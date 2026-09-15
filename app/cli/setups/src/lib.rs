@@ -7,7 +7,11 @@
 
 use mingling::{ProgramCollect, setup::ProgramSetup};
 
+/// Shared setup for Rorolala's command-line programs.
 ///
+/// Registers the resources, global flags and hooks common to every program.
+/// Commands are deliberately not registered here: `gen_program!()` collects
+/// commands per crate, so a command must be declared in the crate that binds it.
 pub struct RorolalaSetup;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for RorolalaSetup
