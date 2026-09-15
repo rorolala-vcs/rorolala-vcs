@@ -1,0 +1,18 @@
+[package]
+name = "rorolala-utils-configure-macros"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true
+
+# The crate below re-exports this one, so the dependency is a cycle — which cargo
+# allows for dev-dependencies, and which is what lets the example above compile.
+[dev-dependencies]
+rorolala-utils-configure.workspace = true
+serde.workspace = true
