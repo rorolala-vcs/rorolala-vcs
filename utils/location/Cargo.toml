@@ -1,0 +1,8 @@
+[package]
+name = "rorolala-utils-location"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+just_fmt.workspace = true
+tokio.workspace = true

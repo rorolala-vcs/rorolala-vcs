@@ -12,7 +12,8 @@ members = [
     "modules/workspace",
     "utils/lazyffi",
     "utils/lazyffi-core",
-    "utils/lazyffi-macros"
+    "utils/lazyffi-macros",
+    "utils/location"
 ]
 
 [workspace.package]
@@ -33,6 +34,7 @@ rorolala-protocol = { path = "modules/protocol" }
 rorolala-utils-lazyffi = { path = "utils/lazyffi" }
 rorolala-utils-lazyffi-core = { path = "utils/lazyffi-core" }
 rorolala-utils-lazyffi-macros = { path = "utils/lazyffi-macros" }
+rorolala-utils-location = { path = "utils/location" }
 rorolala-vault = { path = "modules/vault" }
 rorolala-workspace = { path = "modules/workspace" }
 
@@ -49,6 +51,14 @@ just_fmt = "0.2.1"
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 quote = "1.0.47"
 syn = { version = "3.0.5", features = ["full"] }
+
+# Async Runtime
+tokio = { version = "1.53.1", features = [
+    "fs",
+    "macros",
+    "rt",
+    "rt-multi-thread"
+] }
 
 [package]
 name = "librorolala"
