@@ -26,16 +26,20 @@ RELEASE_DIR := $(TARGET_DIR)/release
 # The generated C header, written by the root build script while `lib` builds.
 HEADER := $(RELEASE_DIR)/ffi_bindings/rorolala_ffi.h
 
-# Completion scripts. While `bin` compiles, mingling's `gen_program!()` writes one
-# per supported shell into this directory — deliberately not profile-specific, so
-# the same files serve every build.
+# Completion scripts. While the programs compile, mingling's `gen_program!()` writes
+# one per supported shell into this directory — deliberately not profile-specific,
+# so the same files serve every build.
 COMPLETION_DIR ?= $(TARGET_DIR)/mingling
 
-# mingling names them `<crate>_comp.<shell>`; they are exported as one set named
-# after the program. The scripts call the `rola` command by name and never refer to
-# their own file name, so the exported name is free.
-COMPLETION_SOURCE ?= $(COMPLETION_DIR)/rola_comp
-COMPLETION_TARGET ?= $(BUILD_DIR)/bin/rola-completion
+# Shells mingling generates a completion script for.
+COMPLETION_SHELLS := sh zsh fish ps1
+
+# The command line programs. Each is a workspace member whose package name is also
+# its binary name, so one list drives the build, the export, and the completion
+# scripts — mingling names those `<program>_comp.<shell>` and they are exported as
+# `<program>-completion.<shell>`. The scripts call their command by name and never
+# refer to their own file name, so the exported name is free.
+PROGRAMS := rola rola-daemon
 
 # `export` and `clean` delete their destination with `rm -rf`, so refuse a path that
 # would take something else with it.
@@ -66,7 +70,7 @@ endif
 #   | ffi_bindings/rorolala_ffi.h  | $(BUILD_DIR)/lib/rorolala.h              |
 #   |                              | $(BUILD_DIR)/lib/rorolala.hpp            |
 #   | rola[.exe]                   | $(BUILD_DIR)/bin/rola[.exe]              |
-#   | mingling/rola_comp.<shell>   | $(BUILD_DIR)/bin/rola-completion.<shell> |
+#   | mingling/<program>_comp.*    | $(BUILD_DIR)/bin/<program>-completion.*  |
 #
 # The header is C and C++ at once — its declarations sit in an `extern "C"` block —
 # so `.hpp` is the same file under the name a C++ project includes. The completion
@@ -100,12 +104,12 @@ check: test build clippy doc
 lib:
 	$(CARGO) build $(RELEASE_FLAG) --all-features -p rorolala-ffi
 
-# Builds the release command line program. Compiling it is also what refreshes the
-# completion scripts in $(COMPLETION_DIR).
+# Builds the release command line programs. Compiling them is also what refreshes
+# the completion scripts in $(COMPLETION_DIR).
 bin:
-	$(CARGO) build $(RELEASE_FLAG) --all-features -p rola
+	$(CARGO) build $(RELEASE_FLAG) --all-features $(addprefix -p ,$(PROGRAMS))
 
-# Everything that ships: the library and the program.
+# Everything that ships: the library and the programs.
 build: lib bin
 
 # Lays the build out for hand-off under $(BUILD_DIR), under the names a consumer
@@ -117,11 +121,13 @@ export: build
 	cp $(RELEASE_DIR)/$(CARGO_STATIC) $(BUILD_DIR)/lib/rorolala.$(STATIC_SUFFIX)
 	cp $(HEADER) $(BUILD_DIR)/lib/rorolala.h
 	cp $(HEADER) $(BUILD_DIR)/lib/rorolala.hpp
-	cp $(RELEASE_DIR)/rola$(EXE_SUFFIX) $(BUILD_DIR)/bin/rola$(EXE_SUFFIX)
-	cp $(COMPLETION_SOURCE).sh $(COMPLETION_TARGET).sh
-	cp $(COMPLETION_SOURCE).zsh $(COMPLETION_TARGET).zsh
-	cp $(COMPLETION_SOURCE).fish $(COMPLETION_TARGET).fish
-	cp $(COMPLETION_SOURCE).ps1 $(COMPLETION_TARGET).ps1
+	set -e; for program in $(PROGRAMS); do \
+		cp $(RELEASE_DIR)/$${program}$(EXE_SUFFIX) $(BUILD_DIR)/bin/$${program}$(EXE_SUFFIX); \
+		for shell in $(COMPLETION_SHELLS); do \
+			cp $(COMPLETION_DIR)/$${program}_comp.$${shell} \
+				$(BUILD_DIR)/bin/$${program}-completion.$${shell}; \
+		done; \
+	done
 
 # Runs clippy over the workspace; warnings are errors.
 clippy:

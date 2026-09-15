@@ -241,6 +241,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rola-daemon"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "mingling",
+ "rorolala-cli-setups",
+ "rorolala-utils-lazyffi",
+]
+
+[[package]]
 name = "rorolala-auth"
 version = "0.1.0"
 

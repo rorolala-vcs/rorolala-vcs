@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "app/cli/rola",
+    "app/cli/rola-daemon",
     "app/cli/setups",
     "app/ffi",
     "dev/bindgen",
@@ -23,6 +24,7 @@ edition = "2024"
 # Members
 librorolala = { path = "." }
 rola = { path = "app/cli/rola" }
+rola-daemon = { path = "app/cli/rola-daemon" }
 rorolala-auth = { path = "modules/auth" }
 rorolala-cli-setups = { path = "app/cli/setups" }
 rorolala-dev-bindgen = { path = "dev/bindgen" }
