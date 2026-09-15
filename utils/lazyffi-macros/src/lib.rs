@@ -209,6 +209,50 @@ fn expand(args: &LazyFfiArgs, item: &Item) -> syn::Result<TokenStream2> {
     }
 }
 
+/// The kind of default name an item's repr takes, when `export` does not say.
+#[derive(Clone, Copy)]
+enum DefaultName {
+    /// `FFI<PascalCase>`, for a `struct` or an `enum`.
+    Type,
+    /// `ffi_<snake_case>`, for a `const` or a `fn`.
+    Value,
+}
+
+/// The name of the generated item, refusing one that is the item's own.
+///
+/// `export` names the repr, which is generated *beside* the item it mirrors — so naming
+/// it after that item asks for the same name twice in one module. Saying so here beats
+/// the pile of resolution errors the collision would otherwise produce.
+fn exported_name(
+    args: &LazyFfiArgs,
+    rust_name: &Ident,
+    default: DefaultName,
+) -> syn::Result<Ident> {
+    let name = args.export.clone().unwrap_or_else(|| match default {
+        DefaultName::Type => default_type_name(rust_name),
+        DefaultName::Value => default_value_name(rust_name),
+    });
+
+    reject_self_export(&name, rust_name)?;
+
+    Ok(name)
+}
+
+/// Refuses an `export` that names the item it mirrors.
+fn reject_self_export(name: &Ident, rust_name: &Ident) -> syn::Result<()> {
+    if name == rust_name {
+        return Err(syn::Error::new_spanned(
+            rust_name,
+            format!(
+                "`export = {name}` names the item it mirrors; the generated repr needs a \
+                 name of its own"
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Default FFI name for a value-level item (`fn`, `const`), from `lazyffi-core`.
 fn default_value_name(rust_name: &Ident) -> Ident {
     Ident::new(&value_name(&rust_name.to_string()), rust_name.span())
@@ -254,10 +298,7 @@ fn mirrored_attrs(what: &str, attrs: &[Attribute]) -> Vec<TokenStream2> {
 /// Expands `#[lazyffi]` on a `const` item.
 fn expand_const(args: &LazyFfiArgs, konst: &ItemConst) -> syn::Result<TokenStream2> {
     let rust_name = &konst.ident;
-    let ffi_name = args
-        .export
-        .clone()
-        .unwrap_or_else(|| default_value_name(rust_name));
+    let ffi_name = exported_name(args, rust_name, DefaultName::Value)?;
     let ty = &konst.ty;
     let mirrored = mirrored_attrs(&format!("`{rust_name}`"), &konst.attrs);
 
@@ -301,10 +342,7 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
     }
 
     let rust_name = &item.ident;
-    let ffi_name = args
-        .export
-        .clone()
-        .unwrap_or_else(|| default_type_name(rust_name));
+    let ffi_name = exported_name(args, rust_name, DefaultName::Type)?;
     let release = Ident::new(&free_name(&rust_name.to_string()), rust_name.span());
 
     let struct_docs = mirrored_attrs(&format!("`{rust_name}`"), &item.attrs);
@@ -408,10 +446,7 @@ fn expand_enum(args: &LazyFfiArgs, item: &ItemEnum) -> syn::Result<TokenStream2>
     }
 
     let rust_name = &item.ident;
-    let ffi_name = args
-        .export
-        .clone()
-        .unwrap_or_else(|| default_type_name(rust_name));
+    let ffi_name = exported_name(args, rust_name, DefaultName::Type)?;
 
     let carries_data = item
         .variants
@@ -1091,10 +1126,7 @@ fn wrapper_tokens(
 /// Expands `#[lazyffi]` on a `fn` item.
 fn expand_fn(args: &LazyFfiArgs, item: &ItemFn) -> syn::Result<TokenStream2> {
     let rust_name = &item.sig.ident;
-    let ffi_name = args
-        .export
-        .clone()
-        .unwrap_or_else(|| default_value_name(rust_name));
+    let ffi_name = exported_name(args, rust_name, DefaultName::Value)?;
 
     let parts = expand_fn_params(&item.sig.inputs)?;
     let wrapper = wrapper_tokens(
@@ -1161,6 +1193,7 @@ fn expand_impl(args: &LazyFfiArgs, item: &ItemImpl) -> syn::Result<TokenStream2>
                 rust_name.span(),
             )
         });
+        reject_self_export(&ffi_name, rust_name)?;
 
         // The receiver is the method's first parameter; everything after it is an
         // ordinary parameter, converted exactly like a free function's.
