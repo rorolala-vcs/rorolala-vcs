@@ -15,7 +15,21 @@
                         "**/temp/**"
                     ]
                 },
-                "linkedProjects": [],
+                "linkedProjects": [
+                    "app/cli/rola/Cargo.toml",
+                    "app/cli/rola-daemon/Cargo.toml",
+                    "app/cli/setups/Cargo.toml",
+                    "app/ffi/Cargo.toml",
+                    "dev/bindgen/Cargo.toml",
+                    "modules/auth/Cargo.toml",
+                    "modules/protocol/Cargo.toml",
+                    "modules/vault/Cargo.toml",
+                    "modules/workspace/Cargo.toml",
+                    "utils/lazyffi/Cargo.toml",
+                    "utils/lazyffi-core/Cargo.toml",
+                    "utils/lazyffi-macros/Cargo.toml",
+                    "utils/location/Cargo.toml"
+                ],
                 "procMacro": {
                     "attributes": {
                         "enable": true
