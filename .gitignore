@@ -1,6 +1,9 @@
 # All temp
 /.cargo/temp
 
+# Build
+/build/
+
 # macOS
 .DS_Store
 .AppleDouble
