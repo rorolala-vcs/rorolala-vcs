@@ -12,6 +12,13 @@ use just_fmt::{pascal_case, snake_case};
 /// generator spells it as `char *`.
 pub const STRING_REPR: &str = "*mut c_char";
 
+/// Name of the function that releases a string handed out by an export.
+///
+/// `rorolala-utils-lazyffi` defines it with `#[unsafe(no_mangle)]`, so this name
+/// is a link-time contract; the header generator declares exactly this symbol,
+/// since C cannot release an allocated string without it.
+pub const FREE_STRING: &str = "ffi_free_string";
+
 /// Invokes `$callback!` with the list of scalar types whose repr is themselves.
 ///
 /// The `builtin` conversions are implemented for these types, and the header
@@ -43,4 +50,98 @@ pub fn value_name(rust_name: &str) -> String {
 #[must_use]
 pub fn type_name(rust_name: &str) -> String {
     format!("FFI{}", pascal_case!(rust_name.to_string()))
+}
+
+/// Export name of a method inside an `impl`: `ffi_<snake_case(type)>_<snake_case(method)>`.
+///
+/// The type name is part of the export because `impl` blocks are flattened into
+/// free functions: without it, `impl Foo { fn new }` and `impl Bar { fn new }`
+/// would both claim the symbol `ffi_new`.
+///
+/// ```ignore
+/// assert_eq!(rorolala_utils_lazyffi_core::method_name("Vault", "open"), "ffi_vault_open");
+/// ```
+#[must_use]
+pub fn method_name(rust_name: &str, method_name: &str) -> String {
+    format!(
+        "ffi_{}_{}",
+        snake_case!(rust_name.to_string()),
+        snake_case!(method_name.to_string())
+    )
+}
+
+/// Name of the tag enum generated for a data-carrying enum: `<repr>Tag`.
+///
+/// Takes the **repr** name rather than the Rust name, so an `export = ...`
+/// override carries over to every generated sibling.
+#[must_use]
+pub fn tag_type_name(repr: &str) -> String {
+    format!("{repr}Tag")
+}
+
+/// Name of the payload union generated for a data-carrying enum: `<repr>Payload`.
+#[must_use]
+pub fn payload_type_name(repr: &str) -> String {
+    format!("{repr}Payload")
+}
+
+/// Name of the companion struct generated for a variant's payload:
+/// `<repr><PascalCase(variant)>`.
+#[must_use]
+pub fn variant_type_name(repr: &str, variant_name: &str) -> String {
+    format!("{repr}{}", pascal_case!(variant_name.to_string()))
+}
+
+/// C spelling of an enum enumerator: `<repr>_<PascalCase(variant)>`.
+///
+/// C has no scoped enumerators, so the variants of an exported enum are prefixed
+/// with the name of the repr type to keep them out of each other's way.
+#[must_use]
+pub fn c_variant_name(repr: &str, variant_name: &str) -> String {
+    format!("{repr}_{}", pascal_case!(variant_name.to_string()))
+}
+
+/// Field a unit variant occupies inside a payload union.
+///
+/// A union must be constructed through one of its fields, and a unit variant has
+/// no payload to name, so every payload union carries this zero-sized slot. It
+/// contributes nothing to the union's layout, so the header generator leaves it
+/// out of the C union entirely.
+pub const PAYLOAD_UNIT_FIELD: &str = "__unit";
+
+/// The fields of an enum variant, as both the macro and the generator see them.
+///
+/// This mirrors `syn::Fields` without depending on `syn`, so the rule below stays
+/// dependency-free yet stated exactly once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VariantFields {
+    /// A unit variant.
+    Unit,
+    /// A tuple variant with this many fields.
+    Unnamed(usize),
+    /// A braced variant with this many fields.
+    Named(usize),
+}
+
+/// Whether a variant's payload is wrapped in a companion struct.
+///
+/// A payload is wrapped when it has braced fields (so the field names survive
+/// into C) or more than one tuple field (so the union only ever names one type
+/// per variant). A single tuple field is used directly.
+///
+/// ```ignore
+/// assert!(!rorolala_utils_lazyffi_core::variant_needs_companion(
+///     &rorolala_utils_lazyffi_core::VariantFields::Unnamed(1)
+/// ));
+/// assert!(rorolala_utils_lazyffi_core::variant_needs_companion(
+///     &rorolala_utils_lazyffi_core::VariantFields::Named(1)
+/// ));
+/// ```
+#[must_use]
+pub fn variant_needs_companion(fields: &VariantFields) -> bool {
+    match fields {
+        VariantFields::Unit => false,
+        VariantFields::Unnamed(count) => *count > 1,
+        VariantFields::Named(_) => true,
+    }
 }

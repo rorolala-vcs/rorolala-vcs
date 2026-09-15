@@ -5,8 +5,6 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
 
-use rorolala_utils_lazyffi::lazyffi;
-
 /// Authentication
 pub use rorolala_auth as auth;
 

@@ -12,10 +12,10 @@
 //! A type the generator cannot map to C is reported as an error pointing at the
 //! offending line, never skipped: an incomplete header is worse than no header.
 //!
-//! # Tradeoff: `export` is parsed twice
+//! # Tradeoff: the attribute is parsed twice
 //!
-//! The `export = <Name>` override is parsed here *and* in
-//! `rorolala-utils-lazyffi-macros`, and that duplication is deliberate.
+//! `#[lazyffi]` itself, and the `export = <Name>` override in it, are parsed here
+//! *and* in `rorolala-utils-lazyffi-macros`, and that duplication is deliberate.
 //!
 //! The two never see the same input. An attribute macro receives its item with the
 //! `#[lazyffi]` attribute **already stripped**, so the macro can only read `export`
@@ -24,9 +24,38 @@
 //! attributes. There is no shared shape to factor out — only the *defaults* are,
 //! and those do live in `rorolala-utils-lazyffi-core`.
 //!
-//! What must not drift is therefore the naming rule (`ffi_<snake>` / `FFI<Pascal>`)
-//! and the built-in repr table, not this parser. If you add a second attribute
-//! argument, you have to teach both parsers about it.
+//! What must not drift is therefore the naming rule (`ffi_<snake>` /
+//! `ffi_<type>_<method>` / `FFI<Pascal>` and its `Tag`/`Payload`/`<Variant>`
+//! derivatives), the built-in repr table, and the shape rules (`variant_fields`,
+//! `variant_needs_companion`), not this parser. If you add a second attribute
+//! argument, or change when a variant needs a companion struct, you have to teach
+//! both sides about it.
+//!
+//! # Definition order
+//!
+//! C needs a type to be complete before it is used by value, so the generated
+//! definitions are emitted in dependency order rather than source order. A cycle
+//! (which Rust cannot express by value either) is reported as an error.
+//!
+//! # Documentation
+//!
+//! Only two parts of an item's Rust docs reach the header, so C readers get a
+//! summary instead of a Rust manual: the first line, and the section under a
+//! `# FFI` heading (the heading itself is dropped, and the section ends at the
+//! next heading). Generated machinery — the tag enum, the payload union, the
+//! companion structs — carries no comment of its own; what belongs to a variant
+//! or a field is documented on the member that mirrors it, since that is where a
+//! C reader looks.
+//!
+//! # Name resolution
+//!
+//! Types are resolved by their **last path segment**, so an export in one crate can
+//! mention a type defined in a sibling crate (`auth::Token`, `rorolala_auth::Token`
+//! and a bare `Token` all name the same repr). That is deliberately weaker than
+//! name resolution: an aliased import does not resolve, and two types sharing a
+//! name are ambiguous. Both are reported as errors rather than guessed at, and two
+//! definitions that would claim the same C name — the usual symptom of such a
+//! clash — are rejected outright.
 
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
@@ -35,7 +64,7 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
 use std::fmt::{self, Write as _};
 use std::fs;
@@ -46,10 +75,14 @@ use std::sync::Arc;
 
 use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet, renderer::DecorStyle};
 use quote::quote;
-use rorolala_utils_lazyffi_core::{STRING_REPR, for_each_scalar, type_name, value_name};
+use rorolala_utils_lazyffi_core::{
+    FREE_STRING, STRING_REPR, VariantFields, c_variant_name, for_each_scalar, method_name,
+    payload_type_name, tag_type_name, type_name, value_name, variant_needs_companion,
+    variant_type_name,
+};
 use syn::{
-    Attribute, Fields, FnArg, Item, ItemConst, ItemFn, ItemStruct, Pat, ReturnType, Type,
-    spanned::Spanned,
+    Attribute, Expr, ExprLit, Fields, FnArg, ImplItem, Item, ItemConst, ItemEnum, ItemFn, ItemImpl,
+    ItemStruct, Lit, Meta, Pat, ReceiverKind, ReturnType, Signature, Type, spanned::Spanned,
 };
 
 /// File name of the generated header.
@@ -71,6 +104,9 @@ const SCALAR_NAMES: &[&str] = for_each_scalar!(scalar_names);
 /// Include guard used in the generated header.
 const INCLUDE_GUARD: &str = "ROROLALA_FFI_H";
 
+/// Documentation heading whose section is carried into the header.
+const FFI_HEADING: &str = "# FFI";
+
 /// Comment written at the top of every generated header.
 const BANNER: &str = "\
 /*!
@@ -82,6 +118,26 @@ const BANNER: &str = "\
  */
 ";
 
+/// Header preamble: the include guard, the standard headers the reprs need, the
+/// `extern "C"` block a C++ consumer needs, and the declaration of the string
+/// release helper.
+///
+/// The helper is declared unconditionally: it costs nothing, and a C caller could
+/// not release a returned string otherwise.
+fn preamble() -> String {
+    format!(
+        "\n#ifndef {INCLUDE_GUARD}\n#define {INCLUDE_GUARD}\n\n\
+         #include <stdarg.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdlib.h>\n\n\
+         #ifdef __cplusplus\nextern \"C\" {{\n#endif\n\n\
+         void {FREE_STRING}(char *string);\n\n"
+    )
+}
+
+/// Header footer: closes the `extern "C"` block and the include guard.
+fn footer() -> String {
+    format!("#ifdef __cplusplus\n}}\n#endif\n\n#endif  /* {INCLUDE_GUARD} */\n")
+}
+
 /// Everything one generation run needs.
 #[derive(Debug)]
 pub struct Config<'a> {
@@ -91,9 +147,9 @@ pub struct Config<'a> {
     pub output_dir: &'a Path,
 }
 
-/// A Rust type that has no repr-C sibling, so its item cannot be exported.
+/// Something in the sources that cannot be rendered into the header.
 #[derive(Debug)]
-pub struct Unresolved {
+pub struct Diagnostic {
     /// Source file the item lives in.
     pub path: PathBuf,
     /// Full text of that file, kept for the diagnostic.
@@ -102,8 +158,10 @@ pub struct Unresolved {
     pub line: usize,
     /// Name of the item being rendered.
     pub item: String,
-    /// The type that could not be resolved.
-    pub ty: String,
+    /// What exactly is wrong with it.
+    pub label: String,
+    /// Extra context shown below the snippet, when the label cannot carry it.
+    pub note: Option<String>,
 }
 
 /// What can go wrong while generating the header.
@@ -123,8 +181,8 @@ pub enum Error {
         /// The underlying error.
         source: syn::Error,
     },
-    /// Types were found that have no repr-C sibling.
-    Unresolved(Vec<Unresolved>),
+    /// Items were found that cannot be rendered into C.
+    Diagnostics(Vec<Diagnostic>),
 }
 
 impl fmt::Display for Error {
@@ -132,7 +190,7 @@ impl fmt::Display for Error {
         match self {
             Self::Io { path, source } => write!(formatter, "{}: {source}", path.display()),
             Self::Parse { path, source } => write!(formatter, "{}: {source}", path.display()),
-            Self::Unresolved(diagnostics) => formatter.write_str(&render_diagnostics(diagnostics)),
+            Self::Diagnostics(diagnostics) => formatter.write_str(&render_diagnostics(diagnostics)),
         }
     }
 }
@@ -142,7 +200,7 @@ impl StdError for Error {
         match self {
             Self::Io { source, .. } => Some(source),
             Self::Parse { source, .. } => Some(source),
-            Self::Unresolved(_) => None,
+            Self::Diagnostics(_) => None,
         }
     }
 }
@@ -160,7 +218,7 @@ pub fn generate(config: &Config<'_>) -> Result<PathBuf, Error> {
         scan_dir(root, &mut exports)?;
     }
 
-    let header = render(&exports).map_err(Error::Unresolved)?;
+    let header = render(&exports).map_err(Error::Diagnostics)?;
 
     fs::create_dir_all(config.output_dir).map_err(|source| Error::Io {
         path: config.output_dir.to_path_buf(),
@@ -177,7 +235,7 @@ pub fn generate(config: &Config<'_>) -> Result<PathBuf, Error> {
 }
 
 /// Where an item was read from, kept so diagnostics can point back at it.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Origin {
     /// Source file.
     path: PathBuf,
@@ -185,15 +243,25 @@ struct Origin {
     source: Arc<String>,
 }
 
+/// An exported type, in either of the two shapes `#[lazyffi]` supports.
+enum TypeItem {
+    /// An exported struct.
+    Struct(ItemStruct),
+    /// An exported enum.
+    Enum(ItemEnum),
+}
+
 /// The `#[lazyffi]` items collected from the sources.
 #[derive(Default)]
 struct Exports {
     /// Exported constants.
     constants: Vec<(ItemConst, Origin)>,
-    /// Exported structs.
-    structs: Vec<(ItemStruct, Origin)>,
-    /// Exported functions.
+    /// Exported structs and enums.
+    types: Vec<(TypeItem, Origin)>,
+    /// Exported free functions.
     functions: Vec<(ItemFn, Origin)>,
+    /// Exported `impl` blocks.
+    impls: Vec<(ItemImpl, Origin)>,
 }
 
 /// Scans `dir` recursively, collecting `#[lazyffi]` items.
@@ -256,10 +324,20 @@ fn collect_items(items: &[Item], origin: &Origin, exports: &mut Exports) {
                 exports.constants.push((item.clone(), origin.clone()));
             }
             Item::Struct(item) if has_lazyffi(&item.attrs) => {
-                exports.structs.push((item.clone(), origin.clone()));
+                exports
+                    .types
+                    .push((TypeItem::Struct(item.clone()), origin.clone()));
+            }
+            Item::Enum(item) if has_lazyffi(&item.attrs) => {
+                exports
+                    .types
+                    .push((TypeItem::Enum(item.clone()), origin.clone()));
             }
             Item::Fn(item) if has_lazyffi(&item.attrs) => {
                 exports.functions.push((item.clone(), origin.clone()));
+            }
+            Item::Impl(item) if has_lazyffi(&item.attrs) => {
+                exports.impls.push((item.clone(), origin.clone()));
             }
             _ => {}
         }
@@ -268,12 +346,15 @@ fn collect_items(items: &[Item], origin: &Origin, exports: &mut Exports) {
 
 /// Whether an item carries `#[lazyffi]`, in any of its spellings.
 fn has_lazyffi(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(|attr| {
-        attr.path()
-            .segments
-            .last()
-            .is_some_and(|segment| segment.ident == "lazyffi")
-    })
+    attrs.iter().any(is_lazyffi)
+}
+
+/// Whether one attribute is `#[lazyffi]`, in any of its spellings.
+fn is_lazyffi(attr: &Attribute) -> bool {
+    attr.path()
+        .segments
+        .last()
+        .is_some_and(|segment| segment.ident == "lazyffi")
 }
 
 /// Reads `export = <Name>` from the `#[lazyffi]` attribute, if present.
@@ -282,10 +363,7 @@ fn has_lazyffi(attrs: &[Attribute]) -> bool {
 /// `rorolala-utils-lazyffi-macros`; see the crate docs for why the two cannot be
 /// merged, and mind both when adding attribute arguments.
 fn export_override(attrs: &[Attribute]) -> Option<String> {
-    for attr in attrs
-        .iter()
-        .filter(|attr| has_lazyffi(std::slice::from_ref(*attr)))
-    {
+    for attr in attrs.iter().filter(|attr| is_lazyffi(attr)) {
         let mut name = None;
         let _ = attr.parse_nested_meta(|meta| {
             if !meta.path.is_ident("export") {
@@ -309,45 +387,118 @@ fn export_override(attrs: &[Attribute]) -> Option<String> {
     None
 }
 
-/// The repr-C sibling of every type that has one, keyed by the Rust type name.
-type ReprMap = BTreeMap<String, String>;
+/// The repr-C siblings of the exported types, plus every C name the header
+/// defines.
+struct Reprs {
+    /// Rust type name → repr-C name.
+    map: BTreeMap<String, String>,
+    /// Every type name the header defines.
+    names: BTreeSet<String>,
+}
 
-/// Builds the Rust type name → repr-C type map.
+/// Builds the type tables.
 ///
 /// The built-in types come from `lazyffi-core`, so they match what `builtin`
-/// actually implements; every `#[lazyffi]` struct maps to the repr type its
-/// invocation generates.
-fn repr_map(exports: &Exports) -> ReprMap {
-    let mut reprs = ReprMap::new();
+/// actually implements; every `#[lazyffi]` type maps to the repr its invocation
+/// generates, including the parts of a data-carrying enum.
+fn reprs(exports: &Exports) -> Reprs {
+    let mut reprs = Reprs {
+        map: BTreeMap::new(),
+        names: BTreeSet::new(),
+    };
 
     for scalar in SCALAR_NAMES {
-        reprs.insert((*scalar).to_string(), (*scalar).to_string());
+        reprs
+            .map
+            .insert((*scalar).to_string(), (*scalar).to_string());
     }
-    reprs.insert("String".to_string(), STRING_REPR.to_string());
+    reprs
+        .map
+        .insert("String".to_string(), STRING_REPR.to_string());
 
-    for (item, _) in &exports.structs {
-        let rust_name = item.ident.to_string();
+    for (item, _) in &exports.types {
+        let (rust_name, attrs) = match item {
+            TypeItem::Struct(item) => (item.ident.to_string(), &item.attrs),
+            TypeItem::Enum(item) => (item.ident.to_string(), &item.attrs),
+        };
+
         let default = type_name(&rust_name);
-        let name = export_override(&item.attrs).unwrap_or(default);
-        reprs.insert(rust_name, name);
+        let repr = export_override(attrs).unwrap_or(default);
+        reprs.names.insert(repr.clone());
+
+        if let TypeItem::Enum(item) = item
+            && carries_data(item)
+        {
+            reprs.names.insert(tag_type_name(&repr));
+            reprs.names.insert(payload_type_name(&repr));
+            for variant in &item.variants {
+                if variant_needs_companion(&variant_fields(&variant.fields)) {
+                    reprs
+                        .names
+                        .insert(variant_type_name(&repr, &variant.ident.to_string()));
+                }
+            }
+        }
+
+        reprs.map.insert(rust_name, repr);
     }
 
     reprs
 }
 
 /// Resolves the repr-C sibling of a Rust type.
-fn repr_of(ty: &Type, reprs: &ReprMap) -> Option<String> {
+///
+/// Resolution is by the **last path segment**, not by full path: the table is
+/// keyed by the type's name, so `auth::Token`, `rorolala_auth::Token` and a bare
+/// `Token` all name the same repr. Without that, an export in one crate could not
+/// mention a type defined in a sibling crate, which is the normal shape of this
+/// workspace.
+///
+/// Two consequences worth knowing:
+///
+/// - an alias (`use rorolala_auth::Token as Seal;`) does not resolve, because no
+///   `Seal` is defined here — it is reported, not skipped;
+/// - two types with the same name in different crates are genuinely ambiguous,
+///   and [`duplicates`] rejects the build rather than picking one.
+///
+/// `Self` has no entry in the table either — it only appears inside an `impl`,
+/// where it stands for the target type; [`Resolution::self_repr`] carries that.
+fn repr_of(ty: &Type, resolution: &Resolution<'_>) -> Option<String> {
     if let Type::Path(path) = ty
-        && let Some(ident) = path.path.get_ident()
+        && path.qself.is_none()
+        && let Some(segment) = path.path.segments.last()
+        && segment.arguments.is_none()
     {
-        return reprs.get(&ident.to_string()).cloned();
+        let ident = segment.ident.to_string();
+        if ident == "Self" {
+            return resolution.self_repr.map(ToString::to_string);
+        }
+        return resolution.reprs.map.get(&ident).cloned();
     }
 
     None
 }
 
+/// What leads from a Rust type to its C spelling.
+struct Resolution<'a> {
+    /// The repr-C siblings of the exported types.
+    reprs: &'a Reprs,
+    /// The repr of `Self`, when rendering inside an `impl`.
+    self_repr: Option<&'a str>,
+}
+
+impl<'a> Resolution<'a> {
+    /// Resolves types outside an `impl`, where `Self` cannot appear.
+    const fn plain(reprs: &'a Reprs) -> Self {
+        Self {
+            reprs,
+            self_repr: None,
+        }
+    }
+}
+
 /// C spelling of a repr type.
-fn c_type(repr: &str, reprs: &ReprMap) -> Option<String> {
+fn c_type(repr: &str, reprs: &Reprs) -> Option<String> {
     if let Some(scalar) = scalar_c_type(repr) {
         return Some(scalar.to_string());
     }
@@ -360,8 +511,8 @@ fn c_type(repr: &str, reprs: &ReprMap) -> Option<String> {
         return Some(format!("{} *", c_type(inner, reprs)?));
     }
 
-    // A generated repr struct keeps its Rust name in C.
-    if reprs.values().any(|value| value == repr) {
+    // A generated repr type keeps its Rust name in C.
+    if reprs.names.contains(repr) {
         return Some(repr.to_string());
     }
 
@@ -402,46 +553,660 @@ fn is_str_ref(ty: &Type) -> bool {
     false
 }
 
-/// Records that `ty` inside `item` has no repr-C sibling.
-fn unresolved(diagnostics: &mut Vec<Unresolved>, origin: &Origin, item: &str, ty: &Type) {
-    diagnostics.push(Unresolved {
+/// Maps a variant's fields onto the shape `lazyffi-core` reasons about.
+fn variant_fields(fields: &Fields) -> VariantFields {
+    match fields {
+        Fields::Unit => VariantFields::Unit,
+        Fields::Unnamed(unnamed) => VariantFields::Unnamed(unnamed.unnamed.len()),
+        Fields::Named(named) => VariantFields::Named(named.named.len()),
+    }
+}
+
+/// Whether an enum has any variant carrying data.
+fn carries_data(item: &ItemEnum) -> bool {
+    item.variants
+        .iter()
+        .any(|variant| !matches!(variant.fields, Fields::Unit))
+}
+
+/// The documentation of one field of a variant, by the name it is known under in
+/// C (`_0` for tuple fields).
+fn field_docs(variant: &syn::Variant, field_name: &str) -> Vec<String> {
+    let Fields::Named(named) = &variant.fields else {
+        return Vec::new();
+    };
+
+    named
+        .named
+        .iter()
+        .find(|field| field.ident.as_ref().is_some_and(|name| name == field_name))
+        .map_or_else(Vec::new, |field| doc_lines(&field.attrs))
+}
+
+/// The name/type pairs of a variant's payload, sharing the macro's naming: tuple
+/// fields are `_0`, `_1`, … and braced fields keep their names.
+fn payload_fields(fields: &Fields) -> Vec<(String, &Type)> {
+    match fields {
+        Fields::Unit => Vec::new(),
+        Fields::Unnamed(unnamed) => unnamed
+            .unnamed
+            .iter()
+            .enumerate()
+            .map(|(index, field)| (format!("_{index}"), &field.ty))
+            .collect(),
+        Fields::Named(named) => named
+            .named
+            .iter()
+            .filter_map(|field| {
+                let ident = field.ident.as_ref()?;
+                Some((ident.to_string(), &field.ty))
+            })
+            .collect(),
+    }
+}
+
+/// One C type definition in the header.
+#[derive(Clone)]
+struct Definition {
+    /// C name of the defined type.
+    name: String,
+    /// Rendered C definition.
+    text: String,
+    /// Where it came from, for diagnostics.
+    origin: Origin,
+    /// Name of the item being rendered, for diagnostics.
+    item: String,
+    /// 1-based line of the item, for diagnostics.
+    line: usize,
+}
+
+/// Where a rendering pass sends the problems it finds.
+struct Reporting<'a> {
+    /// File the item came from, for the diagnostic.
+    origin: &'a Origin,
+    /// Diagnostics collected so far.
+    diagnostics: &'a mut Vec<Diagnostic>,
+}
+
+impl<'a> Reporting<'a> {
+    /// Borrows the origin and the diagnostic sink for one rendering pass.
+    const fn new(origin: &'a Origin, diagnostics: &'a mut Vec<Diagnostic>) -> Self {
+        Self {
+            origin,
+            diagnostics,
+        }
+    }
+
+    /// Records that something in `item` cannot be rendered.
+    fn report(&mut self, line: usize, item: &str, label: String) {
+        push_diagnostic(self.diagnostics, self.origin, line, item, label);
+    }
+}
+
+/// Records that `item` cannot be rendered, on `line`.
+fn push_diagnostic(
+    diagnostics: &mut Vec<Diagnostic>,
+    origin: &Origin,
+    line: usize,
+    item: &str,
+    label: String,
+) {
+    diagnostics.push(Diagnostic {
         path: origin.path.clone(),
         source: origin.source.as_ref().clone(),
-        line: ty.span().start().line,
+        line,
         item: item.to_string(),
-        // `quote!` renders paths with padding (`core :: net :: IpAddr`); C users
-        // expect the compact spelling.
-        ty: quote!(#ty).to_string().replace(" :: ", "::"),
+        label,
+        note: None,
     });
 }
 
-/// Renders the whole header, or reports every type it could not resolve.
-fn render(exports: &Exports) -> Result<String, Vec<Unresolved>> {
-    let reprs = repr_map(exports);
+/// `ty` with the padding `quote!` adds to paths removed.
+fn compact(ty: &Type) -> String {
+    quote!(#ty).to_string().replace(" :: ", "::")
+}
+
+/// The raw text of an item's `#[doc = ...]` attributes, one entry per line.
+///
+/// A `///` comment becomes exactly one such attribute per line, so this is the
+/// documentation as written. `#[doc = include_str!(...)]` cannot be read without
+/// expanding it, and is left out rather than guessed at.
+fn doc_attribute_lines(attrs: &[Attribute]) -> Vec<String> {
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("doc"))
+        .filter_map(|attr| match &attr.meta {
+            Meta::NameValue(name_value) => match &name_value.value {
+                Expr::Lit(ExprLit {
+                    lit: Lit::Str(text),
+                    ..
+                }) => Some(text.value()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+/// The documentation lines that belong in the header.
+///
+/// Rust docs are aimed at Rust readers, so only two parts of them travel:
+///
+/// - the first line, which is the summary;
+/// - the section under a `# FFI` heading, which is written for the C side on
+///   purpose. The heading itself is dropped, and the section ends at the next
+///   heading, so a `# Safety` or `# Panics` section stays on the Rust side.
+///
+/// When both are present they are separated by a blank line.
+fn doc_lines(attrs: &[Attribute]) -> Vec<String> {
+    let lines = doc_attribute_lines(attrs);
+    let heading = lines.iter().position(|line| line.trim() == FFI_HEADING);
+    let mut selected = Vec::new();
+
+    if let Some(first) = lines.first() {
+        let first = first.trim();
+        if !first.is_empty() && heading != Some(0) {
+            selected.push(first.to_string());
+        }
+    }
+
+    if let Some(position) = heading {
+        let mut section = lines
+            .iter()
+            .skip(position + 1)
+            .take_while(|line| !is_doc_heading(line))
+            .map(|line| doc_line_text(line))
+            .collect::<Vec<_>>();
+
+        while section.last().is_some_and(String::is_empty) {
+            section.pop();
+        }
+        while section.first().is_some_and(String::is_empty) {
+            section.remove(0);
+        }
+
+        if !section.is_empty() && !selected.is_empty() {
+            selected.push(String::new());
+        }
+        selected.extend(section);
+    }
+
+    selected
+}
+
+/// Whether a documentation line opens a section.
+fn is_doc_heading(line: &str) -> bool {
+    line.trim_start().starts_with("# ")
+}
+
+/// One line of documentation with its marker removed.
+///
+/// Exactly one leading space goes away — the one a `///` comment is written with.
+/// Anything beyond that is deliberate indentation and is kept.
+fn doc_line_text(line: &str) -> String {
+    let line = line.trim_end();
+    line.strip_prefix(' ').unwrap_or(line).to_string()
+}
+
+/// Renders documentation lines as a C comment block, or nothing when there is
+/// none.
+fn render_doc(lines: &[String], indent: &str) -> String {
+    match lines {
+        [] => String::new(),
+        [single] => format!("{indent}/** {} */\n", escape_comment(single)),
+        _ => {
+            let mut out = format!("{indent}/**\n");
+            for line in lines {
+                let text = escape_comment(line);
+                if text.is_empty() {
+                    let _ = writeln!(out, "{indent} *");
+                } else {
+                    let _ = writeln!(out, "{indent} * {text}");
+                }
+            }
+            let _ = writeln!(out, "{indent} */");
+            out
+        }
+    }
+}
+
+/// Neutralises a `*/` inside documentation so it cannot close the comment early.
+fn escape_comment(text: &str) -> String {
+    text.replace("*/", "* /")
+}
+
+/// The C spelling of a field's Rust type, reporting it when there is none.
+fn field_c_type(
+    ty: &Type,
+    resolution: &Resolution<'_>,
+    reporting: &mut Reporting<'_>,
+    item: &str,
+) -> Option<String> {
+    let spelling = repr_of(ty, resolution).and_then(|repr| c_type(&repr, resolution.reprs));
+    if spelling.is_none() {
+        reporting.report(
+            ty.span().start().line,
+            item,
+            format!("`{}` has no repr-C sibling", compact(ty)),
+        );
+    }
+    spelling
+}
+
+/// Builds one definition per C type the exported types need.
+fn build_definitions(
+    exports: &Exports,
+    reprs: &Reprs,
+    definitions: &mut Vec<Definition>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for (item, origin) in &exports.types {
+        match item {
+            TypeItem::Struct(item) => build_struct(item, origin, reprs, definitions, diagnostics),
+            TypeItem::Enum(item) => build_enum(item, origin, reprs, definitions, diagnostics),
+        }
+    }
+}
+
+/// Builds the definition of one exported struct.
+fn build_struct(
+    item: &ItemStruct,
+    origin: &Origin,
+    reprs: &Reprs,
+    definitions: &mut Vec<Definition>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let rust_name = item.ident.to_string();
+    let Some(repr) = reprs.map.get(&rust_name).cloned() else {
+        return;
+    };
+
+    let mut reporting = Reporting::new(origin, diagnostics);
+    let Fields::Named(named) = &item.fields else {
+        reporting.report(
+            item.fields.span().start().line,
+            &rust_name,
+            "`#[lazyffi]` requires a struct with named fields".to_string(),
+        );
+        return;
+    };
+
+    let resolution = Resolution::plain(reprs);
+    let mut body = String::new();
+    for field in &named.named {
+        let Some(name) = field.ident.as_ref() else {
+            continue;
+        };
+        let label = format!("{rust_name}.{name}");
+        let Some(c_type) = field_c_type(&field.ty, &resolution, &mut reporting, &label) else {
+            continue;
+        };
+        body.push_str(&render_doc(&doc_lines(&field.attrs), "  "));
+        let _ = writeln!(body, "  {c_type} {name};");
+    }
+
+    definitions.push(Definition {
+        text: format!(
+            "{doc}typedef struct {repr} {{\n{body}}} {repr};\n\n",
+            doc = render_doc(&doc_lines(&item.attrs), "")
+        ),
+        name: repr,
+        origin: origin.clone(),
+        item: rust_name,
+        line: item.ident.span().start().line,
+    });
+}
+
+/// Builds the definitions of one exported enum.
+fn build_enum(
+    item: &ItemEnum,
+    origin: &Origin,
+    reprs: &Reprs,
+    definitions: &mut Vec<Definition>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let rust_name = item.ident.to_string();
+    let Some(repr) = reprs.map.get(&rust_name).cloned() else {
+        return;
+    };
+    let line = item.ident.span().start().line;
+
+    if !carries_data(item) {
+        definitions.push(Definition {
+            text: format!(
+                "{doc}{}",
+                render_enum(&repr, &repr, item),
+                doc = render_doc(&doc_lines(&item.attrs), "")
+            ),
+            name: repr,
+            origin: origin.clone(),
+            item: rust_name,
+            line,
+        });
+        return;
+    }
+
+    let tag = tag_type_name(&repr);
+    let payload = payload_type_name(&repr);
+
+    // The tag and the payload are generated machinery, so they carry no comment
+    // of their own; what a C reader wants is on their members, which come from
+    // the variant documentation.
+    definitions.push(Definition {
+        text: render_enum(&tag, &repr, item),
+        name: tag.clone(),
+        origin: origin.clone(),
+        item: rust_name.clone(),
+        line,
+    });
+
+    for variant in &item.variants {
+        build_companion(variant, &repr, origin, reprs, definitions, diagnostics);
+    }
+
+    definitions.push(Definition {
+        text: render_payload(
+            &payload,
+            &repr,
+            item,
+            reprs,
+            &mut Reporting::new(origin, diagnostics),
+            &rust_name,
+        ),
+        name: payload.clone(),
+        origin: origin.clone(),
+        item: rust_name.clone(),
+        line,
+    });
+
+    definitions.push(Definition {
+        text: format!(
+            "{doc}typedef struct {repr} {{\n  {tag} tag;\n  {payload} payload;\n}} {repr};\n\n",
+            doc = render_doc(&doc_lines(&item.attrs), "")
+        ),
+        name: repr,
+        origin: origin.clone(),
+        item: rust_name,
+        line,
+    });
+}
+
+/// Renders a C enum, naming its enumerators after `repr`.
+///
+/// The numbers match the macro's tag enum: both count from zero in declaration
+/// order and never look at the Rust discriminants. Each enumerator carries the
+/// documentation of the variant it mirrors.
+fn render_enum(name: &str, repr: &str, item: &ItemEnum) -> String {
+    let variants = item
+        .variants
+        .iter()
+        .enumerate()
+        .map(|(index, variant)| {
+            format!(
+                "{doc}  {} = {index},",
+                c_variant_name(repr, &variant.ident.to_string()),
+                doc = render_doc(&doc_lines(&variant.attrs), "  ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!("typedef enum {name} {{\n{variants}\n}} {name};\n\n")
+}
+
+/// Builds the companion struct of a variant whose payload needs one.
+fn build_companion(
+    variant: &syn::Variant,
+    repr: &str,
+    origin: &Origin,
+    reprs: &Reprs,
+    definitions: &mut Vec<Definition>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if !variant_needs_companion(&variant_fields(&variant.fields)) {
+        return;
+    }
+
+    let name = variant_type_name(repr, &variant.ident.to_string());
+    let mut reporting = Reporting::new(origin, diagnostics);
+    let resolution = Resolution::plain(reprs);
+    let mut body = String::new();
+    for (field_name, ty) in payload_fields(&variant.fields) {
+        let label = format!("{repr}::{}.{field_name}", variant.ident);
+        let Some(c_type) = field_c_type(ty, &resolution, &mut reporting, &label) else {
+            continue;
+        };
+        body.push_str(&render_doc(&field_docs(variant, &field_name), "  "));
+        let _ = writeln!(body, "  {c_type} {field_name};");
+    }
+
+    definitions.push(Definition {
+        text: format!("typedef struct {name} {{\n{body}}} {name};\n\n"),
+        name,
+        origin: origin.clone(),
+        item: repr.to_string(),
+        line: variant.ident.span().start().line,
+    });
+}
+
+/// Renders the payload union of a data-carrying enum.
+///
+/// The zero-sized slot the macro uses for unit variants is left out: it has no
+/// bearing on the union's layout, and C has nothing to name there.
+fn render_payload(
+    name: &str,
+    repr: &str,
+    item: &ItemEnum,
+    reprs: &Reprs,
+    reporting: &mut Reporting<'_>,
+    rust_name: &str,
+) -> String {
+    let resolution = Resolution::plain(reprs);
+    let mut body = String::new();
+    for variant in &item.variants {
+        if matches!(variant.fields, Fields::Unit) {
+            continue;
+        }
+
+        let variant_name = variant.ident.to_string();
+        let label = format!("{rust_name}::{variant_name}");
+        let c_type = if variant_needs_companion(&variant_fields(&variant.fields)) {
+            Some(variant_type_name(repr, &variant_name))
+        } else {
+            payload_fields(&variant.fields)
+                .first()
+                .and_then(|(_, ty)| field_c_type(ty, &resolution, reporting, &label))
+        };
+
+        let Some(c_type) = c_type else {
+            continue;
+        };
+        body.push_str(&render_doc(&doc_lines(&variant.attrs), "  "));
+        let _ = writeln!(body, "  {c_type} {variant_name};");
+    }
+
+    format!("typedef union {name} {{\n{body}}} {name};\n\n")
+}
+
+/// Reports two definitions that claim the same C name.
+///
+/// Nothing else catches this: two `#[lazyffi]` types with the same name in
+/// different crates both map to the same repr, and two different `export =`
+/// overrides can collide. C would reject the result, but only once a user tried to
+/// compile it — so the build stops here instead.
+fn duplicates(definitions: &[Definition]) -> Vec<Diagnostic> {
+    let mut seen: BTreeMap<&str, &Definition> = BTreeMap::new();
     let mut diagnostics = Vec::new();
-    let mut out = String::from(BANNER);
 
-    let _ = writeln!(out, "\n#ifndef {INCLUDE_GUARD}");
-    let _ = writeln!(out, "#define {INCLUDE_GUARD}\n");
-    out.push_str(
-        "#include <stdarg.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdlib.h>\n\n",
-    );
+    for definition in definitions {
+        if let Some(first) = seen.get(definition.name.as_str()) {
+            diagnostics.push(Diagnostic {
+                path: definition.origin.path.clone(),
+                source: definition.origin.source.as_ref().clone(),
+                line: definition.line,
+                item: definition.item.clone(),
+                label: format!("`{}` is already defined", definition.name),
+                note: Some(format!(
+                    "also exported as `{}` from {}:{}",
+                    first.name,
+                    first.origin.path.display(),
+                    first.line
+                )),
+            });
+        } else {
+            seen.insert(definition.name.as_str(), definition);
+        }
+    }
 
-    for (item, origin) in &exports.constants {
-        render_const(&mut out, item, origin, &reprs, &mut diagnostics);
-    }
-    for (item, origin) in &exports.structs {
-        render_struct(&mut out, item, origin, &reprs, &mut diagnostics);
-    }
-    for (item, origin) in &exports.functions {
-        render_function(&mut out, item, origin, &reprs, &mut diagnostics);
+    diagnostics
+}
+
+/// The state of one definition during the dependency walk.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Visit {
+    /// Not reached yet.
+    Pending,
+    /// Being walked; reaching it again means a cycle.
+    Active,
+    /// Already emitted.
+    Done,
+}
+
+/// Every C type name `text` mentions, ignoring `own` and anything not defined in
+/// this header.
+fn referenced(text: &str, names: &BTreeSet<String>, own: &str) -> BTreeSet<String> {
+    text.split(|character: char| !character.is_alphanumeric() && character != '_')
+        .filter(|word| *word != own && names.contains(*word))
+        .map(str::to_string)
+        .collect()
+}
+
+/// Orders definitions so that every type is complete before it is used.
+///
+/// C cannot express a cycle of by-value types, so a cycle here means the sources
+/// describe something the header cannot represent; it is reported rather than
+/// emitted.
+fn order(definitions: &[Definition]) -> Result<Vec<Definition>, Vec<Diagnostic>> {
+    let names: BTreeSet<String> = definitions.iter().map(|item| item.name.clone()).collect();
+    let index: BTreeMap<&str, usize> = definitions
+        .iter()
+        .enumerate()
+        .map(|(position, item)| (item.name.as_str(), position))
+        .collect();
+
+    let dependencies = definitions
+        .iter()
+        .map(|item| {
+            referenced(&item.text, &names, &item.name)
+                .iter()
+                .filter_map(|name| index.get(name.as_str()).copied())
+                .collect::<Vec<usize>>()
+        })
+        .collect::<Vec<_>>();
+
+    let mut state = vec![Visit::Pending; definitions.len()];
+    let mut ordered = Vec::with_capacity(definitions.len());
+    let mut diagnostics = Vec::new();
+
+    for start in 0..definitions.len() {
+        visit(
+            start,
+            &dependencies,
+            definitions,
+            &mut state,
+            &mut ordered,
+            &mut diagnostics,
+        );
     }
 
     if !diagnostics.is_empty() {
         return Err(diagnostics);
     }
 
-    let _ = writeln!(out, "#endif  /* {INCLUDE_GUARD} */");
+    Ok(ordered
+        .into_iter()
+        .map(|position| definitions[position].clone())
+        .collect())
+}
+
+/// Depth-first emission of one definition and its dependencies.
+fn visit(
+    node: usize,
+    dependencies: &[Vec<usize>],
+    definitions: &[Definition],
+    state: &mut [Visit],
+    ordered: &mut Vec<usize>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    match state[node] {
+        Visit::Done => return,
+        Visit::Active => {
+            let definition = &definitions[node];
+            push_diagnostic(
+                diagnostics,
+                &definition.origin,
+                definition.line,
+                &definition.item,
+                format!(
+                    "`{}` is defined in terms of itself; C cannot hold a by-value cycle",
+                    definition.name
+                ),
+            );
+            return;
+        }
+        Visit::Pending => {}
+    }
+
+    state[node] = Visit::Active;
+    for &dependency in &dependencies[node] {
+        visit(
+            dependency,
+            dependencies,
+            definitions,
+            state,
+            ordered,
+            diagnostics,
+        );
+    }
+    state[node] = Visit::Done;
+    ordered.push(node);
+}
+
+/// Renders the whole header, or reports everything it could not resolve.
+fn render(exports: &Exports) -> Result<String, Vec<Diagnostic>> {
+    let reprs = reprs(exports);
+    let mut diagnostics = Vec::new();
+
+    let mut definitions = Vec::new();
+    build_definitions(exports, &reprs, &mut definitions, &mut diagnostics);
+    diagnostics.extend(duplicates(&definitions));
+    if !diagnostics.is_empty() {
+        return Err(diagnostics);
+    }
+
+    let definitions = order(&definitions)?;
+
+    let mut out = String::from(BANNER);
+    out.push_str(&preamble());
+
+    for (item, origin) in &exports.constants {
+        render_const(&mut out, item, origin, &reprs, &mut diagnostics);
+    }
+    for definition in &definitions {
+        out.push_str(&definition.text);
+    }
+    for (item, origin) in &exports.functions {
+        render_function(&mut out, item, origin, &reprs, &mut diagnostics);
+    }
+    for (item, origin) in &exports.impls {
+        render_impl(&mut out, item, origin, &reprs, &mut diagnostics);
+    }
+
+    if !diagnostics.is_empty() {
+        return Err(diagnostics);
+    }
+
+    out.push_str(&footer());
     Ok(out)
 }
 
@@ -450,128 +1215,267 @@ fn render_const(
     out: &mut String,
     item: &ItemConst,
     origin: &Origin,
-    reprs: &ReprMap,
-    diagnostics: &mut Vec<Unresolved>,
+    reprs: &Reprs,
+    diagnostics: &mut Vec<Diagnostic>,
 ) {
     let rust_name = item.ident.to_string();
     let default = value_name(&rust_name);
     let export = export_override(&item.attrs).unwrap_or(default);
 
     if is_str_ref(&item.ty) {
+        out.push_str(&render_doc(&doc_lines(&item.attrs), ""));
         let _ = writeln!(out, "char *{export}(void);\n");
         return;
     }
 
-    let Some(repr) = repr_of(&item.ty, reprs) else {
-        unresolved(diagnostics, origin, &rust_name, &item.ty);
+    let mut reporting = Reporting::new(origin, diagnostics);
+    let Some(c_type) = field_c_type(
+        &item.ty,
+        &Resolution::plain(reprs),
+        &mut reporting,
+        &rust_name,
+    ) else {
         return;
     };
-    let Some(c_type) = c_type(&repr, reprs) else {
-        unresolved(diagnostics, origin, &rust_name, &item.ty);
-        return;
-    };
-
+    out.push_str(&render_doc(&doc_lines(&item.attrs), ""));
     let _ = writeln!(out, "extern const {c_type} {export};\n");
 }
 
-/// Renders the repr-C sibling of one exported struct.
-fn render_struct(
-    out: &mut String,
-    item: &ItemStruct,
-    origin: &Origin,
-    reprs: &ReprMap,
-    diagnostics: &mut Vec<Unresolved>,
-) {
-    let rust_name = item.ident.to_string();
-    let Some(repr) = reprs.get(&rust_name).cloned() else {
-        return;
-    };
-    let Fields::Named(named) = &item.fields else {
-        return;
-    };
-
-    let _ = writeln!(out, "typedef struct {repr} {{");
-    for field in &named.named {
-        let Some(name) = field.ident.as_ref() else {
-            continue;
-        };
-        let Some(field_repr) = repr_of(&field.ty, reprs) else {
-            unresolved(
-                diagnostics,
-                origin,
-                &format!("{rust_name}.{name}"),
-                &field.ty,
-            );
-            continue;
-        };
-        let Some(c_type) = c_type(&field_repr, reprs) else {
-            unresolved(
-                diagnostics,
-                origin,
-                &format!("{rust_name}.{name}"),
-                &field.ty,
-            );
-            continue;
-        };
-        let _ = writeln!(out, "  {c_type} {name};");
-    }
-    let _ = writeln!(out, "}} {repr};\n");
-}
-
-/// Renders the wrapper of one exported function.
+/// Renders the wrapper of one exported free function.
 fn render_function(
     out: &mut String,
     item: &ItemFn,
     origin: &Origin,
-    reprs: &ReprMap,
-    diagnostics: &mut Vec<Unresolved>,
+    reprs: &Reprs,
+    diagnostics: &mut Vec<Diagnostic>,
 ) {
     let rust_name = item.sig.ident.to_string();
     let default = value_name(&rust_name);
     let export = export_override(&item.attrs).unwrap_or(default);
 
+    out.push_str(&render_doc(&doc_lines(&item.attrs), ""));
+    render_signature(
+        out,
+        &item.sig,
+        &export,
+        None,
+        &Resolution::plain(reprs),
+        &mut Reporting::new(origin, diagnostics),
+        &rust_name,
+    );
+}
+
+/// Renders one wrapper per method of an exported `impl`.
+fn render_impl(
+    out: &mut String,
+    item: &ItemImpl,
+    origin: &Origin,
+    reprs: &Reprs,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let mut reporting = Reporting::new(origin, diagnostics);
+
+    if let Some((path, _)) = &item.trait_ {
+        reporting.report(
+            path.span().start().line,
+            "impl",
+            "`#[lazyffi]` only supports inherent `impl` blocks, not trait implementations"
+                .to_string(),
+        );
+        return;
+    }
+
+    if let Some(export) = export_override(&item.attrs) {
+        reporting.report(
+            item.self_ty.span().start().line,
+            "impl",
+            format!(
+                "`export = {export}` is not accepted on `impl`, since it would name every method \
+                 the same; put `#[lazyffi(export = ...)]` on the method instead"
+            ),
+        );
+        return;
+    }
+
+    let Some(self_name) = simple_type_name(&item.self_ty) else {
+        reporting.report(
+            item.self_ty.span().start().line,
+            "impl",
+            "`#[lazyffi]` needs a plain path as the `impl` target".to_string(),
+        );
+        return;
+    };
+
+    let Some(repr) =
+        repr_of(&item.self_ty, &Resolution::plain(reprs)).and_then(|repr| c_type(&repr, reprs))
+    else {
+        reporting.report(
+            item.self_ty.span().start().line,
+            &self_name,
+            format!("`{}` has no repr-C sibling", compact(&item.self_ty)),
+        );
+        return;
+    };
+
+    // Inside the `impl`, `Self` names the target type.
+    let resolution = Resolution {
+        reprs,
+        self_repr: Some(&repr),
+    };
+
+    for impl_item in &item.items {
+        let ImplItem::Fn(method) = impl_item else {
+            continue;
+        };
+        let rust_name = method.sig.ident.to_string();
+        let default = method_name(&self_name, &rust_name);
+        let export = export_override(&method.attrs).unwrap_or(default);
+        let label = format!("{self_name}::{rust_name}");
+
+        let mut receiver = None;
+        if let Some(receiver_item) = method.sig.receiver() {
+            match &receiver_item.kind {
+                ReceiverKind::Reference(_, _, Some(_)) => receiver = Some(format!("{repr} *")),
+                ReceiverKind::Reference(_, _, None) => {
+                    reporting.report(
+                        receiver_item.span().start().line,
+                        &label,
+                        "`&self` is rejected: a shared reference would let the C side mutate \
+                         memory Rust treats as immutable"
+                            .to_string(),
+                    );
+                    continue;
+                }
+                _ => receiver = Some(repr.clone()),
+            }
+        }
+
+        out.push_str(&render_doc(&doc_lines(&method.attrs), ""));
+        render_signature(
+            out,
+            &method.sig,
+            &export,
+            receiver.as_deref(),
+            &resolution,
+            &mut reporting,
+            &label,
+        );
+    }
+}
+
+/// Whether `#[lazyffi]` can export a signature at all.
+///
+/// The macro rejects these shapes too; checking them here as well means the build
+/// stops with this message first, instead of after the wrapper has been rendered
+/// into a plausible-looking but wrong declaration.
+fn signature_is_exportable(sig: &Signature, reporting: &mut Reporting<'_>, item: &str) -> bool {
+    if sig.asyncness.is_some() {
+        reporting.report(
+            sig.span().start().line,
+            item,
+            "`#[lazyffi]` does not support `async fn`".to_string(),
+        );
+        return false;
+    }
+
+    if !sig.generics.params.is_empty() {
+        reporting.report(
+            sig.generics.span().start().line,
+            item,
+            "`#[lazyffi]` does not support generic functions".to_string(),
+        );
+        return false;
+    }
+
+    if !matches!(sig.safety, syn::Safety::Default) {
+        reporting.report(
+            sig.span().start().line,
+            item,
+            "`#[lazyffi]` does not support `unsafe fn` or `safe fn`".to_string(),
+        );
+        return false;
+    }
+
+    true
+}
+
+/// The name of an `impl` target, when it is a plain path.
+fn simple_type_name(ty: &Type) -> Option<String> {
+    if let Type::Path(type_path) = ty
+        && type_path.qself.is_none()
+        && let Some(segment) = type_path.path.segments.last()
+        && segment.arguments.is_none()
+    {
+        return Some(segment.ident.to_string());
+    }
+
+    None
+}
+
+/// Renders one C declaration from a Rust signature.
+///
+/// `receiver` is the already-rendered C type of a method receiver, if any: the
+/// receiver has no C spelling of its own, since Rust writes it as `Self`.
+fn render_signature(
+    out: &mut String,
+    sig: &Signature,
+    export: &str,
+    receiver: Option<&str>,
+    resolution: &Resolution<'_>,
+    reporting: &mut Reporting<'_>,
+    item: &str,
+) {
+    if !signature_is_exportable(sig, reporting, item) {
+        return;
+    }
+
     let mut params = Vec::new();
-    for input in &item.sig.inputs {
+    if let Some(receiver) = receiver {
+        // `self` cannot collide with a Rust parameter name, which is why the
+        // receiver is spelled this way in C.
+        params.push(format!("{receiver} self"));
+    }
+
+    for input in &sig.inputs {
         let FnArg::Typed(pat_type) = input else {
             continue;
         };
         let Pat::Ident(pat_ident) = &*pat_type.pat else {
+            reporting.report(
+                pat_type.pat.span().start().line,
+                item,
+                "`#[lazyffi]` requires plain identifier parameters".to_string(),
+            );
             continue;
         };
 
-        let repr = match &*pat_type.ty {
+        let c_type = match &*pat_type.ty {
             Type::Reference(reference) => {
-                let Some(inner) = repr_of(&reference.elem, reprs) else {
-                    unresolved(diagnostics, origin, &rust_name, &reference.elem);
+                if reference.mutability.is_none() {
+                    reporting.report(
+                        pat_type.ty.span().start().line,
+                        item,
+                        "`&T` parameters are rejected: a shared reference would let the C side \
+                         mutate memory Rust treats as immutable"
+                            .to_string(),
+                    );
                     continue;
-                };
-                format!("*mut {inner}")
+                }
+                field_c_type(&reference.elem, resolution, reporting, item)
+                    .map(|inner| format!("{inner} *"))
             }
-            other => {
-                let Some(repr) = repr_of(other, reprs) else {
-                    unresolved(diagnostics, origin, &rust_name, other);
-                    continue;
-                };
-                repr
-            }
+            other => field_c_type(other, resolution, reporting, item),
         };
 
-        let Some(c_type) = c_type(&repr, reprs) else {
-            unresolved(diagnostics, origin, &rust_name, &pat_type.ty);
-            continue;
-        };
-        params.push(format!("{c_type} {}", pat_ident.ident));
+        if let Some(c_type) = c_type {
+            params.push(format!("{c_type} {}", pat_ident.ident));
+        }
     }
 
-    let returns = match &item.sig.output {
+    let returns = match &sig.output {
         ReturnType::Default => "void".to_string(),
         ReturnType::Type(_, ty) => {
-            let Some(repr) = repr_of(ty, reprs) else {
-                unresolved(diagnostics, origin, &rust_name, ty);
-                return;
-            };
-            let Some(c_type) = c_type(&repr, reprs) else {
-                unresolved(diagnostics, origin, &rust_name, ty);
+            let Some(c_type) = field_c_type(ty, resolution, reporting, item) else {
                 return;
             };
             c_type
@@ -599,13 +1503,13 @@ fn line_offset(source: &str, line: usize) -> Range<usize> {
     0..0
 }
 
-/// Renders [`Unresolved`] diagnostics with `annotate-snippets`.
-fn render_diagnostics(diagnostics: &[Unresolved]) -> String {
+/// Renders [`Diagnostic`]s with `annotate-snippets`.
+fn render_diagnostics(diagnostics: &[Diagnostic]) -> String {
     let renderer = Renderer::styled().decor_style(DecorStyle::Unicode);
     let mut out = String::new();
 
     for diagnostic in diagnostics {
-        let report = &[Level::ERROR
+        let mut group = Level::ERROR
             .primary_title(format!("`{}` cannot be exported", diagnostic.item))
             .element(
                 Snippet::source(&diagnostic.source)
@@ -614,10 +1518,18 @@ fn render_diagnostics(diagnostics: &[Unresolved]) -> String {
                     .annotation(
                         AnnotationKind::Primary
                             .span(line_offset(&diagnostic.source, diagnostic.line))
-                            .label(format!("`{}` has no repr-C sibling", diagnostic.ty)),
+                            .label(&diagnostic.label),
                     ),
-            )];
-        out.push_str(&renderer.render(report));
+            );
+
+        if let Some(note) = &diagnostic.note {
+            group = group.element(Level::NOTE.message(note.clone()));
+        }
+
+        out.push_str(&renderer.render(&[group]));
+        // The renderer does not terminate its output, and the build script
+        // forwards the message one line at a time.
+        out.push('\n');
     }
 
     out
