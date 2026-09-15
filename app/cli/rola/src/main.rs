@@ -1,0 +1,26 @@
+#![doc = include_str!("../README.md")]
+#![deny(missing_docs)]
+#![deny(warnings)]
+#![deny(rust_2018_idioms)]
+#![deny(clippy::pedantic)]
+#![deny(clippy::nursery)]
+
+use mingling::{
+    macros::{buffer, gen_program, r_println, renderer},
+    setup::DefaultSetup,
+};
+use rorolala_cli_setups::RorolalaSetup;
+
+fn main() {
+    let mut program = ThisProgram::new();
+    program.with_setup(DefaultSetup);
+    program.with_setup(RorolalaSetup);
+    program.exec_and_exit();
+}
+
+#[renderer(buffer)]
+pub(crate) fn render_fallback(args: EntryFallback) {
+    r_println!("Command not found: {}", args.join(" "));
+}
+
+gen_program!();

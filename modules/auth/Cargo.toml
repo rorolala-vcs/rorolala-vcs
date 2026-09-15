@@ -1,0 +1,6 @@
+[package]
+name = "rorolala-auth"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

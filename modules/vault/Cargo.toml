@@ -1,0 +1,6 @@
+[package]
+name = "rorolala-vault"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

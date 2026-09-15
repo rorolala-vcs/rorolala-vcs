@@ -1,0 +1,6 @@
+[package]
+name = "rorolala-workspace"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

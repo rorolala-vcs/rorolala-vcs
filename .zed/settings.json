@@ -1,0 +1,28 @@
+{
+    "lsp": {
+        "rust-analyzer": {
+            "initialization_options": {
+                "cargo": {
+                    "features": []
+                },
+                "check": {
+                    "command": "clippy"
+                },
+                "checkOnSave": true,
+                "files": {
+                    "exclude": [
+                        "**/target/**",
+                        "**/temp/**"
+                    ]
+                },
+                "linkedProjects": [],
+                "procMacro": {
+                    "attributes": {
+                        "enable": true
+                    },
+                    "enable": true
+                }
+            }
+        }
+    }
+}

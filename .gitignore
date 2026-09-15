@@ -1,0 +1,41 @@
+# All temp
+/.cargo/temp
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Miscellaneous temp files
+*.tmp
+*.temp
+*~
+*.bak
+*.swp
+*.swo
+*.log
+
+# Windows reserved device names
+nul
+
+# Draft files (files or directories starting with __)
+__*

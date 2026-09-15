@@ -1,0 +1,10 @@
+[package]
+name = "rorolala-cli-setups"
+version.workspace = true
+edition.workspace = true
+
+[dependencies.mingling]
+version = "0.5.1"
+
+[dependencies]
+librorolala.workspace = true
