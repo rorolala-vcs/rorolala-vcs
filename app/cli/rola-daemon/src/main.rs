@@ -4,6 +4,7 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+#![allow(clippy::missing_const_for_fn)]
 
 use mingling::{
     macros::{buffer, gen_program, r_println, renderer},

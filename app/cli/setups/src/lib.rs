@@ -19,6 +19,6 @@ where
     ThisProgram: ProgramCollect<Enum = ThisProgram>,
 {
     fn setup(self, _program: &mut mingling::Program<ThisProgram>) {
-        todo!()
+        // todo!()
     }
 }
