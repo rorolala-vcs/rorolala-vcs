@@ -28,6 +28,11 @@ macro_rules! impl_scalar {
                     // SAFETY: the caller guarantees a valid, aligned, readable pointer.
                     unsafe { *input }
                 }
+
+                unsafe fn write_ptr(self, target: *mut Self::From) {
+                    // SAFETY: the caller guarantees a valid, aligned, writable pointer.
+                    unsafe { *target = self };
+                }
             }
 
             impl ReturnType for $ty {

@@ -72,6 +72,32 @@ Generated machinery (the tag enum, the payload union, the companion structs) car
 comment of its own: what belongs to a variant or a field is documented on the member that
 mirrors it, since that is where a C reader looks.
 
+### Opaque types
+
+An exported `struct` is emitted as an incomplete type — `typedef struct FFIVault
+FFIVault;` — with no fields and no layout. C is told the type exists and nothing else,
+so a value of one can only cross as a pointer:
+
+| Rust | header |
+| --- | --- |
+| `&mut Vault` | `FFIVault *` |
+| `Vault` (parameter) | `FFIVault *`, and the call takes ownership of it |
+| `-> Vault` | `FFIVault *`, owned by the caller |
+| `-> Self` in `impl Vault` | `FFIVault *`, owned by the caller |
+
+Every opaque struct therefore also declares its release, `void
+ffi_free_<type>(FFIVault *value);`, which is what frees the pointers the exports hand
+out. This is also why a resource may hold values with no repr-C sibling at all — a
+`PathBuf`, a socket: its fields are never converted, so nothing has to map them to C.
+
+A by-value parameter is the one sharp edge: the pointer it is spelled as is C's own
+storage, and the call moves the value out of it. C must treat the handle as given away
+— not used again, and not released.
+
+An `enum` is *not* opaque: its tag and payload are its interface, and C has to be able
+to read them. A payload field whose type is opaque is spelled as a pointer, which is
+the only way an incomplete type can appear inside another type.
+
 ### Name resolution is by the last path segment
 
 Types are matched by the final identifier of the path, so an export in one crate can

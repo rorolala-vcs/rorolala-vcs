@@ -70,6 +70,21 @@ pub fn method_name(rust_name: &str, method_name: &str) -> String {
     )
 }
 
+/// Name of the function that releases an owned value of a type:
+/// `ffi_free_<snake_case>`.
+///
+/// An exported `struct` is opaque to C, so every value of one that C receives is an
+/// owning pointer, and each type needs a matching release — named the same way
+/// [`FREE_STRING`] is, for the same reason.
+///
+/// ```ignore
+/// assert_eq!(rorolala_utils_lazyffi_core::free_name("Vault"), "ffi_free_vault");
+/// ```
+#[must_use]
+pub fn free_name(rust_name: &str) -> String {
+    format!("ffi_free_{}", snake_case!(rust_name.to_string()))
+}
+
 /// Name of the tag enum generated for a data-carrying enum: `<repr>Tag`.
 ///
 /// Takes the **repr** name rather than the Rust name, so an `export = ...`

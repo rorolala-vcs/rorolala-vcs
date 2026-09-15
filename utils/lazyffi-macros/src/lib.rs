@@ -9,8 +9,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{Literal, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
 use rorolala_utils_lazyffi_core::{
-    PAYLOAD_UNIT_FIELD, VariantFields, method_name, payload_type_name, tag_type_name, type_name,
-    value_name, variant_needs_companion, variant_type_name,
+    PAYLOAD_UNIT_FIELD, VariantFields, free_name, method_name, payload_type_name, tag_type_name,
+    type_name, value_name, variant_needs_companion, variant_type_name,
 };
 use syn::{
     Attribute, Expr, ExprLit, ExprPath, Fields, FnArg, Ident, ImplItem, Item, ItemConst, ItemEnum,
@@ -113,19 +113,26 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// | Item | Behaviour |
 /// | --- | --- |
 /// | `const` | Supported: `&str`, `char`, `bool` and numeric primitives. |
-/// | `struct` | Supported: named fields, no generics. |
+/// | `struct` | Supported: exported as an **opaque handle**. C is told the type exists and nothing about what is in it. No generics. |
 /// | `enum` | Supported: unit-only becomes a `#[repr(C)]` enum, variants with data become a tag plus a payload union. |
 /// | `fn` | Supported: by-value and `&mut` parameters, by-value return. |
 /// | `impl` | Supported: inherent impls, flattened into free functions whose first parameter is the receiver. |
 ///
-/// Every Rust type has a single repr-C sibling named by `export`; all four
-/// conversion traits point at it. The original item is always kept and the FFI
-/// item is generated next to it:
+/// A `struct`'s repr is opaque, so a value of one crosses the boundary only as a
+/// pointer: `&mut` borrows it, a by-value parameter **takes ownership** of it, and a
+/// return hands out an owning pointer that C releases with `ffi_free_<type>`. This is
+/// also the only reason a resource whose fields have no repr-C sibling (a `PathBuf`,
+/// say) can be exported at all — its fields are never converted.
+///
+/// An `enum`'s repr is transparent, because its tag and payload *are* its interface:
+/// C has to be able to read them. The original item is always kept and the FFI item is
+/// generated next to it:
 ///
 /// - a `const` scalar becomes a `#[unsafe(no_mangle)] static`, a `const` `&str`
 ///   becomes an `extern "C"` function allocating a C string (release it with
 ///   `rorolala_utils_lazyffi::ffi_free_string`),
-/// - a `struct` gains a `#[repr(C)]` sibling plus the four conversions,
+/// - a `struct` gains a one-field repr wrapping the value, the four conversions, and
+///   a `ffi_free_<type>` release,
 /// - a unit-only `enum` gains a `#[repr(C)]` sibling plus the four conversions,
 /// - an `enum` with data gains a repr struct holding a generated `<repr>Tag` enum
 ///   and a `<repr>Payload` union, plus the four conversions,
@@ -136,12 +143,12 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// # Naming
 ///
 /// Defaults come from `rorolala-utils-lazyffi-core`: `ffi_<snake_case>` for
-/// `fn`/`const`, `ffi_<snake_case(type)>_<snake_case(method)>` for methods, and
-/// `FFI<PascalCase>` for `struct`/`enum` (with `Tag`, `Payload` and
-/// `<repr><Variant>` derivatives for the parts of a data-carrying enum). The
-/// repr numbers enum variants from zero in declaration order; the Rust
-/// discriminants are not mirrored, because the conversions match on the variant
-/// rather than reinterpreting the value.
+/// `fn`/`const`, `ffi_<snake_case(type)>_<snake_case(method)>` for methods,
+/// `ffi_free_<snake_case(type)>` for a type's release, and `FFI<PascalCase>` for
+/// `struct`/`enum` (with `Tag`, `Payload` and `<repr><Variant>` derivatives for the
+/// parts of a data-carrying enum). The repr numbers enum variants from zero in
+/// declaration order; the Rust discriminants are not mirrored, because the
+/// conversions match on the variant rather than reinterpreting the value.
 ///
 /// # Documentation
 ///
@@ -157,18 +164,18 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// /// A rectangle.
 /// ///
 /// /// # FFI
-/// /// Passed by value; the fields are copied, not shared.
+/// /// Moved in and out by pointer; the handle owns its storage.
 /// #[lazyffi]
 /// pub struct Rect { /* ... */ }
 /// ```
 ///
 /// # References
 ///
-/// `&mut T` parameters are supported: the value is copied in, the function runs
-/// with `&mut`, and the result is written back through the same pointer. Shared
-/// `&T` parameters are rejected — a shared reference would let the C side mutate
-/// memory Rust treats as immutable. Reference returns are rejected too: the
-/// wrapper cannot guarantee the referent outlives the call.
+/// `&mut T` parameters are supported: the value is read out, the function runs with
+/// `&mut`, and the result is written back through the same pointer. Shared `&T`
+/// parameters are rejected — a shared reference would let the C side mutate memory
+/// Rust treats as immutable. Reference returns are rejected too: the wrapper cannot
+/// guarantee the referent outlives the call.
 #[proc_macro_attribute]
 pub fn lazyffi(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as LazyFfiArgs);
@@ -291,69 +298,87 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
         .export
         .clone()
         .unwrap_or_else(|| default_type_name(rust_name));
-
-    let Fields::Named(named) = &item.fields else {
-        return Err(syn::Error::new_spanned(
-            &item.fields,
-            "`#[lazyffi]` requires a struct with named fields",
-        ));
-    };
-
-    let mut ffi_fields = Vec::new();
-    let mut from_ffi = Vec::new();
-    let mut to_ffi = Vec::new();
-
-    for field in &named.named {
-        let Some(field_name) = field.ident.as_ref() else {
-            continue;
-        };
-
-        if field.attrs.iter().any(|attr| attr.path().is_ident("cfg")) {
-            return Err(syn::Error::new_spanned(
-                field,
-                "`#[lazyffi]` does not support `cfg` on struct fields yet",
-            ));
-        }
-
-        let field_ty = &field.ty;
-        let field_docs = docs_or_fallback(&format!("field `{field_name}`"), &field.attrs);
-
-        ffi_fields.push(quote! {
-            #(#field_docs)*
-            pub #field_name: <#field_ty as ::rorolala_utils_lazyffi::ReturnType>::Target,
-        });
-        from_ffi.push(quote! {
-            #field_name: unsafe {
-                <#field_ty as ::rorolala_utils_lazyffi::InputType>::input_type(input.#field_name)
-            },
-        });
-        to_ffi.push(quote! {
-            #field_name: <#field_ty as ::rorolala_utils_lazyffi::ReturnType>::return_self(
-                self.#field_name,
-            ),
-        });
-    }
+    let release = Ident::new(&free_name(&rust_name.to_string()), rust_name.span());
 
     let struct_docs = mirrored_attrs(&format!("`{rust_name}`"), &item.attrs);
-    let conversions = conversion_impls(
-        rust_name,
-        &ffi_name,
-        &quote! { Self { #(#from_ffi)* } },
-        &quote! { #ffi_name { #(#to_ffi)* } },
+    let release_docs = generated_attrs(
+        &format!("Releases a `{rust_name}` handed out by an export."),
+        &item.attrs,
     );
 
     Ok(quote! {
         #item
 
         #(#struct_docs)*
-        #[repr(C)]
-        #[derive(Clone, Copy)]
+        /// Opaque to C, which is told the type exists and nothing else about it.
+        #[repr(transparent)]
         #[allow(nonstandard_style)]
-        pub struct #ffi_name {
-            #(#ffi_fields)*
+        pub struct #ffi_name(#rust_name);
+
+        impl ::rorolala_utils_lazyffi::InputType for #rust_name {
+            type From = *mut #ffi_name;
+
+            /// Takes the value C points at.
+            ///
+            /// The handle *is* the value, so this moves it out and leaves C's
+            /// storage stale: the caller gives it up in exchange.
+            unsafe fn input_type(input: Self::From) -> Self {
+                // SAFETY: the caller guarantees a valid, aligned, readable pointer to
+                // a live value, and hands ownership of that storage over with it.
+                unsafe { ::core::ptr::read(::core::ptr::addr_of!((*input).0)) }
+            }
         }
 
-        #conversions
+        impl ::rorolala_utils_lazyffi::ReturnType for #rust_name {
+            type Target = *mut #ffi_name;
+
+            /// Moves the value into freshly allocated storage.
+            ///
+            /// C owns the result and releases it with [`#release`].
+            fn return_self(self) -> Self::Target {
+                ::std::boxed::Box::into_raw(::std::boxed::Box::new(#ffi_name(self)))
+            }
+        }
+
+        impl ::rorolala_utils_lazyffi::InputPtr for #rust_name {
+            type From = #ffi_name;
+
+            /// Moves the value out of C's storage, to be handed back by
+            /// [`write_ptr`](::rorolala_utils_lazyffi::InputPtr::write_ptr).
+            unsafe fn input_ptr(input: *mut Self::From) -> Self {
+                // SAFETY: the caller guarantees a valid, aligned, readable pointer,
+                // and writes a value back before its storage is used again.
+                unsafe { ::core::ptr::read(::core::ptr::addr_of!((*input).0)) }
+            }
+
+            unsafe fn write_ptr(self, target: *mut Self::From) {
+                // SAFETY: the caller guarantees a valid, aligned, writable pointer,
+                // and passes the one the value was read from.
+                unsafe { ::core::ptr::write(::core::ptr::addr_of_mut!((*target).0), self) };
+            }
+        }
+
+        impl ::rorolala_utils_lazyffi::ReturnPtr for #rust_name {
+            type Target = #ffi_name;
+
+            fn return_ptr(self) -> *const Self::Target {
+                ::std::boxed::Box::into_raw(::std::boxed::Box::new(#ffi_name(self)))
+            }
+        }
+
+        #(#release_docs)*
+        #[doc = #SAFETY_DOC]
+        #[unsafe(no_mangle)]
+        #[allow(nonstandard_style)]
+        pub unsafe extern "C" fn #release(value: *mut #ffi_name) {
+            if value.is_null() {
+                return;
+            }
+
+            // SAFETY: the caller guarantees `value` is a pointer this export handed
+            // out and has not been released yet.
+            drop(unsafe { ::std::boxed::Box::from_raw(value) });
+        }
     })
 }
 
@@ -811,6 +836,13 @@ fn conversion_impls(
                 // SAFETY: the caller guarantees a valid, aligned, readable pointer.
                 unsafe { <Self as ::rorolala_utils_lazyffi::InputType>::input_type(*input) }
             }
+
+            unsafe fn write_ptr(self, target: *mut Self::From) {
+                // SAFETY: the caller guarantees a valid, aligned, writable pointer.
+                unsafe {
+                    *target = <Self as ::rorolala_utils_lazyffi::ReturnType>::return_self(self);
+                }
+            }
         }
 
         impl ::rorolala_utils_lazyffi::ReturnPtr for #rust_name {
@@ -894,7 +926,7 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
             parts.call_args.push(quote! { &mut #local });
             parts.write_back.push(quote! {
                 unsafe {
-                    *#name = <#inner as ::rorolala_utils_lazyffi::ReturnType>::return_self(#local);
+                    <#inner as ::rorolala_utils_lazyffi::InputPtr>::write_ptr(#local, #name);
                 }
             });
 
@@ -1178,7 +1210,7 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
             parts.call_args.push(quote! { &mut #local });
             parts.write_back.push(quote! {
                 unsafe {
-                    *#param = <Self as ::rorolala_utils_lazyffi::ReturnType>::return_self(#local);
+                    <Self as ::rorolala_utils_lazyffi::InputPtr>::write_ptr(#local, #param);
                 }
             });
         }

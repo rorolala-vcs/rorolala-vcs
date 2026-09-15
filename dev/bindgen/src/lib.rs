@@ -76,8 +76,8 @@ use std::sync::Arc;
 use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet, renderer::DecorStyle};
 use quote::quote;
 use rorolala_utils_lazyffi_core::{
-    FREE_STRING, STRING_REPR, VariantFields, c_variant_name, for_each_scalar, method_name,
-    payload_type_name, tag_type_name, type_name, value_name, variant_needs_companion,
+    FREE_STRING, STRING_REPR, VariantFields, c_variant_name, for_each_scalar, free_name,
+    method_name, payload_type_name, tag_type_name, type_name, value_name, variant_needs_companion,
     variant_type_name,
 };
 use syn::{
@@ -394,17 +394,36 @@ struct Reprs {
     map: BTreeMap<String, String>,
     /// Every type name the header defines.
     names: BTreeSet<String>,
+    /// Repr-C names of the types that are opaque to C.
+    ///
+    /// An exported `struct` is one: C is told that the type exists and nothing else
+    /// about it, so it can never hold a value of one, and every appearance of one in
+    /// the header is a pointer.
+    opaque: BTreeSet<String>,
+}
+
+impl Reprs {
+    /// The C spelling of a value whose repr-C name is `repr`.
+    fn shape(&self, repr: &str) -> String {
+        if self.opaque.contains(repr) {
+            format!("*mut {repr}")
+        } else {
+            repr.to_string()
+        }
+    }
 }
 
 /// Builds the type tables.
 ///
 /// The built-in types come from `lazyffi-core`, so they match what `builtin`
 /// actually implements; every `#[lazyffi]` type maps to the repr its invocation
-/// generates, including the parts of a data-carrying enum.
+/// generates, including the parts of a data-carrying enum. An exported `struct` is
+/// also recorded as opaque, since its repr is never spelled out in C.
 fn reprs(exports: &Exports) -> Reprs {
     let mut reprs = Reprs {
         map: BTreeMap::new(),
         names: BTreeSet::new(),
+        opaque: BTreeSet::new(),
     };
 
     for scalar in SCALAR_NAMES {
@@ -425,6 +444,10 @@ fn reprs(exports: &Exports) -> Reprs {
         let default = type_name(&rust_name);
         let repr = export_override(attrs).unwrap_or(default);
         reprs.names.insert(repr.clone());
+
+        if matches!(item, TypeItem::Struct(_)) {
+            reprs.opaque.insert(repr.clone());
+        }
 
         if let TypeItem::Enum(item) = item
             && carries_data(item)
@@ -775,14 +798,31 @@ fn escape_comment(text: &str) -> String {
     text.replace("*/", "* /")
 }
 
-/// The C spelling of a field's Rust type, reporting it when there is none.
-fn field_c_type(
+/// The C spelling of a value of `ty`, as it appears in a declaration.
+///
+/// An opaque type has no value C could name, so this is a pointer to it.
+fn shape_of(ty: &Type, resolution: &Resolution<'_>) -> Option<String> {
+    let repr = repr_of(ty, resolution)?;
+    c_type(&resolution.reprs.shape(&repr), resolution.reprs)
+}
+
+/// The C name of what a `&mut` to `ty` points at.
+///
+/// This is the repr itself rather than its shape: an opaque type is already a pointer
+/// in a value position, but a `&mut` to it points at the handle, not at a pointer to a
+/// handle.
+fn pointee_of(ty: &Type, resolution: &Resolution<'_>) -> Option<String> {
+    let repr = repr_of(ty, resolution)?;
+    c_type(&repr, resolution.reprs)
+}
+
+/// Records that `ty` has no repr-C sibling, if that is what happened.
+fn report_missing(
+    spelling: Option<String>,
     ty: &Type,
-    resolution: &Resolution<'_>,
     reporting: &mut Reporting<'_>,
     item: &str,
 ) -> Option<String> {
-    let spelling = repr_of(ty, resolution).and_then(|repr| c_type(&repr, resolution.reprs));
     if spelling.is_none() {
         reporting.report(
             ty.span().start().line,
@@ -791,6 +831,26 @@ fn field_c_type(
         );
     }
     spelling
+}
+
+/// The C spelling of a field or parameter of type `ty`.
+fn field_c_type(
+    ty: &Type,
+    resolution: &Resolution<'_>,
+    reporting: &mut Reporting<'_>,
+    item: &str,
+) -> Option<String> {
+    report_missing(shape_of(ty, resolution), ty, reporting, item)
+}
+
+/// The C spelling of the type behind a `&mut`.
+fn pointee_c_type(
+    ty: &Type,
+    resolution: &Resolution<'_>,
+    reporting: &mut Reporting<'_>,
+    item: &str,
+) -> Option<String> {
+    report_missing(pointee_of(ty, resolution), ty, reporting, item)
 }
 
 /// Builds one definition per C type the exported types need.
@@ -802,52 +862,32 @@ fn build_definitions(
 ) {
     for (item, origin) in &exports.types {
         match item {
-            TypeItem::Struct(item) => build_struct(item, origin, reprs, definitions, diagnostics),
+            TypeItem::Struct(item) => build_struct(item, origin, reprs, definitions),
             TypeItem::Enum(item) => build_enum(item, origin, reprs, definitions, diagnostics),
         }
     }
 }
 
 /// Builds the definition of one exported struct.
+///
+/// The struct is opaque: its fields are not converted and never reach C, so what is
+/// emitted is an incomplete type plus the declaration of the release that frees the
+/// handles exports hand out.
 fn build_struct(
     item: &ItemStruct,
     origin: &Origin,
     reprs: &Reprs,
     definitions: &mut Vec<Definition>,
-    diagnostics: &mut Vec<Diagnostic>,
 ) {
     let rust_name = item.ident.to_string();
     let Some(repr) = reprs.map.get(&rust_name).cloned() else {
         return;
     };
-
-    let mut reporting = Reporting::new(origin, diagnostics);
-    let Fields::Named(named) = &item.fields else {
-        reporting.report(
-            item.fields.span().start().line,
-            &rust_name,
-            "`#[lazyffi]` requires a struct with named fields".to_string(),
-        );
-        return;
-    };
-
-    let resolution = Resolution::plain(reprs);
-    let mut body = String::new();
-    for field in &named.named {
-        let Some(name) = field.ident.as_ref() else {
-            continue;
-        };
-        let label = format!("{rust_name}.{name}");
-        let Some(c_type) = field_c_type(&field.ty, &resolution, &mut reporting, &label) else {
-            continue;
-        };
-        body.push_str(&render_doc(&doc_lines(&field.attrs), "  "));
-        let _ = writeln!(body, "  {c_type} {name};");
-    }
+    let release = free_name(&rust_name);
 
     definitions.push(Definition {
         text: format!(
-            "{doc}typedef struct {repr} {{\n{body}}} {repr};\n\n",
+            "{doc}typedef struct {repr} {repr};\n\nvoid {release}({repr} *value);\n\n",
             doc = render_doc(&doc_lines(&item.attrs), "")
         ),
         name: repr,
@@ -1335,6 +1375,7 @@ fn render_impl(
         let mut receiver = None;
         if let Some(receiver_item) = method.sig.receiver() {
             match &receiver_item.kind {
+                // A `&mut` points at the repr itself, opaque or not.
                 ReceiverKind::Reference(_, _, Some(_)) => receiver = Some(format!("{repr} *")),
                 ReceiverKind::Reference(_, _, None) => {
                     reporting.report(
@@ -1346,7 +1387,9 @@ fn render_impl(
                     );
                     continue;
                 }
-                _ => receiver = Some(repr.clone()),
+                // A by-value receiver is handed over the way a value is: as a pointer
+                // for an opaque type, by value otherwise.
+                _ => receiver = Some(reprs.shape(&repr)),
             }
         }
 
@@ -1461,7 +1504,20 @@ fn render_signature(
                     );
                     continue;
                 }
-                field_c_type(&reference.elem, resolution, reporting, item)
+                // A string already crosses as a C string, so there is no second
+                // pointer to take.
+                if repr_of(&reference.elem, resolution).is_some_and(|repr| repr == STRING_REPR) {
+                    reporting.report(
+                        pat_type.ty.span().start().line,
+                        item,
+                        "`&mut String` is not supported: a string crosses as a C string, and a \
+                         pointer to one is not a value this side can build"
+                            .to_string(),
+                    );
+                    continue;
+                }
+                // A `&mut` points at the repr itself, opaque or not.
+                pointee_c_type(&reference.elem, resolution, reporting, item)
                     .map(|inner| format!("{inner} *"))
             }
             other => field_c_type(other, resolution, reporting, item),
