@@ -26,6 +26,17 @@ RELEASE_DIR := $(TARGET_DIR)/release
 # The generated C header, written by the root build script while `lib` builds.
 HEADER := $(RELEASE_DIR)/ffi_bindings/rorolala_ffi.h
 
+# Completion scripts. While `bin` compiles, mingling's `gen_program!()` writes one
+# per supported shell into this directory — deliberately not profile-specific, so
+# the same files serve every build.
+COMPLETION_DIR ?= $(TARGET_DIR)/mingling
+
+# mingling names them `<crate>_comp.<shell>`; they are exported as one set named
+# after the program. The scripts call the `rola` command by name and never refer to
+# their own file name, so the exported name is free.
+COMPLETION_SOURCE ?= $(COMPLETION_DIR)/rola_comp
+COMPLETION_TARGET ?= $(BUILD_DIR)/bin/rola-completion
+
 # `export` deletes its destination before copying, so refuse a path that would take
 # something else with it.
 ifneq ($(filter /%,$(BUILD_DIR)),)
@@ -39,19 +50,21 @@ endif
 # Windows one with a `.dll` suffix, so the exported names are normalised to one
 # shape per platform:
 #
-#   | cargo artifact              | exported as                              |
-#   | --------------------------- | ---------------------------------------- |
-#   | librorolala_ffi.so          | $(BUILD_DIR)/lib/rorolala.so             |
-#   | librorolala_ffi.dylib       | $(BUILD_DIR)/lib/rorolala.dylib          |
-#   | rorolala_ffi.dll            | $(BUILD_DIR)/lib/rorolala.dll            |
-#   | librorolala_ffi.a           | $(BUILD_DIR)/lib/rorolala.a              |
-#   | rorolala_ffi.lib            | $(BUILD_DIR)/lib/rorolala.lib            |
-#   | ffi_bindings/rorolala_ffi.h | $(BUILD_DIR)/lib/rorolala.h              |
-#   |                             | $(BUILD_DIR)/lib/rorolala.hpp            |
-#   | rola[.exe]                  | $(BUILD_DIR)/bin/rola[.exe]              |
+#   | cargo artifact               | exported as                              |
+#   | ---------------------------- | ---------------------------------------- |
+#   | librorolala_ffi.so           | $(BUILD_DIR)/lib/rorolala.so             |
+#   | librorolala_ffi.dylib        | $(BUILD_DIR)/lib/rorolala.dylib          |
+#   | rorolala_ffi.dll             | $(BUILD_DIR)/lib/rorolala.dll            |
+#   | librorolala_ffi.a            | $(BUILD_DIR)/lib/rorolala.a              |
+#   | rorolala_ffi.lib             | $(BUILD_DIR)/lib/rorolala.lib            |
+#   | ffi_bindings/rorolala_ffi.h  | $(BUILD_DIR)/lib/rorolala.h              |
+#   |                              | $(BUILD_DIR)/lib/rorolala.hpp            |
+#   | rola[.exe]                   | $(BUILD_DIR)/bin/rola[.exe]              |
+#   | mingling/rola_comp.<shell>   | $(BUILD_DIR)/bin/rola-completion.<shell> |
 #
 # The header is C and C++ at once — its declarations sit in an `extern "C"` block —
-# so `.hpp` is the same file under the name a C++ project includes.
+# so `.hpp` is the same file under the name a C++ project includes. The completion
+# scripts are the four shells mingling generates: sh, zsh, fish and ps1.
 ifeq ($(OS),Windows_NT)
   EXE_SUFFIX    := .exe
   SHARED_SUFFIX := dll
@@ -81,7 +94,8 @@ check:
 lib:
 	$(CARGO) build $(RELEASE_FLAG) --all-features -p rorolala-ffi
 
-# Builds the release command line program.
+# Builds the release command line program. Compiling it is also what refreshes the
+# completion scripts in $(COMPLETION_DIR).
 bin:
 	$(CARGO) build $(RELEASE_FLAG) --all-features -p rola
 
@@ -89,7 +103,7 @@ bin:
 build: lib bin
 
 # Lays the build out for hand-off under $(BUILD_DIR), under the names a consumer
-# links and includes against.
+# links, includes and sources.
 export: build
 	rm -rf $(BUILD_DIR)/lib $(BUILD_DIR)/bin
 	mkdir -p $(BUILD_DIR)/lib $(BUILD_DIR)/bin
@@ -98,6 +112,10 @@ export: build
 	cp $(HEADER) $(BUILD_DIR)/lib/rorolala.h
 	cp $(HEADER) $(BUILD_DIR)/lib/rorolala.hpp
 	cp $(RELEASE_DIR)/rola$(EXE_SUFFIX) $(BUILD_DIR)/bin/rola$(EXE_SUFFIX)
+	cp $(COMPLETION_SOURCE).sh $(COMPLETION_TARGET).sh
+	cp $(COMPLETION_SOURCE).zsh $(COMPLETION_TARGET).zsh
+	cp $(COMPLETION_SOURCE).fish $(COMPLETION_TARGET).fish
+	cp $(COMPLETION_SOURCE).ps1 $(COMPLETION_TARGET).ps1
 
 # Runs clippy over the workspace; warnings are errors.
 clippy:
