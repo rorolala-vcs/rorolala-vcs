@@ -25,6 +25,8 @@
                     "modules/protocol/Cargo.toml",
                     "modules/vault/Cargo.toml",
                     "modules/workspace/Cargo.toml",
+                    "utils/configure/Cargo.toml",
+                    "utils/configure-macros/Cargo.toml",
                     "utils/lazyffi/Cargo.toml",
                     "utils/lazyffi-core/Cargo.toml",
                     "utils/lazyffi-macros/Cargo.toml",
