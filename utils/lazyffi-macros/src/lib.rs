@@ -160,13 +160,17 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///   heading itself is dropped and the section ends at the next heading, so
 ///   `# Safety`, `# Panics` and anything else remain Rust-only.
 ///
-/// ```rust,ignore
+/// ```
+/// use rorolala_utils_lazyffi::lazyffi;
+///
 /// /// A rectangle.
 /// ///
 /// /// # FFI
 /// /// Moved in and out by pointer; the handle owns its storage.
 /// #[lazyffi]
-/// pub struct Rect { /* ... */ }
+/// pub struct Rect {}
+///
+/// fn main() {}
 /// ```
 ///
 /// # References

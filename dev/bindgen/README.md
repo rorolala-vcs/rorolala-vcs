@@ -43,16 +43,20 @@ under a `# FFI` heading (the heading itself is dropped, and the section ends at 
 heading). Everything else stays on the Rust side, so the header stays readable no matter
 how thorough the Rust docs are.
 
-```rust,ignore
+```rust
+use rorolala_utils_lazyffi::lazyffi;
+
 /// A rectangle.
 ///
 /// # FFI
-/// Passed by value; the fields are copied, not shared.
+/// Moved in and out by pointer; the handle owns its storage.
 ///
 /// # Invariants
 /// Never negative.
 #[lazyffi]
-pub struct Rect { /* ... */ }
+pub struct Rect {}
+
+fn main() {}
 ```
 
 becomes

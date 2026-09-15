@@ -9,3 +9,8 @@ proc-macro2.workspace = true
 quote.workspace = true
 rorolala-utils-lazyffi-core.workspace = true
 syn.workspace = true
+
+# The example in the README is an export, so it needs the crate that carries the
+# attribute to compile as a doctest rather than be ignored.
+[dev-dependencies]
+rorolala-utils-lazyffi.workspace = true

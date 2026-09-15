@@ -34,7 +34,7 @@ macro_rules! for_each_scalar {
 
 /// Export name of a value-level item (`fn`, `const`): `ffi_<snake_case>`.
 ///
-/// ```ignore
+/// ```
 /// assert_eq!(rorolala_utils_lazyffi_core::value_name("FFI_SMOKE_NAME"), "ffi_ffi_smoke_name");
 /// ```
 #[must_use]
@@ -44,7 +44,7 @@ pub fn value_name(rust_name: &str) -> String {
 
 /// Export name of a type (`struct`, `enum`): `FFI<PascalCase>`.
 ///
-/// ```ignore
+/// ```
 /// assert_eq!(rorolala_utils_lazyffi_core::type_name("Foo"), "FFIFoo");
 /// ```
 #[must_use]
@@ -58,7 +58,7 @@ pub fn type_name(rust_name: &str) -> String {
 /// free functions: without it, `impl Foo { fn new }` and `impl Bar { fn new }`
 /// would both claim the symbol `ffi_new`.
 ///
-/// ```ignore
+/// ```
 /// assert_eq!(rorolala_utils_lazyffi_core::method_name("Vault", "open"), "ffi_vault_open");
 /// ```
 #[must_use]
@@ -77,7 +77,7 @@ pub fn method_name(rust_name: &str, method_name: &str) -> String {
 /// owning pointer, and each type needs a matching release — named the same way
 /// [`FREE_STRING`] is, for the same reason.
 ///
-/// ```ignore
+/// ```
 /// assert_eq!(rorolala_utils_lazyffi_core::free_name("Vault"), "ffi_free_vault");
 /// ```
 #[must_use]
@@ -144,7 +144,7 @@ pub enum VariantFields {
 /// into C) or more than one tuple field (so the union only ever names one type
 /// per variant). A single tuple field is used directly.
 ///
-/// ```ignore
+/// ```
 /// assert!(!rorolala_utils_lazyffi_core::variant_needs_companion(
 ///     &rorolala_utils_lazyffi_core::VariantFields::Unnamed(1)
 /// ));
