@@ -37,7 +37,8 @@ Replacing a file in place has two ways to lose it: a process that dies while wri
 leaves half a file, and two processes writing leave a mixture of both. So an edit never
 touches the original:
 
-1. `read` parses the original and copies it to `<file>.lock` beside it,
+1. `read` parses the original and copies it to `<file>.lock` beside it — and `new` stages
+   an empty configuration the same way, for a file that is not there yet,
 2. `write` renders the contents into that staging file,
 3. publishing renames the staging file over the original — one atomic step.
 

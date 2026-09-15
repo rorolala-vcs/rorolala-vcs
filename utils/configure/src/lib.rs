@@ -268,11 +268,11 @@ pub trait Configure: Serialize + DeserializeOwned {
 /// A configuration file being edited, staged beside the original.
 ///
 /// [`read`](Config::read) parses the file and copies it to a staging file next to it
-/// (`<file>.lock`). [`write`](Config::write) renders the current contents into that
-/// staging file, and the original is then replaced by a single rename — on
-/// [`publish`](Config::publish), or when the value is dropped. The original is
-/// therefore never truncated in place: a process that dies mid-edit leaves it whole,
-/// with the staged edit beside it.
+/// (`<file>.lock`), and [`new`](Config::new) starts one from an empty configuration.
+/// [`write`](Config::write) renders the current contents into that staging file, and
+/// the original is then replaced by a single rename — on [`publish`](Config::publish),
+/// or when the value is dropped. The original is therefore never truncated in place: a
+/// process that dies mid-edit leaves it whole, with the staged edit beside it.
 ///
 /// The contents are reached straight through: a `Config<T>` is a `T` for reading and
 /// for writing, through [`Deref`] and [`DerefMut`].
@@ -309,6 +309,61 @@ impl<T: Configure> Config<T> {
         let value = T::read_from(&file)?;
 
         fs::copy(&file, &lock).map_err(|error| Error::Stage {
+            file: file.clone(),
+            lock: lock.clone(),
+            reason: Reason::of(&error),
+        })?;
+
+        Ok(Self {
+            value,
+            file,
+            lock,
+            published: false,
+        })
+    }
+
+    /// Creates `path` as a new, empty configuration.
+    ///
+    /// The file is written straight away, with the default value rendered in the format
+    /// its extension names, and a copy of it is staged beside the original — which leaves
+    /// exactly the state [`read`](Config::read) leaves behind, so editing and publishing
+    /// carry on the same way. An existing file at `path` is replaced: this is the call
+    /// that asks for a starting point.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a staging file is already there, when the default value cannot be
+    /// rendered, or when either file cannot be written.
+    pub fn new(path: impl AsRef<Path>) -> Result<Self, Error>
+    where
+        T: Default,
+    {
+        let file = path.as_ref().to_path_buf();
+        let lock = lock_path(&file);
+
+        if lock.try_exists().map_err(|error| Error::Read {
+            file: lock.clone(),
+            reason: Reason::of(&error),
+        })? {
+            return Err(Error::Locked { file, lock });
+        }
+
+        let value = T::default();
+
+        let text = Format::of(&file)
+            .render(&value)
+            .map_err(|()| Error::Render { file: file.clone() })?;
+
+        // Staged first and put in place second, so that a failure leaves the staging
+        // file — the same leftover an interrupted edit leaves, and the same sign that the
+        // original was never reached.
+        fs::write(&lock, text).map_err(|error| Error::Stage {
+            file: file.clone(),
+            lock: lock.clone(),
+            reason: Reason::of(&error),
+        })?;
+
+        fs::copy(&lock, &file).map_err(|error| Error::Publish {
             file: file.clone(),
             lock: lock.clone(),
             reason: Reason::of(&error),
@@ -504,7 +559,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A configuration to round-trip.
-    #[derive(Debug, PartialEq, Serialize, Deserialize, Configure)]
+    #[derive(Debug, Default, PartialEq, Serialize, Deserialize, Configure)]
     struct Settings {
         name: String,
         level: u32,
@@ -662,6 +717,62 @@ mod tests {
             }) => {}
             other => panic!("expected a read failure, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_new_configuration_is_created_empty_and_publishes_the_edit() {
+        let dir = scratch("new");
+        let file = dir.join("settings.toml");
+
+        {
+            let mut config = Config::<Settings>::new(&file).unwrap();
+
+            // Created on the spot, holding the default value, and staged like a read.
+            assert_eq!(config.name, "");
+            assert_eq!(config.level, 0);
+            assert!(file.exists());
+            assert_eq!(config.lock(), dir.join("settings.toml.lock"));
+            assert!(config.lock().exists());
+
+            config.level = 4;
+            config.write().unwrap();
+
+            // The file still holds the empty configuration: only the staging copy has
+            // the edit in it yet.
+            assert_eq!(
+                fs::read_to_string(&file).unwrap(),
+                "name = \"\"\nlevel = 0\n"
+            );
+        }
+
+        let published = fs::read_to_string(&file).unwrap();
+        assert!(published.contains("level = 4"));
+        assert!(!dir.join("settings.toml.lock").exists());
+    }
+
+    #[test]
+    fn a_new_configuration_is_refused_where_a_staged_edit_is_in_the_way() {
+        let dir = scratch("new-locked");
+        let file = dir.join("settings.toml");
+        fs::write(&file, TOML).unwrap();
+        fs::write(
+            dir.join("settings.toml.lock"),
+            "name = \"staged\"\nlevel = 9\n",
+        )
+        .unwrap();
+
+        match Config::<Settings>::new(&file) {
+            Err(Error::Locked { .. }) => {}
+            other => panic!("expected Locked, got {other:?}"),
+        }
+
+        // The refusal left both files as they were.
+        assert_eq!(fs::read_to_string(&file).unwrap(), TOML);
+        assert!(
+            fs::read_to_string(dir.join("settings.toml.lock"))
+                .unwrap()
+                .contains("staged")
+        );
     }
 
     #[test]
