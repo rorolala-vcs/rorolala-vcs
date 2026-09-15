@@ -43,7 +43,7 @@ under a `# FFI` heading (the heading itself is dropped, and the section ends at 
 heading). Everything else stays on the Rust side, so the header stays readable no matter
 how thorough the Rust docs are.
 
-```rust
+```rust,ignore
 /// A rectangle.
 ///
 /// # FFI

@@ -1,7 +1,8 @@
 //! Conversions for common types.
 //!
-//! The traits themselves live in [`crate::convert`]; this module implements them
-//! for the primitives that most FFI signatures are built from.
+//! The traits are defined in the private `convert` module and re-exported at the
+//! crate root, as [`crate::InputType`] and the three that go with it; this module
+//! implements them for the primitives that most FFI signatures are built from.
 
 use core::ffi::c_char;
 use std::ffi::CStr;

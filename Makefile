@@ -87,13 +87,13 @@ endif
 
 .PHONY: all check lib bin build export clippy doc doc-open fmt test cargo-clean clean
 
-# Default target: the code compiles and every lint passes.
+# Default target: the full gate.
 all: check build
 
-# Type-checks the workspace, tests and examples included. No artifact comes out of
-# this, so it stays on the profile cargo defaults to.
-check:
-	$(CARGO) check --workspace --all-targets --all-features
+# The full gate: the test suites, a build of every crate, clippy, then the
+# documentation. Composed from the targets below rather than repeating their
+# commands.
+check: test build clippy doc
 
 # Builds the C ABI artifact — a release cdylib and staticlib — and, as a side effect
 # of the root build script, the C header that describes it.
