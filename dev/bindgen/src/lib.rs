@@ -104,6 +104,13 @@ const SCALAR_NAMES: &[&str] = for_each_scalar!(scalar_names);
 /// Include guard used in the generated header.
 const INCLUDE_GUARD: &str = "ROROLALA_FFI_H";
 
+/// C spelling of a string in a position Rust only reads.
+///
+/// A parameter is always such a position: the callee copies out of the C string and
+/// the caller keeps its buffer, so the string is spelled `const` — which is also what
+/// lets a C++ caller pass a string literal.
+const READ_ONLY_STRING: &str = "const char *";
+
 /// Documentation heading whose section is carried into the header.
 const FFI_HEADING: &str = "# FFI";
 
@@ -434,6 +441,16 @@ fn reprs(exports: &Exports) -> Reprs {
     reprs
         .map
         .insert("String".to_string(), STRING_REPR.to_string());
+    reprs
+        .map
+        .insert("PathBuf".to_string(), STRING_REPR.to_string());
+    // `Path` is unsized and can only appear behind a reference, but registering it
+    // means `&Path` resolves and `&mut Path` is rejected the same way a string is.
+    reprs
+        .map
+        .insert("Path".to_string(), STRING_REPR.to_string());
+    // The same, for the borrowed spelling of a string.
+    reprs.map.insert("str".to_string(), STRING_REPR.to_string());
 
     for (item, _) in &exports.types {
         let (rust_name, attrs) = match item {
@@ -831,6 +848,23 @@ fn report_missing(
         );
     }
     spelling
+}
+
+/// Whether a parameter is a string Rust only reads, whatever shape it arrives in.
+///
+/// That is a `String` or `PathBuf` by value — the callee copies out of the C string
+/// and the caller keeps its buffer — and a borrowed `&str` or `&Path`, which is the
+/// same thing with the copy made explicit.
+fn read_only_string(ty: &Type, resolution: &Resolution<'_>) -> bool {
+    let repr = match ty {
+        Type::Reference(reference) if reference.mutability.is_none() => {
+            repr_of(&reference.elem, resolution)
+        }
+        Type::Reference(_) => None,
+        other => repr_of(other, resolution),
+    };
+
+    repr.as_deref() == Some(STRING_REPR)
 }
 
 /// The C spelling of a field or parameter of type `ty`.
@@ -1492,35 +1526,41 @@ fn render_signature(
             continue;
         };
 
-        let c_type = match &*pat_type.ty {
-            Type::Reference(reference) => {
-                if reference.mutability.is_none() {
-                    reporting.report(
-                        pat_type.ty.span().start().line,
-                        item,
-                        "`&T` parameters are rejected: a shared reference would let the C side \
-                         mutate memory Rust treats as immutable"
-                            .to_string(),
-                    );
-                    continue;
+        let c_type = if read_only_string(&pat_type.ty, resolution) {
+            Some(READ_ONLY_STRING.to_string())
+        } else {
+            match &*pat_type.ty {
+                Type::Reference(reference) => {
+                    if reference.mutability.is_none() {
+                        reporting.report(
+                            pat_type.ty.span().start().line,
+                            item,
+                            "`&T` parameters are rejected: a shared reference would let the C side \
+                             mutate memory Rust treats as immutable. `&str` and `&Path` are the \
+                             exceptions, and cross as C strings."
+                                .to_string(),
+                        );
+                        continue;
+                    }
+                    // A string or a path already crosses as a C string, so there is no
+                    // second pointer to take.
+                    if repr_of(&reference.elem, resolution).is_some_and(|repr| repr == STRING_REPR)
+                    {
+                        reporting.report(
+                            pat_type.ty.span().start().line,
+                            item,
+                            "`&mut` of a string or a path is not supported: one crosses as a C \
+                             string, and a pointer to one is not a value this side can build"
+                                .to_string(),
+                        );
+                        continue;
+                    }
+                    // A `&mut` points at the repr itself, opaque or not.
+                    pointee_c_type(&reference.elem, resolution, reporting, item)
+                        .map(|inner| format!("{inner} *"))
                 }
-                // A string already crosses as a C string, so there is no second
-                // pointer to take.
-                if repr_of(&reference.elem, resolution).is_some_and(|repr| repr == STRING_REPR) {
-                    reporting.report(
-                        pat_type.ty.span().start().line,
-                        item,
-                        "`&mut String` is not supported: a string crosses as a C string, and a \
-                         pointer to one is not a value this side can build"
-                            .to_string(),
-                    );
-                    continue;
-                }
-                // A `&mut` points at the repr itself, opaque or not.
-                pointee_c_type(&reference.elem, resolution, reporting, item)
-                    .map(|inner| format!("{inner} *"))
+                other => field_c_type(other, resolution, reporting, item),
             }
-            other => field_c_type(other, resolution, reporting, item),
         };
 
         if let Some(c_type) = c_type {

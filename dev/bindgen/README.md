@@ -98,6 +98,28 @@ An `enum` is *not* opaque: its tag and payload are its interface, and C has to b
 to read them. A payload field whose type is opaque is spelled as a pointer, which is
 the only way an incomplete type can appear inside another type.
 
+### Strings and paths
+
+`String` and `PathBuf` cross as C strings, and `&str` and `&Path` cross as the same
+thing without the copy being visible in Rust:
+
+| Rust | header |
+| --- | --- |
+| `&Path`, `&str` (or `PathBuf`, `String`) parameter | `const char *` |
+| `-> PathBuf`, `-> String` | `char *`, owned by the caller |
+
+A parameter is a position the callee only reads, so it is spelled `const` — which is
+what lets a C++ caller pass a string literal. A returned string is owned and is
+released with `ffi_free_string`, the same release a `String` uses.
+
+A path is not text: its bytes travel as the platform encodes them
+(`OsStr::as_encoded_bytes`), so a path Rust hands out and C gives straight back comes
+back unchanged, including one that is not valid UTF-8. A null pointer on the way in
+becomes an empty path or string; an interior NUL byte cannot be carried by a C string,
+so a return that has one gives null instead of truncating silently.
+
+`&mut String` and `&mut PathBuf` are rejected: a string has no second pointer to take.
+
 ### Name resolution is by the last path segment
 
 Types are matched by the final identifier of the path, so an export in one crate can

@@ -115,7 +115,7 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// | `const` | Supported: `&str`, `char`, `bool` and numeric primitives. |
 /// | `struct` | Supported: exported as an **opaque handle**. C is told the type exists and nothing about what is in it. No generics. |
 /// | `enum` | Supported: unit-only becomes a `#[repr(C)]` enum, variants with data become a tag plus a payload union. |
-/// | `fn` | Supported: by-value and `&mut` parameters, by-value return. |
+/// | `fn` | Supported: by-value, `&mut`, `&str` and `&Path` parameters, by-value return. |
 /// | `impl` | Supported: inherent impls, flattened into free functions whose first parameter is the receiver. |
 ///
 /// A `struct`'s repr is opaque, so a value of one crosses the boundary only as a
@@ -172,10 +172,13 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// # References
 ///
 /// `&mut T` parameters are supported: the value is read out, the function runs with
-/// `&mut`, and the result is written back through the same pointer. Shared `&T`
-/// parameters are rejected — a shared reference would let the C side mutate memory
-/// Rust treats as immutable. Reference returns are rejected too: the wrapper cannot
-/// guarantee the referent outlives the call.
+/// `&mut`, and the result is written back through the same pointer. Other shared
+/// references are rejected — a shared reference would let the C side mutate memory
+/// Rust treats as immutable — with two exceptions: **`&str` and `&Path`**, which name
+/// something a C string carries and are only ever read, so they cross as C strings
+/// (copied in first, so releasing the buffer stays the caller's business). A `String`
+/// or `PathBuf` parameter is the same thing with the copy made explicit. Reference
+/// returns are rejected: the wrapper cannot guarantee the referent outlives the call.
 #[proc_macro_attribute]
 pub fn lazyffi(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as LazyFfiArgs);
@@ -882,6 +885,38 @@ impl FnParts {
     }
 }
 
+/// The owned type a borrowed parameter is read into, and how to borrow it back.
+///
+/// A shared reference is otherwise rejected. `&str` and `&Path` are the exceptions
+/// because each names something a C string carries, and Rust only ever reads them:
+/// the C string is copied into an owned value first, so releasing it is none of the
+/// callee's business.
+///
+/// Matched on the last path segment, the same way the header generator resolves
+/// types, so a qualified `std::path::Path` works too.
+fn borrowed_type(elem: &Type) -> Option<(TokenStream2, Ident)> {
+    let Type::Path(type_path) = elem else {
+        return None;
+    };
+    if type_path.qself.is_some() {
+        return None;
+    }
+
+    let ident = &type_path.path.segments.last()?.ident;
+
+    Some(match ident.to_string().as_str() {
+        "str" => (
+            quote! { ::std::string::String },
+            Ident::new("as_str", ident.span()),
+        ),
+        "Path" => (
+            quote! { ::std::path::PathBuf },
+            Ident::new("as_path", ident.span()),
+        ),
+        _ => return None,
+    })
+}
+
 /// Builds the parameter pieces of an annotated `fn`.
 fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnParts> {
     let mut parts = FnParts::default();
@@ -905,11 +940,29 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
 
         if let Type::Reference(reference) = &*pat_type.ty {
             if reference.mutability.is_none() {
-                return Err(syn::Error::new_spanned(
-                    &pat_type.ty,
-                    "`#[lazyffi]` rejects `&T` parameters: a shared reference would let the C side \
-                     mutate memory Rust treats as immutable",
-                ));
+                // The two shared references that name something a C string can
+                // carry are read as one: an owned value is built from the C string
+                // and the call borrows it back.
+                let Some((owned, borrow)) = borrowed_type(&reference.elem) else {
+                    return Err(syn::Error::new_spanned(
+                        &pat_type.ty,
+                        "`#[lazyffi]` rejects `&T` parameters: a shared reference would let the C \
+                         side mutate memory Rust treats as immutable. `&str` and `&Path` are the \
+                         exceptions, and cross as C strings.",
+                    ));
+                };
+
+                parts.params.push(quote! {
+                    #name: <#owned as ::rorolala_utils_lazyffi::InputType>::From
+                });
+                parts.prelude.push(quote! {
+                    let #name = unsafe {
+                        <#owned as ::rorolala_utils_lazyffi::InputType>::input_type(#name)
+                    };
+                });
+                parts.call_args.push(quote! { #name.#borrow() });
+
+                continue;
             }
 
             let inner = &reference.elem;

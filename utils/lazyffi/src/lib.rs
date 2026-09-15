@@ -14,6 +14,19 @@ mod convert;
 pub use convert::*;
 pub use rorolala_utils_lazyffi_macros::*;
 
+/// Allocates a NUL-terminated copy of `bytes` for handing to C.
+///
+/// The caller owns the result and must release it with [`ffi_free_string`].
+/// Returns a null pointer if `bytes` contains an interior NUL byte.
+///
+/// This is the building block used by `#[lazyffi]`-generated code; it is not
+/// meant to be called directly.
+#[doc(hidden)]
+#[must_use]
+pub fn __export_bytes(bytes: &[u8]) -> *mut c_char {
+    CString::new(bytes).map_or(core::ptr::null_mut(), CString::into_raw)
+}
+
 /// Allocates a NUL-terminated copy of `s` for handing to C.
 ///
 /// The caller owns the result and must release it with [`ffi_free_string`].
@@ -24,7 +37,7 @@ pub use rorolala_utils_lazyffi_macros::*;
 #[doc(hidden)]
 #[must_use]
 pub fn __export_str(s: &str) -> *mut c_char {
-    CString::new(s).map_or(core::ptr::null_mut(), CString::into_raw)
+    __export_bytes(s.as_bytes())
 }
 
 /// Releases a C string previously returned by a `#[lazyffi]` export.
