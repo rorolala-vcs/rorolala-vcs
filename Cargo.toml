@@ -36,6 +36,9 @@ rorolala-utils-lazyffi-macros = { path = "utils/lazyffi-macros" }
 rorolala-vault = { path = "modules/vault" }
 rorolala-workspace = { path = "modules/workspace" }
 
+# CLI Framework
+mingling = { version = "0.5.1", features = ["picker", "comp", "pathf"] }
+
 # Serialization
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

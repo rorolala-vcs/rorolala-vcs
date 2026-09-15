@@ -11,6 +11,8 @@ use mingling::{
 };
 use rorolala_cli_setups::RorolalaSetup;
 
+mod cmd_listen;
+
 fn main() {
     let mut program = ThisProgram::new();
     program.with_setup(DefaultSetup);

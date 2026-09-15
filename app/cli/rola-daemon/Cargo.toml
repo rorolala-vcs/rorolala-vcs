@@ -3,15 +3,8 @@ name = "rola-daemon"
 version.workspace = true
 edition.workspace = true
 
-[dependencies.mingling]
-version = "0.5.1"
-features = [
-    "picker",
-    "comp",
-    "pathf"
-]
-
 [dependencies]
 librorolala.workspace = true
 rorolala-cli-setups.workspace = true
 rorolala-utils-lazyffi.workspace = true
+mingling.workspace = true
