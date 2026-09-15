@@ -37,13 +37,19 @@ COMPLETION_DIR ?= $(TARGET_DIR)/mingling
 COMPLETION_SOURCE ?= $(COMPLETION_DIR)/rola_comp
 COMPLETION_TARGET ?= $(BUILD_DIR)/bin/rola-completion
 
-# `export` deletes its destination before copying, so refuse a path that would take
-# something else with it.
+# `export` and `clean` delete their destination with `rm -rf`, so refuse a path that
+# would take something else with it.
 ifneq ($(filter /%,$(BUILD_DIR)),)
   $(error BUILD_DIR must be a relative path, got `$(BUILD_DIR)')
 endif
 ifeq ($(strip $(BUILD_DIR)),)
   $(error BUILD_DIR must not be empty)
+endif
+ifneq ($(filter /%,$(TARGET_DIR)),)
+  $(error TARGET_DIR must be a relative path, got `$(TARGET_DIR)')
+endif
+ifeq ($(strip $(TARGET_DIR)),)
+  $(error TARGET_DIR must not be empty)
 endif
 
 # Platform spellings. Cargo names a Unix shared library with a `lib` prefix and a
@@ -79,7 +85,7 @@ else
   CARGO_STATIC  := librorolala_ffi.$(STATIC_SUFFIX)
 endif
 
-.PHONY: all check lib bin build export clippy doc doc-open fmt test clean
+.PHONY: all check lib bin build export clippy doc doc-open fmt test cargo-clean clean
 
 # Default target: the code compiles and every lint passes.
 all: check build
@@ -138,7 +144,13 @@ fmt:
 test:
 	$(CARGO) test --workspace --all-features
 
-# Removes cargo's build output. $(BUILD_DIR) is left alone: it holds an export, not
-# a build.
-clean:
+# Removes cargo's build output. $(BUILD_DIR) survives: it holds an export, not a
+# build.
+cargo-clean:
 	$(CARGO) clean
+
+# Removes everything the build ever produced: cargo's output, whatever else
+# $(TARGET_DIR) holds (the generated header, mingling's completion scripts), and the
+# exported $(BUILD_DIR).
+clean: cargo-clean
+	rm -rf $(TARGET_DIR) $(BUILD_DIR)
