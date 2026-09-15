@@ -4,3 +4,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+rorolala-utils-lazyffi.workspace = true
+rorolala-utils-location.workspace = true
