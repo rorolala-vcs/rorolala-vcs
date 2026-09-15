@@ -1,6 +1,9 @@
 //! Build script: collect the git commit hash, the rustc version, the commit
 //! date, and `workspace.package.version` from Cargo.toml, then write them out
 //! to `.cargo/temp/ref.json`.
+//!
+//! It also generates the C header for the workspace's `#[lazyffi]` surface into
+//! `{target_dir}/{profile}/ffi_bindings/` through `rorolala-dev-bindgen`.
 
 use std::collections::BTreeMap;
 use std::env;
@@ -18,6 +21,12 @@ const OUTPUT_FILE: &str = "ref.json";
 
 /// Git ref files to watch so the build script re-runs on new commits.
 const GIT_RERUN_PATHS: &[&str] = &[".git/HEAD", ".git/refs"];
+
+/// Directory, inside `{target_dir}/{profile}`, collecting the FFI bindings.
+const BINDINGS_DIR: &str = "ffi_bindings";
+
+/// Source trees scanned for `#[lazyffi]` items, relative to the manifest directory.
+const BINDING_SOURCE_ROOTS: &[&str] = &["src", "modules", "utils"];
 
 fn main() {
     // Re-run the build script whenever one of the input files changes.
@@ -48,6 +57,52 @@ fn main() {
     std::fs::write(&out_file, json).expect("failed to write output JSON file");
 
     println!("cargo:rerun-if-changed={}", out_file.display());
+
+    generate_c_header();
+}
+
+/// Generates the C header for the workspace's `#[lazyffi]` surface.
+///
+/// Failures stop the build: a build script can only speak to cargo through its
+/// directives, so the diagnostic is forwarded line by line and the script then
+/// exits non-zero. An incomplete header must never be produced silently.
+fn generate_c_header() {
+    for root in BINDING_SOURCE_ROOTS {
+        println!("cargo:rerun-if-changed={root}");
+    }
+
+    let Some(output_dir) = bindings_dir() else {
+        println!("cargo:warning=could not resolve the bindings directory; skipping");
+        return;
+    };
+
+    let manifest = manifest_dir();
+    let source_roots = BINDING_SOURCE_ROOTS
+        .iter()
+        .map(|root| manifest.join(root))
+        .collect::<Vec<_>>();
+
+    let config = rorolala_dev_bindgen::Config {
+        source_roots: &source_roots,
+        output_dir: &output_dir,
+    };
+
+    if let Err(error) = rorolala_dev_bindgen::generate(&config) {
+        for line in error.to_string().lines() {
+            println!("cargo:warning={line}");
+        }
+        std::process::exit(1);
+    }
+}
+
+/// Resolves `{target_dir}/{profile}/ffi_bindings` from `OUT_DIR`.
+///
+/// `OUT_DIR` is `{target_dir}/{profile}/build/{package}-{hash}/out`, so three
+/// levels up is `{target_dir}/{profile}`.
+fn bindings_dir() -> Option<PathBuf> {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").ok()?);
+    let profile_dir = out_dir.ancestors().nth(3)?;
+    Some(profile_dir.join(BINDINGS_DIR))
 }
 
 /// Returns the manifest directory, falling back to the current directory.

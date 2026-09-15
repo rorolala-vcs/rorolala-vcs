@@ -1,0 +1,11 @@
+[package]
+name = "rorolala-dev-bindgen"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+annotate-snippets.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
+rorolala-utils-lazyffi-core.workspace = true
+syn.workspace = true

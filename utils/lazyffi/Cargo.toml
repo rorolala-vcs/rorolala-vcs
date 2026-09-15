@@ -1,0 +1,8 @@
+[package]
+name = "rorolala-utils-lazyffi"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rorolala-utils-lazyffi-core.workspace = true
+rorolala-utils-lazyffi-macros.workspace = true

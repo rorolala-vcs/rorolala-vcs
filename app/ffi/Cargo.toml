@@ -1,0 +1,11 @@
+[package]
+name = "rorolala-ffi"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+librorolala.workspace = true
+rorolala-utils-lazyffi.workspace = true

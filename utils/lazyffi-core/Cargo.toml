@@ -1,0 +1,7 @@
+[package]
+name = "rorolala-utils-lazyffi-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+just_fmt.workspace = true
