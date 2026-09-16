@@ -84,7 +84,8 @@ so a value of one can only cross as a pointer:
 
 | Rust | header |
 | --- | --- |
-| `&mut Vault` | `FFIVault *` |
+| `&Vault` (or a `&self` receiver) | `const FFIVault *` |
+| `&mut Vault` (or a `&mut self` receiver) | `FFIVault *` |
 | `Vault` (parameter) | `FFIVault *`, and the call takes ownership of it |
 | `-> Vault` | `FFIVault *`, owned by the caller |
 | `-> Self` in `impl Vault` | `FFIVault *`, owned by the caller |
@@ -94,13 +95,22 @@ ffi_free_<type>(FFIVault *value);`, which is what frees the pointers the exports
 out. This is also why a resource may hold values with no repr-C sibling at all — a
 `PathBuf`, a socket: its fields are never converted, so nothing has to map them to C.
 
-A by-value parameter is the one sharp edge: the pointer it is spelled as is C's own
-storage, and the call moves the value out of it. C must treat the handle as given away
-— not used again, and not released.
+A shared reference is `const` because Rust only reads through it, which is also what
+lets a C++ caller pass something it holds as `const`. Two pointer positions are worth
+keeping apart:
+
+- a **by-value parameter** is the one sharp edge: the pointer it is spelled as is C's
+own storage, and the call moves the value out of it. C must treat the handle as given
+away — not used again, and not released;
+- a **`&`** takes nothing and writes nothing back, so C keeps the handle and may borrow
+it again — including from two calls at once.
 
 An `enum` is *not* opaque: its tag and payload are its interface, and C has to be able
 to read them. A payload field whose type is opaque is spelled as a pointer, which is
-the only way an incomplete type can appear inside another type.
+the only way an incomplete type can appear inside another type. That is also why an
+`enum` has no `&` to spell: its repr is not the value in place, so a borrow of one
+would have to point at a copy the wrapper built, which is not what the Rust signature
+says. A scalar has one, since its repr *is* itself.
 
 ### Strings and paths
 

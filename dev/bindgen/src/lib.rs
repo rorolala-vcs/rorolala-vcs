@@ -877,7 +877,7 @@ fn field_c_type(
     report_missing(shape_of(ty, resolution), ty, reporting, item)
 }
 
-/// The C spelling of the type behind a `&mut`.
+/// The C spelling of the type behind a reference.
 fn pointee_c_type(
     ty: &Type,
     resolution: &Resolution<'_>,
@@ -1409,17 +1409,11 @@ fn render_impl(
         let mut receiver = None;
         if let Some(receiver_item) = method.sig.receiver() {
             match &receiver_item.kind {
-                // A `&mut` points at the repr itself, opaque or not.
-                ReceiverKind::Reference(_, _, Some(_)) => receiver = Some(format!("{repr} *")),
-                ReceiverKind::Reference(_, _, None) => {
-                    reporting.report(
-                        receiver_item.span().start().line,
-                        &label,
-                        "`&self` is rejected: a shared reference would let the C side mutate \
-                         memory Rust treats as immutable"
-                            .to_string(),
-                    );
-                    continue;
+                // A receiver borrows the repr itself, `const` when the method only
+                // reads through it.
+                ReceiverKind::Reference(_, _, mutability) => {
+                    let constness = if mutability.is_none() { "const " } else { "" };
+                    receiver = Some(format!("{constness}{repr} *"));
                 }
                 // A by-value receiver is handed over the way a value is: as a pointer
                 // for an opaque type, by value otherwise.
@@ -1531,19 +1525,9 @@ fn render_signature(
         } else {
             match &*pat_type.ty {
                 Type::Reference(reference) => {
-                    if reference.mutability.is_none() {
-                        reporting.report(
-                            pat_type.ty.span().start().line,
-                            item,
-                            "`&T` parameters are rejected: a shared reference would let the C side \
-                             mutate memory Rust treats as immutable. `&str` and `&Path` are the \
-                             exceptions, and cross as C strings."
-                                .to_string(),
-                        );
-                        continue;
-                    }
-                    // A string or a path already crosses as a C string, so there is no
-                    // second pointer to take.
+                    // Only a `&mut` reaches this arm: `read_only_string` above has already
+                    // claimed every shared reference to a string, since one crosses as a C
+                    // string. A pointer to one is not a value either side can build.
                     if repr_of(&reference.elem, resolution).is_some_and(|repr| repr == STRING_REPR)
                     {
                         reporting.report(
@@ -1555,10 +1539,20 @@ fn render_signature(
                         );
                         continue;
                     }
-                    // A `&mut` points at the repr itself, opaque or not.
+
+                    // A pointer to the repr itself, `const` when Rust only reads
+                    // through it — which is also what lets a C++ caller pass what it
+                    // holds as `const`.
+                    let constness = if reference.mutability.is_none() {
+                        "const "
+                    } else {
+                        ""
+                    };
+
                     pointee_c_type(&reference.elem, resolution, reporting, item)
-                        .map(|inner| format!("{inner} *"))
+                        .map(|inner| format!("{constness}{inner} *"))
                 }
+
                 other => field_c_type(other, resolution, reporting, item),
             }
         };
@@ -1629,4 +1623,113 @@ fn render_diagnostics(diagnostics: &[Diagnostic]) -> String {
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Config, generate};
+    use std::fs;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Renders the header for a source tree holding exactly `source`.
+    ///
+    /// The generator's input is a directory, so a test has to build one. What it
+    /// asserts on is the header, which is the artifact the build script hands out and
+    /// the only thing a C caller ever sees — the Rust side is not what can be wrong.
+    fn header_for(source: &str) -> String {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let root = std::env::temp_dir().join(format!(
+            "rorolala-bindgen-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = fs::remove_dir_all(&root);
+
+        let sources = root.join("src");
+        fs::create_dir_all(&sources).unwrap();
+        fs::write(sources.join("lib.rs"), source).unwrap();
+
+        let output_dir = root.join("out");
+        let config = Config {
+            source_roots: std::slice::from_ref(&sources),
+            output_dir: &output_dir,
+        };
+
+        fs::read_to_string(generate(&config).unwrap()).unwrap()
+    }
+
+    /// A counter with a read-only method, a mutating method and a free function that
+    /// borrows one, which is every reference shape the generator has to spell.
+    const REFERENCES: &str = "
+/// A counter.
+#[lazyffi]
+pub struct Counter {}
+
+#[lazyffi]
+impl Counter {
+    /// Reads the count.
+    pub const fn value(&self) -> i64 { 0 }
+
+    /// Advances the count.
+    pub const fn advance(&mut self) {}
+}
+
+/// Adds one.
+#[lazyffi]
+pub const fn total(counter: &Counter) -> i64 { 0 }
+";
+
+    #[test]
+    fn a_shared_reference_is_a_const_pointer() {
+        let header = header_for(REFERENCES);
+
+        // Rust only reads through these, so C is told so — which is also what lets a
+        // C++ caller hand over something it holds as `const`.
+        assert!(
+            header.contains("int64_t ffi_total(const FFICounter * counter);"),
+            "{header}"
+        );
+        assert!(
+            header.contains("int64_t ffi_counter_value(const FFICounter * self);"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_mutable_reference_is_a_plain_pointer() {
+        let header = header_for(REFERENCES);
+
+        // The value is written back through it, so it is not `const`.
+        assert!(
+            header.contains("void ffi_counter_advance(FFICounter * self);"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_shared_reference_to_a_string_is_still_a_const_char_pointer() {
+        let header = header_for(
+            "
+/// Greets.
+#[lazyffi]
+pub const fn greet(name: &str) {}
+
+/// Renames.
+#[lazyffi]
+pub const fn rename(to: &std::path::Path) {}
+",
+        );
+
+        // A string is built from the C string and borrowed back, so it keeps the
+        // spelling it had before shared references had one of their own.
+        assert!(
+            header.contains("void ffi_greet(const char * name);"),
+            "{header}"
+        );
+        assert!(
+            header.contains("void ffi_rename(const char * to);"),
+            "{header}"
+        );
+    }
 }
