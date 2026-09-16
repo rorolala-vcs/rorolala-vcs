@@ -6,5 +6,7 @@
 #![deny(clippy::nursery)]
 
 mod colorize;
+mod theme;
 
 pub use colorize::*;
+pub use theme::*;

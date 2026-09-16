@@ -587,6 +587,7 @@ name = "rorolala-utils-cli-theme"
 version = "0.1.0"
 dependencies = [
  "colored",
+ "mingling",
 ]
 
 [[package]]

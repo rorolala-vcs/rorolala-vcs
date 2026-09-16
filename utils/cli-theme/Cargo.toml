@@ -6,3 +6,4 @@ edition.workspace = true
 
 [dependencies]
 colored.workspace = true
+mingling.workspace = true
