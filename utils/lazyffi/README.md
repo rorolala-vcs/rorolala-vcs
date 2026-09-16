@@ -33,11 +33,11 @@ typedef struct RorolalaResult {
 One C layout cannot name two payload types, and a generated repr per `(T, E)` pair would
 collide the moment two exports returned the same one. So the payload is an owned
 `void *`, the header says what each side of the tag holds, and the caller casts it and
-releases it with that type's own `ffi_free_*`.
+releases it with that type's own `free_*`.
 
 `T` and `E` must each own a pointer of their own: an exported `struct` (whose repr
 already is one), a `String` or `PathBuf`, an exported `enum` (boxed, and released with
-the `ffi_free_<type>` that comes with it), or `()`, which is the `Ok` of the common
+the `free_<type>` that comes with it), or `()`, which is the `Ok` of the common
 `Result<(), E>` and crosses as a null payload. A scalar is rejected — it has no pointer
 of its own — and so is a `String` error: an error is a case the caller switches on.
 
@@ -63,7 +63,7 @@ fn main() {
     assert_eq!(unsafe { Counter::input_ref(handle) }.value, 7);
 
     // SAFETY: `handle` came from `return_self` and has not been released yet.
-    unsafe { ffi_free_counter(handle) };
+    unsafe { free_counter(handle) };
 }
 ```
 
@@ -72,7 +72,7 @@ fn main() {
 - An exported **`struct` is opaque**: C is told the type exists and nothing about
   what is in it, so a value of one crosses only as a pointer. `&` borrows it where it
   lies, `&mut` borrows it to be written back, a by-value parameter takes ownership of
-  it, and a return hands out an owning pointer that C releases with `ffi_free_<type>`.
+  it, and a return hands out an owning pointer that C releases with `free_<type>`.
   Its fields are never converted, which is what lets a resource hold ordinary Rust
   values — a `PathBuf`, a socket — without giving them a repr-C sibling first.
 - An exported **`enum` is transparent**: its tag and payload *are* its interface, so

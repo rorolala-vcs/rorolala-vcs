@@ -17,7 +17,7 @@ pub const STRING_REPR: &str = "*mut c_char";
 /// `rorolala-utils-lazyffi` defines it with `#[unsafe(no_mangle)]`, so this name
 /// is a link-time contract; the header generator declares exactly this symbol,
 /// since C cannot release an allocated string without it.
-pub const FREE_STRING: &str = "ffi_free_string";
+pub const FREE_STRING: &str = "free_string";
 
 /// Name of the one result type every fallible export hands back.
 ///
@@ -25,7 +25,7 @@ pub const FREE_STRING: &str = "ffi_free_string";
 /// the whole surface, always, and a `Result<T, E>` return always comes back as it.
 /// Its payload is an owned `void *` — the caller reads the tag to learn which of `T`
 /// or `E` it is, casts to that type's own repr, and releases it with that type's own
-/// `ffi_free_*`. The tag and its variants follow the same rules as any other exported
+/// `free_*`. The tag and its variants follow the same rules as any other exported
 /// enum (see [`tag_type_name`] and [`c_variant_name`]), so the two sides cannot drift.
 ///
 /// ```
@@ -97,19 +97,19 @@ pub fn method_name(rust_name: &str, method_name: &str) -> String {
     )
 }
 
-/// Name of the function that releases an owned value of a type:
-/// `ffi_free_<snake_case>`.
+/// Name of the function that releases an owned value of a type: `free_<snake_case>`.
 ///
 /// An exported `struct` is opaque to C, so every value of one that C receives is an
 /// owning pointer, and each type needs a matching release — named the same way
-/// [`FREE_STRING`] is, for the same reason.
+/// [`FREE_STRING`] is, for the same reason. An exported `enum` gets one too, because a
+/// `Result` payload that names it is boxed.
 ///
 /// ```
-/// assert_eq!(rorolala_utils_lazyffi_core::free_name("Vault"), "ffi_free_vault");
+/// assert_eq!(rorolala_utils_lazyffi_core::free_name("Vault"), "free_vault");
 /// ```
 #[must_use]
 pub fn free_name(rust_name: &str) -> String {
-    format!("ffi_free_{}", snake_case!(rust_name.to_string()))
+    format!("free_{}", snake_case!(rust_name.to_string()))
 }
 
 /// Name of the tag enum generated for a data-carrying enum: `<repr>Tag`.

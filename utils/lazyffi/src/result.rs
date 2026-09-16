@@ -12,7 +12,7 @@
 //!
 //! 1. read [`RorolalaResult::tag`] to learn which side of the `Result` came back,
 //! 2. cast [`RorolalaResult::payload`] to the type the header names for that side,
-//! 3. release it with that type's own `ffi_free_*`.
+//! 3. release it with that type's own `free_*`.
 //!
 //! A payload is only ever something that has an owning pointer of its own: an exported
 //! `struct` (whose repr is already a pointer), a `String` or `PathBuf` (a `char *`), an
@@ -108,14 +108,14 @@ impl ResultPayload for () {
     }
 }
 
-/// The `char *` a `String` already crosses as, which `ffi_free_string` releases.
+/// The `char *` a `String` already crosses as, which `free_string` releases.
 impl ResultPayload for String {
     fn into_payload(self) -> *mut c_void {
         <Self as ReturnType>::return_self(self).cast()
     }
 }
 
-/// The `char *` a `PathBuf` already crosses as, which `ffi_free_string` releases.
+/// The `char *` a `PathBuf` already crosses as, which `free_string` releases.
 impl ResultPayload for PathBuf {
     fn into_payload(self) -> *mut c_void {
         <Self as ReturnType>::return_self(self).cast()

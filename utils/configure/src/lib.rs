@@ -777,7 +777,7 @@ mod tests {
 
     #[test]
     fn the_error_survives_the_crossing_to_c_and_back() {
-        use rorolala_utils_lazyffi::{InputType, ReturnType, ffi_free_string};
+        use rorolala_utils_lazyffi::{InputType, ReturnType, free_string};
 
         // A variant with a [`PathBuf`] and two numbers, because that is the payload
         // shape the generated layout is most likely to get wrong, and the one whose
@@ -803,7 +803,7 @@ mod tests {
 
         // C → Rust, which borrows the repr — so the string is still ours to release.
         let back = unsafe { Error::input_type(repr) };
-        unsafe { ffi_free_string(c_file) };
+        unsafe { free_string(c_file) };
 
         match back {
             Error::Parse { file, line, column } => {

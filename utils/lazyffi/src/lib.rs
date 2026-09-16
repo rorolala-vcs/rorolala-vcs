@@ -18,7 +18,7 @@ pub use rorolala_utils_lazyffi_macros::*;
 
 /// Allocates a NUL-terminated copy of `bytes` for handing to C.
 ///
-/// The caller owns the result and must release it with [`ffi_free_string`].
+/// The caller owns the result and must release it with [`free_string`].
 /// Returns a null pointer if `bytes` contains an interior NUL byte.
 ///
 /// This is the building block used by `#[lazyffi]`-generated code; it is not
@@ -31,7 +31,7 @@ pub fn __export_bytes(bytes: &[u8]) -> *mut c_char {
 
 /// Allocates a NUL-terminated copy of `s` for handing to C.
 ///
-/// The caller owns the result and must release it with [`ffi_free_string`].
+/// The caller owns the result and must release it with [`free_string`].
 /// Returns a null pointer if `s` contains an interior NUL byte.
 ///
 /// This is the building block used by `#[lazyffi]`-generated code; it is not
@@ -50,7 +50,7 @@ pub fn __export_str(s: &str) -> *mut c_char {
 /// not already been freed. Passing any other pointer, or freeing the same
 /// pointer twice, is undefined behaviour.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ffi_free_string(ptr: *mut c_char) {
+pub unsafe extern "C" fn free_string(ptr: *mut c_char) {
     if ptr.is_null() {
         return;
     }

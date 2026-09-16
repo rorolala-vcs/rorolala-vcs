@@ -73,7 +73,7 @@ rorolala_utils_lazyffi_core::for_each_scalar!(impl_scalar);
 ///
 /// - **input borrows**: the C string is copied and the caller keeps its buffer,
 /// - **return allocates**: the caller owns the buffer and must release it with
-///   [`crate::ffi_free_string`].
+///   [`crate::free_string`].
 ///
 /// The by-pointer conversions are deliberately not implemented — a pointer to a
 /// pointer is meaningless for a C string.
@@ -112,7 +112,7 @@ impl ReturnType for String {
 ///
 /// - **input borrows**: the C string is copied and the caller keeps its buffer,
 /// - **return allocates**: the caller owns the buffer and releases it with the very
-///   same [`crate::ffi_free_string`] a [`String`] uses.
+///   same [`crate::free_string`] a [`String`] uses.
 ///
 /// The by-pointer conversions are deliberately not implemented — a pointer to a
 /// pointer is meaningless for a C string.

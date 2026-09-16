@@ -90,10 +90,10 @@ so a value of one can only cross as a pointer:
 | `-> Vault` | `FFIVault *`, owned by the caller |
 | `-> Self` in `impl Vault` | `FFIVault *`, owned by the caller |
 
-Every opaque struct therefore also declares its release, `void
-ffi_free_<type>(FFIVault *value);`, which is what frees the pointers the exports hand
-out. This is also why a resource may hold values with no repr-C sibling at all — a
-`PathBuf`, a socket: its fields are never converted, so nothing has to map them to C.
+Every opaque struct therefore also declares its release, `void free_<type>(FFIVault
+*value);`, which is what frees the pointers the exports hand out. This is also why a
+resource may hold values with no repr-C sibling at all — a `PathBuf`, a socket: its
+fields are never converted, so nothing has to map them to C.
 
 A shared reference is `const` because Rust only reads through it, which is also what
 lets a C++ caller pass something it holds as `const`. Two pointer positions are worth
@@ -124,7 +124,7 @@ thing without the copy being visible in Rust:
 
 A parameter is a position the callee only reads, so it is spelled `const` — which is
 what lets a C++ caller pass a string literal. A returned string is owned and is
-released with `ffi_free_string`, the same release a `String` uses.
+released with `free_string`, the same release a `String` uses.
 
 A path is not text: its bytes travel as the platform encodes them
 (`OsStr::as_encoded_bytes`), so a path Rust hands out and C gives straight back comes
@@ -155,8 +155,8 @@ the one the Rust source wrote:
  * Reads a counter.
  *
  * Returns a result:
- * - `Ok`: `char *`, owned; release it with `ffi_free_string`
- * - `Err`: `FFIRefusal *`, owned; release it with `ffi_free_refusal`
+ * - `Ok`: `char *`, owned; release it with `free_string`
+ * - `Err`: `FFIRefusal *`, owned; release it with `free_refusal`
  */
 RorolalaResult ffi_read(const FFICounter * counter);
 ```
@@ -165,7 +165,7 @@ A payload with no repr-C sibling is reported like any other unrenderable type, a
 a scalar, which has no pointer of its own for C to cast or release. The `Ok` of a
 `Result<(), E>` is named as carrying nothing.
 
-An exported enum also declares a release now (`void ffi_free_<type>(FFIType *value);`),
+An exported enum also declares a release now (`void free_<type>(FFIType *value);`),
 because a payload naming one is boxed: nothing else in a signature needs to free a type
 that crosses by value.
 

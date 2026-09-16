@@ -120,7 +120,7 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///
 /// A `struct`'s repr is opaque, so a value of one crosses the boundary only as a
 /// pointer: `&mut` borrows it, a by-value parameter **takes ownership** of it, and a
-/// return hands out an owning pointer that C releases with `ffi_free_<type>`. This is
+/// return hands out an owning pointer that C releases with `free_<type>`. This is
 /// also the only reason a resource whose fields have no repr-C sibling (a `PathBuf`,
 /// say) can be exported at all — its fields are never converted.
 ///
@@ -130,9 +130,9 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///
 /// - a `const` scalar becomes a `#[unsafe(no_mangle)] static`, a `const` `&str`
 ///   becomes an `extern "C"` function allocating a C string (release it with
-///   `rorolala_utils_lazyffi::ffi_free_string`),
+///   `rorolala_utils_lazyffi::free_string`),
 /// - a `struct` gains a one-field repr wrapping the value, the four conversions, and
-///   a `ffi_free_<type>` release,
+///   a `free_<type>` release,
 /// - a unit-only `enum` gains a `#[repr(C)]` sibling plus the four conversions,
 /// - an `enum` with data gains a repr struct holding a generated `<repr>Tag` enum
 ///   and a `<repr>Payload` union, plus the four conversions,
@@ -144,7 +144,7 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///
 /// Defaults come from `rorolala-utils-lazyffi-core`: `ffi_<snake_case>` for
 /// `fn`/`const`, `ffi_<snake_case(type)>_<snake_case(method)>` for methods,
-/// `ffi_free_<snake_case(type)>` for a type's release, and `FFI<PascalCase>` for
+/// `free_<snake_case(type)>` for a type's release, and `FFI<PascalCase>` for
 /// `struct`/`enum` (with `Tag`, `Payload` and `<repr><Variant>` derivatives for the
 /// parts of a data-carrying enum). The repr numbers enum variants from zero in
 /// declaration order; the Rust discriminants are not mirrored, because the
@@ -232,7 +232,7 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///
 /// `T` and `E` must each own a pointer of their own: an exported `struct` (whose repr
 /// already is one), a `String` or `PathBuf`, an exported `enum` (boxed, and released
-/// with the `ffi_free_<type>` generated beside it), or `()`, which is the `Ok` of the
+/// with the `free_<type>` generated beside it), or `()`, which is the `Ok` of the
 /// common `Result<(), E>` and crosses as a null payload. Anything else — a scalar, in
 /// particular — does not compile.
 ///
@@ -524,7 +524,7 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
             fn into_payload(self) -> *mut ::core::ffi::c_void {
                 // An opaque value already crosses as an owning pointer, so it becomes a
                 // payload with nothing further — released with this type's own
-                // `ffi_free_<type>`.
+                // `free_<type>`.
                 <Self as ::rorolala_utils_lazyffi::ReturnType>::return_self(self).cast()
             }
         }
@@ -1067,7 +1067,7 @@ fn conversion_impls(
         impl ::rorolala_utils_lazyffi::ResultPayload for #rust_name {
             fn into_payload(self) -> *mut ::core::ffi::c_void {
                 // A transparent type is a value and a result payload is a pointer, so
-                // the repr is boxed — released with the `ffi_free_<type>` beside this.
+                // the repr is boxed — released with the `free_<type>` beside this.
                 ::std::boxed::Box::into_raw(::std::boxed::Box::new(
                     <Self as ::rorolala_utils_lazyffi::ReturnType>::return_self(self),
                 ))
