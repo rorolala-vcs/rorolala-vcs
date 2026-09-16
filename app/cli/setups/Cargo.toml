@@ -3,8 +3,8 @@ name = "rorolala-cli-setups"
 version.workspace = true
 edition.workspace = true
 
-[dependencies.mingling]
-version = "0.5.1"
-
 [dependencies]
+rorolala-utils-location.workspace = true
 librorolala.workspace = true
+mingling.workspace = true
+rust-i18n.workspace = true
