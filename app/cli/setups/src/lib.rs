@@ -23,9 +23,9 @@ pub use vault::*;
 /// Commands are deliberately not registered here: `gen_program!()` collects
 /// commands per crate, so a command must be declared in the crate that binds it.
 ///
-/// The two setups that shape the output — the language it is written in, and whether it
-/// is colored — come first, so that everything registered after them is translated and
-/// drawn the way the run asked for.
+/// The two setups that shape the output — the language it is written in, and how it is
+/// drawn — come first, so that everything registered after them is spoken and rendered
+/// the way the run asked for.
 pub struct RorolalaSetup;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for RorolalaSetup
