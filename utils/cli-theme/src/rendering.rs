@@ -462,21 +462,34 @@ impl Fence {
 /// The same call as [`TextRendering::render`], for the places where a macro reads
 /// better than a path — which is everywhere a message is written.
 ///
+/// A message written out in the source is read by [`format!`], so a value can be put
+/// into it by position or by name, and a message the program is already holding is
+/// rendered as it stands:
+///
 /// ```rust
 /// use rorolala_utils_cli_theme::{set_enabled, trd};
 ///
 /// set_enabled(false);
 /// assert_eq!(trd!("Hello, **world**!"), "Hello, world!");
+/// assert_eq!(trd!("Hello, **{}**!", "world"), "Hello, world!");
+///
+/// let name = "world";
+/// assert_eq!(trd!("Hello, **{name}**!"), "Hello, world!");
+///
+/// let held = String::from("Hello, **world**!");
+/// assert_eq!(trd!(&held), "Hello, world!");
 /// ```
 #[macro_export]
 macro_rules! trd {
-    // A message that is already a string.
-    ($text:expr) => {
-        $crate::TextRendering::render($text)
+    // A message written out, which `format!` reads whether or not it turns out to hold
+    // anything to fill in. This rule comes first for that reason: a lone literal matches
+    // the rule below as well, and it is the one that has to lose.
+    ($format:literal $(, $argument:tt)*) => {
+        $crate::TextRendering::render(&::std::format!($format $(, $argument)*))
     };
-    // A format string and the arguments it takes.
-    ($($arg:tt)+) => {
-        $crate::TextRendering::render(&::std::format!($($arg)+))
+    // A message the program already holds.
+    ($text:expr) => {
+        $crate::TextRendering::render(&$text)
     };
 }
 
@@ -528,6 +541,23 @@ mod tests {
             color: true,
             ..options(theme)
         }
+    }
+
+    #[test]
+    // The braces in these messages are meant literally: what is being checked is that a
+    // message the program holds is not read as a format string.
+    #[allow(clippy::literal_string_with_formatting_args)]
+    fn a_message_can_be_written_as_a_format_string() {
+        assert_eq!(crate::trd!("Hello, **{}**!", "world"), "Hello, world!");
+
+        let name = "world";
+        assert_eq!(crate::trd!("Hello, **{name}**!"), "Hello, world!");
+
+        // A message the program holds is rendered as it stands, and is not read as a
+        // format string even where it holds braces.
+        let held = String::from("Hello, {name}!");
+        assert_eq!(crate::trd!(&held), "Hello, {name}!");
+        assert_eq!(crate::trd!(held), "Hello, {name}!");
     }
 
     #[test]

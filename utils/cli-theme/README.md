@@ -58,7 +58,12 @@ use rorolala_utils_cli_theme::{set_enabled, trd};
 
 set_enabled(false);
 assert_eq!(trd!("Hello, **world**!"), "Hello, world!");
+assert_eq!(trd!("Hello, **{}**!", "world"), "Hello, world!");
 ```
+
+A message written out in the source is read by [`format!`], so a value can be put into
+it by position or by name; a message the program already holds is rendered as it
+stands, braces and all.
 
 ### Blocks
 
