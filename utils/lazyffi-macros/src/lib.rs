@@ -345,6 +345,7 @@ fn expand_const(args: &LazyFfiArgs, konst: &ItemConst) -> syn::Result<TokenStrea
             #konst
 
             #(#mirrored)*
+            #[doc(hidden)]
             #[unsafe(no_mangle)]
             #[allow(nonstandard_style)]
             pub extern "C" fn #ffi_name() -> *mut ::core::ffi::c_char {
@@ -358,6 +359,7 @@ fn expand_const(args: &LazyFfiArgs, konst: &ItemConst) -> syn::Result<TokenStrea
             #konst
 
             #(#mirrored)*
+            #[doc(hidden)]
             #[unsafe(no_mangle)]
             #[allow(nonstandard_style)]
             pub static #ffi_name: #ty = #rust_name;
@@ -394,10 +396,12 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
 
         #(#struct_docs)*
         /// Opaque to C, which is told the type exists and nothing else about it.
+        #[doc(hidden)]
         #[repr(transparent)]
         #[allow(nonstandard_style)]
         pub struct #ffi_name(#rust_name);
 
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::InputType for #rust_name {
             type From = *mut #ffi_name;
 
@@ -412,6 +416,7 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
             }
         }
 
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::ReturnType for #rust_name {
             type Target = *mut #ffi_name;
 
@@ -423,6 +428,7 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
             }
         }
 
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::InputPtr for #rust_name {
             type From = #ffi_name;
 
@@ -441,6 +447,7 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
             }
         }
 
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::InputRef for #rust_name {
             type From = #ffi_name;
 
@@ -455,6 +462,7 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
             }
         }
 
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::ReturnPtr for #rust_name {
             type Target = #ffi_name;
 
@@ -465,6 +473,7 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
 
         #(#release_docs)*
         #[doc = #SAFETY_DOC]
+        #[doc(hidden)]
         #[unsafe(no_mangle)]
         #[allow(nonstandard_style)]
         pub unsafe extern "C" fn #release(value: *mut #ffi_name) {
@@ -556,6 +565,7 @@ fn expand_unit_enum(item: &ItemEnum, rust_name: &Ident, ffi_name: &Ident) -> Tok
         #item
 
         #(#docs)*
+        #[doc(hidden)]
         #[repr(C)]
         #[derive(Clone, Copy)]
         #[allow(nonstandard_style, clippy::enum_variant_names)]
@@ -699,6 +709,7 @@ fn expand_data_enum(item: &ItemEnum, rust_name: &Ident, ffi_name: &Ident) -> Tok
         #(#companions)*
 
         #(#tag_docs)*
+        #[doc(hidden)]
         #[repr(C)]
         #[derive(Clone, Copy)]
         #[allow(nonstandard_style, clippy::enum_variant_names)]
@@ -707,6 +718,7 @@ fn expand_data_enum(item: &ItemEnum, rust_name: &Ident, ffi_name: &Ident) -> Tok
         }
 
         #(#payload_docs)*
+        #[doc(hidden)]
         #[repr(C)]
         #[derive(Clone, Copy)]
         #[allow(nonstandard_style, clippy::pub_underscore_fields)]
@@ -715,6 +727,7 @@ fn expand_data_enum(item: &ItemEnum, rust_name: &Ident, ffi_name: &Ident) -> Tok
         }
 
         #(#docs)*
+        #[doc(hidden)]
         #[repr(C)]
         #[derive(Clone, Copy)]
         pub struct #ffi_name {
@@ -859,6 +872,7 @@ fn payload_repr(
     (
         quote! {
             #(#companion_docs)*
+            #[doc(hidden)]
             #[repr(C)]
             #[derive(Clone, Copy)]
             #[allow(
@@ -907,6 +921,7 @@ fn conversion_impls(
     return_body: &TokenStream2,
 ) -> TokenStream2 {
     quote! {
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::InputType for #rust_name {
             type From = #ffi_name;
 
@@ -915,6 +930,7 @@ fn conversion_impls(
             }
         }
 
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::ReturnType for #rust_name {
             type Target = #ffi_name;
 
@@ -923,6 +939,7 @@ fn conversion_impls(
             }
         }
 
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::InputPtr for #rust_name {
             type From = #ffi_name;
 
@@ -939,6 +956,7 @@ fn conversion_impls(
             }
         }
 
+        #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::ReturnPtr for #rust_name {
             type Target = #ffi_name;
 
@@ -1174,6 +1192,7 @@ fn wrapper_tokens(
 
     Ok(quote! {
         #(#ffi_docs)*
+        #[doc(hidden)]
         #[unsafe(no_mangle)]
         #[allow(nonstandard_style)]
         pub unsafe extern "C" fn #ffi_name(#(#ffi_params),*) #ffi_return {

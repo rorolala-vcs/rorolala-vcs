@@ -55,3 +55,10 @@ fn main() {
 The procedural macros live in `rorolala-utils-lazyffi-macros` and are re-exported from this
 crate's root, so depend on this crate only. The naming and shape rules shared with the
 header generator live in `rorolala-utils-lazyffi-core`.
+
+## What the docs show
+
+Everything the attribute generates — the repr-C types, the `extern "C"` wrappers, the
+release function, and the conversions between a type and its repr — is `#[doc(hidden)]`.
+`cargo doc` therefore shows the types and functions you wrote, and nothing else: the
+generated surface is C's interface, and the header is where it is documented.
