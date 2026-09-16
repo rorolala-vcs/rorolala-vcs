@@ -210,6 +210,7 @@ fn marked(content: &str) -> String {
 #[cfg(test)]
 mod tests {
     use crate::ThemeChoice;
+    use crate::support::without_color;
 
     use super::{Level, err_line, source};
 
@@ -257,57 +258,66 @@ mod tests {
 
     #[test]
     fn a_line_is_drawn_and_keeps_none_of_its_markings() {
-        for line in [
-            err_line(PREFIX, CONTENT),
-            super::warn_line("WARNING", CONTENT),
-            super::help_line("HELP", CONTENT),
-        ] {
-            assert!(line.contains(CONTENT), "{line:?}");
-            assert!(!line.contains("[[") && !line.contains('*'), "{line:?}");
-        }
+        without_color(|| {
+            for line in [
+                err_line(PREFIX, CONTENT),
+                super::warn_line("WARNING", CONTENT),
+                super::help_line("HELP", CONTENT),
+            ] {
+                assert!(line.contains(CONTENT), "{line:?}");
+                assert!(!line.contains("[[") && !line.contains('*'), "{line:?}");
+            }
+        });
     }
 
     #[test]
     fn a_written_line_says_what_a_call_says() {
         const LOAD: &str = "LOAD";
 
-        assert_eq!(
-            crate::err_line!("Fail to load **{}**!", "vault"),
-            err_line("ERROR", "Fail to load **vault**!")
-        );
-        assert_eq!(
-            crate::err_line!(LOAD => "Fail to load {}!", "vault"),
-            err_line("LOAD", "Fail to load vault!")
-        );
-        assert_eq!(
-            crate::warn_line!("Fail to load vault!"),
-            super::warn_line("WARNING", "Fail to load vault!")
-        );
-        assert_eq!(
-            crate::help_line!("Fail to load vault!"),
-            super::help_line("HELP", "Fail to load vault!")
-        );
+        without_color(|| {
+            assert_eq!(
+                crate::err_line!("Fail to load **{}**!", "vault"),
+                err_line("ERROR", "Fail to load **vault**!")
+            );
+            assert_eq!(
+                crate::err_line!(LOAD => "Fail to load {}!", "vault"),
+                err_line("LOAD", "Fail to load vault!")
+            );
+            assert_eq!(
+                crate::warn_line!("Fail to load vault!"),
+                super::warn_line("WARNING", "Fail to load vault!")
+            );
+            assert_eq!(
+                crate::help_line!("Fail to load vault!"),
+                super::help_line("HELP", "Fail to load vault!")
+            );
+        });
     }
 
     #[test]
     fn a_written_line_takes_a_message_the_program_holds() {
         let held = String::from("Fail to load **vault**!");
-        assert_eq!(crate::err_line!(held), err_line("ERROR", &held));
+
+        without_color(|| assert_eq!(crate::err_line!(held), err_line("ERROR", &held)));
     }
 
     #[test]
     fn a_message_a_block_scalar_ends_with_is_still_drawn() {
         // Every translation written as a `|` block in the locale files ends with a
         // newline, and the markers around it are on the far side of that newline.
-        assert_eq!(
-            super::help_line("HELP", "Please try again\n"),
-            "::HELP=> Please try again"
-        );
+        without_color(|| {
+            assert_eq!(
+                super::help_line("HELP", "Please try again\n"),
+                "::HELP=> Please try again"
+            );
+        });
     }
 
     #[test]
     fn the_content_is_written_in_the_color_language_too() {
-        let line = err_line(PREFIX, "the `vault.json` is missing");
-        assert_eq!(line, "::ERROR=> the `vault.json` is missing");
+        without_color(|| {
+            let line = err_line(PREFIX, "the `vault.json` is missing");
+            assert_eq!(line, "::ERROR=> the `vault.json` is missing");
+        });
     }
 }

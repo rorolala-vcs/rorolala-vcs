@@ -8,6 +8,8 @@
 mod colorize;
 mod rendering;
 mod style;
+#[cfg(test)]
+mod support;
 mod theme;
 
 pub use colorize::*;

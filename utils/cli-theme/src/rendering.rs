@@ -495,9 +495,8 @@ macro_rules! trd {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use crate::ThemeChoice;
+    use crate::support::{with_color, without_color};
 
     use super::{RenderOptions, render_with};
 
@@ -520,21 +519,6 @@ mod tests {
         render_with(source, options(ThemeChoice::Simple))
     }
 
-    /// The colouring switch is one for the whole process, so the tests that turn it on
-    /// take turns rather than race each other for it.
-    static SWITCH: Mutex<()> = Mutex::new(());
-
-    /// Draws what `body` asks for with colouring on.
-    fn with_color<T>(body: impl FnOnce() -> T) -> T {
-        let _held = SWITCH
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        crate::set_enabled(true);
-        let value = body();
-        crate::unset_enabled();
-        value
-    }
-
     /// The options a test that wants escapes draws with.
     fn colored(theme: ThemeChoice) -> RenderOptions {
         RenderOptions {
@@ -544,20 +528,22 @@ mod tests {
     }
 
     #[test]
-    // The braces in these messages are meant literally: what is being checked is that a
-    // message the program holds is not read as a format string.
+    // The braces in these messages are meant literally: what is being checked is that
+    // a message the program holds is not read as a format string.
     #[allow(clippy::literal_string_with_formatting_args)]
     fn a_message_can_be_written_as_a_format_string() {
-        assert_eq!(crate::trd!("Hello, **{}**!", "world"), "Hello, world!");
+        without_color(|| {
+            assert_eq!(crate::trd!("Hello, **{}**!", "world"), "Hello, world!");
 
-        let name = "world";
-        assert_eq!(crate::trd!("Hello, **{name}**!"), "Hello, world!");
+            let name = "world";
+            assert_eq!(crate::trd!("Hello, **{name}**!"), "Hello, world!");
 
-        // A message the program holds is rendered as it stands, and is not read as a
-        // format string even where it holds braces.
-        let held = String::from("Hello, {name}!");
-        assert_eq!(crate::trd!(&held), "Hello, {name}!");
-        assert_eq!(crate::trd!(held), "Hello, {name}!");
+            // A message the program holds is rendered as it stands, and is not read as
+            // a format string even where it holds braces.
+            let held = String::from("Hello, {name}!");
+            assert_eq!(crate::trd!(&held), "Hello, {name}!");
+            assert_eq!(crate::trd!(held), "Hello, {name}!");
+        });
     }
 
     #[test]
