@@ -1,0 +1,73 @@
+_version: 2
+
+error:
+  vault_creation:
+    err_config_locked:
+      en: Failed to read the staging file to check whether it already exists
+      zh-CN: 读取暂存文件以检查其是否已存在失败
+
+    err_config_locked_help:
+      en: |
+          Please make sure the staging file is not locked by another process, then try again
+      zh-CN: |
+          请确认暂存文件未被其他进程占用，然后重试
+
+    err_config_render_failed:
+      en: Failed to parse the default value into the configuration format
+      zh-CN: 将默认值解析为配置格式失败
+
+    err_config_render_failed_help:
+      en: |
+          Please check whether the default configuration value is valid, then try again
+      zh-CN: |
+          请检查默认配置值是否有效，然后重试
+
+    err_config_stage_failed:
+      en: Failed to write the staging file
+      zh-CN: 写入暂存文件失败
+
+    err_config_stage_failed_help:
+      en: |
+          Please check the write permission of the target path, then try again
+      zh-CN: |
+          请检查目标路径的写权限，然后重试
+
+    err_config_publish_failed:
+      en: Failed to publish the staging file to the configuration file
+      zh-CN: 将暂存文件发布（复制）到配置文件失败
+
+    err_config_publish_failed_help:
+      en: |
+          Please check the read/write permission of the configuration path, then try again
+      zh-CN: |
+          请检查配置路径的读写权限，然后重试
+
+    err_config_write_render_failed:
+      en: Failed to render the staging file
+      zh-CN: 渲染暂存文件失败
+
+    err_config_write_render_failed_help:
+      en: |
+          Please check whether the configuration content is valid, then try again
+      zh-CN: |
+          请检查配置内容是否有效，然后重试
+
+    err_config_write_stage_failed:
+      en: Failed to write the staging file
+      zh-CN: 写入暂存文件失败
+
+    err_config_write_stage_failed_help:
+      en: |
+          Please check the write permission of the staging path, then try again
+      zh-CN: |
+          请检查暂存路径的写权限，然后重试
+
+    err_unknown_error:
+      en: An unknown or unclassified error occurred
+      zh-CN: 发生了未知或未分类的错误
+
+    err_unknown_error_help:
+      en: |
+          Please try again, and if the problem persists, report it to the maintainers
+      zh-CN: |
+          请重试，如问题仍然存在，请向维护者反馈

@@ -11,11 +11,13 @@ mod colorize;
 mod global_flag;
 mod language;
 mod vault;
+mod workspace;
 
 pub use colorize::*;
 pub use global_flag::*;
 pub use language::*;
 pub use vault::*;
+pub use workspace::*;
 
 /// Shared setup for Rorolala's command-line programs.
 ///
@@ -37,5 +39,6 @@ where
         program.with_setup(ColorizeSetup);
         program.with_setup(GlobalFlagSetup);
         program.with_setup(VaultSetup);
+        program.with_setup(WorkspaceSetup);
     }
 }

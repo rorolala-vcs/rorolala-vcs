@@ -1,0 +1,42 @@
+_version: 2
+
+common:
+  err_vault_already_exist:
+    en: Vault already exists
+    zh-CN: 保险库已存在
+
+  err_vault_already_exist_help:
+    en: |
+        Please try the command with a different directory
+    zh-CN: |
+        建议换其他目录尝试该命令
+
+  err_vault_not_exist:
+    en: Vault does not exist
+    zh-CN: 保险库不存在
+
+  err_vault_not_exist_help:
+    en: |
+        Please check whether this directory has been initialized using `rola create` or `rola init`
+    zh-CN: |
+        请检查该目录是否已经使用 `rola create` 或 `rola init` 初始化
+
+  err_workspace_already_exist:
+    en: Workspace already exists
+    zh-CN: 工作区已存在
+
+  err_workspace_already_exist_help:
+    en: |
+        Please try the command with a different directory
+    zh-CN: |
+        建议换其他目录尝试该命令
+
+  err_workspace_not_exist:
+    en: Workspace does not exist
+    zh-CN: 工作区不存在
+
+  err_workspace_not_exist_help:
+    en: |
+        Please check whether this directory has been initialized using `rola create` or `rola init`
+    zh-CN: |
+        请检查该目录是否已经使用 `rola create` 或 `rola init` 初始化

@@ -16,6 +16,8 @@ use rorolala_cli_setups::RorolalaSetup;
 
 mod cmd_create;
 mod cmd_init;
+mod error;
+mod exit_codes;
 
 fn main() {
     let mut program = ThisProgram::new();

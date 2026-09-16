@@ -950,6 +950,9 @@ dependencies = [
  "librorolala",
  "mingling",
  "rorolala-cli-setups",
+ "rorolala-utils-cli-theme",
+ "rorolala-vault",
+ "rorolala-workspace",
  "rust-i18n",
 ]
 
@@ -1086,6 +1089,12 @@ dependencies = [
 [[package]]
 name = "rorolala-workspace"
 version = "0.1.0"
+dependencies = [
+ "rorolala-utils-configure",
+ "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "serde",
+]
 
 [[package]]
 name = "rust-i18n"

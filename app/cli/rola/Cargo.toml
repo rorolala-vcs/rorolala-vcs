@@ -6,5 +6,8 @@ edition.workspace = true
 [dependencies]
 librorolala.workspace = true
 rorolala-cli-setups.workspace = true
+rorolala-utils-cli-theme.workspace = true
+rorolala-vault.workspace = true
+rorolala-workspace.workspace = true
 mingling.workspace = true
 rust-i18n.workspace = true
