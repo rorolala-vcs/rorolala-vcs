@@ -40,8 +40,8 @@ pub(super) fn starts(lines: &[&str], index: usize) -> bool {
 #[must_use]
 pub(super) fn render(lines: &[&str], index: usize, options: RenderOptions) -> (Vec<String>, usize) {
     // A link is drawn with an `ESC ] ...` sequence, which `prettytable` does not skip at
-    // all: it counts every character of the address as a column. Inside a table a link
-    // is therefore drawn as plain underlined text.
+    // all: it counts every character of the address as a column. Inside a table a link is
+    // therefore drawn as the text it holds, and the address is dropped.
     let options = RenderOptions {
         hyperlinks: false,
         ..options

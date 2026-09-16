@@ -606,6 +606,32 @@ mod tests {
     }
 
     #[test]
+    fn a_link_is_written_as_the_sequence_a_terminal_follows() {
+        // A link is an escape sequence, so a theme that draws none draws none of it.
+        assert_eq!(drawn("[[?https://example.com]]the docs[[/]]"), "the docs");
+
+        let drawn = with_color(|| {
+            render_with(
+                "[[?https://example.com]]the docs[[/]]",
+                RenderOptions {
+                    hyperlinks: true,
+                    ..colored(ThemeChoice::Simple)
+                },
+            )
+        });
+
+        // `ESC ] 8 ; ; address`, the text, and `ESC ] 8 ; ;` to close it.
+        assert!(
+            drawn.starts_with("\u{1b}]8;;https://example.com"),
+            "{drawn:?}"
+        );
+        assert!(drawn.contains("the docs"), "{drawn:?}");
+        assert_eq!(drawn.matches("\u{1b}]8;;").count(), 2, "{drawn:?}");
+        // The address is not text, and does not take up any room on screen.
+        assert_eq!(super::ansi::display_width(&drawn), 8, "{drawn:?}");
+    }
+
+    #[test]
     fn inline_styles_lose_only_their_markers() {
         assert_eq!(drawn("Hello, **world**!"), "Hello, world!");
         assert_eq!(drawn("[[red]]red[[/]] and plain"), "red and plain");
