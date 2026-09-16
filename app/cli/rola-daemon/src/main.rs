@@ -6,7 +6,7 @@
 #![deny(clippy::nursery)]
 #![allow(clippy::missing_const_for_fn)]
 
-rust_i18n::i18n!("../../../i18n/rola-daemon", fallback = "en");
+rust_i18n::i18n!("i18n", fallback = "en");
 
 use mingling::{
     macros::{buffer, gen_program, r_println, renderer},
