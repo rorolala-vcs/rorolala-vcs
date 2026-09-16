@@ -122,6 +122,25 @@ background instead. The name is always the caller's and everything drawn around 
 fixed; the content is drawn in italics, and is written in the color language like
 anything else, so a style or a character it names is drawn too.
 
+A line is usually written where it is used, with the message as a [`format!`] string
+and a color-language one at once. The name goes before a `=>` where it is not the usual
+one:
+
+```rust
+use rorolala_utils_cli_theme::{ThemeChoice, err_line, set_enabled, set_theme_choice};
+
+set_enabled(false);
+set_theme_choice(ThemeChoice::Simple);
+assert_eq!(err_line!("Fail to load **{}**!", "vault"), "::ERROR=> Fail to load vault!");
+
+const LOAD: &str = "LOAD";
+assert_eq!(err_line!(LOAD => "Fail to load {}!", "vault"), "::LOAD=> Fail to load vault!");
+```
+
+A message written out is read by `format!` and drawn by the line in one pass, so a
+style inside it is drawn as it would be anywhere else. `warn_line!` and `help_line!`
+are the same, under `WARNING` and `HELP`.
+
 Lines come back without the newline that ends them, so that they are joined by the
 caller rather than arriving with a blank line after each.
 

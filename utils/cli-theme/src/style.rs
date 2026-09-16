@@ -36,7 +36,7 @@ pub fn err_line(prefix: &str, content: &str) -> String {
 
 /// The line a warning is reported on.
 ///
-/// The line [`err_line`] draws, in the colour a warning is drawn in.
+/// The line [`err_line()`] draws, in the colour a warning is drawn in.
 #[must_use]
 pub fn warn_line(prefix: &str, content: &str) -> String {
     drawn(Level::Warning, prefix, content)
@@ -44,10 +44,86 @@ pub fn warn_line(prefix: &str, content: &str) -> String {
 
 /// The line a way out is offered on.
 ///
-/// The line [`err_line`] draws, in the colour help is drawn in.
+/// The line [`err_line()`] draws, in the colour help is drawn in.
 #[must_use]
 pub fn help_line(prefix: &str, content: &str) -> String {
     drawn(Level::Help, prefix, content)
+}
+
+/// The line an error is reported on, written out where it is used.
+///
+/// The message is a [`format!`] string and a color-language one at once, so a value is
+/// put into it and a style is written around it. Written without a name for the line,
+/// it is reported as an `ERROR`; the name is written before a `=>` where it is not:
+///
+/// ```rust
+/// use rorolala_utils_cli_theme::{ThemeChoice, err_line, set_enabled, set_theme_choice};
+///
+/// set_enabled(false);
+/// set_theme_choice(ThemeChoice::Simple);
+/// assert_eq!(err_line!("Fail to load **{}**!", "vault"), "::ERROR=> Fail to load vault!");
+///
+/// const LOAD: &str = "LOAD";
+/// assert_eq!(err_line!(LOAD => "Fail to load {}!", "vault"), "::LOAD=> Fail to load vault!");
+/// ```
+#[macro_export]
+macro_rules! err_line {
+    // The name the line is reported under, and what it says.
+    ($prefix:expr => $($message:tt)+) => {
+        $crate::err_line(&$prefix, &$crate::__message!($($message)+))
+    };
+    // What it says, under the name it is usually reported with.
+    ($($message:tt)+) => {
+        $crate::err_line("ERROR", &$crate::__message!($($message)+))
+    };
+}
+
+/// The line a warning is reported on, written out where it is used.
+///
+/// [`err_line!`](macro@crate::err_line) under the name a warning is usually reported
+/// with.
+#[macro_export]
+macro_rules! warn_line {
+    ($prefix:expr => $($message:tt)+) => {
+        $crate::warn_line(&$prefix, &$crate::__message!($($message)+))
+    };
+    ($($message:tt)+) => {
+        $crate::warn_line("WARNING", &$crate::__message!($($message)+))
+    };
+}
+
+/// The line a way out is offered on, written out where it is used.
+///
+/// [`err_line!`](macro@crate::err_line) under the name help is usually offered with.
+#[macro_export]
+macro_rules! help_line {
+    ($prefix:expr => $($message:tt)+) => {
+        $crate::help_line(&$prefix, &$crate::__message!($($message)+))
+    };
+    ($($message:tt)+) => {
+        $crate::help_line("HELP", &$crate::__message!($($message)+))
+    };
+}
+
+/// What a message written in the source says, given to the three lines above.
+///
+/// Not meant to be called: it is the one place that decides what a written message is,
+/// so that the three do not each carry their own answer. A message written out is read
+/// by [`format!`] — whether or not it turns out to hold anything to fill in — and one
+/// the program already holds is taken as it stands.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __message {
+    // A message written out. This rule comes first because a lone literal matches the
+    // one below as well, and it is the one that has to lose: a brace in a message is a
+    // value to fill in, not a brace.
+    ($format:literal $(, $argument:tt)*) => {
+        ::std::format!($format $(, $argument)*)
+    };
+    // A message the program already holds.
+    ($text:expr) => {
+        ::std::string::ToString::to_string(&$text)
+    };
 }
 
 /// Which line is being drawn, which is what decides its colour and its mark.
@@ -168,6 +244,34 @@ mod tests {
             assert!(line.contains(CONTENT), "{line:?}");
             assert!(!line.contains("[[") && !line.contains('*'), "{line:?}");
         }
+    }
+
+    #[test]
+    fn a_written_line_says_what_a_call_says() {
+        const LOAD: &str = "LOAD";
+
+        assert_eq!(
+            crate::err_line!("Fail to load **{}**!", "vault"),
+            err_line("ERROR", "Fail to load **vault**!")
+        );
+        assert_eq!(
+            crate::err_line!(LOAD => "Fail to load {}!", "vault"),
+            err_line("LOAD", "Fail to load vault!")
+        );
+        assert_eq!(
+            crate::warn_line!("Fail to load vault!"),
+            super::warn_line("WARNING", "Fail to load vault!")
+        );
+        assert_eq!(
+            crate::help_line!("Fail to load vault!"),
+            super::help_line("HELP", "Fail to load vault!")
+        );
+    }
+
+    #[test]
+    fn a_written_line_takes_a_message_the_program_holds() {
+        let held = String::from("Fail to load **vault**!");
+        assert_eq!(crate::err_line!(held), err_line("ERROR", &held));
     }
 
     #[test]
