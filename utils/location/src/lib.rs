@@ -539,10 +539,15 @@ where
     ///
     /// # Examples
     ///
+    /// The link the example reads is made with `symlink`, Unix's spelling of it — Windows
+    /// spells the two kinds apart in `symlink_dir` and `symlink_file`, and asks a privilege
+    /// of either — so the example is drawn where a process may make one.
+    ///
     /// ```
     /// use std::path::{Path, PathBuf};
     /// use rorolala_utils_location::Locate;
     ///
+    /// # #[cfg(unix)]
     /// # #[tokio::main]
     /// # async fn main() -> std::io::Result<()> {
     /// struct MyLocation {
@@ -567,6 +572,8 @@ where
     /// # location.remove_file("target/doctest-read-link").await?;
     /// # Ok(())
     /// # }
+    /// # #[cfg(not(unix))]
+    /// # fn main() {}
     /// ```
     fn read_link(
         &self,
@@ -898,7 +905,10 @@ where
     ///
     /// # Examples
     ///
-    /// ```
+    /// Making a link needs a privilege Windows does not give a process by default, so the
+    /// example is checked rather than run.
+    ///
+    /// ```no_run
     /// use std::path::{Path, PathBuf};
     /// use rorolala_utils_location::Locate;
     ///
@@ -947,7 +957,10 @@ where
     ///
     /// # Examples
     ///
-    /// ```
+    /// Making a link needs a privilege Windows does not give a process by default, so the
+    /// example is checked rather than run.
+    ///
+    /// ```no_run
     /// use std::path::{Path, PathBuf};
     /// use rorolala_utils_location::Locate;
     ///

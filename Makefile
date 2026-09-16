@@ -62,11 +62,12 @@ endif
 #
 #   | cargo artifact               | exported as                              |
 #   | ---------------------------- | ---------------------------------------- |
-#   | librorolala_ffi.so           | $(BUILD_DIR)/lib/rorolala.so             |
-#   | librorolala_ffi.dylib        | $(BUILD_DIR)/lib/rorolala.dylib          |
-#   | rorolala_ffi.dll             | $(BUILD_DIR)/lib/rorolala.dll            |
-#   | librorolala_ffi.a            | $(BUILD_DIR)/lib/rorolala.a              |
-#   | rorolala_ffi.lib             | $(BUILD_DIR)/lib/rorolala.lib            |
+#   | librorolala.so               | $(BUILD_DIR)/lib/rorolala.so             |
+#   | librorolala.dylib            | $(BUILD_DIR)/lib/rorolala.dylib          |
+#   | rorolala.dll                 | $(BUILD_DIR)/lib/rorolala.dll            |
+#   | rorolala.dll.lib             | $(BUILD_DIR)/lib/rorolala.dll.lib        |
+#   | librorolala.a                | $(BUILD_DIR)/lib/rorolala.a              |
+#   | rorolala.lib                 | $(BUILD_DIR)/lib/rorolala.lib            |
 #   | ffi_bindings/rorolala_ffi.h  | $(BUILD_DIR)/lib/rorolala.h              |
 #   |                              | $(BUILD_DIR)/lib/rorolala.hpp            |
 #   | rola[.exe]                   | $(BUILD_DIR)/bin/rola[.exe]              |
@@ -75,18 +76,32 @@ endif
 # The header is C and C++ at once — its declarations sit in an `extern "C"` block —
 # so `.hpp` is the same file under the name a C++ project includes. The completion
 # scripts are the four shells mingling generates: sh, zsh, fish and ps1.
+#
+# The import library is the one artifact only Windows has: a DLL is linked through it,
+# and the static library of the same crate needs nothing beside it, which is why the
+# two `.lib` files are both handed over and named apart.
 ifeq ($(OS),Windows_NT)
   EXE_SUFFIX    := .exe
   SHARED_SUFFIX := dll
   STATIC_SUFFIX := lib
-  CARGO_SHARED  := rorolala_ffi.$(SHARED_SUFFIX)
-  CARGO_STATIC  := rorolala_ffi.$(STATIC_SUFFIX)
+  CARGO_SHARED  := rorolala.$(SHARED_SUFFIX)
+  CARGO_STATIC  := rorolala.$(STATIC_SUFFIX)
+  # A DLL is linked through the import library that names what it exports, and cargo
+  # writes that one under the DLL's own name — `rorolala.dll.lib` — so that it does not
+  # take the static library's. It records the DLL it belongs to, so it is only handed
+  # over beside a DLL of the name it reaches for, which is why the library and not this
+  # Makefile is what names the artifact.
+  CARGO_IMPORT  := rorolala.$(SHARED_SUFFIX).$(STATIC_SUFFIX)
+  IMPORT_SUFFIX := $(SHARED_SUFFIX).$(STATIC_SUFFIX)
 else
   EXE_SUFFIX    :=
   SHARED_SUFFIX := $(if $(filter Darwin,$(shell uname -s)),dylib,so)
   STATIC_SUFFIX := a
-  CARGO_SHARED  := librorolala_ffi.$(SHARED_SUFFIX)
-  CARGO_STATIC  := librorolala_ffi.$(STATIC_SUFFIX)
+  CARGO_SHARED  := librorolala.$(SHARED_SUFFIX)
+  CARGO_STATIC  := librorolala.$(STATIC_SUFFIX)
+  # Nothing to hand over: a linker is given the shared library itself.
+  CARGO_IMPORT  :=
+  IMPORT_SUFFIX :=
 endif
 
 .PHONY: all check lib bin build export clippy doc doc-open fmt test cargo-clean clean
@@ -115,10 +130,13 @@ build: lib bin
 # Lays the build out for hand-off under $(BUILD_DIR), under the names a consumer
 # links, includes and sources.
 export: build
-	rm -rf $(BUILD_DIR)/lib $(BUILD_DIR)/bin
+	rm -rf $(BUILD_DIR)
 	mkdir -p $(BUILD_DIR)/lib $(BUILD_DIR)/bin
 	cp $(RELEASE_DIR)/$(CARGO_SHARED) $(BUILD_DIR)/lib/rorolala.$(SHARED_SUFFIX)
 	cp $(RELEASE_DIR)/$(CARGO_STATIC) $(BUILD_DIR)/lib/rorolala.$(STATIC_SUFFIX)
+ifneq ($(CARGO_IMPORT),)
+	cp $(RELEASE_DIR)/$(CARGO_IMPORT) $(BUILD_DIR)/lib/rorolala.$(IMPORT_SUFFIX)
+endif
 	cp $(HEADER) $(BUILD_DIR)/lib/rorolala.h
 	cp $(HEADER) $(BUILD_DIR)/lib/rorolala.hpp
 	set -e; for program in $(PROGRAMS); do \

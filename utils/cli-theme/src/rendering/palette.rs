@@ -415,12 +415,21 @@ pub(super) fn paint(text: &str, style: &StyleState<'_>, options: RenderOptions) 
         return text.to_owned();
     }
 
+    // An exact colour is written out here rather than asked of `colored`, which reads
+    // `COLORTERM` for itself and asks for the nearest of the sixteen whenever that says
+    // the terminal is not twenty-four bit deep. Whether a terminal carries the depth is
+    // not a question to be answered twice: `Pretty` is never picked automatically, so
+    // the person who chose it said the terminal carries it, and a library reading the
+    // environment would be overruling them. The sixteen and the attributes are still
+    // `colored`'s, neither being anything the environment is asked about.
+    let exact = options.theme == ThemeChoice::Pretty;
+
     let mut painted = ColoredString::from(text);
-    if let Some(foreground) = style.foreground {
-        painted = painted.color(colored_color(foreground, options.theme));
+    if !exact && let Some(foreground) = style.foreground {
+        painted = painted.color(sixteen(foreground));
     }
-    if let Some(background) = style.background {
-        painted = painted.on_color(colored_color(background, options.theme));
+    if !exact && let Some(background) = style.background {
+        painted = painted.on_color(sixteen(background));
     }
     if style.bold {
         painted = painted.bold();
@@ -434,7 +443,13 @@ pub(super) fn paint(text: &str, style: &StyleState<'_>, options: RenderOptions) 
     if style.strike {
         painted = painted.strikethrough();
     }
-    let painted = painted.to_string();
+    let mut painted = painted.to_string();
+    if exact && let Some(foreground) = style.foreground {
+        painted = drawn_in(false, channels(foreground), &painted);
+    }
+    if exact && let Some(background) = style.background {
+        painted = drawn_in(true, channels(background), &painted);
+    }
 
     match style.link {
         Some(address) if options.hyperlinks => {
@@ -444,34 +459,38 @@ pub(super) fn paint(text: &str, style: &StyleState<'_>, options: RenderOptions) 
     }
 }
 
-/// How `color` is asked of the terminal, given what `theme` allows.
-fn colored_color(color: Color, theme: ThemeChoice) -> colored::Color {
+/// How `color` is asked of a terminal that carries nothing but the sixteen.
+///
+/// A named colour is the palette entry it names. An exact colour is one such a terminal
+/// cannot be handed, so it moves to the nearest of them: a highlight that is nearly the
+/// right colour is worth more than one nobody can see.
+fn sixteen(color: Color) -> colored::Color {
     match color {
-        Color::Named(named) => named_color(named, theme),
-        Color::Exact(rgb) => {
-            if theme == ThemeChoice::Pretty {
-                exact(rgb)
-            } else {
-                named_color(nearest(rgb), theme)
-            }
-        }
+        Color::Named(named) => named.colored(),
+        Color::Exact(rgb) => nearest(rgb).colored(),
     }
 }
 
-/// How one of the sixteen is asked of the terminal, given what `theme` allows.
-fn named_color(named: NamedColor, theme: ThemeChoice) -> colored::Color {
-    if theme == ThemeChoice::Pretty {
-        exact(named.rgb())
-    } else {
-        named.colored()
+/// The channels `color` is drawn in, to twenty-four bits.
+///
+/// [`NamedColor::rgb`] is the same colour and not a stand-in for it: the sixteen are the
+/// values a terminal falls back to when it has been told nothing else, so asking for the
+/// channels they stand for draws the colour the name meant.
+const fn channels(color: Color) -> Rgb {
+    match color {
+        Color::Named(named) => named.rgb(),
+        Color::Exact(rgb) => rgb,
     }
 }
 
-/// The twenty-four bit colour `rgb` asks for.
-const fn exact(rgb: Rgb) -> colored::Color {
-    colored::Color::TrueColor {
-        r: rgb.red,
-        g: rgb.green,
-        b: rgb.blue,
-    }
+/// `text` drawn in `rgb`, behind it when `background`.
+///
+/// Only the colour is closed, with the sequence that hands the terminal its own
+/// foreground or background back — a run drawn in a colour and nothing else has no reset
+/// of `colored`'s to end it, and ending it with a full reset would take the attributes of
+/// whatever holds this run with it.
+fn drawn_in(background: bool, rgb: Rgb, text: &str) -> String {
+    let Rgb { red, green, blue } = rgb;
+    let (ground, own) = if background { (48, 49) } else { (38, 39) };
+    format!("\u{1b}[{ground};2;{red};{green};{blue}m{text}\u{1b}[{own}m")
 }

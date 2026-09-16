@@ -4,7 +4,7 @@ The C ABI surface of Rorolala: a `cdylib`/`staticlib` built on `rorolala-utils-l
 
 Items annotated with `#[lazyffi]` are exported with `#[unsafe(no_mangle)]`; this crate
 re-exports the libraries that declare them, so the symbols end up in the produced
-`librorolala_ffi.so` / `.a`.
+`librorolala.so` / `.a`.
 
 ## Generated bindings
 

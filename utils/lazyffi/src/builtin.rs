@@ -138,7 +138,13 @@ impl InputType for PathBuf {
         // valid encoded bytes on Unix.
         let os_str = unsafe { OsStr::from_encoded_bytes_unchecked(c_str.to_bytes()) };
         #[cfg(not(unix))]
-        let os_str = OsStr::new(&*c_str.to_string_lossy());
+        // The lossy read is bound rather than inlined: it allocates only when the C
+        // string is not UTF-8, so it hands out a `Cow` that borrows the C string, and
+        // `OsStr` borrows *that* — a temporary would be dropped at the end of the
+        // statement that made it, outliving neither.
+        let lossy = c_str.to_string_lossy();
+        #[cfg(not(unix))]
+        let os_str = OsStr::new(&*lossy);
 
         Self::from(os_str)
     }

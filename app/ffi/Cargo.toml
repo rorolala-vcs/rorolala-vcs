@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [lib]
+# The artifact is named after the library rather than the package: cargo writes
+# `rorolala.dll` and, beside it, the import library a consumer of it links. Both are
+# what the hand-off exports, so a package name carrying `ffi` would end up in every file
+# a C consumer types — and renaming the DLL afterwards would leave the import library
+# pointing at a name nothing carries.
+name = "rorolala"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
