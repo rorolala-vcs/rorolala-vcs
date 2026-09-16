@@ -2,7 +2,7 @@ use rorolala_utils_configure::Config;
 use rorolala_utils_lazyffi::lazyffi;
 use std::path::Path;
 
-use crate::{CONFIG_PATH, Vault, error::CreationError};
+use crate::{CONFIG_PATH, CreationError, Vault};
 
 #[lazyffi]
 impl Vault {

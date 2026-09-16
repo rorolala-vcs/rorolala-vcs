@@ -14,6 +14,8 @@ mod config;
 mod error;
 mod init;
 
+pub use error::*;
+
 /// Path where the Vault configuration file is located
 #[lazyffi(export = VAULT_CONFIG_PATH)]
 pub const CONFIG_PATH: &str = "./vault.toml";
