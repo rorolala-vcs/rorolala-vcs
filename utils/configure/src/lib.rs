@@ -75,8 +75,8 @@ impl fmt::Display for Reason {
 ///
 /// Every variant is a failure a caller can act on, and holds what that caller needs to
 /// act on it — paths, a [`Reason`], a position. None of them holds a message: the enum
-/// crosses to C, where a caller switches on the variant, and text is for [`Display`] to
-/// produce rather than for the value to carry.
+/// crosses to C, where a caller switches on the variant, and text is for
+/// [`Display`](fmt::Display) to produce rather than for the value to carry.
 #[lazyffi(export = ConfigureError)]
 #[derive(Debug)]
 pub enum Error {
