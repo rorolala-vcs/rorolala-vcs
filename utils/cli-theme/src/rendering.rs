@@ -643,6 +643,19 @@ mod tests {
     }
 
     #[test]
+    fn a_character_outside_the_plane_can_be_named_by_two() {
+        // `\u{f08e3}`, an icon out of the Private Use Area, as UTF-16 spells it.
+        assert_eq!(drawn(r"\udb82\udce3"), "\u{f08e3}");
+        assert_eq!(drawn(r"\u{db82}\u{dce3}"), "\u{f08e3}");
+
+        // Half of a pair is not a character, so it is left as it is written.
+        assert_eq!(drawn(r"\udb82"), r"\udb82");
+        assert_eq!(drawn(r"\udce3"), r"\udce3");
+        assert_eq!(drawn(r"\udb82\udb82"), r"\udb82\udb82");
+        assert_eq!(drawn(r"\udb82abc"), r"\udb82abc");
+    }
+
+    #[test]
     fn a_heading_is_a_title_with_a_line_either_side() {
         assert_eq!(drawn("text\n# Title\ntext"), "text\n\nTitle\n\ntext");
         assert_eq!(drawn("# Title\n\nText"), "Title\n\nText");

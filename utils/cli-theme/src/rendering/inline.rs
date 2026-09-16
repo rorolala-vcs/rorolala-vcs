@@ -405,7 +405,27 @@ fn color(text: &str) -> Option<Color> {
 ///
 /// Both spellings a person reaches for are taken: `\u2764`, which is four hex digits,
 /// and `\u{2764}`, which is as many as the character needs.
+///
+/// A character outside the Basic Multilingual Plane comes out of anything that speaks
+/// UTF-16 as a pair — `\udb82\udce3` is one `NerdFont` glyph, not two — so a high
+/// surrogate is read together with the low surrogate that has to follow it. Half of a
+/// pair on its own is not a character, and is left as it is written.
 fn unicode_escape(rest: &str) -> Option<(char, usize)> {
+    let (unit, consumed) = code_unit(rest)?;
+    if matches!(unit, 0xd800..=0xdbff) {
+        let (low, following) = code_unit(rest.get(consumed..)?)?;
+        if !matches!(low, 0xdc00..=0xdfff) {
+            return None;
+        }
+        let joined = 0x10000 + ((unit - 0xd800) << 10) + (low - 0xdc00);
+        return Some((char::from_u32(joined)?, consumed + following));
+    }
+    Some((char::from_u32(unit)?, consumed))
+}
+
+/// One `\u...` escape: the code unit it names, which a pair makes a character out of,
+/// and how many bytes of `rest` it took up.
+fn code_unit(rest: &str) -> Option<(u32, usize)> {
     let after = rest.strip_prefix("\\u")?;
     let (digits, consumed) = if let Some(braced) = after.strip_prefix('{') {
         let end = braced.find('}')?;
@@ -416,6 +436,5 @@ fn unicode_escape(rest: &str) -> Option<(char, usize)> {
         }
         (&after[..4], 6)
     };
-    let value = u32::from_str_radix(digits, 16).ok()?;
-    Some((char::from_u32(value)?, consumed))
+    Some((u32::from_str_radix(digits, 16).ok()?, consumed))
 }

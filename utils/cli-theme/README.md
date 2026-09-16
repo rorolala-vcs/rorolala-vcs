@@ -124,7 +124,9 @@ nest, where Markdown's emphasis only ever pairs up.
 | `<flag>` | italic and bright cyan, markers kept |
 
 A backslash takes the meaning away from `*`, `_` and `~`, and names a character by
-number as `\u2764` or `\u{2764}`.
+number — as `\u2764`, as `\u{2764}`, or, for a character past the Basic Multilingual
+Plane, as the two code units UTF-16 spells it with: `\udb82\udce3` is the one glyph
+`\u{f08e3}`, which is how a `NerdFont` icon is usually written down.
 
 A delimiter opens only where the same one closes later on the line, so that `2 * 3`
 stays arithmetic.
