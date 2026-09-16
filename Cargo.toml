@@ -10,6 +10,7 @@ members = [
     "modules/protocol",
     "modules/vault",
     "modules/workspace",
+    "utils/cli-theme",
     "utils/configure",
     "utils/configure-macros",
     "utils/lazyffi",
@@ -33,6 +34,7 @@ rorolala-cli-setups = { path = "app/cli/setups" }
 rorolala-dev-bindgen = { path = "dev/bindgen" }
 rorolala-ffi = { path = "app/ffi" }
 rorolala-protocol = { path = "modules/protocol" }
+rorolala-utils-cli-theme = { path = "utils/cli-theme" }
 rorolala-utils-configure = { path = "utils/configure" }
 rorolala-utils-configure-macros = { path = "utils/configure-macros" }
 rorolala-utils-lazyffi = { path = "utils/lazyffi" }
@@ -50,6 +52,9 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 serde_yaml = "0.9.34"
 toml = "0.8.23"
+
+# CLI Rendering
+colored = "3.1.1"
 
 # Internationalization
 rust-i18n = "4.2.2"

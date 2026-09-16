@@ -12,6 +12,7 @@
         "modules/protocol/Cargo.toml",
         "modules/vault/Cargo.toml",
         "modules/workspace/Cargo.toml",
+        "utils/cli-theme/Cargo.toml",
         "utils/configure/Cargo.toml",
         "utils/configure-macros/Cargo.toml",
         "utils/lazyffi/Cargo.toml",
