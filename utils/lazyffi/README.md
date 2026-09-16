@@ -8,18 +8,49 @@ and inherent `impl` blocks. The C header for everything it exports is generated 
 `rorolala-dev-bindgen`.
 
 `String` and `PathBuf` cross as C strings, and `&str` and `&Path` are accepted as
-parameters — the two shared references that stay read-only by nature.
+parameters — the two references that name something a C string carries, so one is built
+from the C string and the call borrows the result.
+
+A `&T` parameter or a `&self` receiver is a read-only borrow of a value C already has:
+nothing is taken, and nothing is written back.
+
+```rust
+use rorolala_utils_lazyffi::{InputRef, ReturnType, lazyffi};
+
+#[lazyffi]
+pub struct Counter {
+    value: i64,
+}
+
+fn main() {
+    // The handle an export would hand C, and the borrow C would take of it.
+    let handle = Counter { value: 7 }.return_self();
+
+    // SAFETY: `handle` is a live value this export handed out, and stays so until
+    // the release below.
+    let borrowed = unsafe { Counter::input_ref(handle) };
+    assert_eq!(borrowed.value, 7);
+
+    // Nothing was taken, so the same storage still holds the value and can be
+    // borrowed again — which is the whole difference from a by-value parameter.
+    assert_eq!(unsafe { Counter::input_ref(handle) }.value, 7);
+
+    // SAFETY: `handle` came from `return_self` and has not been released yet.
+    unsafe { ffi_free_counter(handle) };
+}
+```
 
 ## Two kinds of type
 
 - An exported **`struct` is opaque**: C is told the type exists and nothing about
-  what is in it, so a value of one crosses only as a pointer. `&mut` borrows it, a
-  by-value parameter takes ownership of it, and a return hands out an owning pointer
-  that C releases with `ffi_free_<type>`. Its fields are never converted, which is
-  what lets a resource hold ordinary Rust values — a `PathBuf`, a socket — without
-  giving them a repr-C sibling first.
+  what is in it, so a value of one crosses only as a pointer. `&` borrows it where it
+  lies, `&mut` borrows it to be written back, a by-value parameter takes ownership of
+  it, and a return hands out an owning pointer that C releases with `ffi_free_<type>`.
+  Its fields are never converted, which is what lets a resource hold ordinary Rust
+  values — a `PathBuf`, a socket — without giving them a repr-C sibling first.
 - An exported **`enum` is transparent**: its tag and payload *are* its interface, so
-  C has to be able to read them.
+  C has to be able to read them. That is also why an enum has no `&` of its own: its
+  repr is not the value in place, so there would be nothing to borrow.
 
 The procedural macros live in `rorolala-utils-lazyffi-macros` and are re-exported from this
 crate's root, so depend on this crate only. The naming and shape rules shared with the

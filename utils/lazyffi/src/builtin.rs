@@ -8,7 +8,7 @@ use core::ffi::c_char;
 use std::ffi::{CStr, OsStr};
 use std::path::PathBuf;
 
-use crate::convert::{InputPtr, InputType, ReturnPtr, ReturnType};
+use crate::convert::{InputPtr, InputRef, InputType, ReturnPtr, ReturnType};
 
 /// Implements the four conversion traits for a scalar type, whose repr is itself.
 macro_rules! impl_scalar {
@@ -33,6 +33,16 @@ macro_rules! impl_scalar {
                 unsafe fn write_ptr(self, target: *mut Self::From) {
                     // SAFETY: the caller guarantees a valid, aligned, writable pointer.
                     unsafe { *target = self };
+                }
+            }
+
+            impl InputRef for $ty {
+                type From = $ty;
+
+                unsafe fn input_ref<'a>(input: *const Self::From) -> &'a Self {
+                    // SAFETY: the caller guarantees a valid, aligned, readable pointer
+                    // that stays readable for the duration of the borrow.
+                    unsafe { &*input }
                 }
             }
 

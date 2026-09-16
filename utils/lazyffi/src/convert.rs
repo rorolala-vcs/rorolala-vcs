@@ -13,14 +13,15 @@
 //! - an **opaque** type — an exported `struct`, whose layout C is never told — has
 //!   no value C could name, so it crosses through a pointer in every direction:
 //!   [`InputType::From`] and [`ReturnType::Target`] are `*mut` handles, while
-//!   [`InputPtr::From`] and [`ReturnPtr::Target`] are the handle type itself, which
-//!   C spells only as an incomplete `struct` it must not complete.
+//!   [`InputPtr::From`], [`ReturnPtr::Target`] and [`InputRef::From`] are the handle
+//!   type itself, which C spells only as an incomplete `struct` it must not complete.
 //!
-//! The four traits differ only in how the value travels:
+//! The traits differ only in how the value travels:
 //!
 //! | Trait | Direction | Transport |
 //! | --- | --- | --- |
 //! | [`InputType`] | C → Rust | by value |
+//! | [`InputRef`] | C → Rust | borrowed where it lies (never taken) |
 //! | [`InputPtr`] | C → Rust | through a pointer (both halves of a mutable pass) |
 //! | [`ReturnType`] | Rust → C | by value |
 //! | [`ReturnPtr`] | Rust → C | through an owning pointer |
@@ -29,6 +30,9 @@
 //! the function with `&mut`, then writing the value back through the same pointer with
 //! [`InputPtr::write_ptr`] — so a transparent type needs no layout compatibility
 //! between `Self` and its repr, and an opaque one is moved in and out of place.
+//!
+//! A `&` parameter is borrowed with [`InputRef::input_ref`] instead and never taken,
+//! so the repr stays C's for the whole call.
 //!
 //! The input conversions are `unsafe`: the value comes from C, so the caller is
 //! responsible for it being valid (a readable pointer, a live string, …).
@@ -45,6 +49,30 @@ pub trait InputType {
     /// `input` must be a valid value of the repr — in particular, any pointer it
     /// carries must be usable for the conversion.
     unsafe fn input_type(input: Self::From) -> Self;
+}
+
+/// Borrows a value from C while leaving it where C put it.
+///
+/// This is how a `&T` parameter or a `&self` receiver crosses: C points at the repr
+/// with a `const` pointer, and the borrow lasts for the call and no longer.
+///
+/// Nothing is taken, which is what makes the borrow a borrow — and that is only
+/// possible where the repr *is* the value in place, as an opaque handle's is. A
+/// transparent type has no such conversion: a borrow of one would have to point at a
+/// value this side had to build, which is a copy wearing a reference's clothes. So a
+/// `&Enum` parameter does not compile, rather than borrowing something else entirely.
+pub trait InputRef {
+    /// The repr-C sibling: what C points at.
+    type From;
+
+    /// Borrows `Self` from the repr C owns.
+    ///
+    /// # Safety
+    ///
+    /// `input` must be valid, aligned and readable for `Self::From`, and the storage
+    /// must stay readable for as long as the borrow is used — which the generated
+    /// wrapper limits to the call itself.
+    unsafe fn input_ref<'a>(input: *const Self::From) -> &'a Self;
 }
 
 /// Passes a value across the boundary through a pointer, in both directions.

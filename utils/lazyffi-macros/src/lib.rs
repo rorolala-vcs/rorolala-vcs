@@ -176,13 +176,51 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// # References
 ///
 /// `&mut T` parameters are supported: the value is read out, the function runs with
-/// `&mut`, and the result is written back through the same pointer. Other shared
-/// references are rejected — a shared reference would let the C side mutate memory
-/// Rust treats as immutable — with two exceptions: **`&str` and `&Path`**, which name
-/// something a C string carries and are only ever read, so they cross as C strings
-/// (copied in first, so releasing the buffer stays the caller's business). A `String`
-/// or `PathBuf` parameter is the same thing with the copy made explicit. Reference
-/// returns are rejected: the wrapper cannot guarantee the referent outlives the call.
+/// `&mut`, and the result is written back through the same pointer.
+///
+/// `&T` parameters and a `&self` receiver are supported too, as read-only borrows: the
+/// value is never taken, so C keeps it and the borrow ends with the call. A borrow needs
+/// a repr that *is* the value in place, which an exported `struct` has and a scalar has;
+/// a `&enum` therefore does not compile, because a borrow of one would have to point at
+/// a copy the wrapper had to build.
+///
+/// ```
+/// use rorolala_utils_lazyffi::lazyffi;
+///
+/// #[lazyffi]
+/// pub struct Counter {
+///     value: i64,
+/// }
+///
+/// #[lazyffi]
+/// impl Counter {
+///     /// Borrows the counter; nothing is taken and nothing is written back.
+///     pub const fn value(&self) -> i64 {
+///         self.value
+///     }
+///
+///     /// Advances the counter where it lies.
+///     pub const fn advance(&mut self) {
+///         self.value += 1;
+///     }
+/// }
+///
+/// /// Borrows a counter the caller still owns.
+/// #[lazyffi]
+/// pub const fn total(counter: &Counter) -> i64 {
+///     counter.value
+/// }
+///
+/// fn main() {}
+/// ```
+///
+/// **`&str` and `&Path`** name something a C string carries rather than a value C
+/// holds, so they are built from the C string first and the call borrows the result —
+/// which is why releasing that buffer stays the caller's business. A `String` or
+/// `PathBuf` parameter is the same thing with the copy made explicit.
+///
+/// Reference *returns* are rejected: the wrapper cannot guarantee the referent outlives
+/// the call.
 #[proc_macro_attribute]
 pub fn lazyffi(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as LazyFfiArgs);
@@ -400,6 +438,20 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
                 // SAFETY: the caller guarantees a valid, aligned, writable pointer,
                 // and passes the one the value was read from.
                 unsafe { ::core::ptr::write(::core::ptr::addr_of_mut!((*target).0), self) };
+            }
+        }
+
+        impl ::rorolala_utils_lazyffi::InputRef for #rust_name {
+            type From = #ffi_name;
+
+            /// Borrows the value C points at, without taking it.
+            ///
+            /// The handle is `repr(transparent)` over the value, so a borrow of the
+            /// one is a borrow of the other. C keeps both.
+            unsafe fn input_ref<'a>(input: *const Self::From) -> &'a Self {
+                // SAFETY: the caller guarantees a valid, aligned, readable pointer
+                // that stays readable for the duration of the borrow.
+                unsafe { &(*input).0 }
             }
         }
 
@@ -981,25 +1033,35 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
             if reference.mutability.is_none() {
                 // The two shared references that name something a C string can
                 // carry are read as one: an owned value is built from the C string
-                // and the call borrows it back.
-                let Some((owned, borrow)) = borrowed_type(&reference.elem) else {
-                    return Err(syn::Error::new_spanned(
-                        &pat_type.ty,
-                        "`#[lazyffi]` rejects `&T` parameters: a shared reference would let the C \
-                         side mutate memory Rust treats as immutable. `&str` and `&Path` are the \
-                         exceptions, and cross as C strings.",
-                    ));
-                };
+                // and the call borrows it back. What C holds there is the string,
+                // not the value, so there is nothing to borrow in place.
+                if let Some((owned, borrow)) = borrowed_type(&reference.elem) {
+                    parts.params.push(quote! {
+                        #name: <#owned as ::rorolala_utils_lazyffi::InputType>::From
+                    });
+                    parts.prelude.push(quote! {
+                        let #name = unsafe {
+                            <#owned as ::rorolala_utils_lazyffi::InputType>::input_type(#name)
+                        };
+                    });
+                    parts.call_args.push(quote! { #name.#borrow() });
+
+                    continue;
+                }
+
+                // Any other shared reference borrows the value in place and never
+                // takes it: C keeps its value, and the borrow ends with the call.
+                let inner = &reference.elem;
 
                 parts.params.push(quote! {
-                    #name: <#owned as ::rorolala_utils_lazyffi::InputType>::From
+                    #name: *const <#inner as ::rorolala_utils_lazyffi::InputRef>::From
                 });
                 parts.prelude.push(quote! {
                     let #name = unsafe {
-                        <#owned as ::rorolala_utils_lazyffi::InputType>::input_type(#name)
+                        <#inner as ::rorolala_utils_lazyffi::InputRef>::input_ref(#name)
                     };
                 });
-                parts.call_args.push(quote! { #name.#borrow() });
+                parts.call_args.push(quote! { #name });
 
                 continue;
             }
@@ -1282,11 +1344,19 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
     match &receiver.kind {
         ReceiverKind::Reference(_, _, mutability) => {
             if mutability.is_none() {
-                return Err(syn::Error::new_spanned(
-                    receiver,
-                    "`#[lazyffi]` rejects `&self`: a shared reference would let the C side mutate \
-                     memory Rust treats as immutable",
-                ));
+                // Nothing is taken here either: the receiver is borrowed in place and
+                // left alone, so a read-only method costs no move and no write-back.
+                parts.params.push(quote! {
+                    #param: *const <Self as ::rorolala_utils_lazyffi::InputRef>::From
+                });
+                parts.prelude.push(quote! {
+                    let #local = unsafe {
+                        <Self as ::rorolala_utils_lazyffi::InputRef>::input_ref(#param)
+                    };
+                });
+                parts.call_args.push(quote! { #local });
+
+                return Ok(parts);
             }
 
             parts.params.push(quote! {
@@ -1321,12 +1391,12 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
             });
             parts.call_args.push(quote! { #local });
         }
-        // `ReceiverKind` is non-exhaustive; anything but the two supported
+        // `ReceiverKind` is non-exhaustive; anything but the three supported
         // shorthands (`self: Box<Self>` today) is rejected.
         _ => {
             return Err(syn::Error::new_spanned(
                 receiver,
-                "`#[lazyffi]` only supports the `self` and `&mut self` receivers",
+                "`#[lazyffi]` only supports the `self`, `&self` and `&mut self` receivers",
             ));
         }
     }
