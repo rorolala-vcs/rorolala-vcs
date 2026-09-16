@@ -104,12 +104,19 @@ pub fn method_name(rust_name: &str, method_name: &str) -> String {
 /// [`FREE_STRING`] is, for the same reason. An exported `enum` gets one too, because a
 /// `Result` payload that names it is boxed.
 ///
+/// The name is the one C knows the item by: its `export` where it has one, and its
+/// Rust name where it does not. An `export` therefore carries over to the release too,
+/// so that two types a workspace keeps in different modules under one Rust name each
+/// have a release of their own — where the Rust name alone would give both the same
+/// one, and the two would be one symbol.
+///
 /// ```
-/// assert_eq!(rorolala_utils_lazyffi_core::free_name("Vault"), "free_vault");
+/// assert_eq!(rorolala_utils_lazyffi_core::free_name("VaultConfig"), "free_vault_config");
+/// assert_eq!(rorolala_utils_lazyffi_core::free_name("Counter"), "free_counter");
 /// ```
 #[must_use]
-pub fn free_name(rust_name: &str) -> String {
-    format!("free_{}", snake_case!(rust_name.to_string()))
+pub fn free_name(name: &str) -> String {
+    format!("free_{}", snake_case!(name.to_string()))
 }
 
 /// Name of the tag enum generated for a data-carrying enum: `<repr>Tag`.

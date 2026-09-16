@@ -453,10 +453,23 @@ fn export_override(attrs: &[Attribute]) -> Option<String> {
 /// The repr-C siblings of the exported types, plus every C name the header
 /// defines.
 struct Reprs {
-    /// Rust type name → repr-C name.
-    map: BTreeMap<String, String>,
+    /// Every declaration of each exported name: the file it was written in, and the
+    /// repr-C name it is exported under.
+    ///
+    /// A list rather than one entry per name, because a name is not a declaration: two
+    /// modules can each declare a `Config` and export it under a name of its own. Which
+    /// one is meant is decided by where the name is written — see [`Reprs::nearest`] —
+    /// and which one a declaration is rendered as is decided by
+    /// [`Reprs::declared_in`].
+    claims: BTreeMap<String, Vec<(PathBuf, String)>>,
     /// Every type name the header defines.
     names: BTreeSet<String>,
+    /// The release each type was given, keyed by its repr-C name.
+    ///
+    /// Kept for the same reason the repr is: the release mirrors the name C knows the
+    /// type by, which is its `export` where it has one — see [`release_name`] — and a
+    /// signature that hands one out has to name the release that matches.
+    releases: BTreeMap<String, String>,
     /// Repr-C names of the types that are opaque to C.
     ///
     /// An exported `struct` is one: C is told that the type exists and nothing else
@@ -466,6 +479,53 @@ struct Reprs {
 }
 
 impl Reprs {
+    /// Records that `name` is declared in `file` under `repr`.
+    ///
+    /// A built-in has no file of its own, and is recorded with an empty one: it is
+    /// then further from every source file than any declaration in the tree, which is
+    /// what a built-in should be.
+    fn claim(&mut self, name: &str, file: &Path, repr: &str) {
+        self.claims
+            .entry(name.to_string())
+            .or_default()
+            .push((file.to_path_buf(), repr.to_string()));
+    }
+
+    /// The repr of the declaration of `name` written in `file` itself.
+    ///
+    /// This is how a definition is rendered: a `struct Config` is exported under the
+    /// name its own `#[lazyffi]` gave it, never under the name a table of bare names
+    /// happens to hold.
+    fn declared_in(&self, name: &str, file: &Path) -> Option<String> {
+        self.claims
+            .get(name)?
+            .iter()
+            .find(|(claimed, _)| claimed == file)
+            .map(|(_, repr)| repr.clone())
+    }
+
+    /// The repr `name` means where it is written.
+    ///
+    /// The nearest declaration wins, because that is the one a bare name means:
+    /// `modules/vault/src/init.rs` saying `CreationError` means the one beside it, not
+    /// the one `modules/workspace` declares. Two declarations equally near are not
+    /// resolved at all, and the caller reports it rather than picking one.
+    fn nearest(&self, name: &str, file: &Path) -> Option<String> {
+        let mut ranked: Vec<(usize, &str)> = self
+            .claims
+            .get(name)?
+            .iter()
+            .map(|(claimed, repr)| (shared_depth(claimed, file), repr.as_str()))
+            .collect();
+        ranked.sort_by_key(|(depth, _)| std::cmp::Reverse(*depth));
+
+        match ranked.as_slice() {
+            [(depth, _), (next, _), ..] if depth == next => None,
+            [(_, repr), ..] => Some((*repr).to_owned()),
+            [] => None,
+        }
+    }
+
     /// The C spelling of a value whose repr-C name is `repr`.
     fn shape(&self, repr: &str) -> String {
         if self.opaque.contains(repr) {
@@ -476,6 +536,27 @@ impl Reprs {
     }
 }
 
+/// The name of the function that releases a value of the type `attrs` describe.
+///
+/// The name mirrors the one C knows the type by: its `export` where it has one, and the
+/// type's own Rust name where it does not. The Rust name alone would give two types the
+/// same release, which is what two modules each keeping a `Config` amounts to; the
+/// `export` is what tells them apart, so it is what the release follows.
+fn release_name(rust_name: &str, attrs: &[Attribute]) -> String {
+    free_name(&export_override(attrs).unwrap_or_else(|| rust_name.to_string()))
+}
+
+/// How many leading components two paths have in common.
+///
+/// The measure of how near one declaration is to a reference: the more of a path two
+/// files share, the closer they are in the tree.
+fn shared_depth(one: &Path, other: &Path) -> usize {
+    one.components()
+        .zip(other.components())
+        .take_while(|(one, other)| one == other)
+        .count()
+}
+
 /// Builds the type tables.
 ///
 /// The built-in types come from `lazyffi-core`, so they match what `builtin`
@@ -484,31 +565,24 @@ impl Reprs {
 /// also recorded as opaque, since its repr is never spelled out in C.
 fn reprs(exports: &Exports) -> Reprs {
     let mut reprs = Reprs {
-        map: BTreeMap::new(),
+        claims: BTreeMap::new(),
         names: BTreeSet::new(),
+        releases: BTreeMap::new(),
         opaque: BTreeSet::new(),
     };
 
     for scalar in SCALAR_NAMES {
-        reprs
-            .map
-            .insert((*scalar).to_string(), (*scalar).to_string());
+        reprs.claim(scalar, Path::new(""), scalar);
     }
-    reprs
-        .map
-        .insert("String".to_string(), STRING_REPR.to_string());
-    reprs
-        .map
-        .insert("PathBuf".to_string(), STRING_REPR.to_string());
+    reprs.claim("String", Path::new(""), STRING_REPR);
+    reprs.claim("PathBuf", Path::new(""), STRING_REPR);
     // `Path` is unsized and can only appear behind a reference, but registering it
     // means `&Path` resolves and `&mut Path` is rejected the same way a string is.
-    reprs
-        .map
-        .insert("Path".to_string(), STRING_REPR.to_string());
+    reprs.claim("Path", Path::new(""), STRING_REPR);
     // The same, for the borrowed spelling of a string.
-    reprs.map.insert("str".to_string(), STRING_REPR.to_string());
+    reprs.claim("str", Path::new(""), STRING_REPR);
 
-    for (item, _) in &exports.types {
+    for (item, origin) in &exports.types {
         let (rust_name, attrs) = match item {
             TypeItem::Struct(item) => (item.ident.to_string(), &item.attrs),
             TypeItem::Enum(item) => (item.ident.to_string(), &item.attrs),
@@ -516,7 +590,11 @@ fn reprs(exports: &Exports) -> Reprs {
 
         let default = type_name(&rust_name);
         let repr = export_override(attrs).unwrap_or(default);
+        reprs.claim(&rust_name, &origin.path, &repr);
         reprs.names.insert(repr.clone());
+        reprs
+            .releases
+            .insert(repr.clone(), release_name(&rust_name, attrs));
 
         if matches!(item, TypeItem::Struct(_)) {
             reprs.opaque.insert(repr.clone());
@@ -535,8 +613,6 @@ fn reprs(exports: &Exports) -> Reprs {
                 }
             }
         }
-
-        reprs.map.insert(rust_name, repr);
     }
 
     reprs
@@ -544,20 +620,24 @@ fn reprs(exports: &Exports) -> Reprs {
 
 /// Resolves the repr-C sibling of a Rust type.
 ///
-/// Resolution is by the **last path segment**, not by full path: the table is
-/// keyed by the type's name, so `auth::Token`, `rorolala_auth::Token` and a bare
-/// `Token` all name the same repr. Without that, an export in one crate could not
-/// mention a type defined in a sibling crate, which is the normal shape of this
-/// workspace.
+/// Resolution is by the **last path segment**, not by full path: a signature saying
+/// `auth::Token`, `rorolala_auth::Token` or a bare `Token` all name the same repr.
+/// Without that, an export in one crate could not mention a type defined in a
+/// sibling crate, which is the normal shape of this workspace.
+///
+/// What the segment does not say is *which* declaration is meant when two of them
+/// share a name — `vault` and `workspace` each declare a `CreationError`. That is
+/// decided by where the name is written, the nearest declaration winning; see
+/// [`Reprs::nearest`].
 ///
 /// Two consequences worth knowing:
 ///
 /// - an alias (`use rorolala_auth::Token as Seal;`) does not resolve, because no
 ///   `Seal` is defined here — it is reported, not skipped;
-/// - two types with the same name in different crates are genuinely ambiguous,
-///   and [`duplicates`] rejects the build rather than picking one.
+/// - two declarations that are equally near a name resolve to neither, and the
+///   reference is reported rather than guessed at.
 ///
-/// `Self` has no entry in the table either — it only appears inside an `impl`,
+/// `Self` has no entry in any table either — it only appears inside an `impl`,
 /// where it stands for the target type; [`Resolution::self_repr`] carries that.
 fn repr_of(ty: &Type, resolution: &Resolution<'_>) -> Option<String> {
     if let Type::Path(path) = ty
@@ -569,7 +649,7 @@ fn repr_of(ty: &Type, resolution: &Resolution<'_>) -> Option<String> {
         if ident == "Self" {
             return resolution.self_repr.map(ToString::to_string);
         }
-        return resolution.reprs.map.get(&ident).cloned();
+        return resolution.reprs.nearest(&ident, resolution.origin);
     }
 
     None
@@ -579,15 +659,22 @@ fn repr_of(ty: &Type, resolution: &Resolution<'_>) -> Option<String> {
 struct Resolution<'a> {
     /// The repr-C siblings of the exported types.
     reprs: &'a Reprs,
+    /// The file the name being resolved was written in.
+    ///
+    /// A name can be declared by more than one module, and which one is meant is
+    /// decided by how near it is to where the name is written.
+    origin: &'a Path,
     /// The repr of `Self`, when rendering inside an `impl`.
     self_repr: Option<&'a str>,
 }
 
 impl<'a> Resolution<'a> {
-    /// Resolves types outside an `impl`, where `Self` cannot appear.
-    const fn plain(reprs: &'a Reprs) -> Self {
+    /// Resolves types written in `origin`, outside an `impl`, where `Self` cannot
+    /// appear.
+    const fn plain(reprs: &'a Reprs, origin: &'a Path) -> Self {
         Self {
             reprs,
+            origin,
             self_repr: None,
         }
     }
@@ -970,10 +1057,10 @@ fn build_struct(
     definitions: &mut Vec<Definition>,
 ) {
     let rust_name = item.ident.to_string();
-    let Some(repr) = reprs.map.get(&rust_name).cloned() else {
+    let Some(repr) = reprs.declared_in(&rust_name, &origin.path) else {
         return;
     };
-    let release = free_name(&rust_name);
+    let release = release_name(&rust_name, &item.attrs);
 
     definitions.push(Definition {
         text: format!(
@@ -996,13 +1083,13 @@ fn build_enum(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let rust_name = item.ident.to_string();
-    let Some(repr) = reprs.map.get(&rust_name).cloned() else {
+    let Some(repr) = reprs.declared_in(&rust_name, &origin.path) else {
         return;
     };
     let line = item.ident.span().start().line;
 
     if !carries_data(item) {
-        let release = free_name(&rust_name);
+        let release = release_name(&rust_name, &item.attrs);
         definitions.push(Definition {
             text: format!(
                 "{doc}{}void {release}({repr} *value);\n\n",
@@ -1041,7 +1128,8 @@ fn build_enum(
             &repr,
             item,
             reprs,
-            &mut Reporting::new(origin, diagnostics),
+            origin,
+            diagnostics,
             &rust_name,
         ),
         name: payload.clone(),
@@ -1055,7 +1143,7 @@ fn build_enum(
             "{doc}typedef struct {repr} {{\n  {tag} tag;\n  {payload} payload;\n}} {repr};\n\n\
              void {release}({repr} *value);\n\n",
             doc = render_doc(&doc_lines(&item.attrs), ""),
-            release = free_name(&rust_name)
+            release = release_name(&rust_name, &item.attrs)
         ),
         name: repr,
         origin: origin.clone(),
@@ -1102,7 +1190,7 @@ fn build_companion(
 
     let name = variant_type_name(repr, &variant.ident.to_string());
     let mut reporting = Reporting::new(origin, diagnostics);
-    let resolution = Resolution::plain(reprs);
+    let resolution = Resolution::plain(reprs, &origin.path);
     let mut body = String::new();
     for (field_name, ty) in payload_fields(&variant.fields) {
         let label = format!("{repr}::{}.{field_name}", variant.ident);
@@ -1131,10 +1219,12 @@ fn render_payload(
     repr: &str,
     item: &ItemEnum,
     reprs: &Reprs,
-    reporting: &mut Reporting<'_>,
+    origin: &Origin,
+    diagnostics: &mut Vec<Diagnostic>,
     rust_name: &str,
 ) -> String {
-    let resolution = Resolution::plain(reprs);
+    let mut reporting = Reporting::new(origin, diagnostics);
+    let resolution = Resolution::plain(reprs, &origin.path);
     let mut body = String::new();
     for variant in &item.variants {
         if matches!(variant.fields, Fields::Unit) {
@@ -1148,7 +1238,7 @@ fn render_payload(
         } else {
             payload_fields(&variant.fields)
                 .first()
-                .and_then(|(_, ty)| field_c_type(ty, &resolution, reporting, &label))
+                .and_then(|(_, ty)| field_c_type(ty, &resolution, &mut reporting, &label))
         };
 
         let Some(c_type) = c_type else {
@@ -1364,7 +1454,7 @@ fn render_const(
     let mut reporting = Reporting::new(origin, diagnostics);
     let Some(c_type) = field_c_type(
         &item.ty,
-        &Resolution::plain(reprs),
+        &Resolution::plain(reprs, &origin.path),
         &mut reporting,
         &rust_name,
     ) else {
@@ -1385,7 +1475,7 @@ fn render_function(
     let rust_name = item.sig.ident.to_string();
     let default = value_name(&rust_name);
     let export = export_override(&item.attrs).unwrap_or(default);
-    let resolution = Resolution::plain(reprs);
+    let resolution = Resolution::plain(reprs, &origin.path);
 
     // The result mapping belongs to the function's own doc block: it is the only
     // place a caller is told what a payload is, and it is not something the Rust
@@ -1451,8 +1541,8 @@ fn render_impl(
         return;
     };
 
-    let Some(repr) =
-        repr_of(&item.self_ty, &Resolution::plain(reprs)).and_then(|repr| c_type(&repr, reprs))
+    let Some(repr) = repr_of(&item.self_ty, &Resolution::plain(reprs, &origin.path))
+        .and_then(|repr| c_type(&repr, reprs))
     else {
         reporting.report(
             item.self_ty.span().start().line,
@@ -1465,6 +1555,7 @@ fn render_impl(
     // Inside the `impl`, `Self` names the target type.
     let resolution = Resolution {
         reprs,
+        origin: &origin.path,
         self_repr: Some(&repr),
     };
 
@@ -1671,12 +1762,11 @@ fn payload_mapping(
         return None;
     }
 
-    let rust_name = simple_type_name(ty)?;
     let spelling = c_type(&repr, resolution.reprs)?;
+    let release = resolution.reprs.releases.get(&repr)?;
 
     Some(format!(
-        "`{spelling} *`, owned; release it with `{}`",
-        free_name(&rust_name)
+        "`{spelling} *`, owned; release it with `{release}`"
     ))
 }
 
@@ -1846,6 +1936,11 @@ mod tests {
     /// asserts on is the header, which is the artifact the build script hands out and
     /// the only thing a C caller ever sees — the Rust side is not what can be wrong.
     fn header_for(source: &str) -> String {
+        header_for_each(&[("lib.rs", source)])
+    }
+
+    /// Renders the header for a source tree holding each of `sources`, one file each.
+    fn header_for_each(sources: &[(&str, &str)]) -> String {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
 
         let root = std::env::temp_dir().join(format!(
@@ -1855,17 +1950,57 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
 
-        let sources = root.join("src");
-        fs::create_dir_all(&sources).unwrap();
-        fs::write(sources.join("lib.rs"), source).unwrap();
+        let sources_dir = root.join("src");
+        fs::create_dir_all(&sources_dir).unwrap();
+        for (name, source) in sources {
+            fs::write(sources_dir.join(name), source).unwrap();
+        }
 
         let output_dir = root.join("out");
         let config = Config {
-            source_roots: std::slice::from_ref(&sources),
+            source_roots: std::slice::from_ref(&sources_dir),
             output_dir: &output_dir,
         };
 
         fs::read_to_string(generate(&config).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn two_modules_may_name_a_type_the_same() {
+        // The shape of this workspace: `vault` and `workspace` each have a `Config`,
+        // and each `export`s it under a name of its own. A definition has to be
+        // rendered from its own export rather than from a table keyed by a name both
+        // of them have.
+        let header = header_for_each(&[
+            (
+                "vault.rs",
+                "/// A vault.\n#[lazyffi(export = VaultConfig)]\npub struct Config {}\n",
+            ),
+            (
+                "workspace.rs",
+                "/// A workspace.\n#[lazyffi(export = WorkspaceConfig)]\npub struct Config {}\n",
+            ),
+        ]);
+
+        assert!(
+            header.contains("typedef struct VaultConfig VaultConfig;"),
+            "{header}"
+        );
+        assert!(
+            header.contains("typedef struct WorkspaceConfig WorkspaceConfig;"),
+            "{header}"
+        );
+
+        // The releases are named after the name C knows each type by, so the two do
+        // not become one symbol at link time.
+        assert!(
+            header.contains("void free_vault_config(VaultConfig *value);"),
+            "{header}"
+        );
+        assert!(
+            header.contains("void free_workspace_config(WorkspaceConfig *value);"),
+            "{header}"
+        );
     }
 
     /// A counter with a read-only method, a mutating method and a free function that

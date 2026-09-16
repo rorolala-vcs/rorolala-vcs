@@ -324,6 +324,17 @@ fn exported_name(
     Ok(name)
 }
 
+/// The name C knows an item by: its `export` where it has one, and its Rust name
+/// where it does not.
+///
+/// This is what an `export` is for here — the generated release mirrors the name the
+/// caller writes in C, so two types one Rust name apart still have one release each.
+fn mirrored_name(args: &LazyFfiArgs, rust_name: &Ident) -> String {
+    args.export
+        .as_ref()
+        .map_or_else(|| rust_name.to_string(), ToString::to_string)
+}
+
 /// Refuses an `export` that names the item it mirrors.
 fn reject_self_export(name: &Ident, rust_name: &Ident) -> syn::Result<()> {
     if name == rust_name {
@@ -431,7 +442,10 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
 
     let rust_name = &item.ident;
     let ffi_name = exported_name(args, rust_name, DefaultName::Type)?;
-    let release = Ident::new(&free_name(&rust_name.to_string()), rust_name.span());
+    let release = Ident::new(
+        &free_name(&mirrored_name(args, rust_name)),
+        rust_name.span(),
+    );
 
     let struct_docs = mirrored_attrs(&format!("`{rust_name}`"), &item.attrs);
     let release_docs = generated_attrs(
@@ -578,7 +592,7 @@ fn expand_enum(args: &LazyFfiArgs, item: &ItemEnum) -> syn::Result<TokenStream2>
         expand_unit_enum(item, rust_name, &ffi_name)
     };
 
-    let release = enum_release(rust_name, &ffi_name);
+    let release = enum_release(args, rust_name, &ffi_name);
 
     Ok(quote! {
         #expansion
@@ -594,8 +608,13 @@ fn expand_enum(args: &LazyFfiArgs, item: &ItemEnum) -> syn::Result<TokenStream2>
 /// this enum — so there has to be a release for it, named the way every other release
 /// is. It frees the box and nothing else: the repr's own fields are the caller's to
 /// release one by one, exactly as they are when the enum is handed over by value.
-fn enum_release(rust_name: &Ident, ffi_name: &Ident) -> TokenStream2 {
-    let release = Ident::new(&free_name(&rust_name.to_string()), rust_name.span());
+fn enum_release(args: &LazyFfiArgs, rust_name: &Ident, ffi_name: &Ident) -> TokenStream2 {
+    // Named the way C knows the type: its export where it has one, its Rust name where
+    // it does not.
+    let release = Ident::new(
+        &free_name(&mirrored_name(args, rust_name)),
+        rust_name.span(),
+    );
     let docs = generated_attrs(
         &format!("Releases a boxed `{rust_name}` handed out as a result payload."),
         &[],
