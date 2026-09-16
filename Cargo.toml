@@ -43,13 +43,16 @@ rorolala-vault = { path = "modules/vault" }
 rorolala-workspace = { path = "modules/workspace" }
 
 # CLI Framework
-mingling = { version = "0.5.1", features = ["picker", "comp", "pathf"] }
+mingling = { version = "0.5.2", features = ["picker", "comp", "pathf"] }
 
 # Serialization
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 serde_yaml = "0.9.34"
 toml = "0.8.23"
+
+# Internationalization
+rust-i18n = "4.2.2"
 
 # Proc macro
 annotate-snippets = "0.12.16"
