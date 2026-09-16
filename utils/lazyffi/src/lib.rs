@@ -10,8 +10,10 @@ use std::ffi::CString;
 
 pub mod builtin;
 mod convert;
+pub mod result;
 
 pub use convert::*;
+pub use result::*;
 pub use rorolala_utils_lazyffi_macros::*;
 
 /// Allocates a NUL-terminated copy of `bytes` for handing to C.

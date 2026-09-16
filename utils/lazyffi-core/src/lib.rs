@@ -19,6 +19,33 @@ pub const STRING_REPR: &str = "*mut c_char";
 /// since C cannot release an allocated string without it.
 pub const FREE_STRING: &str = "ffi_free_string";
 
+/// Name of the one result type every fallible export hands back.
+///
+/// Unlike the reprs generated per item, this one is fixed: it is declared once for
+/// the whole surface, always, and a `Result<T, E>` return always comes back as it.
+/// Its payload is an owned `void *` — the caller reads the tag to learn which of `T`
+/// or `E` it is, casts to that type's own repr, and releases it with that type's own
+/// `ffi_free_*`. The tag and its variants follow the same rules as any other exported
+/// enum (see [`tag_type_name`] and [`c_variant_name`]), so the two sides cannot drift.
+///
+/// ```
+/// assert_eq!(rorolala_utils_lazyffi_core::RESULT_REPR, "RorolalaResult");
+/// assert_eq!(
+///     rorolala_utils_lazyffi_core::c_variant_name(
+///         rorolala_utils_lazyffi_core::RESULT_REPR,
+///         rorolala_utils_lazyffi_core::RESULT_OK_VARIANT,
+///     ),
+///     "RorolalaResult_Ok",
+/// );
+/// ```
+pub const RESULT_REPR: &str = "RorolalaResult";
+
+/// Variant of [`RESULT_REPR`] carrying `Ok`'s payload.
+pub const RESULT_OK_VARIANT: &str = "Ok";
+
+/// Variant of [`RESULT_REPR`] carrying `Err`'s payload.
+pub const RESULT_ERR_VARIANT: &str = "Err";
+
 /// Invokes `$callback!` with the list of scalar types whose repr is themselves.
 ///
 /// The `builtin` conversions are implemented for these types, and the header

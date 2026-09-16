@@ -14,6 +14,33 @@ from the C string and the call borrows the result.
 A `&T` parameter or a `&self` receiver is a read-only borrow of a value C already has:
 nothing is taken, and nothing is written back.
 
+## Fallible returns
+
+A `Result<T, E>` return crosses as the one fixed `RorolalaResult`:
+
+```c
+typedef enum RorolalaResultTag {
+  RorolalaResult_Ok = 0,
+  RorolalaResult_Err = 1,
+} RorolalaResultTag;
+
+typedef struct RorolalaResult {
+  RorolalaResultTag tag;
+  void * payload;
+} RorolalaResult;
+```
+
+One C layout cannot name two payload types, and a generated repr per `(T, E)` pair would
+collide the moment two exports returned the same one. So the payload is an owned
+`void *`, the header says what each side of the tag holds, and the caller casts it and
+releases it with that type's own `ffi_free_*`.
+
+`T` and `E` must each own a pointer of their own: an exported `struct` (whose repr
+already is one), a `String` or `PathBuf`, an exported `enum` (boxed, and released with
+the `ffi_free_<type>` that comes with it), or `()`, which is the `Ok` of the common
+`Result<(), E>` and crosses as a null payload. A scalar is rejected — it has no pointer
+of its own — and so is a `String` error: an error is a case the caller switches on.
+
 ```rust
 use rorolala_utils_lazyffi::{InputRef, ReturnType, lazyffi};
 

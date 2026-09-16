@@ -13,9 +13,9 @@ use rorolala_utils_lazyffi_core::{
     type_name, value_name, variant_needs_companion, variant_type_name,
 };
 use syn::{
-    Attribute, Expr, ExprLit, ExprPath, Fields, FnArg, Ident, ImplItem, Item, ItemConst, ItemEnum,
-    ItemFn, ItemImpl, ItemStruct, Lit, Meta, Pat, Receiver, ReceiverKind, ReturnType, Signature,
-    Token, Type, Variant,
+    Attribute, Expr, ExprLit, ExprPath, Fields, FnArg, GenericArgument, Ident, ImplItem, Item,
+    ItemConst, ItemEnum, ItemFn, ItemImpl, ItemStruct, Lit, Meta, Pat, PathArguments, Receiver,
+    ReceiverKind, ReturnType, Signature, Token, Type, Variant,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
@@ -221,6 +221,54 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///
 /// Reference *returns* are rejected: the wrapper cannot guarantee the referent outlives
 /// the call.
+///
+/// # Fallible returns
+///
+/// A `Result<T, E>` return crosses as the one fixed `RorolalaResult` rather than as a
+/// repr generated for it. One C layout cannot hold two arbitrary payload types, and a
+/// conversion per `(T, E)` pair would collide the moment two exports returned the same
+/// one — so the payload is an owned `void *`, the header names what each side of the
+/// tag holds, and the caller casts and releases it.
+///
+/// `T` and `E` must each own a pointer of their own: an exported `struct` (whose repr
+/// already is one), a `String` or `PathBuf`, an exported `enum` (boxed, and released
+/// with the `ffi_free_<type>` generated beside it), or `()`, which is the `Ok` of the
+/// common `Result<(), E>` and crosses as a null payload. Anything else — a scalar, in
+/// particular — does not compile.
+///
+/// A `String` or `PathBuf` **error** is rejected outright: an error is a case the
+/// caller switches on, and a sentence gives it nothing to switch on.
+///
+/// ```
+/// use rorolala_utils_lazyffi::lazyffi;
+///
+/// /// Why a counter refused.
+/// #[lazyffi]
+/// pub enum CounterError {
+///     /// There is no counter to start from.
+///     Exhausted,
+/// }
+///
+/// /// A counter.
+/// #[lazyffi]
+/// pub struct Counter {
+///     value: i64,
+/// }
+///
+/// /// Reads a counter, or says why it could not.
+/// #[lazyffi]
+/// pub fn read(counter: &Counter) -> Result<String, CounterError> {
+///     Ok(counter.value.to_string())
+/// }
+///
+/// /// Starts a counter, or says why it would not.
+/// #[lazyffi]
+/// pub const fn open() -> Result<Counter, CounterError> {
+///     Err(CounterError::Exhausted)
+/// }
+///
+/// fn main() {}
+/// ```
 #[proc_macro_attribute]
 pub fn lazyffi(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as LazyFfiArgs);
@@ -471,6 +519,16 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
             }
         }
 
+        #[doc(hidden)]
+        impl ::rorolala_utils_lazyffi::ResultPayload for #rust_name {
+            fn into_payload(self) -> *mut ::core::ffi::c_void {
+                // An opaque value already crosses as an owning pointer, so it becomes a
+                // payload with nothing further — released with this type's own
+                // `ffi_free_<type>`.
+                <Self as ::rorolala_utils_lazyffi::ReturnType>::return_self(self).cast()
+            }
+        }
+
         #(#release_docs)*
         #[doc = #SAFETY_DOC]
         #[doc(hidden)]
@@ -520,7 +578,45 @@ fn expand_enum(args: &LazyFfiArgs, item: &ItemEnum) -> syn::Result<TokenStream2>
         expand_unit_enum(item, rust_name, &ffi_name)
     };
 
-    Ok(expansion)
+    let release = enum_release(rust_name, &ffi_name);
+
+    Ok(quote! {
+        #expansion
+
+        #release
+    })
+}
+
+/// The release C frees a boxed `enum` repr with.
+///
+/// A transparent type crosses by value, so no ordinary signature needs to release one.
+/// A `RorolalaResult` payload is a pointer, though, and the one it carries may name
+/// this enum — so there has to be a release for it, named the way every other release
+/// is. It frees the box and nothing else: the repr's own fields are the caller's to
+/// release one by one, exactly as they are when the enum is handed over by value.
+fn enum_release(rust_name: &Ident, ffi_name: &Ident) -> TokenStream2 {
+    let release = Ident::new(&free_name(&rust_name.to_string()), rust_name.span());
+    let docs = generated_attrs(
+        &format!("Releases a boxed `{rust_name}` handed out as a result payload."),
+        &[],
+    );
+
+    quote! {
+        #(#docs)*
+        #[doc = #SAFETY_DOC]
+        #[doc(hidden)]
+        #[unsafe(no_mangle)]
+        #[allow(nonstandard_style)]
+        pub unsafe extern "C" fn #release(value: *mut #ffi_name) {
+            if value.is_null() {
+                return;
+            }
+
+            // SAFETY: the caller guarantees `value` is a pointer this export handed
+            // out and has not been released yet.
+            drop(unsafe { ::std::boxed::Box::from_raw(value) });
+        }
+    }
 }
 
 /// Maps a variant's fields onto the shape `lazyffi-core` reasons about.
@@ -966,6 +1062,18 @@ fn conversion_impls(
                 ))
             }
         }
+
+        #[doc(hidden)]
+        impl ::rorolala_utils_lazyffi::ResultPayload for #rust_name {
+            fn into_payload(self) -> *mut ::core::ffi::c_void {
+                // A transparent type is a value and a result payload is a pointer, so
+                // the repr is boxed — released with the `ffi_free_<type>` beside this.
+                ::std::boxed::Box::into_raw(::std::boxed::Box::new(
+                    <Self as ::rorolala_utils_lazyffi::ReturnType>::return_self(self),
+                ))
+                .cast()
+            }
+        }
     }
 }
 
@@ -1169,6 +1277,17 @@ fn wrapper_tokens(
                 &**ty,
                 "`#[lazyffi]` cannot return a reference: the wrapper cannot guarantee the \
                  referent outlives the call",
+            ));
+        }
+
+        if let Some(error) = result_error_type(ty)
+            && is_string_like(error)
+        {
+            return Err(syn::Error::new_spanned(
+                error,
+                "`#[lazyffi]` rejects a `String` or `PathBuf` error: C is given a tag to switch \
+                 on, and a sentence gives it nothing to switch on. Give each failure case an \
+                 exported `enum` instead.",
             ));
         }
 
@@ -1421,6 +1540,53 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
     }
 
     Ok(parts)
+}
+
+/// The error type of a `Result<T, E>`, when `ty` is one.
+///
+/// Matched on the last path segment, the way every other type rule here is: the
+/// macro cannot tell `Result` from an alias for it, and pretending otherwise would
+/// mean resolving names it has no view of.
+fn result_error_type(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+
+    if type_path.qself.is_some() {
+        return None;
+    }
+
+    let segment = type_path.path.segments.last()?;
+    if segment.ident != "Result" {
+        return None;
+    }
+
+    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return None;
+    };
+
+    let mut types = arguments.args.iter().filter_map(|argument| match argument {
+        GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    });
+
+    let _ok = types.next()?;
+
+    types.next()
+}
+
+/// Whether `ty` names a string or a path: the two types that cross as C strings.
+fn is_string_like(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+
+    type_path.path.segments.last().is_some_and(|segment| {
+        matches!(
+            segment.ident.to_string().as_str(),
+            "String" | "PathBuf" | "str" | "Path"
+        )
+    })
 }
 
 /// Whether `ty` is a reference to `str`.
