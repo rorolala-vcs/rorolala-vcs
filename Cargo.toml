@@ -54,7 +54,11 @@ serde_yaml = "0.9.34"
 toml = "0.8.23"
 
 # CLI Rendering
+bat = { version = "0.26.1", default-features = false, features = ["regex-fancy"] }
 colored = "3.1.1"
+console = "0.16.6"
+prettytable-rs = { version = "0.10.0", default-features = false }
+unicode-width = "0.2.2"
 
 # Internationalization
 rust-i18n = "4.2.2"
