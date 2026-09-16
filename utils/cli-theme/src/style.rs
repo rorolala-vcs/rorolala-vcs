@@ -176,13 +176,34 @@ fn drawn(level: Level, prefix: &str, content: &str) -> String {
 /// is made out of letters, and where they are there it is made out of a mark on a
 /// background. So the shape is chosen here, and how it is drawn is left to the engine.
 fn source(level: Level, prefix: &str, content: &str, theme: ThemeChoice) -> String {
+    let content = marked(content);
+
     if theme == ThemeChoice::Pretty {
         let (background, foreground) = level.badge();
         let mark = level.mark();
-        format!("[[{background}]][[{foreground}]]** {mark} {prefix} **[[/]][[/]] *{content}*")
+        format!("[[{background}]][[{foreground}]]** {mark} {prefix} **[[/]][[/]] {content}")
     } else {
         let colour = level.colour();
-        format!("[[{colour}]]::{prefix}=>[[/]] *{content}*")
+        format!("[[{colour}]]::{prefix}=>[[/]] {content}")
+    }
+}
+
+/// The message, marked so that it reads as what the line says rather than as part of
+/// the name it follows.
+///
+/// The marking is a **single-line** one. The language is read a line at a time, so a
+/// pair of markers with a newline between them is not a pair at all: marking a message
+/// of several lines would leave a stray `*` at each end of it. A message that is one
+/// line is drawn in italics, and a longer one — a translation written as a `|` block,
+/// or one that carries an example — is drawn as it is. What a `|` block ends with is
+/// trimmed for the same reason it is not marking: it is not part of what was said.
+fn marked(content: &str) -> String {
+    let content = content.trim();
+
+    if content.contains('\n') {
+        content.to_string()
+    } else {
+        format!("*{content}*")
     }
 }
 
@@ -272,6 +293,16 @@ mod tests {
     fn a_written_line_takes_a_message_the_program_holds() {
         let held = String::from("Fail to load **vault**!");
         assert_eq!(crate::err_line!(held), err_line("ERROR", &held));
+    }
+
+    #[test]
+    fn a_message_a_block_scalar_ends_with_is_still_drawn() {
+        // Every translation written as a `|` block in the locale files ends with a
+        // newline, and the markers around it are on the far side of that newline.
+        assert_eq!(
+            super::help_line("HELP", "Please try again\n"),
+            "::HELP=> Please try again"
+        );
     }
 
     #[test]
