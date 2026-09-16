@@ -104,15 +104,19 @@ else
   IMPORT_SUFFIX :=
 endif
 
-.PHONY: all check lib bin build export clippy doc doc-open fmt test cargo-clean clean
+.PHONY: all check lib bin build export clippy doc doc-open fmt fmt-check test cargo-clean clean
 
 # Default target: the full gate.
 all: check build
 
-# The full gate: the test suites, a build of every crate, clippy, then the
-# documentation. Composed from the targets below rather than repeating their
-# commands.
-check: test build clippy doc
+# The full gate: the formatting of every crate, the test suites, a build of every
+# crate, clippy, then the documentation. Composed from the targets below rather than
+# repeating their commands.
+#
+# `fmt-check` comes first because it is instant and it is the one that is forgotten:
+# `fmt` rewrites the sources in place, so nothing else here would notice a crate that
+# was left unformatted.
+check: fmt-check test build clippy doc
 
 # Builds the C ABI artifact — a release cdylib and staticlib — and, as a side effect
 # of the root build script, the C header that describes it.
@@ -153,15 +157,19 @@ clippy:
 
 # Builds the API documentation for every crate in the workspace.
 doc:
-	$(CARGO) doc --workspace --no-deps
+	$(CARGO) doc --workspace --no-deps --all-features
 
 # Same, then opens it in a browser.
 doc-open:
-	$(CARGO) doc --workspace --no-deps --open
+	$(CARGO) doc --workspace --no-deps --all-features --open
 
 # Formats every crate in the workspace in place.
 fmt:
 	$(CARGO) fmt --all
+
+# Verifies that every crate is formatted, without rewriting anything.
+fmt-check:
+	$(CARGO) fmt --all -- --check
 
 # Runs the test suites. Deliberately left on cargo's default profile: release
 # builds turn `debug_assert!` off, which is the opposite of what a test run wants.
