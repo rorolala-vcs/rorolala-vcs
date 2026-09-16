@@ -22,8 +22,7 @@ pub use vault::*;
 /// commands per crate, so a command must be declared in the crate that binds it.
 ///
 /// [`LanguageSetup`] comes first, so that everything registered after it is translated
-/// in the language the run selected. A program that wants its own language setup can
-/// register one after this: the later registration wins.
+/// in the language the run selected.
 pub struct RorolalaSetup;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for RorolalaSetup
@@ -31,7 +30,7 @@ where
     ThisProgram: ProgramCollect<Enum = ThisProgram>,
 {
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
-        program.with_setup(LanguageSetup::new());
+        program.with_setup(LanguageSetup);
         program.with_setup(GlobalFlagSetup);
         program.with_setup(VaultSetup);
     }
