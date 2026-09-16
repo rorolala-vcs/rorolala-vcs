@@ -8,3 +8,4 @@ librorolala.workspace = true
 rorolala-cli-setups.workspace = true
 rorolala-utils-lazyffi.workspace = true
 mingling.workspace = true
+rust-i18n.workspace = true

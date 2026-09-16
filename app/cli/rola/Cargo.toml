@@ -7,3 +7,4 @@ edition.workspace = true
 librorolala.workspace = true
 rorolala-cli-setups.workspace = true
 mingling.workspace = true
+rust-i18n.workspace = true

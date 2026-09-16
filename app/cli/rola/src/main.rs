@@ -6,11 +6,16 @@
 #![deny(clippy::nursery)]
 #![allow(clippy::missing_const_for_fn)]
 
+rust_i18n::i18n!("../../../i18n/rola", fallback = "en");
+
 use mingling::{
     macros::{buffer, gen_program, r_println, renderer},
     setup::DefaultSetup,
 };
 use rorolala_cli_setups::RorolalaSetup;
+
+mod cmd_create;
+mod cmd_init;
 
 fn main() {
     let mut program = ThisProgram::new();
