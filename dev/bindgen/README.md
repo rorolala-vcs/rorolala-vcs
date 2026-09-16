@@ -134,6 +134,41 @@ so a return that has one gives null instead of truncating silently.
 
 `&mut String` and `&mut PathBuf` are rejected: a string has no second pointer to take.
 
+### Fallible returns
+
+A `Result<T, E>` return is rendered as `RorolalaResult`, the one result type every header
+declares — whether or not anything in it is fallible:
+
+```c
+typedef struct RorolalaResult {
+  RorolalaResultTag tag;
+  void * payload;
+} RorolalaResult;
+```
+
+The payload is a `void *` because one layout cannot name two payload types, so what each
+side holds is carried by the declaration's own doc block, which the generator appends to
+the one the Rust source wrote:
+
+```c
+/**
+ * Reads a counter.
+ *
+ * Returns a result:
+ * - `Ok`: `char *`, owned; release it with `ffi_free_string`
+ * - `Err`: `FFIRefusal *`, owned; release it with `ffi_free_refusal`
+ */
+RorolalaResult ffi_read(const FFICounter * counter);
+```
+
+A payload with no repr-C sibling is reported like any other unrenderable type, and so is
+a scalar, which has no pointer of its own for C to cast or release. The `Ok` of a
+`Result<(), E>` is named as carrying nothing.
+
+An exported enum also declares a release now (`void ffi_free_<type>(FFIType *value);`),
+because a payload naming one is boxed: nothing else in a signature needs to free a type
+that crosses by value.
+
 ### Name resolution is by the last path segment
 
 Types are matched by the final identifier of the path, so an export in one crate can

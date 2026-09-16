@@ -76,13 +76,14 @@ use std::sync::Arc;
 use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet, renderer::DecorStyle};
 use quote::quote;
 use rorolala_utils_lazyffi_core::{
-    FREE_STRING, STRING_REPR, VariantFields, c_variant_name, for_each_scalar, free_name,
-    method_name, payload_type_name, tag_type_name, type_name, value_name, variant_needs_companion,
-    variant_type_name,
+    FREE_STRING, RESULT_ERR_VARIANT, RESULT_OK_VARIANT, RESULT_REPR, STRING_REPR, VariantFields,
+    c_variant_name, for_each_scalar, free_name, method_name, payload_type_name, tag_type_name,
+    type_name, value_name, variant_needs_companion, variant_type_name,
 };
 use syn::{
-    Attribute, Expr, ExprLit, Fields, FnArg, ImplItem, Item, ItemConst, ItemEnum, ItemFn, ItemImpl,
-    ItemStruct, Lit, Meta, Pat, ReceiverKind, ReturnType, Signature, Type, spanned::Spanned,
+    Attribute, Expr, ExprLit, Fields, FnArg, GenericArgument, ImplItem, Item, ItemConst, ItemEnum,
+    ItemFn, ItemImpl, ItemStruct, Lit, Meta, Pat, PathArguments, ReceiverKind, ReturnType,
+    Signature, Type, spanned::Spanned,
 };
 
 /// File name of the generated header.
@@ -132,12 +133,67 @@ const BANNER: &str = "\
 /// The helper is declared unconditionally: it costs nothing, and a C caller could
 /// not release a returned string otherwise.
 fn preamble() -> String {
-    format!(
+    let mut out = format!(
         "\n#ifndef {INCLUDE_GUARD}\n#define {INCLUDE_GUARD}\n\n\
          #include <stdarg.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdlib.h>\n\n\
          #ifdef __cplusplus\nextern \"C\" {{\n#endif\n\n\
          void {FREE_STRING}(char *string);\n\n"
-    )
+    );
+
+    out.push_str(&result_declarations());
+
+    out
+}
+
+/// The result type every header declares, whether or not anything uses it.
+///
+/// A `Result<T, E>` return cannot cross as a repr generated for it — one C layout
+/// cannot name two payload types, and a type per `(T, E)` pair would collide the moment
+/// two exports returned the same one. So there is one result type for the whole
+/// surface, declared once here the way the string release is, and the layout below is
+/// the contract `rorolala-utils-lazyffi` implements.
+fn result_declarations() -> String {
+    let repr = RESULT_REPR;
+    let tag = tag_type_name(repr);
+    let ok = c_variant_name(repr, RESULT_OK_VARIANT);
+    let error = c_variant_name(repr, RESULT_ERR_VARIANT);
+
+    let mut out = String::new();
+    let _ = writeln!(out, "/** Which side of a `Result` a `{repr}` carries. */");
+    let _ = writeln!(out, "typedef enum {tag} {{");
+    let _ = writeln!(
+        out,
+        "  /** The call succeeded, and the payload is its value. */"
+    );
+    let _ = writeln!(out, "  {ok} = 0,");
+    let _ = writeln!(
+        out,
+        "  /** The call failed, and the payload is the error. */"
+    );
+    let _ = writeln!(out, "  {error} = 1,");
+    let _ = writeln!(out, "}} {tag};\n");
+    let _ = writeln!(out, "/**");
+    let _ = writeln!(out, " * What a fallible export hands back.");
+    let _ = writeln!(out, " *");
+    let _ = writeln!(
+        out,
+        " * The payload is owned by the caller: read the tag to learn which side it is,"
+    );
+    let _ = writeln!(
+        out,
+        " * cast it to the type the function names for that side, and release it with"
+    );
+    let _ = writeln!(
+        out,
+        " * that type's own `ffi_free_*`. It is null when there is nothing to carry."
+    );
+    let _ = writeln!(out, " */");
+    let _ = writeln!(out, "typedef struct {repr} {{");
+    let _ = writeln!(out, "  {tag} tag;");
+    let _ = writeln!(out, "  void * payload;");
+    let _ = writeln!(out, "}} {repr};\n");
+
+    out
 }
 
 /// Header footer: closes the `extern "C"` block and the include guard.
@@ -946,9 +1002,10 @@ fn build_enum(
     let line = item.ident.span().start().line;
 
     if !carries_data(item) {
+        let release = free_name(&rust_name);
         definitions.push(Definition {
             text: format!(
-                "{doc}{}",
+                "{doc}{}void {release}({repr} *value);\n\n",
                 render_enum(&repr, &repr, item),
                 doc = render_doc(&doc_lines(&item.attrs), "")
             ),
@@ -995,8 +1052,10 @@ fn build_enum(
 
     definitions.push(Definition {
         text: format!(
-            "{doc}typedef struct {repr} {{\n  {tag} tag;\n  {payload} payload;\n}} {repr};\n\n",
-            doc = render_doc(&doc_lines(&item.attrs), "")
+            "{doc}typedef struct {repr} {{\n  {tag} tag;\n  {payload} payload;\n}} {repr};\n\n\
+             void {release}({repr} *value);\n\n",
+            doc = render_doc(&doc_lines(&item.attrs), ""),
+            release = free_name(&rust_name)
         ),
         name: repr,
         origin: origin.clone(),
@@ -1326,14 +1385,26 @@ fn render_function(
     let rust_name = item.sig.ident.to_string();
     let default = value_name(&rust_name);
     let export = export_override(&item.attrs).unwrap_or(default);
+    let resolution = Resolution::plain(reprs);
 
-    out.push_str(&render_doc(&doc_lines(&item.attrs), ""));
+    // The result mapping belongs to the function's own doc block: it is the only
+    // place a caller is told what a payload is, and it is not something the Rust
+    // source can say.
+    let mut docs = doc_lines(&item.attrs);
+    docs.extend(result_doc_lines(
+        &item.sig,
+        &resolution,
+        &mut Reporting::new(origin, diagnostics),
+        &rust_name,
+    ));
+    out.push_str(&render_doc(&docs, ""));
+
     render_signature(
         out,
         &item.sig,
         &export,
         None,
-        &Resolution::plain(reprs),
+        &resolution,
         &mut Reporting::new(origin, diagnostics),
         &rust_name,
     );
@@ -1421,7 +1492,14 @@ fn render_impl(
             }
         }
 
-        out.push_str(&render_doc(&doc_lines(&method.attrs), ""));
+        let mut docs = doc_lines(&method.attrs);
+        docs.extend(result_doc_lines(
+            &method.sig,
+            &resolution,
+            &mut reporting,
+            &label,
+        ));
+        out.push_str(&render_doc(&docs, ""));
         render_signature(
             out,
             &method.sig,
@@ -1481,6 +1559,130 @@ fn simple_type_name(ty: &Type) -> Option<String> {
     }
 
     None
+}
+
+/// The `Ok` and `Err` types of a `Result<T, E>` return, when the signature has one.
+///
+/// Matched on the last path segment, the way every other rule here is: an alias for
+/// `Result` does not resolve, and saying so beats guessing.
+fn result_return(sig: &Signature) -> Option<(&Type, &Type)> {
+    let ReturnType::Type(_, ty) = &sig.output else {
+        return None;
+    };
+
+    let Type::Path(type_path) = &**ty else {
+        return None;
+    };
+
+    if type_path.qself.is_some() {
+        return None;
+    }
+
+    let segment = type_path.path.segments.last()?;
+    if segment.ident != "Result" {
+        return None;
+    }
+
+    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return None;
+    };
+
+    let types: Vec<&Type> = arguments
+        .args
+        .iter()
+        .filter_map(|argument| match argument {
+            GenericArgument::Type(ty) => Some(ty),
+            _ => None,
+        })
+        .collect();
+
+    match types.as_slice() {
+        [ok, error] => Some((ok, error)),
+        _ => None,
+    }
+}
+
+/// The doc lines a fallible return contributes: what each side of the tag holds, and
+/// which release frees it.
+///
+/// They go into the function's own doc block because the payload is a `void *` — one C
+/// layout cannot name two types — so the header is the only place that can tell a
+/// caller what to cast it to.
+fn result_doc_lines(
+    sig: &Signature,
+    resolution: &Resolution<'_>,
+    reporting: &mut Reporting<'_>,
+    item: &str,
+) -> Vec<String> {
+    let Some((ok, error)) = result_return(sig) else {
+        return Vec::new();
+    };
+
+    let mut lines = vec![String::new(), "Returns a result:".to_string()];
+
+    for (side, ty) in [(RESULT_OK_VARIANT, ok), (RESULT_ERR_VARIANT, error)] {
+        if let Some(text) = payload_mapping(ty, resolution, reporting, item) {
+            lines.push(format!("- `{side}`: {text}"));
+        }
+    }
+
+    lines
+}
+
+/// One side of a result, in C's terms: what the caller casts the payload to, and what
+/// releases it.
+fn payload_mapping(
+    ty: &Type,
+    resolution: &Resolution<'_>,
+    reporting: &mut Reporting<'_>,
+    item: &str,
+) -> Option<String> {
+    // The `Ok` of a `Result<(), E>` carries nothing, and crosses as a null payload.
+    if is_unit(ty) {
+        return Some("nothing; the payload is null".to_string());
+    }
+
+    let Some(repr) = repr_of(ty, resolution) else {
+        reporting.report(
+            ty.span().start().line,
+            item,
+            format!(
+                "`{}` has no repr-C sibling, so it cannot be a result payload",
+                compact(ty)
+            ),
+        );
+        return None;
+    };
+
+    // A string is the one payload that already crosses as a pointer of its own.
+    if repr == STRING_REPR {
+        return Some(format!("`char *`, owned; release it with `{FREE_STRING}`"));
+    }
+
+    // Everything else has a value repr, so it is boxed: a payload is a pointer.
+    if SCALAR_NAMES.contains(&repr.as_str()) {
+        reporting.report(
+            ty.span().start().line,
+            item,
+            "a scalar cannot be a result payload: it has no pointer of its own, so C \
+             would have nothing to cast and nothing to release"
+                .to_string(),
+        );
+        return None;
+    }
+
+    let rust_name = simple_type_name(ty)?;
+    let spelling = c_type(&repr, resolution.reprs)?;
+
+    Some(format!(
+        "`{spelling} *`, owned; release it with `{}`",
+        free_name(&rust_name)
+    ))
+}
+
+/// Whether `ty` is the unit type, which a result uses for the side carrying nothing.
+fn is_unit(ty: &Type) -> bool {
+    matches!(ty, Type::Tuple(tuple) if tuple.elems.is_empty())
 }
 
 /// Renders one C declaration from a Rust signature.
@@ -1565,10 +1767,17 @@ fn render_signature(
     let returns = match &sig.output {
         ReturnType::Default => "void".to_string(),
         ReturnType::Type(_, ty) => {
-            let Some(c_type) = field_c_type(ty, resolution, reporting, item) else {
-                return;
-            };
-            c_type
+            // A fallible return crosses as the one fixed result type. The doc lines
+            // written above are where its payloads were named, and where they were
+            // checked for crossing at all.
+            if result_return(sig).is_some() {
+                RESULT_REPR.to_string()
+            } else {
+                let Some(c_type) = field_c_type(ty, resolution, reporting, item) else {
+                    return;
+                };
+                c_type
+            }
         }
     };
 
@@ -1729,6 +1938,84 @@ pub const fn rename(to: &std::path::Path) {}
         );
         assert!(
             header.contains("void ffi_rename(const char * to);"),
+            "{header}"
+        );
+    }
+
+    /// A counter, a reason it might refuse, and one export of each fallible shape:
+    /// one returning a value, one returning nothing at all.
+    const FALLIBLE: &str = "
+/// Why a counter refused.
+#[lazyffi]
+pub enum Refusal {
+    /// It is not allowed.
+    Denied,
+}
+
+/// A counter.
+#[lazyffi]
+pub struct Counter {}
+
+/// Reads a counter.
+#[lazyffi]
+pub fn read(counter: &Counter) -> Result<String, Refusal> { String::new() }
+
+/// Starts a counter.
+#[lazyffi]
+pub fn open() -> Result<(), Refusal> { Ok(()) }
+";
+
+    #[test]
+    fn the_result_type_is_declared_whether_or_not_anything_is_fallible() {
+        // It is part of the surface rather than something generated per item, so a
+        // translation unit that never calls a fallible export still has it.
+        let header = header_for(
+            "
+/// Adds one.
+#[lazyffi]
+pub const fn total(value: i32) -> i32 { value }
+",
+        );
+
+        assert!(
+            header.contains("typedef struct RorolalaResult {"),
+            "{header}"
+        );
+        assert!(header.contains("RorolalaResult_Ok = 0,"), "{header}");
+        assert!(header.contains("RorolalaResult_Err = 1,"), "{header}");
+    }
+
+    #[test]
+    fn a_fallible_return_comes_back_as_the_one_result_type() {
+        let header = header_for(FALLIBLE);
+
+        assert!(
+            header.contains("RorolalaResult ffi_read(const FFICounter * counter);"),
+            "{header}"
+        );
+        assert!(
+            header.contains("RorolalaResult ffi_open(void);"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_fallible_return_says_what_each_payload_is_and_what_frees_it() {
+        let header = header_for(FALLIBLE);
+
+        // The payload is a `void *`, so the header is the only place a caller can
+        // learn what to cast it to — and with what to release it.
+        assert!(
+            header.contains("- `Ok`: `char *`, owned; release it with `ffi_free_string`"),
+            "{header}"
+        );
+        assert!(
+            header.contains("- `Err`: `FFIRefusal *`, owned; release it with `ffi_free_refusal`"),
+            "{header}"
+        );
+        // The `Ok` of a `Result<(), E>` has nothing to carry.
+        assert!(
+            header.contains("- `Ok`: nothing; the payload is null"),
             "{header}"
         );
     }
