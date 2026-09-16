@@ -9,7 +9,7 @@ use crate::ThemeChoice;
 
 use super::ansi::{display_width, escape_count};
 use super::inline;
-use super::style::{RenderOptions, StyleState};
+use super::palette::{RenderOptions, StyleState};
 
 /// How few `-` a separator cell may hold and still separate anything.
 const RULE: usize = 3;

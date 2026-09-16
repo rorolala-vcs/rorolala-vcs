@@ -7,8 +7,10 @@
 
 mod colorize;
 mod rendering;
+mod style;
 mod theme;
 
 pub use colorize::*;
 pub use rendering::TextRendering;
+pub use style::*;
 pub use theme::*;

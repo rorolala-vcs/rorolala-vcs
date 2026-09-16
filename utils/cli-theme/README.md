@@ -103,6 +103,28 @@ and by its mark on one with them:
 | something went wrong
 ```
 
+### Lines
+
+Three lines come up again and again, so they are written once: `err_line`, `warn_line`
+and `help_line`. Each is handed what the line is called and what it says, and comes
+back drawn for the theme the program is in:
+
+```rust
+use rorolala_utils_cli_theme::{ThemeChoice, err_line, set_enabled, set_theme_choice};
+
+set_enabled(false);
+set_theme_choice(ThemeChoice::Simple);
+assert_eq!(err_line("ERROR", "Fail to load vault!"), "::ERROR=> Fail to load vault!");
+```
+
+The same call on a theme that carries the glyphs puts the mark and the name on a
+background instead. The name is always the caller's and everything drawn around it is
+fixed; the content is drawn in italics, and is written in the color language like
+anything else, so a style or a character it names is drawn too.
+
+Lines come back without the newline that ends them, so that they are joined by the
+caller rather than arriving with a blank line after each.
+
 ### Inline
 
 Styles inside a line are marked with a smaller, deliberately non-Markdown set, because

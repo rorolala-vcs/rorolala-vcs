@@ -3,7 +3,7 @@
 
 use unicode_width::UnicodeWidthStr as _;
 
-use super::style::{NamedColor, Rgb, nearest};
+use super::palette::{NamedColor, Rgb, nearest};
 
 /// The byte that introduces an escape sequence.
 const ESCAPE: u8 = 0x1b;
@@ -121,7 +121,7 @@ pub(super) fn escape_count(text: &str) -> usize {
 /// colour: [`paint`] draws nothing there either, so a bold word would be the only
 /// emphasis left on the screen.
 ///
-/// [`paint`]: super::style::paint
+/// [`paint`]: super::palette::paint
 #[must_use]
 pub(super) fn strip(text: &str) -> String {
     let mut out = String::with_capacity(text.len());

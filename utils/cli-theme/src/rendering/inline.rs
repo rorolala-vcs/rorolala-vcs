@@ -1,6 +1,6 @@
 //! The inline half of the color language: the styles inside one line.
 
-use super::style::{Color, NamedColor, RenderOptions, Rgb, StyleState, paint};
+use super::palette::{Color, NamedColor, RenderOptions, Rgb, StyleState, paint};
 
 /// The delimiters that turn an attribute on and off, longest first.
 ///

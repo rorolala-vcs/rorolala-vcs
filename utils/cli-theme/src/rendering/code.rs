@@ -5,7 +5,7 @@ use bat::{PrettyPrinter, WrappingMode};
 use crate::theme::ThemeChoice;
 
 use super::ansi::{strip, to_sixteen};
-use super::style::RenderOptions;
+use super::palette::RenderOptions;
 
 /// How wide `bat` is told the terminal is.
 ///

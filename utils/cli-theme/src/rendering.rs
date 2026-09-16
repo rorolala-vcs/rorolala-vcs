@@ -17,13 +17,13 @@
 mod ansi;
 mod code;
 mod inline;
-mod style;
+mod palette;
 mod table;
 
 use crate::ThemeChoice;
 
 use self::ansi::display_width;
-use self::style::{Color, NamedColor, RenderOptions, StyleState, paint};
+use self::palette::{Color, NamedColor, RenderOptions, StyleState, paint};
 
 /// Draws the color language.
 ///
