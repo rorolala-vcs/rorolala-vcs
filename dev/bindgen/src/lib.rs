@@ -51,11 +51,17 @@
 //!
 //! Types are resolved by their **last path segment**, so an export in one crate can
 //! mention a type defined in a sibling crate (`auth::Token`, `rorolala_auth::Token`
-//! and a bare `Token` all name the same repr). That is deliberately weaker than
-//! name resolution: an aliased import does not resolve, and two types sharing a
-//! name are ambiguous. Both are reported as errors rather than guessed at, and two
-//! definitions that would claim the same C name — the usual symptom of such a
-//! clash — are rejected outright.
+//! and a bare `Token` all name the same repr). When two declarations share that
+//! segment the nearest wins; a **qualified** path narrows the field further, so a
+//! `rorolala_vault::Config` is the `Config` of the crate named `rorolala-vault` even
+//! when a sibling crate's `Config` sits equally near. That is still deliberately
+//! weaker than name resolution: an aliased import does not resolve, and what cannot
+//! be decided is reported as an error rather than guessed at. Two definitions that
+//! would claim the same C name — the usual symptom of such a clash — are rejected
+//! outright.
+//!
+//! A qualified path is matched against real crate names, read from the manifest above
+//! the file that declares the type, rather than against a guess.
 
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
@@ -452,16 +458,34 @@ fn export_override(attrs: &[Attribute]) -> Option<String> {
 
 /// The repr-C siblings of the exported types, plus every C name the header
 /// defines.
+/// One declaration of an exported name.
+///
+/// The crate is kept beside the file it was read from because a qualified reference
+/// names it: `rorolala_vault::Config` can only mean a `Config` declared in
+/// `rorolala-vault`, which is what tells two equally near declarations apart.
+struct Claim {
+    /// The file the declaration was written in.
+    file: PathBuf,
+    /// The repr-C name it is exported under.
+    repr: String,
+    /// The crate ident the file belongs to, when a manifest was found above it.
+    krate: Option<String>,
+}
+
 struct Reprs {
-    /// Every declaration of each exported name: the file it was written in, and the
-    /// repr-C name it is exported under.
+    /// Every declaration of each exported name, in the order they were read.
     ///
     /// A list rather than one entry per name, because a name is not a declaration: two
     /// modules can each declare a `Config` and export it under a name of its own. Which
-    /// one is meant is decided by where the name is written — see [`Reprs::nearest`] —
-    /// and which one a declaration is rendered as is decided by
-    /// [`Reprs::declared_in`].
-    claims: BTreeMap<String, Vec<(PathBuf, String)>>,
+    /// one is meant is decided by where the name is written and by the crate a qualified
+    /// path names — see [`Reprs::nearest`] — and which one a declaration is rendered as
+    /// is decided by [`Reprs::declared_in`].
+    claims: BTreeMap<String, Vec<Claim>>,
+    /// The crate ident of each file, memoised so a manifest is read at most once.
+    ///
+    /// A missing entry means "not looked up yet"; an entry of `None` means the file has
+    /// no manifest above it, which is what a built-in gets.
+    crates: BTreeMap<PathBuf, Option<String>>,
     /// Every type name the header defines.
     names: BTreeSet<String>,
     /// The release each type was given, keyed by its repr-C name.
@@ -485,10 +509,25 @@ impl Reprs {
     /// then further from every source file than any declaration in the tree, which is
     /// what a built-in should be.
     fn claim(&mut self, name: &str, file: &Path, repr: &str) {
+        let krate = self.crate_of(file);
         self.claims
             .entry(name.to_string())
             .or_default()
-            .push((file.to_path_buf(), repr.to_string()));
+            .push(Claim {
+                file: file.to_path_buf(),
+                repr: repr.to_string(),
+                krate,
+            });
+    }
+
+    /// The crate ident of `file`, read from the nearest manifest above it.
+    fn crate_of(&mut self, file: &Path) -> Option<String> {
+        if let Some(cached) = self.crates.get(file) {
+            return cached.clone();
+        }
+        let krate = crate_of_file(file);
+        self.crates.insert(file.to_path_buf(), krate.clone());
+        krate
     }
 
     /// The repr of the declaration of `name` written in `file` itself.
@@ -500,8 +539,8 @@ impl Reprs {
         self.claims
             .get(name)?
             .iter()
-            .find(|(claimed, _)| claimed == file)
-            .map(|(_, repr)| repr.clone())
+            .find(|claim| claim.file == file)
+            .map(|claim| claim.repr.clone())
     }
 
     /// The repr `name` means where it is written.
@@ -510,12 +549,22 @@ impl Reprs {
     /// `modules/vault/src/init.rs` saying `CreationError` means the one beside it, not
     /// the one `modules/workspace` declares. Two declarations equally near are not
     /// resolved at all, and the caller reports it rather than picking one.
-    fn nearest(&self, name: &str, file: &Path) -> Option<String> {
+    ///
+    /// A qualified path is narrower: `rorolala_vault::Config` can only mean a `Config`
+    /// declared in `rorolala-vault`, which is what tells two equally near declarations
+    /// apart. A built-in is still a candidate — it belongs to no crate — but everything
+    /// else the qualifier rules out is dropped.
+    fn nearest(&self, name: &str, file: &Path, krate: Option<&str>) -> Option<String> {
         let mut ranked: Vec<(usize, &str)> = self
             .claims
             .get(name)?
             .iter()
-            .map(|(claimed, repr)| (shared_depth(claimed, file), repr.as_str()))
+            .filter(|claim| match (krate, claim.krate.as_deref()) {
+                (Some(wanted), Some(found)) => wanted == found,
+                (Some(_), None) => claim.file.as_os_str().is_empty(),
+                (None, _) => true,
+            })
+            .map(|claim| (shared_depth(&claim.file, file), claim.repr.as_str()))
             .collect();
         ranked.sort_by_key(|(depth, _)| std::cmp::Reverse(*depth));
 
@@ -557,6 +606,49 @@ fn shared_depth(one: &Path, other: &Path) -> usize {
         .count()
 }
 
+/// The crate ident a source file belongs to.
+///
+/// Found by walking up to the nearest `Cargo.toml` and normalising its package name the
+/// way `rustc` does — `rorolala-vault` becomes `rorolala_vault` — so that
+/// `modules/vault/src/config.rs` belongs to the crate a signature spells
+/// `rorolala_vault::Config` with. A file with no manifest above it belongs to no crate:
+/// a built-in, or a test's bare `src/`.
+fn crate_of_file(file: &Path) -> Option<String> {
+    let manifest = file
+        .ancestors()
+        .skip(1)
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .map(|dir| dir.join("Cargo.toml"))
+        .find(|candidate| candidate.is_file())?;
+    let content = fs::read_to_string(manifest).ok()?;
+    package_name(&content).map(|name| name.replace('-', "_"))
+}
+
+/// Reads `name` from the `[package]` table of a manifest.
+fn package_name(manifest: &str) -> Option<String> {
+    let mut in_package = false;
+    for line in manifest.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with('[') {
+            in_package = trimmed == "[package]";
+            continue;
+        }
+
+        if in_package
+            && let Some(rest) = trimmed.strip_prefix("name")
+            && let Some(value) = rest.trim_start().strip_prefix('=')
+        {
+            let value = value.trim().trim_matches(['"', '\'']);
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+
+    None
+}
+
 /// Builds the type tables.
 ///
 /// The built-in types come from `lazyffi-core`, so they match what `builtin`
@@ -566,6 +658,7 @@ fn shared_depth(one: &Path, other: &Path) -> usize {
 fn reprs(exports: &Exports) -> Reprs {
     let mut reprs = Reprs {
         claims: BTreeMap::new(),
+        crates: BTreeMap::new(),
         names: BTreeSet::new(),
         releases: BTreeMap::new(),
         opaque: BTreeSet::new(),
@@ -649,10 +742,31 @@ fn repr_of(ty: &Type, resolution: &Resolution<'_>) -> Option<String> {
         if ident == "Self" {
             return resolution.self_repr.map(ToString::to_string);
         }
-        return resolution.reprs.nearest(&ident, resolution.origin);
+        let krate = qualifier_crate(&path.path, resolution);
+        return resolution
+            .reprs
+            .nearest(&ident, resolution.origin, krate.as_deref());
     }
 
     None
+}
+
+/// The crate a qualified path names, when it names one.
+///
+/// `rorolala_vault::Config` names the crate `rorolala_vault`; a bare `Config` names
+/// none. `crate::` and `self::` name the crate the reference is written in, and a
+/// `super::` path names none either, since telling those apart needs the module tree
+/// this generator does not have.
+fn qualifier_crate(path: &syn::Path, resolution: &Resolution<'_>) -> Option<String> {
+    if path.segments.len() < 2 {
+        return None;
+    }
+
+    match path.segments.first()?.ident.to_string().as_str() {
+        "crate" | "self" => crate_of_file(resolution.origin),
+        "super" => None,
+        crate_name => Some(crate_name.to_string()),
+    }
 }
 
 /// What leads from a Rust type to its C spelling.
@@ -1941,6 +2055,24 @@ mod tests {
 
     /// Renders the header for a source tree holding each of `sources`, one file each.
     fn header_for_each(sources: &[(&str, &str)]) -> String {
+        let entries: Vec<(String, &str)> = sources
+            .iter()
+            .map(|(name, source)| (format!("src/{name}"), *source))
+            .collect();
+        let tree: Vec<(&str, &str)> = entries
+            .iter()
+            .map(|(path, source)| (path.as_str(), *source))
+            .collect();
+
+        header_for_tree(&tree)
+    }
+
+    /// Renders the header for a source tree described by relative paths.
+    ///
+    /// Unlike [`header_for_each`], each entry carries its own path, so a test can lay
+    /// out whole crates — a `Cargo.toml` and a `src/` apiece — which is what a
+    /// qualified path is resolved against.
+    fn header_for_tree(entries: &[(&str, &str)]) -> String {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
 
         let root = std::env::temp_dir().join(format!(
@@ -1950,15 +2082,17 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
 
-        let sources_dir = root.join("src");
-        fs::create_dir_all(&sources_dir).unwrap();
-        for (name, source) in sources {
-            fs::write(sources_dir.join(name), source).unwrap();
+        for (path, source) in entries {
+            let file = root.join(path);
+            if let Some(parent) = file.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(&file, source).unwrap();
         }
 
         let output_dir = root.join("out");
         let config = Config {
-            source_roots: std::slice::from_ref(&sources_dir),
+            source_roots: std::slice::from_ref(&root),
             output_dir: &output_dir,
         };
 
@@ -1999,6 +2133,42 @@ mod tests {
         );
         assert!(
             header.contains("void free_workspace_config(WorkspaceConfig *value);"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_qualified_path_picks_the_crate_it_names() {
+        // `vault` and `workspace` each declare a `Config`, and both sit equally far from
+        // the crate that references one — so the bare name is ambiguous and only the
+        // qualifier can say which is meant.
+        let header = header_for_tree(&[
+            (
+                "modules/vault/Cargo.toml",
+                "[package]\nname = \"rorolala-vault\"\n",
+            ),
+            (
+                "modules/vault/src/lib.rs",
+                "/// A vault.\n#[lazyffi(export = VaultConfig)]\npub struct Config {}\n",
+            ),
+            (
+                "modules/workspace/Cargo.toml",
+                "[package]\nname = \"rorolala-workspace\"\n",
+            ),
+            (
+                "modules/workspace/src/lib.rs",
+                "/// A workspace.\n#[lazyffi(export = WorkspaceConfig)]\npub struct Config {}\n",
+            ),
+            (
+                "src/lib.rs",
+                "/// Starts the daemon.\n///\n/// # FFI\n/// Borrows the vault configuration; the caller keeps it.\n#[lazyffi(export = daemon_begin)]\npub fn daemon_begin(config: &rorolala_vault::Config) {}\n",
+            ),
+        ]);
+
+        // The parameter is the `Config` of `rorolala-vault`, not the equally near one
+        // `rorolala-workspace` declares.
+        assert!(
+            header.contains("void daemon_begin(const VaultConfig * config);"),
             "{header}"
         );
     }

@@ -177,6 +177,16 @@ bare `Token` all resolve to the same repr. Real name resolution would need a com
 and everything this generator cannot resolve is reported against the offending line
 rather than skipped.
 
+A name is a list of declarations, not one, and which is meant is decided by where it
+is written: the nearest declaration wins. Two declarations equally near are ambiguous.
+A **qualified** path breaks that tie, because the crate it names says which declaration
+is meant — `rorolala_vault::Config` is the `Config` of the crate named `rorolala-vault`,
+even when a sibling crate's `Config` sits equally near. The crate ident comes from the
+`Cargo.toml` above the file that declares the type, so it is matched against a real
+crate name rather than a guess. `crate::` and `self::` name the crate the reference is
+written in; a `super::` path says nothing this generator can use, so it falls back to
+the nearest declaration alone.
+
 The consequences are worth knowing:
 
 - an aliased import (`use rorolala_auth::Token as Seal;`) does not resolve;
