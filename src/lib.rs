@@ -8,6 +8,9 @@
 /// Authentication
 pub use rorolala_auth as auth;
 
+/// Background daemon
+pub use rorolala_daemon as daemon;
+
 /// Transport and wire protocol
 pub use rorolala_protocol as protocol;
 

@@ -7,6 +7,7 @@ members = [
     "app/ffi",
     "dev/bindgen",
     "modules/auth",
+    "modules/daemon",
     "modules/protocol",
     "modules/vault",
     "modules/workspace",
@@ -31,6 +32,7 @@ rola = { path = "app/cli/rola" }
 rola-daemon = { path = "app/cli/rola-daemon" }
 rorolala-auth = { path = "modules/auth" }
 rorolala-cli-setups = { path = "app/cli/setups" }
+rorolala-daemon = { path = "modules/daemon" }
 rorolala-dev-bindgen = { path = "dev/bindgen" }
 rorolala-ffi = { path = "app/ffi" }
 rorolala-protocol = { path = "modules/protocol" }
@@ -74,8 +76,11 @@ syn = { version = "3.0.5", features = ["full"] }
 tokio = { version = "1.53.1", features = [
     "fs",
     "macros",
+    "net",
     "rt",
-    "rt-multi-thread"
+    "rt-multi-thread",
+    "signal",
+    "sync",
 ] }
 
 [package]
@@ -86,6 +91,7 @@ license.workspace = true
 
 [dependencies]
 rorolala-auth.workspace = true
+rorolala-daemon.workspace = true
 rorolala-protocol.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-vault.workspace = true
