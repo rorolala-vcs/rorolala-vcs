@@ -14,6 +14,7 @@ mod config;
 mod error;
 mod init;
 
+pub use config::*;
 pub use error::*;
 
 /// Path where the Vault configuration file is located
@@ -31,8 +32,20 @@ pub struct Vault {
     current_dir: PathBuf,
 }
 
+/// Locates a [`Vault`] by searching upwards from the given directory
+///
+/// Starting at `vault_dir`, this walks up the directory tree looking for
+/// the Vault configuration file ([`CONFIG_PATH`]). Returns `Some(Vault)`
+/// pointing at the directory that contains the configuration file, or
+/// `None` if no Vault could be found.
+#[must_use]
+#[lazyffi(export = locate_rola_vault)]
+pub fn locate_vault(vault_dir: &Path) -> Option<Vault> {
+    Vault::locate(vault_dir)
+}
+
 impl Locate for Vault {
-    fn locate(cwd: &std::path::Path) -> Option<Self> {
+    fn locate(cwd: &Path) -> Option<Self> {
         let path = cwd.locate(|cwd| cwd.join(CONFIG_PATH).exists())?;
         Some(Self { current_dir: path })
     }

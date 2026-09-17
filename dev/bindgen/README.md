@@ -169,6 +169,48 @@ An exported enum also declares a release now (`void free_<type>(FFIType *value);
 because a payload naming one is boxed: nothing else in a signature needs to free a type
 that crosses by value.
 
+### Absent returns
+
+An `Option<T>` return crosses as `T`'s own repr, with the null pointer standing for
+`None`:
+
+```rust
+use std::path::Path;
+
+use rorolala_utils_lazyffi::lazyffi;
+
+#[lazyffi(export = RolaVault)]
+pub struct Vault {}
+
+#[lazyffi(export = locate_rola_vault)]
+pub fn locate_vault(dir: &Path) -> Option<Vault> {
+    let _ = dir;
+    None
+}
+
+fn main() {}
+```
+
+```c
+/**
+ * Locates a vault by searching upwards from the given directory.
+ *
+ * Returns an owned `RolaVault *`, or `NULL` when there is nothing; release it with
+ * `free_rola_vault`.
+ */
+RolaVault * locate_rola_vault(const char * dir);
+```
+
+Absence is not a failure, so it does not go through `RorolalaResult`: a caller reads the
+pointer directly instead of switching on a tag. Only an **opaque** type can be absent,
+because only an opaque type already crosses as an owning pointer its null can be spent
+on. A scalar and an exported `enum` cross by value, and a `String`'s `char *` already
+spends null on a string it cannot carry; each is reported rather than given a pointer it
+does not have.
+
+The doc line is generated, not written in the Rust source: null is the whole of what
+`None` means to C, so the header is the only place it can be said.
+
 ### Name resolution is by the last path segment
 
 Types are matched by the final identifier of the path, so an export in one crate can

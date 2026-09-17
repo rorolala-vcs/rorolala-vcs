@@ -543,6 +543,15 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
             }
         }
 
+        #[doc(hidden)]
+        impl ::rorolala_utils_lazyffi::Nullable for #rust_name {
+            /// An opaque value already crosses as an owning pointer, so `None` is the
+            /// null pointer and needs nothing of its own.
+            fn null() -> Self::Target {
+                ::core::ptr::null_mut()
+            }
+        }
+
         #(#release_docs)*
         #[doc = #SAFETY_DOC]
         #[doc(hidden)]

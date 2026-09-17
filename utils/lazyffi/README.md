@@ -67,6 +67,40 @@ fn main() {
 }
 ```
 
+## Absent returns
+
+An `Option<T>` return crosses as `T`'s own repr, with the null pointer standing for
+`None`. Absence is not a failure, so it does not go through `RorolalaResult`: the caller
+reads the pointer instead of a tag, and releases a value it finds with `free_<type>`.
+
+```rust
+use rorolala_utils_lazyffi::{ReturnType, lazyffi};
+
+#[lazyffi]
+pub struct Vault {}
+
+#[lazyffi(export = locate_vault)]
+pub fn find_vault() -> Option<Vault> {
+    None
+}
+
+fn main() {
+    let absent = find_vault().return_self();
+    assert!(absent.is_null());
+
+    let found = Some(Vault {}).return_self();
+    assert!(!found.is_null());
+
+    // SAFETY: `found` came from `return_self` and has not been released yet.
+    unsafe { free_vault(found) };
+}
+```
+
+Only a type that already crosses as an owning pointer can be absent, so `Nullable` is
+implemented for an exported `struct` and nothing else. A scalar and an exported `enum`
+cross by value, and a `String` or `PathBuf` crosses as a `char *` that already spends
+null on a string it cannot carry; `Option<i32>` therefore does not compile.
+
 ## Two kinds of type
 
 - An exported **`struct` is opaque**: C is told the type exists and nothing about

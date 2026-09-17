@@ -1601,6 +1601,7 @@ fn render_function(
         &mut Reporting::new(origin, diagnostics),
         &rust_name,
     ));
+    docs.extend(option_doc_lines(&item.sig, &resolution));
     out.push_str(&render_doc(&docs, ""));
 
     render_signature(
@@ -1704,6 +1705,7 @@ fn render_impl(
             &mut reporting,
             &label,
         ));
+        docs.extend(option_doc_lines(&method.sig, &resolution));
         out.push_str(&render_doc(&docs, ""));
         render_signature(
             out,
@@ -1807,6 +1809,43 @@ fn result_return(sig: &Signature) -> Option<(&Type, &Type)> {
     }
 }
 
+/// The `T` of an `Option<T>` return, when the signature has one.
+///
+/// Matched on the last path segment, the way every other rule here is: an alias for
+/// `Option` does not resolve, and saying so beats guessing.
+fn option_return(sig: &Signature) -> Option<&Type> {
+    let ReturnType::Type(_, ty) = &sig.output else {
+        return None;
+    };
+
+    let Type::Path(type_path) = &**ty else {
+        return None;
+    };
+
+    if type_path.qself.is_some() {
+        return None;
+    }
+
+    let segment = type_path.path.segments.last()?;
+    if segment.ident != "Option" {
+        return None;
+    }
+
+    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return None;
+    };
+
+    let mut types = arguments.args.iter().filter_map(|argument| match argument {
+        GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    });
+
+    match (types.next(), types.next()) {
+        (Some(inner), None) => Some(inner),
+        _ => None,
+    }
+}
+
 /// The doc lines a fallible return contributes: what each side of the tag holds, and
 /// which release frees it.
 ///
@@ -1832,6 +1871,32 @@ fn result_doc_lines(
     }
 
     lines
+}
+
+/// The doc line an absent return contributes: what null means, and what releases the
+/// value when there is one.
+///
+/// A nullable return is read as a pointer whose null is the whole of `None`, which is
+/// not something the Rust source can say — so, like a result payload, it is written down
+/// where the caller reads the signature.
+fn option_doc_lines(sig: &Signature, resolution: &Resolution<'_>) -> Vec<String> {
+    let Some(inner) = option_return(sig) else {
+        return Vec::new();
+    };
+
+    // A type that cannot be absent is reported by `render_signature`, which owns that
+    // diagnostic; this has something to add only once there is a pointer to describe.
+    let Some((spelling, release)) = nullable_release(inner, resolution) else {
+        return Vec::new();
+    };
+
+    vec![
+        String::new(),
+        format!(
+            "Returns an owned `{spelling}`, or `NULL` when there is nothing; release it with \
+             `{release}`."
+        ),
+    ]
 }
 
 /// One side of a result, in C's terms: what the caller casts the payload to, and what
@@ -1887,6 +1952,62 @@ fn payload_mapping(
 /// Whether `ty` is the unit type, which a result uses for the side carrying nothing.
 fn is_unit(ty: &Type) -> bool {
     matches!(ty, Type::Tuple(tuple) if tuple.elems.is_empty())
+}
+
+/// The C spelling and the release of a nullable return's value, when the type is one C
+/// can hold by pointer.
+///
+/// Only an opaque type qualifies: it is the one that already crosses as an owning
+/// pointer, so its null is free to mean `None`.
+fn nullable_release(inner: &Type, resolution: &Resolution<'_>) -> Option<(String, String)> {
+    let repr = repr_of(inner, resolution)?;
+
+    if !resolution.reprs.opaque.contains(&repr) {
+        return None;
+    }
+
+    let spelling = c_type(&resolution.reprs.shape(&repr), resolution.reprs)?;
+    let release = resolution.reprs.releases.get(&repr)?;
+
+    Some((spelling, release.clone()))
+}
+
+/// The C spelling of a nullable return: the pointer the value crosses as, with null
+/// standing for `None`.
+///
+/// A type that cannot be absent is reported rather than given a pointer it does not
+/// have, since the alternative — boxing it for the return alone — would spell the same
+/// Rust type two ways depending on how it is returned.
+fn nullable_return_c_type(
+    inner: &Type,
+    resolution: &Resolution<'_>,
+    reporting: &mut Reporting<'_>,
+    item: &str,
+) -> Option<String> {
+    if let Some((spelling, _)) = nullable_release(inner, resolution) {
+        return Some(spelling);
+    }
+
+    if repr_of(inner, resolution).is_none() {
+        reporting.report(
+            inner.span().start().line,
+            item,
+            format!("`{}` has no repr-C sibling", compact(inner)),
+        );
+        return None;
+    }
+
+    reporting.report(
+        inner.span().start().line,
+        item,
+        format!(
+            "`{}` cannot be absent: only an opaque type has a pointer of its own, so only \
+             it can spend null on `None`. Return a `Result<T, E>` to say why there is \
+             nothing.",
+            compact(inner)
+        ),
+    );
+    None
 }
 
 /// Renders one C declaration from a Rust signature.
@@ -1976,6 +2097,14 @@ fn render_signature(
             // checked for crossing at all.
             if result_return(sig).is_some() {
                 RESULT_REPR.to_string()
+            } else if let Some(inner) = option_return(sig) {
+                // A nullable return crosses as the pointer its type already crosses as,
+                // with null standing for `None`.
+                let Some(c_type) = nullable_return_c_type(inner, resolution, reporting, item)
+                else {
+                    return;
+                };
+                c_type
             } else {
                 let Some(c_type) = field_c_type(ty, resolution, reporting, item) else {
                     return;
@@ -2042,6 +2171,7 @@ fn render_diagnostics(diagnostics: &[Diagnostic]) -> String {
 mod tests {
     use super::{Config, generate};
     use std::fs;
+    use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// Renders the header for a source tree holding exactly `source`.
@@ -2073,6 +2203,35 @@ mod tests {
     /// out whole crates — a `Cargo.toml` and a `src/` apiece — which is what a
     /// qualified path is resolved against.
     fn header_for_tree(entries: &[(&str, &str)]) -> String {
+        let root = write_tree(entries);
+        let output_dir = root.join("out");
+        let config = Config {
+            source_roots: std::slice::from_ref(&root),
+            output_dir: &output_dir,
+        };
+
+        fs::read_to_string(generate(&config).unwrap()).unwrap()
+    }
+
+    /// The generator's error for a tree, as the build script would show it.
+    fn error_for_tree(entries: &[(&str, &str)]) -> String {
+        let root = write_tree(entries);
+        let output_dir = root.join("out");
+        let config = Config {
+            source_roots: std::slice::from_ref(&root),
+            output_dir: &output_dir,
+        };
+
+        generate(&config).unwrap_err().to_string()
+    }
+
+    /// The generator's error for a source tree holding exactly `source`.
+    fn error_for(source: &str) -> String {
+        error_for_tree(&[("src/lib.rs", source)])
+    }
+
+    /// Writes `entries`, each a path relative to a fresh root, and returns that root.
+    fn write_tree(entries: &[(&str, &str)]) -> PathBuf {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
 
         let root = std::env::temp_dir().join(format!(
@@ -2090,13 +2249,7 @@ mod tests {
             fs::write(&file, source).unwrap();
         }
 
-        let output_dir = root.join("out");
-        let config = Config {
-            source_roots: std::slice::from_ref(&root),
-            output_dir: &output_dir,
-        };
-
-        fs::read_to_string(generate(&config).unwrap()).unwrap()
+        root
     }
 
     #[test]
@@ -2171,6 +2324,47 @@ mod tests {
             header.contains("void daemon_begin(const VaultConfig * config);"),
             "{header}"
         );
+    }
+
+    #[test]
+    fn a_type_that_can_be_absent_comes_back_as_a_nullable_pointer() {
+        let header = header_for(
+            "/// A vault.\n\
+             #[lazyffi(export = RolaVault)]\n\
+             pub struct Vault {}\n\
+             \n\
+             /// Locates a vault, or nothing when there is none.\n\
+             #[lazyffi(export = locate_rola_vault)]\n\
+             pub fn locate_vault(dir: &str) -> Option<Vault> { todo!() }\n",
+        );
+
+        // The value crosses as the pointer it already crosses as; null is the `None`.
+        assert!(
+            header.contains("RolaVault * locate_rola_vault(const char * dir);"),
+            "{header}"
+        );
+
+        // And the header says what null means and what releases the value.
+        assert!(
+            header.contains("or `NULL` when there is nothing; release it with `free_rola_vault`"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_type_that_crosses_by_value_cannot_be_absent() {
+        let error = error_for(
+            "/// Why a counter refused.\n\
+             #[lazyffi(export = Reason)]\n\
+             pub enum Reason { Busy }\n\
+             \n\
+             /// Tries to read a counter.\n\
+             #[lazyffi(export = read_counter)]\n\
+             pub fn read_counter() -> Option<Reason> { todo!() }\n",
+        );
+
+        // An enum crosses by value, so there is no null to spend on `None`.
+        assert!(error.contains("`Reason` cannot be absent"), "{error}");
     }
 
     /// A counter with a read-only method, a mutating method and a free function that
