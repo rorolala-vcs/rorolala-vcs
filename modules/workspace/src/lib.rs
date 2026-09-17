@@ -16,20 +16,14 @@ mod init;
 
 pub use error::*;
 
-/// Workspace data directory
-#[lazyffi(export = WORKSPACE_DATA_DIR)]
-pub const DATA_DIR: &str = "./.rola/";
-
-/// Path to the workspace configuration file
-#[lazyffi(export = WORKSPACE_CONFIG_PATH)]
-pub const CONFIG_PATH: &str = "./.rola/workspace.toml";
-
-/// Path, inside the Workspace's data directory, where its member keys are kept
+/// Where the Workspace keeps its data, its configuration and its keys
 ///
-/// A key kept here belongs to the Workspace it was set up in, so it is one of the two
-/// directories the local scope of a member search covers — the other being the Vault's.
-#[lazyffi(export = WORKSPACE_KEYS_DIR)]
-pub const KEYS_DIR: &str = "./.rola/auth/";
+/// These are the layout [`rorolala_utils_constants`] states, re-exported so the
+/// Workspace's own spelling of where it keeps things is still one name.
+pub use rorolala_utils_constants::{
+    WORKSPACE_CONFIG_PATH as CONFIG_PATH, WORKSPACE_DATA_DIR as DATA_DIR,
+    WORKSPACE_KEYS_DIR as KEYS_DIR,
+};
 
 /// Rorolala local workspace
 ///

@@ -2,121 +2,86 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rorolala_utils_lazyffi::lazyffi;
-use rorolala_utils_location::Locate;
-use rorolala_vault::Vault;
-use rorolala_workspace::Workspace;
+use rorolala_utils_constants::{
+    ENV_KEYS_DIR, GLOBAL_KEYS_DIR, HOME_ENV_VAR, PRIVATE_KEY_EXTENSION, PUBLIC_KEY_EXTENSION,
+    USER_KEYS_DIR,
+};
 
 use crate::{Account, Accounts, KeyLocateRule, Member, Members};
-
-/// Keys of a global (machine-wide) scope, under the filesystem root.
-const GLOBAL_DIR: &str = ".rola/keys";
-
-/// Keys of a user scope, under the user's local data directory.
-const USER_DIR: &str = "rola/keys";
-
-/// Keys named by the environment, under `ROLA_HOME`.
-const ENV_DIR: &str = "keys";
-
-/// The variable that names the directory an environment key set lives in.
-const HOME_VAR: &str = "ROLA_HOME";
-
-/// The extension a member's public key carries.
-const PUBLIC_EXTENSION: &str = "pub";
-
-/// The extension an account's private key carries.
-const PRIVATE_EXTENSION: &str = "pem";
 
 /// Every member whose public key `rule` finds, highest priority first.
 ///
 /// A member is named by a **public** key, which is meant to be shared, so it is looked
-/// for in every scope the rule turns on: the local scopes first, then the user's local
-/// data directory, the filesystem root, and `ROLA_HOME`. That order is the precedence: a
-/// name found in a higher scope shadows the same name in a lower one, and members of one
-/// scope are ordered by name.
+/// for in every scope the rule turns on: the local roots first, then the user's local data
+/// directory, the filesystem root, and `ROLA_HOME`. That order is the precedence: a name
+/// found in a higher scope shadows the same name in a lower one, and members of one scope
+/// are ordered by name.
 ///
-/// The local scope covers both places a key can sit beside the work at hand: the
-/// Workspace the call is made from ([`rorolala_workspace::KEYS_DIR`]) and the Vault given
-/// here ([`rorolala_vault::KEYS_DIR`]); the Workspace comes first, so a key kept there
-/// shadows an equally named one in the Vault.
+/// `local_roots` are where the keys of the Workspace and the Vault beside the caller sit,
+/// highest priority first. They are given rather than found here, so this crate need not
+/// know what a Workspace or a Vault is — the layer that does resolves them and passes
+/// their key directories in.
 ///
 /// The members cross as a set, read one index at a time; see [`Members`].
 #[must_use]
-#[lazyffi(export = rola_member_locate)]
-pub fn member_locate(vault: &Vault, rule: &KeyLocateRule) -> Members {
-    Members::new(all_members(Some(vault), current_workspace().as_ref(), rule))
+pub fn locate_members(local_roots: &[PathBuf], rule: &KeyLocateRule) -> Members {
+    Members::new(all_members(local_roots, rule))
 }
 
 /// The member named `member_name`, if any scope the rule turns on holds its public key.
 ///
-/// The lazy counterpart of [`member_locate`]: it asks each directory for one file instead
+/// The lazy counterpart of [`locate_members`]: it asks each directory for one file instead
 /// of listing them all, and stops at the first that has it. That is what makes asking
 /// repeatedly for different names cheap, and why a caller that only wants one member
-/// never pays for the whole set. The Vault and the Workspace are both looked for from the
-/// current directory, since neither is given.
+/// never pays for the whole set.
 #[must_use]
-#[lazyffi(export = rola_member_find)]
-pub fn member_find(member_name: &str, rule: &KeyLocateRule) -> Option<Member> {
-    let vault = current_vault();
-    let workspace = current_workspace();
-
-    one_member(member_name, vault.as_ref(), workspace.as_ref(), rule)
+pub fn find_member(
+    member_name: &str,
+    local_roots: &[PathBuf],
+    rule: &KeyLocateRule,
+) -> Option<Member> {
+    one_member(member_name, local_roots, rule)
 }
 
 /// Every account whose private key `rule` finds, highest priority first.
 ///
 /// An account is named by a **private** key, which is not shared, so it is only ever
-/// looked for locally — beside the Workspace and the Vault, in that order. The other
+/// looked for in `local_roots` — the keys beside the Workspace and the Vault. The other
 /// scopes the rule turns on are places a public key can be shared from, never a private
 /// one, and are not searched however they are set.
 ///
 /// The accounts cross as a set, read one index at a time; see [`Accounts`].
 #[must_use]
-#[lazyffi(export = rola_account_locate)]
-pub fn account_locate(vault: &Vault, rule: &KeyLocateRule) -> Accounts {
-    Accounts::new(all_accounts(
-        Some(vault),
-        current_workspace().as_ref(),
-        rule,
-    ))
+pub fn locate_accounts(local_roots: &[PathBuf], rule: &KeyLocateRule) -> Accounts {
+    Accounts::new(all_accounts(local_roots, rule))
 }
 
-/// The account named `account_name`, if a local scope holds its private key.
+/// The account named `account_name`, if a local root holds its private key.
 ///
-/// The lazy counterpart of [`account_locate`], which also only looks locally. The Vault
-/// and the Workspace are both looked for from the current directory, since neither is
-/// given.
+/// The lazy counterpart of [`locate_accounts`], which also only looks in the local roots.
 #[must_use]
-#[lazyffi(export = rola_account_find)]
-pub fn account_find(account_name: &str, rule: &KeyLocateRule) -> Option<Account> {
-    let vault = current_vault();
-    let workspace = current_workspace();
-
-    one_account(account_name, vault.as_ref(), workspace.as_ref(), rule)
+pub fn find_account(
+    account_name: &str,
+    local_roots: &[PathBuf],
+    rule: &KeyLocateRule,
+) -> Option<Account> {
+    one_account(account_name, local_roots, rule)
 }
 
 /// Every member the scopes `rule` turns on hold, highest priority first.
-fn all_members(
-    vault: Option<&Vault>,
-    workspace: Option<&Workspace>,
-    rule: &KeyLocateRule,
-) -> Vec<Member> {
+fn all_members(local_roots: &[PathBuf], rule: &KeyLocateRule) -> Vec<Member> {
     merged(
-        member_scopes(rule, vault, workspace)
+        member_scopes(rule, local_roots)
             .iter()
             .map(|dir| members_in(dir)),
         Member::name,
     )
 }
 
-/// Every account the local scopes hold, highest priority first.
-fn all_accounts(
-    vault: Option<&Vault>,
-    workspace: Option<&Workspace>,
-    rule: &KeyLocateRule,
-) -> Vec<Account> {
+/// Every account the local roots hold, highest priority first.
+fn all_accounts(local_roots: &[PathBuf], rule: &KeyLocateRule) -> Vec<Account> {
     merged(
-        account_scopes(rule, vault, workspace)
+        account_scopes(rule, local_roots)
             .iter()
             .map(|dir| accounts_in(dir)),
         Account::name,
@@ -124,31 +89,21 @@ fn all_accounts(
 }
 
 /// The member named `name`, from the first scope that has its public key.
-fn one_member(
-    name: &str,
-    vault: Option<&Vault>,
-    workspace: Option<&Workspace>,
-    rule: &KeyLocateRule,
-) -> Option<Member> {
+fn one_member(name: &str, local_roots: &[PathBuf], rule: &KeyLocateRule) -> Option<Member> {
     find_key(
         name,
-        &member_scopes(rule, vault, workspace),
-        PUBLIC_EXTENSION,
+        &member_scopes(rule, local_roots),
+        PUBLIC_KEY_EXTENSION,
         Member::new,
     )
 }
 
-/// The account named `name`, from the first local scope that has its private key.
-fn one_account(
-    name: &str,
-    vault: Option<&Vault>,
-    workspace: Option<&Workspace>,
-    rule: &KeyLocateRule,
-) -> Option<Account> {
+/// The account named `name`, from the first local root that has its private key.
+fn one_account(name: &str, local_roots: &[PathBuf], rule: &KeyLocateRule) -> Option<Account> {
     find_key(
         name,
-        &account_scopes(rule, vault, workspace),
-        PRIVATE_EXTENSION,
+        &account_scopes(rule, local_roots),
+        PRIVATE_KEY_EXTENSION,
         Account::new,
     )
 }
@@ -158,15 +113,11 @@ fn one_account(
 /// The order *is* the precedence, so nothing else has to know it. A directory that does
 /// not exist is still named: a scope that is not set up is not an error, and reading it
 /// simply finds nothing.
-fn member_scopes(
-    rule: &KeyLocateRule,
-    vault: Option<&Vault>,
-    workspace: Option<&Workspace>,
-) -> Vec<PathBuf> {
+fn member_scopes(rule: &KeyLocateRule, local_roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
     if rule.find_local {
-        dirs.extend(local_scopes(vault, workspace));
+        dirs.extend_from_slice(local_roots);
     }
     if rule.find_user {
         dirs.extend(user_dir());
@@ -183,31 +134,14 @@ fn member_scopes(
 
 /// The directories an account may be found in, highest priority first.
 ///
-/// Only the local scopes: a private key is not shared, so the rules for the other scopes
-/// do not reach it. `find_local` still says whether the local scopes are searched at all.
-fn account_scopes(
-    rule: &KeyLocateRule,
-    vault: Option<&Vault>,
-    workspace: Option<&Workspace>,
-) -> Vec<PathBuf> {
+/// Only the local roots: a private key is not shared, so the rules for the other scopes do
+/// not reach it. `find_local` still says whether the local roots are searched at all.
+fn account_scopes(rule: &KeyLocateRule, local_roots: &[PathBuf]) -> Vec<PathBuf> {
     if rule.find_local {
-        local_scopes(vault, workspace)
+        local_roots.to_vec()
     } else {
         Vec::new()
     }
-}
-
-/// The two places a key sits beside the work at hand, highest priority first.
-///
-/// The Workspace comes first, since it is the copy being worked in, so a key kept there
-/// shadows an equally named one in the Vault.
-fn local_scopes(vault: Option<&Vault>, workspace: Option<&Workspace>) -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-
-    dirs.extend(workspace.map(workspace_keys_dir));
-    dirs.extend(vault.map(vault_keys_dir));
-
-    dirs
 }
 
 /// Collects each scope's items, letting the first scope to name one keep it.
@@ -228,7 +162,7 @@ fn merged<T>(scopes: impl IntoIterator<Item = Vec<T>>, name: impl Fn(&T) -> Stri
 
 /// The member named by each public key directly inside `dir`, by name.
 fn members_in(dir: &Path) -> Vec<Member> {
-    files_in(dir, PUBLIC_EXTENSION)
+    files_in(dir, PUBLIC_KEY_EXTENSION)
         .into_iter()
         .map(|(name, key_path)| Member::new(name, key_path))
         .collect()
@@ -236,7 +170,7 @@ fn members_in(dir: &Path) -> Vec<Member> {
 
 /// The account named by each private key directly inside `dir`, by name.
 fn accounts_in(dir: &Path) -> Vec<Account> {
-    files_in(dir, PRIVATE_EXTENSION)
+    files_in(dir, PRIVATE_KEY_EXTENSION)
         .into_iter()
         .map(|(name, key_path)| Account::new(name, key_path))
         .collect()
@@ -281,30 +215,20 @@ fn find_key<T>(
     })
 }
 
-/// The directory the Vault keeps its member keys in.
-fn vault_keys_dir(vault: &Vault) -> PathBuf {
-    vault.get_root().join(rorolala_vault::KEYS_DIR)
-}
-
-/// The directory the Workspace keeps its member keys in.
-fn workspace_keys_dir(workspace: &Workspace) -> PathBuf {
-    workspace.get_root().join(rorolala_workspace::KEYS_DIR)
-}
-
 /// The directory keys are kept in under the user's local data directory.
 fn user_dir() -> Option<PathBuf> {
-    Some(dirs::data_local_dir()?.join(USER_DIR))
+    Some(dirs::data_local_dir()?.join(USER_KEYS_DIR))
 }
 
 /// The directory keys are kept in under the filesystem root.
 fn global_dir() -> Option<PathBuf> {
-    Some(root_dir()?.join(GLOBAL_DIR))
+    Some(root_dir()?.join(GLOBAL_KEYS_DIR))
 }
 
 /// The directory keys are kept in under `ROLA_HOME`, if it names one.
 fn env_dir() -> Option<PathBuf> {
-    let home = std::env::var_os(HOME_VAR).filter(|value| !value.is_empty())?;
-    Some(PathBuf::from(home).join(ENV_DIR))
+    let home = std::env::var_os(HOME_ENV_VAR).filter(|value| !value.is_empty())?;
+    Some(PathBuf::from(home).join(ENV_KEYS_DIR))
 }
 
 /// The filesystem root: `/` on Unix, the current drive's root on Windows.
@@ -316,25 +240,11 @@ fn root_dir() -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// The Vault the current directory is inside, if it is inside one.
-fn current_vault() -> Option<Vault> {
-    Vault::locate(&std::env::current_dir().ok()?)
-}
-
-/// The Workspace the current directory is inside, if it is inside one.
-fn current_workspace() -> Option<Workspace> {
-    Workspace::locate(&std::env::current_dir().ok()?)
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use rorolala_utils_location::Locate;
-    use rorolala_vault::Vault;
-    use rorolala_workspace::Workspace;
 
     use crate::{KeyLocateRule, Member};
 
@@ -372,7 +282,7 @@ mod tests {
         key(dir, name, "pem")
     }
 
-    /// A rule that looks only at the local scopes, so a test sees only what it made.
+    /// A rule that looks only at the local roots, so a test sees only what it made.
     fn local_only() -> KeyLocateRule {
         KeyLocateRule {
             find_global: false,
@@ -403,100 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn a_local_member_is_found_beside_its_vault() {
-        let dir = scratch("vault");
-        Vault::create(&dir).unwrap();
-        let keys = dir.join(rorolala_vault::KEYS_DIR);
-        fs::create_dir_all(&keys).unwrap();
-        public(&keys, "alice");
-
-        let vault = Vault::locate(&dir).unwrap();
-        let members = super::all_members(Some(&vault), None, &local_only());
-
-        assert_eq!(members.len(), 1);
-        assert_eq!(members[0].key_path(), keys.join("alice.pub"));
-    }
-
-    #[test]
-    fn a_local_account_is_found_beside_its_vault() {
-        let dir = scratch("vault-account");
-        Vault::create(&dir).unwrap();
-        let keys = dir.join(rorolala_vault::KEYS_DIR);
-        fs::create_dir_all(&keys).unwrap();
-        private(&keys, "alice");
-
-        let vault = Vault::locate(&dir).unwrap();
-        let accounts = super::all_accounts(Some(&vault), None, &local_only());
-
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0].key_path(), keys.join("alice.pem"));
-    }
-
-    #[test]
-    fn a_local_member_is_found_in_its_workspace_too() {
-        let dir = scratch("workspace");
-        Workspace::create(&dir).unwrap();
-        let keys = dir.join(rorolala_workspace::KEYS_DIR);
-        fs::create_dir_all(&keys).unwrap();
-        public(&keys, "alice");
-
-        let workspace = Workspace::locate(&dir).unwrap();
-        let members = super::all_members(None, Some(&workspace), &local_only());
-
-        assert_eq!(members.len(), 1);
-        assert_eq!(members[0].key_path(), keys.join("alice.pub"));
-    }
-
-    #[test]
-    fn a_workspace_key_shadows_an_equally_named_vault_key() {
-        let dir = scratch("shadow");
-        Workspace::create(&dir).unwrap();
-        Vault::create(&dir).unwrap();
-
-        let workspace_keys = dir.join(rorolala_workspace::KEYS_DIR);
-        fs::create_dir_all(&workspace_keys).unwrap();
-        let written = public(&workspace_keys, "alice");
-
-        let vault_keys = dir.join(rorolala_vault::KEYS_DIR);
-        fs::create_dir_all(&vault_keys).unwrap();
-        public(&vault_keys, "alice");
-
-        let workspace = Workspace::locate(&dir).unwrap();
-        let vault = Vault::locate(&dir).unwrap();
-        let members = super::all_members(Some(&vault), Some(&workspace), &local_only());
-
-        // Both scopes name alice, and the Workspace is the one that keeps her, since it
-        // is the copy the caller is working in.
-        assert_eq!(members.len(), 1);
-        assert_eq!(members[0].key_path(), written);
-    }
-
-    #[test]
-    fn an_account_is_never_looked_for_outside_the_local_scopes() {
-        let dir = scratch("scopes");
-        Workspace::create(&dir).unwrap();
-        Vault::create(&dir).unwrap();
-
-        let workspace = Workspace::locate(&dir).unwrap();
-        let vault = Vault::locate(&dir).unwrap();
-        let everything = KeyLocateRule::new();
-
-        // Whatever the other flags say, an account is only ever looked for locally...
-        assert_eq!(
-            super::account_scopes(&everything, Some(&vault), Some(&workspace)),
-            super::local_scopes(Some(&vault), Some(&workspace))
-        );
-
-        // ...and a rule that turns the local scope off finds none at all.
-        let nowhere = KeyLocateRule {
-            find_local: false,
-            ..KeyLocateRule::new()
-        };
-        assert!(super::account_scopes(&nowhere, Some(&vault), Some(&workspace)).is_empty());
-    }
-
-    #[test]
-    fn a_shared_name_keeps_the_higher_scope() {
+    fn the_local_roots_are_searched_in_the_order_given() {
         let high = scratch("high");
         let low = scratch("low");
         public(&high, "alice");
@@ -504,41 +321,23 @@ mod tests {
         public(&low, "alice");
         public(&low, "carol");
 
-        let members = super::merged(
-            [super::members_in(&high), super::members_in(&low)],
-            Member::name,
-        );
+        let roots = vec![high.clone(), low];
+        let members = super::locate_members(&roots, &local_only());
         let names: Vec<String> = members.iter().map(Member::name).collect();
 
-        // Alice is shadowed in the lower scope, so only the higher one names her; bob
-        // and carol are each only in one scope and both survive.
+        // Alice is shadowed in the lower root, so only the higher one names her; bob and
+        // carol are each only in one root and both survive.
         assert_eq!(names, ["alice", "bob", "carol"]);
-        assert_eq!(members[0].key_path(), high.join("alice.pub"));
-    }
-
-    #[test]
-    fn finding_a_name_stops_at_the_first_scope_that_has_it() {
-        let high = scratch("find-high");
-        let low = scratch("find-low");
-        public(&low, "alice");
-
-        let found = super::find_key("alice", &[high, low.clone()], "pub", Member::new).unwrap();
-        assert_eq!(found.key_path(), low.join("alice.pub"));
-
-        assert!(super::find_key("nobody", &[], "pub", Member::new).is_none());
+        assert_eq!(members.at(0).unwrap().key_path(), high.join("alice.pub"));
     }
 
     #[test]
     fn a_search_hands_back_a_set_that_is_read_by_index() {
         let dir = scratch("set");
-        Vault::create(&dir).unwrap();
-        let keys = dir.join(rorolala_vault::KEYS_DIR);
-        fs::create_dir_all(&keys).unwrap();
-        public(&keys, "alice");
-        public(&keys, "bob");
+        public(&dir, "alice");
+        public(&dir, "bob");
 
-        let vault = Vault::locate(&dir).unwrap();
-        let found = super::member_locate(&vault, &local_only());
+        let found = super::locate_members(&[dir], &local_only());
 
         assert_eq!(found.len(), 2);
         assert!(!found.is_empty());
@@ -555,12 +354,38 @@ mod tests {
     #[test]
     fn a_search_that_finds_nothing_hands_back_an_empty_set() {
         let dir = scratch("empty");
-        Vault::create(&dir).unwrap();
 
-        let vault = Vault::locate(&dir).unwrap();
-        let found = super::member_locate(&vault, &local_only());
+        let found = super::locate_members(&[dir], &local_only());
 
         assert_eq!(found.len(), 0);
         assert!(found.is_empty());
+    }
+
+    #[test]
+    fn finding_a_name_stops_at_the_first_root_that_has_it() {
+        let high = scratch("find-high");
+        let low = scratch("find-low");
+        public(&low, "alice");
+
+        let found = super::find_member("alice", &[high, low.clone()], &local_only()).unwrap();
+        assert_eq!(found.key_path(), low.join("alice.pub"));
+
+        assert!(super::find_member("nobody", &[], &local_only()).is_none());
+    }
+
+    #[test]
+    fn an_account_is_only_looked_for_in_the_local_roots() {
+        let roots = vec![PathBuf::from("/first"), PathBuf::from("/second")];
+        let every_scope = KeyLocateRule::new();
+
+        // Whatever the other flags say, an account is only ever looked for locally...
+        assert_eq!(super::account_scopes(&every_scope, &roots), roots);
+
+        // ...and a rule that turns the local roots off finds none at all.
+        let nowhere = KeyLocateRule {
+            find_local: false,
+            ..KeyLocateRule::new()
+        };
+        assert!(super::account_scopes(&nowhere, &roots).is_empty());
     }
 }

@@ -17,16 +17,11 @@ mod init;
 pub use config::*;
 pub use error::*;
 
-/// Path where the Vault configuration file is located
-#[lazyffi(export = VAULT_CONFIG_PATH)]
-pub const CONFIG_PATH: &str = "./vault.toml";
-
-/// Path, inside the Vault, where its member keys are kept
+/// Path to the Vault configuration file, and the directory its keys are kept in
 ///
-/// A key kept here belongs to the Vault it sits in, which is what makes the containing
-/// directory the local scope a member search looks in first.
-#[lazyffi(export = VAULT_KEYS_DIR)]
-pub const KEYS_DIR: &str = "./keys/";
+/// Both are the layout [`rorolala_utils_constants`] states, re-exported so the Vault's own
+/// spelling of where it keeps things is still one name.
+pub use rorolala_utils_constants::{VAULT_CONFIG_PATH as CONFIG_PATH, VAULT_KEYS_DIR as KEYS_DIR};
 
 /// Rorolala remote resource vault
 ///

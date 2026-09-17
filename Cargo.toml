@@ -14,6 +14,7 @@ members = [
     "utils/cli-theme",
     "utils/configure",
     "utils/configure-macros",
+    "utils/constants",
     "utils/lazyffi",
     "utils/lazyffi-core",
     "utils/lazyffi-macros",
@@ -39,6 +40,7 @@ rorolala-protocol = { path = "modules/protocol" }
 rorolala-utils-cli-theme = { path = "utils/cli-theme" }
 rorolala-utils-configure = { path = "utils/configure" }
 rorolala-utils-configure-macros = { path = "utils/configure-macros" }
+rorolala-utils-constants = { path = "utils/constants" }
 rorolala-utils-lazyffi = { path = "utils/lazyffi" }
 rorolala-utils-lazyffi-core = { path = "utils/lazyffi-core" }
 rorolala-utils-lazyffi-macros = { path = "utils/lazyffi-macros" }
@@ -96,7 +98,9 @@ license.workspace = true
 rorolala-auth.workspace = true
 rorolala-daemon.workspace = true
 rorolala-protocol.workspace = true
+rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
+rorolala-utils-location.workspace = true
 rorolala-vault.workspace = true
 rorolala-workspace.workspace = true
 

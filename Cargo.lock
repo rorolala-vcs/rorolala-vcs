@@ -672,7 +672,9 @@ dependencies = [
  "rorolala-daemon",
  "rorolala-dev-bindgen",
  "rorolala-protocol",
+ "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
  "rorolala-vault",
  "rorolala-workspace",
  "serde_json",
@@ -1020,10 +1022,8 @@ name = "rorolala-auth"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
- "rorolala-utils-location",
- "rorolala-vault",
- "rorolala-workspace",
 ]
 
 [[package]]
@@ -1109,6 +1109,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-utils-constants"
+version = "0.1.0"
+dependencies = [
+ "rorolala-utils-lazyffi",
+]
+
+[[package]]
 name = "rorolala-utils-lazyffi"
 version = "0.1.0"
 dependencies = [
@@ -1148,6 +1155,7 @@ name = "rorolala-vault"
 version = "0.1.0"
 dependencies = [
  "rorolala-utils-configure",
+ "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "serde",
@@ -1158,6 +1166,7 @@ name = "rorolala-workspace"
 version = "0.1.0"
 dependencies = [
  "rorolala-utils-configure",
+ "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "serde",

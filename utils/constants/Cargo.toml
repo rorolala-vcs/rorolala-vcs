@@ -1,9 +1,7 @@
 [package]
-name = "rorolala-auth"
+name = "rorolala-utils-constants"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-dirs.workspace = true
-rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
