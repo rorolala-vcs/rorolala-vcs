@@ -1,3 +1,4 @@
 # rorolala-auth
 
-Authentication: member identity, key challenge-response, and host mode.
+Authentication: member identity, public-key and account location, key challenge-response,
+and host mode.

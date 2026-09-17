@@ -24,6 +24,13 @@ pub const DATA_DIR: &str = "./.rola/";
 #[lazyffi(export = WORKSPACE_CONFIG_PATH)]
 pub const CONFIG_PATH: &str = "./.rola/workspace.toml";
 
+/// Path, inside the Workspace's data directory, where its member keys are kept
+///
+/// A key kept here belongs to the Workspace it was set up in, so it is one of the two
+/// directories the local scope of a member search covers — the other being the Vault's.
+#[lazyffi(export = WORKSPACE_KEYS_DIR)]
+pub const KEYS_DIR: &str = "./.rola/auth/";
+
 /// Rorolala local workspace
 ///
 /// The local workspace is used to edit, organize, and advance the progress

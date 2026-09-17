@@ -21,6 +21,13 @@ pub use error::*;
 #[lazyffi(export = VAULT_CONFIG_PATH)]
 pub const CONFIG_PATH: &str = "./vault.toml";
 
+/// Path, inside the Vault, where its member keys are kept
+///
+/// A key kept here belongs to the Vault it sits in, which is what makes the containing
+/// directory the local scope a member search looks in first.
+#[lazyffi(export = VAULT_KEYS_DIR)]
+pub const KEYS_DIR: &str = "./keys/";
+
 /// Rorolala remote resource vault
 ///
 /// It can only be loaded and operated on the machine where the Vault resides,

@@ -65,6 +65,9 @@ unicode-width = "0.2.2"
 # Internationalization
 rust-i18n = "4.2.2"
 
+# Filesystem
+dirs = "6.0.0"
+
 # Proc macro
 annotate-snippets = "0.12.16"
 just_fmt = "0.2.1"
