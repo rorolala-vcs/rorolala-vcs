@@ -7,6 +7,9 @@
 
 mod account;
 mod accounts;
+mod channel;
+mod error;
+mod key;
 mod locate;
 mod member;
 mod members;
@@ -14,6 +17,9 @@ mod rule;
 
 pub use account::*;
 pub use accounts::*;
+pub use channel::*;
+pub use error::*;
+pub use key::*;
 pub use locate::*;
 pub use member::*;
 pub use members::*;
