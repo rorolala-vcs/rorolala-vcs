@@ -2,12 +2,13 @@ use std::path::PathBuf;
 
 use mingling::{
     Grouped, LazyRes,
-    macros::{buffer, command, r_eprintln, r_println, renderer},
+    macros::{buffer, command, help, metadata, r_eprintln, r_println, renderer},
+    metadata::Description,
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResVault;
 use rorolala_daemon::daemon_begin;
-use rorolala_utils_cli_theme::{err_line, help_line};
+use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_configure::Configure;
 use rorolala_utils_location::Locate;
 use rorolala_vault::{CONFIG_PATH, Config};
@@ -15,8 +16,19 @@ use rust_i18n::t;
 
 use crate::{
     Next,
-    exit_codes::{EC_ERR_DAEMON_CONFIG, EC_NOT_EXIST},
+    exit_codes::{EC_ERR_DAEMON_CONFIG, EC_HELP, EC_NOT_EXIST},
 };
+
+#[help(buffer)]
+pub fn help_listen(_: EntryListen, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("listen.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryListen)]
+pub fn desc_listen() -> Description {
+    t!("listen.cmd_listen_description").to_string().into()
+}
 
 #[command]
 pub fn listen(vault: &mut LazyRes<ResVault>) -> Next {
