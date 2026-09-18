@@ -2,8 +2,25 @@ _version: 2
 
 create:
   help:
-    en:
-    zh-CN:
+    en: |
+        Create a workspace or a vault
+
+        **Usage**: `rola create <PATH> [--vault]`
+
+        A Workspace is the copy you work in; a Vault is what copies are shared through.
+        With `--vault` a Vault is created, and without it a Workspace. The directory is
+        created if it is not there yet.
+
+        `rola init` does the same for the current directory.
+    zh-CN: |
+        创建工作区或保险库
+
+        **用法**：`rola create <PATH> [--vault]`
+
+        工作区是你动手改的那份副本；保险库是副本之间共享的落点。
+        加 `--vault` 创建保险库，不加则创建工作区。目录不存在时会一并创建。
+
+        `rola init` 对当前目录做同样的事。
 
   cmd_create_description:
     en: Create workspace or vault
