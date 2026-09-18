@@ -1,0 +1,38 @@
+_version: 2
+
+rola:
+  help:
+    en: |
+        **Usage**: `rola <COMMAND> [ARGS]`
+
+        **Commands**
+            create <PATH>       Create a Workspace at PATH, or a Vault with --vault
+            init                Create a Workspace or Vault in the current directory
+            key [--pem]         List the keys beside the current Vault or Workspace
+            tool-keygen [PATH]  Generate an Ed25519 key pair
+
+        **Options**
+            --vault                 Act on a Vault instead of a Workspace
+            --workspace-dir <PATH>  Work in this Workspace
+            --vault-dir <PATH>      Work in this Vault
+            --no-color              Draw without colour
+            --theme-choice <NAME>   Draw in this theme
+            --lang, -l <LOCALE>     Speak this language
+            -h, --help              Show this help
+    zh-CN: |
+        **用法**：`rola <命令> [参数]`
+
+        **命令**
+            create <PATH>       在 PATH 创建工作区；加 --vault 则创建保险库
+            init                将当前目录创建为工作区或保险库
+            key [--pem]         列出当前保险库 / 工作区旁边的密钥
+            tool-keygen [PATH]  生成一对 Ed25519 密钥
+
+        **选项**
+            --vault                 操作保险库而不是工作区
+            --workspace-dir <PATH>  使用这个目录作为工作区
+            --vault-dir <PATH>      使用这个目录作为保险库
+            --no-color              不使用颜色
+            --theme-choice <NAME>   使用该主题绘制
+            --lang, -l <LOCALE>     使用该语言
+            -h, --help              显示本帮助

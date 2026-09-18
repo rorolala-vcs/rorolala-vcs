@@ -1,0 +1,61 @@
+_version: 2
+
+tool_keygen:
+  help:
+    en: |
+        Generate an Ed25519 key pair with `openssl`
+
+        **Usage**: `rola tool keygen [PATH]`
+
+        The pair is written as `key.pem` (private) and `key.pub` (public) in the current
+        directory, or where `PATH` says. `PATH` names the pair rather than one file: an
+        extension on it separates the stem from what a key is written as, so `alice`,
+        `alice.pem` and `alice.pub` all name `alice.pem` and `alice.pub`.
+    zh-CN: |
+        使用 `openssl` 生成一对 Ed25519 密钥
+
+        **用法**：`rola tool keygen [PATH]`
+
+        默认在当前目录生成 `key.pem`（私钥）与 `key.pub`（公钥），指定 `PATH` 时写到那里。
+        `PATH` 指代的是“这一对”而不是单个文件：路径上的扩展名当作分界，
+        所以 `alice`、`alice.pem`、`alice.pub` 都表示 `alice.pem` 与 `alice.pub`。
+
+  cmd_tool_keygen_description:
+    en: Generate an Ed25519 key pair
+    zh-CN: 生成一对 Ed25519 密钥
+
+  success:
+    en: Key pair written to %{private} and %{public}
+    zh-CN: 密钥对已生成：%{private} 与 %{public}
+
+  err_no_openssl:
+    en: Could not run `openssl`
+    zh-CN: 无法运行 `openssl`
+
+  err_no_openssl_help:
+    en: |
+        `rola tool keygen` generates keys with OpenSSL. Please install it and make sure
+        `openssl` is on your PATH, then try again
+    zh-CN: |
+        `rola tool keygen` 使用 OpenSSL 生成密钥。请安装 OpenSSL，并确认 `openssl`
+        在 PATH 中，然后重试
+
+  err_keygen_failed:
+    en: OpenSSL ran but did not produce both keys
+    zh-CN: OpenSSL 已运行，但未能生成完整密钥对
+
+  err_keygen_failed_help:
+    en: |
+        Please run `openssl genpkey -algorithm ed25519 -out key.pem` by hand to see why
+    zh-CN: |
+        请手动运行 `openssl genpkey -algorithm ed25519 -out key.pem` 查看具体原因
+
+  err_path_not_exist:
+    en: The directory %{path} does not exist
+    zh-CN: 目录 %{path} 不存在
+
+  err_path_not_exist_help:
+    en: |
+        Please create the directory first, or name a path inside one that already exists
+    zh-CN: |
+        请先创建该目录，或将路径指向一个已存在的目录
