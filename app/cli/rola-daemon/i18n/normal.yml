@@ -1,0 +1,26 @@
+_version: 2
+
+listen:
+  err_vault_not_exist:
+    en: Vault does not exist
+    zh-CN: 保险库不存在
+
+  err_vault_not_exist_help:
+    en: |
+        Please check whether this directory has been initialized using `rola create` or `rola init`
+    zh-CN: |
+        请检查该目录是否已经使用 `rola create` 或 `rola init` 初始化
+
+  err_config_unreadable:
+    en: Failed to read the vault configuration at %{path}
+    zh-CN: 无法读取位于 %{path} 的保险库配置
+
+  err_config_unreadable_help:
+    en: |
+        Please check that the vault configuration file exists and is readable
+    zh-CN: |
+        请检查保险库配置文件是否存在且可读
+
+  result_stopped:
+    en: Daemon stopped
+    zh-CN: 守护进程已停止

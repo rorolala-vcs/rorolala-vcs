@@ -1415,7 +1415,12 @@ dependencies = [
  "librorolala",
  "mingling",
  "rorolala-cli-setups",
+ "rorolala-daemon",
+ "rorolala-utils-cli-theme",
+ "rorolala-utils-configure",
  "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "rorolala-vault",
  "rust-i18n",
 ]
 
