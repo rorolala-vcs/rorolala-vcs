@@ -1,6 +1,10 @@
+use std::fs;
 use std::path::PathBuf;
 
 use rorolala_utils_lazyffi::lazyffi;
+use serde::{Deserialize, Serialize};
+
+use crate::{Error, PublicKey, SigningKey};
 
 /// A local account, as identified by the private key that holds it.
 ///
@@ -9,21 +13,82 @@ use rorolala_utils_lazyffi::lazyffi;
 /// for beside the work at hand — a Workspace or a Vault — and never in a scope a public
 /// key could come from.
 ///
-/// An account is read-only: it says where its private key is, and changing that would
-/// mean moving the key, which is not this type's to do.
+/// A `.pem` is required of an account; a `.pub` beside it is not. When one is there, a
+/// client holding the account has an identity to hold its peer to, and can require the
+/// peer to prove it before anything runs. When there is not, the client has only its own
+/// private key: it can still prove *itself* when challenged, but it has nothing to check
+/// an answer against.
+///
+/// An account is read-only: it says where its keys are, and changing that would mean
+/// moving them, which is not this type's to do.
 #[lazyffi(export = RolaAccount)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Account {
     /// The account's name: the stem of its private key file.
     name: String,
     /// Where the account's private key file was found.
     key_path: PathBuf,
+    /// Where the public key found beside the private one sits, if there was one.
+    public_path: Option<PathBuf>,
 }
 
 impl Account {
-    /// Names an account by the private key file found at `key_path`.
-    pub(crate) const fn new(name: String, key_path: PathBuf) -> Self {
-        Self { name, key_path }
+    /// Names an account by the private key file found at `key_path`, and the public key
+    /// found beside it, if any.
+    pub(crate) const fn new(name: String, key_path: PathBuf, public_path: Option<PathBuf>) -> Self {
+        Self {
+            name,
+            key_path,
+            public_path,
+        }
+    }
+
+    /// Reads the account's private key from the file it was found at.
+    ///
+    /// The key is read afresh, so an account names a file rather than holding a copy of
+    /// one: whatever the file holds when the account is asked is what the account is.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the key file cannot be read, and [`Error::Malformed`] if
+    /// it does not hold a private key this build understands.
+    pub fn get_key(&self) -> Result<SigningKey, Error> {
+        let pem = fs::read_to_string(&self.key_path)?;
+
+        SigningKey::from_pem(&pem)
+    }
+
+    /// The public half of the account's private key.
+    ///
+    /// An account is known to a peer by this key, not by its name: a name is only a
+    /// label, and the key is what says which identity an action runs as.
+    ///
+    /// # Errors
+    ///
+    /// Returns what [`get_key`](Self::get_key) does.
+    pub fn get_pub_key(&self) -> Result<PublicKey, Error> {
+        Ok(self.get_key()?.public_key())
+    }
+
+    /// The public key a client holding this account holds its peer to, if the account
+    /// came with one.
+    ///
+    /// The `.pem` is what an account proves itself *with*; a `.pub` beside it is what it
+    /// asks its peer to prove. An account without one has nothing to check an answer
+    /// against, so a client is only challenged rather than challenging back.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if a public key file is there but cannot be read, and
+    /// [`Error::Malformed`] if it does not hold a public key this build understands.
+    pub fn peer_key(&self) -> Result<Option<PublicKey>, Error> {
+        let Some(path) = &self.public_path else {
+            return Ok(None);
+        };
+
+        let pem = fs::read_to_string(path)?;
+
+        Ok(Some(PublicKey::from_pem(&pem)?))
     }
 }
 
@@ -112,5 +177,81 @@ impl<'a> IntoIterator for &'a Accounts {
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+
+    use ed25519_dalek::SigningKey as Ed25519SigningKey;
+    use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+    use ed25519_dalek::pkcs8::{EncodePrivateKey as _, EncodePublicKey as _};
+
+    use super::Account;
+    use crate::Error;
+
+    /// A path in a directory of the test's own, made if it is not there yet.
+    fn path(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("rorolala-auth-account-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+
+        dir.join(name)
+    }
+
+    #[test]
+    fn an_account_reads_the_private_key_its_file_holds() {
+        let signing = Ed25519SigningKey::from_bytes(&[3; 32]);
+        let file = path("alice.pem");
+        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
+        fs::write(&file, pem.as_str()).unwrap();
+
+        let account = Account::new("alice".to_string(), file, None);
+
+        let public = account.get_pub_key().unwrap();
+        assert_eq!(account.get_key().unwrap().public_key(), public);
+        assert_eq!(public.as_bytes(), signing.verifying_key().to_bytes());
+    }
+
+    #[test]
+    fn an_account_with_a_public_key_beside_it_holds_its_peer_to_it() {
+        let signing = Ed25519SigningKey::from_bytes(&[5; 32]);
+        let file = path("carol.pem");
+        let public = path("carol.pub");
+        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
+        let spki = signing
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap();
+        fs::write(&file, pem.as_str()).unwrap();
+        fs::write(&public, spki).unwrap();
+
+        let account = Account::new("carol".to_string(), file, Some(public));
+
+        assert_eq!(
+            account.peer_key().unwrap().unwrap().as_bytes(),
+            signing.verifying_key().to_bytes()
+        );
+    }
+
+    #[test]
+    fn an_account_without_a_public_key_has_nothing_to_hold_its_peer_to() {
+        let signing = Ed25519SigningKey::from_bytes(&[6; 32]);
+        let file = path("dave.pem");
+        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
+        fs::write(&file, pem.as_str()).unwrap();
+
+        let account = Account::new("dave".to_string(), file, None);
+
+        assert!(account.peer_key().unwrap().is_none());
+    }
+
+    #[test]
+    fn an_account_whose_key_file_is_missing_says_so() {
+        let account = Account::new("nobody".to_string(), path("nobody.pem"), None);
+
+        assert!(matches!(account.get_key(), Err(Error::Io(_))));
     }
 }

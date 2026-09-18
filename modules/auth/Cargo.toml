@@ -6,11 +6,13 @@ edition.workspace = true
 [dependencies]
 chacha20poly1305.workspace = true
 dirs.workspace = true
-ed25519-dalek.workspace = true
+ed25519-dalek = { workspace = true, features = ["pem", "pkcs8"] }
 hkdf.workspace = true
 ml-kem.workspace = true
+rorolala-errors.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 sha2.workspace = true
 tokio = { workspace = true, features = ["io-util", "time"] }
 x25519-dalek.workspace = true
+serde.workspace = true

@@ -8,6 +8,7 @@
 
 use std::fmt;
 
+use ed25519_dalek::pkcs8::{DecodePrivateKey as _, DecodePublicKey as _};
 use ed25519_dalek::{
     Signature as Ed25519Signature, Signer as _, SigningKey as Ed25519SigningKey, Verifier as _,
     VerifyingKey as Ed25519VerifyingKey,
@@ -167,6 +168,26 @@ impl PublicKey {
         Ok(Self { algorithm, bytes })
     }
 
+    /// Reads `pem` as a public key.
+    ///
+    /// The encoding says which algorithm the key is: a public key is written the way its
+    /// algorithm states, so an Ed25519 one is an X.509 `SubjectPublicKeyInfo` in PEM. The
+    /// bytes it holds are the same ones [`as_bytes`](Self::as_bytes) hands back, so a key
+    /// read here is indistinguishable from one wrapped by [`from_bytes`](Self::from_bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Malformed`] if `pem` is not a public key of an algorithm this
+    /// build understands.
+    pub fn from_pem(pem: &str) -> Result<Self, Error> {
+        let key = Ed25519VerifyingKey::from_public_key_pem(pem).map_err(|_| Error::Malformed)?;
+
+        Ok(Self {
+            algorithm: KeyAlgorithm::Ed25519,
+            bytes: key.to_bytes().to_vec(),
+        })
+    }
+
     /// The algorithm this key is for.
     #[must_use]
     pub const fn algorithm(&self) -> KeyAlgorithm {
@@ -235,6 +256,24 @@ impl SigningKey {
         }
     }
 
+    /// Reads `pem` as a private key.
+    ///
+    /// The encoding says which algorithm the key is: a private key is written the way its
+    /// algorithm states, so an Ed25519 one is a PKCS#8 `PrivateKeyInfo` in PEM.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Malformed`] if `pem` is not a private key of an algorithm this
+    /// build understands.
+    pub fn from_pem(pem: &str) -> Result<Self, Error> {
+        let signing = Ed25519SigningKey::from_pkcs8_pem(pem).map_err(|_| Error::Malformed)?;
+
+        Ok(Self {
+            algorithm: KeyAlgorithm::Ed25519,
+            signing,
+        })
+    }
+
     /// The algorithm this key is for.
     #[must_use]
     pub const fn algorithm(&self) -> KeyAlgorithm {
@@ -291,6 +330,9 @@ fn ed25519_signature(bytes: &[u8]) -> Result<Ed25519Signature, Error> {
 mod tests {
     use super::{Fingerprint, KeyAlgorithm, PublicKey, Signature, SigningKey};
     use crate::Error;
+    use ed25519_dalek::SigningKey as Ed25519SigningKey;
+    use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+    use ed25519_dalek::pkcs8::{EncodePrivateKey as _, EncodePublicKey as _};
 
     /// A key with a given seed, so a test is deterministic.
     fn key(seed: u8) -> SigningKey {
@@ -362,5 +404,38 @@ mod tests {
         let read = PublicKey::from_bytes(public.algorithm(), public.as_bytes()).unwrap();
 
         assert_eq!(read, public);
+    }
+
+    #[test]
+    fn a_private_key_round_trips_through_pem() {
+        let signing = Ed25519SigningKey::from_bytes(&[7; 32]);
+        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
+
+        let read = SigningKey::from_pem(&pem).unwrap();
+
+        assert_eq!(read.public_key(), key(7).public_key());
+    }
+
+    #[test]
+    fn a_public_key_round_trips_through_pem() {
+        let public = key(7).public_key();
+        let dalek = Ed25519SigningKey::from_bytes(&[7; 32]).verifying_key();
+        let pem = dalek.to_public_key_pem(LineEnding::LF).unwrap();
+
+        let read = PublicKey::from_pem(&pem).unwrap();
+
+        assert_eq!(read, public);
+    }
+
+    #[test]
+    fn a_text_that_is_not_a_key_is_rejected() {
+        assert!(matches!(
+            SigningKey::from_pem("not a key"),
+            Err(Error::Malformed)
+        ));
+        assert!(matches!(
+            PublicKey::from_pem("not a key"),
+            Err(Error::Malformed)
+        ));
     }
 }
