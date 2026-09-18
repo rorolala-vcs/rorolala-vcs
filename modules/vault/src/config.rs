@@ -13,10 +13,29 @@ pub struct Config {
     daemon_config: DaemonConfig,
 }
 
+impl Config {
+    /// The configuration for the Vault daemon.
+    #[must_use]
+    pub const fn daemon_config(&self) -> &DaemonConfig {
+        &self.daemon_config
+    }
+}
+
 /// Configuration for the Vault daemon.
 #[lazyffi(export = VaultDaemonConfig)]
 #[derive(Debug, Default, Clone, Configure, Serialize, Deserialize)]
 pub struct DaemonConfig {
     /// The preferred port the daemon should listen on.
     prefer_port: u16,
+}
+
+impl DaemonConfig {
+    /// The port the daemon prefers to listen on.
+    ///
+    /// It is a preference and not an order: the daemon asks for this port, and takes
+    /// another if it is already taken.
+    #[must_use]
+    pub const fn prefer_port(&self) -> u16 {
+        self.prefer_port
+    }
 }
