@@ -1,11 +1,18 @@
 use std::fmt;
 use std::io;
 
+use rorolala_errors::IoError;
+use rorolala_utils_lazyffi::lazyffi;
+
 /// What can go wrong while reading an identity, proving one, or running a session.
 ///
-/// The channel is a Rust-side type — nothing here is exported over FFI, which only wraps
-/// plain request-and-result calls — so the variants are free to say exactly what failed.
+/// The channel is a Rust-side type, but the errors it raises are not: they are what a
+/// caller outside Rust reads when a session could not be established, so the enum
+/// crosses the C ABI as [`RolaAuthError`]. The underlying stream's [`io::Error`] cannot
+/// cross — it is foreign and has no repr-C sibling — so what crosses instead is the
+/// stand-in [`IoError`] from `rorolala-errors`, which carries what it said.
 #[derive(Debug)]
+#[lazyffi(export = RolaAuthError)]
 pub enum Error {
     /// A key or signature was not the shape its algorithm states.
     Malformed,
@@ -19,7 +26,7 @@ pub enum Error {
     /// A record did not decrypt: it was altered, reordered, or never a record at all.
     BadRecord,
     /// The underlying stream failed.
-    Io(io::Error),
+    Io(IoError),
 }
 
 impl fmt::Display for Error {
@@ -48,6 +55,6 @@ impl std::error::Error for Error {
 
 impl From<io::Error> for Error {
     fn from(source: io::Error) -> Self {
-        Self::Io(source)
+        Self::Io(source.into())
     }
 }
