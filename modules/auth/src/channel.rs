@@ -213,10 +213,32 @@ impl<S: AsyncRead + AsyncWrite + Unpin> SecureStream<S> {
     /// `expected`, [`Error::BadSignature`] if its proof does not verify,
     /// [`Error::Handshake`] if it does not follow the protocol, and [`Error::Io`] if the
     /// stream fails.
-    pub async fn connect(
+    pub async fn connect(inner: S, me: &SigningKey, expected: &PublicKey) -> Result<Self, Error> {
+        Self::handshake(inner, me, Some(expected)).await
+    }
+
+    /// Connects to a peer that is not held to any particular identity, and proves our own.
+    ///
+    /// The peer's proof is still verified — it must hold the private half of the key it
+    /// presented — but nothing says *which* key that must be. A caller with no key to hold
+    /// its peer to is challenged rather than challenging back: what answered is read from
+    /// [`peer`](Self::peer), and what that is worth is the caller's to decide.
+    ///
+    /// # Errors
+    ///
+    /// The same as [`connect`](Self::connect), except
+    /// [`UnexpectedIdentity`](Error::UnexpectedIdentity), which cannot happen when nothing
+    /// was expected.
+    pub async fn connect_unpinned(inner: S, me: &SigningKey) -> Result<Self, Error> {
+        Self::handshake(inner, me, None).await
+    }
+
+    /// Runs the client half of the handshake, checking the peer against `expected` when
+    /// there is one.
+    async fn handshake(
         mut inner: S,
         me: &SigningKey,
-        expected: &PublicKey,
+        expected: Option<&PublicKey>,
     ) -> Result<Self, Error> {
         let ephemeral = EphemeralSecret::random();
         let our_ephemeral = X25519PublicKey::from(&ephemeral);
@@ -241,8 +263,10 @@ impl<S: AsyncRead + AsyncWrite + Unpin> SecureStream<S> {
         let peer = answer.identity()?;
         let ciphertext = answer.ciphertext()?;
 
-        // The expected identity is checked before anything it signed is believed.
-        if peer.fingerprint() != expected.fingerprint() {
+        // A pinned identity is checked before anything it signed is believed.
+        if let Some(expected) = expected
+            && peer.fingerprint() != expected.fingerprint()
+        {
             return Err(Error::UnexpectedIdentity);
         }
 
@@ -986,6 +1010,31 @@ mod tests {
 
         assert_eq!(client.peer(), &server_key.public_key());
         assert_eq!(server.peer(), &client_key.public_key());
+    }
+
+    #[tokio::test]
+    async fn an_unpinned_client_accepts_whichever_peer_answers() {
+        let client_key = key(21);
+        let server_key = key(22);
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let running = server_key.clone();
+        let accepting =
+            tokio::spawn(async move { SecureStream::accept(server_io, &running).await });
+
+        // Nothing is pinned, so a server the client never named is accepted — it still has
+        // to prove the key it presented, and it is read off the session afterwards.
+        let mut client = SecureStream::connect_unpinned(client_io, &client_key)
+            .await
+            .unwrap();
+        let mut server = accepting.await.unwrap().unwrap();
+
+        assert_eq!(client.peer(), &server_key.public_key());
+
+        client.write_all(b"hello").await.unwrap();
+        let mut heard = [0u8; 5];
+        server.read_exact(&mut heard).await.unwrap();
+        assert_eq!(&heard, b"hello");
     }
 
     #[tokio::test]
