@@ -21,6 +21,9 @@ pub use rorolala_auth as auth;
 /// Background daemon
 pub use rorolala_daemon as daemon;
 
+/// Errors across the C ABI
+pub use rorolala_errors as errors;
+
 /// Transport and wire protocol
 pub use rorolala_protocol as protocol;
 

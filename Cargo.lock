@@ -171,6 +171,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f49f6183038e081170ebbbadee6678966c7d54728938a3e7de7f4e780770318f"
+dependencies = [
+ "byteorder",
+ "serde",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -224,6 +234,12 @@ name = "bytemuck"
 version = "1.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
+
+[[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
@@ -526,6 +542,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
 dependencies = [
  "const-oid 0.9.6",
+ "pem-rfc7468",
  "zeroize",
 ]
 
@@ -990,6 +1007,7 @@ dependencies = [
  "rorolala-auth",
  "rorolala-daemon",
  "rorolala-dev-bindgen",
+ "rorolala-errors",
  "rorolala-protocol",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
@@ -1210,6 +1228,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pem-rfc7468"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88b39c9bfcfc231068454382784bb460aae594343fb030d46e9f50a645418412"
+dependencies = [
+ "base64ct",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1403,6 +1430,8 @@ dependencies = [
  "mingling",
  "rorolala-cli-setups",
  "rorolala-utils-cli-theme",
+ "rorolala-utils-constants",
+ "rorolala-utils-location",
  "rorolala-vault",
  "rorolala-workspace",
  "rust-i18n",
@@ -1433,8 +1462,10 @@ dependencies = [
  "ed25519-dalek",
  "hkdf",
  "ml-kem",
+ "rorolala-errors",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
+ "serde",
  "sha2",
  "tokio",
  "x25519-dalek",
@@ -1455,11 +1486,19 @@ dependencies = [
 name = "rorolala-daemon"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
+ "just_template",
+ "rorolala-auth",
+ "rorolala-errors",
+ "rorolala-protocol",
  "rorolala-utils-cli-theme",
  "rorolala-utils-configure",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vault",
+ "serde",
+ "serde_json",
+ "syn 3.0.5",
  "tokio",
 ]
 
@@ -1476,6 +1515,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-errors"
+version = "0.1.0"
+dependencies = [
+ "bincode2",
+ "rorolala-utils-lazyffi",
+ "serde_json",
+]
+
+[[package]]
 name = "rorolala-ffi"
 version = "0.1.0"
 dependencies = [
@@ -1485,6 +1533,19 @@ dependencies = [
 
 [[package]]
 name = "rorolala-protocol"
+version = "0.1.0"
+dependencies = [
+ "bincode2",
+ "rorolala-auth",
+ "rorolala-errors",
+ "rorolala-protocol-macros",
+ "rorolala-utils-lazyffi",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "rorolala-protocol-macros"
 version = "0.1.0"
 
 [[package]]

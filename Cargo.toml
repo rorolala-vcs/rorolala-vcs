@@ -8,7 +8,9 @@ members = [
     "dev/bindgen",
     "modules/auth",
     "modules/daemon",
+    "modules/errors",
     "modules/protocol",
+    "modules/protocol-macros",
     "modules/vault",
     "modules/workspace",
     "utils/cli-theme",
@@ -35,8 +37,10 @@ rorolala-auth = { path = "modules/auth" }
 rorolala-cli-setups = { path = "app/cli/setups" }
 rorolala-daemon = { path = "modules/daemon" }
 rorolala-dev-bindgen = { path = "dev/bindgen" }
+rorolala-errors = { path = "modules/errors" }
 rorolala-ffi = { path = "app/ffi" }
 rorolala-protocol = { path = "modules/protocol" }
+rorolala-protocol-macros = { path = "modules/protocol-macros" }
 rorolala-utils-cli-theme = { path = "utils/cli-theme" }
 rorolala-utils-configure = { path = "utils/configure" }
 rorolala-utils-configure-macros = { path = "utils/configure-macros" }
@@ -56,6 +60,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 serde_yaml = "0.9.34"
 toml = "0.8.23"
+bincode2 = "2.0.1"
 
 # CLI Rendering
 bat = { version = "0.26.1", default-features = false, features = ["regex-fancy"] }
@@ -81,6 +86,7 @@ dirs = "6.0.0"
 # Proc macro
 annotate-snippets = "0.12.16"
 just_fmt = "0.2.1"
+just_template = "0.2.1"
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 quote = "1.0.47"
 syn = { version = "3.0.5", features = ["full"] }
@@ -105,6 +111,7 @@ license.workspace = true
 [dependencies]
 rorolala-auth.workspace = true
 rorolala-daemon.workspace = true
+rorolala-errors.workspace = true
 rorolala-protocol.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
