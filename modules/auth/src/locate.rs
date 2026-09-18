@@ -104,7 +104,10 @@ fn one_account(name: &str, local_roots: &[PathBuf], rule: &KeyLocateRule) -> Opt
         name,
         &account_scopes(rule, local_roots),
         PRIVATE_KEY_EXTENSION,
-        Account::new,
+        |name, key_path| {
+            let public_path = sibling_public(&key_path);
+            Account::new(name, key_path, public_path)
+        },
     )
 }
 
@@ -172,8 +175,22 @@ fn members_in(dir: &Path) -> Vec<Member> {
 fn accounts_in(dir: &Path) -> Vec<Account> {
     files_in(dir, PRIVATE_KEY_EXTENSION)
         .into_iter()
-        .map(|(name, key_path)| Account::new(name, key_path))
+        .map(|(name, key_path)| {
+            let public_path = sibling_public(&key_path);
+            Account::new(name, key_path, public_path)
+        })
         .collect()
+}
+
+/// The public key file beside a private one, if there is one.
+///
+/// An account's private key is required of it and its public key is not, so the two are
+/// found by the same name and a different extension: what sits beside `<name>.pem` as
+/// `<name>.pub` is that account's public key, and anything else is someone else's.
+fn sibling_public(private: &Path) -> Option<PathBuf> {
+    let public = private.with_extension(PUBLIC_KEY_EXTENSION);
+
+    public.is_file().then_some(public)
 }
 
 /// The name and path of each file carrying `extension` directly inside `dir`, by name.
@@ -246,6 +263,10 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use ed25519_dalek::SigningKey as Ed25519SigningKey;
+    use ed25519_dalek::pkcs8::EncodePublicKey as _;
+    use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+
     use crate::{KeyLocateRule, Member};
 
     /// A directory of its own, emptied first so a rerun starts clean.
@@ -290,6 +311,27 @@ mod tests {
             find_user: false,
             find_env: false,
         }
+    }
+
+    #[test]
+    fn an_account_is_paired_with_the_public_key_beside_it() {
+        let dir = scratch("paired");
+        private(&dir, "alice");
+        let pem = Ed25519SigningKey::from_bytes(&[9; 32])
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap();
+        fs::write(dir.join("alice.pub"), pem).unwrap();
+        private(&dir, "bob");
+
+        // Alice has a public key beside her private one, so an account named after her
+        // comes with one; bob does not, so his has nothing to hold a peer to.
+        let alice =
+            super::find_account("alice", std::slice::from_ref(&dir), &local_only()).unwrap();
+        assert!(alice.peer_key().unwrap().is_some());
+
+        let bob = super::find_account("bob", std::slice::from_ref(&dir), &local_only()).unwrap();
+        assert!(bob.peer_key().unwrap().is_none());
     }
 
     #[test]
