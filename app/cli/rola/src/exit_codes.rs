@@ -25,3 +25,14 @@ pub const EC_ERR_TOOL_KEYGEN_FAILED: i32 = 42;
 
 // Exit code indicating the path a key was to be written to is not there
 pub const EC_ERR_TOOL_KEYGEN_PATH_NOT_EXIST: i32 = 43;
+
+// Vaults
+
+// Exit code indicating the Workspace configuration could not be read
+pub const EC_ERR_VAULT_CONFIG: i32 = 51;
+
+// Exit code indicating a `rola vault` command was given arguments it cannot use
+pub const EC_ERR_VAULT_ARGUMENT: i32 = 52;
+
+// Exit code indicating the name a `rola vault unbind` was given is not bound
+pub const EC_ERR_VAULT_NOT_BOUND: i32 = 53;

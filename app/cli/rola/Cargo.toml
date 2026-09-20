@@ -13,3 +13,4 @@ rorolala-vault.workspace = true
 rorolala-workspace.workspace = true
 mingling.workspace = true
 rust-i18n.workspace = true
+dirs.workspace = true

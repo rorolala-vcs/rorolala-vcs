@@ -17,18 +17,23 @@ use rorolala_cli_setups::RorolalaSetup;
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
+mod address;
 mod cmd_create;
 mod cmd_init;
+mod cmd_vault;
 mod error;
 mod exit_codes;
 mod tools;
+mod user;
 
+use crate::address::AddressHistorySetup;
 use crate::exit_codes::EC_HELP;
 
 fn main() {
     let mut program = ThisProgram::new();
     program.with_setup(DefaultSetup);
     program.with_setup(RorolalaSetup);
+    program.with_setup(AddressHistorySetup);
     program.exec_and_exit();
 }
 

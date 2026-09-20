@@ -1,0 +1,131 @@
+_version: 2
+
+vault:
+  help:
+    en: |
+        List the Vaults this Workspace knows
+
+        **Usage**: `rola vault`
+
+        **Commands**
+            bind <NAME> <ADDR>  Bind a name to a Vault address, or change what it means
+            unbind <NAME>       Let a name go
+
+        The names are the Workspace's own: the same Vault may be `origin` here and something
+        else elsewhere. Each one is printed as its name and the address it answers at, in
+        name order.
+    zh-CN: |
+        列出当前工作区已知的保险库
+
+        **用法**：`rola vault`
+
+        **命令**
+            bind <NAME> <ADDR>  将名字绑定到保险库地址，或修改其含义
+            unbind <NAME>       解除名字的绑定
+
+        名字属于工作区自身：同一个保险库在这里叫 `origin`，在别处可能另有其名。
+        每个绑定按名字排序，依次输出名字与它对应的地址。
+
+  cmd_vault_description:
+    en: List the Vaults this Workspace knows
+    zh-CN: 列出当前工作区已知的保险库
+
+  result_none:
+    en: No Vault is bound
+    zh-CN: 尚未绑定任何保险库
+
+  err_config_unreadable:
+    en: Could not read the Workspace configuration at %{path}
+    zh-CN: 无法读取工作区配置：%{path}
+
+  err_config_unreadable_help:
+    en: Please fix the file and try again — %{reason}
+    zh-CN: 请修复该文件后重试 —— %{reason}
+
+vault_bind:
+  help:
+    en: |
+        Bind a name to a Vault address
+
+        **Usage**: `rola vault bind <NAME> <ADDR>`
+
+        `NAME` is the Workspace's own shorthand for a Vault, and naming one that is already
+        bound changes what it means. `ADDR` is an ip and a port, such as `127.0.0.1:7000`, or
+        an ip alone, which means the port a Vault listens on by default. The address is
+        remembered, so a later `bind` can offer it again.
+    zh-CN: |
+        将名字绑定到保险库地址
+
+        **用法**：`rola vault bind <NAME> <ADDR>`
+
+        `NAME` 是工作区为保险库起的简称；名字已存在时，再次绑定即为修改其含义。
+        `ADDR` 是 ip 与端口，例如 `127.0.0.1:7000`；也可以只写 ip，此时使用保险库的默认端口。
+        地址会被记住，方便下次 `bind` 时补全。
+
+  cmd_vault_bind_description:
+    en: Bind a name to a Vault address
+    zh-CN: 将名字绑定到保险库地址
+
+  result_bound:
+    en: Bound %{name} to %{address}
+    zh-CN: 已将 %{name} 绑定到 %{address}
+
+  result_changed:
+    en: Changed %{name} from %{previous} to %{address}
+    zh-CN: 已将 %{name} 从 %{previous} 改为 %{address}
+
+  err_name_missing:
+    en: A name is required
+    zh-CN: 缺少名字
+
+  err_name_missing_help:
+    en: Please name the Vault, as in `rola vault bind origin 127.0.0.1:7000`
+    zh-CN: 请给出保险库名字，例如 `rola vault bind origin 127.0.0.1:7000`
+
+  err_address_missing:
+    en: An address is required
+    zh-CN: 缺少地址
+
+  err_address_missing_help:
+    en: Please name the address, as in `rola vault bind origin 127.0.0.1:7000`
+    zh-CN: 请给出地址，例如 `rola vault bind origin 127.0.0.1:7000`
+
+  err_address_invalid:
+    en: "`%{address}` is not an ip"
+    zh-CN: "`%{address}` 不是 ip"
+
+  err_address_invalid_help:
+    en: Please write it as an ip, such as `127.0.0.1` or `127.0.0.1:7000`
+    zh-CN: 请写成 ip，例如 `127.0.0.1` 或 `127.0.0.1:7000`
+
+vault_unbind:
+  help:
+    en: |
+        Let a name go
+
+        **Usage**: `rola vault unbind <NAME>`
+
+        The name stops meaning a Vault. A name that was not bound is reported rather than
+        passed over in silence.
+    zh-CN: |
+        解除名字的绑定
+
+        **用法**：`rola vault unbind <NAME>`
+
+        该名字不再指代任何保险库。名字本就没有绑定时会报错，而不是默默略过。
+
+  cmd_vault_unbind_description:
+    en: Let a name go
+    zh-CN: 解除名字的绑定
+
+  result_unbound:
+    en: Unbound %{name} (%{address})
+    zh-CN: 已解除 %{name} 的绑定（%{address}）
+
+  err_not_bound:
+    en: "`%{name}` is not bound to a Vault"
+    zh-CN: "`%{name}` 未绑定到任何保险库"
+
+  err_not_bound_help:
+    en: Run `rola vault` to see the names that are bound
+    zh-CN: 运行 `rola vault` 查看已绑定的名字
