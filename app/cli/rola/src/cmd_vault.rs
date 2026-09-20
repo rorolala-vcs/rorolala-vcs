@@ -14,7 +14,7 @@ use mingling::{
         arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer, suggest,
     },
     metadata::Description,
-    picker::EntryPicker,
+    picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResWorkspaceConfig;
@@ -35,6 +35,14 @@ use crate::exit_codes::{
 /// The argument being completed is counted from the words after it, so this is what tells
 /// an address being typed from a name being typed.
 const BIND_NODE_TAIL: &str = "bind";
+
+/// The flags `rola vault bind` takes.
+#[derive(Pickable)]
+struct VaultBindFlags {
+    /// Also make the name the one the Workspace reaches for.
+    #[arg(long)]
+    set_default: Flag,
+}
 
 #[help(buffer)]
 pub fn help_vault(_: EntryVault, ec: &mut ResExitCode) {
@@ -57,11 +65,9 @@ pub fn vault(config: &mut LazyRes<ResWorkspaceConfig>) -> Next {
     match config.get_ref() {
         ResWorkspaceConfig::Read { config, .. } => ResultVaults::of(config).into(),
         ResWorkspaceConfig::Absent => ErrorWorkspaceNotExist.into(),
-        ResWorkspaceConfig::Unread { path, reason } => ErrorConfigUnreadable {
-            path: path.clone(),
-            reason: reason.clone(),
+        ResWorkspaceConfig::Unread { path, reason } => {
+            ErrorConfigUnreadable::new(path.clone(), reason.clone()).into()
         }
-        .into(),
     }
 }
 
@@ -83,18 +89,22 @@ pub fn desc_vault_bind() -> Description {
 /// The name is the Workspace's own, so the same Vault may be `origin` here and something
 /// else elsewhere. Naming one that is already bound is how its address is changed. The
 /// address is remembered for completion, whether or not the name had been bound before.
+///
+/// With `--set-default`, binding also [chooses](vault_set_default) the name to be reached
+/// for, which saves saying so twice.
 #[command(node = "vault.bind")]
 pub fn vault_bind(
     args: EntryVaultBind,
     config: &mut LazyRes<ResWorkspaceConfig>,
     history: &mut LazyRes<ResAddressHistory>,
 ) -> Next {
-    let pair = args
+    let picked = args
+        .pick(&arg![VaultBindFlags])
         .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
         .pick_or_route(&arg![String], || ErrorVaultAddressMissing.into())
         .to_result();
-    let (name, address) = match pair {
-        Ok(pair) => pair,
+    let (flags, name, address) = match picked {
+        Ok(picked) => picked,
         Err(next) => return next,
     };
 
@@ -108,19 +118,26 @@ pub fn vault_bind(
             let workspace = state.config_mut().unwrap();
             let replaced = workspace.vaults_mut().bind(name.clone(), address);
             history.get_mut().remember(address.to_string());
+
+            // The name is bound by now, so choosing it is choosing one that can be reached
+            // for. Picking a `Flag` cannot fail, so this is `Active` only when it was written.
+            let made_default = matches!(flags.set_default, Flag::Active);
+            if made_default {
+                let _ = workspace.default_config_mut().set_vault(name.clone());
+            }
+
             ResultVaultBound {
                 name,
                 address,
                 replaced,
+                made_default,
             }
             .into()
         }
         ResWorkspaceConfig::Absent => ErrorWorkspaceNotExist.into(),
-        ResWorkspaceConfig::Unread { path, reason } => ErrorConfigUnreadable {
-            path: path.clone(),
-            reason: reason.clone(),
+        ResWorkspaceConfig::Unread { path, reason } => {
+            ErrorConfigUnreadable::new(path.clone(), reason.clone()).into()
         }
-        .into(),
     }
 }
 
@@ -140,7 +157,8 @@ pub fn desc_vault_unbind() -> Description {
 /// Lets a name go, so it no longer means a Vault.
 ///
 /// A name that is not bound is not something to let go, so it is reported rather than
-/// passed over in silence.
+/// passed over in silence. A name that was the one [reached for](vault_set_default) by
+/// default goes along with it: a default that named nothing would reach nowhere.
 #[command(node = "vault.unbind")]
 pub fn vault_unbind(args: EntryVaultUnbind, config: &mut LazyRes<ResWorkspaceConfig>) -> Next {
     let name = match args
@@ -156,16 +174,77 @@ pub fn vault_unbind(args: EntryVaultUnbind, config: &mut LazyRes<ResWorkspaceCon
             // UNWRAP: the arm this is in shows there is a configuration to change.
             let workspace = state.config_mut().unwrap();
             match workspace.vaults_mut().unbind(&name) {
-                Some(address) => ResultVaultUnbound { name, address }.into(),
+                Some(address) => {
+                    let default_config = workspace.default_config_mut();
+                    let cleared_default = default_config.vault() == Some(name.as_str());
+                    if cleared_default {
+                        let _ = default_config.clear_vault();
+                    }
+
+                    ResultVaultUnbound {
+                        name,
+                        address,
+                        cleared_default,
+                    }
+                    .into()
+                }
                 None => ErrorVaultNotBound { name }.into(),
             }
         }
         ResWorkspaceConfig::Absent => ErrorWorkspaceNotExist.into(),
-        ResWorkspaceConfig::Unread { path, reason } => ErrorConfigUnreadable {
-            path: path.clone(),
-            reason: reason.clone(),
+        ResWorkspaceConfig::Unread { path, reason } => {
+            ErrorConfigUnreadable::new(path.clone(), reason.clone()).into()
         }
-        .into(),
+    }
+}
+
+#[help(buffer)]
+pub fn help_vault_set_default(_: EntryVaultSetDefault, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("vault_set_default.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryVaultSetDefault)]
+pub fn desc_vault_set_default() -> Description {
+    t!("vault_set_default.cmd_vault_set_default_description")
+        .to_string()
+        .into()
+}
+
+/// Chooses the Vault the Workspace reaches for when nothing else names one.
+///
+/// A default is what commands that would otherwise ask which Vault to reach for fall back
+/// on, so the name has to be one the Workspace knows: a default that named nothing would be
+/// a default that reached nowhere. Naming the one already chosen is not an error, only a
+/// choice made again.
+#[command(node = "vault.set-default")]
+pub fn vault_set_default(
+    args: EntryVaultSetDefault,
+    config: &mut LazyRes<ResWorkspaceConfig>,
+) -> Next {
+    let name = match args
+        .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
+        .to_result()
+    {
+        Ok(name) => name,
+        Err(next) => return next,
+    };
+
+    match config.get_mut() {
+        state @ ResWorkspaceConfig::Read { .. } => {
+            // UNWRAP: the arm this is in shows there is a configuration to change.
+            let workspace = state.config_mut().unwrap();
+            if !workspace.vaults().contains(&name) {
+                return ErrorVaultNotBound { name }.into();
+            }
+
+            let replaced = workspace.default_config_mut().set_vault(name.clone());
+            ResultVaultDefaultSet { name, replaced }.into()
+        }
+        ResWorkspaceConfig::Absent => ErrorWorkspaceNotExist.into(),
+        ResWorkspaceConfig::Unread { path, reason } => {
+            ErrorConfigUnreadable::new(path.clone(), reason.clone()).into()
+        }
     }
 }
 
@@ -174,6 +253,30 @@ pub fn vault_unbind(args: EntryVaultUnbind, config: &mut LazyRes<ResWorkspaceCon
 /// A name that is bound is one the command can act on, so those are what is offered.
 #[completion(EntryVaultUnbind)]
 pub fn complete_vault_unbind(
+    ctx: ShellContext,
+    config: &mut LazyRes<ResWorkspaceConfig>,
+) -> Suggest {
+    if ctx.current_word.starts_with('-') {
+        return suggest!();
+    }
+
+    let Some(config) = config.get_ref().config() else {
+        return suggest!();
+    };
+
+    let mut names: Vec<String> = config.vaults().names().cloned().collect();
+    names.sort();
+    names.retain(|name| name.starts_with(&ctx.current_word));
+
+    suggest! { names }
+}
+
+/// Completes what `rola vault set-default` can be given next.
+///
+/// Only a name that is bound can be reached for, so those are what is offered, the way
+/// `vault unbind` offers them.
+#[completion(EntryVaultSetDefault)]
+pub fn complete_vault_set_default(
     ctx: ShellContext,
     config: &mut LazyRes<ResWorkspaceConfig>,
 ) -> Suggest {
@@ -274,6 +377,8 @@ pub struct ResultVaultBound {
     address: SocketAddress,
     /// The address it was bound to before, if it was bound at all.
     replaced: Option<SocketAddress>,
+    /// Whether the name was also chosen to be reached for.
+    made_default: bool,
 }
 
 #[renderer(buffer)]
@@ -294,6 +399,37 @@ pub fn render_result_vault_bound(result: ResultVaultBound) {
     };
 
     r_println!("{}", rendered.trim());
+
+    if result.made_default {
+        r_println!(
+            "{}",
+            t!("vault_set_default.result_chosen", name = result.name).trim()
+        );
+    }
+}
+
+/// Result: a name was chosen to be reached for.
+#[derive(Grouped)]
+pub struct ResultVaultDefaultSet {
+    /// The name that is reached for now.
+    name: String,
+    /// The name that was reached for before, if one was.
+    replaced: Option<String>,
+}
+
+#[renderer(buffer)]
+pub fn render_result_vault_default_set(result: ResultVaultDefaultSet) {
+    let rendered = if let Some(previous) = result.replaced {
+        t!(
+            "vault_set_default.result_changed",
+            name = result.name,
+            previous = previous
+        )
+    } else {
+        t!("vault_set_default.result_chosen", name = result.name)
+    };
+
+    r_println!("{}", rendered.trim());
 }
 
 /// Result: a name was let go.
@@ -303,6 +439,8 @@ pub struct ResultVaultUnbound {
     name: String,
     /// The address it had been bound to.
     address: SocketAddress,
+    /// Whether it was also the one reached for by default.
+    cleared_default: bool,
 }
 
 #[renderer(buffer)]
@@ -316,6 +454,10 @@ pub fn render_result_vault_unbound(result: ResultVaultUnbound) {
         )
         .trim()
     );
+
+    if result.cleared_default {
+        r_println!("{}", t!("vault_set_default.result_cleared").trim());
+    }
 }
 
 /// Error: the Workspace's configuration could not be read.
@@ -325,6 +467,16 @@ pub struct ErrorConfigUnreadable {
     path: PathBuf,
     /// Why it could not be read.
     reason: String,
+}
+
+impl ErrorConfigUnreadable {
+    /// The error for a Workspace whose configuration would not read.
+    ///
+    /// A command outside this module that needs the configuration says so through this, since
+    /// the fields are the module's own.
+    pub(crate) fn new(path: PathBuf, reason: String) -> Self {
+        Self { path, reason }
+    }
 }
 
 #[renderer(buffer)]
@@ -394,7 +546,7 @@ pub fn render_error_vault_address_invalid(error: ErrorVaultAddressInvalid, ec: &
     ec.exit_code = EC_ERR_VAULT_ARGUMENT;
 }
 
-/// Error: the name a `rola vault unbind` was given is not bound to anything.
+/// Error: the name a `rola vault` command was given is not bound to anything.
 #[derive(Grouped)]
 pub struct ErrorVaultNotBound {
     /// The name that is not bound.
@@ -405,11 +557,8 @@ pub struct ErrorVaultNotBound {
 pub fn render_error_vault_not_bound(error: ErrorVaultNotBound, ec: &mut ResExitCode) {
     r_eprintln!(
         "{}",
-        err_line!(t!("vault_unbind.err_not_bound", name = error.name).trim())
+        err_line!(t!("vault.err_not_bound", name = error.name).trim())
     );
-    r_eprintln!(
-        "{}",
-        help_line!(t!("vault_unbind.err_not_bound_help").trim())
-    );
+    r_eprintln!("{}", help_line!(t!("vault.err_not_bound_help").trim()));
     ec.exit_code = EC_ERR_VAULT_NOT_BOUND;
 }

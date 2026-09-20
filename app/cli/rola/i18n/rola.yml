@@ -12,7 +12,7 @@ rola:
             account <ACCOUNT>   Name the account the work acts as, or list them
             tool-keygen <PATH>  Generate an Ed25519 key pair
             tool-handshake      Speak the handshake action to a Vault daemon
-            vault               List the Vaults this Workspace knows
+            vault               List, bind, and choose the Vaults this Workspace knows
 
         **Flags**
             -v, --vault  Act on a Vault instead of a Workspace
@@ -34,7 +34,7 @@ rola:
             account <ACCOUNT>   指定当前账户，或列出可用账户
             tool-keygen <PATH>  生成一对 Ed25519 密钥
             tool-handshake      向保险库守护进程发起握手
-            vault               列出当前工作区已知的保险库
+            vault               列出、绑定并选择工作区已知的保险库
 
         **标志**
             -v, --vault  操作保险库而不是工作区

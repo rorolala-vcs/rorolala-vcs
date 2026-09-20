@@ -8,8 +8,9 @@ vault:
         **Usage**: `rola vault`
 
         **Commands**
-            bind <NAME> <ADDR>  Bind a name to a Vault address, or change what it means
-            unbind <NAME>       Let a name go
+            bind <NAME> <ADDR>   Bind a name to a Vault address, or change what it means
+            unbind <NAME>        Let a name go
+            set-default <NAME>   Choose the Vault the Workspace reaches for
 
         The names are the Workspace's own: the same Vault may be `origin` here and something
         else elsewhere. Each one is printed as its name and the address it answers at, in
@@ -20,8 +21,9 @@ vault:
         **用法**：`rola vault`
 
         **命令**
-            bind <NAME> <ADDR>  将名字绑定到保险库地址，或修改其含义
-            unbind <NAME>       解除名字的绑定
+            bind <NAME> <ADDR>   将名字绑定到保险库地址，或修改其含义
+            unbind <NAME>        解除名字的绑定
+            set-default <NAME>   选择工作区默认使用的保险库
 
         名字属于工作区自身：同一个保险库在这里叫 `origin`，在别处可能另有其名。
         每个绑定按名字排序，依次输出名字与它对应的地址。
@@ -42,25 +44,39 @@ vault:
     en: Please fix the file and try again — %{reason}
     zh-CN: 请修复该文件后重试 —— %{reason}
 
+  err_not_bound:
+    en: "`%{name}` is not bound to a Vault"
+    zh-CN: "`%{name}` 未绑定到任何保险库"
+
+  err_not_bound_help:
+    en: Run `rola vault` to see the names that are bound
+    zh-CN: 运行 `rola vault` 查看已绑定的名字
+
 vault_bind:
   help:
     en: |
         Bind a name to a Vault address
 
-        **Usage**: `rola vault bind <NAME> <ADDR>`
+        **Usage**: `rola vault bind [--set-default] <NAME> <ADDR>`
 
         `NAME` is the Workspace's own shorthand for a Vault, and naming one that is already
         bound changes what it means. `ADDR` is an ip and a port, such as `127.0.0.1:7000`, or
         an ip alone, which means the port a Vault listens on by default. The address is
         remembered, so a later `bind` can offer it again.
+
+        With `--set-default`, the name also becomes the one the Workspace reaches for, as if
+        `rola vault set-default` had been run once the binding was made.
     zh-CN: |
         将名字绑定到保险库地址
 
-        **用法**：`rola vault bind <NAME> <ADDR>`
+        **用法**：`rola vault bind [--set-default] <NAME> <ADDR>`
 
         `NAME` 是工作区为保险库起的简称；名字已存在时，再次绑定即为修改其含义。
         `ADDR` 是 ip 与端口，例如 `127.0.0.1:7000`；也可以只写 ip，此时使用保险库的默认端口。
         地址会被记住，方便下次 `bind` 时补全。
+
+        加 `--set-default` 时，该名字同时成为工作区默认使用的保险库，
+        相当于绑定完成后再执行一次 `rola vault set-default`。
 
   cmd_vault_bind_description:
     en: Bind a name to a Vault address
@@ -106,13 +122,15 @@ vault_unbind:
         **Usage**: `rola vault unbind <NAME>`
 
         The name stops meaning a Vault. A name that was not bound is reported rather than
-        passed over in silence.
+        passed over in silence. A name that was the one reached for by default goes along
+        with it, since a default that named nothing would reach nowhere.
     zh-CN: |
         解除名字的绑定
 
         **用法**：`rola vault unbind <NAME>`
 
         该名字不再指代任何保险库。名字本就没有绑定时会报错，而不是默默略过。
+        若该名字正是默认使用的保险库，默认选择会一并清除，以免指向不存在的名字。
 
   cmd_vault_unbind_description:
     en: Let a name go
@@ -122,10 +140,38 @@ vault_unbind:
     en: Unbound %{name} (%{address})
     zh-CN: 已解除 %{name} 的绑定（%{address}）
 
-  err_not_bound:
-    en: "`%{name}` is not bound to a Vault"
-    zh-CN: "`%{name}` 未绑定到任何保险库"
+vault_set_default:
+  help:
+    en: |
+        Choose the Vault the Workspace reaches for
 
-  err_not_bound_help:
-    en: Run `rola vault` to see the names that are bound
-    zh-CN: 运行 `rola vault` 查看已绑定的名字
+        **Usage**: `rola vault set-default <NAME>`
+
+        `NAME` has to be one the Workspace has bound with `rola vault bind`. It becomes what a
+        command that would otherwise ask which Vault to reach for falls back on — `rola
+        tool-handshake` with nothing named, for one. Naming the one already chosen is not an
+        error, only a choice made again.
+    zh-CN: |
+        选择工作区默认使用的保险库
+
+        **用法**：`rola vault set-default <NAME>`
+
+        `NAME` 必须是工作区已用 `rola vault bind` 绑定的名字。它将成为那些本会询问
+        “要连哪个保险库”的命令的默认选择（例如不带参数的 `rola tool-handshake`）。
+        重复指定当前的选择不算错误。
+
+  cmd_vault_set_default_description:
+    en: Choose the Vault the Workspace reaches for
+    zh-CN: 选择工作区默认使用的保险库
+
+  result_chosen:
+    en: The Vault reached for by default is now `%{name}`
+    zh-CN: 默认使用的保险库已设为 `%{name}`
+
+  result_changed:
+    en: The Vault reached for by default is now `%{name}`, in place of `%{previous}`
+    zh-CN: 默认使用的保险库已从 `%{previous}` 改为 `%{name}`
+
+  result_cleared:
+    en: Nothing is reached for by default now
+    zh-CN: 现在不再有默认使用的保险库
