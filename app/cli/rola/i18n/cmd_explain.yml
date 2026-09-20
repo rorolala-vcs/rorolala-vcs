@@ -38,7 +38,7 @@ explain_exit_code:
         **Usage**: `rola explain exit-code [N]`
 
         `N` is the exit code to explain, and it has to be one the program states — they
-        are listed below. Naming none explains the code the run just before this one ended
+        are listed below. Naming none explains the code the last run that failed ended
         with, which is kept under the user's local data directory —
         `~/.local/share/rola/lastec` on a machine that follows the XDG layout.
 
@@ -53,7 +53,7 @@ explain_exit_code:
         **用法**：`rola explain exit-code [N]`
 
         `N` 是要解释的退出码，必须是本程序声明过的码 —— 它们列在下方。
-        不加 `N` 时解释上一次运行结束时的退出码，它保存在用户的本地数据目录下
+        不加 `N` 时解释上一次失败运行结束时的退出码，它保存在用户的本地数据目录下
         （遵循 XDG 的机器上是 `~/.local/share/rola/lastec`）。
 
         程序没有声明的码会报错而不是默默略过：一个没有任何码对应的数字，
@@ -70,16 +70,16 @@ explain_exit_code:
     zh-CN: "退出码 %{code}：%{meaning}"
 
   err_no_lastec:
-    en: No last exit code has been recorded
-    zh-CN: 尚未记录上一次运行的退出码
+    en: No failing run has been recorded to explain
+    zh-CN: 尚未记录任何可供解释的失败运行
 
   err_no_lastec_help:
     en: |
         Please name the code to explain, as in `rola explain exit-code 84`; one is recorded
-        as each run of `rola` ends
+        as each run that fails ends
     zh-CN: |
         请给出要解释的退出码，例如 `rola explain exit-code 84`；
-        每次运行 `rola` 结束时都会记录一个
+        每次运行以失败结束时都会记录一个
 
   err_unknown_code:
     en: "`%{code}` is not an exit code `rola` states"
@@ -90,8 +90,8 @@ explain_exit_code:
     zh-CN: 运行 `rola explain exit-code -h` 查看可用的退出码
 
   err_lastec_unknown:
-    en: "The last run ended with `%{code}`, which is not an exit code `rola` states"
-    zh-CN: "上一次运行以 `%{code}` 结束，而它不是 `rola` 声明过的退出码"
+    en: "The last run that failed ended with `%{code}`, which is not an exit code `rola` states"
+    zh-CN: "上一次失败运行以 `%{code}` 结束，而它不是 `rola` 声明过的退出码"
 
   err_lastec_unknown_help:
     en: Run `rola explain exit-code -h` to see the exit codes there are

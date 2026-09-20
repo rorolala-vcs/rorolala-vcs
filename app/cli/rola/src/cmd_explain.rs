@@ -10,8 +10,8 @@
 //! [`explain_ec`](crate::exit_codes::explain_ec), and the words they name live in the
 //! locale files, so a code is spoken in the run's language rather than in the program's.
 //!
-//! The code a run is usually asking about is the one it just ended with, so `explain
-//! exit-code` with nothing named reaches for the code the run before this one ended with,
+//! The code a run is usually asking about is the one it failed with, so `explain
+//! exit-code` with nothing named reaches for the code the last run that failed ended with,
 //! kept under the user's local data directory.
 
 use mingling::{
@@ -85,11 +85,11 @@ pub fn desc_explain_exit_code() -> Description {
         .into()
 }
 
-/// Explains the exit code named, or the one the last run ended with.
+/// Explains the exit code named, or the one the last run that failed ended with.
 ///
-/// Naming no code asks about the run just before this one, whose exit code is recorded as
+/// Naming no code asks about the last run that went wrong, whose exit code is recorded as
 /// it ends. A code the program states is spoken in the run's language; one it does not is
-/// reported rather than passed over, whether it was named or read from the last run, since
+/// reported rather than passed over, whether it was named or read from that record, since
 /// a number no code stands for is not something there is anything of the program to say.
 ///
 /// # Errors
@@ -185,10 +185,10 @@ pub fn render_error_unknown_exit_code(error: ErrorUnknownExitCode, ec: &mut ResE
     ec.exit_code = EC_ERR_EXPLAIN_UNKNOWN;
 }
 
-/// Error: the code the last run ended with is not one the program states.
+/// Error: the code the last run that failed ended with is not one the program states.
 #[derive(Grouped)]
 pub struct ErrorLastExitCodeUnknown {
-    /// The code the last run ended with.
+    /// The code the last run that failed ended with.
     code: i32,
 }
 

@@ -54,13 +54,27 @@ fn main() {
     program.with_setup(AddressHistorySetup);
     program.with_setup(CurrentAccountSetup);
 
+    // Whether this run is the shell asking what could be typed rather than a run of the
+    // program. It is read before the program is run, since running it consumes it.
+    let completing = program.is_completing();
+
     let exit_code = program.exec();
 
-    // The run is over, and its exit code is the one `rola explain exit-code` explains when
-    // it is given nothing: recording it here is what makes "the run before" a thing the
-    // program can be asked about. It is kept under the user's local data directory, so a
-    // machine that names none simply has nothing recorded.
-    lastec::record(exit_code);
+    // A completion run is not a run: the shell is asking what could be typed, so there is
+    // nothing it did to explain and nothing about it to remember. It ends with nothing
+    // wrong either, so that completing a command never marks a prompt as failed.
+    if completing {
+        std::process::exit(0);
+    }
+
+    // Only a run that failed is worth explaining, so a run that did nothing wrong leaves
+    // the record as it was: `rola explain exit-code` then speaks about the last run that
+    // went wrong rather than about the last run there was, which is the one a reader has a
+    // question about. It is kept under the user's local data directory, so a machine that
+    // names none simply has nothing recorded.
+    if exit_code != 0 {
+        lastec::record(exit_code);
+    }
 
     std::process::exit(exit_code);
 }
