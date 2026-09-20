@@ -2,6 +2,16 @@ _version: 2
 
 error:
   vault_creation:
+    err_dir_create_failed:
+      en: Failed to create the directory the vault keeps its configuration in
+      zh-CN: 创建保险库存放配置的目录失败
+
+    err_dir_create_failed_help:
+      en: |
+          Please check the write permission of the target path, then try again
+      zh-CN: |
+          请检查目标路径的写权限，然后重试
+
     err_config_locked:
       en: Failed to read the staging file to check whether it already exists
       zh-CN: 读取暂存文件以检查其是否已存在失败

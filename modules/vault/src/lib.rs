@@ -56,3 +56,11 @@ impl Locate for Vault {
         self.current_dir.as_path()
     }
 }
+
+impl Vault {
+    /// The file this Vault keeps its configuration in.
+    #[must_use]
+    pub fn config_path(&self) -> PathBuf {
+        self.current_dir.join(CONFIG_PATH)
+    }
+}

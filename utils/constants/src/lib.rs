@@ -36,6 +36,14 @@ pub const VAULT_CONFIG_PATH: &str = "./vault.toml";
 #[lazyffi(export = ROLA_VAULT_KEYS_DIR)]
 pub const VAULT_KEYS_DIR: &str = "./keys/";
 
+/// The port a Vault's daemon listens on when its configuration names no other.
+///
+/// It is a port of its own rather than an ephemeral one, so that a Vault has one address to
+/// be reached at without being told it every time. It is also what an address written without
+/// a port means, which is why it lives here beside the rest of the layout rather than only in
+/// the configuration that happens to read it.
+pub const VAULT_DEFAULT_PORT: u16 = 7717;
+
 /// Keys of a global (machine-wide) scope, under the filesystem root
 pub const GLOBAL_KEYS_DIR: &str = ".rola/keys";
 

@@ -8,13 +8,14 @@ listen:
         **Usage**: `rola-daemon listen`
 
         The Vault the current directory is inside is served: the daemon binds the port in
-        `vault.toml` and runs every action a Workspace asks for. It stops on Ctrl-C.
+        `vault.toml` — 7717 unless the Vault says otherwise — and runs every action a
+        Workspace asks for. It stops on Ctrl-C.
     zh-CN: |
         作为本保险库的守护进程持续服务
 
         **用法**：`rola-daemon listen`
 
-        服务当前目录所在的保险库：守护进程绑定 `vault.toml` 中的端口，
+        服务当前目录所在的保险库：守护进程绑定 `vault.toml` 中的端口（默认为 7717），
         并执行工作区请求的每一个动作。按 Ctrl-C 停止。
 
   cmd_listen_description:

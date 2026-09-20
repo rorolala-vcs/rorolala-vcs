@@ -4,6 +4,8 @@ use rorolala_utils_lazyffi::lazyffi;
 #[lazyffi(export = VaultCreationError)]
 #[derive(Debug)]
 pub enum CreationError {
+    /// Failure when the directory the Vault keeps its configuration in cannot be created
+    DirCreateFailed,
     /// Failure when reading the staging file to check if it already exists
     ConfigLocked,
     /// Failure when rendering the default value into the configuration format

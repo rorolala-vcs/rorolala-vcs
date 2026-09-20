@@ -12,6 +12,16 @@ import_type!(ErrorVaultCreation = rorolala_vault::CreationError);
 #[renderer(buffer)]
 pub fn render_error_vault_creation(err: ErrorVaultCreation, ec: &mut ResExitCode) {
     match err {
+        rorolala_vault::CreationError::DirCreateFailed => {
+            r_eprintln!(
+                "{}",
+                err_line!(t!("error.vault_creation.err_dir_create_failed")).trim()
+            );
+            r_eprintln!(
+                "{}",
+                help_line!(t!("error.vault_creation.err_dir_create_failed_help")).trim()
+            );
+        }
         rorolala_vault::CreationError::ConfigLocked => {
             r_eprintln!(
                 "{}",
