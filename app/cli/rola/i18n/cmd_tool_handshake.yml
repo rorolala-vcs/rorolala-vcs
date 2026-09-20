@@ -47,16 +47,6 @@ tool_handshake:
         请给出名字或地址，例如 `rola tool-handshake origin` 或 `rola tool-handshake 127.0.0.1:7717`；
         也可以运行 `rola vault set-default <NAME>` 选定默认保险库，以后就不必每次指定
 
-  err_no_account:
-    en: No account was named to act as
-    zh-CN: 未指定以哪个账户行事
-
-  err_no_account_help:
-    en: |
-        Please run `rola account <ACCOUNT>` to name the account the work acts as
-    zh-CN: |
-        请运行 `rola account <ACCOUNT>` 指定当前使用的账户
-
   err_account_unknown:
     en: "`%{name}` is not an account the work can act as"
     zh-CN: "`%{name}` 不是当前工作可以使用的账户"

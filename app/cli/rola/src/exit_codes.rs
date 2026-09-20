@@ -36,9 +36,6 @@ pub const EC_ERR_TOOL_KEYGEN_INSTALL_FAILED: i32 = 45;
 // Exit code indicating the target or the input a handshake needs is missing
 pub const EC_ERR_TOOL_HANDSHAKE_ARGUMENT: i32 = 46;
 
-// Exit code indicating no account could be named to act as
-pub const EC_ERR_TOOL_HANDSHAKE_NO_ACCOUNT: i32 = 47;
-
 // Configuration
 
 // Exit code indicating the configuration the run works from could not be read
@@ -59,6 +56,9 @@ pub const EC_ERR_ACCOUNT_NOT_FOUND: i32 = 61;
 
 // Exit code indicating the machine does not name where Rorolala keeps the user's files
 pub const EC_ERR_ACCOUNT_NO_DIR: i32 = 62;
+
+// Exit code indicating the work acts as no account, which the command needs
+pub const EC_ERR_ACCOUNT_NOT_BOUND: i32 = 63;
 
 // Placement
 

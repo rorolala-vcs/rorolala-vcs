@@ -22,9 +22,7 @@ use rust_i18n::t;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::error::ErrorConfigUnreadable;
-use crate::exit_codes::{
-    EC_ERR_TOOL_HANDSHAKE_ARGUMENT, EC_ERR_TOOL_HANDSHAKE_NO_ACCOUNT, EC_HELP,
-};
+use crate::exit_codes::{EC_ERR_ACCOUNT_NOT_FOUND, EC_ERR_TOOL_HANDSHAKE_ARGUMENT, EC_HELP};
 use crate::keys::account_named;
 
 #[help(buffer)]
@@ -59,6 +57,7 @@ pub fn desc_tool_handshake() -> Description {
 /// the renderer that knows it, so the failure is reported where every other action failure
 /// is.
 ///
+/// [`ErrorNoAccount`]: crate::account::ErrorNoAccount
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "tool-handshake", routeify)]
 pub fn tool_handshake(
@@ -81,9 +80,9 @@ pub fn tool_handshake(
 
     let target = address_of(place, config.get_ref());
 
-    let Some(name) = current.get_ref().name().map(str::to_string) else {
-        return ErrorNoAccount.into();
-    };
+    // `?` here is `routeify`'s as well: the account the work acts as is the resource's to
+    // hand over, and a run that acts as none leaves through it.
+    let name = current.get_ref().must_bind()?;
 
     let Some(account) = account_named(
         &name,
@@ -186,20 +185,6 @@ pub fn render_error_handshake_arguments(_: ErrorHandshakeArguments, ec: &mut Res
     ec.exit_code = EC_ERR_TOOL_HANDSHAKE_ARGUMENT;
 }
 
-/// Error: no account was named to act as.
-#[derive(Grouped)]
-pub struct ErrorNoAccount;
-
-#[renderer(buffer)]
-pub fn render_error_no_account(_: ErrorNoAccount, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("tool_handshake.err_no_account").trim()));
-    r_eprintln!(
-        "{}",
-        help_line!(t!("tool_handshake.err_no_account_help").trim())
-    );
-    ec.exit_code = EC_ERR_TOOL_HANDSHAKE_NO_ACCOUNT;
-}
-
 /// Error: the account named to act as is not there.
 #[derive(Grouped)]
 pub struct ErrorAccountUnknown {
@@ -217,5 +202,5 @@ pub fn render_error_account_unknown(error: ErrorAccountUnknown, ec: &mut ResExit
         "{}",
         help_line!(t!("tool_handshake.err_account_unknown_help").trim())
     );
-    ec.exit_code = EC_ERR_TOOL_HANDSHAKE_NO_ACCOUNT;
+    ec.exit_code = EC_ERR_ACCOUNT_NOT_FOUND;
 }

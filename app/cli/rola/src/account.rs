@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::Path;
 
-use mingling::{LazyInit, ProgramCollect, setup::ProgramSetup};
+use mingling::{Grouped, LazyInit, ProgramCollect, setup::ProgramSetup};
 
 use crate::user::account_path;
 
@@ -30,6 +30,18 @@ impl ResCurrentAccount {
     #[must_use]
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
+    }
+
+    /// The account the work acts as.
+    ///
+    /// A command that cannot do its work without acting as someone asks this, and is handed
+    /// the name as an account there is rather than as a choice that may not have been made.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorNoAccount`] when the work acts as no account.
+    pub fn must_bind(&self) -> Result<String, ErrorNoAccount> {
+        self.name().map(str::to_string).ok_or(ErrorNoAccount)
     }
 
     /// Names the account the work acts as.
@@ -75,6 +87,14 @@ impl ResCurrentAccount {
         let _ = fs::write(path, format!("{name}\n"));
     }
 }
+
+/// Error: the work does not act as any account.
+///
+/// Acting as someone is the same thing a client proves over a channel, so a command that
+/// speaks to a Vault has nothing to say without it. [`ResCurrentAccount::must_bind`] is where
+/// a command asks.
+#[derive(Grouped)]
+pub struct ErrorNoAccount;
 
 /// Registers the account the work acts as, so commands can read it and name it.
 ///
