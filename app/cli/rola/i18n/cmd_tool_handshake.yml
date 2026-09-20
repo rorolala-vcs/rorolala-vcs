@@ -13,6 +13,9 @@ tool_handshake:
         introduces itself by that name, so the call needs nothing else; what the daemon answers
         is printed as it is.
 
+        Naming no `VAULT` reaches for the one the Workspace was told to reach for by default
+        with `rola vault set-default`.
+
         `rola-daemon listen` is the other side of this exchange.
     zh-CN: |
         向保险库守护进程发起一次握手
@@ -22,6 +25,8 @@ tool_handshake:
         `VAULT` 指要连的守护进程：可以是工作区用 `rola vault bind` 绑定的名字，也可以是
         ip（不写端口时使用保险库的默认端口）。动作以当前工作所使用的账户（由 `rola account`
         指定）行事，并以该账户的名字自报家门，所以不需要别的参数；守护进程的回答会原样输出。
+
+        不指定 `VAULT` 时，使用工作区通过 `rola vault set-default` 选定的默认保险库。
 
         `rola-daemon listen` 则是这次对话的另一端。
 
@@ -35,10 +40,12 @@ tool_handshake:
 
   err_arguments_help:
     en: |
-        Please name it, as in `rola tool-handshake origin` or `rola tool-handshake
-        127.0.0.1:7717`
+        Please name one, as in `rola tool-handshake origin` or `rola tool-handshake
+        127.0.0.1:7717`, or run `rola vault set-default <NAME>` to choose a Vault to reach
+        for without naming it every time
     zh-CN: |
-        请给出名字或地址，例如 `rola tool-handshake origin` 或 `rola tool-handshake 127.0.0.1:7717`
+        请给出名字或地址，例如 `rola tool-handshake origin` 或 `rola tool-handshake 127.0.0.1:7717`；
+        也可以运行 `rola vault set-default <NAME>` 选定默认保险库，以后就不必每次指定
 
   err_no_account:
     en: No account was named to act as

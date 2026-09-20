@@ -58,8 +58,9 @@ pub fn desc_vault() -> Description {
 /// Lists the Vaults this Workspace knows.
 ///
 /// Each one is printed as the name it is known by and the address it answers at, in name
-/// order. A Workspace that knows none prints nothing about any, and one that cannot be
-/// found beside the current directory is an error, since there is nothing to list from.
+/// order, and the one the Workspace reaches for by default is marked. A Workspace that knows
+/// none prints nothing about any, and one that cannot be found beside the current directory is
+/// an error, since there is nothing to list from.
 #[command(node = "vault")]
 pub fn vault(config: &mut LazyRes<ResWorkspaceConfig>) -> Next {
     match config.get_ref() {
@@ -334,10 +335,12 @@ fn positional(ctx: &ShellContext) -> usize {
 pub struct ResultVaults {
     /// Each Vault, by name and address, in name order.
     vaults: Vec<(String, SocketAddress)>,
+    /// The Vault the Workspace reaches for, if one has been chosen.
+    current: Option<String>,
 }
 
 impl ResultVaults {
-    /// The Vaults of `config`, in name order.
+    /// The Vaults of `config`, in name order, and the one it reaches for.
     fn of(config: &WorkspaceConfig) -> Self {
         let mut vaults: Vec<(String, SocketAddress)> = config
             .vaults()
@@ -346,7 +349,10 @@ impl ResultVaults {
             .collect();
         vaults.sort_by(|left, right| left.0.cmp(&right.0));
 
-        Self { vaults }
+        Self {
+            vaults,
+            current: config.default_config().vault().map(str::to_string),
+        }
     }
 }
 
@@ -363,7 +369,12 @@ pub fn render_result_vaults(result: ResultVaults) {
             .unwrap_or_default();
 
         for (name, address) in result.vaults {
-            r_println!("{name:<width$}  {address}");
+            let vault = format!("{name:<width$}  {address}");
+            if result.current.as_deref() == Some(name.as_str()) {
+                r_println!("{}", t!("vault.result_current", vault = vault).trim());
+            } else {
+                r_println!("{vault}");
+            }
         }
     }
 }

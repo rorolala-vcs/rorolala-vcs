@@ -14,7 +14,7 @@ vault:
 
         The names are the Workspace's own: the same Vault may be `origin` here and something
         else elsewhere. Each one is printed as its name and the address it answers at, in
-        name order.
+        name order, and the one reached for by default is marked `(current)`.
     zh-CN: |
         列出当前工作区已知的保险库
 
@@ -26,7 +26,7 @@ vault:
             set-default <NAME>   选择工作区默认使用的保险库
 
         名字属于工作区自身：同一个保险库在这里叫 `origin`，在别处可能另有其名。
-        每个绑定按名字排序，依次输出名字与它对应的地址。
+        每个绑定按名字排序，依次输出名字与它对应的地址，默认使用的那个会标上 `（当前）`。
 
   cmd_vault_description:
     en: List the Vaults this Workspace knows
@@ -35,6 +35,10 @@ vault:
   result_none:
     en: No Vault is bound
     zh-CN: 尚未绑定任何保险库
+
+  result_current:
+    en: "%{vault} (current)"
+    zh-CN: "%{vault}（当前）"
 
   err_config_unreadable:
     en: Could not read the Workspace configuration at %{path}

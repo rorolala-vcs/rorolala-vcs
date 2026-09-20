@@ -21,6 +21,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::cmd_vault::ErrorConfigUnreadable;
 use crate::exit_codes::{
     EC_ERR_TOOL_HANDSHAKE_ARGUMENT, EC_ERR_TOOL_HANDSHAKE_NO_ACCOUNT, EC_HELP,
 };
@@ -42,17 +43,21 @@ pub fn desc_tool_handshake() -> Description {
 /// Speaks the handshake action to a Vault, and prints what it answers.
 ///
 /// `VAULT` names the daemon to reach: a name the Workspace has [bound](crate::cmd_vault), or
-/// an ip and a port. The action runs as the account the work acts as — the one `rola account`
-/// names, which is the same choice every other command makes — and what it introduces itself
-/// with is that account's name, so the call needs nothing else.
+/// an ip and a port. Naming none reaches for the one the Workspace
+/// [reaches for by default](crate::cmd_vault::vault_set_default), which is the same thing
+/// `rola vault set-default` chose. The action runs as the account the work acts as — the one
+/// `rola account` names, which is the same choice every other command makes — and what it
+/// introduces itself with is that account's name, so the call needs nothing else.
 ///
 /// # Errors
 ///
-/// Renders [`ErrorHandshakeArguments`] when no Vault is named, [`ErrorNoAccount`] when no
-/// account is named to act as, and [`ErrorAccountUnknown`] when the one named is not there.
-/// What the exchange itself fails with is routed on: `routeify` sends the [`ActionError`] the
-/// daemon call raises to the renderer that knows it, so the failure is reported where every
-/// other action failure is.
+/// Renders [`ErrorHandshakeArguments`] when no Vault is named and none is reached for by
+/// default, [`ErrorConfigUnreadable`] when the Workspace's configuration would not read and
+/// there was no other Vault to reach, [`ErrorNoAccount`] when no account is named to act as,
+/// and [`ErrorAccountUnknown`] when the one named is not there. What the exchange itself
+/// fails with is routed on: `routeify` sends the [`ActionError`] the daemon call raises to
+/// the renderer that knows it, so the failure is reported where every other action failure
+/// is.
 ///
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "tool-handshake", routeify)]
@@ -63,9 +68,15 @@ pub fn tool_handshake(
     config: &mut LazyRes<ResWorkspaceConfig>,
     current: &mut LazyRes<ResCurrentAccount>,
 ) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`.
-    let Some(place) = args.pick(&arg![Option<String>]).unwrap() else {
-        return ErrorHandshakeArguments.into();
+    // Picking cannot fail: a positional that is absent is `None`. Naming no Vault is how the
+    // Workspace's own choice is reached for, so that is what is asked next.
+    let place = match args.pick(&arg![Option<String>]).unwrap() {
+        Some(place) => place,
+        None => match default_vault(config.get_ref()) {
+            Ok(Some(place)) => place,
+            Ok(None) => return ErrorHandshakeArguments.into(),
+            Err(next) => return next,
+        },
     };
 
     let target = address_of(place, config.get_ref());
@@ -117,6 +128,24 @@ pub fn complete_tool_handshake(
     names.retain(|name| name.starts_with(&ctx.current_word));
 
     suggest! { names }
+}
+
+/// The Vault the Workspace reaches for, when nothing named one.
+///
+/// A Workspace that is not there has no choice to hand back, which is not an error: a daemon
+/// can be reached without a Workspace at all. One whose configuration will not read is
+/// another matter — there may well be a choice in it — so it is reported rather than passed
+/// over, which is what the `Err` holds.
+fn default_vault(config: &ResWorkspaceConfig) -> Result<Option<String>, Next> {
+    match config {
+        ResWorkspaceConfig::Read { config, .. } => {
+            Ok(config.default_config().vault().map(str::to_string))
+        }
+        ResWorkspaceConfig::Absent => Ok(None),
+        ResWorkspaceConfig::Unread { path, reason } => {
+            Err(ErrorConfigUnreadable::new(path.clone(), reason.clone()).into())
+        }
+    }
 }
 
 /// The address to reach: what `place` names in the Workspace's Vaults, or `place` itself.
