@@ -1,0 +1,35 @@
+_version: 2
+
+error:
+  placement:
+    err_should_in_workspace:
+      en: This command works on a Workspace, and this run is not inside one
+      zh-CN: 该命令需要在工作区中运行，而当前不在任何工作区内
+
+    err_should_in_workspace_help:
+      en: |
+        Please run it inside one — `rola create <PATH>` makes a Workspace, and
+        `--workspace-dir <PATH>` works in one that is already there
+      zh-CN: |
+        请在某个工作区内运行 —— `rola create <PATH>` 可以创建工作区，
+        `--workspace-dir <PATH>` 可以指定已有的工作区
+
+    err_should_in_vault:
+      en: This command works on a Vault, and this run is not inside one
+      zh-CN: 该命令需要在保险库中运行，而当前不在任何保险库内
+
+    err_should_in_vault_help:
+      en: |
+        Please run it inside one — `rola create --vault <PATH>` makes a Vault, and
+        `--vault-dir <PATH>` works in one that is already there
+      zh-CN: |
+        请在某个保险库内运行 —— `rola create --vault <PATH>` 可以创建保险库，
+        `--vault-dir <PATH>` 可以指定已有的保险库
+
+    err_config_unreadable:
+      en: Could not read the Workspace configuration at %{path}
+      zh-CN: 无法读取工作区配置：%{path}
+
+    err_config_unreadable_help:
+      en: Please fix the file and try again — %{reason}
+      zh-CN: 请修复该文件后重试 —— %{reason}

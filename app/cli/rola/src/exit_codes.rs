@@ -39,10 +39,12 @@ pub const EC_ERR_TOOL_HANDSHAKE_ARGUMENT: i32 = 46;
 // Exit code indicating no account could be named to act as
 pub const EC_ERR_TOOL_HANDSHAKE_NO_ACCOUNT: i32 = 47;
 
-// Vaults
+// Configuration
 
-// Exit code indicating the Workspace configuration could not be read
-pub const EC_ERR_VAULT_CONFIG: i32 = 51;
+// Exit code indicating the configuration the run works from could not be read
+pub const EC_ERR_CONFIG_UNREADABLE: i32 = 51;
+
+// Vaults
 
 // Exit code indicating a `rola vault` command was given arguments it cannot use
 pub const EC_ERR_VAULT_ARGUMENT: i32 = 52;
@@ -57,6 +59,14 @@ pub const EC_ERR_ACCOUNT_NOT_FOUND: i32 = 61;
 
 // Exit code indicating the machine does not name where Rorolala keeps the user's files
 pub const EC_ERR_ACCOUNT_NO_DIR: i32 = 62;
+
+// Placement
+
+// Exit code indicating the run is not inside a Workspace, which the command needs
+pub const EC_ERR_SHOULD_IN_WORKSPACE: i32 = 71;
+
+// Exit code indicating the run is not inside a Vault, which the command needs
+pub const EC_ERR_SHOULD_IN_VAULT: i32 = 72;
 
 // Actions
 

@@ -21,7 +21,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::cmd_vault::ErrorConfigUnreadable;
+use crate::error::ErrorConfigUnreadable;
 use crate::exit_codes::{
     EC_ERR_TOOL_HANDSHAKE_ARGUMENT, EC_ERR_TOOL_HANDSHAKE_NO_ACCOUNT, EC_HELP,
 };

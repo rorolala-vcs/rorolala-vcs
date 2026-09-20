@@ -40,14 +40,6 @@ vault:
     en: "%{vault} (current)"
     zh-CN: "%{vault}（当前）"
 
-  err_config_unreadable:
-    en: Could not read the Workspace configuration at %{path}
-    zh-CN: 无法读取工作区配置：%{path}
-
-  err_config_unreadable_help:
-    en: Please fix the file and try again — %{reason}
-    zh-CN: 请修复该文件后重试 —— %{reason}
-
   err_not_bound:
     en: "`%{name}` is not bound to a Vault"
     zh-CN: "`%{name}` 未绑定到任何保险库"

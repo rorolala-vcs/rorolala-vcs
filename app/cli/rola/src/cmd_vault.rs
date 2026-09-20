@@ -5,8 +5,6 @@
 //! naming no name lists them all. The configuration is a resource, so a change made here is
 //! written back once the program is done with it.
 
-use std::path::PathBuf;
-
 use librorolala::protocol::parse_address;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
@@ -26,9 +24,8 @@ use rust_i18n::t;
 use crate::Next;
 use crate::address::ResAddressHistory;
 use crate::cmd_create::ErrorWorkspaceNotExist;
-use crate::exit_codes::{
-    EC_ERR_VAULT_ARGUMENT, EC_ERR_VAULT_CONFIG, EC_ERR_VAULT_NOT_BOUND, EC_HELP,
-};
+use crate::error::ErrorConfigUnreadable;
+use crate::exit_codes::{EC_ERR_VAULT_ARGUMENT, EC_ERR_VAULT_NOT_BOUND, EC_HELP};
 
 /// The last word of the two `rola vault bind` is dispatched by.
 ///
@@ -469,44 +466,6 @@ pub fn render_result_vault_unbound(result: ResultVaultUnbound) {
     if result.cleared_default {
         r_println!("{}", t!("vault_set_default.result_cleared").trim());
     }
-}
-
-/// Error: the Workspace's configuration could not be read.
-#[derive(Grouped)]
-pub struct ErrorConfigUnreadable {
-    /// The file that could not be read.
-    path: PathBuf,
-    /// Why it could not be read.
-    reason: String,
-}
-
-impl ErrorConfigUnreadable {
-    /// The error for a Workspace whose configuration would not read.
-    ///
-    /// A command outside this module that needs the configuration says so through this, since
-    /// the fields are the module's own.
-    pub(crate) fn new(path: PathBuf, reason: String) -> Self {
-        Self { path, reason }
-    }
-}
-
-#[renderer(buffer)]
-pub fn render_error_config_unreadable(error: ErrorConfigUnreadable, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(
-            t!(
-                "vault.err_config_unreadable",
-                path = error.path.display().to_string()
-            )
-            .trim()
-        )
-    );
-    r_eprintln!(
-        "{}",
-        help_line!(t!("vault.err_config_unreadable_help", reason = error.reason).trim())
-    );
-    ec.exit_code = EC_ERR_VAULT_CONFIG;
 }
 
 /// Error: the name a `rola vault bind` or `rola vault unbind` was given is missing.
