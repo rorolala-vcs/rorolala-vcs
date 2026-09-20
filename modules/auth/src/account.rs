@@ -74,21 +74,29 @@ impl Account {
     /// came with one.
     ///
     /// The `.pem` is what an account proves itself *with*; a `.pub` beside it is what it
-    /// asks its peer to prove. An account without one has nothing to check an answer
-    /// against, so a client is only challenged rather than challenging back.
+    /// asks its peer to prove. It only asks when the two say different things: a `.pub`
+    /// holding the account's own key is the pair a key generator wrote beside the `.pem`, not
+    /// a word about the peer, and holding a peer to it would be asking the peer to be this
+    /// account. An account without one has nothing to check an answer against, so a client is
+    /// only challenged rather than challenging back.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Io`] if a public key file is there but cannot be read, and
-    /// [`Error::Malformed`] if it does not hold a public key this build understands.
+    /// Returns [`Error::Io`] if a key file is there but cannot be read, and
+    /// [`Error::Malformed`] if one does not hold a key this build understands.
     pub fn peer_key(&self) -> Result<Option<PublicKey>, Error> {
         let Some(path) = &self.public_path else {
             return Ok(None);
         };
 
         let pem = fs::read_to_string(path)?;
+        let found = PublicKey::from_pem(&pem)?;
 
-        Ok(Some(PublicKey::from_pem(&pem)?))
+        if found == self.get_pub_key()? {
+            return Ok(None);
+        }
+
+        Ok(Some(found))
     }
 }
 
@@ -216,7 +224,9 @@ mod tests {
     }
 
     #[test]
-    fn an_account_with_a_public_key_beside_it_holds_its_peer_to_it() {
+    fn an_account_whose_public_key_beside_it_is_its_own_holds_no_peer_to_it() {
+        // A key generator writes a pair of the same identity, so the `.pub` says what the
+        // account *is* rather than what its peer must be.
         let signing = Ed25519SigningKey::from_bytes(&[5; 32]);
         let file = path("carol.pem");
         let public = path("carol.pub");
@@ -230,9 +240,28 @@ mod tests {
 
         let account = Account::new("carol".to_string(), file, Some(public));
 
+        assert!(account.peer_key().unwrap().is_none());
+    }
+
+    #[test]
+    fn an_account_with_a_peer_public_key_beside_it_holds_its_peer_to_it() {
+        let signing = Ed25519SigningKey::from_bytes(&[7; 32]);
+        let peer = Ed25519SigningKey::from_bytes(&[8; 32]);
+        let file = path("erin.pem");
+        let public = path("erin.pub");
+        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
+        let spki = peer
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap();
+        fs::write(&file, pem.as_str()).unwrap();
+        fs::write(&public, spki).unwrap();
+
+        let account = Account::new("erin".to_string(), file, Some(public));
+
         assert_eq!(
             account.peer_key().unwrap().unwrap().as_bytes(),
-            signing.verifying_key().to_bytes()
+            peer.verifying_key().to_bytes()
         );
     }
 
