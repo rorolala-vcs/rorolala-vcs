@@ -75,27 +75,3 @@ pub async fn do_action_with(
 
     entry.run(ctx).await
 }
-
-/// Runs the action `id` names, blocking until it has.
-///
-/// This is the entry point the C ABI can export. The context it runs against is the
-/// daemon's own, which is not built yet — the same piece `proc_action` is missing.
-///
-/// # Errors
-///
-/// Returns what [`do_action_with`] does, or [`ActionError::Io`](rorolala_protocol::ActionError::Io)
-/// if the runtime cannot be built.
-///
-/// # Panics
-///
-/// Panics when the daemon's context is asked for: there is none yet.
-// The daemon's context is the one piece still missing, so the call after its `todo!()` is
-// unreachable until the daemon's session is wired up.
-#[allow(unreachable_code)]
-pub fn do_action(
-    registry: &[std::option::Option<std::boxed::Box<dyn ActionEntry>>],
-    id: u32,
-) -> Result<String, rorolala_protocol::ActionError> {
-    let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(do_action_with(registry, id, todo!("the daemon's context")))
-}
