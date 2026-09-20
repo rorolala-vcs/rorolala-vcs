@@ -1,8 +1,9 @@
 //! The `rola tool-handshake` command: speak the handshake action to a Vault.
 //!
-//! It is the handshake on its own, with no Workspace in the way: a daemon is reached directly
-//! at an ip and a port and the action runs as the account the caller names, so a daemon can be
-//! checked from anywhere a key is.
+//! It is the handshake on its own, with none of the work in the way: the Vault is reached
+//! where the Workspace says it answers, or at an address the caller gives, and the action runs
+//! as the account the work acts as, so a daemon can be checked from anywhere a Workspace and a
+//! key are.
 
 use librorolala::daemon::action_handshake;
 use mingling::{
@@ -15,14 +16,13 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResVault, ResWorkspace, ResWorkspaceConfig};
-use rorolala_utils_cli_theme::{err_line, help_line, trd};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::error::ErrorConfigUnreadable;
-use crate::exit_codes::{EC_ERR_ACCOUNT_NOT_FOUND, EC_ERR_TOOL_HANDSHAKE_ARGUMENT, EC_HELP};
+use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 
 #[help(buffer)]
@@ -40,66 +40,61 @@ pub fn desc_tool_handshake() -> Description {
 
 /// Speaks the handshake action to a Vault, and prints what it answers.
 ///
-/// `VAULT` names the daemon to reach: a name the Workspace has [bound](crate::cmd_vault), or
-/// an ip and a port. Naming none reaches for the one the Workspace
-/// [reaches for by default](crate::cmd_vault::vault_set_default), which is the same thing
-/// `rola vault set-default` chose. The action runs as the account the work acts as — the one
-/// `rola account` names, which is the same choice every other command makes — and what it
-/// introduces itself with is that account's name, so the call needs nothing else.
+/// `VAULT` names the Vault to reach: a name the Workspace has [bound](crate::cmd_vault), or an
+/// ip and a port. Naming none reaches for the one the Workspace
+/// [reaches for by default](crate::cmd_vault::vault_set_default). The action runs as the
+/// account the work acts as — the one `rola account` names, which is the same choice every
+/// other command makes — and what it introduces itself with is that account's name, so the
+/// call needs nothing else.
+///
+/// The exchange is between the work and its remote, so it is spoken from inside a Workspace:
+/// that is what says which Vault is reached, and whose keys the account comes from.
 ///
 /// # Errors
 ///
-/// Renders [`ErrorHandshakeArguments`] when no Vault is named and none is reached for by
-/// default, [`ErrorConfigUnreadable`] when the Workspace's configuration would not read and
-/// there was no other Vault to reach, [`ErrorNoAccount`] when no account is named to act as,
-/// and [`ErrorAccountUnknown`] when the one named is not there. What the exchange itself
-/// fails with is routed on: `routeify` sends the [`ActionError`] the daemon call raises to
-/// the renderer that knows it, so the failure is reported where every other action failure
-/// is.
+/// Every way this can fail is one the part that knows reports for itself, and `routeify`
+/// carries it out: the run is not where the exchange is spoken from ([`ErrorShouldInWorkspace`]),
+/// the Workspace has no Vault to hand it ([`ErrorRemoteVault`]), the run acts as no account or
+/// as one no scope holds ([`ErrorNoAccount`], [`ErrorAccountUnknown`]), or the exchange itself
+/// failed ([`ActionError`]).
 ///
 /// [`ErrorNoAccount`]: crate::account::ErrorNoAccount
+/// [`ErrorAccountUnknown`]: crate::keys::ErrorAccountUnknown
+/// [`ErrorShouldInWorkspace`]: crate::error::ErrorShouldInWorkspace
+/// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "tool-handshake", routeify)]
 pub fn tool_handshake(
     args: EntryToolHandshake,
-    vault: &mut LazyRes<ResVault>,
     workspace: &mut LazyRes<ResWorkspace>,
-    config: &mut LazyRes<ResWorkspaceConfig>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
 ) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`. Naming no Vault is how the
-    // Workspace's own choice is reached for, so that is what is asked next.
-    let place = match args.pick(&arg![Option<String>]).unwrap() {
-        Some(place) => place,
-        None => match default_vault(config.get_ref()) {
-            Ok(Some(place)) => place,
-            Ok(None) => return ErrorHandshakeArguments.into(),
-            Err(next) => return next,
-        },
-    };
+    // Everything below works through the Workspace, so it is asked once, here, and taken for
+    // granted after.
+    workspace.get_ref().check()?;
 
-    let target = address_of(place, config.get_ref());
+    // Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is reached for. `?` here is
+    // `routeify`'s: a run with nothing to reach for leaves through it.
+    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let target = remote
+        .get_ref()
+        .vault_or_default(named.unwrap_or_default())?;
 
     // `?` here is `routeify`'s as well: the account the work acts as is the resource's to
     // hand over, and a run that acts as none leaves through it.
     let name = current.get_ref().must_bind()?;
 
-    let Some(account) = account_named(
-        &name,
-        workspace.get_ref().as_ref(),
-        vault.get_ref().as_ref(),
-    ) else {
-        return ErrorAccountUnknown { name }.into();
-    };
+    // No Vault is held: the one being reached for is elsewhere, so a key kept in a local
+    // Vault is not this run's to act as. `?` here is `routeify`'s once more: a name no scope
+    // holds is the lookup's own to report.
+    let account = account_named(&name, workspace.get_ref().as_ref(), None)?;
 
-    // What the Workspace side holds and sends is who it is, so what is printed is the
-    // daemon greeting the account this runs as.
+    // What the Workspace side holds and sends is who it is, so what is printed is the daemon
+    // greeting the account this runs as.
     let input = account.name();
 
-    // `?` here is `routeify`'s: an [`ActionError`] leaves through it rather than being said
-    // again in the words of this command.
-    //
-    // [`ActionError`]: librorolala::protocol::ActionError
     let output = action_handshake(&account, target, input)?;
 
     ResultHandshake { output }.into()
@@ -107,56 +102,27 @@ pub fn tool_handshake(
 
 /// Completes what `rola tool-handshake` can be given next.
 ///
-/// What can be reached by name is what the Workspace has bound, so those are what is offered;
-/// an address is not, since there is nothing here that knows which ones are worth offering.
+/// What can be reached by name is what the Workspace has bound, which is the same set the
+/// command itself resolves; an address is not, since there is nothing here that knows which
+/// ones are worth offering.
 #[completion(EntryToolHandshake)]
 pub fn complete_tool_handshake(
     ctx: ShellContext,
-    config: &mut LazyRes<ResWorkspaceConfig>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
     if ctx.current_word.starts_with('-') {
         return suggest!();
     }
 
-    let Some(config) = config.get_ref().config() else {
+    let Ok(names) = remote.get_ref().names() else {
         return suggest!();
     };
 
-    let mut names: Vec<String> = config.vaults().names().cloned().collect();
+    let mut names: Vec<String> = names.into_iter().map(str::to_string).collect();
     names.sort();
     names.retain(|name| name.starts_with(&ctx.current_word));
 
     suggest! { names }
-}
-
-/// The Vault the Workspace reaches for, when nothing named one.
-///
-/// A Workspace that is not there has no choice to hand back, which is not an error: a daemon
-/// can be reached without a Workspace at all. One whose configuration will not read is
-/// another matter — there may well be a choice in it — so it is reported rather than passed
-/// over, which is what the `Err` holds.
-fn default_vault(config: &ResWorkspaceConfig) -> Result<Option<String>, Next> {
-    match config {
-        ResWorkspaceConfig::Read { config, .. } => {
-            Ok(config.default_config().vault().map(str::to_string))
-        }
-        ResWorkspaceConfig::Absent => Ok(None),
-        ResWorkspaceConfig::Unread { path, reason } => {
-            Err(ErrorConfigUnreadable::new(path.clone(), reason.clone()).into())
-        }
-    }
-}
-
-/// The address to reach: what `place` names in the Workspace's Vaults, or `place` itself.
-///
-/// A name is the Workspace's own shorthand, so it is looked up in the configuration the
-/// Workspace keeps beside it. A name that is not bound is taken to be an address already,
-/// which is what lets a daemon be reached that no name was ever given.
-fn address_of(place: String, config: &ResWorkspaceConfig) -> String {
-    config
-        .config()
-        .and_then(|config| config.vaults().get(&place))
-        .map_or(place, std::string::ToString::to_string)
 }
 
 /// Result: the daemon answered.
@@ -169,38 +135,4 @@ pub struct ResultHandshake {
 #[renderer(buffer)]
 pub fn render_result_handshake(result: ResultHandshake) {
     r_println!("{}", result.output);
-}
-
-/// Error: no Vault was named to reach.
-#[derive(Grouped)]
-pub struct ErrorHandshakeArguments;
-
-#[renderer(buffer)]
-pub fn render_error_handshake_arguments(_: ErrorHandshakeArguments, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("tool_handshake.err_arguments").trim()));
-    r_eprintln!(
-        "{}",
-        help_line!(t!("tool_handshake.err_arguments_help").trim())
-    );
-    ec.exit_code = EC_ERR_TOOL_HANDSHAKE_ARGUMENT;
-}
-
-/// Error: the account named to act as is not there.
-#[derive(Grouped)]
-pub struct ErrorAccountUnknown {
-    /// The name that is not an account.
-    name: String,
-}
-
-#[renderer(buffer)]
-pub fn render_error_account_unknown(error: ErrorAccountUnknown, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("tool_handshake.err_account_unknown", name = error.name).trim())
-    );
-    r_eprintln!(
-        "{}",
-        help_line!(t!("tool_handshake.err_account_unknown_help").trim())
-    );
-    ec.exit_code = EC_ERR_ACCOUNT_NOT_FOUND;
 }

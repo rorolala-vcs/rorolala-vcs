@@ -14,7 +14,9 @@ tool_handshake:
         is printed as it is.
 
         Naming no `VAULT` reaches for the one the Workspace was told to reach for by default
-        with `rola vault set-default`.
+        with `rola vault set-default`. The exchange is between the work and its remote, so it is
+        spoken from inside a Workspace — that is what says which Vault is reached, and whose
+        keys the account comes from.
 
         `rola-daemon listen` is the other side of this exchange.
     zh-CN: |
@@ -27,33 +29,11 @@ tool_handshake:
         指定）行事，并以该账户的名字自报家门，所以不需要别的参数；守护进程的回答会原样输出。
 
         不指定 `VAULT` 时，使用工作区通过 `rola vault set-default` 选定的默认保险库。
+        这次对话发生在当前工作与它的远端之间，因此必须在工作区内发起 —— 工作区既决定要连哪个
+        保险库，也决定账户从哪些密钥中查找。
 
         `rola-daemon listen` 则是这次对话的另一端。
 
   cmd_tool_handshake_description:
     en: Speak the handshake action to a Vault daemon
     zh-CN: 向保险库守护进程发起握手
-
-  err_arguments:
-    en: A Vault to reach is required
-    zh-CN: 未指定要连接的保险库
-
-  err_arguments_help:
-    en: |
-        Please name one, as in `rola tool-handshake origin` or `rola tool-handshake
-        127.0.0.1:7717`, or run `rola vault set-default <NAME>` to choose a Vault to reach
-        for without naming it every time
-    zh-CN: |
-        请给出名字或地址，例如 `rola tool-handshake origin` 或 `rola tool-handshake 127.0.0.1:7717`；
-        也可以运行 `rola vault set-default <NAME>` 选定默认保险库，以后就不必每次指定
-
-  err_account_unknown:
-    en: "`%{name}` is not an account the work can act as"
-    zh-CN: "`%{name}` 不是当前工作可以使用的账户"
-
-  err_account_unknown_help:
-    en: |
-        Please run `rola account` to see the accounts there are, or `rola tool-keygen` to
-        make one
-    zh-CN: |
-        请运行 `rola account` 查看已有账户，或用 `rola tool-keygen` 生成一个

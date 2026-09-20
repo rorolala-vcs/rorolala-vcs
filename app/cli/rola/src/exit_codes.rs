@@ -33,9 +33,6 @@ pub const EC_ERR_TOOL_KEYGEN_NO_KEY_DIR: i32 = 44;
 // created
 pub const EC_ERR_TOOL_KEYGEN_INSTALL_FAILED: i32 = 45;
 
-// Exit code indicating the target or the input a handshake needs is missing
-pub const EC_ERR_TOOL_HANDSHAKE_ARGUMENT: i32 = 46;
-
 // Configuration
 
 // Exit code indicating the configuration the run works from could not be read
@@ -67,6 +64,9 @@ pub const EC_ERR_SHOULD_IN_WORKSPACE: i32 = 71;
 
 // Exit code indicating the run is not inside a Vault, which the command needs
 pub const EC_ERR_SHOULD_IN_VAULT: i32 = 72;
+
+// Exit code indicating the run has no Vault to reach for
+pub const EC_ERR_NO_REMOTE_VAULT: i32 = 73;
 
 // Actions
 

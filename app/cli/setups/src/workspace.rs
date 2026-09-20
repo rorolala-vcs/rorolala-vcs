@@ -115,23 +115,19 @@ enum RemoteState {
 impl ResCurrentRemoteVault {
     /// The address of the Vault the Workspace reaches for.
     ///
-    /// `None` is a Workspace that has chosen none, which a caller may still name, so it is
-    /// not an error here.
-    ///
     /// # Errors
     ///
     /// Returns [`ErrorRemoteVault::ShouldInWorkspace`] when this run is not inside a
-    /// Workspace, and [`ErrorRemoteVault::Unread`] when its configuration would not read.
-    pub fn vault(&self) -> Result<Option<String>, ErrorRemoteVault> {
+    /// Workspace, [`ErrorRemoteVault::Unread`] when its configuration would not read, and
+    /// [`ErrorRemoteVault::NotChosen`] when it reaches for no Vault.
+    pub fn vault(&self) -> Result<String, ErrorRemoteVault> {
         let config = self.reach()?;
-        let Some(name) = config.default_config().vault() else {
-            return Ok(None);
-        };
+        let name = config
+            .default_config()
+            .vault()
+            .ok_or(ErrorRemoteVault::NotChosen)?;
 
-        Ok(config
-            .vaults()
-            .get(name)
-            .map(std::string::ToString::to_string))
+        Ok(address_of(name, config))
     }
 
     /// The address to reach for: what `name` names, or the one the Workspace reaches for.
@@ -140,34 +136,19 @@ impl ResCurrentRemoteVault {
     /// address already, which is what lets a Vault be reached that was never given a name;
     /// any other answers at the address the Workspace bound it to.
     ///
-    /// `None` is a Workspace that names nothing to reach for, which is the same nothing
-    /// [`vault`](Self::vault) hands back.
-    ///
     /// # Errors
     ///
-    /// Returns what [`vault`](Self::vault) does.
-    pub fn vault_or_default(
-        &self,
-        name: impl Into<String>,
-    ) -> Result<Option<String>, ErrorRemoteVault> {
-        let config = self.reach()?;
+    /// Returns what [`vault`](Self::vault) does: naming none is not a way out of a Workspace
+    /// that has chosen none, since there is then nothing to reach for at all.
+    pub fn vault_or_default(&self, name: impl Into<String>) -> Result<String, ErrorRemoteVault> {
         let name = name.into();
+        if name.is_empty() {
+            return self.vault();
+        }
 
-        let wanted = if name.is_empty() {
-            match config.default_config().vault() {
-                Some(chosen) => chosen.to_string(),
-                None => return Ok(None),
-            }
-        } else {
-            name
-        };
+        let config = self.reach()?;
 
-        Ok(Some(
-            config
-                .vaults()
-                .get(&wanted)
-                .map_or(wanted, std::string::ToString::to_string),
-        ))
+        Ok(address_of(&name, config))
     }
 
     /// Each Vault the Workspace knows, under the name it is known by.
@@ -197,8 +178,9 @@ impl ResCurrentRemoteVault {
 
 /// Error: the Vault a run was to reach for could not be worked out.
 ///
-/// The two ways there can be none are told apart because what is to be done about them
-/// differs: work inside a Workspace, or fix the configuration the Workspace keeps.
+/// The ways there can be none are told apart because what is to be done about them differs:
+/// work inside a Workspace, fix the configuration the Workspace keeps, or choose a Vault for
+/// it to reach for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ErrorRemoteVault {
     /// This run is not inside a Workspace, so nothing could have named a Vault.
@@ -210,6 +192,20 @@ pub enum ErrorRemoteVault {
         /// Why it could not be read.
         reason: String,
     },
+    /// The Workspace is here, and reaches for no Vault.
+    NotChosen,
+}
+
+/// The address `name` answers at, or `name` itself when the Workspace knows no such Vault.
+///
+/// A name is the Workspace's own shorthand, so one it knows says where to go; one it does not
+/// is taken to be an address already, which is what lets a Vault be reached that was never
+/// given a name.
+fn address_of(name: &str, config: &WorkspaceConfig) -> String {
+    config
+        .vaults()
+        .get(name)
+        .map_or_else(|| name.to_string(), std::string::ToString::to_string)
 }
 
 /// A [`ProgramSetup`] implementation used to register Workspace-related resources and behaviors

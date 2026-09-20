@@ -12,3 +12,14 @@ error:
         `rola account <ACCOUNT>` to name the account the work acts as
       zh-CN: |
         客户端需要以某个账户的身份自证，因此请运行 `rola account <ACCOUNT>` 指定当前使用的账户
+
+    err_unknown:
+      en: "`%{name}` is not an account the work can act as"
+      zh-CN: "`%{name}` 不是当前工作可以使用的账户"
+
+    err_unknown_help:
+      en: |
+        Please run `rola account` to see the accounts there are, or `rola tool-keygen` to
+        make one
+      zh-CN: |
+        请运行 `rola account` 查看已有账户，或用 `rola tool-keygen` 生成一个
