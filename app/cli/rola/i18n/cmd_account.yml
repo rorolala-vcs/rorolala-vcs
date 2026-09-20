@@ -1,0 +1,64 @@
+_version: 2
+
+account:
+  help:
+    en: |
+        Name the account the work acts as, or list the accounts it can act as
+
+        **Usage**: `rola account <ACCOUNT>`
+
+        Naming no account lists every account any scope holds, each name once and in name
+        order — the same list completion offers. Naming one records it, in Rorolala's own
+        file for the user (`~/.local/share/rola/user`), as the account the work acts as by
+        default. A name that is not an account anywhere is reported rather than recorded.
+
+        An account is a private key, `<ACCOUNT>.pem`; `rola key --pem` prints where the ones
+        there are kept.
+    zh-CN: |
+        指定当前工作以哪个账户行事，或列出可用的账户
+
+        **用法**：`rola account <ACCOUNT>`
+
+        不带账户名时，列出所有作用域中能找到的账户名，去重并按名字排序——与补全给出的列表同源。
+        给出账户名时，会把它记录到 Rorolala 为用户保存的文件（`~/.local/share/rola/user`）里，
+        作为当前工作默认使用的账户。若该名字不是任何作用域中的账户，会报错而不会记录下来。
+
+        账户即私钥，形如 `<ACCOUNT>.pem`；`rola key --pem` 可以列出它们所在的位置。
+
+  cmd_account_description:
+    en: Name the account the work acts as, or list the accounts there are
+    zh-CN: 指定当前账户，或列出可用账户
+
+  result_none:
+    en: No account is installed
+    zh-CN: 尚未安装任何账户
+
+  result_current:
+    en: "%{name} (current)"
+    zh-CN: "%{name}（当前）"
+
+  result_set:
+    en: The work now acts as %{name} — recorded in %{path}
+    zh-CN: 当前工作将以 %{name} 的身份行事 —— 已记录到 %{path}
+
+  err_not_found:
+    en: "`%{name}` is not an account the work can act as"
+    zh-CN: "`%{name}` 不是当前工作可以使用的账户"
+
+  err_not_found_help:
+    en: |
+        Please run `rola account` to see the accounts there are, or `rola tool-keygen` to
+        make one
+    zh-CN: |
+        请运行 `rola account` 查看已有账户，或用 `rola tool-keygen` 生成一个
+
+  err_no_user_dir:
+    en: Could not find the directory Rorolala keeps the user's files in
+    zh-CN: 无法确定 Rorolala 保存用户文件的目录
+
+  err_no_user_dir_help:
+    en: |
+        Naming an account needs the local data directory, which this machine does not name.
+        Please set `XDG_DATA_HOME`
+    zh-CN: |
+        记录账户需要本地数据目录，但本机未指明该目录。请设置 `XDG_DATA_HOME`

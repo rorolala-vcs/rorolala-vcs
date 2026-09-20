@@ -1,0 +1,69 @@
+//! Where keys are looked for, and which accounts a run can act as.
+//!
+//! The scopes a key can live in are Rorolala's, not a command's: the listing a command
+//! prints and the names completion offers are the same list, read from the same place, so
+//! the two cannot come to disagree about what exists.
+
+use std::path::PathBuf;
+
+use librorolala::auth::{
+    KeyLocateRule, env_keys_dir, global_keys_dir, locate_accounts, user_keys_dir,
+};
+use librorolala::{vault::Vault, workspace::Workspace};
+use rorolala_utils_constants::{VAULT_KEYS_DIR, WORKSPACE_KEYS_DIR};
+use rorolala_utils_location::Locate;
+
+/// The directories keys are looked for in, highest priority first.
+///
+/// Everything Rorolala can reach: the keys beside the work at hand first — the Workspace's,
+/// then the Vault's, since a key kept beside the copy being worked in shadows the same name
+/// in the Vault — and after them the scopes the user keeps for themselves. A scope the
+/// machine does not name is simply not there.
+pub fn roots(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Some(held) = workspace {
+        roots.push(held.get_root().join(WORKSPACE_KEYS_DIR));
+    }
+    if let Some(held) = vault {
+        roots.push(held.get_root().join(VAULT_KEYS_DIR));
+    }
+
+    roots.extend(user_keys_dir());
+    roots.extend(global_keys_dir());
+    roots.extend(env_keys_dir());
+
+    roots
+}
+
+/// The rule the directories above are searched under.
+///
+/// Every directory a command searches is one it named itself, the user's own stores
+/// included, so the other scopes are turned off: turning one on would name its directory a
+/// second time. `find_local` is what stays on — it is the flag for "search the directories
+/// this caller handed in".
+pub const fn scopes() -> KeyLocateRule {
+    KeyLocateRule {
+        find_global: false,
+        find_local: true,
+        find_user: false,
+        find_env: false,
+    }
+}
+
+/// Every account name any scope holds, deduplicated and in name order.
+///
+/// This is the one list `rola account` prints and completion offers: a name that is kept in
+/// more than one scope is listed once, under the name it is known by, and the order does not
+/// depend on which scope it came from.
+pub fn account_names(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Vec<String> {
+    let mut names: Vec<String> = locate_accounts(&roots(workspace, vault), &scopes())
+        .into_iter()
+        .map(|account| account.name())
+        .collect();
+
+    names.sort();
+    names.dedup();
+
+    names
+}

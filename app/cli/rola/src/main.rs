@@ -17,15 +17,19 @@ use rorolala_cli_setups::RorolalaSetup;
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
+mod account;
 mod address;
+mod cmd_account;
 mod cmd_create;
 mod cmd_init;
 mod cmd_vault;
 mod error;
 mod exit_codes;
+mod keys;
 mod tools;
 mod user;
 
+use crate::account::CurrentAccountSetup;
 use crate::address::AddressHistorySetup;
 use crate::exit_codes::EC_HELP;
 
@@ -34,6 +38,7 @@ fn main() {
     program.with_setup(DefaultSetup);
     program.with_setup(RorolalaSetup);
     program.with_setup(AddressHistorySetup);
+    program.with_setup(CurrentAccountSetup);
     program.exec_and_exit();
 }
 

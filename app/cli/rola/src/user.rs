@@ -12,6 +12,9 @@ const DATA_DIR: &str = "rola";
 /// The file the addresses seen so far are kept in, one per line.
 const HISTORY_FILE: &str = "addr.hs";
 
+/// The file the account the work acts as is kept in.
+const ACCOUNT_FILE: &str = "user";
+
 /// The directory Rorolala keeps its own files in, if the machine names one.
 ///
 /// On a machine that follows the XDG layout this is `~/.local/share/rola`.
@@ -22,4 +25,9 @@ pub fn data_dir() -> Option<PathBuf> {
 /// The file the address history is kept in.
 pub fn history_path() -> Option<PathBuf> {
     Some(data_dir()?.join(HISTORY_FILE))
+}
+
+/// The file the account the work acts as is kept in.
+pub fn account_path() -> Option<PathBuf> {
+    Some(data_dir()?.join(ACCOUNT_FILE))
 }

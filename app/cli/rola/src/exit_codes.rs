@@ -36,3 +36,11 @@ pub const EC_ERR_VAULT_ARGUMENT: i32 = 52;
 
 // Exit code indicating the name a `rola vault unbind` was given is not bound
 pub const EC_ERR_VAULT_NOT_BOUND: i32 = 53;
+
+// Accounts
+
+// Exit code indicating the name given is not an account the work can act as
+pub const EC_ERR_ACCOUNT_NOT_FOUND: i32 = 61;
+
+// Exit code indicating the machine does not name where Rorolala keeps the user's files
+pub const EC_ERR_ACCOUNT_NO_DIR: i32 = 62;
