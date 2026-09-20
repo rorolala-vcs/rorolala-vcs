@@ -23,6 +23,13 @@ pub struct Config {
     /// The Vaults this Workspace knows, each under a name of its own.
     #[serde(default, skip_serializing_if = "VaultsConfig::is_empty")]
     vaults: VaultsConfig,
+    /// What the Workspace reaches for when nothing else names anything.
+    #[serde(
+        default,
+        rename = "default",
+        skip_serializing_if = "DefaultConfig::is_empty"
+    )]
+    default_config: DefaultConfig,
 }
 
 impl Config {
@@ -38,6 +45,54 @@ impl Config {
     /// was read from once the program is done with it.
     pub const fn vaults_mut(&mut self) -> &mut VaultsConfig {
         &mut self.vaults
+    }
+
+    /// What this Workspace reaches for when nothing else names anything.
+    #[must_use]
+    pub const fn default_config(&self) -> &DefaultConfig {
+        &self.default_config
+    }
+
+    /// What this Workspace reaches for, to be changed.
+    ///
+    /// A change made through here is kept, the way a change to the Vaults is.
+    pub const fn default_config_mut(&mut self) -> &mut DefaultConfig {
+        &mut self.default_config
+    }
+}
+
+/// What a Workspace reaches for when nothing else names anything.
+///
+/// It is the same kind of thing a binding is — a name — but a choice among them rather than
+/// one of them: the name is meant to be one the Workspace knows, which is the caller's to
+/// check, and nothing else is kept here.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DefaultConfig {
+    /// The name the Workspace reaches for, if one has been chosen.
+    vault: Option<String>,
+}
+
+impl DefaultConfig {
+    /// The Vault the Workspace reaches for, if one has been chosen.
+    #[must_use]
+    pub fn vault(&self) -> Option<&str> {
+        self.vault.as_deref()
+    }
+
+    /// Chooses the Vault to reach for, answering with the one that was chosen before.
+    pub fn set_vault(&mut self, name: impl Into<String>) -> Option<String> {
+        self.vault.replace(name.into())
+    }
+
+    /// Forgets the Vault to reach for, answering with the one that was chosen.
+    pub const fn clear_vault(&mut self) -> Option<String> {
+        self.vault.take()
+    }
+
+    /// Whether nothing has been chosen.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.vault.is_none()
     }
 }
 
@@ -189,5 +244,49 @@ mod tests {
         let toml = toml::to_string(&Config::default()).unwrap();
 
         assert!(!toml.contains("vaults"), "{toml}");
+    }
+
+    #[test]
+    fn choosing_a_vault_to_reach_for_hands_back_the_one_it_replaced() {
+        let mut config = Config::default();
+
+        // Nothing is chosen to begin with, and a choice is answered by the one before it.
+        assert_eq!(config.default_config().vault(), None);
+        assert_eq!(config.default_config_mut().set_vault("origin"), None);
+        assert_eq!(config.default_config().vault(), Some("origin"));
+
+        assert_eq!(
+            config.default_config_mut().set_vault("upstream"),
+            Some("origin".to_owned())
+        );
+
+        // Letting it go answers with what was chosen, and leaves nothing chosen.
+        assert_eq!(
+            config.default_config_mut().clear_vault(),
+            Some("upstream".to_owned())
+        );
+        assert!(config.default_config().is_empty());
+        assert_eq!(config.default_config_mut().clear_vault(), None);
+    }
+
+    #[test]
+    fn the_vault_a_workspace_reaches_for_survives_the_format_it_is_written_in() {
+        let mut config = Config::default();
+        config
+            .vaults_mut()
+            .bind("origin", address("127.0.0.1:7000"));
+        config.default_config_mut().set_vault("origin");
+
+        let toml = toml::to_string(&config).unwrap();
+        let read: Config = toml::from_str(&toml).unwrap();
+
+        assert_eq!(read.default_config().vault(), Some("origin"));
+    }
+
+    #[test]
+    fn a_configuration_with_nothing_chosen_writes_no_default_table() {
+        let toml = toml::to_string(&Config::default()).unwrap();
+
+        assert!(!toml.contains("default"), "{toml}");
     }
 }
