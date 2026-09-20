@@ -51,3 +51,32 @@ pub const EC_ERR_ACCOUNT_NOT_FOUND: i32 = 61;
 
 // Exit code indicating the machine does not name where Rorolala keeps the user's files
 pub const EC_ERR_ACCOUNT_NO_DIR: i32 = 62;
+
+// Actions
+
+// Exit code indicating an action had no channel to exchange over
+pub const EC_ERR_ACTION_NO_CHANNEL: i32 = 81;
+
+// Exit code indicating the side that owned a value held none to send
+pub const EC_ERR_ACTION_MISSING_VALUE: i32 = 82;
+
+// Exit code indicating a value was too long to frame
+pub const EC_ERR_ACTION_VALUE_TOO_LARGE: i32 = 83;
+
+// Exit code indicating the channel failed
+pub const EC_ERR_ACTION_IO: i32 = 84;
+
+// Exit code indicating a value could not cross the channel
+pub const EC_ERR_ACTION_CODEC: i32 = 85;
+
+// Exit code indicating no action answers to the id asked for
+pub const EC_ERR_ACTION_UNKNOWN: i32 = 86;
+
+// Exit code indicating what an action produced would not encode
+pub const EC_ERR_ACTION_JSON: i32 = 87;
+
+// Exit code indicating a target would not read as an address
+pub const EC_ERR_ACTION_ADDR: i32 = 88;
+
+// Exit code indicating a session could not be established
+pub const EC_ERR_ACTION_AUTH: i32 = 89;
