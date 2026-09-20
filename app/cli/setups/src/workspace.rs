@@ -80,6 +80,138 @@ impl ResWorkspaceConfig {
     }
 }
 
+/// The Vault a run reaches for, as the Workspace beside it names it.
+///
+/// A command that reaches for a Vault has two questions to answer: which one the caller
+/// named, and — when they named none — which one the Workspace reaches for. Both answers come
+/// out of the Workspace's configuration, so they are read together and handed over as an
+/// address, which saves the command from loading the configuration and working them out.
+///
+/// The Vault is deliberately not a resource of its own here: reaching for one is dialling it,
+/// and a run inside a Workspace holds no Vault to hand — the one it reaches for is elsewhere.
+#[derive(Debug, Default, Clone)]
+pub struct ResCurrentRemoteVault {
+    /// What the Workspace says, when this run is inside one at all.
+    state: RemoteState,
+}
+
+/// What the Workspace beside a run says about the Vaults a run can reach for.
+#[derive(Debug, Default, Clone)]
+enum RemoteState {
+    /// No Workspace was found, so nothing could have named a Vault.
+    #[default]
+    Absent,
+    /// The Workspace's configuration, as read.
+    Read(WorkspaceConfig),
+    /// A configuration is there, but could not be read.
+    Unread {
+        /// The file that could not be read.
+        path: PathBuf,
+        /// Why it could not be read.
+        reason: String,
+    },
+}
+
+impl ResCurrentRemoteVault {
+    /// The address of the Vault the Workspace reaches for.
+    ///
+    /// `None` is a Workspace that has chosen none, which a caller may still name, so it is
+    /// not an error here.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorRemoteVault::ShouldInWorkspace`] when this run is not inside a
+    /// Workspace, and [`ErrorRemoteVault::Unread`] when its configuration would not read.
+    pub fn vault(&self) -> Result<Option<String>, ErrorRemoteVault> {
+        let config = self.reach()?;
+        let Some(name) = config.default_config().vault() else {
+            return Ok(None);
+        };
+
+        Ok(config
+            .vaults()
+            .get(name)
+            .map(std::string::ToString::to_string))
+    }
+
+    /// The address to reach for: what `name` names, or the one the Workspace reaches for.
+    ///
+    /// A `name` that is empty names none. One the Workspace does not know is taken to be an
+    /// address already, which is what lets a Vault be reached that was never given a name;
+    /// any other answers at the address the Workspace bound it to.
+    ///
+    /// `None` is a Workspace that names nothing to reach for, which is the same nothing
+    /// [`vault`](Self::vault) hands back.
+    ///
+    /// # Errors
+    ///
+    /// Returns what [`vault`](Self::vault) does.
+    pub fn vault_or_default(
+        &self,
+        name: impl Into<String>,
+    ) -> Result<Option<String>, ErrorRemoteVault> {
+        let config = self.reach()?;
+        let name = name.into();
+
+        let wanted = if name.is_empty() {
+            match config.default_config().vault() {
+                Some(chosen) => chosen.to_string(),
+                None => return Ok(None),
+            }
+        } else {
+            name
+        };
+
+        Ok(Some(
+            config
+                .vaults()
+                .get(&wanted)
+                .map_or(wanted, std::string::ToString::to_string),
+        ))
+    }
+
+    /// Each Vault the Workspace knows, under the name it is known by.
+    ///
+    /// These are the names a caller can reach for, so they are also the ones worth offering:
+    /// the same set [`vault_or_default`](Self::vault_or_default) resolves.
+    ///
+    /// # Errors
+    ///
+    /// Returns what [`vault`](Self::vault) does.
+    pub fn names(&self) -> Result<Vec<&str>, ErrorRemoteVault> {
+        Ok(self.reach()?.vaults().names().map(String::as_str).collect())
+    }
+
+    /// The Workspace's configuration, or why there is none to read a Vault out of.
+    fn reach(&self) -> Result<&WorkspaceConfig, ErrorRemoteVault> {
+        match &self.state {
+            RemoteState::Read(config) => Ok(config),
+            RemoteState::Absent => Err(ErrorRemoteVault::ShouldInWorkspace),
+            RemoteState::Unread { path, reason } => Err(ErrorRemoteVault::Unread {
+                path: path.clone(),
+                reason: reason.clone(),
+            }),
+        }
+    }
+}
+
+/// Error: the Vault a run was to reach for could not be worked out.
+///
+/// The two ways there can be none are told apart because what is to be done about them
+/// differs: work inside a Workspace, or fix the configuration the Workspace keeps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ErrorRemoteVault {
+    /// This run is not inside a Workspace, so nothing could have named a Vault.
+    ShouldInWorkspace,
+    /// The Workspace's configuration is there, but would not read.
+    Unread {
+        /// The file that could not be read.
+        path: PathBuf,
+        /// Why it could not be read.
+        reason: String,
+    },
+}
+
 /// A [`ProgramSetup`] implementation used to register Workspace-related resources and behaviors
 pub struct WorkspaceSetup;
 
@@ -111,7 +243,30 @@ impl ResWorkspace {
     pub const fn exist(&self) -> bool {
         self.workspace.is_some()
     }
+
+    /// Whether this run is inside a Workspace, as an error when it is not.
+    ///
+    /// A command that cannot do anything without a Workspace asks this first, so that
+    /// everything after it can take one for granted rather than asking again.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorShouldInWorkspace`] when no Workspace was found.
+    pub const fn check(&self) -> Result<(), ErrorShouldInWorkspace> {
+        if self.exist() {
+            Ok(())
+        } else {
+            Err(ErrorShouldInWorkspace)
+        }
+    }
 }
+
+/// Error: this run is not inside a Workspace.
+///
+/// A Workspace is where the work is done, so a command that works on one has nowhere to
+/// work without it. [`ResWorkspace::check`] is where a command asks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorShouldInWorkspace;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for WorkspaceSetup
 where
@@ -137,6 +292,14 @@ where
                 ResWorkspaceConfig::lazy_init(move || read_workspace_config(&workspace_dir_cloned))
                     .with_on_drop(save_workspace_config),
             );
+        }
+
+        // ResCurrentRemoteVault
+        {
+            let workspace_dir_cloned = workspace_dir.clone();
+            program.with_resource(ResCurrentRemoteVault::lazy_init(move || {
+                read_current_remote_vault(&workspace_dir_cloned)
+            }));
         }
 
         // ResWorkspaceDir
@@ -167,6 +330,21 @@ fn read_workspace_config(dir: &Path) -> ResWorkspaceConfig {
             reason: error.to_string(),
         },
     }
+}
+
+/// Reads the Vaults the Workspace beside `dir` names, and the one it reaches for.
+///
+/// It is read the way the configuration resource is, through the same function, so there is
+/// one reading of the file to keep right. What comes back is a snapshot: nothing here writes
+/// the file, and a command that only reaches for a Vault never holds the configuration.
+fn read_current_remote_vault(dir: &Path) -> ResCurrentRemoteVault {
+    let state = match read_workspace_config(dir) {
+        ResWorkspaceConfig::Read { config, .. } => RemoteState::Read(config),
+        ResWorkspaceConfig::Unread { path, reason } => RemoteState::Unread { path, reason },
+        ResWorkspaceConfig::Absent => RemoteState::Absent,
+    };
+
+    ResCurrentRemoteVault { state }
 }
 
 /// Writes the configuration back to the file it was read from.

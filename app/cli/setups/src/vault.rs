@@ -111,7 +111,30 @@ impl ResVault {
     pub const fn exist(&self) -> bool {
         self.vault.is_some()
     }
+
+    /// Whether this run is inside a Vault, as an error when it is not.
+    ///
+    /// A command that works on a Vault rather than through one asks this first, so that
+    /// everything after it can take one for granted rather than asking again.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorShouldInVault`] when no Vault was found.
+    pub const fn check(&self) -> Result<(), ErrorShouldInVault> {
+        if self.exist() {
+            Ok(())
+        } else {
+            Err(ErrorShouldInVault)
+        }
+    }
 }
+
+/// Error: this run is not inside a Vault.
+///
+/// A Vault is the other side of the work, so a command that serves one has nothing to serve
+/// without it. [`ResVault::check`] is where a command asks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorShouldInVault;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for VaultSetup
 where
