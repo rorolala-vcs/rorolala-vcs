@@ -5,20 +5,30 @@ tool_keygen:
     en: |
         Generate an Ed25519 key pair with `openssl`
 
-        **Usage**: `rola tool keygen [PATH]`
+        **Usage**: `rola tool-keygen [--name <NAME>] [--install] <PATH>`
 
-        The pair is written as `key.pem` (private) and `key.pub` (public) in the current
-        directory, or where `PATH` says. `PATH` names the pair rather than one file: an
-        extension on it separates the stem from what a key is written as, so `alice`,
-        `alice.pem` and `alice.pub` all name `alice.pem` and `alice.pub`.
+        The pair is written as `<NAME>.pem` (private) and `<NAME>.pub` (public) in the
+        current directory, or where `PATH` says. `NAME` is `key` unless `--name` states it,
+        and `PATH` names the pair rather than one file: an extension on either separates the
+        stem from what a key is written as, so `alice`, `alice.pem` and `alice.pub` all name
+        `alice.pem` and `alice.pub`.
+
+        With `--install`, the pair goes into the user's key directory under the local data
+        directory — `~/.local/share/rola/keys` on a machine that follows the XDG layout —
+        which is created if it is not there yet. `PATH` then only names the pair, since the
+        directory is the one being installed into.
     zh-CN: |
         使用 `openssl` 生成一对 Ed25519 密钥
 
-        **用法**：`rola tool keygen [PATH]`
+        **用法**：`rola tool-keygen [--name <NAME>] [--install] <PATH>`
 
-        默认在当前目录生成 `key.pem`（私钥）与 `key.pub`（公钥），指定 `PATH` 时写到那里。
-        `PATH` 指代的是“这一对”而不是单个文件：路径上的扩展名当作分界，
-        所以 `alice`、`alice.pem`、`alice.pub` 都表示 `alice.pem` 与 `alice.pub`。
+        默认在当前目录生成 `<NAME>.pem`（私钥）与 `<NAME>.pub`（公钥），指定 `PATH` 时写到那里。
+        `NAME` 缺省为 `key`，可由 `--name` 指定；`PATH` 指代的是“这一对”而不是单个文件：
+        名字或路径上的扩展名当作分界，所以 `alice`、`alice.pem`、`alice.pub` 都表示
+        `alice.pem` 与 `alice.pub`。
+
+        加 `--install` 时写入用户密钥目录（遵循 XDG 的机器上是 `~/.local/share/rola/keys`），
+        目录不存在时会创建。此时 `PATH` 只用来给这一对命名。
 
   cmd_tool_keygen_description:
     en: Generate an Ed25519 key pair
@@ -34,10 +44,10 @@ tool_keygen:
 
   err_no_openssl_help:
     en: |
-        `rola tool keygen` generates keys with OpenSSL. Please install it and make sure
+        `rola tool-keygen` generates keys with OpenSSL. Please install it and make sure
         `openssl` is on your PATH, then try again
     zh-CN: |
-        `rola tool keygen` 使用 OpenSSL 生成密钥。请安装 OpenSSL，并确认 `openssl`
+        `rola tool-keygen` 使用 OpenSSL 生成密钥。请安装 OpenSSL，并确认 `openssl`
         在 PATH 中，然后重试
 
   err_keygen_failed:
@@ -59,3 +69,25 @@ tool_keygen:
         Please create the directory first, or name a path inside one that already exists
     zh-CN: |
         请先创建该目录，或将路径指向一个已存在的目录
+
+  err_no_key_dir:
+    en: Could not find the user's key directory
+    zh-CN: 无法确定用户密钥目录
+
+  err_no_key_dir_help:
+    en: |
+        `--install` writes into the local data directory, which this machine does not name.
+        Please write the pair to a path instead, or set `XDG_DATA_HOME`
+    zh-CN: |
+        `--install` 需要写入本地数据目录，但本机未指明该目录。
+        请改用路径写出密钥对，或设置 `XDG_DATA_HOME`
+
+  err_install_dir:
+    en: Could not create the install directory %{path} — %{reason}
+    zh-CN: 无法创建安装目录 %{path} —— %{reason}
+
+  err_install_dir_help:
+    en: |
+        Please check the write permission of the local data directory, then try again
+    zh-CN: |
+        请检查本地数据目录的写权限，然后重试

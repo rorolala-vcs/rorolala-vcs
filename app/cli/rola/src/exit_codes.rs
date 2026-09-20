@@ -26,6 +26,13 @@ pub const EC_ERR_TOOL_KEYGEN_FAILED: i32 = 42;
 // Exit code indicating the path a key was to be written to is not there
 pub const EC_ERR_TOOL_KEYGEN_PATH_NOT_EXIST: i32 = 43;
 
+// Exit code indicating `--install` could not find the user's key directory
+pub const EC_ERR_TOOL_KEYGEN_NO_KEY_DIR: i32 = 44;
+
+// Exit code indicating the directory a key pair was to be installed into could not be
+// created
+pub const EC_ERR_TOOL_KEYGEN_INSTALL_FAILED: i32 = 45;
+
 // Vaults
 
 // Exit code indicating the Workspace configuration could not be read

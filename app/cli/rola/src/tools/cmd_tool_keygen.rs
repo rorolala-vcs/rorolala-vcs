@@ -1,11 +1,13 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use librorolala::auth::user_keys_dir;
 use mingling::{
     Grouped,
     macros::{arg, buffer, command, help, metadata, r_eprintln, r_println, renderer},
     metadata::Description,
-    picker::EntryPicker,
+    picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
 };
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -14,12 +16,23 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ERR_TOOL_KEYGEN_FAILED, EC_ERR_TOOL_KEYGEN_NO_OPENSSL, EC_ERR_TOOL_KEYGEN_PATH_NOT_EXIST,
-    EC_HELP,
+    EC_ERR_TOOL_KEYGEN_FAILED, EC_ERR_TOOL_KEYGEN_INSTALL_FAILED, EC_ERR_TOOL_KEYGEN_NO_KEY_DIR,
+    EC_ERR_TOOL_KEYGEN_NO_OPENSSL, EC_ERR_TOOL_KEYGEN_PATH_NOT_EXIST, EC_HELP,
 };
 
-/// The stem a key pair is named by when no path is given.
+/// The stem a key pair is named by when neither a name nor a path says otherwise.
 const KEY_STEM: &str = "key";
+
+/// The flags `rola tool-keygen` takes.
+#[derive(Pickable)]
+struct KeygenFlags {
+    /// The name the pair is known by, instead of `key`.
+    #[arg(long)]
+    name: Option<String>,
+    /// Install the pair into the user's key directory.
+    #[arg(long)]
+    install: Flag,
+}
 
 /// The algorithm a key pair is generated for.
 ///
@@ -46,36 +59,57 @@ pub fn desc_tool_keygen() -> Description {
 ///
 /// Two files are written, named after the same stem: a private key in PKCS#8 PEM, which is
 /// what an account is, and the public key derived from it in SPKI PEM, which is what a
-/// member is. The pair goes in the current directory as `key.pem` and `key.pub`, or where
-/// the path the caller names says.
+/// member is. The pair goes in the current directory as `key.pem` and `key.pub`, under the
+/// name `--name` gives, or where the path the caller names says.
 ///
-/// The path names the *pair*, not one file: an extension on it separates the stem from what
-/// a key is written as, so `alice`, `alice.pem` and `alice.pub` all name the same two files
-/// — `alice.pem` and `alice.pub`. A path that is already a directory holds the pair under
-/// the default stem.
+/// The path names the *pair*, not one file: an extension on it — or on `--name` — separates
+/// the stem from what a key is written as, so `alice`, `alice.pem` and `alice.pub` all name
+/// the same two files. A path that is already a directory holds the pair under `--name`, or
+/// under the default stem.
+///
+/// With `--install`, the pair goes into the user's key directory under the local data
+/// directory instead, and that directory is created if it is not there yet.
 ///
 /// # Errors
 ///
 /// Renders [`ErrorNoOpenSsl`] when `openssl` cannot be run, [`ErrorKeyGenFailed`] when it
-/// runs and does not produce both keys, and [`ErrorPathNotExist`] when the path named is
-/// not inside a directory that exists.
+/// runs and does not produce both keys, [`ErrorPathNotExist`] when the path named is not
+/// inside a directory that exists, [`ErrorNoKeyDir`] when `--install` cannot find the
+/// user's key directory, and [`ErrorInstallDir`] when it cannot create it.
 #[command(node = "tool-keygen")]
 pub fn tool_keygen(args: EntryToolKeygen) -> Next {
-    // Picking an `Option` cannot fail — an argument that is absent is `None` rather than an
-    // error — so this unwrap never panics.
-    let (private, public) = pair(args.pick(&arg![Option<PathBuf>]).unwrap());
+    // Picking cannot fail — a flag that is absent is `Inactive`, and an option or a
+    // positional that is absent is `None` — so this unwrap never panics.
+    let (flags, output) = args
+        .pick(&arg![KeygenFlags])
+        .pick(&arg![Option<PathBuf>])
+        .unwrap();
+
+    let install = matches!(flags.install, Flag::Active);
+
+    let Some((directory, name)) = destination(output.as_deref(), flags.name.as_deref(), install)
+    else {
+        return ErrorNoKeyDir.into();
+    };
 
     // A key pair is written into a directory that has to be there already: naming a path is
-    // not a request to create one. The two files share a directory, so one check covers both.
-    if let Some(directory) = private.parent()
-        && !directory.as_os_str().is_empty()
-        && !directory.exists()
-    {
-        return ErrorPathNotExist {
-            path: directory.to_path_buf(),
+    // not a request to create one. Installing is the exception — the directory is the
+    // program's own to make, so it does.
+    if install {
+        if let Err(error) = fs::create_dir_all(&directory) {
+            return ErrorInstallDir {
+                path: directory,
+                reason: error.to_string(),
+            }
+            .into();
         }
-        .into();
+    } else if !directory.as_os_str().is_empty() && !directory.exists() {
+        return ErrorPathNotExist { path: directory }.into();
     }
+
+    let stem = directory.join(name);
+    let private = stem.with_extension(PRIVATE_KEY_EXTENSION);
+    let public = stem.with_extension(PUBLIC_KEY_EXTENSION);
 
     match generate(&private, &public) {
         Ok(()) => ResultKeyGenerated { private, public }.into(),
@@ -83,18 +117,38 @@ pub fn tool_keygen(args: EntryToolKeygen) -> Next {
     }
 }
 
-/// The private and public files a key pair is written to.
-fn pair(output: Option<PathBuf>) -> (PathBuf, PathBuf) {
-    let stem = match output {
-        None => PathBuf::from(KEY_STEM),
-        Some(path) if path.is_dir() => path.join(KEY_STEM),
-        Some(path) => path.with_extension(""),
+/// Where a pair is written: the directory it goes into and the name it is known by.
+///
+/// The name is the one `--name` states, or the name the path carries, or `key`. The
+/// directory is the user's key directory when `--install` says so, the one the path names,
+/// or the current directory. `None` means `--install` was asked for on a machine that does
+/// not say where the user's local data directory is, so there is nowhere to install to.
+fn destination(
+    output: Option<&Path>,
+    name: Option<&str>,
+    install: bool,
+) -> Option<(PathBuf, String)> {
+    let directory = if install {
+        user_keys_dir()?
+    } else {
+        match output {
+            None => PathBuf::new(),
+            Some(path) if path.is_dir() => path.to_path_buf(),
+            Some(path) => path.parent().map_or_else(PathBuf::new, Path::to_path_buf),
+        }
     };
 
-    (
-        stem.with_extension(PRIVATE_KEY_EXTENSION),
-        stem.with_extension(PUBLIC_KEY_EXTENSION),
-    )
+    let name = name
+        .and_then(|name| stem_of(Path::new(name)))
+        .or_else(|| output.filter(|path| !path.is_dir()).and_then(stem_of))
+        .unwrap_or_else(|| KEY_STEM.to_string());
+
+    Some((directory, name))
+}
+
+/// The name a path carries, without the part that says what a key is written as.
+fn stem_of(path: &Path) -> Option<String> {
+    Some(path.file_stem()?.to_str()?.to_string())
 }
 
 /// Asks `openssl` to write both halves of the pair.
@@ -204,4 +258,47 @@ pub fn render_error_path_not_exist(err: ErrorPathNotExist, ec: &mut ResExitCode)
         help_line!(t!("tool_keygen.err_path_not_exist_help").trim())
     );
     ec.exit_code = EC_ERR_TOOL_KEYGEN_PATH_NOT_EXIST;
+}
+
+/// Error: `--install` found nowhere to install the pair into.
+#[derive(Grouped)]
+pub struct ErrorNoKeyDir;
+
+#[renderer(buffer)]
+pub fn render_error_no_key_dir(_: ErrorNoKeyDir, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("tool_keygen.err_no_key_dir").trim()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("tool_keygen.err_no_key_dir_help").trim())
+    );
+    ec.exit_code = EC_ERR_TOOL_KEYGEN_NO_KEY_DIR;
+}
+
+/// Error: the directory a pair was to be installed into could not be created.
+#[derive(Grouped)]
+pub struct ErrorInstallDir {
+    /// The directory that could not be created.
+    path: PathBuf,
+    /// Why it could not be created.
+    reason: String,
+}
+
+#[renderer(buffer)]
+pub fn render_error_install_dir(err: ErrorInstallDir, ec: &mut ResExitCode) {
+    r_eprintln!(
+        "{}",
+        err_line!(
+            t!(
+                "tool_keygen.err_install_dir",
+                path = err.path.display().to_string(),
+                reason = err.reason
+            )
+            .trim()
+        )
+    );
+    r_eprintln!(
+        "{}",
+        help_line!(t!("tool_keygen.err_install_dir_help").trim())
+    );
+    ec.exit_code = EC_ERR_TOOL_KEYGEN_INSTALL_FAILED;
 }
