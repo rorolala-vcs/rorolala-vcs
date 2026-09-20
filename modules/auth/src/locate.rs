@@ -123,13 +123,13 @@ fn member_scopes(rule: &KeyLocateRule, local_roots: &[PathBuf]) -> Vec<PathBuf> 
         dirs.extend_from_slice(local_roots);
     }
     if rule.find_user {
-        dirs.extend(user_dir());
+        dirs.extend(user_keys_dir());
     }
     if rule.find_global {
-        dirs.extend(global_dir());
+        dirs.extend(global_keys_dir());
     }
     if rule.find_env {
-        dirs.extend(env_dir());
+        dirs.extend(env_keys_dir());
     }
 
     dirs
@@ -233,17 +233,31 @@ fn find_key<T>(
 }
 
 /// The directory keys are kept in under the user's local data directory.
-fn user_dir() -> Option<PathBuf> {
+///
+/// This is the scope a generated pair is installed into, and the one a member is looked for
+/// in when the user scope is turned on: `~/.local/share/rola/keys` on a machine that follows
+/// the XDG layout. It is `None` when the machine does not say where that directory is.
+#[must_use]
+pub fn user_keys_dir() -> Option<PathBuf> {
     Some(dirs::data_local_dir()?.join(USER_KEYS_DIR))
 }
 
-/// The directory keys are kept in under the filesystem root.
-fn global_dir() -> Option<PathBuf> {
+/// The directory keys are kept in under the filesystem root: `/.rola/keys` on Unix.
+///
+/// It is the machine-wide scope, shared by every user of the machine, so what it holds is
+/// meant to be shared too. It is `None` when the current directory has no root — which is
+/// to say, never.
+#[must_use]
+pub fn global_keys_dir() -> Option<PathBuf> {
     Some(root_dir()?.join(GLOBAL_KEYS_DIR))
 }
 
 /// The directory keys are kept in under `ROLA_HOME`, if it names one.
-fn env_dir() -> Option<PathBuf> {
+///
+/// A set kept here is the caller's to point wherever it likes — a mounted share, a directory
+/// that is thrown away between runs — so it is looked for only when the environment names it.
+#[must_use]
+pub fn env_keys_dir() -> Option<PathBuf> {
     let home = std::env::var_os(HOME_ENV_VAR).filter(|value| !value.is_empty())?;
     Some(PathBuf::from(home).join(ENV_KEYS_DIR))
 }
@@ -264,6 +278,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use ed25519_dalek::SigningKey as Ed25519SigningKey;
+    use ed25519_dalek::pkcs8::EncodePrivateKey as _;
     use ed25519_dalek::pkcs8::EncodePublicKey as _;
     use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
 
@@ -316,16 +331,25 @@ mod tests {
     #[test]
     fn an_account_is_paired_with_the_public_key_beside_it() {
         let dir = scratch("paired");
-        private(&dir, "alice");
-        let pem = Ed25519SigningKey::from_bytes(&[9; 32])
-            .verifying_key()
-            .to_public_key_pem(LineEnding::LF)
-            .unwrap();
-        fs::write(dir.join("alice.pub"), pem).unwrap();
+        let signing = Ed25519SigningKey::from_bytes(&[9; 32]);
+        let peer = Ed25519SigningKey::from_bytes(&[10; 32]);
+        fs::write(
+            dir.join("alice.pem"),
+            signing.to_pkcs8_pem(LineEnding::LF).unwrap().as_str(),
+        )
+        .unwrap();
+        fs::write(
+            dir.join("alice.pub"),
+            peer.verifying_key()
+                .to_public_key_pem(LineEnding::LF)
+                .unwrap(),
+        )
+        .unwrap();
         private(&dir, "bob");
 
-        // Alice has a public key beside her private one, so an account named after her
-        // comes with one; bob does not, so his has nothing to hold a peer to.
+        // Alice has a public key beside her private one — one that is not her own — so an
+        // account named after her comes with a peer to hold; bob does not, so his has nothing
+        // to hold a peer to.
         let alice =
             super::find_account("alice", std::slice::from_ref(&dir), &local_only()).unwrap();
         assert!(alice.peer_key().unwrap().is_some());
