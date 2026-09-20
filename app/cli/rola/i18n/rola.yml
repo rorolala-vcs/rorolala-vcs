@@ -46,3 +46,15 @@ rola:
             --vault-dir <PATH>      使用这个目录作为保险库
             --theme-choice <NAME>   使用该主题绘制
             --lang, -l <LOCALE>     使用该语言
+
+  err_unknown_command:
+    en: Unknown command `%{command}`
+    zh-CN: 未知命令 `%{command}`
+
+  err_unknown_command_similar:
+    en: "Found similar command: “%{commands}”"
+    zh-CN: "找到类似命令：“%{commands}”"
+
+  err_unknown_command_help:
+    en: Please run `rola -h` to see the commands there are
+    zh-CN: 请运行 `rola -h` 查看可用的命令

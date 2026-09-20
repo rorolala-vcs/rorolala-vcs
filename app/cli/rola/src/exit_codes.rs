@@ -4,6 +4,9 @@ pub const EC_ALREADY_EXIST: i32 = 11;
 // Exit code indicating the resource does not exist
 pub const EC_NOT_EXIST: i32 = 12;
 
+// Exit code indicating the run named a command the program does not have
+pub const EC_UNKNOWN_COMMAND: i32 = 13;
+
 // Exit code indicating help was triggered
 pub const EC_HELP: i32 = 2;
 
