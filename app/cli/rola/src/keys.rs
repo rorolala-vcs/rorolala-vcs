@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use librorolala::auth::{
-    KeyLocateRule, env_keys_dir, global_keys_dir, locate_accounts, user_keys_dir,
+    Account, KeyLocateRule, env_keys_dir, global_keys_dir, locate_accounts, user_keys_dir,
 };
 use librorolala::{vault::Vault, workspace::Workspace};
 use rorolala_utils_constants::{VAULT_KEYS_DIR, WORKSPACE_KEYS_DIR};
@@ -66,4 +66,18 @@ pub fn account_names(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Ve
     names.dedup();
 
     names
+}
+
+/// The account named `name`, from the first scope that holds it.
+///
+/// This is the account the [names](account_names) are listed under: the same search, so a
+/// name that can be completed is one this finds.
+pub fn account_named(
+    name: &str,
+    workspace: Option<&Workspace>,
+    vault: Option<&Vault>,
+) -> Option<Account> {
+    locate_accounts(&roots(workspace, vault), &scopes())
+        .into_iter()
+        .find(|account| account.name() == name)
 }

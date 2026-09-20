@@ -33,6 +33,12 @@ pub const EC_ERR_TOOL_KEYGEN_NO_KEY_DIR: i32 = 44;
 // created
 pub const EC_ERR_TOOL_KEYGEN_INSTALL_FAILED: i32 = 45;
 
+// Exit code indicating the target or the input a handshake needs is missing
+pub const EC_ERR_TOOL_HANDSHAKE_ARGUMENT: i32 = 46;
+
+// Exit code indicating no account could be named to act as
+pub const EC_ERR_TOOL_HANDSHAKE_NO_ACCOUNT: i32 = 47;
+
 // Vaults
 
 // Exit code indicating the Workspace configuration could not be read

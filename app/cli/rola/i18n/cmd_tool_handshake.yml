@@ -1,0 +1,62 @@
+_version: 2
+
+tool_handshake:
+  help:
+    en: |
+        Speak the handshake action to a Vault daemon
+
+        **Usage**: `rola tool-handshake <VAULT>`
+
+        `VAULT` names the daemon to reach: a name the Workspace has bound with `rola vault
+        bind`, or an ip, with the port a Vault listens on by default when none is written. The
+        action runs as the account the work acts as — the one `rola account` names — and
+        introduces itself by that name, so the call needs nothing else; what the daemon answers
+        is printed as it is.
+
+        `rola-daemon listen` is the other side of this exchange.
+    zh-CN: |
+        向保险库守护进程发起一次握手
+
+        **用法**：`rola tool-handshake <VAULT>`
+
+        `VAULT` 指要连的守护进程：可以是工作区用 `rola vault bind` 绑定的名字，也可以是
+        ip（不写端口时使用保险库的默认端口）。动作以当前工作所使用的账户（由 `rola account`
+        指定）行事，并以该账户的名字自报家门，所以不需要别的参数；守护进程的回答会原样输出。
+
+        `rola-daemon listen` 则是这次对话的另一端。
+
+  cmd_tool_handshake_description:
+    en: Speak the handshake action to a Vault daemon
+    zh-CN: 向保险库守护进程发起握手
+
+  err_arguments:
+    en: A Vault to reach is required
+    zh-CN: 未指定要连接的保险库
+
+  err_arguments_help:
+    en: |
+        Please name it, as in `rola tool-handshake origin` or `rola tool-handshake
+        127.0.0.1:7717`
+    zh-CN: |
+        请给出名字或地址，例如 `rola tool-handshake origin` 或 `rola tool-handshake 127.0.0.1:7717`
+
+  err_no_account:
+    en: No account was named to act as
+    zh-CN: 未指定以哪个账户行事
+
+  err_no_account_help:
+    en: |
+        Please run `rola account <ACCOUNT>` to name the account the work acts as
+    zh-CN: |
+        请运行 `rola account <ACCOUNT>` 指定当前使用的账户
+
+  err_account_unknown:
+    en: "`%{name}` is not an account the work can act as"
+    zh-CN: "`%{name}` 不是当前工作可以使用的账户"
+
+  err_account_unknown_help:
+    en: |
+        Please run `rola account` to see the accounts there are, or `rola tool-keygen` to
+        make one
+    zh-CN: |
+        请运行 `rola account` 查看已有账户，或用 `rola tool-keygen` 生成一个
