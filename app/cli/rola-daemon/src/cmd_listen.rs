@@ -6,12 +6,10 @@ use mingling::{
     metadata::Description,
     res::ResExitCode,
 };
-use rorolala_cli_setups::ResVault;
+use rorolala_cli_setups::{ResVault, ResVaultConfig};
 use rorolala_daemon::daemon_begin;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_configure::Configure;
 use rorolala_utils_location::Locate;
-use rorolala_vault::{CONFIG_PATH, Config};
 use rust_i18n::t;
 
 use crate::{
@@ -31,24 +29,26 @@ pub fn desc_listen() -> Description {
 }
 
 #[command]
-pub fn listen(vault: &mut LazyRes<ResVault>) -> Next {
+pub fn listen(vault: &mut LazyRes<ResVault>, config: &mut LazyRes<ResVaultConfig>) -> Next {
     let Some(vault) = vault.get_ref().as_ref() else {
         return ErrorVaultNotExist.into();
     };
 
-    let config_path = vault.get_root().join(CONFIG_PATH);
-    let config = match Config::read_from(&config_path) {
-        Ok(config) => config,
-        Err(error) => {
+    // The configuration is a resource too, so it is read the same way the Vault is, and
+    // written back once the daemon is done with it.
+    let config = match config.get_ref() {
+        ResVaultConfig::Read { config, .. } => config,
+        ResVaultConfig::Absent => return ErrorVaultNotExist.into(),
+        ResVaultConfig::Unread { path, reason } => {
             return ErrorConfigUnreadable {
-                path: config_path,
-                reason: error.to_string(),
+                path: path.clone(),
+                reason: reason.clone(),
             }
             .into();
         }
     };
 
-    let _exit = daemon_begin(vault.get_root(), &config);
+    let _exit = daemon_begin(vault.get_root(), config);
     ResultStopped.into()
 }
 

@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 rorolala-utils-cli-theme.workspace = true
+rorolala-utils-configure.workspace = true
 rorolala-utils-location.workspace = true
 librorolala.workspace = true
 mingling.workspace = true
