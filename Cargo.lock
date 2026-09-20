@@ -1427,6 +1427,7 @@ name = "rola"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "just_template",
  "librorolala",
  "mingling",
  "rorolala-cli-setups",

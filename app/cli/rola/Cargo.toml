@@ -14,3 +14,6 @@ rorolala-workspace.workspace = true
 mingling.workspace = true
 rust-i18n.workspace = true
 dirs.workspace = true
+
+[build-dependencies]
+just_template.workspace = true

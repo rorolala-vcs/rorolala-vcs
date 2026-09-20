@@ -1,101 +1,121 @@
-// Exit code indicating the resource already exists
+//! The exit codes the program ends with.
+//!
+//! Each constant states a number and carries the `i18n/exit_codes.yml` key that says what
+//! it means, written above it. `build.rs` reads the keys and generates `explain.rs` beside
+//! this file, which is what turns a number back into words — so the words live in the
+//! locale files and the keys live here, and neither is written twice.
+
+mod explain;
+
+pub use explain::*;
+
+// General
+
+/// `exit_codes.already_exist`
 pub const EC_ALREADY_EXIST: i32 = 11;
 
-// Exit code indicating the resource does not exist
+/// `exit_codes.not_exist`
 pub const EC_NOT_EXIST: i32 = 12;
 
-// Exit code indicating the run named a command the program does not have
+/// `exit_codes.unknown_command`
 pub const EC_UNKNOWN_COMMAND: i32 = 13;
 
-// Exit code indicating help was triggered
+/// `exit_codes.help`
 pub const EC_HELP: i32 = 2;
 
 // Creation
 
-// Exit code indicating failure to create a workspace
+/// `exit_codes.creation_workspace`
 pub const EC_ERR_CREATION_WORKSPACE: i32 = 21;
 
-// Exit code indicating failure to create a vault
+/// `exit_codes.creation_vault`
 pub const EC_ERR_CREATION_VAULT: i32 = 22;
 
 // Tools
 
-// Exit code indicating `openssl` could not be run
+/// `exit_codes.tool_keygen_no_openssl`
 pub const EC_ERR_TOOL_KEYGEN_NO_OPENSSL: i32 = 41;
 
-// Exit code indicating `openssl` ran but did not produce a key
+/// `exit_codes.tool_keygen_failed`
 pub const EC_ERR_TOOL_KEYGEN_FAILED: i32 = 42;
 
-// Exit code indicating the path a key was to be written to is not there
+/// `exit_codes.tool_keygen_path_not_exist`
 pub const EC_ERR_TOOL_KEYGEN_PATH_NOT_EXIST: i32 = 43;
 
-// Exit code indicating `--install` could not find the user's key directory
+/// `exit_codes.tool_keygen_no_key_dir`
 pub const EC_ERR_TOOL_KEYGEN_NO_KEY_DIR: i32 = 44;
 
-// Exit code indicating the directory a key pair was to be installed into could not be
-// created
+/// `exit_codes.tool_keygen_install_failed`
 pub const EC_ERR_TOOL_KEYGEN_INSTALL_FAILED: i32 = 45;
 
 // Configuration
 
-// Exit code indicating the configuration the run works from could not be read
+/// `exit_codes.config_unreadable`
 pub const EC_ERR_CONFIG_UNREADABLE: i32 = 51;
 
 // Vaults
 
-// Exit code indicating a `rola vault` command was given arguments it cannot use
+/// `exit_codes.vault_argument`
 pub const EC_ERR_VAULT_ARGUMENT: i32 = 52;
 
-// Exit code indicating the name a `rola vault unbind` was given is not bound
+/// `exit_codes.vault_not_bound`
 pub const EC_ERR_VAULT_NOT_BOUND: i32 = 53;
 
 // Accounts
 
-// Exit code indicating the name given is not an account the work can act as
+/// `exit_codes.account_not_found`
 pub const EC_ERR_ACCOUNT_NOT_FOUND: i32 = 61;
 
-// Exit code indicating the machine does not name where Rorolala keeps the user's files
+/// `exit_codes.account_no_dir`
 pub const EC_ERR_ACCOUNT_NO_DIR: i32 = 62;
 
-// Exit code indicating the work acts as no account, which the command needs
+/// `exit_codes.account_not_bound`
 pub const EC_ERR_ACCOUNT_NOT_BOUND: i32 = 63;
 
 // Placement
 
-// Exit code indicating the run is not inside a Workspace, which the command needs
+/// `exit_codes.should_in_workspace`
 pub const EC_ERR_SHOULD_IN_WORKSPACE: i32 = 71;
 
-// Exit code indicating the run is not inside a Vault, which the command needs
+/// `exit_codes.should_in_vault`
 pub const EC_ERR_SHOULD_IN_VAULT: i32 = 72;
 
-// Exit code indicating the run has no Vault to reach for
+/// `exit_codes.no_remote_vault`
 pub const EC_ERR_NO_REMOTE_VAULT: i32 = 73;
 
 // Actions
 
-// Exit code indicating an action had no channel to exchange over
+/// `exit_codes.action_no_channel`
 pub const EC_ERR_ACTION_NO_CHANNEL: i32 = 81;
 
-// Exit code indicating the side that owned a value held none to send
+/// `exit_codes.action_missing_value`
 pub const EC_ERR_ACTION_MISSING_VALUE: i32 = 82;
 
-// Exit code indicating a value was too long to frame
+/// `exit_codes.action_value_too_large`
 pub const EC_ERR_ACTION_VALUE_TOO_LARGE: i32 = 83;
 
-// Exit code indicating the channel failed
+/// `exit_codes.action_io`
 pub const EC_ERR_ACTION_IO: i32 = 84;
 
-// Exit code indicating a value could not cross the channel
+/// `exit_codes.action_codec`
 pub const EC_ERR_ACTION_CODEC: i32 = 85;
 
-// Exit code indicating no action answers to the id asked for
+/// `exit_codes.action_unknown`
 pub const EC_ERR_ACTION_UNKNOWN: i32 = 86;
 
-// Exit code indicating what an action produced would not encode
+/// `exit_codes.action_json`
 pub const EC_ERR_ACTION_JSON: i32 = 87;
 
-// Exit code indicating a target would not read as an address
+/// `exit_codes.action_addr`
 pub const EC_ERR_ACTION_ADDR: i32 = 88;
 
-// Exit code indicating a session could not be established
+/// `exit_codes.action_auth`
 pub const EC_ERR_ACTION_AUTH: i32 = 89;
+
+// Explain
+
+/// `exit_codes.explain_unknown`
+pub const EC_ERR_EXPLAIN_UNKNOWN: i32 = 91;
+
+/// `exit_codes.explain_no_lastec`
+pub const EC_ERR_EXPLAIN_NO_LASTEC: i32 = 92;

@@ -15,6 +15,9 @@ const HISTORY_FILE: &str = "addr.hs";
 /// The file the account the work acts as is kept in.
 const ACCOUNT_FILE: &str = "user";
 
+/// The file the exit code of the last run is kept in.
+const LASTEC_FILE: &str = "lastec";
+
 /// The directory Rorolala keeps its own files in, if the machine names one.
 ///
 /// On a machine that follows the XDG layout this is `~/.local/share/rola`.
@@ -30,4 +33,9 @@ pub fn history_path() -> Option<PathBuf> {
 /// The file the account the work acts as is kept in.
 pub fn account_path() -> Option<PathBuf> {
     Some(data_dir()?.join(ACCOUNT_FILE))
+}
+
+/// The file the exit code of the last run is kept in.
+pub fn lastec_path() -> Option<PathBuf> {
+    Some(data_dir()?.join(LASTEC_FILE))
 }

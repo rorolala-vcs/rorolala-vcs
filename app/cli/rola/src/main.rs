@@ -23,11 +23,13 @@ mod account;
 mod address;
 mod cmd_account;
 mod cmd_create;
+mod cmd_explain;
 mod cmd_init;
 mod cmd_vault;
 mod error;
 mod exit_codes;
 mod keys;
+mod lastec;
 mod tools;
 mod user;
 
@@ -51,7 +53,16 @@ fn main() {
     program.with_setup(RorolalaSetup);
     program.with_setup(AddressHistorySetup);
     program.with_setup(CurrentAccountSetup);
-    program.exec_and_exit();
+
+    let exit_code = program.exec();
+
+    // The run is over, and its exit code is the one `rola explain exit-code` explains when
+    // it is given nothing: recording it here is what makes "the run before" a thing the
+    // program can be asked about. It is kept under the user's local data directory, so a
+    // machine that names none simply has nothing recorded.
+    lastec::record(exit_code);
+
+    std::process::exit(exit_code);
 }
 
 /// Prints the help a run falls back to when no command is named.

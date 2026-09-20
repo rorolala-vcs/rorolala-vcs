@@ -13,6 +13,7 @@ rola:
             tool-keygen <PATH>  Generate an Ed25519 key pair
             tool-handshake      Speak the handshake action to a Vault daemon
             vault               List, bind, and choose the Vaults this Workspace knows
+            explain <CMD>       Say what a number or a name means
 
         **Flags**
             -v, --vault  Act on a Vault instead of a Workspace
@@ -35,6 +36,7 @@ rola:
             tool-keygen <PATH>  生成一对 Ed25519 密钥
             tool-handshake      向保险库守护进程发起握手
             vault               列出、绑定并选择工作区已知的保险库
+            explain <CMD>       解释某个数字或名字的含义
 
         **标志**
             -v, --vault  操作保险库而不是工作区

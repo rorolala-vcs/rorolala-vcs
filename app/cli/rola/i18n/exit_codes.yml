@@ -1,0 +1,126 @@
+_version: 2
+
+exit_codes:
+  already_exist:
+    en: The resource is already there
+    zh-CN: 资源已存在
+
+  not_exist:
+    en: The resource is not there
+    zh-CN: 资源不存在
+
+  unknown_command:
+    en: The run named a command the program does not have
+    zh-CN: 本次运行给出的命令不属于本程序
+
+  help:
+    en: Help was asked for
+    zh-CN: 请求了帮助
+
+  creation_workspace:
+    en: A Workspace could not be created
+    zh-CN: 无法创建工作区
+
+  creation_vault:
+    en: A Vault could not be created
+    zh-CN: 无法创建保险库
+
+  tool_keygen_no_openssl:
+    en: "`openssl` could not be run"
+    zh-CN: 无法运行 `openssl`
+
+  tool_keygen_failed:
+    en: "`openssl` ran but did not produce a key"
+    zh-CN: "`openssl` 已运行，但未生成密钥"
+
+  tool_keygen_path_not_exist:
+    en: The path a key was to be written to is not there
+    zh-CN: 用于写出密钥的路径不存在
+
+  tool_keygen_no_key_dir:
+    en: "`--install` could not find the user's key directory"
+    zh-CN: "`--install` 无法找到用户密钥目录"
+
+  tool_keygen_install_failed:
+    en: The directory a key pair was to be installed into could not be created
+    zh-CN: 无法创建用于安装密钥对的目录
+
+  config_unreadable:
+    en: The configuration the run works from could not be read
+    zh-CN: 无法读取本次运行所依据的配置
+
+  vault_argument:
+    en: "A `rola vault` command was given arguments it cannot use"
+    zh-CN: "`rola vault` 收到了无法使用的参数"
+
+  vault_not_bound:
+    en: "The name a `rola vault unbind` was given is not bound"
+    zh-CN: "`rola vault unbind` 得到的名字并未绑定"
+
+  account_not_found:
+    en: The name given is not an account the work can act as
+    zh-CN: 所给名字不是可作为身份使用的账户
+
+  account_no_dir:
+    en: The machine does not name where Rorolala keeps the user's files
+    zh-CN: 本机未指明 Rorolala 存放用户文件的位置
+
+  account_not_bound:
+    en: The work acts as no account, which the command needs
+    zh-CN: 尚未指定身份，而该命令需要
+
+  should_in_workspace:
+    en: The run is not inside a Workspace, which the command needs
+    zh-CN: 本次运行不在任何工作区内，而该命令需要
+
+  should_in_vault:
+    en: The run is not inside a Vault, which the command needs
+    zh-CN: 本次运行不在任何保险库内，而该命令需要
+
+  no_remote_vault:
+    en: The run has no Vault to reach for
+    zh-CN: 本次运行没有可连接的保险库
+
+  action_no_channel:
+    en: An action had no channel to exchange over
+    zh-CN: 动作没有可用于交换的通道
+
+  action_missing_value:
+    en: The side that owned a value held none to send
+    zh-CN: 持有值的一方没有可发送的内容
+
+  action_value_too_large:
+    en: A value was too long to frame
+    zh-CN: 值过长，无法装帧
+
+  action_io:
+    en: The channel failed
+    zh-CN: 通道失败
+
+  action_codec:
+    en: A value could not cross the channel
+    zh-CN: 值无法通过通道
+
+  action_unknown:
+    en: No action answers to the id asked for
+    zh-CN: 没有动作响应所请求的 id
+
+  action_json:
+    en: What an action produced would not encode
+    zh-CN: 动作产生的值无法编码
+
+  action_addr:
+    en: A target would not read as an address
+    zh-CN: 目标无法解析为地址
+
+  action_auth:
+    en: A session could not be established
+    zh-CN: 无法建立会话
+
+  explain_unknown:
+    en: The exit code asked about is not one the program states
+    zh-CN: 所询问的退出码不是本程序声明的
+
+  explain_no_lastec:
+    en: No exit code was recorded to explain
+    zh-CN: 没有可供解释的历史退出码
