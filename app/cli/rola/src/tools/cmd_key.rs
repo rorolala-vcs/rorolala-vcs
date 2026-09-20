@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use librorolala::auth::{KeyLocateRule, locate_accounts, locate_members};
+use librorolala::auth::{locate_accounts, locate_members};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -13,12 +13,11 @@ use mingling::{
 };
 use rorolala_cli_setups::{ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
-use rorolala_utils_constants::{VAULT_KEYS_DIR, WORKSPACE_KEYS_DIR};
-use rorolala_utils_location::Locate;
 use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::EC_HELP;
+use crate::keys::{roots, scopes};
 
 /// The flags `rola key` takes.
 #[derive(Pickable)]
@@ -39,13 +38,14 @@ pub fn desc_key() -> Description {
     t!("key.cmd_key_description").to_string().into()
 }
 
-/// Lists the keys beside the current Vault or Workspace.
+/// Lists the keys Rorolala can reach.
 ///
-/// Both are sniffed from the current directory, and only the directories beside the work at
-/// hand are looked in — the Workspace's first, then the Vault's — so what is listed is what
-/// this place would resolve a name against. By default the keys listed are public ones, the
-/// members a name can mean; with `--pem` they are private ones, the accounts the work can
-/// act as.
+/// Every scope is searched, highest priority first: the keys beside the work at hand first —
+/// the Workspace's, then the Vault's — and after them the user's own stores, under the local
+/// data directory, the filesystem root and `ROLA_HOME`. A key found higher up shadows the
+/// same name below it, so that is the order a name would resolve in. By default the keys
+/// listed are public ones, the members a name can mean; with `--pem` they are private ones,
+/// the accounts the work can act as.
 ///
 /// Each key found is printed as a full path, one per line, on standard output, in the order
 /// it is looked up. Finding nothing is not a failure: it prints nothing and returns.
@@ -55,15 +55,7 @@ pub fn key(
     vault: &mut LazyRes<ResVault>,
     workspace: &mut LazyRes<ResWorkspace>,
 ) -> Next {
-    // The Workspace's keys come first, then the Vault's, which is the order `locate` searches
-    // them in: a key kept beside the copy being worked in shadows the same name in the Vault.
-    let mut roots = Vec::new();
-    if let Some(held) = workspace.get_ref().as_ref() {
-        roots.push(held.get_root().join(WORKSPACE_KEYS_DIR));
-    }
-    if let Some(held) = vault.get_ref().as_ref() {
-        roots.push(held.get_root().join(VAULT_KEYS_DIR));
-    }
+    let roots = roots(workspace.get_ref().as_ref(), vault.get_ref().as_ref());
 
     // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
     let flags = args.pick(&arg![KeyFlags]).unwrap();
@@ -86,19 +78,6 @@ pub fn key(
         empty_result!()
     } else {
         ResultKeysFound { paths }.into()
-    }
-}
-
-/// The scopes a key is looked for in: only the directories beside the work at hand.
-///
-/// A key in the user's, the machine's, or `ROLA_HOME`'s store belongs to no particular Vault
-/// or Workspace, so a listing of what is *here* does not reach it.
-const fn scopes() -> KeyLocateRule {
-    KeyLocateRule {
-        find_global: false,
-        find_local: true,
-        find_user: false,
-        find_env: false,
     }
 }
 

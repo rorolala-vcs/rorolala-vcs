@@ -3,31 +3,33 @@ _version: 2
 key:
   help:
     en: |
-        List the keys beside the current Vault or Workspace
+        List every key Rorolala can reach
 
         **Usage**: `rola key [--pem]`
 
-        Both are sniffed from the current directory, and only the directories beside the
-        work at hand are looked in: the Workspace's keys first, then the Vault's. Each key
+        Every scope is searched, highest priority first: the Workspace's keys, then the
+        Vault's, then the user's own stores — the local data directory, the filesystem root
+        and `ROLA_HOME`. A key found higher up shadows the same name below it. Each key
         found is printed as a full path, one per line, in that order.
 
         By default public keys are listed — the members a name can mean. With `--pem`,
         private keys are listed instead, the accounts the work can act as. Finding no keys
         is not an error.
     zh-CN: |
-        列出当前保险库 / 工作区旁边的密钥
+        列出 Rorolala 能找到的全部密钥
 
         **用法**：`rola key [--pem]`
 
-        两者都从当前目录嗅探，且只查找手头这份工作旁边的目录：先工作区的密钥，
-        再保险库的。每找到一个密钥就按该顺序输出一行完整路径。
+        按优先级从高到低搜索每个作用域：先工作区的密钥，再保险库的，然后是用户自己的仓库
+        （本地数据目录、文件系统根目录与 `ROLA_HOME`）。上方找到的名字会遮蔽下方同名的密钥。
+        每找到一个密钥就按该顺序输出一行完整路径。
 
         默认列出公钥（名字可能指代的成员）；加 `--pem` 则列出私钥（当前工作可以扮演的账户）。
         没找到不是错误。
 
   cmd_key_description:
-    en: List the keys beside the current Vault or Workspace
-    zh-CN: 列出当前保险库 / 工作区旁边的密钥
+    en: List every key Rorolala can reach
+    zh-CN: 列出 Rorolala 能找到的全部密钥
 
   complete:
     pem:
