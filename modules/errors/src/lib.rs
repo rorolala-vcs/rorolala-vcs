@@ -405,7 +405,7 @@ impl AddrError {
 
 impl fmt::Display for AddrError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "`{}` is not an ip and port", self.target)
+        write!(formatter, "`{}` is not an ip", self.target)
     }
 }
 

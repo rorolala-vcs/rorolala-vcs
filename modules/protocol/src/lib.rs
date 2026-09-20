@@ -9,6 +9,9 @@
 #[macro_use]
 mod macros;
 
+mod address;
+pub use address::*;
+
 mod action;
 pub use action::*;
 
