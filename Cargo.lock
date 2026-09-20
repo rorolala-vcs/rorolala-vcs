@@ -1426,6 +1426,7 @@ dependencies = [
 name = "rola"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "librorolala",
  "mingling",
  "rorolala-cli-setups",
@@ -1478,6 +1479,7 @@ dependencies = [
  "librorolala",
  "mingling",
  "rorolala-utils-cli-theme",
+ "rorolala-utils-configure",
  "rorolala-utils-location",
  "rust-i18n",
 ]
@@ -1493,6 +1495,7 @@ dependencies = [
  "rorolala-protocol",
  "rorolala-utils-cli-theme",
  "rorolala-utils-configure",
+ "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vault",
@@ -1634,6 +1637,7 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "serde",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -1645,6 +1649,7 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "serde",
+ "toml 0.8.23",
 ]
 
 [[package]]

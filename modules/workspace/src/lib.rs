@@ -14,6 +14,7 @@ mod config;
 mod error;
 mod init;
 
+pub use config::*;
 pub use error::*;
 
 /// Where the Workspace keeps its data, its configuration and its keys
@@ -57,6 +58,17 @@ impl Locate for Workspace {
 
     fn get_root(&self) -> &Path {
         self.current_dir.as_path()
+    }
+}
+
+impl Workspace {
+    /// The file this Workspace keeps its configuration in.
+    ///
+    /// The configuration sits inside the data directory, so a Workspace that has one
+    /// always has somewhere to read it from and to write it back to.
+    #[must_use]
+    pub fn config_path(&self) -> PathBuf {
+        self.current_dir.join(CONFIG_PATH)
     }
 }
 
