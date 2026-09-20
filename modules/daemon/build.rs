@@ -10,6 +10,12 @@
 //! and `type Output` are taken as written, and every other shape — generics, an
 //! `impl` that is not of `Action` — is left alone rather than guessed at.
 //!
+//! An input that is a tuple is spread over one parameter per element, because that is what
+//! a caller would have written out by hand: `type Input = (String, i32)` gives
+//! `name: String, value: i32`. The names come from the input's own doc comments, one list
+//! item per parameter — `- name: String` — and fall back to `p0`, `p1`, … where there is
+//! none; a single value keeps the name `input` unless a list item names it.
+//!
 //! What comes out is shaped by `tmpl/action_func.tmpl`, one arm per action, so the
 //! wording of an entry point can be changed without touching this script.
 //!
@@ -30,7 +36,10 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use just_template::Template;
-use syn::{Expr, ExprLit, GenericArgument, ImplItem, Item, Lit, PathArguments, Type, TypePath};
+use syn::{
+    Attribute, Expr, ExprLit, GenericArgument, ImplItem, Item, Lit, Meta, PathArguments, Type,
+    TypePath,
+};
 
 /// Where the actions are read from, relative to the manifest directory.
 const ACTIONS_DIR: &str = "src/actions";
@@ -50,6 +59,14 @@ const OUTPUT: &str = "src/action_func.rs";
 /// The file the registry is written to, relative to the manifest directory.
 const REGISTRY_OUTPUT: &str = "src/registry.rs";
 
+/// The template the action files' module is rendered from, relative to the manifest
+/// directory.
+const MODULES_TEMPLATE: &str = "tmpl/mod.tmpl";
+
+/// The file the module declaring the action files is written to, relative to the manifest
+/// directory.
+const MODULES_OUTPUT: &str = "src/actions/mod.rs";
+
 /// The trait an action implements, matched by the last segment of its path.
 const ACTION_TRAIT: &str = "Action";
 
@@ -60,6 +77,7 @@ fn main() {
     println!("cargo:rerun-if-changed={ACTIONS_DIR}");
     println!("cargo:rerun-if-changed={TEMPLATE}");
     println!("cargo:rerun-if-changed={REGISTRY_TEMPLATE}");
+    println!("cargo:rerun-if-changed={MODULES_TEMPLATE}");
     println!("cargo:rerun-if-changed=build.rs");
 
     let manifest = PathBuf::from(
@@ -82,14 +100,30 @@ fn main() {
             })
             .filter(|path| path != &manifest.join(OUTPUT))
             .filter(|path| path != &manifest.join(REGISTRY_OUTPUT))
+            .filter(|path| path != &manifest.join(MODULES_OUTPUT))
             .collect::<Vec<_>>(),
         Err(error) => fail(&format!("reading {}: {error}", directory.display())),
     };
     action_files.sort();
 
     let mut actions = Vec::new();
+    let mut modules = Vec::new();
     for path in action_files {
-        actions.extend(actions_in(&path).unwrap_or_else(|error| fail(&error)));
+        let found = actions_in(&path).unwrap_or_else(|error| fail(&error));
+
+        // A file that declares no action is not a module of actions: it is a helper, or a
+        // draft that got past the name filter, and declaring it would compile something
+        // nothing reaches.
+        if found.is_empty() {
+            continue;
+        }
+
+        let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            fail(&format!("{}: the file name is not text", path.display()));
+        };
+        modules.push(stem.to_owned());
+
+        actions.extend(found);
     }
 
     if let Err(error) = ensure_unique_ids(&actions) {
@@ -103,6 +137,11 @@ fn main() {
             &render(&manifest, template, &actions),
         );
     }
+
+    write_if_changed(
+        &manifest.join(MODULES_OUTPUT),
+        &render_modules(&manifest, &modules),
+    );
 }
 
 /// One action, as its `impl Action for ...` block spells it.
@@ -111,8 +150,14 @@ struct Action {
     id: u32,
     /// The implementing type, as written.
     type_name: String,
-    /// What the action takes, as written.
-    input: String,
+    /// The parameters the entry points take for the action's input, as a signature spells
+    /// them: `input: String`, or one parameter per element of a tuple input.
+    params: String,
+    /// What the entry points hand on for that input: the parameter, or a tuple of them.
+    argument: String,
+    /// The same, spelled as the arguments of a call — the names alone, since a call that
+    /// takes the parameters one by one is handed the names and not a tuple.
+    call_args: String,
     /// What the action yields, as written.
     output: String,
 }
@@ -178,7 +223,7 @@ fn action_of(item: &Item) -> Result<Option<Action>, String> {
                 id = Some(action_id(&associated.expr)?);
             }
             ImplItem::Type(associated) => match associated.ident.to_string().as_str() {
-                "Input" => input = Some(render_type(&associated.ty)?),
+                "Input" => input = Some(input_parameters(&associated.ty, &associated.attrs)?),
                 "Output" => output = Some(render_type(&associated.ty)?),
                 _ => {}
             },
@@ -187,15 +232,99 @@ fn action_of(item: &Item) -> Result<Option<Action>, String> {
     }
 
     let id = id.ok_or_else(|| format!("`{type_name}` declares no `{ACTION_ID}`"))?;
-    let input = input.ok_or_else(|| format!("`{type_name}` declares no `Input`"))?;
+    let (params, argument, call_args) =
+        input.ok_or_else(|| format!("`{type_name}` declares no `Input`"))?;
     let output = output.ok_or_else(|| format!("`{type_name}` declares no `Output`"))?;
 
     Ok(Some(Action {
         id,
         type_name,
-        input,
+        params,
+        argument,
+        call_args,
         output,
     }))
+}
+
+/// How an action's input is handed to its entry points: the parameters to take, the value to
+/// pass on, and the same value spelled as the arguments of a call.
+///
+/// A tuple of two or more is spread over one parameter per element, so a caller names each
+/// part rather than building a tuple to hand over. A single value — and a one-element tuple,
+/// which is one value wearing brackets — takes one parameter holding the whole input. The
+/// names are the ones the input's doc comments hint at, and the fallbacks otherwise.
+fn input_parameters(
+    ty: &Type,
+    attributes: &[Attribute],
+) -> Result<(String, String, String), String> {
+    let hints = hint_names(attributes);
+
+    if let Type::Tuple(tuple) = ty
+        && tuple.elems.len() > 1
+    {
+        let mut parameters = Vec::new();
+        let mut arguments = Vec::new();
+        for (index, element) in tuple.elems.iter().enumerate() {
+            let name = hints
+                .get(index)
+                .cloned()
+                .unwrap_or_else(|| format!("p{index}"));
+
+            parameters.push(format!("{name}: {}", render_type(element)?));
+            arguments.push(name);
+        }
+
+        let call_args = arguments.join(", ");
+
+        return Ok((parameters.join(", "), format!("({call_args})"), call_args));
+    }
+
+    let name = hints.first().cloned().unwrap_or_else(|| "input".to_owned());
+
+    Ok((format!("{name}: {}", render_type(ty)?), name.clone(), name))
+}
+
+/// The parameter names an input's doc comments hint at, in order.
+///
+/// Only a list item says anything — a line that is `- name: Type` — and only the name half is
+/// read: what a parameter *is* comes from the tuple itself, and a hint that disagreed with it
+/// could only mislead. The prose around the list is ignored, so a description can be written
+/// the usual way.
+fn hint_names(attributes: &[Attribute]) -> Vec<String> {
+    let mut names = Vec::new();
+
+    for attribute in attributes {
+        if !attribute.path().is_ident("doc") {
+            continue;
+        }
+
+        let Meta::NameValue(name_value) = &attribute.meta else {
+            continue;
+        };
+        let Expr::Lit(ExprLit {
+            lit: Lit::Str(text),
+            ..
+        }) = &name_value.value
+        else {
+            continue;
+        };
+
+        for line in text.value().lines() {
+            let Some(item) = line.trim().strip_prefix('-') else {
+                continue;
+            };
+            let Some((name, _)) = item.split_once(':') else {
+                continue;
+            };
+
+            let name = name.trim();
+            if !name.is_empty() {
+                names.push(name.to_owned());
+            }
+        }
+    }
+
+    names
 }
 
 /// The id an action declares, as the number the registry is laid out by.
@@ -328,7 +457,9 @@ fn render(manifest: &Path, template: &str, actions: &[Action]) -> String {
         arms.push(HashMap::from([
             ("type_name".to_owned(), action.type_name.clone()),
             ("stem".to_owned(), action.stem()),
-            ("input".to_owned(), action.input.clone()),
+            ("params".to_owned(), action.params.clone()),
+            ("argument".to_owned(), action.argument.clone()),
+            ("call_args".to_owned(), action.call_args.clone()),
             ("output".to_owned(), action.output.clone()),
         ]));
     }
@@ -348,10 +479,48 @@ fn render(manifest: &Path, template: &str, actions: &[Action]) -> String {
     )
 }
 
+/// Renders the module that declares the action files, from its template.
+///
+/// It is what makes adding an action one file and nothing else: the declarations are read
+/// off the directory rather than written by hand, so a file and its module cannot come
+/// apart.
+fn render_modules(manifest: &Path, modules: &[String]) -> String {
+    let path = manifest.join(MODULES_TEMPLATE);
+    let source = match fs::read_to_string(&path) {
+        Ok(source) => source,
+        Err(error) => fail(&format!("reading {}: {error}", path.display())),
+    };
+
+    let mut template = Template::from(source);
+    template.insert_param("modules".to_owned(), module_declarations(modules));
+
+    template.expand().map_or_else(
+        || {
+            fail(&format!(
+                "expanding {}: its blocks do not pair up, or a block is nested",
+                path.display()
+            ))
+        },
+        |rendered| rendered + "\n",
+    )
+}
+
+/// What each action file needs said about it: its module, and what that module exports.
+///
+/// A module is named after its file, so a file is reached by the name it was written under
+/// rather than by the action inside it.
+fn module_declarations(modules: &[String]) -> String {
+    modules
+        .iter()
+        .map(|module| format!("mod {module};\npub use {module}::*;"))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 /// Refuses two actions that claim one id.
 ///
 /// The registry is laid out by id, so a repeated one would put an action where another
-/// belongs. The build stops here instead, while both are still there to be seen.
+/// belongs. The build stops here, while both are still there to be seen.
 fn ensure_unique_ids(actions: &[Action]) -> Result<(), String> {
     for (index, action) in actions.iter().enumerate() {
         if let Some(other) = actions[index + 1..]
@@ -381,7 +550,7 @@ fn registry_rows(actions: &[Action]) -> String {
     for id in 0..=last.id {
         match actions.iter().find(|action| action.id == id) {
             Some(action) => rows.push(format!(
-                "        std::option::Option::Some(std::boxed::Box::new({}),)",
+                "        std::option::Option::Some(std::boxed::Box::new({})),",
                 action.type_name
             )),
             None => rows.push("        std::option::Option::None,".to_owned()),

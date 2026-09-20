@@ -1,13 +1,18 @@
-mod handshake;
-pub use handshake::*;
+// The actions themselves, one file each. Which files there are is written down by
+// `build.rs`, in the `actions` module beside them, so adding an action is adding a file and
+// nothing else.
+//
+// The path is spelled out because a module keeps its children in a directory named after
+// itself: `action.rs`'s own is `src/action/`, while the action files live in `src/actions/`.
+#[path = "actions/mod.rs"]
+mod actions;
+pub use actions::*;
 
-use std::net::SocketAddr;
-
-use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace, Socket};
+use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace, Socket, parse_address};
+use rorolala_utils_constants::VAULT_DEFAULT_PORT;
 use tokio::net::TcpStream;
 
 use rorolala_auth::{Account, SecureStream};
-use rorolala_errors::AddrError;
 
 use crate::wire;
 
@@ -37,11 +42,10 @@ pub async fn proc_action<A>(
 where
     A: Action,
 {
-    // Read before anything else: an address that cannot be one is the caller's to fix, and
-    // says so here rather than at the first write.
-    let address: SocketAddr = target
-        .parse()
-        .map_err(|_| ActionError::Addr(AddrError::new(target)))?;
+    // Read before anything else: a target that cannot be an address is the caller's to fix,
+    // and says so here rather than at the first write. An address written without a port
+    // means the one a Vault listens on by default.
+    let address = parse_address(&target, VAULT_DEFAULT_PORT).map_err(ActionError::Addr)?;
 
     let identity = account.get_key()?;
     let expected = account.peer_key()?;

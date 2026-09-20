@@ -9,6 +9,7 @@ rorolala-errors.workspace = true
 rorolala-protocol.workspace = true
 rorolala-utils-cli-theme.workspace = true
 rorolala-utils-configure.workspace = true
+rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
 rorolala-vault.workspace = true

@@ -47,7 +47,7 @@ impl Action for ActionHandshake {
         // The server responds
         let response = OnlyVault::new(&ctx, || "Welcome!".to_string());
 
-        // Append the server's response to the message
+        // Append the server's response to the message and have both sides sync
         message
             .sync_mut_with(&mut ctx, response, |raw, response| {
                 *raw = format!("Hello, {raw} ... {response}");

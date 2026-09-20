@@ -16,12 +16,12 @@ use tokio::sync::watch;
 
 use crate::begin::DaemonInput;
 
-mod actions;
+mod action;
 mod begin;
 mod exit;
 mod wire;
 
-pub use actions::*;
+pub use action::*;
 pub use exit::*;
 
 /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
