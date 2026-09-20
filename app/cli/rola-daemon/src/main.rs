@@ -9,10 +9,12 @@
 rust_i18n::i18n!("i18n", fallback = "en");
 
 use mingling::{
-    macros::{buffer, gen_program, r_println, renderer},
+    macros::{chain, gen_program},
     setup::DefaultSetup,
 };
 use rorolala_cli_setups::RorolalaSetup;
+
+use crate::cmd_listen::EntryListen;
 
 mod cmd_listen;
 mod exit_codes;
@@ -24,9 +26,10 @@ fn main() {
     program.exec_and_exit();
 }
 
-#[renderer(buffer)]
-pub(crate) fn render_fallback(args: EntryFallback) {
-    r_println!("Command not found: {}", args.join(" "));
+#[chain]
+pub(crate) fn handle_fallback(args: EntryFallback) -> EntryListen {
+    // When no subcommand matches, automatically route to listen
+    EntryListen::from(args.0)
 }
 
 gen_program!();
