@@ -51,6 +51,7 @@ pub const VAULT_VAULTS_DIR: &str = "./vaults/";
 /// rather than being one of them. Naming it is what an address written without a `/sub`
 /// means, and what says so is the empty name: the root is the Vault a path naming nothing
 /// resolves to, which is the same answer `RootVault` gives an empty path.
+#[lazyffi(export = ROLA_ROOT_SUB_VAULT)]
 pub const ROOT_SUB_VAULT: &str = "";
 
 /// The port a Vault's daemon listens on when its configuration names no other.
@@ -59,22 +60,29 @@ pub const ROOT_SUB_VAULT: &str = "";
 /// be reached at without being told it every time. It is also what an address written without
 /// a port means, which is why it lives here beside the rest of the layout rather than only in
 /// the configuration that happens to read it.
+#[lazyffi(export = ROLA_VAULT_DEFAULT_PORT)]
 pub const VAULT_DEFAULT_PORT: u16 = 7717;
 
 /// Keys of a global (machine-wide) scope, under the filesystem root
+#[lazyffi(export = ROLA_GLOBAL_KEYS_DIR)]
 pub const GLOBAL_KEYS_DIR: &str = ".rola/keys";
 
 /// Keys of a user scope, under the user's local data directory
+#[lazyffi(export = ROLA_USER_KEYS_DIR)]
 pub const USER_KEYS_DIR: &str = "rola/keys";
 
 /// Keys named by the environment, under [`HOME_ENV_VAR`]
+#[lazyffi(export = ROLA_ENV_KEYS_DIR)]
 pub const ENV_KEYS_DIR: &str = "keys";
 
 /// The variable that names the directory an environment key set lives in
+#[lazyffi(export = ROLA_HOME_ENV_VAR)]
 pub const HOME_ENV_VAR: &str = "ROLA_HOME";
 
 /// The extension a member's public key carries
+#[lazyffi(export = ROLA_PUBLIC_KEY_EXTENSION)]
 pub const PUBLIC_KEY_EXTENSION: &str = "pub";
 
 /// The extension an account's private key carries
+#[lazyffi(export = ROLA_PRIVATE_KEY_EXTENSION)]
 pub const PRIVATE_KEY_EXTENSION: &str = "pem";
