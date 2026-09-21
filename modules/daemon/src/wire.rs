@@ -1,9 +1,11 @@
 //! The preamble a Workspace and a Vault exchange before an action runs.
 //!
 //! The channel is up, but neither side yet knows what the other wants. The Workspace
-//! speaks first: it names the action it wants run and the account it acts as. The Vault
-//! answers with two bytes that echo the action's id, which is what tells the Workspace
-//! the Vault read the same request — and only then do both sides start the action itself.
+//! speaks first: it names the action it wants run, the account it acts as, and which Vault
+//! under the daemon it is reached with — one daemon may serve several, so the Vault is not
+//! the daemon's to assume. The Vault answers with two bytes that echo the action's id,
+//! which is what tells the Workspace the Vault read the same request — and only then do
+//! both sides start the action itself.
 //!
 //! The request is framed the way a synced value is: a four-byte length, then the encoding.
 //! The confirmation is not a value but a check, so it is exactly the two bytes it is. Both
@@ -16,7 +18,7 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 /// The largest request a Vault will read.
 ///
-/// A request is an id and a name, so anything longer than this is not one; the bound is
+/// A request is an id and a few names, so anything longer than this is not one; the bound is
 /// what keeps a peer from asking for a name megabytes long to be allocated.
 const MAX_REQUEST: usize = 4 * 1024;
 
@@ -27,6 +29,14 @@ pub(crate) struct Request {
     pub(crate) id: u32,
     /// The account the Workspace acts as.
     pub(crate) account: String,
+    /// The Vault under the daemon's own that is being reached for.
+    ///
+    /// Nothing names the Vault the daemon serves, which is what an address without a sub-vault
+    /// asks for; anything else names one below the root the daemon's own sits in. The daemon is
+    /// reached as the authority of the link and is not told which port or host was dialled, so
+    /// which Vault is meant has to travel: it is the one part of an address a connection cannot
+    /// imply.
+    pub(crate) sub: String,
 }
 
 /// The two bytes that confirm an action id: its low two, in big-endian order.
@@ -153,6 +163,7 @@ mod tests {
         let request = Request {
             id: 7,
             account: "alice".to_string(),
+            sub: "vaults/alpha".to_string(),
         };
 
         write_request(&mut workspace, &request).await.unwrap();
@@ -169,6 +180,7 @@ mod tests {
         let request = Request {
             id: 1,
             account: "a".repeat(MAX_REQUEST + 1),
+            sub: String::new(),
         };
 
         write_request(&mut workspace, &request).await.unwrap();

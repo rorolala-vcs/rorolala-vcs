@@ -75,6 +75,28 @@ fn main() {
         );
         checked.wants_refused(&workspace, "nobody", &address, "nothing holds it");
 
+        // The same daemon serves the Vault it holds when the request names one, so a link to it
+        // is answered by the Vault below — under that Vault's own rules, which reach up into the
+        // root's keys and no further.
+        let alpha_link = link(ROOT_PORT, "alpha");
+
+        checked.wants_admitted(
+            &workspace,
+            "rootuser",
+            &alpha_link,
+            "the root above holds it",
+        );
+        checked.wants_admitted(&workspace, "subuser", &alpha_link, "it holds it itself");
+        checked.wants_refused(&workspace, "nobody", &alpha_link, "nothing holds it");
+
+        // A name under the root that is no Vault is refused rather than answered by the root.
+        checked.wants_refused(
+            &workspace,
+            "rootuser",
+            &link(ROOT_PORT, "nowhere"),
+            "no Vault is served there",
+        );
+
         serving.stop();
     }
 
@@ -180,6 +202,11 @@ fn local_only() -> KeyLocateRule {
 /// The address a Vault serving on `port` is reached at.
 fn address(port: u16) -> String {
     format!("127.0.0.1:{port}")
+}
+
+/// The link a Vault serving on `port` is reached at, naming the Vault `sub` holds.
+fn link(port: u16, sub: &str) -> String {
+    format!("rola://127.0.0.1:{port}/{sub}")
 }
 
 /// Makes `dir` a Vault that can be served: a Vault of its own, listening on `port`, holding

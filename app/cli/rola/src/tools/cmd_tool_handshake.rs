@@ -101,10 +101,10 @@ pub fn tool_handshake(
     // greeting the account this runs as.
     let input = account.name();
 
-    // The daemon is dialled at the address the link names. Which Vault under it is asked for is
-    // not part of that yet: the request carries the action and the account and nothing about
-    // where the daemon should look, so the Vault reached is the one it serves.
-    let output = action_handshake(held, &account, target.authority(), input)?;
+    // The daemon is dialled at the address the link names, and the link is handed over whole:
+    // which Vault under the daemon is asked for travels with the request, so passing only the
+    // authority would reach whichever Vault the daemon serves rather than the one named here.
+    let output = action_handshake(held, &account, target.to_string(), input)?;
 
     ResultHandshake { output }.into()
 }

@@ -4,8 +4,14 @@
 //! A Vault does not reach out; it waits. Every connection is answered on its own, so one
 //! Workspace that fails to prove itself, or asks for something the Vault does not serve,
 //! never holds up the ones behind it. What a connection needs that does not change — the
-//! Vault's identity, where its keys sit, and the actions it serves — is resolved once, as
-//! the daemon starts, and shared from there.
+//! Vault's identity, where it sits among the Vaults it belongs to, and the actions it serves —
+//! is resolved once, as the daemon starts, and shared from there.
+//!
+//! Which Vault a connection is *served as*, though, changes with every connection: an address
+//! reaches a daemon, and the daemon may hold several Vaults under the one it was started for, so
+//! the request says which is meant. What is fixed is only what a Vault cannot be talked into —
+//! the identity it proves itself with — and what is read per connection is the Vault the
+//! request names, what it is configured with, and who it admits.
 
 use std::fmt;
 use std::net::SocketAddr;
@@ -13,14 +19,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use rorolala_auth::{
-    KeyLocateRule, Member, SecureStream, SigningKey, env_keys_dir, find_member, global_keys_dir,
+    KeyLocateRule, SecureStream, SigningKey, env_keys_dir, find_member, global_keys_dir,
     locate_accounts, user_keys_dir,
 };
 use rorolala_protocol::{ActionContext, ActionError, Socket};
 use rorolala_utils_cli_theme::{err_line, help_line, warn_line};
 use rorolala_utils_configure::Configure as _;
 use rorolala_utils_location::Locate;
-use rorolala_vault::{KEYS_DIR, KeyDiscovery, RootVault, Vault};
+use rorolala_vault::{KEYS_DIR, KeyDiscovery, RootVault, VAULTS_DIR, Vault};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -39,10 +45,11 @@ pub(crate) struct DaemonInput<'a> {
 
 /// Runs the daemon until it is cancelled.
 ///
-/// What does not change while it runs is resolved once here: the directories a member is
-/// looked for in and the actions the Vault serves. A daemon that cannot resolve them
-/// cannot serve at all, so it says so and stops rather than listening and refusing every
-/// connection.
+/// What does not change while it runs is resolved once here: the Vault the daemon was started
+/// for, the root that holds it, and the identity it proves itself with. A daemon that cannot
+/// resolve those cannot serve at all, so it says so and stops rather than listening and refusing
+/// every connection. Which Vault under the root a connection is served as is read from each
+/// request, so a Vault made while the daemon runs is served without it being restarted.
 ///
 /// # Standard Error
 ///
@@ -54,13 +61,9 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         signal,
     } = input;
 
-    // The Vault's keys are the first scope a member is looked for in, and the Vaults holding
-    // it follow: a key kept only below the root admits only to the Vault that holds it, so a
-    // member of a sub-vault cannot be a caller of the vault above.
-    //
-    // The Vault being served, and the root that holds it. Both are resolved once here and
-    // kept for as long as the daemon runs, so the context of every action can borrow them
-    // rather than have each one look for them again. The root is a Vault of its own — the
+    // The Vault the daemon was started for, and the root that holds it. Both are resolved once
+    // here and kept for as long as the daemon runs, so every connection is served against the
+    // same pair rather than looking for them again. The root is a Vault of its own — the
     // outermost above `cwd` — so a Vault-side action that works on the Vaults below it, or on
     // the one holding it, is handed it directly.
     let Some(vault) = Vault::locate(cwd) else {
@@ -80,8 +83,9 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         return DaemonExit::default();
     };
 
-    // Where the members a connection may name are looked for, which the Vault's own
-    // configuration says: a Vault that names no place admits nobody.
+    // Where the members of the daemon's own Vault are looked for, which its configuration says:
+    // a Vault that names no place admits nobody. A Vault below it is served under the places its
+    // own configuration names, resolved per connection.
     let (roots, rule) = member_scopes(config, &vault, &root_vault);
 
     // The identity the Vault proves itself with comes from the same places a member is looked
@@ -218,19 +222,26 @@ fn vault_identity(
     }
 }
 
-/// Everything a connection needs that does not change while the daemon runs.
+/// Everything the daemon needs to answer a connection.
+///
+/// What a Vault cannot be talked into — the identity it proves itself with — is fixed here, and
+/// so is the Vault the daemon was started for, with the scopes and configuration it runs under.
+/// The root above it is fixed too, since which Vaults a request may name is read against it. What
+/// a request names under the root is resolved per connection rather than kept here.
 struct Host {
     /// The identity the Vault proves to every peer.
     signing: SigningKey,
-    /// The directories a member may be found in, in the order the Vault names them.
+    /// The directories a member of the daemon's own Vault may be found in, in the order it names
+    /// them.
     roots: Vec<PathBuf>,
     /// The scopes a member may be found in, which is the directories above and no other.
     rule: KeyLocateRule,
-    /// The Vault being served, as a context hands it to an action.
+    /// The Vault the daemon was started for, as a context hands it to an action.
     vault: Vault,
     /// The root above [`vault`](Self::vault), as a context hands it to an action.
     root_vault: RootVault,
-    /// What the Vault is configured with, as a context hands it to an action.
+    /// What the Vault the daemon was started for is configured with, as a context hands it to an
+    /// action.
     vault_config: rorolala_vault::Config,
     /// What the root above it is configured with, as a context hands it to an action.
     root_vault_config: rorolala_vault::Config,
@@ -276,10 +287,11 @@ async fn listen(listener: TcpListener, host: Arc<Host>, mut cancel: watch::Recei
 
 /// Serves one connection: handshakes, checks the caller, and runs the action.
 ///
-/// The order is what makes a name mean anything. The handshake proves a key; the name the
-/// Workspace sends is only a label, so the member that label finds must be the identity
-/// that was proved before the action runs. A request that is not confirmed never starts
-/// an action, so a Workspace that is refused finds out before it has anything to undo.
+/// The order is what makes a name mean anything. The handshake proves a key; which Vault the
+/// request names is read after it, since that is what the connection is served for; and the
+/// name the Workspace sends is only a label, so the member that label finds must be the
+/// identity that was proved before the action runs. A request that is not confirmed never
+/// starts an action, so a Workspace that is refused finds out before it has anything to undo.
 async fn serve<Stream>(stream: Stream, host: Arc<Host>) -> Result<(), SessionError>
 where
     Stream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -291,7 +303,15 @@ where
         .await
         .map_err(SessionError::Exchange)?;
 
-    let member = host.member(&request.account)?;
+    // Which Vault the request names decides who is admitted to it, so it is resolved before the
+    // caller is looked for: the same name is a member of one Vault and of no other.
+    let Some(served) = host.serve_for(&request.sub).await else {
+        return Err(SessionError::UnknownVault(request.sub));
+    };
+
+    let Some(member) = find_member(&request.account, &served.roots, &served.rule) else {
+        return Err(SessionError::UnknownMember(request.account));
+    };
     if member.get_key().map_err(SessionError::Key)? != *channel.peer() {
         return Err(SessionError::IdentityMismatch(request.account));
     }
@@ -301,13 +321,13 @@ where
         .await
         .map_err(SessionError::Exchange)?;
 
-    // The Vault being served and its root outlive this connection — they belong to the daemon
-    // — so the action reaches them, and what either is configured with, by borrowing them: the
-    // same things for every connection.
+    // The Vault being served and its root live for this connection — one of them is built for
+    // it — so the action reaches them, and what either is configured with, by borrowing them for
+    // as long as the action runs.
     let ctx = ActionContext::new_vault_ctx(member)
-        .with_current_vault(&host.vault)
+        .with_current_vault(&served.vault)
         .with_current_root_vault(&host.root_vault)
-        .with_current_vault_config(&host.vault_config)
+        .with_current_vault_config(&served.config)
         .with_current_root_vault_config(&host.root_vault_config)
         .with_channel(channel);
     do_action_with(&host.registry, request.id, ctx)
@@ -317,11 +337,102 @@ where
     Ok(())
 }
 
+/// The Vault one connection is served for, with what it is served with.
+///
+/// A Vault is one thing for the duration of a connection and a different one for the next, so
+/// what a request names is resolved into this: the Vault itself, what its file — or, for the
+/// daemon's own, what was handed in — is configured with, and where its members are looked for.
+struct Served {
+    /// The Vault the action is run over.
+    vault: Vault,
+    /// What that Vault is configured with, as a context hands it to an action.
+    config: rorolala_vault::Config,
+    /// The directories a member of it may be found in, nearest first.
+    roots: Vec<PathBuf>,
+    /// The scopes a member may be found in, which is the directories above and no other.
+    rule: KeyLocateRule,
+}
+
 impl Host {
-    /// The member `name` refers to, if this Vault can find its key.
-    fn member(&self, name: &str) -> Result<Member, SessionError> {
-        find_member(name, &self.roots, &self.rule)
-            .ok_or_else(|| SessionError::UnknownMember(name.to_string()))
+    /// The Vault a request naming `sub` is served for, if this daemon can serve one there.
+    ///
+    /// Nothing names the Vault the daemon was started for; anything else names a Vault under the
+    /// root it sits in, either by the path it sits at or by the name the root holds it under.
+    /// A name that reaches no Vault is a request this daemon cannot answer.
+    ///
+    /// What the Vault is configured with, and who it admits, are read here rather than once at
+    /// startup: a Vault made or reconfigured while the daemon runs is served under the rules it
+    /// has, and a Vault under a root that keeps the group's keys admits them without either
+    /// Vault having to be restarted.
+    async fn serve_for(&self, sub: &str) -> Option<Served> {
+        let vault = self.vault_named(sub).await?;
+        let own = vault.get_root() == self.vault.get_root();
+
+        // The daemon's own Vault is what it was started for, so what it is configured with is
+        // what was handed in rather than what the file says: a configuration changed for this run
+        // is not one to read back. A Vault below it is known here only by what its file says, so
+        // the file is where it is read from — and a file that will not read leaves a Vault
+        // configured as a fresh one rather than one that cannot be served at all.
+        let config = if own {
+            self.vault_config.clone()
+        } else {
+            match rorolala_vault::Config::read_from(&vault.config_path()) {
+                Ok(read) => read,
+                Err(error) => {
+                    eprintln!(
+                        "{}",
+                        warn_line!(
+                            "The configuration of the Vault at {} could not be read: {error}",
+                            (vault.get_root().display())
+                        )
+                    );
+                    rorolala_vault::Config::default()
+                }
+            }
+        };
+
+        // The daemon's own scopes were resolved once from the configuration it runs with, so they
+        // are taken as they are; a Vault below it is looked for in the places its own
+        // configuration names.
+        let (roots, rule) = if own {
+            (self.roots.clone(), self.rule.clone())
+        } else {
+            member_scopes(&config, &vault, &self.root_vault)
+        };
+
+        Some(Served {
+            vault,
+            config,
+            roots,
+            rule,
+        })
+    }
+
+    /// The Vault `sub` names, if the root holds one there.
+    ///
+    /// Nothing, `.`, and a path that walks to where it started all name the Vault the daemon
+    /// serves itself, whatever it is. Anything else goes through the root: as the path it sits at
+    /// under the root — which is what an address written out in full says — or, when that names
+    /// nothing, as the name the root holds it under, which is how a Vault is named when it is
+    /// made and how it is reached without writing the path out.
+    ///
+    /// The path is the root's to read, so nothing here can climb out of the root on its own — see
+    /// [`RootVault::get_vault_by_path`] — and a Vault the root reaches through a symlink is
+    /// reached the same way here.
+    async fn vault_named(&self, sub: &str) -> Option<Vault> {
+        let sub = sub.trim_matches('/');
+
+        if sub.is_empty() || sub == "." {
+            return Some(self.vault.clone());
+        }
+
+        if let Some(named) = self.root_vault.get_vault_by_path(sub).await {
+            return Some(named);
+        }
+
+        self.root_vault
+            .get_vault_by_path(format!("{VAULTS_DIR}/{sub}"))
+            .await
     }
 }
 
@@ -339,6 +450,8 @@ enum SessionError {
     Key(rorolala_auth::Error),
     /// No member this Vault knows is named as the caller.
     UnknownMember(String),
+    /// The request names a Vault this daemon does not serve.
+    UnknownVault(String),
     /// The member the caller named is not the identity it proved.
     IdentityMismatch(String),
     /// The action itself failed.
@@ -354,6 +467,9 @@ impl fmt::Display for SessionError {
             }
             Self::Key(source) => write!(formatter, "a member's key could not be read: {source}"),
             Self::UnknownMember(name) => write!(formatter, "no member is named {name}"),
+            Self::UnknownVault(name) => {
+                write!(formatter, "no Vault is served under {name}")
+            }
             Self::IdentityMismatch(name) => {
                 write!(formatter, "the peer is not the member it named ({name})")
             }
@@ -386,7 +502,8 @@ mod tests {
     use rorolala_protocol::{
         Action as _, ActionContext, ActionError, Channel, OnlyWorkspace, Socket,
     };
-    use rorolala_vault::{KEYS_DIR, RootVault, Vault};
+    use rorolala_utils_location::Locate;
+    use rorolala_vault::{KEYS_DIR, RootVault, VAULTS_DIR, Vault};
     use rorolala_workspace::Workspace;
     use tokio::io::{AsyncWriteExt as _, DuplexStream, duplex};
     use tokio::net::TcpListener;
@@ -476,13 +593,19 @@ mod tests {
             .unwrap()
     }
 
-    /// Asks for the action `id` to run as `account`.
+    /// Asks for the action `id` to run as `account`, against the Vault the daemon serves itself.
     async fn request(channel: &mut Channel, id: u32, account: &str) {
+        request_sub(channel, id, account, "").await;
+    }
+
+    /// Asks for the action `id` to run as `account`, against the Vault `sub` names.
+    async fn request_sub(channel: &mut Channel, id: u32, account: &str, sub: &str) {
         wire::write_request(
             channel,
             &Request {
                 id,
                 account: account.to_string(),
+                sub: sub.to_string(),
             },
         )
         .await
@@ -536,6 +659,110 @@ mod tests {
         // No confirmation came, so the client finds the channel closed rather than a
         // go-ahead it must not have.
         assert!(wire::read_confirmation(&mut channel).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_request_that_names_no_vault_the_daemon_serves_is_refused() {
+        let keys = scratch("unknown-vault");
+        let server = signing(31);
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(server_io, Arc::new(vault(keys, signing(31)))));
+
+        // The daemon's own Vault is the default, so a name under it that reaches nothing is a
+        // Vault this daemon does not serve — refused before any member is looked for.
+        let mut channel = connect(client_io, &signing(32), &server.public_key()).await;
+        request_sub(&mut channel, ActionHandshake::ID, "client", "nowhere").await;
+
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(error, SessionError::UnknownVault(sub) if sub == "nowhere"));
+        assert!(wire::read_confirmation(&mut channel).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn an_action_runs_over_the_vault_the_request_names() {
+        let root = scratch("served-root");
+        let alpha = root.join(VAULTS_DIR).join("alpha");
+        let server = signing(33);
+        let client = Ed25519SigningKey::from_bytes(&[34; 32]);
+        // Two Vaults, and a caller the one under the root admits while the root itself does not:
+        // what comes back says which of them the request reached.
+        Vault::create(&root).unwrap();
+        Vault::create(&alpha).unwrap();
+        publish(&alpha.join(KEYS_DIR), "client", &client);
+
+        // The daemon is started for the root, so its own scopes hold no member: only a request
+        // that names the Vault below reaches the caller, and it is reached under that Vault's own
+        // rules.
+        let host = Host {
+            signing: signing(33),
+            roots: Vec::new(),
+            rule: local_only(),
+            vault: Vault::locate(&root).unwrap(),
+            root_vault: RootVault::locate(&root).unwrap(),
+            vault_config: rorolala_vault::Config::default(),
+            root_vault_config: rorolala_vault::Config::default(),
+            registry: build_action_registry(),
+        };
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(server_io, Arc::new(host)));
+
+        let mut channel = connect(client_io, &signing(34), &server.public_key()).await;
+        request_sub(&mut channel, ActionHandshake::ID, "client", "alpha").await;
+        let confirmation = wire::read_confirmation(&mut channel).await.unwrap();
+        assert_eq!(confirmation, wire::confirmation(ActionHandshake::ID));
+
+        let ctx = ActionContext::new_workspace_ctx(Account::default()).with_channel(channel);
+        let output = ActionHandshake::process(OnlyWorkspace::from(Some("world".to_string())), ctx)
+            .await
+            .unwrap();
+
+        // The greeting is named after the Vault the request reached, which is the one under the
+        // root rather than the one the daemon was started for.
+        assert_eq!(output, "Hello, world, I'm Alpha.\n\nNew Rola Vault");
+        serving.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_sub_is_the_path_a_vault_sits_at_or_the_name_it_is_held_under() {
+        let root = scratch("named");
+        let alpha = root.join(VAULTS_DIR).join("alpha");
+        Vault::create(&root).unwrap();
+        Vault::create(&alpha).unwrap();
+
+        let host = Host {
+            signing: signing(35),
+            roots: Vec::new(),
+            rule: local_only(),
+            vault: Vault::locate(&root).unwrap(),
+            root_vault: RootVault::locate(&root).unwrap(),
+            vault_config: rorolala_vault::Config::default(),
+            root_vault_config: rorolala_vault::Config::default(),
+            registry: build_action_registry(),
+        };
+
+        // Nothing, `.`, and the path the served Vault sits at all name the Vault the daemon
+        // serves itself.
+        for own in ["", ".", "/"] {
+            assert_eq!(
+                host.vault_named(own).await.unwrap().get_root(),
+                root.as_path()
+            );
+        }
+
+        // A Vault the root holds is reached by the name it is held under, by the path it sits at,
+        // and with either written with a trailing separator.
+        for named in ["alpha", "vaults/alpha", "alpha/", "/vaults/alpha"] {
+            assert_eq!(
+                host.vault_named(named).await.unwrap().get_root(),
+                alpha.as_path(),
+                "{named}"
+            );
+        }
+
+        // A name the root holds nothing under names no Vault.
+        assert!(host.vault_named("nowhere").await.is_none());
     }
 
     #[tokio::test]
@@ -704,6 +931,10 @@ mod tests {
             (
                 SessionError::IdentityMismatch("bob".to_string()),
                 "the peer is not the member it named (bob)",
+            ),
+            (
+                SessionError::UnknownVault("alpha".to_string()),
+                "no Vault is served under alpha",
             ),
             (
                 SessionError::Action(ActionError::NoChannel),

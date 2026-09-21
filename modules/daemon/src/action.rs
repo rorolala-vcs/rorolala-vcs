@@ -66,13 +66,16 @@ where
         None => SecureStream::connect_unpinned(socket, &identity).await?,
     };
 
-    // Name the action and the account we act as, and wait for the peer to say it read the
-    // same request. An id the peer does not answer for never starts an action.
+    // Name the action, the account we act as, and the Vault under the daemon we are reaching
+    // for, and wait for the peer to say it read the same request. An id the peer does not
+    // answer for never starts an action. The sub-vault is written as it was parsed rather than
+    // as it was typed, so `rola://host:port/` and `rola://host:port` reach the same Vault.
     wire::write_request(
         &mut channel,
         &wire::Request {
             id: A::ID,
             account: account.name(),
+            sub: address.sub().to_string(),
         },
     )
     .await?;

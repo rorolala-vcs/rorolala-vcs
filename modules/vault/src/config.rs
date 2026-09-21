@@ -40,6 +40,14 @@ impl Config {
         &self.daemon_config
     }
 
+    /// The configuration for the Vault daemon, to be changed.
+    ///
+    /// A change made through here reaches the file the configuration came from, the way a
+    /// change to any other part of it does.
+    pub const fn daemon_config_mut(&mut self) -> &mut DaemonConfig {
+        &mut self.daemon_config
+    }
+
     /// What this Vault says about itself.
     #[must_use]
     pub const fn vault_config(&self) -> &MetaConfig {
