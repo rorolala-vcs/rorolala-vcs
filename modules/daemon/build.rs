@@ -14,7 +14,10 @@
 //! a caller would have written out by hand: `type Input = (String, i32)` gives
 //! `name: String, value: i32`. The names come from the input's own doc comments, one list
 //! item per parameter — `- name: String` — and fall back to `p0`, `p1`, … where there is
-//! none; a single value keeps the name `input` unless a list item names it.
+//! none. A single value takes its name from the action's own `process`, which already named
+//! it — `name` in `async fn process(name: OnlyWorkspace<Self::Input>, …)` — because that is
+//! the name the action uses for it everywhere else; a method that does not name it plainly
+//! falls back to `input`.
 //!
 //! What comes out is shaped by `tmpl/action_func.tmpl`, one arm per action, so the
 //! wording of an entry point can be changed without touching this script.
@@ -37,8 +40,8 @@ use std::process::exit;
 
 use just_template::Template;
 use syn::{
-    Attribute, Expr, ExprLit, GenericArgument, ImplItem, Item, Lit, Meta, PathArguments, Type,
-    TypePath,
+    Attribute, Expr, ExprLit, FnArg, GenericArgument, ImplItem, ImplItemFn, Item, Lit, Meta, Pat,
+    PathArguments, Type, TypePath,
 };
 
 /// Where the actions are read from, relative to the manifest directory.
@@ -72,6 +75,12 @@ const ACTION_TRAIT: &str = "Action";
 
 /// The associated constant an action declares its id in.
 const ACTION_ID: &str = "ID";
+
+/// The method an action carries its behavior out in.
+const ACTION_PROCESS: &str = "process";
+
+/// The wrapper the input arrives in, matched by the last segment of its path.
+const ONLY_WORKSPACE: &str = "OnlyWorkspace";
 
 fn main() {
     println!("cargo:rerun-if-changed={ACTIONS_DIR}");
@@ -151,7 +160,7 @@ struct Action {
     /// The implementing type, as written.
     type_name: String,
     /// The parameters the entry points take for the action's input, as a signature spells
-    /// them: `input: String`, or one parameter per element of a tuple input.
+    /// them: one parameter holding a single input, or one parameter per element of a tuple.
     params: String,
     /// What the entry points hand on for that input: the parameter, or a tuple of them.
     argument: String,
@@ -214,6 +223,13 @@ fn action_of(item: &Item) -> Result<Option<Action>, String> {
     let type_name = plain_name(&item.self_ty)
         .ok_or_else(|| "an action is implemented for a plain type name".to_owned())?;
 
+    // The name the action's own `process` gives its input, if it names it: a single input is
+    // the action's to speak for, and it already speaks for it where it is used.
+    let named = item.items.iter().find_map(|item| match item {
+        ImplItem::Fn(method) if method.sig.ident == ACTION_PROCESS => process_input_name(method),
+        _ => None,
+    });
+
     let mut id = None;
     let mut input = None;
     let mut output = None;
@@ -223,7 +239,7 @@ fn action_of(item: &Item) -> Result<Option<Action>, String> {
                 id = Some(action_id(&associated.expr)?);
             }
             ImplItem::Type(associated) => match associated.ident.to_string().as_str() {
-                "Input" => input = Some(input_parameters(&associated.ty, &associated.attrs)?),
+                "Input" => input = Some((&associated.ty, &associated.attrs)),
                 "Output" => output = Some(render_type(&associated.ty)?),
                 _ => {}
             },
@@ -232,8 +248,8 @@ fn action_of(item: &Item) -> Result<Option<Action>, String> {
     }
 
     let id = id.ok_or_else(|| format!("`{type_name}` declares no `{ACTION_ID}`"))?;
-    let (params, argument, call_args) =
-        input.ok_or_else(|| format!("`{type_name}` declares no `Input`"))?;
+    let (ty, attributes) = input.ok_or_else(|| format!("`{type_name}` declares no `Input`"))?;
+    let (params, argument, call_args) = input_parameters(ty, attributes, named.as_deref())?;
     let output = output.ok_or_else(|| format!("`{type_name}` declares no `Output`"))?;
 
     Ok(Some(Action {
@@ -252,10 +268,12 @@ fn action_of(item: &Item) -> Result<Option<Action>, String> {
 /// A tuple of two or more is spread over one parameter per element, so a caller names each
 /// part rather than building a tuple to hand over. A single value — and a one-element tuple,
 /// which is one value wearing brackets — takes one parameter holding the whole input. The
-/// names are the ones the input's doc comments hint at, and the fallbacks otherwise.
+/// names are the ones the input's doc comments hint at, then the action's own name for it
+/// (`named`), and the fallbacks otherwise.
 fn input_parameters(
     ty: &Type,
     attributes: &[Attribute],
+    named: Option<&str>,
 ) -> Result<(String, String, String), String> {
     let hints = hint_names(attributes);
 
@@ -279,9 +297,46 @@ fn input_parameters(
         return Ok((parameters.join(", "), format!("({call_args})"), call_args));
     }
 
-    let name = hints.first().cloned().unwrap_or_else(|| "input".to_owned());
+    let name = hints
+        .first()
+        .map(String::as_str)
+        .or(named)
+        .unwrap_or("input")
+        .to_owned();
 
     Ok((format!("{name}: {}", render_type(ty)?), name.clone(), name))
+}
+
+/// The name an action's `process` gives its input, if it names it.
+///
+/// The first parameter is the input — the trait spells it so — and an action that names it
+/// names it for a caller too. A parameter that is not the wrapped input, or not a plain name,
+/// says nothing, and the fallback stands.
+fn process_input_name(method: &ImplItemFn) -> Option<String> {
+    let FnArg::Typed(parameter) = method.sig.inputs.first()? else {
+        return None;
+    };
+
+    if !wraps_input(&parameter.ty) {
+        return None;
+    }
+
+    let Pat::Ident(name) = parameter.pat.as_ref() else {
+        return None;
+    };
+
+    Some(name.ident.to_string())
+}
+
+/// Whether `ty` is the input as the trait wraps it: `OnlyWorkspace<...>`.
+fn wraps_input(ty: &Type) -> bool {
+    let Type::Path(TypePath { path, .. }) = ty else {
+        return false;
+    };
+
+    path.segments
+        .last()
+        .is_some_and(|segment| segment.ident == ONLY_WORKSPACE)
 }
 
 /// The parameter names an input's doc comments hint at, in order.

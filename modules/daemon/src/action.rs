@@ -8,11 +8,12 @@
 mod actions;
 pub use actions::*;
 
-use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace, Socket, VaultAddress};
-use rorolala_workspace::Workspace;
+use rorolala_protocol::{Action, ActionContext, OnlyWorkspace, Socket, VaultAddress};
 use tokio::net::TcpStream;
 
-use rorolala_auth::{Account, SecureStream};
+// `Account`, `ActionError` and `Workspace` are named by the entry points generated below,
+// which bring them into scope; what `proc_action` needs of its own is here.
+use rorolala_auth::SecureStream;
 
 use crate::wire;
 

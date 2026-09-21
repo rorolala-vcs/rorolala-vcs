@@ -38,11 +38,11 @@ impl Action for ActionHandshake {
     type Output = String;
 
     async fn process(
-        input: OnlyWorkspace<Self::Input>,
+        name: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
         // Turn the Workspace's input into something both sides hold
-        let mut message = ctx.sync(input).await?;
+        let mut message = ctx.sync(name).await?;
 
         // The server responds
         let response = OnlyVault::new(&ctx, || "Welcome!".to_string());
