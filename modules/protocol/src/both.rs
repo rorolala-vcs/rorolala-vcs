@@ -54,19 +54,31 @@ where
     /// [`mut_on_workspace`](OnlyWorkspace::mut_on_workspace) changes it there and
     /// nowhere else.
     ///
+    /// The context is what says whether this is the side that keeps the value: a value
+    /// only the Workspace holds must not be left lying on the Vault, so on the Vault it is
+    /// dropped and the wrapper comes back empty. There is deliberately no `From` impl to
+    /// demote with — one could not see the side, and would hand the value over on both.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use rorolala_protocol::{Both, OnlyWorkspace};
+    /// use rorolala_auth::{Account, Member};
+    /// use rorolala_protocol::{ActionContext, Both, OnlyWorkspace};
     ///
-    /// let by_method: OnlyWorkspace<u64> = Both::new(7_u64).only_workspace();
-    /// let by_into: OnlyWorkspace<u64> = Both::new(7_u64).into();
-    /// assert_eq!(by_method.into_inner(), Some(7));
-    /// assert_eq!(by_into.into_inner(), Some(7));
+    /// // On the Workspace, which is the side that holds it, the value stays.
+    /// let ctx = ActionContext::new_workspace_ctx(Account::default());
+    /// let kept: OnlyWorkspace<u64> = Both::new(7_u64).only_workspace(&ctx);
+    /// assert_eq!(kept.into_inner(), Some(7));
+    ///
+    /// // On the Vault it is dropped, since what only the Workspace holds is not made up
+    /// // on the side that does not hold it.
+    /// let ctx = ActionContext::new_vault_ctx(Member::default());
+    /// let dropped: OnlyWorkspace<u64> = Both::new(7_u64).only_workspace(&ctx);
+    /// assert!(dropped.into_inner().is_none());
     /// ```
     #[must_use]
-    pub fn only_workspace(self) -> OnlyWorkspace<T> {
-        OnlyWorkspace::from(self)
+    pub fn only_workspace(self, ctx: &ActionContext) -> OnlyWorkspace<T> {
+        OnlyWorkspace::new(ctx, || self.into_inner())
     }
 
     /// Demotes the value to one only the Vault holds.
@@ -76,19 +88,31 @@ where
     /// result to the Workspace, and [`mut_on_vault`](OnlyVault::mut_on_vault)
     /// changes it there and nowhere else.
     ///
+    /// The context is what says whether this is the side that keeps the value: a value
+    /// only the Vault holds must not be left lying on the Workspace, so on the Workspace it
+    /// is dropped and the wrapper comes back empty. There is deliberately no `From` impl to
+    /// demote with — one could not see the side, and would hand the value over on both.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use rorolala_protocol::{Both, OnlyVault};
+    /// use rorolala_auth::{Account, Member};
+    /// use rorolala_protocol::{ActionContext, Both, OnlyVault};
     ///
-    /// let by_method: OnlyVault<u64> = Both::new(7_u64).only_vault();
-    /// let by_into: OnlyVault<u64> = Both::new(7_u64).into();
-    /// assert_eq!(by_method.into_inner(), Some(7));
-    /// assert_eq!(by_into.into_inner(), Some(7));
+    /// // On the Vault, which is the side that holds it, the value stays.
+    /// let ctx = ActionContext::new_vault_ctx(Member::default());
+    /// let kept: OnlyVault<u64> = Both::new(7_u64).only_vault(&ctx);
+    /// assert_eq!(kept.into_inner(), Some(7));
+    ///
+    /// // On the Workspace it is dropped, since what only the Vault holds is not made up
+    /// // on the side that does not hold it.
+    /// let ctx = ActionContext::new_workspace_ctx(Account::default());
+    /// let dropped: OnlyVault<u64> = Both::new(7_u64).only_vault(&ctx);
+    /// assert!(dropped.into_inner().is_none());
     /// ```
     #[must_use]
-    pub fn only_vault(self) -> OnlyVault<T> {
-        OnlyVault::from(self)
+    pub fn only_vault(self, ctx: &ActionContext) -> OnlyVault<T> {
+        OnlyVault::new(ctx, || self.into_inner())
     }
 }
 

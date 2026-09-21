@@ -408,7 +408,7 @@ mod tests {
         // The Workspace demotes its copy and changes that, without the Vault being
         // asked: the two have stopped keeping this value in step, so the Vault's
         // copy is left as it was.
-        let mut demoted = workspace_value.only_workspace();
+        let mut demoted = workspace_value.only_workspace(&workspace);
         demoted.mut_on_workspace(&workspace, |value| *value += 10);
         assert_eq!(demoted.into_inner(), Some(11));
         assert_eq!(*vault_value, 1);

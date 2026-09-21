@@ -1,4 +1,4 @@
-use crate::{ActionContext, Both};
+use crate::ActionContext;
 
 /// A value that only exists on the Vault side.
 ///
@@ -137,17 +137,6 @@ where
 {
     fn from(inner: Option<Inner>) -> Self {
         Self { inner }
-    }
-}
-
-impl<Inner> From<Both<Inner>> for OnlyVault<Inner>
-where
-    Inner: Send + Sync + 'static,
-{
-    fn from(both: Both<Inner>) -> Self {
-        Self {
-            inner: Some(both.into_inner()),
-        }
     }
 }
 
@@ -309,17 +298,6 @@ where
 {
     fn from(inner: Option<Inner>) -> Self {
         Self { inner }
-    }
-}
-
-impl<Inner> From<Both<Inner>> for OnlyWorkspace<Inner>
-where
-    Inner: Send + Sync + 'static,
-{
-    fn from(both: Both<Inner>) -> Self {
-        Self {
-            inner: Some(both.into_inner()),
-        }
     }
 }
 
