@@ -9,7 +9,7 @@ use crate::ActionContext;
 /// The wrapper is read through [`Deref`](std::ops::Deref) only; changing the
 /// value goes through [`mut_on_vault`](Self::mut_on_vault), which changes it on
 /// the side that holds it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OnlyVault<Inner>
 where
     Inner: Send + Sync + 'static,
@@ -59,6 +59,16 @@ where
     #[must_use]
     pub const fn empty() -> Self {
         Self { inner: None }
+    }
+
+    /// Wraps `inner` as a value held on the Vault, without a context to ask.
+    ///
+    /// This is how something that already knows which side it is on records a value that
+    /// side holds — a [`ActionContext`](crate::ActionContext) keeping the member it acts
+    /// as — where which wrapper is being built says the side, and `f` never has to be run
+    /// to find out.
+    pub(crate) const fn holding(inner: Inner) -> Self {
+        Self { inner: Some(inner) }
     }
 
     /// Consumes the wrapper and returns the inner value.
@@ -169,7 +179,7 @@ where
 /// The wrapper is read through [`Deref`](std::ops::Deref) only; changing the
 /// value goes through [`mut_on_workspace`](Self::mut_on_workspace), which changes
 /// it on the side that holds it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OnlyWorkspace<Inner>
 where
     Inner: Send + Sync + 'static,
@@ -219,6 +229,16 @@ where
     #[must_use]
     pub const fn empty() -> Self {
         Self { inner: None }
+    }
+
+    /// Wraps `inner` as a value held on the Workspace, without a context to ask.
+    ///
+    /// This is how something that already knows which side it is on records a value that
+    /// side holds — a [`ActionContext`](crate::ActionContext) keeping the account it acts
+    /// as — where which wrapper is being built says the side, and `f` never has to be run
+    /// to find out.
+    pub(crate) const fn holding(inner: Inner) -> Self {
+        Self { inner: Some(inner) }
     }
 
     /// Consumes the wrapper and returns the inner value.

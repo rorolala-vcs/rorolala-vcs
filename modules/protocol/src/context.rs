@@ -25,15 +25,19 @@ pub struct ActionContext {
     /// The side on which the action occurs.
     side: ActionSide,
 
-    /// The member of the current execution context.
+    /// The member the action runs as.
     ///
-    /// This is only present on the Vault side.
-    member: Option<Member>,
+    /// A member is the Vault's record of whoever is acting, so it is held on the Vault
+    /// side: the wrapper is empty wherever the action runs as a Workspace, and a value
+    /// that only the Vault holds is not made up on the side that does not.
+    member: OnlyVault<Member>,
 
-    /// The account of the current execution context.
+    /// The account the action runs as.
     ///
-    /// This is only present on the Workspace side.
-    account: Option<Account>,
+    /// An account is private, so it is held on the Workspace side: the wrapper is empty
+    /// wherever the action runs as a Vault, and a value that only the Workspace holds is
+    /// not made up on the side that does not.
+    account: OnlyWorkspace<Account>,
 
     /// The encrypted channel values are exchanged over, once one has been attached.
     channel: Option<Channel>,
@@ -112,8 +116,8 @@ impl ActionContext {
     pub const fn new_workspace_ctx(account: Account) -> Self {
         Self {
             side: ActionSide::Workspace,
-            member: None,
-            account: Some(account),
+            member: OnlyVault::empty(),
+            account: OnlyWorkspace::holding(account),
             channel: None,
         }
     }
@@ -133,8 +137,8 @@ impl ActionContext {
     pub const fn new_vault_ctx(member: Member) -> Self {
         Self {
             side: ActionSide::Vault,
-            member: Some(member),
-            account: None,
+            member: OnlyVault::holding(member),
+            account: OnlyWorkspace::empty(),
             channel: None,
         }
     }
@@ -173,7 +177,7 @@ impl ActionContext {
     /// ```
     #[must_use]
     pub fn get_account(&self) -> OnlyWorkspace<Account> {
-        OnlyWorkspace::from(self.account.clone())
+        self.account.clone()
     }
 
     /// The member the current action runs as, on the Vault side.
@@ -194,6 +198,6 @@ impl ActionContext {
     /// ```
     #[must_use]
     pub fn get_member(&self) -> OnlyVault<Member> {
-        OnlyVault::from(self.member.clone())
+        self.member.clone()
     }
 }
