@@ -3,7 +3,7 @@ use rorolala_utils_lazyffi::lazyffi;
 use std::fs;
 use std::path::Path;
 
-use crate::{CONFIG_PATH, CreationError, Vault};
+use crate::{CONFIG_PATH, CreationError, KEYS_DIR, Vault, config::MetaConfig};
 
 #[lazyffi]
 impl Vault {
@@ -13,15 +13,21 @@ impl Vault {
     /// somewhere to write the configuration into — the same way a Workspace makes its own
     /// data directory before writing the configuration inside it.
     ///
+    /// The directory it keeps its keys in is made beside it, so that the key pair a Vault
+    /// proves itself with has somewhere to go: a Vault is not served without one, and the tool
+    /// that makes one writes into a directory that has to be there already.
+    ///
     /// # Errors
     ///
-    /// Returns [`CreationError::DirCreateFailed`] if the directory cannot be created, and
-    /// the configuration errors if the configuration file cannot be created inside it.
+    /// Returns [`CreationError::DirCreateFailed`] if the directory or its keys directory
+    /// cannot be created, and the configuration errors if the configuration file cannot be
+    /// created inside it.
     #[lazyffi(export = create_vault)]
     pub fn create(dir: &Path) -> Result<(), CreationError> {
         fs::create_dir_all(dir).map_err(|_| CreationError::DirCreateFailed)?;
+        fs::create_dir_all(dir.join(KEYS_DIR)).map_err(|_| CreationError::DirCreateFailed)?;
 
-        let config = Config::<crate::config::Config>::new(dir.join(CONFIG_PATH)).map_err(
+        let mut config = Config::<crate::config::Config>::new(dir.join(CONFIG_PATH)).map_err(
             |error| match error {
                 rorolala_utils_configure::Error::Locked { .. } => CreationError::ConfigLocked,
                 rorolala_utils_configure::Error::Render { .. } => CreationError::ConfigRenderFailed,
@@ -32,6 +38,10 @@ impl Vault {
                 _ => CreationError::UnknownError,
             },
         )?;
+
+        // A Vault is named by the directory it is made in, and says it is new until someone
+        // says otherwise about it.
+        *config.vault_config_mut() = MetaConfig::made_in(dir);
 
         config.write().map_err(|error| match error {
             rorolala_utils_configure::Error::Render { .. } => {
@@ -56,7 +66,7 @@ mod tests {
     use rorolala_utils_configure::Configure;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, CreationError, Vault};
+    use crate::{CONFIG_PATH, CreationError, KEYS_DIR, Vault};
 
     /// A parent directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -87,6 +97,37 @@ mod tests {
         assert!(file.is_file(), "{file:?}");
         assert!(Vault::locate(&dir).is_some(), "{dir:?}");
         crate::config::Config::read_from(&file).unwrap();
+
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn creating_a_vault_makes_the_directory_its_keys_go_in() {
+        let parent = scratch("keys-dir");
+        let dir = parent.join("vault");
+
+        Vault::create(&dir).unwrap();
+
+        // A Vault is not served without a key pair of its own, and the tool that makes one
+        // writes into a directory that has to be there already: making the Vault makes it.
+        assert!(dir.join(KEYS_DIR).is_dir(), "{:?}", dir.join(KEYS_DIR));
+
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn creating_a_vault_names_it_after_the_directory_it_is_made_in() {
+        let parent = scratch("named");
+        let dir = parent.join("My Project");
+
+        Vault::create(&dir).unwrap();
+
+        // What is on disk is the name, not the directory it was read from: a Vault renamed
+        // by hand, or made somewhere that was moved afterwards, keeps the name it was made
+        // with.
+        let read = crate::config::Config::read_from(&dir.join(CONFIG_PATH)).unwrap();
+        assert_eq!(read.vault_config().name(), "My Project");
+        assert_eq!(read.vault_config().description(), "New Rola Vault");
 
         let _ = fs::remove_dir_all(&parent);
     }

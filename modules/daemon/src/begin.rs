@@ -12,11 +12,14 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use rorolala_auth::{KeyLocateRule, Member, SecureStream, SigningKey, find_member};
+use rorolala_auth::{
+    KeyLocateRule, Member, SecureStream, SigningKey, env_keys_dir, find_member, global_keys_dir,
+    locate_accounts, user_keys_dir,
+};
 use rorolala_protocol::{ActionContext, ActionError, Socket};
-use rorolala_utils_cli_theme::{err_line, warn_line};
+use rorolala_utils_cli_theme::{err_line, help_line, warn_line};
 use rorolala_utils_location::Locate;
-use rorolala_vault::{RootVault, Vault, key_scopes};
+use rorolala_vault::{KEYS_DIR, KeyDiscovery, RootVault, Vault};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -29,13 +32,6 @@ pub(crate) struct DaemonInput<'a> {
     pub(crate) cwd: &'a Path,
     /// The configuration used to run the daemon.
     pub(crate) config: &'a rorolala_vault::Config,
-    /// The identity the Vault proves to every peer.
-    ///
-    /// It is resolved where the daemon is wired up, not here: the Vault side of a
-    /// protocol knows peers as [`Member`]s, and the Vault's own private key is host
-    /// setup rather than a peer. What comes through is the bare key, not the account it
-    /// was read from.
-    pub(crate) identity: SigningKey,
     /// The signal used to cancel the daemon.
     pub(crate) signal: CancelSignal,
 }
@@ -54,16 +50,13 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
     let DaemonInput {
         cwd,
         config,
-        identity,
         signal,
     } = input;
 
     // The Vault's keys are the first scope a member is looked for in, and the Vaults holding
     // it follow: a key kept only below the root admits only to the Vault that holds it, so a
     // member of a sub-vault cannot be a caller of the vault above.
-    let roots = key_scopes(cwd);
-    let rule = KeyLocateRule::new();
-
+    //
     // The Vault being served, and the root that holds it. Both are resolved once here and
     // kept for as long as the daemon runs, so the context of every action can borrow them
     // rather than have each one look for them again. The root is a Vault of its own — the
@@ -83,6 +76,17 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
             "{}",
             err_line!("No root Vault is at or above {} to serve.", (cwd.display()))
         );
+        return DaemonExit::default();
+    };
+
+    // Where the members a connection may name are looked for, which the Vault's own
+    // configuration says: a Vault that names no place admits nobody.
+    let (roots, rule) = member_scopes(config, &vault, &root_vault);
+
+    // The identity the Vault proves itself with comes from the same places a member is looked
+    // for in: a Vault that keeps its own key pair is proved by it, and one under a root that
+    // keeps the group's — a sub-vault — is proved by the root's.
+    let Some(identity) = vault_identity(&roots, &rule, vault.get_root()) else {
         return DaemonExit::default();
     };
 
@@ -113,13 +117,97 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
     DaemonExit::default()
 }
 
+/// The directories a member is looked for in, and the rule they are searched under.
+///
+/// The Vault's configuration names the places — see [`KeyDiscovery`] — and each one is a
+/// directory handed to the search, so the rule is the one that searches what it is handed and
+/// nothing else: a scope turned on in the rule as well would name its directory a second time.
+/// A place with no directory yet is still named, since a scope that is not set up is not an
+/// error.
+fn member_scopes(
+    config: &rorolala_vault::Config,
+    vault: &Vault,
+    root_vault: &RootVault,
+) -> (Vec<PathBuf>, KeyLocateRule) {
+    let mut roots = Vec::new();
+
+    for place in config.daemon_config().key_discovery() {
+        match place {
+            KeyDiscovery::System => roots.extend(global_keys_dir()),
+            KeyDiscovery::User => roots.extend(user_keys_dir()),
+            KeyDiscovery::Env => roots.extend(env_keys_dir()),
+            KeyDiscovery::Vault => roots.push(vault.get_root().join(KEYS_DIR)),
+            KeyDiscovery::RootVault => roots.push(root_vault.get_root().join(KEYS_DIR)),
+        }
+    }
+
+    let rule = KeyLocateRule {
+        find_global: false,
+        find_local: true,
+        find_user: false,
+        find_env: false,
+    };
+
+    (roots, rule)
+}
+
+/// The identity the Vault proves, read from the first account the places hold.
+///
+/// Which key a Vault is, is host setup, not something the Vault *side* of a protocol touches:
+/// there, a peer is a [`Member`] and nothing else. Resolving it here keeps that side free of
+/// the Workspace's notion of an account, and hands on the bare key it needs.
+///
+/// # Standard Error
+///
+/// Writes an error log when no place holds an account, or its key cannot be read.
+fn vault_identity(
+    roots: &[PathBuf],
+    rule: &KeyLocateRule,
+    vault_root: &Path,
+) -> Option<SigningKey> {
+    let accounts = locate_accounts(roots, rule);
+
+    let Some(account) = accounts.iter().next() else {
+        // The directory is walked back into the path it names before it is spoken of: the
+        // layout names it `./keys/`, and joining that onto a root leaves the `./` in the
+        // middle of the path a reader is shown.
+        let own = vault_root.join(KEYS_DIR).components().collect::<PathBuf>();
+
+        eprintln!(
+            "{}",
+            err_line!(
+                "The Vault holds no account to prove itself with, in its own keys at {} or in the places its configuration names.",
+                (own.display())
+            )
+        );
+        eprintln!(
+            "{}",
+            help_line!(
+                "Please give the Vault a key pair of its own — `rola tool-keygen keys/vault` makes one in its keys directory"
+            )
+        );
+        return None;
+    };
+
+    match account.get_key() {
+        Ok(identity) => Some(identity),
+        Err(error) => {
+            eprintln!(
+                "{}",
+                err_line!("The Vault's own key could not be read: {error}")
+            );
+            None
+        }
+    }
+}
+
 /// Everything a connection needs that does not change while the daemon runs.
 struct Host {
     /// The identity the Vault proves to every peer.
     signing: SigningKey,
-    /// The directories a member may be found in, the Vault's own keys first.
+    /// The directories a member may be found in, in the order the Vault names them.
     roots: Vec<PathBuf>,
-    /// Which scopes a member may be found in.
+    /// The scopes a member may be found in, which is the directories above and no other.
     rule: KeyLocateRule,
     /// The Vault being served, as a context hands it to an action.
     vault: Vault,
@@ -267,18 +355,19 @@ mod tests {
     use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
     use ed25519_dalek::pkcs8::{EncodePrivateKey as _, EncodePublicKey as _};
     use rorolala_auth::Error as AuthError;
+    use rorolala_auth::user_keys_dir;
     use rorolala_auth::{
         Account, KeyAlgorithm, KeyLocateRule, PublicKey, SecureStream, SigningKey, find_account,
     };
     use rorolala_protocol::{
         Action as _, ActionContext, ActionError, Channel, OnlyWorkspace, Socket,
     };
-    use rorolala_vault::{RootVault, Vault};
+    use rorolala_vault::{KEYS_DIR, RootVault, Vault};
     use rorolala_workspace::Workspace;
     use tokio::io::{AsyncWriteExt as _, DuplexStream, duplex};
     use tokio::net::TcpListener;
 
-    use super::{Host, SessionError, serve};
+    use super::{Host, SessionError, member_scopes, serve, vault_identity};
     use crate::{
         ActionHandshake, build_action_registry, proc_action,
         wire::{self, Request},
@@ -598,24 +687,96 @@ mod tests {
         }
     }
 
+    /// The identity the daemon runs as, looked for in the Vault's own keys alone.
+    fn identity_of(cwd: &Path) -> Option<SigningKey> {
+        vault_identity(&[cwd.join(KEYS_DIR)], &local_only(), cwd)
+    }
+
+    #[test]
+    fn a_vault_with_no_account_cannot_prove_itself() {
+        let cwd = scratch("no-account");
+
+        assert!(identity_of(&cwd).is_none());
+    }
+
+    #[test]
+    fn a_vault_whose_key_cannot_be_read_cannot_prove_itself() {
+        let cwd = scratch("bad-key");
+        // The account is found by name, but the file it names is not a key.
+        fs::create_dir_all(cwd.join(KEYS_DIR)).unwrap();
+        fs::write(cwd.join(KEYS_DIR).join("vault.pem"), "not a key").unwrap();
+
+        assert!(identity_of(&cwd).is_none());
+    }
+
+    #[test]
+    fn a_vault_whose_key_can_be_read_proves_it() {
+        let cwd = scratch("key");
+        let signing = Ed25519SigningKey::from_bytes(&[30; 32]);
+        fs::create_dir_all(cwd.join(KEYS_DIR)).unwrap();
+        enroll(&cwd.join(KEYS_DIR), "vault", &signing);
+
+        let identity = identity_of(&cwd).unwrap();
+
+        assert_eq!(
+            identity.public_key().as_bytes(),
+            signing.verifying_key().to_bytes()
+        );
+    }
+
+    #[test]
+    fn a_member_is_looked_for_only_where_the_vault_names() {
+        // One place named, one directory handed over, and the rule searches what it is handed
+        // rather than naming any scope a second time.
+        let config: rorolala_vault::Config =
+            serde_json::from_str("{\"daemon_config\":{\"key_discovery\":[\"vault\"]}}").unwrap();
+        let (roots, rule) = member_scopes(&config, &Vault::default(), &RootVault::default());
+
+        assert_eq!(roots, [PathBuf::new().join(KEYS_DIR)]);
+        assert!(rule.find_local);
+        assert!(!rule.find_global && !rule.find_user && !rule.find_env);
+
+        // The user's own store, when it is named, is the directory it is everywhere else.
+        let config: rorolala_vault::Config =
+            serde_json::from_str("{\"daemon_config\":{\"key_discovery\":[\"user\"]}}").unwrap();
+        let (roots, _) = member_scopes(&config, &Vault::default(), &RootVault::default());
+
+        assert_eq!(roots, [user_keys_dir().unwrap()]);
+    }
+
+    #[test]
+    fn a_vault_that_names_no_place_looks_nowhere() {
+        let config: rorolala_vault::Config =
+            serde_json::from_str("{\"daemon_config\":{\"key_discovery\":[]}}").unwrap();
+        let (roots, _) = member_scopes(&config, &Vault::default(), &RootVault::default());
+
+        assert!(roots.is_empty());
+    }
+
     #[tokio::test]
     async fn a_vault_that_cannot_bind_stops() {
         // Hold the address the daemon will try to take, so binding it must fail.
         let taken = TcpListener::bind("0.0.0.0:0").await.unwrap();
         let port = taken.local_addr().unwrap().port();
-        let config: rorolala_vault::Config =
-            serde_json::from_str(&format!("{{\"daemon_config\":{{\"prefer_port\":{port}}}}}"))
-                .unwrap();
+        let config: rorolala_vault::Config = serde_json::from_str(&format!(
+            "{{\"daemon_config\":{{\"prefer_port\":{port},\"key_discovery\":[\"vault\"]}}}}"
+        ))
+        .unwrap();
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
         let cwd = scratch("bind");
-        // The daemon serves a Vault, so it stops before listening when there is none to serve:
-        // this one is made so that what stops it is the port and nothing else.
+        // The daemon serves a Vault and proves itself with an account of its own, so both are
+        // made: what stops it here is the port, and nothing else.
         Vault::create(&cwd).unwrap();
+        enroll(
+            &cwd.join(KEYS_DIR),
+            "vault",
+            &Ed25519SigningKey::from_bytes(&[40; 32]),
+        );
+
         let daemon = super::daemon(super::DaemonInput {
             cwd: &cwd,
             config: &config,
-            identity: signing(40),
             signal: crate::CancelSignal { rx },
         });
 

@@ -4,7 +4,7 @@
 //! prints and the names completion offers are the same list, read from the same place, so
 //! the two cannot come to disagree about what exists.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use librorolala::auth::{
     Account, KeyLocateRule, env_keys_dir, global_keys_dir, locate_accounts, user_keys_dir,
@@ -24,10 +24,10 @@ pub fn roots(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Vec<PathBu
     let mut roots = Vec::new();
 
     if let Some(held) = workspace {
-        roots.push(held.get_root().join(WORKSPACE_KEYS_DIR));
+        roots.push(plain(&held.get_root().join(WORKSPACE_KEYS_DIR)));
     }
     if let Some(held) = vault {
-        roots.push(held.get_root().join(VAULT_KEYS_DIR));
+        roots.push(plain(&held.get_root().join(VAULT_KEYS_DIR)));
     }
 
     roots.extend(user_keys_dir());
@@ -35,6 +35,17 @@ pub fn roots(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Vec<PathBu
     roots.extend(env_keys_dir());
 
     roots
+}
+
+/// A path as it is meant to be read, with the `./` the layout writes taken out of it.
+///
+/// The scopes are named `./keys/` and the like, and joining one onto a root leaves that `./`
+/// in the middle of every path built from it — a listing prints those paths, and a reader is
+/// owed the place rather than the pieces it was joined from. Nothing is resolved by this: the
+/// path is walked back into the components it is made of, which is what a caller would have
+/// written.
+fn plain(path: &Path) -> PathBuf {
+    path.components().collect()
 }
 
 /// The rule the directories above are searched under.

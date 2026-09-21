@@ -8,10 +8,8 @@
 
 use std::{path::Path, pin::Pin};
 
-use rorolala_auth::{KeyLocateRule, SigningKey, locate_accounts};
 use rorolala_utils_cli_theme::err_line;
 use rorolala_utils_lazyffi::lazyffi;
-use rorolala_vault::KEYS_DIR;
 use tokio::sync::watch;
 
 use crate::begin::DaemonInput;
@@ -63,8 +61,8 @@ pub fn daemon_begin(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
 /// embedding the daemon's logic into an application that already manages its
 /// own async executor.
 ///
-/// The Vault's own identity is resolved here, once, before anything is served: a
-/// daemon that cannot prove itself cannot serve at all.
+/// The Vault's own identity is resolved as the daemon starts, before anything is
+/// served: a daemon that cannot prove itself cannot serve at all.
 ///
 /// # Standard Out
 ///
@@ -75,10 +73,6 @@ pub fn daemon_begin(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
 /// This function is intended for asynchronous use and is not exposed over the
 /// FFI boundary on its own; use [`daemon_begin`] for blocking/FFI callers.
 pub async fn daemon_begin_async(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
-    let Some(identity) = vault_identity(cwd) else {
-        return DaemonExit::default();
-    };
-
     let cancel = init_close_channel();
 
     let (exit, ()) = tokio::join!(
@@ -86,7 +80,6 @@ pub async fn daemon_begin_async(cwd: &Path, config: &rorolala_vault::Config) -> 
         crate::begin::daemon(DaemonInput {
             cwd,
             config,
-            identity,
             signal: cancel.get_rx()
         }),
         // Ctrl + C
@@ -94,45 +87,6 @@ pub async fn daemon_begin_async(cwd: &Path, config: &rorolala_vault::Config) -> 
     );
 
     exit
-}
-
-/// The identity the Vault proves, read from the first account under its keys
-/// directory.
-///
-/// Which key a Vault is is host setup, not something the Vault *side* of a
-/// protocol touches: there, a peer is a [`Member`](rorolala_auth::Member) and
-/// nothing else. Resolving it here keeps that side free of the Workspace's
-/// notion of an account, and hands on the bare key it needs.
-///
-/// # Standard Error
-///
-/// Writes an error log when the Vault holds no account, or its key cannot be
-/// read.
-fn vault_identity(cwd: &Path) -> Option<SigningKey> {
-    let keys = vec![cwd.join(KEYS_DIR)];
-    let accounts = locate_accounts(&keys, &KeyLocateRule::new());
-
-    let Some(account) = accounts.iter().next() else {
-        eprintln!(
-            "{}",
-            err_line!(
-                "The Vault holds no account under {} to prove itself with.",
-                (keys[0].display())
-            )
-        );
-        return None;
-    };
-
-    match account.get_key() {
-        Ok(identity) => Some(identity),
-        Err(error) => {
-            eprintln!(
-                "{}",
-                err_line!("The Vault's own key could not be read: {error}")
-            );
-            None
-        }
-    }
 }
 
 /// A cancellation context that bundles the signalling channel together with
@@ -199,74 +153,4 @@ fn init_close_channel() -> Cancellation {
     });
 
     Cancellation { rx, future }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use ed25519_dalek::SigningKey as Ed25519SigningKey;
-    use ed25519_dalek::pkcs8::EncodePrivateKey as _;
-    use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
-    use rorolala_vault::KEYS_DIR;
-
-    use super::vault_identity;
-
-    /// A directory of its own, emptied first so a rerun starts clean.
-    fn scratch(label: &str) -> PathBuf {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-        let dir = std::env::temp_dir().join(format!(
-            "rorolala-daemon-identity-{}-{label}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-
-        dir
-    }
-
-    /// The keys directory of a Vault rooted at `cwd`, made so a key can be put in it.
-    fn keys(cwd: &std::path::Path) -> PathBuf {
-        let dir = cwd.join(KEYS_DIR);
-        fs::create_dir_all(&dir).unwrap();
-
-        dir
-    }
-
-    #[test]
-    fn a_vault_with_no_account_cannot_prove_itself() {
-        let cwd = scratch("no-account");
-        keys(&cwd);
-
-        assert!(vault_identity(&cwd).is_none());
-    }
-
-    #[test]
-    fn a_vault_whose_key_cannot_be_read_cannot_prove_itself() {
-        let cwd = scratch("bad-key");
-        // The account is found by name, but the file it names is not a key.
-        fs::write(keys(&cwd).join("vault.pem"), "not a key").unwrap();
-
-        assert!(vault_identity(&cwd).is_none());
-    }
-
-    #[test]
-    fn a_vault_whose_key_can_be_read_proves_it() {
-        let cwd = scratch("key");
-        let signing = Ed25519SigningKey::from_bytes(&[30; 32]);
-        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
-        fs::write(keys(&cwd).join("vault.pem"), pem.as_str()).unwrap();
-
-        let identity = vault_identity(&cwd).unwrap();
-
-        assert_eq!(
-            identity.public_key().as_bytes(),
-            signing.verifying_key().to_bytes()
-        );
-    }
 }
