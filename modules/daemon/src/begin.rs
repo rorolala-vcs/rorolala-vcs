@@ -432,7 +432,7 @@ mod tests {
     struct Failing;
 
     impl crate::ActionEntry for Failing {
-        fn run(&self, _ctx: ActionContext) -> crate::EntryFuture {
+        fn run<'a>(&self, _ctx: ActionContext<'a>) -> crate::EntryFuture<'a> {
             Box::pin(async { Err(ActionError::NoChannel) })
         }
     }

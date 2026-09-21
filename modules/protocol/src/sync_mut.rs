@@ -51,7 +51,7 @@ where
     /// ```
     pub async fn sync_mut<Run>(
         self,
-        ctx: &mut ActionContext,
+        ctx: &mut ActionContext<'_>,
         run: Run,
     ) -> Result<Both<T>, ActionError>
     where
@@ -90,7 +90,7 @@ where
     /// change, the value will not cross the channel, or the stream fails.
     pub async fn sync_mut<Run>(
         self,
-        ctx: &mut ActionContext,
+        ctx: &mut ActionContext<'_>,
         run: Run,
     ) -> Result<Both<T>, ActionError>
     where
@@ -134,7 +134,7 @@ pub trait SyncMutWith<T, Run> {
     /// fails.
     fn sync_mut_with(
         self,
-        ctx: &mut ActionContext,
+        ctx: &mut ActionContext<'_>,
         value: &mut T,
         run: Run,
     ) -> impl Future<Output = Result<(), ActionError>> + Send;
@@ -149,7 +149,7 @@ where
 {
     async fn sync_mut_with(
         self,
-        ctx: &mut ActionContext,
+        ctx: &mut ActionContext<'_>,
         value: &mut T,
         run: Run,
     ) -> Result<(), ActionError> {
@@ -176,7 +176,7 @@ where
 {
     async fn sync_mut_with(
         self,
-        ctx: &mut ActionContext,
+        ctx: &mut ActionContext<'_>,
         value: &mut T,
         run: Run,
     ) -> Result<(), ActionError> {
@@ -220,7 +220,7 @@ internal_repeat!(2..=12 => {
     {
         async fn sync_mut_with(
             self,
-            ctx: &mut ActionContext,
+            ctx: &mut ActionContext<'_>,
             value: &mut T,
             run: Run,
         ) -> Result<(), ActionError> {
@@ -286,7 +286,7 @@ internal_repeat!(2..=12 => {
     {
         async fn sync_mut_with(
             self,
-            ctx: &mut ActionContext,
+            ctx: &mut ActionContext<'_>,
             value: &mut T,
             run: Run,
         ) -> Result<(), ActionError> {

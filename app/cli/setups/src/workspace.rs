@@ -207,20 +207,18 @@ pub enum ErrorRemoteVault {
     },
 }
 
-/// The address `name` names, or `name` itself read as an address when the Workspace knows no
-/// such Vault.
+/// The address `name` names, read as one.
 ///
-/// A name is the Workspace's own shorthand, so one it knows says where to go; one it does not is
-/// taken to be an address already, which is what lets a Vault be reached that was never given a
-/// name. What is neither a name it knows nor an address that reads is reported rather than
-/// handed on, since there is nowhere it could be dialled.
+/// A name the Workspace knows says where to go, written down as the link it is; one it does not
+/// is taken to be an address already, which is what lets a Vault be reached that was never given
+/// a name. What is neither a name it knows nor a readable address is reported rather than handed
+/// on: a configuration that was edited by hand can hold an address no caller could have written,
+/// and there is nowhere either could be dialled.
 fn address_of(name: &str, config: &WorkspaceConfig) -> Result<VaultAddress, ErrorRemoteVault> {
-    if let Some(address) = config.vaults().get(name) {
-        return Ok(address.clone());
-    }
+    let written = config.vaults().get(name).map_or(name, String::as_str);
 
-    VaultAddress::parse(name).map_err(|_| ErrorRemoteVault::NotAddress {
-        name: name.to_string(),
+    VaultAddress::parse(written).map_err(|_| ErrorRemoteVault::NotAddress {
+        name: written.to_string(),
     })
 }
 

@@ -70,7 +70,7 @@ pub trait Action {
     /// the stream failing.
     fn process(
         input: OnlyWorkspace<Self::Input>,
-        ctx: ActionContext,
+        ctx: ActionContext<'_>,
     ) -> impl Future<Output = Result<Self::Output, ActionError>> + Send;
 }
 
@@ -89,7 +89,7 @@ mod tests {
 
         async fn process(
             input: OnlyWorkspace<Self::Input>,
-            _ctx: ActionContext,
+            _ctx: ActionContext<'_>,
         ) -> Result<Self::Output, ActionError> {
             Ok(input.unwrap_or_default())
         }

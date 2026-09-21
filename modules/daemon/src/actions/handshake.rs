@@ -39,7 +39,7 @@ impl Action for ActionHandshake {
 
     async fn process(
         input: OnlyWorkspace<Self::Input>,
-        mut ctx: ActionContext,
+        mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
         // Turn the Workspace's input into something both sides hold
         let mut message = ctx.sync(input).await?;

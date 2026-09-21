@@ -4,7 +4,7 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use crate::{ActionContext, ActionError, Both, Channel, Encodable, OnlyVault, OnlyWorkspace};
 
-impl ActionContext {
+impl ActionContext<'_> {
     /// Builds a value only the Vault side holds.
     ///
     /// This side decides: on the Vault the closure runs and the wrapper holds its
@@ -124,13 +124,13 @@ pub trait DataSync<Type> {
     /// Returns the value for the workspace side.
     fn do_workspace(
         &mut self,
-        context: &mut ActionContext,
+        context: &mut ActionContext<'_>,
     ) -> impl Future<Output = Result<Type, Self::Error>> + Send;
 
     /// Returns the value for the vault side.
     fn do_vault(
         &mut self,
-        context: &mut ActionContext,
+        context: &mut ActionContext<'_>,
     ) -> impl Future<Output = Result<Type, Self::Error>>;
 }
 
@@ -140,12 +140,15 @@ where
 {
     type Error = ActionError;
 
-    async fn do_workspace(&mut self, context: &mut ActionContext) -> Result<Inner, Self::Error> {
+    async fn do_workspace(
+        &mut self,
+        context: &mut ActionContext<'_>,
+    ) -> Result<Inner, Self::Error> {
         let channel = context.channel_mut().ok_or(ActionError::NoChannel)?;
         receive_value(channel).await
     }
 
-    async fn do_vault(&mut self, context: &mut ActionContext) -> Result<Inner, Self::Error> {
+    async fn do_vault(&mut self, context: &mut ActionContext<'_>) -> Result<Inner, Self::Error> {
         let value = self.take().ok_or(ActionError::MissingValue)?;
         let channel = context.channel_mut().ok_or(ActionError::NoChannel)?;
         send_value(channel, &value).await?;
@@ -159,14 +162,17 @@ where
 {
     type Error = ActionError;
 
-    async fn do_workspace(&mut self, context: &mut ActionContext) -> Result<Inner, Self::Error> {
+    async fn do_workspace(
+        &mut self,
+        context: &mut ActionContext<'_>,
+    ) -> Result<Inner, Self::Error> {
         let value = self.take().ok_or(ActionError::MissingValue)?;
         let channel = context.channel_mut().ok_or(ActionError::NoChannel)?;
         send_value(channel, &value).await?;
         Ok(value)
     }
 
-    async fn do_vault(&mut self, context: &mut ActionContext) -> Result<Inner, Self::Error> {
+    async fn do_vault(&mut self, context: &mut ActionContext<'_>) -> Result<Inner, Self::Error> {
         let channel = context.channel_mut().ok_or(ActionError::NoChannel)?;
         receive_value(channel).await
     }

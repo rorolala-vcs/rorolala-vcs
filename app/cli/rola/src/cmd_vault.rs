@@ -109,11 +109,16 @@ pub fn vault_bind(
         return ErrorVaultAddressInvalid { address }.into();
     };
 
+    // What is written down is the link the address adds up to, so a name reached for as
+    // `10.0.0.1` and one reached for as `rola://10.0.0.1/` are written the same way, and
+    // reading one back later is reading the same thing either time.
+    let address = address.to_string();
+
     match config.get_mut() {
         state @ ResWorkspaceConfig::Read { .. } => {
             // UNWRAP: the arm this is in shows there is a configuration to change.
             let workspace = state.config_mut().unwrap();
-            history.get_mut().remember(address.to_string());
+            history.get_mut().remember(address.clone());
             let replaced = workspace.vaults_mut().bind(name.clone(), address.clone());
 
             // The name is bound by now, so choosing it is choosing one that can be reached
@@ -330,7 +335,7 @@ fn positional(ctx: &ShellContext) -> usize {
 #[derive(Grouped)]
 pub struct ResultVaults {
     /// Each Vault, by name and address, in name order.
-    vaults: Vec<(String, VaultAddress)>,
+    vaults: Vec<(String, String)>,
     /// The Vault the Workspace reaches for, if one has been chosen.
     current: Option<String>,
 }
@@ -338,7 +343,7 @@ pub struct ResultVaults {
 impl ResultVaults {
     /// The Vaults of `config`, in name order, and the one it reaches for.
     fn of(config: &WorkspaceConfig) -> Self {
-        let mut vaults: Vec<(String, VaultAddress)> = config
+        let mut vaults: Vec<(String, String)> = config
             .vaults()
             .iter()
             .map(|(name, address)| (name.clone(), address.clone()))
@@ -381,9 +386,9 @@ pub struct ResultVaultBound {
     /// The name that was bound.
     name: String,
     /// The address it is bound to now.
-    address: VaultAddress,
+    address: String,
     /// The address it was bound to before, if it was bound at all.
-    replaced: Option<VaultAddress>,
+    replaced: Option<String>,
     /// Whether the name was also chosen to be reached for.
     made_default: bool,
 }
@@ -394,14 +399,14 @@ pub fn render_result_vault_bound(result: ResultVaultBound) {
         t!(
             "vault_bind.result_changed",
             name = result.name,
-            previous = previous.to_string(),
-            address = result.address.to_string()
+            previous = previous,
+            address = result.address
         )
     } else {
         t!(
             "vault_bind.result_bound",
             name = result.name,
-            address = result.address.to_string()
+            address = result.address
         )
     };
 
@@ -445,7 +450,7 @@ pub struct ResultVaultUnbound {
     /// The name that was let go.
     name: String,
     /// The address it had been bound to.
-    address: VaultAddress,
+    address: String,
     /// Whether it was also the one reached for by default.
     cleared_default: bool,
 }
@@ -457,7 +462,7 @@ pub fn render_result_vault_unbound(result: ResultVaultUnbound) {
         t!(
             "vault_unbind.result_unbound",
             name = result.name,
-            address = result.address.to_string()
+            address = result.address
         )
         .trim()
     );

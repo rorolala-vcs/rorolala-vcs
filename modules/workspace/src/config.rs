@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use rorolala_protocol::VaultAddress;
 use rorolala_utils_configure::Configure;
 use rorolala_utils_lazyffi::lazyffi;
 use serde::{Deserialize, Serialize};
@@ -92,14 +91,18 @@ impl DefaultConfig {
 /// The Vaults a Workspace knows, each under a name of its own.
 ///
 /// A name is how the Workspace talks about a Vault — `origin`, say — and the address is
-/// where that Vault answers: the daemon to knock at, and which Vault under it is meant. Names
-/// are not shared between Workspaces: the same Vault may well be `origin` in one and
+/// where that Vault answers: the daemon to knock at, and which Vault under it is meant. The
+/// address is kept as it was written, a link — `rola://<host>[:<port>]/<sub-vault>` — or the
+/// bare address it is short for. Nothing here reads it: a Workspace writes down where to go,
+/// and whoever dials reads the address it wrote down.
+///
+/// Names are not shared between Workspaces: the same Vault may well be `origin` in one and
 /// `upstream` in another.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct VaultsConfig {
-    /// The address each name means.
-    vaults: HashMap<String, VaultAddress>,
+    /// The address each name means, as it was written.
+    vaults: HashMap<String, String>,
 }
 
 impl VaultsConfig {
@@ -107,18 +110,18 @@ impl VaultsConfig {
     ///
     /// Binding a name that is already taken is how an address is changed: the new one
     /// replaces the old and the old is handed back.
-    pub fn bind(&mut self, name: impl Into<String>, address: VaultAddress) -> Option<VaultAddress> {
-        self.vaults.insert(name.into(), address)
+    pub fn bind(&mut self, name: impl Into<String>, address: impl Into<String>) -> Option<String> {
+        self.vaults.insert(name.into(), address.into())
     }
 
     /// Lets `name` go, answering with the address it was bound to, if it was bound at all.
-    pub fn unbind(&mut self, name: &str) -> Option<VaultAddress> {
+    pub fn unbind(&mut self, name: &str) -> Option<String> {
         self.vaults.remove(name)
     }
 
     /// The address `name` is bound to, if it is bound at all.
     #[must_use]
-    pub fn get(&self, name: &str) -> Option<&VaultAddress> {
+    pub fn get(&self, name: &str) -> Option<&String> {
         self.vaults.get(name)
     }
 
@@ -129,7 +132,7 @@ impl VaultsConfig {
     }
 
     /// Each name and the address it is bound to.
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &VaultAddress)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
         self.vaults.iter()
     }
 
@@ -151,14 +154,14 @@ impl VaultsConfig {
     }
 }
 
-impl From<HashMap<String, VaultAddress>> for VaultsConfig {
-    fn from(vaults: HashMap<String, VaultAddress>) -> Self {
+impl From<HashMap<String, String>> for VaultsConfig {
+    fn from(vaults: HashMap<String, String>) -> Self {
         Self { vaults }
     }
 }
 
-impl FromIterator<(String, VaultAddress)> for VaultsConfig {
-    fn from_iter<IntoIter: IntoIterator<Item = (String, VaultAddress)>>(entries: IntoIter) -> Self {
+impl FromIterator<(String, String)> for VaultsConfig {
+    fn from_iter<IntoIter: IntoIterator<Item = (String, String)>>(entries: IntoIter) -> Self {
         Self {
             vaults: entries.into_iter().collect(),
         }
@@ -169,13 +172,11 @@ impl FromIterator<(String, VaultAddress)> for VaultsConfig {
 mod tests {
     use std::collections::HashMap;
 
-    use rorolala_protocol::VaultAddress;
-
     use super::{Config, VaultsConfig};
 
-    /// An address to bind names to, parsed the way a caller's word would be.
-    fn address(text: &str) -> VaultAddress {
-        VaultAddress::parse(text).unwrap()
+    /// An address to bind names to, as a caller would have written it.
+    fn address(text: &str) -> String {
+        text.to_owned()
     }
 
     #[test]
@@ -286,7 +287,7 @@ mod tests {
         vaults.bind("origin", address("127.0.0.1:7000"));
         vaults.bind("upstream", address("[::1]:7001"));
 
-        let mut listed: Vec<(String, VaultAddress)> = vaults
+        let mut listed: Vec<(String, String)> = vaults
             .iter()
             .map(|(name, address)| (name.clone(), address.clone()))
             .collect();

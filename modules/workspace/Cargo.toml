@@ -8,7 +8,6 @@ rorolala-utils-configure.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
-rorolala-protocol.workspace = true
 serde.workspace = true
 
 [dev-dependencies]

@@ -1,4 +1,6 @@
 use rorolala_auth::{Account, Member};
+use rorolala_vault::{RootVault, Vault};
+use rorolala_workspace::Workspace;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{OnlyVault, OnlyWorkspace};
@@ -21,7 +23,11 @@ impl<T> Socket for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
 pub type Channel = rorolala_auth::SecureStream<Box<dyn Socket>>;
 
 /// Action context, used in client-server interaction.
-pub struct ActionContext {
+///
+/// The lifetime is that of the local things the action is handed: the Workspace it is taken
+/// from, and the Vault it is taken against. They belong to whoever built the context and
+/// outlive the action, so the context borrows them rather than taking copies.
+pub struct ActionContext<'a> {
     /// The side on which the action occurs.
     side: ActionSide,
 
@@ -39,6 +45,26 @@ pub struct ActionContext {
     /// not made up on the side that does not.
     account: OnlyWorkspace<Account>,
 
+    /// The Workspace the action is being taken from.
+    ///
+    /// The Workspace is the side the action runs on, so what holds it is the Workspace: the
+    /// wrapper is empty wherever the action runs as a Vault, which is the other side of the
+    /// channel and has no Workspace to hand.
+    current_workspace: OnlyWorkspace<&'a Workspace>,
+
+    /// The Vault the action is being taken against.
+    ///
+    /// The Vault is the other side, so what holds it is the Vault: the wrapper is empty
+    /// wherever the action runs as a Workspace.
+    current_vault: OnlyVault<&'a Vault>,
+
+    /// The outermost Vault above [`current_vault`](Self::current_vault).
+    ///
+    /// A Vault sits under a root that holds it — see [`RootVault`] — and a Vault-side
+    /// action that works on the Vaults below it is handed that root rather than looking for
+    /// it again. It is held on the Vault side, for the reason the Vault is.
+    current_root_vault: OnlyVault<&'a RootVault>,
+
     /// The encrypted channel values are exchanged over, once one has been attached.
     channel: Option<Channel>,
 }
@@ -52,7 +78,7 @@ pub enum ActionSide {
     Vault,
 }
 
-impl ActionContext {
+impl<'a> ActionContext<'a> {
     /// Returns the side on which the action occurs.
     ///
     /// # Examples
@@ -118,6 +144,9 @@ impl ActionContext {
             side: ActionSide::Workspace,
             member: OnlyVault::empty(),
             account: OnlyWorkspace::holding(account),
+            current_workspace: OnlyWorkspace::empty(),
+            current_vault: OnlyVault::empty(),
+            current_root_vault: OnlyVault::empty(),
             channel: None,
         }
     }
@@ -139,8 +168,41 @@ impl ActionContext {
             side: ActionSide::Vault,
             member: OnlyVault::holding(member),
             account: OnlyWorkspace::empty(),
+            current_workspace: OnlyWorkspace::empty(),
+            current_vault: OnlyVault::empty(),
+            current_root_vault: OnlyVault::empty(),
             channel: None,
         }
+    }
+
+    /// Attaches the Workspace this action is being taken from.
+    ///
+    /// The Workspace handed over has to outlive the context, which it does: the caller runs
+    /// the action against a Workspace it already holds.
+    #[must_use]
+    pub const fn with_current_workspace(mut self, workspace: &'a Workspace) -> Self {
+        self.current_workspace = OnlyWorkspace::holding(workspace);
+        self
+    }
+
+    /// Attaches the Vault this action is being taken against.
+    ///
+    /// The Vault handed over has to outlive the context, which it does: the caller runs the
+    /// action against a Vault it already holds.
+    #[must_use]
+    pub const fn with_current_vault(mut self, vault: &'a Vault) -> Self {
+        self.current_vault = OnlyVault::holding(vault);
+        self
+    }
+
+    /// Attaches the root of the Vault this action is being taken against.
+    ///
+    /// As [`with_current_vault`](Self::with_current_vault): an action that works on the
+    /// Vaults below this one is handed the root that holds them.
+    #[must_use]
+    pub const fn with_current_root_vault(mut self, root_vault: &'a RootVault) -> Self {
+        self.current_root_vault = OnlyVault::holding(root_vault);
+        self
     }
 
     /// Attaches `channel` so synced values can cross to the peer.
@@ -199,5 +261,69 @@ impl ActionContext {
     #[must_use]
     pub fn get_member(&self) -> OnlyVault<Member> {
         self.member.clone()
+    }
+
+    /// The Workspace the current action is taken from, on the Workspace side.
+    ///
+    /// A Workspace is the side the action runs on, so it exists only where the action is
+    /// taken by a Workspace; a context on the Vault side yields an empty [`OnlyWorkspace`].
+    #[must_use]
+    pub fn current_workspace(&self) -> OnlyWorkspace<&'a Workspace> {
+        self.current_workspace.clone()
+    }
+
+    /// The Vault the current action runs against, on the Vault side.
+    ///
+    /// A Vault is the other side's own, so it exists only where the action is taken by a
+    /// Vault; a context on the Workspace side yields an empty [`OnlyVault`].
+    #[must_use]
+    pub fn current_vault(&self) -> OnlyVault<&'a Vault> {
+        self.current_vault.clone()
+    }
+
+    /// The root above the Vault the current action runs against, on the Vault side.
+    ///
+    /// As [`current_vault`](Self::current_vault): it exists only where the action is taken
+    /// by a Vault.
+    #[must_use]
+    pub fn current_root_vault(&self) -> OnlyVault<&'a RootVault> {
+        self.current_root_vault.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rorolala_auth::{Account, Member};
+    use rorolala_vault::{RootVault, Vault};
+    use rorolala_workspace::Workspace;
+
+    use super::ActionContext;
+
+    #[test]
+    fn a_context_keeps_the_local_side_it_was_handed_and_only_there() {
+        let vault = Vault::default();
+        let root = RootVault::default();
+        let workspace = Workspace::default();
+
+        let ctx = ActionContext::new_vault_ctx(Member::default())
+            .with_current_vault(&vault)
+            .with_current_root_vault(&root);
+
+        assert!(ctx.current_vault().into_inner().is_some());
+        assert!(ctx.current_root_vault().into_inner().is_some());
+
+        // The Workspace side has no Vault to hand, so there is nothing there to reach for —
+        // and a Vault context that was handed none is empty the same way.
+        let ctx = ActionContext::new_workspace_ctx(Account::default());
+        assert!(ctx.current_vault().into_inner().is_none());
+        assert!(ctx.current_root_vault().into_inner().is_none());
+
+        // The other way round for the Workspace the action is taken from.
+        let ctx =
+            ActionContext::new_workspace_ctx(Account::default()).with_current_workspace(&workspace);
+        assert!(ctx.current_workspace().into_inner().is_some());
+
+        let ctx = ActionContext::new_vault_ctx(Member::default());
+        assert!(ctx.current_workspace().into_inner().is_none());
     }
 }

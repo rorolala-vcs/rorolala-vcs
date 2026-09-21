@@ -2,9 +2,14 @@
 // Do not edit: change the action, or `tmpl/registry.tmpl`, and this follows.
 
 /// What running an entry yields: what the action produced, as JSON.
-pub type EntryFuture = std::pin::Pin<
+///
+/// It borrows for as long as the context it runs against does, since the context is what
+/// carries the local things the action was handed.
+pub type EntryFuture<'a> = std::pin::Pin<
     std::boxed::Box<
-        dyn std::future::Future<Output = Result<String, rorolala_protocol::ActionError>> + Send,
+        dyn std::future::Future<Output = Result<String, rorolala_protocol::ActionError>>
+            + Send
+            + 'a,
     >,
 >;
 
@@ -16,7 +21,7 @@ pub type EntryFuture = std::pin::Pin<
 /// [`build_action_registry`], not something it carries.
 pub trait ActionEntry: Send + Sync {
     /// Runs the action against `ctx` and hands back what it produced, as JSON.
-    fn run(&self, ctx: rorolala_protocol::ActionContext) -> EntryFuture;
+    fn run<'a>(&self, ctx: rorolala_protocol::ActionContext<'a>) -> EntryFuture<'a>;
 }
 
 impl<Entry> ActionEntry for Entry
@@ -24,7 +29,7 @@ where
     Entry: rorolala_protocol::Action + Send + Sync + 'static,
     Entry::Output: Send + 'static,
 {
-    fn run(&self, ctx: rorolala_protocol::ActionContext) -> EntryFuture {
+    fn run<'a>(&self, ctx: rorolala_protocol::ActionContext<'a>) -> EntryFuture<'a> {
         std::boxed::Box::pin(async move {
             // Nothing is handed in: what an action runs on belongs to whoever asked for
             // it, and on this side that value is still to cross.
@@ -66,7 +71,7 @@ pub fn build_action_registry() -> Vec<std::option::Option<std::boxed::Box<dyn Ac
 pub async fn do_action_with(
     registry: &[std::option::Option<std::boxed::Box<dyn ActionEntry>>],
     id: u32,
-    ctx: rorolala_protocol::ActionContext,
+    ctx: rorolala_protocol::ActionContext<'_>,
 ) -> Result<String, rorolala_protocol::ActionError> {
     let entry = registry
         .get(usize::try_from(id).unwrap_or(usize::MAX))

@@ -12,14 +12,14 @@ use crate::ActionContext;
 #[derive(Debug, Clone)]
 pub struct OnlyVault<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     inner: Option<Inner>,
 }
 
 impl<Inner> OnlyVault<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     /// Builds a value from `f`, where the action runs as a Vault.
     ///
@@ -44,7 +44,7 @@ where
     /// assert!(empty.into_inner().is_none());
     /// ```
     #[must_use]
-    pub fn new<F>(ctx: &ActionContext, f: F) -> Self
+    pub fn new<F>(ctx: &ActionContext<'_>, f: F) -> Self
     where
         F: FnOnce() -> Inner,
     {
@@ -129,7 +129,7 @@ where
     /// value.mut_on_vault(&ctx, |value| *value += 2);
     /// assert_eq!(value.into_inner(), Some(3));
     /// ```
-    pub fn mut_on_vault<F>(&mut self, ctx: &ActionContext, f: F)
+    pub fn mut_on_vault<F>(&mut self, ctx: &ActionContext<'_>, f: F)
     where
         F: FnOnce(&mut Inner),
     {
@@ -143,7 +143,7 @@ where
 
 impl<Inner> From<Option<Inner>> for OnlyVault<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     fn from(inner: Option<Inner>) -> Self {
         Self { inner }
@@ -152,7 +152,7 @@ where
 
 impl<Inner> AsRef<Option<Inner>> for OnlyVault<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     fn as_ref(&self) -> &Option<Inner> {
         &self.inner
@@ -161,7 +161,7 @@ where
 
 impl<Inner> std::ops::Deref for OnlyVault<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     type Target = Option<Inner>;
 
@@ -182,14 +182,14 @@ where
 #[derive(Debug, Clone)]
 pub struct OnlyWorkspace<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     inner: Option<Inner>,
 }
 
 impl<Inner> OnlyWorkspace<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     /// Builds a value from `f`, where the action runs as a Workspace.
     ///
@@ -214,7 +214,7 @@ where
     /// assert!(empty.into_inner().is_none());
     /// ```
     #[must_use]
-    pub fn new<F>(ctx: &ActionContext, f: F) -> Self
+    pub fn new<F>(ctx: &ActionContext<'_>, f: F) -> Self
     where
         F: FnOnce() -> Inner,
     {
@@ -300,7 +300,7 @@ where
     /// value.mut_on_workspace(&ctx, |value| *value += 2);
     /// assert_eq!(value.into_inner(), Some(3));
     /// ```
-    pub fn mut_on_workspace<F>(&mut self, ctx: &ActionContext, f: F)
+    pub fn mut_on_workspace<F>(&mut self, ctx: &ActionContext<'_>, f: F)
     where
         F: FnOnce(&mut Inner),
     {
@@ -314,7 +314,7 @@ where
 
 impl<Inner> From<Option<Inner>> for OnlyWorkspace<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     fn from(inner: Option<Inner>) -> Self {
         Self { inner }
@@ -323,7 +323,7 @@ where
 
 impl<Inner> AsRef<Option<Inner>> for OnlyWorkspace<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     fn as_ref(&self) -> &Option<Inner> {
         &self.inner
@@ -332,7 +332,7 @@ where
 
 impl<Inner> std::ops::Deref for OnlyWorkspace<Inner>
 where
-    Inner: Send + Sync + 'static,
+    Inner: Send + Sync,
 {
     type Target = Option<Inner>;
 

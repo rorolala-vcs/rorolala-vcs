@@ -77,7 +77,7 @@ where
     /// assert!(dropped.into_inner().is_none());
     /// ```
     #[must_use]
-    pub fn only_workspace(self, ctx: &ActionContext) -> OnlyWorkspace<T> {
+    pub fn only_workspace(self, ctx: &ActionContext<'_>) -> OnlyWorkspace<T> {
         OnlyWorkspace::new(ctx, || self.into_inner())
     }
 
@@ -111,7 +111,7 @@ where
     /// assert!(dropped.into_inner().is_none());
     /// ```
     #[must_use]
-    pub fn only_vault(self, ctx: &ActionContext) -> OnlyVault<T> {
+    pub fn only_vault(self, ctx: &ActionContext<'_>) -> OnlyVault<T> {
         OnlyVault::new(ctx, || self.into_inner())
     }
 }
@@ -178,7 +178,7 @@ where
     /// fails.
     pub async fn sync_mut_with<Inputs, Run>(
         &mut self,
-        ctx: &mut ActionContext,
+        ctx: &mut ActionContext<'_>,
         inputs: Inputs,
         run: Run,
     ) -> Result<(), ActionError>

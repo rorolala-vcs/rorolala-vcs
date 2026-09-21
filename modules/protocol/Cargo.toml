@@ -10,6 +10,8 @@ rorolala-errors.workspace = true
 rorolala-protocol-macros.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
+rorolala-vault.workspace = true
+rorolala-workspace.workspace = true
 serde.workspace = true
 bincode2.workspace = true
 tokio = { workspace = true, features = ["io-util"] }

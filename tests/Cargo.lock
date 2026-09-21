@@ -1371,6 +1371,8 @@ dependencies = [
  "rorolala-protocol-macros",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
+ "rorolala-vault",
+ "rorolala-workspace",
  "serde",
  "tokio",
 ]
@@ -1474,7 +1476,6 @@ dependencies = [
 name = "rorolala-workspace"
 version = "0.1.0"
 dependencies = [
- "rorolala-protocol",
  "rorolala-utils-configure",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
