@@ -58,3 +58,43 @@ impl From<io::Error> for Error {
         Self::Io(source.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error as _;
+    use std::io;
+
+    use super::Error;
+
+    #[test]
+    fn each_error_says_what_went_wrong() {
+        assert_eq!(
+            Error::Malformed.to_string(),
+            "a key or signature was malformed"
+        );
+        assert_eq!(
+            Error::BadSignature.to_string(),
+            "a signature did not verify"
+        );
+        assert_eq!(
+            Error::UnexpectedIdentity.to_string(),
+            "the peer proved an identity that was not expected"
+        );
+        assert_eq!(
+            Error::Handshake.to_string(),
+            "the handshake did not follow the protocol"
+        );
+        assert_eq!(Error::BadRecord.to_string(), "a record did not decrypt");
+    }
+
+    #[test]
+    fn an_io_error_keeps_what_the_stream_said_and_carries_a_source() {
+        let error: Error = io::Error::new(io::ErrorKind::ConnectionReset, "reset by peer").into();
+
+        // The underlying stream's words survive the crossing, and it is the only variant
+        // with a source to hand to a caller walking the chain.
+        assert!(error.to_string().contains("reset by peer"));
+        assert!(error.source().is_some());
+        assert!(Error::Handshake.source().is_none());
+    }
+}

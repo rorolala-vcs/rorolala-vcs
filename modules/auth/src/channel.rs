@@ -923,9 +923,14 @@ mod tests {
     };
     use tokio::time::timeout;
 
-    use super::{KEM_CIPHERTEXT_LEN, KEM_ENCAPSULATION_LEN, MAX_PLAINTEXT, SecureStream};
+    use super::{
+        Answer, Handshake, KEM_CIPHERTEXT_LEN, KEM_ENCAPSULATION_LEN, MAX_CIPHERTEXT,
+        MAX_PLAINTEXT, Offer, SUITE, Schedule, SecureStream, hybrid_shared, read_message,
+        seal_once, write_message,
+    };
     use crate::Error;
     use crate::key::{KeyAlgorithm, SigningKey};
+    use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
     /// A key with a given seed, so a test is deterministic.
     fn key(seed: u8) -> SigningKey {
@@ -1246,6 +1251,215 @@ mod tests {
         assert!(accept_message(&oversized).await.is_err());
     }
 
+    #[tokio::test]
+    async fn a_record_longer_than_a_session_writes_is_refused_at_once() {
+        let (mut wire, other) = duplex(64);
+        let mut stream = SecureStream::new(other, [1; 32], [2; 32], key(20).public_key());
+
+        // A record longer than a session ever writes cannot be one, and a peer that names a
+        // gigabyte must not make one be allocated, so the length is refused as it is read.
+        let length = u32::try_from(MAX_CIPHERTEXT + 1).unwrap().to_be_bytes();
+        wire.write_all(&length).await.unwrap();
+        wire.flush().await.unwrap();
+
+        let mut heard = [0u8; 8];
+        let error = stream.read_exact(&mut heard).await.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[tokio::test]
+    async fn a_client_refuses_a_low_order_server_exchange_key() {
+        let (client_io, server_io) = duplex(64 * 1024);
+        let client_key = key(30);
+        let server_key = key(31);
+        let expected = server_key.public_key();
+
+        // A server that proves a real identity but answers with an exchange key whose half of
+        // the Diffie-Hellman is zero: the client must refuse rather than derive a secret a
+        // peer can drive to nothing.
+        let running = server_key.clone();
+        let lying = tokio::spawn(async move {
+            let mut io = server_io;
+            let message = read_message(&mut io).await.unwrap();
+            let offer = Offer::decode(&message).unwrap();
+            let peer_ephemeral = offer.ephemeral().unwrap();
+            let peer = offer.identity().unwrap();
+            let encapsulation = offer.encapsulation().unwrap();
+
+            let mut handshake = Handshake::new(SUITE).unwrap();
+            handshake
+                .offer(
+                    peer_ephemeral.as_bytes(),
+                    peer.as_bytes(),
+                    offer.encapsulation,
+                )
+                .unwrap();
+
+            let low_order = X25519PublicKey::from([0u8; 32]);
+            let (ciphertext, _) = encapsulation.encapsulate();
+            let identity = running.public_key();
+            let answering = handshake
+                .answer(
+                    low_order.as_bytes(),
+                    identity.as_bytes(),
+                    ciphertext.as_ref(),
+                )
+                .unwrap();
+            let proof = running.sign(&answering);
+            let answer =
+                Answer::encode(&low_order, &identity, ciphertext.as_ref(), &proof).unwrap();
+            write_message(&mut io, &answer).await.unwrap();
+        });
+
+        let connected = SecureStream::connect(client_io, &client_key, &expected).await;
+        let _ = lying.await;
+
+        assert!(matches!(connected, Err(Error::Handshake)));
+    }
+
+    #[tokio::test]
+    async fn a_server_refuses_a_low_order_client_exchange_key() {
+        // A client offer with a sound encapsulation key but an exchange key that contributes
+        // nothing: the server must refuse the exchange rather than carry on with a weakened
+        // secret, exactly as the client does.
+        let (_, encapsulation) = MlKem768::generate_keypair();
+        let encapsulation = encapsulation.to_bytes();
+
+        let mut offer = vec![SUITE];
+        field(&mut offer, &[0u8; 32]);
+        field(&mut offer, &[0u8; 32]);
+        field(&mut offer, encapsulation.as_ref());
+
+        assert!(matches!(accept_offer(&offer).await, Err(Error::Handshake)));
+    }
+
+    #[tokio::test]
+    async fn a_malformed_answer_is_refused() {
+        // A suite this build does not offer.
+        assert!(connect_answer(&framed(&[9])).await.is_err());
+
+        // Nothing at all: a zero-length frame, and no frame.
+        assert!(connect_answer(&framed(&[])).await.is_err());
+        assert!(connect_answer(&[]).await.is_err());
+
+        // A field that promises more bytes than it carries.
+        assert!(connect_answer(&framed(&[1, 0, 5, 1, 2])).await.is_err());
+
+        // A well-formed answer with a byte left over.
+        let mut trailing = vec![SUITE];
+        field(&mut trailing, &[0; 32]);
+        field(&mut trailing, &[0; 32]);
+        field(&mut trailing, &[0; KEM_CIPHERTEXT_LEN]);
+        field(&mut trailing, &[0; 64]);
+        trailing.push(0);
+        assert!(connect_answer(&framed(&trailing)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn an_answer_field_of_the_wrong_length_is_refused() {
+        // The exchange key must be 32 bytes.
+        let mut ephemeral = vec![SUITE];
+        field(&mut ephemeral, &[0; 31]);
+        field(&mut ephemeral, &[0; 32]);
+        field(&mut ephemeral, &[0; KEM_CIPHERTEXT_LEN]);
+        field(&mut ephemeral, &[0; 64]);
+        assert!(matches!(
+            connect_answer(&framed(&ephemeral)).await,
+            Err(Error::Handshake)
+        ));
+
+        // The identity must be an Ed25519 key...
+        let mut identity = vec![SUITE];
+        field(&mut identity, &[0; 32]);
+        field(&mut identity, &[0; 31]);
+        field(&mut identity, &[0; KEM_CIPHERTEXT_LEN]);
+        field(&mut identity, &[0; 64]);
+        assert!(matches!(
+            connect_answer(&framed(&identity)).await,
+            Err(Error::Malformed)
+        ));
+
+        // ...the ciphertext must be one an ML-KEM-768 key made...
+        let mut ciphertext = vec![SUITE];
+        field(&mut ciphertext, &[0; 32]);
+        field(&mut ciphertext, &[0; 32]);
+        field(&mut ciphertext, &[0; 10]);
+        field(&mut ciphertext, &[0; 64]);
+        assert!(matches!(
+            connect_answer(&framed(&ciphertext)).await,
+            Err(Error::Handshake)
+        ));
+
+        // ...and the proof must be a 64-byte signature.
+        let mut proof = vec![SUITE];
+        field(&mut proof, &[0; 32]);
+        field(&mut proof, &[0; 32]);
+        field(&mut proof, &[0; KEM_CIPHERTEXT_LEN]);
+        field(&mut proof, &[0; 63]);
+        assert!(matches!(
+            connect_answer(&framed(&proof)).await,
+            Err(Error::Malformed)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_client_proof_that_does_not_open_is_refused() {
+        // Bytes that are not a record sealed under the handshake key do not open at all.
+        assert!(matches!(
+            accept_client_message(|_| vec![1, 2, 3]).await,
+            Err(Error::BadRecord)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_client_proof_of_the_wrong_length_is_refused() {
+        // A proof that opens but is not 64 bytes cannot be a signature.
+        assert!(matches!(
+            accept_client_message(|key| seal_once(key, &[0; 63]).unwrap()).await,
+            Err(Error::Malformed)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_client_proof_that_does_not_verify_is_refused() {
+        // A signature of the right length that the peer's key did not make is not a proof.
+        assert!(matches!(
+            accept_client_message(|key| seal_once(key, &[0; 64]).unwrap()).await,
+            Err(Error::BadSignature)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_session_hands_back_the_stream_it_was_given() {
+        let (one, mut other) = duplex(256);
+        let stream = SecureStream::new(one, [1; 32], [2; 32], key(23).public_key());
+
+        // Taking the stream back yields the same one that was handed in, so raw bytes written
+        // to it reach the peer unsealed — which is what makes releasing the session mean
+        // anything.
+        let mut inner = stream.into_inner();
+        inner.write_all(b"raw").await.unwrap();
+
+        let mut heard = [0u8; 3];
+        other.read_exact(&mut heard).await.unwrap();
+        assert_eq!(&heard, b"raw");
+    }
+
+    #[tokio::test]
+    async fn shutting_a_session_down_ends_the_stream_under_it() {
+        let (one, mut other) = duplex(256);
+        let mut stream = SecureStream::new(one, [1; 32], [2; 32], key(24).public_key());
+        stream.write_all(b"bye").await.unwrap();
+
+        stream.shutdown().await.unwrap();
+
+        // The last record went out before the end did, so the peer reads the bytes and then a
+        // clean close rather than losing them.
+        let mut seen = Vec::new();
+        other.read_to_end(&mut seen).await.unwrap();
+        assert!(seen.len() > 3);
+    }
+
     /// A stream that fails every write, so a write error can be seen to reach the caller.
     struct Failing;
 
@@ -1308,5 +1522,111 @@ mod tests {
         let _ = writing.await;
 
         accepted
+    }
+
+    /// Runs `connect` against one raw answering message.
+    async fn connect_answer(
+        message: &[u8],
+    ) -> Result<SecureStream<tokio::io::DuplexStream>, Error> {
+        let (client_io, mut server_io) = duplex(8 * 1024);
+        let me = key(32);
+        let sending = message.to_vec();
+
+        // The client writes its offer and then blocks on the answer, so the reply comes from
+        // another task; reading the offer first keeps the stream open while the client waits.
+        let writing = tokio::spawn(async move {
+            let _ = read_message(&mut server_io).await;
+            let _ = server_io.write_all(&sending).await;
+            let _ = server_io.shutdown().await;
+        });
+
+        let connected = SecureStream::connect_unpinned(client_io, &me).await;
+        let _ = writing.await;
+
+        connected
+    }
+
+    /// Runs `accept` against one raw offer, keeping the client end open long enough to read
+    /// the answer the server writes before it judges the exchange.
+    async fn accept_offer(offer: &[u8]) -> Result<SecureStream<tokio::io::DuplexStream>, Error> {
+        let (client_io, server_io) = duplex(8 * 1024);
+        let me = key(33);
+        let sending = framed(offer);
+
+        let writing = tokio::spawn(async move {
+            let mut client = client_io;
+            let _ = client.write_all(&sending).await;
+            // Drain the answer, so the server's write does not fail on a closed pipe; the end
+            // arrives once the server gives up on the exchange.
+            let mut sink = Vec::new();
+            let _ = client.read_to_end(&mut sink).await;
+        });
+
+        let accepted = SecureStream::accept(server_io, &me).await;
+        let _ = writing.await;
+
+        accepted
+    }
+
+    /// Carries a client through the exchange up to the point the server opens its proof,
+    /// handing back the key the server will open that proof under.
+    async fn client_holding_to_server(
+        io: &mut tokio::io::DuplexStream,
+        me: &SigningKey,
+    ) -> [u8; 32] {
+        let ephemeral = EphemeralSecret::random();
+        let our_ephemeral = X25519PublicKey::from(&ephemeral);
+        let identity = me.public_key();
+        let (decapsulation, encapsulation) = MlKem768::generate_keypair();
+        let encapsulation = encapsulation.to_bytes();
+
+        let mut handshake = Handshake::new(SUITE).unwrap();
+        let offer = Offer::encode(&our_ephemeral, &identity, encapsulation.as_ref()).unwrap();
+        handshake
+            .offer(
+                our_ephemeral.as_bytes(),
+                identity.as_bytes(),
+                encapsulation.as_ref(),
+            )
+            .unwrap();
+        write_message(io, &offer).await.unwrap();
+
+        let message = read_message(io).await.unwrap();
+        let answer = Answer::decode(&message).unwrap();
+        let peer_ephemeral = answer.ephemeral().unwrap();
+        let peer = answer.identity().unwrap();
+        let ciphertext = answer.ciphertext().unwrap();
+        let answering = handshake
+            .answer(peer_ephemeral.as_bytes(), peer.as_bytes(), ciphertext)
+            .unwrap();
+
+        let shared = ephemeral.diffie_hellman(&peer_ephemeral);
+        let encapsulated = decapsulation.decapsulate_slice(ciphertext).unwrap();
+        let keys = Schedule::extract(
+            &answering,
+            &hybrid_shared(shared.as_bytes(), encapsulated.as_ref()),
+        );
+
+        keys.expand("hs to server")
+    }
+
+    /// Runs `accept` against a client that has reached the client-proof step, sending whatever
+    /// `seal` makes of the key the server opens that proof under.
+    async fn accept_client_message(
+        seal: impl FnOnce(&[u8; 32]) -> Vec<u8>,
+    ) -> Result<SecureStream<tokio::io::DuplexStream>, Error> {
+        let (client_io, server_io) = duplex(64 * 1024);
+        let server_key = key(40);
+        let running = server_key.clone();
+        let accepting =
+            tokio::spawn(async move { SecureStream::accept(server_io, &running).await });
+
+        let mut client = client_io;
+        let to_server = client_holding_to_server(&mut client, &key(41)).await;
+        let message = seal(&to_server);
+        write_message(&mut client, &message).await.unwrap();
+        let _ = client.shutdown().await;
+
+        accepting.await.unwrap()
     }
 }

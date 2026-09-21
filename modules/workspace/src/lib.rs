@@ -79,7 +79,9 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use crate::{Workspace, free_rola_workspace, locate_rola_workspace};
+    use rorolala_utils_location::Locate;
+
+    use crate::{CONFIG_PATH, Workspace, free_rola_workspace, locate_rola_workspace};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -123,6 +125,23 @@ mod tests {
 
         // SAFETY: `found` came from the export above and has not been released yet.
         unsafe { free_rola_workspace(found) };
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_workspace_keeps_its_configuration_inside_the_directory_it_was_located_at() {
+        let dir = scratch("config-path");
+        Workspace::create(&dir).unwrap();
+
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        assert_eq!(workspace.config_path(), dir.join(CONFIG_PATH));
+        assert!(
+            workspace.config_path().is_file(),
+            "{:?}",
+            workspace.config_path()
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }

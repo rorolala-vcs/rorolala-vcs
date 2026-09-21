@@ -179,6 +179,7 @@ impl FromIterator<(String, SocketAddress)> for VaultsConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::net::SocketAddr;
 
     use super::{Config, VaultsConfig};
@@ -288,5 +289,73 @@ mod tests {
         let toml = toml::to_string(&Config::default()).unwrap();
 
         assert!(!toml.contains("default"), "{toml}");
+    }
+
+    #[test]
+    fn listing_the_vaults_gives_back_each_name_with_the_address_it_means() {
+        let mut vaults = VaultsConfig::default();
+        vaults.bind("origin", address("127.0.0.1:7000"));
+        vaults.bind("upstream", address("[::1]:7001"));
+
+        let mut listed: Vec<(String, SocketAddr)> = vaults
+            .iter()
+            .map(|(name, address)| (name.clone(), *address))
+            .collect();
+        listed.sort();
+
+        assert_eq!(
+            listed,
+            [
+                ("origin".to_owned(), address("127.0.0.1:7000")),
+                ("upstream".to_owned(), address("[::1]:7001")),
+            ]
+        );
+    }
+
+    #[test]
+    fn listing_the_names_gives_back_each_name_in_use() {
+        let mut vaults = VaultsConfig::default();
+        vaults.bind("origin", address("127.0.0.1:7000"));
+        vaults.bind("upstream", address("[::1]:7001"));
+
+        let mut names: Vec<String> = vaults.names().cloned().collect();
+        names.sort();
+
+        assert_eq!(names, ["origin", "upstream"]);
+    }
+
+    #[test]
+    fn an_empty_configuration_lists_nothing() {
+        let vaults = VaultsConfig::default();
+
+        assert_eq!(vaults.iter().count(), 0);
+        assert_eq!(vaults.names().count(), 0);
+    }
+
+    #[test]
+    fn a_map_of_names_and_addresses_becomes_a_configuration_that_knows_them() {
+        let mut map = HashMap::new();
+        map.insert("origin".to_owned(), address("127.0.0.1:7000"));
+        map.insert("upstream".to_owned(), address("[::1]:7001"));
+
+        let vaults = VaultsConfig::from(map);
+
+        assert_eq!(vaults.get("origin"), Some(&address("127.0.0.1:7000")));
+        assert_eq!(vaults.get("upstream"), Some(&address("[::1]:7001")));
+        assert_eq!(vaults.len(), 2);
+    }
+
+    #[test]
+    fn collecting_pairs_of_names_and_addresses_binds_them_all() {
+        let vaults: VaultsConfig = [
+            ("origin".to_owned(), address("127.0.0.1:7000")),
+            ("upstream".to_owned(), address("[::1]:7001")),
+        ]
+        .into_iter()
+        .collect();
+
+        assert_eq!(vaults.get("origin"), Some(&address("127.0.0.1:7000")));
+        assert_eq!(vaults.get("upstream"), Some(&address("[::1]:7001")));
+        assert_eq!(vaults.len(), 2);
     }
 }

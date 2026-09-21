@@ -333,6 +333,7 @@ mod tests {
     use ed25519_dalek::SigningKey as Ed25519SigningKey;
     use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
     use ed25519_dalek::pkcs8::{EncodePrivateKey as _, EncodePublicKey as _};
+    use std::fmt::Write as _;
 
     /// A key with a given seed, so a test is deterministic.
     fn key(seed: u8) -> SigningKey {
@@ -437,5 +438,56 @@ mod tests {
             PublicKey::from_pem("not a key"),
             Err(Error::Malformed)
         ));
+    }
+
+    #[test]
+    fn an_algorithm_names_itself_and_the_lengths_it_states() {
+        assert_eq!(KeyAlgorithm::Ed25519.name(), "ed25519");
+        assert_eq!(
+            KeyAlgorithm::from_name("ed25519"),
+            Some(KeyAlgorithm::Ed25519)
+        );
+        assert_eq!(KeyAlgorithm::from_name("rsa"), None);
+        assert_eq!(KeyAlgorithm::Ed25519.public_len(), 32);
+        assert_eq!(KeyAlgorithm::Ed25519.secret_len(), 32);
+        assert_eq!(KeyAlgorithm::Ed25519.signature_len(), 64);
+    }
+
+    #[test]
+    fn a_key_and_a_signature_carry_the_algorithm_that_made_them() {
+        let signing = key(1);
+
+        assert_eq!(signing.algorithm(), KeyAlgorithm::Ed25519);
+        assert_eq!(signing.public_key().algorithm(), KeyAlgorithm::Ed25519);
+        assert_eq!(signing.sign(b"rorolala").algorithm(), KeyAlgorithm::Ed25519);
+    }
+
+    #[test]
+    fn a_fingerprint_writes_its_bytes_as_hex() {
+        let fingerprint = Fingerprint::of(KeyAlgorithm::Ed25519, b"rorolala");
+
+        assert_eq!(fingerprint.as_bytes().len(), 32);
+
+        // What is shown is the bytes written out as hex, two characters to each, which is
+        // the whole of what a log or a prompt has to compare by.
+        let mut shown = String::new();
+        for byte in fingerprint.as_bytes() {
+            write!(shown, "{byte:02x}").unwrap();
+        }
+        assert_eq!(fingerprint.to_string(), shown);
+        assert_eq!(fingerprint.to_string().len(), 64);
+    }
+
+    #[test]
+    fn a_private_key_never_reaches_a_debug_log() {
+        // The seed is all-3, so anywhere its bytes were shown would be plain to see. The
+        // `Debug` names only the algorithm: a private key must not reach a log through a
+        // `Debug` that looked harmless at the call site.
+        let signing = key(3);
+
+        let shown = format!("{signing:?}");
+
+        assert_eq!(shown, "SigningKey { algorithm: Ed25519, .. }");
+        assert!(!shown.contains("3, 3"));
     }
 }

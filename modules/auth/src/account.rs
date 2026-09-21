@@ -283,4 +283,18 @@ mod tests {
 
         assert!(matches!(account.get_key(), Err(Error::Io(_))));
     }
+
+    #[test]
+    fn an_account_set_is_consumed_into_the_accounts_it_holds() {
+        // The owned iterator is what a `for` loop over a set uses, so a caller that is
+        // finished with the set can take its accounts rather than only borrow them.
+        let accounts = super::Accounts::new(vec![
+            Account::new("alice".to_string(), PathBuf::from("alice.pem"), None),
+            Account::new("bob".to_string(), PathBuf::from("bob.pem"), None),
+        ]);
+
+        let names: Vec<String> = accounts.into_iter().map(|account| account.name()).collect();
+
+        assert_eq!(names, ["alice", "bob"]);
+    }
 }

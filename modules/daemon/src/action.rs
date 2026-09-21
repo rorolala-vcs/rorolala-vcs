@@ -86,10 +86,67 @@ include!("registry.rs");
 
 #[cfg(test)]
 mod tests {
-    use rorolala_auth::Account;
-    use rorolala_protocol::{ActionContext, ActionError};
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use super::{build_action_registry, do_action_with};
+    use ed25519_dalek::SigningKey as Ed25519SigningKey;
+    use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+    use ed25519_dalek::pkcs8::{EncodePrivateKey as _, EncodePublicKey as _};
+    use rorolala_auth::{
+        Account, KeyAlgorithm, KeyLocateRule, SecureStream, SigningKey, find_account,
+    };
+    use rorolala_protocol::{Action as _, ActionContext, ActionError, Socket};
+    use tokio::net::TcpListener;
+
+    use super::{ActionHandshake, build_action_registry, do_action_with, proc_action};
+    use crate::wire;
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-daemon-action-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    /// An identity from a fixed seed, so a test names the same key twice.
+    fn signing(seed: u8) -> SigningKey {
+        SigningKey::from_bytes(KeyAlgorithm::Ed25519, [seed; 32]).unwrap()
+    }
+
+    /// Writes the private key of `identity` as the account `name`, where a search finds it.
+    fn enroll(keys: &Path, name: &str, identity: &Ed25519SigningKey) {
+        let pem = identity.to_pkcs8_pem(LineEnding::LF).unwrap();
+        fs::write(keys.join(format!("{name}.pem")), pem.as_str()).unwrap();
+    }
+
+    /// Writes the public key of `identity` as the member `name`, where a search finds it.
+    fn publish(keys: &Path, name: &str, identity: &Ed25519SigningKey) {
+        let pem = identity
+            .verifying_key()
+            .to_public_key_pem(LineEnding::LF)
+            .unwrap();
+        fs::write(keys.join(format!("{name}.pub")), pem).unwrap();
+    }
+
+    /// A rule that looks only at the caller's own keys, so a test sees only what it made.
+    fn local_only() -> KeyLocateRule {
+        KeyLocateRule {
+            find_global: false,
+            find_local: true,
+            find_user: false,
+            find_env: false,
+        }
+    }
 
     /// An id no action claims is refused rather than mistaken for a position.
     ///
@@ -106,5 +163,95 @@ mod tests {
             .expect_err("an id no action names is refused");
 
         assert!(matches!(error, ActionError::UnknownAction(id) if id == u32::MAX));
+    }
+
+    /// A target that would not read as an address is refused before a key is read.
+    #[tokio::test]
+    async fn a_target_that_is_not_an_address_is_refused() {
+        // The account holds no key, so if the address were checked later this would fail
+        // with an auth error instead of the address one.
+        let error = proc_action::<ActionHandshake>(
+            &Account::default(),
+            "nowhere".to_string(),
+            "world".to_string(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ActionError::Addr(_)));
+    }
+
+    /// An account whose private key cannot be read fails before anything is sent.
+    #[tokio::test]
+    async fn an_account_whose_key_cannot_be_read_is_refused() {
+        // `Account::default()` names a key file that is not there, and the address is one
+        // that would parse, so reading the key is what fails.
+        let error = proc_action::<ActionHandshake>(
+            &Account::default(),
+            "127.0.0.1:1".to_string(),
+            "world".to_string(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ActionError::Auth(_)));
+    }
+
+    /// An account whose peer key cannot be read fails before anything is sent.
+    #[tokio::test]
+    async fn an_account_whose_peer_key_cannot_be_read_is_refused() {
+        let keys = scratch("peer-key");
+        let client = Ed25519SigningKey::from_bytes(&[2; 32]);
+        // A public key beside the private one names a peer, so the account holds its
+        // peer to it — until the file is gone.
+        enroll(&keys, "client", &client);
+        publish(&keys, "client", &Ed25519SigningKey::from_bytes(&[3; 32]));
+
+        let account = find_account("client", std::slice::from_ref(&keys), &local_only()).unwrap();
+        fs::remove_file(keys.join("client.pub")).unwrap();
+
+        let error = proc_action::<ActionHandshake>(
+            &account,
+            "127.0.0.1:1".to_string(),
+            "world".to_string(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, ActionError::Auth(_)));
+    }
+
+    /// A peer that confirms some other action never starts the one that was asked for.
+    #[tokio::test]
+    async fn a_confirmation_that_does_not_match_the_action_is_refused() {
+        let keys = scratch("mismatch");
+        let client = Ed25519SigningKey::from_bytes(&[4; 32]);
+        enroll(&keys, "client", &client);
+
+        let server = signing(5);
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        // A peer that reads the request and answers with the confirmation of another
+        // action, which is what a caller must not take for a go-ahead.
+        let serving = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let socket: Box<dyn Socket> = Box::new(stream);
+            let mut channel = SecureStream::accept(socket, &server).await.unwrap();
+            let request = wire::read_request(&mut channel).await.unwrap();
+            wire::write_confirmation(&mut channel, request.id + 1)
+                .await
+                .unwrap();
+        });
+
+        let account = find_account("client", std::slice::from_ref(&keys), &local_only()).unwrap();
+
+        let error =
+            proc_action::<ActionHandshake>(&account, address.to_string(), "world".to_string())
+                .await
+                .unwrap_err();
+
+        assert!(matches!(error, ActionError::UnknownAction(id) if id == ActionHandshake::ID));
+        serving.await.unwrap();
     }
 }

@@ -342,3 +342,64 @@ where
         &self.inner
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{OnlyVault, OnlyWorkspace};
+
+    #[test]
+    fn a_vault_wrapper_hands_out_its_value_or_a_fallback() {
+        let held: OnlyVault<u64> = OnlyVault::from(Some(7));
+        assert_eq!(held.unwrap(), 7);
+
+        let empty: OnlyVault<u64> = OnlyVault::empty();
+        assert_eq!(empty.unwrap_or(3), 3);
+        assert_eq!(OnlyVault::<u64>::empty().unwrap_or_else(|| 4), 4);
+        assert_eq!(OnlyVault::<u64>::empty().unwrap_or_default(), 0);
+    }
+
+    #[test]
+    fn a_workspace_wrapper_hands_out_its_value_or_a_fallback() {
+        let held: OnlyWorkspace<u64> = OnlyWorkspace::from(Some(7));
+        assert_eq!(held.unwrap(), 7);
+
+        let empty: OnlyWorkspace<u64> = OnlyWorkspace::empty();
+        assert_eq!(empty.unwrap_or(3), 3);
+        assert_eq!(OnlyWorkspace::<u64>::empty().unwrap_or_else(|| 4), 4);
+        assert_eq!(OnlyWorkspace::<u64>::empty().unwrap_or_default(), 0);
+    }
+
+    #[test]
+    fn a_vault_wrapper_reads_as_the_option_it_holds() {
+        let held: OnlyVault<u64> = OnlyVault::from(Some(7));
+        assert_eq!(held.as_ref(), &Some(7));
+        assert_eq!(*held, Some(7));
+
+        let empty: OnlyVault<u64> = OnlyVault::empty();
+        assert_eq!(empty.as_ref(), &None);
+    }
+
+    #[test]
+    fn a_workspace_wrapper_reads_as_the_option_it_holds() {
+        let held: OnlyWorkspace<u64> = OnlyWorkspace::from(Some(7));
+        assert_eq!(held.as_ref(), &Some(7));
+        assert_eq!(*held, Some(7));
+
+        let empty: OnlyWorkspace<u64> = OnlyWorkspace::empty();
+        assert_eq!(empty.as_ref(), &None);
+    }
+
+    #[test]
+    #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+    fn unwrapping_an_empty_vault_wrapper_panics() {
+        let empty: OnlyVault<u64> = OnlyVault::empty();
+        empty.unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+    fn unwrapping_an_empty_workspace_wrapper_panics() {
+        let empty: OnlyWorkspace<u64> = OnlyWorkspace::empty();
+        empty.unwrap();
+    }
+}

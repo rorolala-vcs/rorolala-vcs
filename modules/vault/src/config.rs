@@ -71,5 +71,26 @@ mod tests {
         let read: Config = toml::from_str("").unwrap();
 
         assert_eq!(read.daemon_config().prefer_port(), VAULT_DEFAULT_PORT);
+
+        // The same holds a table that is present but says nothing.
+        let read: Config = toml::from_str("[daemon_config]\n").unwrap();
+
+        assert_eq!(read.daemon_config().prefer_port(), VAULT_DEFAULT_PORT);
+    }
+
+    #[test]
+    fn a_configuration_keeps_the_port_it_is_written_with() {
+        let read: Config = toml::from_str("[daemon_config]\nprefer_port = 4321\n").unwrap();
+
+        assert_eq!(read.daemon_config().prefer_port(), 4321);
+
+        // And the port is spelled back out under the table it came from, so a caller
+        // reading the file finds it where the structure says it lives.
+        let written = toml::to_string(&read).unwrap();
+        assert!(written.contains("[daemon_config]"), "{written}");
+        assert!(written.contains("prefer_port = 4321"), "{written}");
+
+        let read_back: Config = toml::from_str(&written).unwrap();
+        assert_eq!(read_back.daemon_config().prefer_port(), 4321);
     }
 }

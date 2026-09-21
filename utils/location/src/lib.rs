@@ -1171,3 +1171,134 @@ where
         async move { tokio::fs::try_exists(path).await }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Locate;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// A location rooted wherever a test says, so the wrappers can be driven directly.
+    struct Fake {
+        root: PathBuf,
+    }
+
+    impl Fake {
+        fn at(root: impl AsRef<Path>) -> Self {
+            Self {
+                root: root.as_ref().to_path_buf(),
+            }
+        }
+    }
+
+    impl Locate for Fake {
+        fn locate(cwd: &Path) -> Option<Self> {
+            Some(Self::at(cwd))
+        }
+
+        fn get_root(&self) -> &Path {
+            &self.root
+        }
+    }
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-location-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn a_sibling_sharing_the_root_prefix_is_not_inside_the_root() {
+        let location = Fake::at("/tmp/space");
+
+        // `strip_prefix` works component by component, so the sibling `space2` is out.
+        assert_eq!(
+            location.to_local_path("/tmp/space2/file.txt").unwrap(),
+            None
+        );
+        assert_eq!(
+            location.to_local_path("/tmp/space/file.txt").unwrap(),
+            Some(PathBuf::from("file.txt"))
+        );
+    }
+
+    #[tokio::test]
+    async fn canonicalize_reports_a_path_that_is_not_there() {
+        let dir = scratch("canonicalize-missing");
+        let location = Fake::at(&dir);
+
+        assert!(location.canonicalize("no/such/file").await.is_err());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn read_to_string_reports_a_file_that_is_not_utf8() {
+        let dir = scratch("not-utf8");
+        fs::write(dir.join("binary"), [0xff, 0xfe, 0x00]).unwrap();
+        let location = Fake::at(&dir);
+
+        assert!(location.read_to_string("binary").await.is_err());
+        // A file that is not there fails the same way, with no contents either way.
+        assert!(location.read_to_string("nope").await.is_err());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn copy_reports_a_source_that_is_not_there() {
+        let dir = scratch("copy-missing");
+        let location = Fake::at(&dir);
+
+        assert!(location.copy("from", "to").await.is_err());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn remove_file_reports_a_file_that_is_not_there() {
+        let dir = scratch("remove-missing");
+        let location = Fake::at(&dir);
+
+        assert!(location.remove_file("nope").await.is_err());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn remove_dir_reports_a_directory_that_is_not_empty() {
+        let dir = scratch("remove-full");
+        fs::create_dir(dir.join("full")).unwrap();
+        fs::write(dir.join("full/kept"), b"x").unwrap();
+        let location = Fake::at(&dir);
+
+        assert!(location.remove_dir("full").await.is_err());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn exists_and_try_exists_agree_on_what_is_there() {
+        let dir = scratch("exists");
+        fs::write(dir.join("present"), b"x").unwrap();
+        let location = Fake::at(&dir);
+
+        assert!(location.exists("present").await.unwrap());
+        assert!(location.try_exists("present").await.unwrap());
+        assert!(!location.exists("absent").await.unwrap());
+        assert!(!location.try_exists("absent").await.unwrap());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+}

@@ -419,20 +419,77 @@ impl From<serde_json::Error> for JsonError {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as StdError;
     use std::io::{Error as IoFailure, ErrorKind as StdKind};
 
     use super::{AddrError, BincodeError, IoError, IoErrorKind, JsonError};
 
+    /// Every kind this crate names, paired with the `std` kind it stands for.
+    ///
+    /// Kept as one table so both directions are checked over the whole list at once: an arm
+    /// that was swapped, dropped, or pointed at the wrong sibling shows up as a mismatch.
+    /// `Other` is deliberately left out — it is where anything *not* listed lands, not a
+    /// kind `std` names on the way in.
+    const NAMED_KINDS: [(IoErrorKind, StdKind); 38] = [
+        (IoErrorKind::NotFound, StdKind::NotFound),
+        (IoErrorKind::PermissionDenied, StdKind::PermissionDenied),
+        (IoErrorKind::ConnectionRefused, StdKind::ConnectionRefused),
+        (IoErrorKind::ConnectionReset, StdKind::ConnectionReset),
+        (IoErrorKind::HostUnreachable, StdKind::HostUnreachable),
+        (IoErrorKind::NetworkUnreachable, StdKind::NetworkUnreachable),
+        (IoErrorKind::ConnectionAborted, StdKind::ConnectionAborted),
+        (IoErrorKind::NotConnected, StdKind::NotConnected),
+        (IoErrorKind::AddrInUse, StdKind::AddrInUse),
+        (IoErrorKind::AddrNotAvailable, StdKind::AddrNotAvailable),
+        (IoErrorKind::NetworkDown, StdKind::NetworkDown),
+        (IoErrorKind::BrokenPipe, StdKind::BrokenPipe),
+        (IoErrorKind::AlreadyExists, StdKind::AlreadyExists),
+        (IoErrorKind::WouldBlock, StdKind::WouldBlock),
+        (IoErrorKind::NotADirectory, StdKind::NotADirectory),
+        (IoErrorKind::IsADirectory, StdKind::IsADirectory),
+        (IoErrorKind::DirectoryNotEmpty, StdKind::DirectoryNotEmpty),
+        (IoErrorKind::ReadOnlyFilesystem, StdKind::ReadOnlyFilesystem),
+        (
+            IoErrorKind::StaleNetworkFileHandle,
+            StdKind::StaleNetworkFileHandle,
+        ),
+        (IoErrorKind::InvalidInput, StdKind::InvalidInput),
+        (IoErrorKind::InvalidData, StdKind::InvalidData),
+        (IoErrorKind::TimedOut, StdKind::TimedOut),
+        (IoErrorKind::WriteZero, StdKind::WriteZero),
+        (IoErrorKind::StorageFull, StdKind::StorageFull),
+        (IoErrorKind::NotSeekable, StdKind::NotSeekable),
+        (IoErrorKind::QuotaExceeded, StdKind::QuotaExceeded),
+        (IoErrorKind::FileTooLarge, StdKind::FileTooLarge),
+        (IoErrorKind::ResourceBusy, StdKind::ResourceBusy),
+        (IoErrorKind::ExecutableFileBusy, StdKind::ExecutableFileBusy),
+        (IoErrorKind::Deadlock, StdKind::Deadlock),
+        (IoErrorKind::CrossesDevices, StdKind::CrossesDevices),
+        (IoErrorKind::TooManyLinks, StdKind::TooManyLinks),
+        (IoErrorKind::InvalidFilename, StdKind::InvalidFilename),
+        (
+            IoErrorKind::ArgumentListTooLong,
+            StdKind::ArgumentListTooLong,
+        ),
+        (IoErrorKind::Interrupted, StdKind::Interrupted),
+        (IoErrorKind::Unsupported, StdKind::Unsupported),
+        (IoErrorKind::UnexpectedEof, StdKind::UnexpectedEof),
+        (IoErrorKind::OutOfMemory, StdKind::OutOfMemory),
+    ];
+
     #[test]
-    fn a_kind_survives_a_round_trip_through_std() {
-        for kind in [
-            IoErrorKind::NotFound,
-            IoErrorKind::PermissionDenied,
-            IoErrorKind::WouldBlock,
-            IoErrorKind::Other,
-        ] {
-            assert_eq!(IoErrorKind::from(StdKind::from(kind)), kind);
+    fn every_named_kind_survives_a_round_trip_through_std() {
+        for (kind, std_kind) in NAMED_KINDS {
+            assert_eq!(IoErrorKind::from(std_kind), kind, "{std_kind:?}");
+            assert_eq!(StdKind::from(kind), std_kind, "{kind:?}");
         }
+    }
+
+    #[test]
+    fn a_std_kind_with_no_arm_of_its_own_falls_back_to_other() {
+        // `Other` is the one `std` kind this crate gives no arm: whatever `std` calls
+        // something it does not, arrives here.
+        assert_eq!(IoErrorKind::from(StdKind::Other), IoErrorKind::Other);
     }
 
     #[test]
@@ -449,6 +506,16 @@ mod tests {
     }
 
     #[test]
+    fn naming_an_io_failure_keeps_its_kind_and_its_message() {
+        let carried = IoError::new(IoErrorKind::TimedOut, "too slow".to_owned());
+
+        assert_eq!(carried.kind(), IoErrorKind::TimedOut);
+        assert_eq!(carried.message(), "too slow");
+        assert_eq!(carried.to_string(), "too slow");
+        assert!(StdError::source(&carried).is_none());
+    }
+
+    #[test]
     fn a_bincode_failure_keeps_its_message() {
         let source = Box::new(bincode2::ErrorKind::Custom("bad tag".to_owned()));
         let carried = BincodeError::from(source);
@@ -458,13 +525,39 @@ mod tests {
     }
 
     #[test]
+    fn naming_a_bincode_failure_keeps_its_message() {
+        let carried = BincodeError::new("bad tag".to_owned());
+
+        assert_eq!(carried.message(), "bad tag");
+        assert_eq!(carried.to_string(), "bad tag");
+        assert!(StdError::source(&carried).is_none());
+        assert_eq!(carried.into_bincode().to_string(), "bad tag");
+    }
+
+    #[test]
     fn a_json_failure_keeps_what_it_said_and_where() {
         let source = serde_json::from_str::<u32>("").unwrap_err();
+        let (line, column) = (source.line(), source.column());
         let carried = JsonError::from(source);
 
         assert!(!carried.message().is_empty());
-        assert_eq!(carried.line(), 1);
+        // The two are distinct on this input, so a swap between them could not pass.
+        assert_ne!(line, column);
+        assert_eq!(carried.line(), line);
+        assert_eq!(carried.column(), column);
         assert_eq!(carried.clone().into_json().to_string(), carried.message());
+    }
+
+    #[test]
+    fn naming_a_json_failure_keeps_what_it_said_and_where() {
+        let carried = JsonError::new("expected a value".to_owned(), 3, 7);
+
+        assert_eq!(carried.message(), "expected a value");
+        assert_eq!(carried.line(), 3);
+        assert_eq!(carried.column(), 7);
+        assert_eq!(carried.to_string(), "expected a value");
+        assert!(StdError::source(&carried).is_none());
+        assert_eq!(carried.into_json().to_string(), "expected a value");
     }
 
     #[test]
@@ -473,5 +566,6 @@ mod tests {
 
         assert_eq!(carried.target(), "nowhere");
         assert!(carried.to_string().contains("nowhere"));
+        assert!(StdError::source(&carried).is_none());
     }
 }

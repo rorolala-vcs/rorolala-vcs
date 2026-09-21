@@ -107,7 +107,35 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::confirmation;
+    use rorolala_auth::{KeyAlgorithm, SecureStream, SigningKey};
+    use rorolala_protocol::{ActionError, Channel, Socket};
+    use tokio::io::duplex;
+
+    use super::{MAX_REQUEST, Request, confirmation, read_request, write_request};
+
+    /// A key with a given seed, so a test names the same identity twice.
+    fn key(seed: u8) -> SigningKey {
+        SigningKey::from_bytes(KeyAlgorithm::Ed25519, [seed; 32]).unwrap()
+    }
+
+    /// The two ends of one encrypted session over an in-memory stream.
+    async fn session() -> (Channel, Channel) {
+        let (client_io, server_io) = duplex(64 * 1024);
+        let server = key(1);
+        let expected = server.public_key();
+
+        let accepting = tokio::spawn(async move {
+            SecureStream::accept(Box::new(server_io) as Box<dyn Socket>, &server).await
+        });
+
+        let client =
+            SecureStream::connect(Box::new(client_io) as Box<dyn Socket>, &key(2), &expected)
+                .await
+                .unwrap();
+        let server = accepting.await.unwrap().unwrap();
+
+        (client, server)
+    }
 
     #[test]
     fn a_confirmation_is_the_low_two_bytes_of_an_id() {
@@ -115,5 +143,37 @@ mod tests {
         assert_eq!(confirmation(1), [0, 1]);
         assert_eq!(confirmation(256), [1, 0]);
         assert_eq!(confirmation(0x1234_5678), [0x56, 0x78]);
+        // The high two bytes are not part of what comes back, whatever they say.
+        assert_eq!(confirmation(0xFFFF_0001), [0, 1]);
+    }
+
+    #[tokio::test]
+    async fn a_request_round_trips_through_its_frame() {
+        let (mut workspace, mut vault) = session().await;
+        let request = Request {
+            id: 7,
+            account: "alice".to_string(),
+        };
+
+        write_request(&mut workspace, &request).await.unwrap();
+        let read = read_request(&mut vault).await.unwrap();
+
+        assert_eq!(read, request);
+    }
+
+    #[tokio::test]
+    async fn a_frame_longer_than_the_bound_is_refused() {
+        let (mut workspace, mut vault) = session().await;
+        // A name that could not be a request: the bound is what stops a peer from asking
+        // for a name megabytes long to be allocated.
+        let request = Request {
+            id: 1,
+            account: "a".repeat(MAX_REQUEST + 1),
+        };
+
+        write_request(&mut workspace, &request).await.unwrap();
+        let error = read_request(&mut vault).await.unwrap_err();
+
+        assert!(matches!(error, ActionError::ValueTooLarge));
     }
 }

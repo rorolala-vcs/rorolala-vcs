@@ -73,3 +73,31 @@ pub trait Action {
         ctx: ActionContext,
     ) -> impl Future<Output = Result<Self::Output, ActionError>> + Send;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Action;
+    use crate::{ActionContext, ActionError, OnlyWorkspace};
+
+    /// An action that only reports its id; enough to read the default `get_id`.
+    struct Question;
+
+    impl Action for Question {
+        const ID: u32 = 42;
+        type Input = u64;
+        type Output = u64;
+
+        async fn process(
+            input: OnlyWorkspace<Self::Input>,
+            _ctx: ActionContext,
+        ) -> Result<Self::Output, ActionError> {
+            Ok(input.unwrap_or_default())
+        }
+    }
+
+    #[test]
+    fn an_action_defaults_to_reporting_its_own_id() {
+        assert_eq!(Question.get_id(), 42);
+        assert_eq!(Question::ID, 42);
+    }
+}

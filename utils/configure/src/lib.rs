@@ -552,10 +552,12 @@ impl Format {
 
 #[cfg(test)]
 mod tests {
-    use super::{Config, Configure, Error, Reason};
+    use super::{Config, Configure, Error, Format, Reason, as_u32, position_in};
     use serde::{Deserialize, Serialize};
+    use std::collections::BTreeMap;
     use std::fs;
-    use std::path::PathBuf;
+    use std::io::{self, ErrorKind};
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A configuration to round-trip.
@@ -773,6 +775,306 @@ mod tests {
                 .unwrap()
                 .contains("staged")
         );
+    }
+
+    /// A value whose map key no text format can spell, so rendering it fails.
+    #[derive(Debug, Default, Deserialize, Serialize, Configure)]
+    struct Tangle {
+        edges: BTreeMap<(u8, u8), u8>,
+    }
+
+    #[test]
+    fn every_reason_reads_as_the_sentence_it_means() {
+        assert_eq!(Reason::Missing.to_string(), "it is not there");
+        assert_eq!(Reason::Denied.to_string(), "it is not allowed");
+        assert_eq!(Reason::WrongKind.to_string(), "it is not a file");
+        assert_eq!(Reason::Busy.to_string(), "it is in use");
+        assert_eq!(
+            Reason::Other.to_string(),
+            "the filesystem gave no reason this crate tells apart"
+        );
+    }
+
+    #[test]
+    fn an_io_error_kind_becomes_the_reason_it_amounts_to() {
+        assert_eq!(
+            Reason::of(&io::Error::from(ErrorKind::NotFound)),
+            Reason::Missing
+        );
+        assert_eq!(
+            Reason::of(&io::Error::from(ErrorKind::PermissionDenied)),
+            Reason::Denied
+        );
+        assert_eq!(
+            Reason::of(&io::Error::from(ErrorKind::IsADirectory)),
+            Reason::WrongKind
+        );
+        assert_eq!(
+            Reason::of(&io::Error::from(ErrorKind::NotADirectory)),
+            Reason::WrongKind
+        );
+        assert_eq!(
+            Reason::of(&io::Error::from(ErrorKind::DirectoryNotEmpty)),
+            Reason::Busy
+        );
+        assert_eq!(
+            Reason::of(&io::Error::from(ErrorKind::ResourceBusy)),
+            Reason::Busy
+        );
+        assert_eq!(
+            Reason::of(&io::Error::from(ErrorKind::UnexpectedEof)),
+            Reason::Other
+        );
+    }
+
+    #[test]
+    fn every_error_reads_as_the_sentence_it_means() {
+        let file = PathBuf::from("/tmp/a.toml");
+        let lock = PathBuf::from("/tmp/a.toml.lock");
+
+        assert_eq!(
+            Error::Read {
+                file: file.clone(),
+                reason: Reason::Missing,
+            }
+            .to_string(),
+            "`/tmp/a.toml` could not be read: it is not there"
+        );
+        assert_eq!(
+            Error::Stage {
+                file: file.clone(),
+                lock: lock.clone(),
+                reason: Reason::Busy,
+            }
+            .to_string(),
+            "`/tmp/a.toml` could not be staged as `/tmp/a.toml.lock`: it is in use"
+        );
+        assert_eq!(
+            Error::Publish {
+                file: file.clone(),
+                lock: lock.clone(),
+                reason: Reason::Denied,
+            }
+            .to_string(),
+            "`/tmp/a.toml` could not be replaced by `/tmp/a.toml.lock`: it is not allowed"
+        );
+        assert_eq!(
+            Error::Parse {
+                file: file.clone(),
+                line: 3,
+                column: 7,
+            }
+            .to_string(),
+            "`/tmp/a.toml` does not parse at line 3, column 7"
+        );
+        // `line == 0` is the parser naming no position, so only the path is said.
+        assert_eq!(
+            Error::Parse {
+                file: file.clone(),
+                line: 0,
+                column: 0,
+            }
+            .to_string(),
+            "`/tmp/a.toml` does not parse"
+        );
+        assert_eq!(
+            Error::Render { file: file.clone() }.to_string(),
+            "`/tmp/a.toml` could not be written: the value does not fit that format"
+        );
+        assert_eq!(
+            Error::Locked { file, lock }.to_string(),
+            "`/tmp/a.toml` is already being edited: `/tmp/a.toml.lock` is in the way"
+        );
+    }
+
+    #[test]
+    fn the_extension_picks_the_format_and_anything_unknown_is_json() {
+        assert!(matches!(Format::of(Path::new("a.toml")), Format::Toml));
+        assert!(matches!(Format::of(Path::new("a.tml")), Format::Toml));
+        assert!(matches!(Format::of(Path::new("a.TOML")), Format::Toml));
+        assert!(matches!(Format::of(Path::new("a.yaml")), Format::Yaml));
+        assert!(matches!(Format::of(Path::new("a.yml")), Format::Yaml));
+        assert!(matches!(Format::of(Path::new("a.YAML")), Format::Yaml));
+        assert!(matches!(Format::of(Path::new("a.json")), Format::Json));
+        assert!(matches!(Format::of(Path::new("a.conf")), Format::Json));
+        assert!(matches!(
+            Format::of(Path::new("no-extension")),
+            Format::Json
+        ));
+    }
+
+    #[test]
+    fn a_byte_offset_becomes_the_line_and_column_it_sits_at() {
+        // No offset at all: the parser named no position.
+        assert_eq!(position_in("anything", None), (0, 0));
+        // A position past the end is clamped to the end rather than panicking.
+        assert_eq!(position_in("one line", Some(1000)), (1, 9));
+        assert_eq!(position_in("abc", Some(0)), (1, 1));
+        // A position on a later line counts the lines and columns before it.
+        assert_eq!(position_in("one\ntwo", Some(5)), (2, 2));
+    }
+
+    #[test]
+    fn a_number_too_large_for_a_line_or_column_saturates() {
+        assert_eq!(as_u32(0), 0);
+        assert_eq!(as_u32(42), 42);
+        assert_eq!(as_u32(usize::MAX), u32::MAX);
+    }
+
+    #[test]
+    fn an_unterminated_string_reports_where_the_parser_stopped() {
+        match Format::Toml.parse::<Settings>("name = \"before\nlevel = 1\n") {
+            Err((line, column)) => {
+                assert!(line > 0);
+                assert!(column > 0);
+            }
+            other => panic!("expected a position, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_value_the_format_cannot_render_is_reported_as_render() {
+        let dir = scratch("render");
+        let file = dir.join("tangle.toml");
+
+        let value = Tangle {
+            edges: BTreeMap::from([((1, 2), 3)]),
+        };
+
+        // Directly, the renderer refuses and says nothing structured.
+        assert!(Format::of(&file).render(&value).is_err());
+
+        // Through `write_to`, the refusal is an `Error::Render` naming the file.
+        match value.write_to(&file) {
+            Err(Error::Render { file: reported }) => assert_eq!(reported, file),
+            other => panic!("expected Render, got {other:?}"),
+        }
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn writing_a_value_the_format_cannot_render_reports_the_file() {
+        let dir = scratch("write-render");
+        let file = dir.join("tangle.toml");
+
+        // The empty default renders, so the configuration is created before the edit.
+        let mut config = Config::<Tangle>::new(&file).unwrap();
+        config.edges.insert((1, 2), 3);
+
+        match config.write() {
+            Err(Error::Render { file: reported }) => assert_eq!(reported, file),
+            other => panic!("expected Render, got {other:?}"),
+        }
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn writing_where_the_directory_is_missing_is_reported_as_staging() {
+        let dir = scratch("stage");
+        let file = dir.join("missing-dir").join("settings.toml");
+
+        match Settings::default().write_to(&file) {
+            Err(Error::Stage {
+                file: reported,
+                reason,
+                ..
+            }) => {
+                assert_eq!(reported, file);
+                assert_eq!(reason, Reason::Missing);
+            }
+            other => panic!("expected Stage, got {other:?}"),
+        }
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn publishing_without_a_staged_file_leaves_the_original_as_it_was() {
+        let dir = scratch("publish-failed");
+        let file = dir.join("settings.toml");
+        fs::write(&file, TOML).unwrap();
+
+        let config = Config::<Settings>::read(&file).unwrap();
+        fs::remove_file(config.lock()).unwrap();
+
+        match config.publish() {
+            Err(Error::Publish { file: reported, .. }) => assert_eq!(reported, file),
+            other => panic!("expected Publish, got {other:?}"),
+        }
+        assert_eq!(fs::read_to_string(&file).unwrap(), TOML);
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn creating_a_new_configuration_where_a_directory_is_in_the_way_reports_the_publish() {
+        let dir = scratch("new-over-dir");
+        let file = dir.join("settings.toml");
+        fs::create_dir(&file).unwrap();
+
+        match Config::<Settings>::new(&file) {
+            Err(Error::Publish { file: reported, .. }) => assert_eq!(reported, file),
+            other => panic!("expected Publish, got {other:?}"),
+        }
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_file_with_an_unknown_extension_is_read_and_written_as_json() {
+        let dir = scratch("unknown-format");
+        let file = dir.join("settings.conf");
+        fs::write(&file, "{\"name\":\"from json\",\"level\":1}").unwrap();
+
+        let mut config = Config::<Settings>::read(&file).unwrap();
+        assert_eq!(config.file(), file);
+        assert_eq!(config.name, "from json");
+
+        config.level = 2;
+        config.write().unwrap();
+        config.publish().unwrap();
+
+        let written = fs::read_to_string(&file).unwrap();
+        assert!(written.starts_with('{'));
+        assert!(written.contains("\"level\": 2"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_file_that_does_not_parse_as_yaml_reports_where() {
+        let dir = scratch("broken-yaml");
+        let file = dir.join("broken.yml");
+        fs::write(&file, "name: [unterminated\n").unwrap();
+
+        match Config::<Settings>::read(&file) {
+            Err(Error::Parse { .. }) => {}
+            other => panic!("expected Parse, got {other:?}"),
+        }
+
+        // A failed parse stages nothing.
+        assert!(!dir.join("broken.yml.lock").exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_file_that_does_not_parse_as_json_reports_where() {
+        let dir = scratch("broken-json");
+        let file = dir.join("broken.json");
+        fs::write(&file, "{\n  \"name\": \"x\",\n}\n").unwrap();
+
+        match Config::<Settings>::read(&file) {
+            Err(Error::Parse { line, column, .. }) => {
+                assert_eq!(line, 3);
+                assert!(column > 0);
+            }
+            other => panic!("expected Parse, got {other:?}"),
+        }
+
+        assert!(!dir.join("broken.json.lock").exists());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

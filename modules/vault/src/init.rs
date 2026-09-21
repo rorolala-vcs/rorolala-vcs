@@ -56,7 +56,7 @@ mod tests {
     use rorolala_utils_configure::Configure;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, Vault};
+    use crate::{CONFIG_PATH, CreationError, Vault};
 
     /// A parent directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -89,5 +89,102 @@ mod tests {
         crate::config::Config::read_from(&file).unwrap();
 
         let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn creating_a_vault_somewhere_no_directory_can_be_made_says_the_directory_failed() {
+        let parent = scratch("dir-create");
+        let blocker = parent.join("blocker");
+        fs::write(&blocker, b"in the way").unwrap();
+
+        // A file is not a directory, so there is nowhere to put the Vault at all.
+        let result = Vault::create(&blocker.join("vault"));
+
+        assert!(
+            matches!(result, Err(CreationError::DirCreateFailed)),
+            "{result:?}"
+        );
+
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn creating_a_vault_over_a_leftover_staging_file_refuses_rather_than_replacing_it() {
+        let dir = scratch("locked");
+
+        // A staging file left by an edit that was never published: reading past it would
+        // discard whatever was staged, so creating over it is refused instead.
+        fs::write(dir.join(format!("{CONFIG_PATH}.lock")), b"staged").unwrap();
+
+        let result = Vault::create(&dir);
+
+        assert!(
+            matches!(result, Err(CreationError::ConfigLocked)),
+            "{result:?}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn creating_a_vault_where_the_configuration_cannot_be_put_in_place_says_the_publish_failed() {
+        let dir = scratch("publish");
+
+        // A directory sits where the configuration file would go, so the staged file has
+        // somewhere to be written but nowhere to be published to.
+        fs::create_dir_all(dir.join(CONFIG_PATH)).unwrap();
+
+        let result = Vault::create(&dir);
+
+        assert!(
+            matches!(result, Err(CreationError::ConfigPublishFailed)),
+            "{result:?}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creating_a_vault_where_the_staging_file_cannot_be_written_says_the_stage_failed() {
+        use std::os::unix::fs::symlink;
+
+        let dir = scratch("stage");
+        let lock = dir.join(format!("{CONFIG_PATH}.lock"));
+
+        // A dangling symlink: the staging file looks absent, but writing through it lands
+        // in a directory that is not there.
+        symlink(dir.join("missing").join("target"), &lock).unwrap();
+
+        let result = Vault::create(&dir);
+
+        assert!(
+            matches!(result, Err(CreationError::ConfigStageFailed)),
+            "{result:?}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creating_a_vault_with_a_staging_file_that_cannot_be_looked_at_says_the_cause_is_unknown() {
+        use std::os::unix::fs::symlink;
+
+        let dir = scratch("unknown");
+        let lock = dir.join(format!("{CONFIG_PATH}.lock"));
+
+        // A symlink that points at itself: looking the staging file up fails rather than
+        // reporting it missing, which is a cause this taxonomy does not tell apart.
+        symlink(&lock, &lock).unwrap();
+
+        let result = Vault::create(&dir);
+
+        assert!(
+            matches!(result, Err(CreationError::UnknownError)),
+            "{result:?}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

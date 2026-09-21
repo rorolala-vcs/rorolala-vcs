@@ -93,3 +93,78 @@ impl From<rorolala_auth::Error> for ActionError {
         Self::Auth(source)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error as _;
+    use std::io;
+
+    use super::ActionError;
+
+    #[test]
+    fn a_variant_with_no_cause_says_what_happened() {
+        assert_eq!(
+            ActionError::NoChannel.to_string(),
+            "the action context has no channel"
+        );
+        assert_eq!(
+            ActionError::MissingValue.to_string(),
+            "the owning side held no value to send"
+        );
+        assert_eq!(
+            ActionError::ValueTooLarge.to_string(),
+            "a value was too long to frame"
+        );
+        assert_eq!(
+            ActionError::UnknownAction(7).to_string(),
+            "no action answers to id 7"
+        );
+    }
+
+    #[test]
+    fn a_variant_with_no_cause_has_no_source() {
+        for error in [
+            ActionError::NoChannel,
+            ActionError::MissingValue,
+            ActionError::ValueTooLarge,
+            ActionError::UnknownAction(1),
+        ] {
+            assert!(error.source().is_none());
+        }
+    }
+
+    #[test]
+    fn an_io_failure_becomes_a_failed_channel() {
+        let error = ActionError::from(io::Error::new(io::ErrorKind::PermissionDenied, "denied"));
+
+        assert!(matches!(error, ActionError::Io(_)));
+        assert_eq!(error.to_string(), "the channel failed: denied");
+        assert!(error.source().is_some());
+    }
+
+    #[test]
+    fn a_codec_failure_becomes_a_value_that_would_not_cross() {
+        let raw = bincode2::deserialize::<u32>(&[]).unwrap_err();
+        let error = ActionError::from(raw);
+
+        assert!(matches!(error, ActionError::Codec(_)));
+        assert!(
+            error
+                .to_string()
+                .starts_with("a value could not cross the channel:")
+        );
+        assert!(error.source().is_some());
+    }
+
+    #[test]
+    fn an_auth_failure_becomes_a_session_that_would_not_establish() {
+        let error = ActionError::from(rorolala_auth::Error::Malformed);
+
+        assert!(matches!(error, ActionError::Auth(_)));
+        assert_eq!(
+            error.to_string(),
+            "the session could not be established: a key or signature was malformed"
+        );
+        assert!(error.source().is_some());
+    }
+}

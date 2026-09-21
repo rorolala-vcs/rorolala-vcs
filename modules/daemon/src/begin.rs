@@ -230,11 +230,14 @@ mod tests {
     use ed25519_dalek::SigningKey as Ed25519SigningKey;
     use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
     use ed25519_dalek::pkcs8::{EncodePrivateKey as _, EncodePublicKey as _};
+    use rorolala_auth::Error as AuthError;
     use rorolala_auth::{
         Account, KeyAlgorithm, KeyLocateRule, PublicKey, SecureStream, SigningKey, find_account,
     };
-    use rorolala_protocol::{Action as _, ActionContext, Channel, OnlyWorkspace, Socket};
-    use tokio::io::{DuplexStream, duplex};
+    use rorolala_protocol::{
+        Action as _, ActionContext, ActionError, Channel, OnlyWorkspace, Socket,
+    };
+    use tokio::io::{AsyncWriteExt as _, DuplexStream, duplex};
     use tokio::net::TcpListener;
 
     use super::{Host, SessionError, serve};
@@ -292,11 +295,20 @@ mod tests {
     /// A Vault that proves `identity`, knows the members under `keys`, and serves every
     /// action the daemon does.
     fn vault(keys: PathBuf, identity: SigningKey) -> Host {
+        vault_serving(keys, identity, build_action_registry())
+    }
+
+    /// A Vault that serves `registry` rather than the actions the daemon ships.
+    fn vault_serving(
+        keys: PathBuf,
+        identity: SigningKey,
+        registry: Vec<Option<Box<dyn crate::ActionEntry>>>,
+    ) -> Host {
         Host {
             signing: identity,
             roots: vec![keys],
             rule: local_only(),
-            registry: build_action_registry(),
+            registry,
         }
     }
 
@@ -412,5 +424,156 @@ mod tests {
 
         assert_eq!(output, "Hello, world ... Welcome!");
         serving.await.unwrap().unwrap();
+    }
+
+    /// An action that always fails, so the session's handling of that is exercised.
+    struct Failing;
+
+    impl crate::ActionEntry for Failing {
+        fn run(&self, _ctx: ActionContext) -> crate::EntryFuture {
+            Box::pin(async { Err(ActionError::NoChannel) })
+        }
+    }
+
+    #[tokio::test]
+    async fn a_request_the_vault_cannot_read_fails_the_exchange() {
+        let keys = scratch("exchange");
+        let server = signing(20);
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(server_io, Arc::new(vault(keys, signing(20)))));
+
+        let mut channel = connect(client_io, &signing(21), &server.public_key()).await;
+        // A name longer than any request may carry is not one the vault reads, so the
+        // request never reaches the member lookup behind it.
+        request(&mut channel, ActionHandshake::ID, &"a".repeat(5000)).await;
+
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            SessionError::Exchange(ActionError::ValueTooLarge)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_members_key_that_cannot_be_read_fails_the_session() {
+        let keys = scratch("bad-key");
+        let server = signing(22);
+        // The member is found by name, but the file it names is not a key.
+        fs::write(keys.join("client.pub"), "not a key").unwrap();
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(server_io, Arc::new(vault(keys, signing(22)))));
+
+        let mut channel = connect(client_io, &signing(23), &server.public_key()).await;
+        request(&mut channel, ActionHandshake::ID, "client").await;
+
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(error, SessionError::Key(_)));
+        assert!(wire::read_confirmation(&mut channel).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn an_action_that_fails_fails_the_session() {
+        let keys = scratch("action");
+        let server = signing(24);
+        let client = Ed25519SigningKey::from_bytes(&[25; 32]);
+        publish(&keys, "client", &client);
+
+        // The member and the confirmation are both fine; it is the action itself that
+        // cannot be carried out.
+        let registry: Vec<Option<Box<dyn crate::ActionEntry>>> = vec![Some(Box::new(Failing))];
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(vault_serving(keys, signing(24), registry)),
+        ));
+
+        let mut channel = connect(client_io, &signing(25), &server.public_key()).await;
+        request(&mut channel, ActionHandshake::ID, "client").await;
+        let confirmation = wire::read_confirmation(&mut channel).await.unwrap();
+        assert_eq!(confirmation, wire::confirmation(ActionHandshake::ID));
+
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(
+            error,
+            SessionError::Action(ActionError::NoChannel)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_peer_that_does_not_handshake_fails_the_session() {
+        let (mut client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(vault(scratch("handshake"), signing(26))),
+        ));
+
+        // A message of no length is not the offer a handshake opens with, so accepting
+        // the peer fails and the connection is refused.
+        client_io.write_all(&[0, 0, 0, 0]).await.unwrap();
+        client_io.flush().await.unwrap();
+
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(error, SessionError::Handshake(_)));
+    }
+
+    #[test]
+    fn every_session_failure_says_what_went_wrong() {
+        let cases = [
+            (
+                SessionError::Handshake(AuthError::Malformed),
+                "the handshake failed: a key or signature was malformed",
+            ),
+            (
+                SessionError::Exchange(ActionError::NoChannel),
+                "the request could not be answered: the action context has no channel",
+            ),
+            (
+                SessionError::Key(AuthError::Malformed),
+                "a member's key could not be read: a key or signature was malformed",
+            ),
+            (
+                SessionError::UnknownMember("alice".to_string()),
+                "no member is named alice",
+            ),
+            (
+                SessionError::IdentityMismatch("bob".to_string()),
+                "the peer is not the member it named (bob)",
+            ),
+            (
+                SessionError::Action(ActionError::NoChannel),
+                "the action failed: the action context has no channel",
+            ),
+        ];
+
+        for (error, expected) in cases {
+            assert_eq!(error.to_string(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_vault_that_cannot_bind_stops() {
+        // Hold the address the daemon will try to take, so binding it must fail.
+        let taken = TcpListener::bind("0.0.0.0:0").await.unwrap();
+        let port = taken.local_addr().unwrap().port();
+        let config: rorolala_vault::Config =
+            serde_json::from_str(&format!("{{\"daemon_config\":{{\"prefer_port\":{port}}}}}"))
+                .unwrap();
+
+        let (_tx, rx) = tokio::sync::watch::channel(false);
+        let cwd = scratch("bind");
+        let daemon = super::daemon(super::DaemonInput {
+            cwd: &cwd,
+            config: &config,
+            identity: signing(40),
+            signal: crate::CancelSignal { rx },
+        });
+
+        // The daemon stops with the port taken rather than listening somewhere else; a
+        // daemon that bound anyway would wait for a cancellation that never comes.
+        tokio::time::timeout(std::time::Duration::from_secs(5), daemon)
+            .await
+            .expect("the daemon stops when the port is taken");
     }
 }

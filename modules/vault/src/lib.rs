@@ -64,3 +64,43 @@ impl Vault {
         self.current_dir.join(CONFIG_PATH)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use rorolala_utils_location::Locate;
+
+    use crate::{CONFIG_PATH, Vault};
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-vault-locate-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn a_vault_keeps_its_configuration_in_the_directory_it_was_located_at() {
+        let dir = scratch("config-path");
+        Vault::create(&dir).unwrap();
+
+        let vault = Vault::locate(&dir).unwrap();
+
+        assert_eq!(vault.config_path(), dir.join(CONFIG_PATH));
+        assert!(vault.config_path().is_file(), "{:?}", vault.config_path());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+}

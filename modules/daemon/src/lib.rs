@@ -200,3 +200,73 @@ fn init_close_channel() -> Cancellation {
 
     Cancellation { rx, future }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use ed25519_dalek::SigningKey as Ed25519SigningKey;
+    use ed25519_dalek::pkcs8::EncodePrivateKey as _;
+    use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+    use rorolala_vault::KEYS_DIR;
+
+    use super::vault_identity;
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-daemon-identity-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    /// The keys directory of a Vault rooted at `cwd`, made so a key can be put in it.
+    fn keys(cwd: &std::path::Path) -> PathBuf {
+        let dir = cwd.join(KEYS_DIR);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn a_vault_with_no_account_cannot_prove_itself() {
+        let cwd = scratch("no-account");
+        keys(&cwd);
+
+        assert!(vault_identity(&cwd).is_none());
+    }
+
+    #[test]
+    fn a_vault_whose_key_cannot_be_read_cannot_prove_itself() {
+        let cwd = scratch("bad-key");
+        // The account is found by name, but the file it names is not a key.
+        fs::write(keys(&cwd).join("vault.pem"), "not a key").unwrap();
+
+        assert!(vault_identity(&cwd).is_none());
+    }
+
+    #[test]
+    fn a_vault_whose_key_can_be_read_proves_it() {
+        let cwd = scratch("key");
+        let signing = Ed25519SigningKey::from_bytes(&[30; 32]);
+        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
+        fs::write(keys(&cwd).join("vault.pem"), pem.as_str()).unwrap();
+
+        let identity = vault_identity(&cwd).unwrap();
+
+        assert_eq!(
+            identity.public_key().as_bytes(),
+            signing.verifying_key().to_bytes()
+        );
+    }
+}

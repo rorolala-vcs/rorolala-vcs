@@ -327,3 +327,217 @@ internal_repeat!(2..=12 => {
         }
     }
 });
+
+// `internal_repeat!` is a proc macro, so its parser cannot be reached directly from a unit test:
+// `proc_macro::TokenStream` values cannot be built outside a live macro invocation. What can be
+// pinned is the behaviour of its expansions, which is what these tests do — each one invokes the
+// macro with a shape that exercises a specific branch of its parser and asserts on the Rust the
+// expansion produces. The silent fallbacks (no `=>`, an empty range, non-numeric bounds) expand to
+// the same twelve repetitions, so they are asserted to hold that behaviour rather than to error.
+#[cfg(test)]
+mod tests {
+    use rorolala_protocol_macros::internal_repeat;
+
+    #[test]
+    fn an_inclusive_range_repeats_once_per_number() {
+        let mut count = 0_u32;
+        internal_repeat!(2..=4 => {
+            count += 1;
+        });
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn an_exclusive_range_stops_before_its_end() {
+        let mut count = 0_u32;
+        internal_repeat!(2..5 => {
+            count += 1;
+        });
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn a_bare_number_counts_up_to_itself() {
+        let mut sum = 0_usize;
+        internal_repeat!(4 => {
+            sum += $;
+        });
+        assert_eq!(sum, 1 + 2 + 3 + 4);
+    }
+
+    #[test]
+    fn a_missing_arrow_falls_back_to_twelve_repetitions() {
+        let mut count = 0_u32;
+        internal_repeat!({
+            count += 1;
+        });
+        assert_eq!(count, 12);
+    }
+
+    #[test]
+    fn an_empty_range_falls_back_to_twelve_repetitions() {
+        let mut count = 0_u32;
+        internal_repeat!(5..3 => {
+            count += 1;
+        });
+        assert_eq!(count, 12);
+    }
+
+    #[test]
+    fn a_non_numeric_bound_falls_back_to_twelve_repetitions() {
+        let mut count = 0_u32;
+        internal_repeat!(1..=abc => {
+            count += 1;
+        });
+        assert_eq!(count, 12);
+    }
+
+    #[test]
+    fn the_current_number_is_written_per_repetition() {
+        let mut sum = 0_usize;
+        internal_repeat!(1..=3 => {
+            sum += $;
+        });
+        assert_eq!(sum, 6);
+    }
+
+    #[test]
+    fn the_caret_placeholders_write_the_range_bounds() {
+        let mut sum = 0_usize;
+        internal_repeat!(1..=4 => {
+            sum += ^$;
+        });
+        assert_eq!(sum, 16);
+
+        let mut sum = 0_usize;
+        internal_repeat!(1..=4 => {
+            sum += $^;
+        });
+        assert_eq!(sum, 4);
+    }
+
+    #[test]
+    fn the_plus_and_minus_placeholders_shift_the_current_number() {
+        let mut sum = 0_usize;
+        internal_repeat!(1..=3 => {
+            sum += $+;
+        });
+        assert_eq!(sum, 2 + 3 + 4);
+
+        let mut sum = 0_usize;
+        internal_repeat!(1..=3 => {
+            sum += $-;
+        });
+        // `$-` clamps at the range's start: 1-1, 2-1, 3-1.
+        assert_eq!(sum, 3);
+    }
+
+    #[test]
+    fn an_identifier_gains_the_current_number_as_a_suffix() {
+        let mut sum = 0_usize;
+        internal_repeat!(1..=3 => {
+            let value$ = $;
+            sum += value$;
+        });
+        assert_eq!(sum, 6);
+    }
+
+    #[test]
+    fn an_identifier_suffix_survives_the_number_being_inserted() {
+        let mut sum = 0_usize;
+        internal_repeat!(1..=3 => {
+            let value$arg = $;
+            sum += value$arg;
+        });
+        assert_eq!(sum, 6);
+    }
+
+    #[test]
+    fn an_identifier_can_take_a_shifted_or_minimum_number() {
+        let mut sum = 0_usize;
+        internal_repeat!(1..=3 => {
+            let next$+ = $;
+            sum += next$+;
+        });
+        assert_eq!(sum, 6);
+
+        let mut sum = 0_usize;
+        internal_repeat!(1..=3 => {
+            let previous$- = $;
+            sum += previous$-;
+        });
+        assert_eq!(sum, 6);
+
+        // `ident$^` names the range's start, so each repetition shadows the last.
+        let mut sum = 0_usize;
+        internal_repeat!(1..=3 => {
+            let first$^ = $;
+            sum += first$^;
+        });
+        assert_eq!(sum, 6);
+    }
+
+    #[test]
+    fn a_comma_separated_group_repeats_as_a_tuple() {
+        let tuple: (usize, usize, usize) = internal_repeat!(3..=3 => {
+            ( ( $, +) )
+        });
+        assert_eq!(tuple, (1, 2, 3));
+    }
+
+    #[test]
+    fn a_semicolon_separated_group_repeats_as_statements() {
+        let mut count = 0_u32;
+        internal_repeat!(3..=3 => {
+            ( count += 1; +)
+        });
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn a_group_without_a_separator_repeats_what_it_holds() {
+        let mut sum = 0_usize;
+        internal_repeat!(3..=3 => {
+            ( { sum += $; } +)
+        });
+        assert_eq!(sum, 6);
+    }
+
+    #[test]
+    fn a_bare_marker_repeats_nothing() {
+        let mut count = 0_u32;
+        internal_repeat!(3..=3 => {
+            count += 1;
+            (+)
+        });
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn a_trailing_plus_repeats_the_group_once_more() {
+        let mut count = 0_u32;
+        internal_repeat!(3..=3 => {
+            ( count += 1; +)+
+        });
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn a_trailing_minus_repeats_the_group_once_less() {
+        let mut count = 0_u32;
+        internal_repeat!(3..=3 => {
+            ( count += 1; +)-
+        });
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn a_trailing_caret_repeats_the_complement_of_the_range() {
+        let mut count = 0_u32;
+        internal_repeat!(2..=4 => {
+            ( { count += 1; } +)^
+        });
+        // The range's end (4) is the current number further from the end at each step: 2 + 1 + 0.
+        assert_eq!(count, 3);
+    }
+}

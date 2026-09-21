@@ -34,3 +34,20 @@ where
         bincode2::deserialize(&raw)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Encodable;
+
+    #[test]
+    fn a_value_round_trips_through_its_encoding() {
+        let encoded = 42_u32.encode().unwrap();
+        assert_eq!(u32::decode(encoded).unwrap(), 42);
+    }
+
+    #[test]
+    fn decoding_bytes_that_are_too_short_reports_a_codec_failure() {
+        assert!(u32::decode(Vec::new()).is_err());
+        assert!(u32::decode(vec![0, 1, 2]).is_err());
+    }
+}
