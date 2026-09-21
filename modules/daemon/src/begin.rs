@@ -15,7 +15,7 @@ use std::sync::Arc;
 use rorolala_auth::{KeyLocateRule, Member, SecureStream, SigningKey, find_member};
 use rorolala_protocol::{ActionContext, ActionError, Socket};
 use rorolala_utils_cli_theme::{err_line, warn_line};
-use rorolala_vault::KEYS_DIR;
+use rorolala_vault::key_scopes;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -57,8 +57,10 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         signal,
     } = input;
 
-    // The Vault's keys are the first scope a member is looked for in.
-    let roots = vec![cwd.join(KEYS_DIR)];
+    // The Vault's keys are the first scope a member is looked for in, and the Vaults holding
+    // it follow: a key kept only below the root admits only to the Vault that holds it, so a
+    // member of a sub-vault cannot be a caller of the vault above.
+    let roots = key_scopes(cwd);
     let rule = KeyLocateRule::new();
 
     let address = SocketAddr::from(([0, 0, 0, 0], config.daemon_config().prefer_port()));

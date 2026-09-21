@@ -1539,10 +1539,12 @@ dependencies = [
 name = "rorolala-protocol"
 version = "0.1.0"
 dependencies = [
+ "arg-picker",
  "bincode2",
  "rorolala-auth",
  "rorolala-errors",
  "rorolala-protocol-macros",
+ "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "serde",
  "tokio",
@@ -1633,11 +1635,13 @@ dependencies = [
 name = "rorolala-vault"
 version = "0.1.0"
 dependencies = [
+ "just_fmt 0.2.1",
  "rorolala-utils-configure",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "serde",
+ "tokio",
  "toml 0.8.23",
 ]
 

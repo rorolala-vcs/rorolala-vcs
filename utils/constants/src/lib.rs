@@ -36,6 +36,23 @@ pub const VAULT_CONFIG_PATH: &str = "./vault.toml";
 #[lazyffi(export = ROLA_VAULT_KEYS_DIR)]
 pub const VAULT_KEYS_DIR: &str = "./keys/";
 
+/// Path, inside the Vault's root, where the Vaults it holds are kept
+///
+/// A directory under here is a Vault the root holds once it carries a configuration of its
+/// own, which is what `RootVault` lists. It is a plain directory beside the configuration
+/// rather than one of the Vault's own: a Vault held by another is a Vault in its own right,
+/// and nothing about it says it is held.
+#[lazyffi(export = ROLA_VAULT_VAULTS_DIR)]
+pub const VAULT_VAULTS_DIR: &str = "./vaults/";
+
+/// The sub-vault an address names when it names none
+///
+/// An address is `rola://ip:port/sub`, and the Vault at the root of a tree holds the others
+/// rather than being one of them. Naming it is what an address written without a `/sub`
+/// means, and what says so is the empty name: the root is the Vault a path naming nothing
+/// resolves to, which is the same answer `RootVault` gives an empty path.
+pub const ROOT_SUB_VAULT: &str = "";
+
 /// The port a Vault's daemon listens on when its configuration names no other.
 ///
 /// It is a port of its own rather than an ephemeral one, so that a Vault has one address to
@@ -66,7 +83,7 @@ pub const PRIVATE_KEY_EXTENSION: &str = "pem";
 mod tests {
     use super::{
         ENV_KEYS_DIR, GLOBAL_KEYS_DIR, HOME_ENV_VAR, PRIVATE_KEY_EXTENSION, PUBLIC_KEY_EXTENSION,
-        USER_KEYS_DIR, VAULT_CONFIG_PATH, VAULT_DEFAULT_PORT, VAULT_KEYS_DIR,
+        USER_KEYS_DIR, VAULT_CONFIG_PATH, VAULT_DEFAULT_PORT, VAULT_KEYS_DIR, VAULT_VAULTS_DIR,
         WORKSPACE_CONFIG_PATH, WORKSPACE_DATA_DIR, WORKSPACE_KEYS_DIR,
     };
 
@@ -81,6 +98,7 @@ mod tests {
     fn the_vault_layout_names_its_own_paths_and_port() {
         assert_eq!(VAULT_CONFIG_PATH, "./vault.toml");
         assert_eq!(VAULT_KEYS_DIR, "./keys/");
+        assert_eq!(VAULT_VAULTS_DIR, "./vaults/");
         assert_eq!(VAULT_DEFAULT_PORT, 7717);
     }
 

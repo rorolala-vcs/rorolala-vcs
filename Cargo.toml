@@ -55,6 +55,11 @@ rorolala-workspace = { path = "modules/workspace" }
 # CLI Framework
 mingling = { version = "0.5.2", features = ["picker", "comp", "pathf"] }
 
+# Argument picking, on its own. The version has to be the one `mingling` resolves to, or the
+# `SinglePickable` implemented against it would not be the trait `mingling::picker` reaches
+# for and the two would be different traits with one name.
+arg-picker = "0.3.2"
+
 # Serialization
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

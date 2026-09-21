@@ -4,6 +4,7 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+#![allow(clippy::unsafe_derive_deserialize)]
 #![allow(clippy::redundant_pub_crate)]
 
 #[macro_use]

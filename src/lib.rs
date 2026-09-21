@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use rorolala_utils_constants::{VAULT_KEYS_DIR, WORKSPACE_KEYS_DIR};
+use rorolala_utils_constants::WORKSPACE_KEYS_DIR;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate;
 use rorolala_vault::Vault;
@@ -36,14 +36,19 @@ pub use rorolala_vault as vault;
 /// The local key roots the current directory sits inside, highest priority first.
 ///
 /// The Workspace comes before the Vault, since it is the copy being worked in, so a key
-/// kept there shadows an equally named one in the Vault. The keyring itself does not know
-/// what either of those is: this is where their directories are turned into the plain
-/// roots it searches.
+/// kept there shadows an equally named one in the Vault. The Vault then brings every scope
+/// it is admitted to — see [`Vault::key_scopes`] — its own first and the Vaults holding it
+/// after, so a member kept in a sub-vault is looked for there before the root, and is not
+/// found at all by a search that starts above it. The keyring itself does not know what
+/// any of those are: this is where their directories are turned into the plain roots it
+/// searches.
 fn local_roots(vault: Option<&Vault>, workspace: Option<&Workspace>) -> Vec<PathBuf> {
     let mut roots = Vec::new();
 
     roots.extend(workspace.map(|held| held.get_root().join(WORKSPACE_KEYS_DIR)));
-    roots.extend(vault.map(|held| held.get_root().join(VAULT_KEYS_DIR)));
+    if let Some(held) = vault {
+        roots.extend(held.key_scopes());
+    }
 
     roots
 }

@@ -8,7 +8,9 @@ rorolala-utils-configure.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
+just_fmt.workspace = true
 serde.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 toml.workspace = true

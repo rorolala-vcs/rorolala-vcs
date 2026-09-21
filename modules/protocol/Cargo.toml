@@ -4,9 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+arg-picker.workspace = true
 rorolala-auth.workspace = true
 rorolala-errors.workspace = true
 rorolala-protocol-macros.workspace = true
+rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 serde.workspace = true
 bincode2.workspace = true
