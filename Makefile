@@ -104,19 +104,19 @@ else
   IMPORT_SUFFIX :=
 endif
 
-.PHONY: all check lib bin build export clippy doc doc-open fmt fmt-check test cargo-clean clean
+.PHONY: all check lib bin build export clippy doc doc-open fmt fmt-check test integration-test cargo-clean clean
 
 # Default target: the full gate.
 all: check build
 
 # The full gate: the formatting of every crate, the test suites, a build of every
-# crate, clippy, then the documentation. Composed from the targets below rather than
-# repeating their commands.
+# crate, clippy, the documentation, then the integration suites. Composed from the
+# targets below rather than repeating their commands.
 #
 # `fmt-check` comes first because it is instant and it is the one that is forgotten:
 # `fmt` rewrites the sources in place, so nothing else here would notice a crate that
 # was left unformatted.
-check: fmt-check test build clippy doc
+check: fmt-check test build clippy doc integration-test
 
 # Builds the C ABI artifact — a release cdylib and staticlib — and, as a side effect
 # of the root build script, the C header that describes it.
@@ -175,6 +175,35 @@ fmt-check:
 # builds turn `debug_assert!` off, which is the opposite of what a test run wants.
 test:
 	$(CARGO) test --workspace --all-features
+
+# Runs the integration suites under `tests/`. Each is a program of its own — deliberately
+# not a member of the workspace — that runs the built programs and checks what they said,
+# so what is checked is the program a caller meets rather than the parts it is made of.
+#
+# A suite is a program rather than a test crate, because what it does is what a caller does:
+# it is run, and it complains — by ending non-zero — when what came back was not what it
+# expected. That is also what lets one do what a test cannot: serve a Vault, reach it, and
+# stop it again.
+#
+# The suites are a workspace of their own, so they are run from beside it: where a suite is
+# run from is what picks its target directory out of `tests/.cargo/config.toml`, which is how
+# running them leaves nothing inside the workspace they test. The programs they run are the
+# release ones this Makefile builds, named to them rather than looked for.
+#
+# They run one at a time, so a suite that fails is named rather than lost among the output of
+# the others — and the ones after it still run, so one run reports every suite that failed.
+integration-test: bin
+	set -e; \
+	cd tests; \
+	failed=; \
+	for suite in */; do \
+		[ -f "$${suite}Cargo.toml" ] || continue; \
+		echo "==> $${suite}"; \
+		if ! ROLA_BIN_DIR="$(CURDIR)/$(RELEASE_DIR)" $(CARGO) run --manifest-path "$${suite}Cargo.toml"; then \
+			failed="$$failed $${suite}"; \
+		fi; \
+	done; \
+	if [ -n "$$failed" ]; then echo "==> failed:$$failed"; exit 1; fi
 
 # Removes cargo's build output. $(BUILD_DIR) survives: it holds an export, not a
 # build.

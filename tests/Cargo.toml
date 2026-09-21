@@ -1,0 +1,11 @@
+[workspace]
+resolver = "3"
+
+# One directory per suite, so adding one is adding a directory. They are deliberately not
+# members of the workspace they test: what is here runs the built programs, so it is not built
+# with them, is not linted with them, and does not appear in their dependency graph.
+members = ["*"]
+
+# `*` reaches the directories a suite's own configuration and output sit in, which are not
+# suites.
+exclude = [".cargo"]

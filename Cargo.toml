@@ -20,7 +20,8 @@ members = [
     "utils/lazyffi",
     "utils/lazyffi-core",
     "utils/lazyffi-macros",
-    "utils/location"
+    "utils/location",
+    "utils/sandbox"
 ]
 
 [workspace.package]
@@ -49,6 +50,7 @@ rorolala-utils-lazyffi = { path = "utils/lazyffi" }
 rorolala-utils-lazyffi-core = { path = "utils/lazyffi-core" }
 rorolala-utils-lazyffi-macros = { path = "utils/lazyffi-macros" }
 rorolala-utils-location = { path = "utils/location" }
+rorolala-utils-sandbox = { path = "utils/sandbox" }
 rorolala-vault = { path = "modules/vault" }
 rorolala-workspace = { path = "modules/workspace" }
 
