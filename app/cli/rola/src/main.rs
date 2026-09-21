@@ -36,6 +36,7 @@ mod user;
 use crate::account::CurrentAccountSetup;
 use crate::address::AddressHistorySetup;
 use crate::exit_codes::{EC_HELP, EC_UNKNOWN_COMMAND};
+use crate::lastec::LastExitCodeRecordSetup;
 
 /// How far a mistyped word may be from a command and still be offered as one it may have
 /// meant.
@@ -53,30 +54,8 @@ fn main() {
     program.with_setup(RorolalaSetup);
     program.with_setup(AddressHistorySetup);
     program.with_setup(CurrentAccountSetup);
-
-    // Whether this run is the shell asking what could be typed rather than a run of the
-    // program. It is read before the program is run, since running it consumes it.
-    let completing = program.is_completing();
-
-    let exit_code = program.exec();
-
-    // A completion run is not a run: the shell is asking what could be typed, so there is
-    // nothing it did to explain and nothing about it to remember. It ends with nothing
-    // wrong either, so that completing a command never marks a prompt as failed.
-    if completing {
-        std::process::exit(0);
-    }
-
-    // Only a run that failed is worth explaining, so a run that did nothing wrong leaves
-    // the record as it was: `rola explain exit-code` then speaks about the last run that
-    // went wrong rather than about the last run there was, which is the one a reader has a
-    // question about. It is kept under the user's local data directory, so a machine that
-    // names none simply has nothing recorded.
-    if exit_code != 0 {
-        lastec::record(exit_code);
-    }
-
-    std::process::exit(exit_code);
+    program.with_setup(LastExitCodeRecordSetup);
+    program.exec_and_exit();
 }
 
 /// Prints the help a run falls back to when no command is named.

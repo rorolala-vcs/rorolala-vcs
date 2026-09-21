@@ -1043,9 +1043,9 @@ dependencies = [
 
 [[package]]
 name = "mingling"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe0aa0bf73e2b8b894ba98bcf7de577adfeef7c4be1c9be6ff79c3bd58d4f747"
+checksum = "dd812d4ca18445025fbb762ebec18bf77b196d6b02922acc145d929a024f6b47"
 dependencies = [
  "arg-picker",
  "mingling_core",
@@ -1054,9 +1054,9 @@ dependencies = [
 
 [[package]]
 name = "mingling_core"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3340b808b7cf9ba72836d2563f3c3e4ff8000696fc843b5750df0516030bfa74"
+checksum = "8f6eb66a4e2f1a2116170c3637f1ea2e2e7e5fc649632f01f6b57360530523ac"
 dependencies = [
  "just_fmt 0.2.1",
  "might_be_async",
@@ -1064,9 +1064,9 @@ dependencies = [
 
 [[package]]
 name = "mingling_macros"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bb00d320481a8debdba032371ca7753c1b12ef1619499d3a7b4765b74ba8c23"
+checksum = "203fa24615ab586de619f322535620e25b874df22d34640f2b56b17226348576"
 dependencies = [
  "just_fmt 0.2.1",
  "just_template",
@@ -1078,9 +1078,9 @@ dependencies = [
 
 [[package]]
 name = "mingling_pathf"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf216d26110e22409e9f75d1e26ff4110490c584e0fd2f064d9e9c50f98f6cc"
+checksum = "f2d8935c585447038867f3e71dd312ce6661e396a147b4ebd3a51521ea866c6a"
 dependencies = [
  "cargo_metadata",
  "just_fmt 0.2.1",

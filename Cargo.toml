@@ -53,7 +53,11 @@ rorolala-vault = { path = "modules/vault" }
 rorolala-workspace = { path = "modules/workspace" }
 
 # CLI Framework
-mingling = { version = "0.5.2", features = ["picker", "comp", "pathf"] }
+mingling = { version = "0.5.3", features = [
+    "picker",
+    "comp",
+    "pathf",
+] }
 
 # Argument picking, on its own. The version has to be the one `mingling` resolves to, or the
 # `SinglePickable` implemented against it would not be the trait `mingling::picker` reaches
