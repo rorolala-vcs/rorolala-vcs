@@ -512,7 +512,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(output, "Hello, world ... Welcome!");
+        // The greeting is the Vault's own voice, so what it says about itself is what the Vault
+        // it was handed says — the default here, since the Host under it was configured with
+        // nothing.
+        assert_eq!(output, "Hello, world, I'm unknown_vault.\n\nUnnamed Vault");
         serving.await.unwrap().unwrap();
     }
 
@@ -583,7 +586,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(output, "Hello, world ... Welcome!");
+        assert_eq!(output, "Hello, world, I'm unknown_vault.\n\nUnnamed Vault");
         serving.await.unwrap().unwrap();
     }
 

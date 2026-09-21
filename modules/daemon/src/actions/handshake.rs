@@ -1,4 +1,4 @@
-use rorolala_protocol::{Action, ActionContext, ActionError, OnlyVault, OnlyWorkspace};
+use rorolala_protocol::{Action, ActionContext, ActionError, OnlyVault, OnlyWorkspace, Transfer};
 
 /// An Action used for handshake interaction with the server.
 ///
@@ -18,12 +18,12 @@ use rorolala_protocol::{Action, ActionContext, ActionError, OnlyVault, OnlyWorks
 ///
 /// # Behavior Flow
 /// 1. Start from a value only the Workspace holds.
-/// 2. Hand the input to `sync`, so the Vault receives the Workspace's value and
+/// 2. Hand the input to `transfer`, so the Vault receives the Workspace's value and
 ///    both sides end up holding the same message.
 /// 3. Have the Vault provide its welcome response, held on both sides.
-/// 4. Use `sync_mut_with`: the Workspace rewrites the message by formatting it as
-///    `"Hello, {raw} ... {response}"`, and the Vault takes what it produced.
-/// 5. Return the rewritten string.
+/// 4. Use `sync` so the Workspace receives the Vault's response and both sides hold
+///    it.
+/// 5. Return the response string.
 ///
 /// # Errors
 /// If the exchange fails, the corresponding [`ActionError`] is returned.
@@ -41,20 +41,32 @@ impl Action for ActionHandshake {
         name: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
-        // Turn the Workspace's input into something both sides hold
-        let mut message = ctx.sync(name).await?;
+        // Obtain the Vault's information
+        let vault_cfg = ctx.current_vault_config();
+        let vault_name_and_desc = ctx.only_vault(|| {
+            let vault_cfg = vault_cfg.unwrap();
+            (
+                vault_cfg.vault_config().name().to_owned(),
+                vault_cfg.vault_config().description().to_owned(),
+            )
+        });
 
-        // The server responds
-        let response = OnlyVault::new(&ctx, || "Welcome!".to_string());
+        // Obtain the Name input by the Workspace
+        let user_name = name.transfer(&mut ctx).await?;
 
-        // Append the server's response to the message and have both sides sync
-        message
-            .sync_mut_with(&mut ctx, response, |raw, response| {
-                *raw = format!("Hello, {raw} ... {response}");
-            })
-            .await?;
+        // Compose the reply message
+        let response = OnlyVault::new(&ctx, || {
+            // UNWRAP: The following types are all OnlyVault, and can be safely unwrapped in the Vault branch
+            let (name, desc) = vault_name_and_desc.unwrap();
+            let user_name = user_name.unwrap();
+
+            format!("Hello, {user_name}, I'm {name}.\n\n{desc}")
+        });
+
+        // Sync the reply message
+        let response = ctx.sync(response).await?;
 
         // Unwrap the message and return it
-        Ok(message.into_inner())
+        Ok(response.into_inner())
     }
 }
