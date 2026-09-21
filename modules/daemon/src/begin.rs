@@ -15,7 +15,8 @@ use std::sync::Arc;
 use rorolala_auth::{KeyLocateRule, Member, SecureStream, SigningKey, find_member};
 use rorolala_protocol::{ActionContext, ActionError, Socket};
 use rorolala_utils_cli_theme::{err_line, warn_line};
-use rorolala_vault::key_scopes;
+use rorolala_utils_location::Locate;
+use rorolala_vault::{RootVault, Vault, key_scopes};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
@@ -63,6 +64,28 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
     let roots = key_scopes(cwd);
     let rule = KeyLocateRule::new();
 
+    // The Vault being served, and the root that holds it. Both are resolved once here and
+    // kept for as long as the daemon runs, so the context of every action can borrow them
+    // rather than have each one look for them again. The root is a Vault of its own — the
+    // outermost above `cwd` — so a Vault-side action that works on the Vaults below it, or on
+    // the one holding it, is handed it directly.
+    let Some(vault) = Vault::locate(cwd) else {
+        eprintln!(
+            "{}",
+            err_line!("No Vault is at or above {} to serve.", (cwd.display()))
+        );
+        return DaemonExit::default();
+    };
+    // A Vault that was found has its root above it — itself, at the least — so the search that
+    // found one finds the other.
+    let Some(root_vault) = RootVault::locate(cwd) else {
+        eprintln!(
+            "{}",
+            err_line!("No root Vault is at or above {} to serve.", (cwd.display()))
+        );
+        return DaemonExit::default();
+    };
+
     let address = SocketAddr::from(([0, 0, 0, 0], config.daemon_config().prefer_port()));
     let listener = match TcpListener::bind(address).await {
         Ok(listener) => listener,
@@ -79,6 +102,8 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         signing: identity,
         roots,
         rule,
+        vault,
+        root_vault,
         // Built once: the list a caller's id is read against is the one this daemon runs.
         registry: build_action_registry(),
     });
@@ -96,6 +121,10 @@ struct Host {
     roots: Vec<PathBuf>,
     /// Which scopes a member may be found in.
     rule: KeyLocateRule,
+    /// The Vault being served, as a context hands it to an action.
+    vault: Vault,
+    /// The root above [`vault`](Self::vault), as a context hands it to an action.
+    root_vault: RootVault,
     /// Every action this daemon serves, laid out by id.
     registry: Vec<Option<Box<dyn ActionEntry>>>,
 }
@@ -163,7 +192,12 @@ where
         .await
         .map_err(SessionError::Exchange)?;
 
-    let ctx = ActionContext::new_vault_ctx(member).with_channel(channel);
+    // The Vault being served and its root outlive this connection — they belong to the daemon
+    // — so the action reaches them by borrowing them, the same pair for every connection.
+    let ctx = ActionContext::new_vault_ctx(member)
+        .with_current_vault(&host.vault)
+        .with_current_root_vault(&host.root_vault)
+        .with_channel(channel);
     do_action_with(&host.registry, request.id, ctx)
         .await
         .map_err(SessionError::Action)?;
@@ -239,6 +273,8 @@ mod tests {
     use rorolala_protocol::{
         Action as _, ActionContext, ActionError, Channel, OnlyWorkspace, Socket,
     };
+    use rorolala_vault::{RootVault, Vault};
+    use rorolala_workspace::Workspace;
     use tokio::io::{AsyncWriteExt as _, DuplexStream, duplex};
     use tokio::net::TcpListener;
 
@@ -310,6 +346,10 @@ mod tests {
             signing: identity,
             roots: vec![keys],
             rule: local_only(),
+            // The Vault a connection is served for is the daemon's to keep; a test that checks
+            // what an action is handed over the wire does not reach for it.
+            vault: Vault::default(),
+            root_vault: RootVault::default(),
             registry,
         }
     }
@@ -419,10 +459,14 @@ mod tests {
         let account =
             find_account("client", std::slice::from_ref(&workspace), &local_only()).unwrap();
 
-        let output =
-            proc_action::<ActionHandshake>(&account, address.to_string(), "world".to_string())
-                .await
-                .unwrap();
+        let output = proc_action::<ActionHandshake>(
+            &Workspace::default(),
+            &account,
+            address.to_string(),
+            "world".to_string(),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(output, "Hello, world ... Welcome!");
         serving.await.unwrap().unwrap();
@@ -565,6 +609,9 @@ mod tests {
 
         let (_tx, rx) = tokio::sync::watch::channel(false);
         let cwd = scratch("bind");
+        // The daemon serves a Vault, so it stops before listening when there is none to serve:
+        // this one is made so that what stops it is the port and nothing else.
+        Vault::create(&cwd).unwrap();
         let daemon = super::daemon(super::DaemonInput {
             cwd: &cwd,
             config: &config,

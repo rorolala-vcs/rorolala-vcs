@@ -19,6 +19,7 @@ use std::time::Duration;
 use librorolala::auth::{Account, KeyLocateRule, find_account};
 use librorolala::daemon::action_handshake;
 use librorolala::vault::{CONFIG_PATH, KEYS_DIR, VAULTS_DIR, Vault};
+use librorolala::workspace::{Workspace, locate_workspace};
 use rorolala_utils_sandbox::{Sandbox, Serving, command, run, serve};
 
 /// The port the root Vault serves on.
@@ -156,7 +157,12 @@ fn reach(workspace: &Path, name: &str, address: &str) -> Result<String, String> 
     let account: Account = find_account(name, &keys, &local_only())
         .unwrap_or_else(|| panic!("the client holds no account named {name}"));
 
-    action_handshake(&account, address.to_string(), name.to_string())
+    // What the action is taken from is the Workspace the client works in, which is the one
+    // the account's key was found in.
+    let held: Workspace = locate_workspace(workspace)
+        .unwrap_or_else(|| panic!("{} is not a Workspace", workspace.display()));
+
+    action_handshake(&held, &account, address.to_string(), name.to_string())
         .map_err(|error| error.to_string())
 }
 

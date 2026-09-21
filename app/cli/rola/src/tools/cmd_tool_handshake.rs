@@ -71,8 +71,14 @@ pub fn tool_handshake(
     current: &mut LazyRes<ResCurrentAccount>,
 ) -> Next {
     // Everything below works through the Workspace, so it is asked once, here, and taken for
-    // granted after.
+    // granted after: `?` is `routeify`'s, and a run that is inside no Workspace leaves through
+    // it. `held` is the copy the exchange is spoken from, and the same one the action is
+    // handed, so both sides mean the same place by it.
     workspace.get_ref().check()?;
+
+    // UNWRAP: `check` above is exactly what a run without a Workspace fails with, and this run
+    // did not fail, so there is a Workspace here to hand on.
+    let held = workspace.get_ref().as_ref().unwrap();
 
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // lets the Workspace's own choice be the one that is reached for. `?` here is
@@ -89,7 +95,7 @@ pub fn tool_handshake(
     // No Vault is held: the one being reached for is elsewhere, so a key kept in a local
     // Vault is not this run's to act as. `?` here is `routeify`'s once more: a name no scope
     // holds is the lookup's own to report.
-    let account = account_named(&name, workspace.get_ref().as_ref(), None)?;
+    let account = account_named(&name, Some(held), None)?;
 
     // What the Workspace side holds and sends is who it is, so what is printed is the daemon
     // greeting the account this runs as.
@@ -98,7 +104,7 @@ pub fn tool_handshake(
     // The daemon is dialled at the address the link names. Which Vault under it is asked for is
     // not part of that yet: the request carries the action and the account and nothing about
     // where the daemon should look, so the Vault reached is the one it serves.
-    let output = action_handshake(&account, target.authority(), input)?;
+    let output = action_handshake(held, &account, target.authority(), input)?;
 
     ResultHandshake { output }.into()
 }

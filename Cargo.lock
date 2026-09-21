@@ -1500,6 +1500,7 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vault",
+ "rorolala-workspace",
  "serde",
  "serde_json",
  "syn 3.0.5",

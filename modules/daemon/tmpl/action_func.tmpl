@@ -3,32 +3,33 @@
 
 >>>>>>>>>> actions
 @@@ >>> actions
-/// Runs the [`<<<type_name>>>`](crate::<<<type_name>>>) action on the input it is handed, as
-/// `account`, against the daemon at `target`.
+/// Runs the [`<<<type_name>>>`](crate::<<<type_name>>>) action on the input it is handed, taken
+/// from `workspace`, as `account`, against the daemon at `target`.
 ///
 /// # Errors
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails.
-pub async fn action_<<<stem>>>_async(account: &rorolala_auth::Account, target: String, <<<params>>>) -> Result<<<<output>>>, rorolala_protocol::ActionError> {
-    proc_action::<<<<type_name>>>>(account, target, <<<argument>>>).await
+pub async fn action_<<<stem>>>_async(workspace: &rorolala_workspace::Workspace, account: &rorolala_auth::Account, target: String, <<<params>>>) -> Result<<<<output>>>, rorolala_protocol::ActionError> {
+    proc_action::<<<<type_name>>>>(workspace, account, target, <<<argument>>>).await
 }
 
 /// Runs the [`<<<type_name>>>`](crate::<<<type_name>>>) action, blocking until it has.
 ///
 /// This is the entry point the C ABI exports; the `async` one above is what a Rust
-/// caller should use instead. The account is the one the caller names, so which identity
-/// an action runs as is theirs to say and not looked up behind their back, and the target
-/// is the daemon to reach, as an ip and a port.
+/// caller should use instead. `workspace` is the copy the work is taken from, and the
+/// account is the one the caller names, so which identity an action runs as is theirs to
+/// say and not looked up behind their back, and the target is the daemon to reach, as a
+/// host and a port.
 ///
 /// # Errors
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
 #[rorolala_utils_lazyffi::lazyffi(export = do_action_<<<stem>>>)]
-pub fn action_<<<stem>>>(account: &rorolala_auth::Account, target: String, <<<params>>>) -> Result<<<<output>>>, rorolala_protocol::ActionError> {
+pub fn action_<<<stem>>>(workspace: &rorolala_workspace::Workspace, account: &rorolala_auth::Account, target: String, <<<params>>>) -> Result<<<<output>>>, rorolala_protocol::ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_<<<stem>>>_async(account, target, <<<call_args>>>))
+    runtime.block_on(action_<<<stem>>>_async(workspace, account, target, <<<call_args>>>))
 }
 
 @@@ <<<

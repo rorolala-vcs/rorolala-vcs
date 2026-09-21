@@ -13,6 +13,7 @@ rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
 rorolala-vault.workspace = true
+rorolala-workspace.workspace = true
 
 tokio = { workspace = true, features = ["io-util"] }
 serde.workspace = true

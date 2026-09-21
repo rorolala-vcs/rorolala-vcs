@@ -9,18 +9,21 @@ mod actions;
 pub use actions::*;
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace, Socket, VaultAddress};
+use rorolala_workspace::Workspace;
 use tokio::net::TcpStream;
 
 use rorolala_auth::{Account, SecureStream};
 
 use crate::wire;
 
-/// Runs the action `A` on `input`, as `account`, against the daemon at `target`.
+/// Runs the action `A` on `input`, taken from `workspace`, as `account`, against the daemon at
+/// `target`.
 ///
 /// The input is what the caller asked for, so it belongs to the Workspace side and is
-/// wrapped as the [`OnlyWorkspace`] the action takes; the account is the one the caller
-/// named, so the action runs as that identity rather than as whatever was found first; and
-/// `target` is the daemon to reach, as a host and a port a Vault answers at.
+/// wrapped as the [`OnlyWorkspace`] the action takes; `workspace` is the copy the work is
+/// being taken from, handed on so that an action can reach it; the account is the one the
+/// caller named, so the action runs as that identity rather than as whatever was found first;
+/// and `target` is the daemon to reach, as a host and a port a Vault answers at.
 ///
 /// The session is established before the action runs. The account's private key proves
 /// which identity the action runs as, and a public key beside it — if there is one — is
@@ -34,6 +37,7 @@ use crate::wire;
 /// [`ActionError::Auth`] if a key cannot be read or the peer cannot be proven, and
 /// [`ActionError`] once the action can be carried out but the exchange fails.
 pub async fn proc_action<A>(
+    workspace: &Workspace,
     account: &Account,
     target: String,
     input: A::Input,
@@ -75,7 +79,9 @@ where
     }
 
     let input = OnlyWorkspace::from(Some(input));
-    let ctx = ActionContext::new_workspace_ctx(account.clone()).with_channel(channel);
+    let ctx = ActionContext::new_workspace_ctx(account.clone())
+        .with_current_workspace(workspace)
+        .with_channel(channel);
 
     A::process(input, ctx).await
 }
@@ -98,6 +104,7 @@ mod tests {
         Account, KeyAlgorithm, KeyLocateRule, SecureStream, SigningKey, find_account,
     };
     use rorolala_protocol::{Action as _, ActionContext, ActionError, Socket};
+    use rorolala_workspace::Workspace;
     use tokio::net::TcpListener;
 
     use super::{ActionHandshake, build_action_registry, do_action_with, proc_action};
@@ -172,6 +179,7 @@ mod tests {
         // The account holds no key, so if the address were checked later this would fail
         // with an auth error instead of the address one.
         let error = proc_action::<ActionHandshake>(
+            &Workspace::default(),
             &Account::default(),
             "rola://".to_string(),
             "world".to_string(),
@@ -188,6 +196,7 @@ mod tests {
         // `Account::default()` names a key file that is not there, and the address is one
         // that would parse, so reading the key is what fails.
         let error = proc_action::<ActionHandshake>(
+            &Workspace::default(),
             &Account::default(),
             "127.0.0.1:1".to_string(),
             "world".to_string(),
@@ -212,6 +221,7 @@ mod tests {
         fs::remove_file(keys.join("client.pub")).unwrap();
 
         let error = proc_action::<ActionHandshake>(
+            &Workspace::default(),
             &account,
             "127.0.0.1:1".to_string(),
             "world".to_string(),
@@ -247,10 +257,14 @@ mod tests {
 
         let account = find_account("client", std::slice::from_ref(&keys), &local_only()).unwrap();
 
-        let error =
-            proc_action::<ActionHandshake>(&account, address.to_string(), "world".to_string())
-                .await
-                .unwrap_err();
+        let error = proc_action::<ActionHandshake>(
+            &Workspace::default(),
+            &account,
+            address.to_string(),
+            "world".to_string(),
+        )
+        .await
+        .unwrap_err();
 
         assert!(matches!(error, ActionError::UnknownAction(id) if id == ActionHandshake::ID));
         serving.await.unwrap();
