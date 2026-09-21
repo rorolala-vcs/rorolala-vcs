@@ -9,6 +9,8 @@ mod actions;
 pub use actions::*;
 
 use rorolala_protocol::{Action, ActionContext, OnlyWorkspace, Socket, VaultAddress};
+use rorolala_utils_configure::Configure as _;
+use rorolala_workspace::Config as WorkspaceConfig;
 use tokio::net::TcpStream;
 
 // `Account`, `ActionError` and `Workspace` are named by the entry points generated below,
@@ -80,9 +82,19 @@ where
     }
 
     let input = OnlyWorkspace::from(Some(input));
-    let ctx = ActionContext::new_workspace_ctx(account.clone())
+    let mut ctx = ActionContext::new_workspace_ctx(account.clone())
         .with_current_workspace(workspace)
         .with_channel(channel);
+
+    // What the Workspace works from is read here rather than handed in: the copy the work is
+    // being taken from is the one that says it. A Workspace whose configuration will not read
+    // hands the action nothing instead of stopping it, since an action that needs a
+    // configuration reads it for itself and says so.
+    let workspace_config = WorkspaceConfig::read_from(&workspace.config_path()).ok();
+
+    if let Some(workspace_config) = &workspace_config {
+        ctx = ctx.with_current_workspace_config(workspace_config);
+    }
 
     A::process(input, ctx).await
 }

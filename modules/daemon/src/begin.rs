@@ -18,6 +18,7 @@ use rorolala_auth::{
 };
 use rorolala_protocol::{ActionContext, ActionError, Socket};
 use rorolala_utils_cli_theme::{err_line, help_line, warn_line};
+use rorolala_utils_configure::Configure as _;
 use rorolala_utils_location::Locate;
 use rorolala_vault::{KEYS_DIR, KeyDiscovery, RootVault, Vault};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -90,6 +91,20 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         return DaemonExit::default();
     };
 
+    // What the root above is configured with, which a Vault-side action that works on the
+    // Vaults below it is handed. The file is the Vault's own when the Vault served is the root
+    // itself.
+    let root_vault_config = match rorolala_vault::Config::read_from(&root_vault.config_path()) {
+        Ok(read) => read,
+        Err(error) => {
+            eprintln!(
+                "{}",
+                warn_line!("The root Vault's configuration could not be read: {error}")
+            );
+            rorolala_vault::Config::default()
+        }
+    };
+
     let address = SocketAddr::from(([0, 0, 0, 0], config.daemon_config().prefer_port()));
     let listener = match TcpListener::bind(address).await {
         Ok(listener) => listener,
@@ -108,6 +123,8 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         rule,
         vault,
         root_vault,
+        vault_config: config.clone(),
+        root_vault_config,
         // Built once: the list a caller's id is read against is the one this daemon runs.
         registry: build_action_registry(),
     });
@@ -213,6 +230,10 @@ struct Host {
     vault: Vault,
     /// The root above [`vault`](Self::vault), as a context hands it to an action.
     root_vault: RootVault,
+    /// What the Vault is configured with, as a context hands it to an action.
+    vault_config: rorolala_vault::Config,
+    /// What the root above it is configured with, as a context hands it to an action.
+    root_vault_config: rorolala_vault::Config,
     /// Every action this daemon serves, laid out by id.
     registry: Vec<Option<Box<dyn ActionEntry>>>,
 }
@@ -281,10 +302,13 @@ where
         .map_err(SessionError::Exchange)?;
 
     // The Vault being served and its root outlive this connection — they belong to the daemon
-    // — so the action reaches them by borrowing them, the same pair for every connection.
+    // — so the action reaches them, and what either is configured with, by borrowing them: the
+    // same things for every connection.
     let ctx = ActionContext::new_vault_ctx(member)
         .with_current_vault(&host.vault)
         .with_current_root_vault(&host.root_vault)
+        .with_current_vault_config(&host.vault_config)
+        .with_current_root_vault_config(&host.root_vault_config)
         .with_channel(channel);
     do_action_with(&host.registry, request.id, ctx)
         .await
@@ -439,6 +463,8 @@ mod tests {
             // what an action is handed over the wire does not reach for it.
             vault: Vault::default(),
             root_vault: RootVault::default(),
+            vault_config: rorolala_vault::Config::default(),
+            root_vault_config: rorolala_vault::Config::default(),
             registry,
         }
     }
