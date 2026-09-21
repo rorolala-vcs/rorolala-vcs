@@ -31,6 +31,9 @@ pub const EC_ERR_CREATION_WORKSPACE: i32 = 21;
 /// `exit_codes.creation_vault`
 pub const EC_ERR_CREATION_VAULT: i32 = 22;
 
+/// `exit_codes.creation_argument`
+pub const EC_ERR_CREATION_ARGUMENT: i32 = 23;
+
 // Tools
 
 /// `exit_codes.tool_keygen_no_openssl`

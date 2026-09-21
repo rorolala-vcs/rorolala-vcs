@@ -11,6 +11,9 @@ create:
         With `--vault` a Vault is created, and without it a Workspace. The directory is
         created if it is not there yet.
 
+        Run inside a Vault, `--vault` makes a Vault inside that one instead: the name
+        given is taken as the directory under the current vault's `vaults/`.
+
         `rola init` does the same for the current directory.
     zh-CN: |
         创建工作区或保险库
@@ -19,6 +22,9 @@ create:
 
         工作区是你动手改的那份副本；保险库是副本之间共享的落点。
         加 `--vault` 创建保险库，不加则创建工作区。目录不存在时会一并创建。
+
+        在保险库内运行时，`--vault` 会在其内部再建一个保险库：所给名字用作当前保险库
+        `vaults/` 下的目录名。
 
         `rola init` 对当前目录做同样的事。
 
@@ -45,6 +51,20 @@ create:
   result_workspace_created:
     en: Workspace created at %{path}
     zh-CN: 工作区已创建于 %{path}
+
+  sub_vault_name_is_path:
+    en: "A vault inside a vault is named, not pathed: `%{name}` is a path"
+    zh-CN: 保险库内的保险库用名字指定，而非路径：`%{name}` 是路径
+
+  sub_vault_name_is_path_help:
+    en: |
+        Give the vault a name, and it is made under the current vault's `vaults/`
+
+        **Example**: `rola create alpha --vault`
+    zh-CN: |
+        给该保险库一个名字，它会被创建在当前保险库的 `vaults/` 下
+
+        **例如**：`rola create alpha --vault`
 
   result_vault_created:
     en: Vault created at %{path}

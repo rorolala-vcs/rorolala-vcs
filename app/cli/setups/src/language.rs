@@ -9,9 +9,9 @@ use mingling::{
 
 /// Environment variables consulted, in order, when `--lang` is absent
 ///
-/// The first one set wins. `ROROLALA_LANG` is the project's own; `APP_LANG` and `LANG`
-/// are the conventions a shell and a container already carry.
-const LANGUAGE_ENV_VARS: &[&str] = &["ROROLALA_LANG", "APP_LANG", "LANG"];
+/// The first one set wins. `ROLA_LANG` is the project's own; `APP_LANG` and `LANG` are the
+/// conventions a container and a shell already carry.
+const LANGUAGE_ENV_VARS: &[&str] = &["ROLA_LANG", "APP_LANG", "LANG"];
 
 /// Language used when neither `--lang` nor the environment names one
 const FALLBACK_LANGUAGE: &str = "en";
@@ -24,7 +24,7 @@ pub const GLOBAL_ARG_LANG: PickerArg<'static, String> = arg![lang: String, 'l'];
 /// A [`ProgramSetup`] implementation that selects the language and binds it to rust-i18n
 ///
 /// The language comes from `--lang`, or — when the argument is absent — from the first
-/// of `ROROLALA_LANG`, `APP_LANG` and `LANG` that is set, falling back to `en`.
+/// of `ROLA_LANG`, `APP_LANG` and `LANG` that is set, falling back to `en`.
 ///
 /// The choice is made during setup, so no command has run yet when it lands and every
 /// `t!` after it resolves in the selected locale. That works across crates: the locale

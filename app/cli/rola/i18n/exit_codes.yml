@@ -25,6 +25,10 @@ exit_codes:
     en: A Vault could not be created
     zh-CN: 无法创建保险库
 
+  creation_argument:
+    en: "A `rola create` command was given arguments it cannot use"
+    zh-CN: "`rola create` 收到了无法使用的参数"
+
   tool_keygen_no_openssl:
     en: "`openssl` could not be run"
     zh-CN: 无法运行 `openssl`
