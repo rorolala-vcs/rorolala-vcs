@@ -5,7 +5,7 @@
 //! naming no name lists them all. The configuration is a resource, so a change made here is
 //! written back once the program is done with it.
 
-use librorolala::protocol::parse_address;
+use librorolala::protocol::VaultAddress;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -17,8 +17,7 @@ use mingling::{
 };
 use rorolala_cli_setups::ResWorkspaceConfig;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_constants::VAULT_DEFAULT_PORT;
-use rorolala_workspace::{Config as WorkspaceConfig, SocketAddress};
+use rorolala_workspace::Config as WorkspaceConfig;
 use rust_i18n::t;
 
 use crate::Next;
@@ -106,7 +105,7 @@ pub fn vault_bind(
         Err(next) => return next,
     };
 
-    let Ok(address) = parse_address(&address, VAULT_DEFAULT_PORT) else {
+    let Ok(address) = VaultAddress::parse(&address) else {
         return ErrorVaultAddressInvalid { address }.into();
     };
 
@@ -114,8 +113,8 @@ pub fn vault_bind(
         state @ ResWorkspaceConfig::Read { .. } => {
             // UNWRAP: the arm this is in shows there is a configuration to change.
             let workspace = state.config_mut().unwrap();
-            let replaced = workspace.vaults_mut().bind(name.clone(), address);
             history.get_mut().remember(address.to_string());
+            let replaced = workspace.vaults_mut().bind(name.clone(), address.clone());
 
             // The name is bound by now, so choosing it is choosing one that can be reached
             // for. Picking a `Flag` cannot fail, so this is `Active` only when it was written.
@@ -331,7 +330,7 @@ fn positional(ctx: &ShellContext) -> usize {
 #[derive(Grouped)]
 pub struct ResultVaults {
     /// Each Vault, by name and address, in name order.
-    vaults: Vec<(String, SocketAddress)>,
+    vaults: Vec<(String, VaultAddress)>,
     /// The Vault the Workspace reaches for, if one has been chosen.
     current: Option<String>,
 }
@@ -339,10 +338,10 @@ pub struct ResultVaults {
 impl ResultVaults {
     /// The Vaults of `config`, in name order, and the one it reaches for.
     fn of(config: &WorkspaceConfig) -> Self {
-        let mut vaults: Vec<(String, SocketAddress)> = config
+        let mut vaults: Vec<(String, VaultAddress)> = config
             .vaults()
             .iter()
-            .map(|(name, address)| (name.clone(), *address))
+            .map(|(name, address)| (name.clone(), address.clone()))
             .collect();
         vaults.sort_by(|left, right| left.0.cmp(&right.0));
 
@@ -382,9 +381,9 @@ pub struct ResultVaultBound {
     /// The name that was bound.
     name: String,
     /// The address it is bound to now.
-    address: SocketAddress,
+    address: VaultAddress,
     /// The address it was bound to before, if it was bound at all.
-    replaced: Option<SocketAddress>,
+    replaced: Option<VaultAddress>,
     /// Whether the name was also chosen to be reached for.
     made_default: bool,
 }
@@ -446,7 +445,7 @@ pub struct ResultVaultUnbound {
     /// The name that was let go.
     name: String,
     /// The address it had been bound to.
-    address: SocketAddress,
+    address: VaultAddress,
     /// Whether it was also the one reached for by default.
     cleared_default: bool,
 }

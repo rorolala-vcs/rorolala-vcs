@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use librorolala::protocol::VaultAddress;
 use librorolala::workspace::{Config as WorkspaceConfig, Workspace};
 use mingling::{
     LazyInit, ProgramCollect, Wrap, macros::arg, picker::PickerArg, picker::PickerHelper,
@@ -120,14 +121,14 @@ impl ResCurrentRemoteVault {
     /// Returns [`ErrorRemoteVault::ShouldInWorkspace`] when this run is not inside a
     /// Workspace, [`ErrorRemoteVault::Unread`] when its configuration would not read, and
     /// [`ErrorRemoteVault::NotChosen`] when it reaches for no Vault.
-    pub fn vault(&self) -> Result<String, ErrorRemoteVault> {
+    pub fn vault(&self) -> Result<VaultAddress, ErrorRemoteVault> {
         let config = self.reach()?;
         let name = config
             .default_config()
             .vault()
             .ok_or(ErrorRemoteVault::NotChosen)?;
 
-        Ok(address_of(name, config))
+        address_of(name, config)
     }
 
     /// The address to reach for: what `name` names, or the one the Workspace reaches for.
@@ -139,8 +140,13 @@ impl ResCurrentRemoteVault {
     /// # Errors
     ///
     /// Returns what [`vault`](Self::vault) does: naming none is not a way out of a Workspace
-    /// that has chosen none, since there is then nothing to reach for at all.
-    pub fn vault_or_default(&self, name: impl Into<String>) -> Result<String, ErrorRemoteVault> {
+    /// that has chosen none, since there is then nothing to reach for at all. A name the
+    /// Workspace does not know and that will not read as an address is
+    /// [`ErrorRemoteVault::NotAddress`].
+    pub fn vault_or_default(
+        &self,
+        name: impl Into<String>,
+    ) -> Result<VaultAddress, ErrorRemoteVault> {
         let name = name.into();
         if name.is_empty() {
             return self.vault();
@@ -148,7 +154,7 @@ impl ResCurrentRemoteVault {
 
         let config = self.reach()?;
 
-        Ok(address_of(&name, config))
+        address_of(&name, config)
     }
 
     /// Each Vault the Workspace knows, under the name it is known by.
@@ -194,18 +200,28 @@ pub enum ErrorRemoteVault {
     },
     /// The Workspace is here, and reaches for no Vault.
     NotChosen,
+    /// The name is neither one the Workspace knows nor an address that reads.
+    NotAddress {
+        /// What was named.
+        name: String,
+    },
 }
 
-/// The address `name` answers at, or `name` itself when the Workspace knows no such Vault.
+/// The address `name` names, or `name` itself read as an address when the Workspace knows no
+/// such Vault.
 ///
-/// A name is the Workspace's own shorthand, so one it knows says where to go; one it does not
-/// is taken to be an address already, which is what lets a Vault be reached that was never
-/// given a name.
-fn address_of(name: &str, config: &WorkspaceConfig) -> String {
-    config
-        .vaults()
-        .get(name)
-        .map_or_else(|| name.to_string(), std::string::ToString::to_string)
+/// A name is the Workspace's own shorthand, so one it knows says where to go; one it does not is
+/// taken to be an address already, which is what lets a Vault be reached that was never given a
+/// name. What is neither a name it knows nor an address that reads is reported rather than
+/// handed on, since there is nowhere it could be dialled.
+fn address_of(name: &str, config: &WorkspaceConfig) -> Result<VaultAddress, ErrorRemoteVault> {
+    if let Some(address) = config.vaults().get(name) {
+        return Ok(address.clone());
+    }
+
+    VaultAddress::parse(name).map_err(|_| ErrorRemoteVault::NotAddress {
+        name: name.to_string(),
+    })
 }
 
 /// A [`ProgramSetup`] implementation used to register Workspace-related resources and behaviors

@@ -1,16 +1,9 @@
 use std::collections::HashMap;
-use std::net::SocketAddr;
 
+use rorolala_protocol::VaultAddress;
 use rorolala_utils_configure::Configure;
 use rorolala_utils_lazyffi::lazyffi;
 use serde::{Deserialize, Serialize};
-
-/// An address a Vault answers at, as a Workspace writes it down.
-///
-/// It is an ip and port, which is what the daemon binds and a client dials: a name has
-/// to be resolved before it can be written down, so what is stored is where to go rather
-/// than what to ask to get there.
-pub type SocketAddress = SocketAddr;
 
 /// Top-level configuration for the Workspace
 ///
@@ -99,13 +92,14 @@ impl DefaultConfig {
 /// The Vaults a Workspace knows, each under a name of its own.
 ///
 /// A name is how the Workspace talks about a Vault — `origin`, say — and the address is
-/// where that Vault answers. Names are not shared between Workspaces: the same Vault may
-/// well be `origin` in one and `upstream` in another.
+/// where that Vault answers: the daemon to knock at, and which Vault under it is meant. Names
+/// are not shared between Workspaces: the same Vault may well be `origin` in one and
+/// `upstream` in another.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct VaultsConfig {
     /// The address each name means.
-    vaults: HashMap<String, SocketAddress>,
+    vaults: HashMap<String, VaultAddress>,
 }
 
 impl VaultsConfig {
@@ -113,22 +107,18 @@ impl VaultsConfig {
     ///
     /// Binding a name that is already taken is how an address is changed: the new one
     /// replaces the old and the old is handed back.
-    pub fn bind(
-        &mut self,
-        name: impl Into<String>,
-        address: SocketAddress,
-    ) -> Option<SocketAddress> {
+    pub fn bind(&mut self, name: impl Into<String>, address: VaultAddress) -> Option<VaultAddress> {
         self.vaults.insert(name.into(), address)
     }
 
     /// Lets `name` go, answering with the address it was bound to, if it was bound at all.
-    pub fn unbind(&mut self, name: &str) -> Option<SocketAddress> {
+    pub fn unbind(&mut self, name: &str) -> Option<VaultAddress> {
         self.vaults.remove(name)
     }
 
     /// The address `name` is bound to, if it is bound at all.
     #[must_use]
-    pub fn get(&self, name: &str) -> Option<&SocketAddress> {
+    pub fn get(&self, name: &str) -> Option<&VaultAddress> {
         self.vaults.get(name)
     }
 
@@ -139,7 +129,7 @@ impl VaultsConfig {
     }
 
     /// Each name and the address it is bound to.
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &SocketAddress)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &VaultAddress)> {
         self.vaults.iter()
     }
 
@@ -161,16 +151,14 @@ impl VaultsConfig {
     }
 }
 
-impl From<HashMap<String, SocketAddress>> for VaultsConfig {
-    fn from(vaults: HashMap<String, SocketAddress>) -> Self {
+impl From<HashMap<String, VaultAddress>> for VaultsConfig {
+    fn from(vaults: HashMap<String, VaultAddress>) -> Self {
         Self { vaults }
     }
 }
 
-impl FromIterator<(String, SocketAddress)> for VaultsConfig {
-    fn from_iter<IntoIter: IntoIterator<Item = (String, SocketAddress)>>(
-        entries: IntoIter,
-    ) -> Self {
+impl FromIterator<(String, VaultAddress)> for VaultsConfig {
+    fn from_iter<IntoIter: IntoIterator<Item = (String, VaultAddress)>>(entries: IntoIter) -> Self {
         Self {
             vaults: entries.into_iter().collect(),
         }
@@ -180,13 +168,14 @@ impl FromIterator<(String, SocketAddress)> for VaultsConfig {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::net::SocketAddr;
+
+    use rorolala_protocol::VaultAddress;
 
     use super::{Config, VaultsConfig};
 
     /// An address to bind names to, parsed the way a caller's word would be.
-    fn address(text: &str) -> SocketAddr {
-        text.parse().unwrap()
+    fn address(text: &str) -> VaultAddress {
+        VaultAddress::parse(text).unwrap()
     }
 
     #[test]
@@ -297,11 +286,11 @@ mod tests {
         vaults.bind("origin", address("127.0.0.1:7000"));
         vaults.bind("upstream", address("[::1]:7001"));
 
-        let mut listed: Vec<(String, SocketAddr)> = vaults
+        let mut listed: Vec<(String, VaultAddress)> = vaults
             .iter()
-            .map(|(name, address)| (name.clone(), *address))
+            .map(|(name, address)| (name.clone(), address.clone()))
             .collect();
-        listed.sort();
+        listed.sort_by(|left, right| left.0.cmp(&right.0));
 
         assert_eq!(
             listed,

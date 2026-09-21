@@ -8,8 +8,7 @@
 mod actions;
 pub use actions::*;
 
-use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace, Socket, parse_address};
-use rorolala_utils_constants::VAULT_DEFAULT_PORT;
+use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace, Socket, VaultAddress};
 use tokio::net::TcpStream;
 
 use rorolala_auth::{Account, SecureStream};
@@ -21,7 +20,7 @@ use crate::wire;
 /// The input is what the caller asked for, so it belongs to the Workspace side and is
 /// wrapped as the [`OnlyWorkspace`] the action takes; the account is the one the caller
 /// named, so the action runs as that identity rather than as whatever was found first; and
-/// `target` is the daemon to reach, as an ip and a port.
+/// `target` is the daemon to reach, as a host and a port a Vault answers at.
 ///
 /// The session is established before the action runs. The account's private key proves
 /// which identity the action runs as, and a public key beside it — if there is one — is
@@ -31,7 +30,7 @@ use crate::wire;
 ///
 /// # Errors
 ///
-/// Returns [`ActionError::Addr`] if `target` is not an ip and a port,
+/// Returns [`ActionError::Addr`] if `target` does not read as an address,
 /// [`ActionError::Auth`] if a key cannot be read or the peer cannot be proven, and
 /// [`ActionError`] once the action can be carried out but the exchange fails.
 pub async fn proc_action<A>(
@@ -44,15 +43,17 @@ where
 {
     // Read before anything else: a target that cannot be an address is the caller's to fix,
     // and says so here rather than at the first write. An address written without a port
-    // means the one a Vault listens on by default.
-    let address = parse_address(&target, VAULT_DEFAULT_PORT).map_err(ActionError::Addr)?;
+    // means the one a Vault listens on by default, and its host may be a name, which is left
+    // to the connection to resolve.
+    let address = VaultAddress::parse(&target).map_err(ActionError::Addr)?;
 
     let identity = account.get_key()?;
     let expected = account.peer_key()?;
 
     // Prove who the action runs as, and hold the peer to an identity where the account
     // says which one that must be.
-    let socket: Box<dyn Socket> = Box::new(TcpStream::connect(address).await?);
+    let authority = address.authority();
+    let socket: Box<dyn Socket> = Box::new(TcpStream::connect(authority.as_str()).await?);
     let mut channel = match &expected {
         Some(expected) => SecureStream::connect(socket, &identity, expected).await?,
         None => SecureStream::connect_unpinned(socket, &identity).await?,
@@ -172,7 +173,7 @@ mod tests {
         // with an auth error instead of the address one.
         let error = proc_action::<ActionHandshake>(
             &Account::default(),
-            "nowhere".to_string(),
+            "rola://".to_string(),
             "world".to_string(),
         )
         .await

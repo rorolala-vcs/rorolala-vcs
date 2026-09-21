@@ -46,3 +46,15 @@ error:
       zh-CN: |
         请给出名字或地址，例如 `rola tool-handshake origin` 或 `rola tool-handshake 127.0.0.1:7717`；
         也可以运行 `rola vault set-default <NAME>` 为工作区选定默认保险库，以后就不必每次指定
+
+    err_not_address:
+      en: "`%{name}` is not a Vault this Workspace knows, nor an address"
+      zh-CN: "`%{name}` 既不是本工作区已知的保险库，也不是一个地址"
+
+    err_not_address_help:
+      en: |
+        Please name a Vault the Workspace has bound with `rola vault bind`, or write an
+        address such as `127.0.0.1:7717` or `rola://127.0.0.1/alpha`
+      zh-CN: |
+        请给出已用 `rola vault bind` 绑定的保险库名字，或写成地址，例如
+        `127.0.0.1:7717` 或 `rola://127.0.0.1/alpha`

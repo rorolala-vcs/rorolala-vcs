@@ -1,16 +1,20 @@
 //! Addressing the daemon an action is spoken to, and the Vault an address names.
 //!
-//! There are two spellings for where a Vault is. One is a bare address — an ip, an ip and a
+//! There are two spellings for where a Vault is. One is a bare address — a host, a host and a
 //! port, or a port alone — which says where a daemon answers and nothing about which Vault
 //! under it is meant. The other is the `rola://` link, which says both:
 //!
 //! ```text
-//! rola://<ip>[:<port>]/<sub-vault>
+//! rola://<host>[:<port>]/<sub-vault>
 //! ```
 //!
 //! A [`VaultAddress`] is the second, and every form the first takes reads as one: what is left
 //! out is filled from what it would otherwise have to be, so an address written without a port
 //! takes the port a Vault listens on, and one written without a sub-vault names the root.
+//!
+//! A host is an ip or a name — `127.0.0.1`, `[::1]`, `localhost`, `example.com`. A name is not
+//! resolved here: it is kept as the name it is and left to whatever dials the daemon, so an
+//! address stays the address it was written as, whatever a resolver would make of it.
 
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
@@ -32,28 +36,6 @@ const LOCALHOST: &str = "127.0.0.1";
 /// The scheme a full Vault link is written with.
 const SCHEME: &str = "rola://";
 
-/// The address a target names.
-///
-/// An ip and a port is an address, and so is an ip alone: the port that was left out means
-/// `default_port`, which is the one a Vault listens on when its configuration names no other.
-/// A name is not an address — it has to be resolved before it can be written down — so what is
-/// neither is refused rather than guessed at.
-///
-/// # Errors
-///
-/// Returns an [`AddrError`] naming the target when it is neither an ip nor an ip and a port.
-pub fn parse_address(target: &str, default_port: u16) -> Result<SocketAddr, AddrError> {
-    if let Ok(address) = target.parse::<SocketAddr>() {
-        return Ok(address);
-    }
-
-    if let Ok(ip) = target.parse::<IpAddr>() {
-        return Ok(SocketAddr::new(ip, default_port));
-    }
-
-    Err(AddrError::new(target.to_string()))
-}
-
 /// A Vault named by the link it answers at.
 ///
 /// The parts say where to knock and which Vault is being asked for: `addr` and `port` are the
@@ -65,11 +47,12 @@ pub fn parse_address(target: &str, default_port: u16) -> Result<SocketAddr, Addr
 /// what comes back is the same kind of thing whichever was written, so a caller never has to
 /// ask which spelling it was given.
 #[lazyffi(export = RolaVaultAddress)]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct VaultAddress {
     /// What the caller wrote, as it was written.
     raw: String,
-    /// The ip the daemon answers at.
+    /// The host the daemon answers at, as an ip or a name.
     addr: String,
     /// The port the daemon answers at.
     port: u16,
@@ -77,24 +60,40 @@ pub struct VaultAddress {
     sub_vault: String,
 }
 
+impl PartialEq for VaultAddress {
+    /// Two addresses are the same when they name the same place.
+    ///
+    /// [`raw`](Self::raw) is not part of that. It is what the caller happened to write, and the
+    /// same address is written `10.0.0.1` by one caller and `rola://10.0.0.1/` by another — so a
+    /// configuration that wrote one away and read it back holds the address it stored, whatever
+    /// spelling the file came back in.
+    fn eq(&self, other: &Self) -> bool {
+        self.addr == other.addr && self.port == other.port && self.sub_vault == other.sub_vault
+    }
+}
+
+impl Eq for VaultAddress {}
+
 impl VaultAddress {
     /// Reads `text` as an address, filling in what it leaves out.
     ///
     /// What is accepted, and what each is taken to mean:
     ///
-    /// | written                | taken as                                            |
-    /// | ---------------------- | --------------------------------------------------- |
-    /// | `ip`                   | that ip, the default port, the root Vault            |
-    /// | `port`                 | `127.0.0.1`, that port, the root Vault               |
-    /// | `ip:port`              | that ip and port, the root Vault                     |
-    /// | `rola://ip:port/sub`   | all of it                                            |
-    /// | `rola://ip/sub`        | that ip, the default port, that sub-vault            |
-    /// | `rola://ip:port`       | that ip and port, the root Vault                     |
+    /// | written                  | taken as                                          |
+    /// | ------------------------ | ------------------------------------------------- |
+    /// | `host`                   | that host, the default port, the root Vault       |
+    /// | `port`                   | `127.0.0.1`, that port, the root Vault            |
+    /// | `host:port`              | that host and port, the root Vault                |
+    /// | `rola://host:port/sub`   | all of it                                         |
+    /// | `rola://host/sub`        | that host, the default port, that sub-vault       |
+    /// | `rola://host:port`       | that host and port, the root Vault                |
+    ///
+    /// A host is an ip or a name, and a name is kept as it was written rather than resolved.
     ///
     /// # Errors
     ///
     /// Returns an [`AddrError`] naming `text` when it names neither: what is left of a link
-    /// after the scheme is an ip, an ip and a port, or a port, and anything else is refused
+    /// after the scheme is a host, a host and a port, or a port, and anything else is refused
     /// rather than guessed at.
     pub fn parse(text: &str) -> Result<Self, AddrError> {
         // A link says which sub-vault and an address does not; without the scheme the whole of
@@ -124,7 +123,7 @@ impl VaultAddress {
         &self.raw
     }
 
-    /// The ip the daemon answers at.
+    /// The host the daemon answers at.
     #[must_use]
     pub fn address(&self) -> &str {
         &self.addr
@@ -142,7 +141,7 @@ impl VaultAddress {
         &self.sub_vault
     }
 
-    /// Names the ip the daemon answers at.
+    /// Names the host the daemon answers at.
     ///
     /// What is written here is not read back — an address is read once, when it is parsed — so
     /// a change is the caller's to make sense of, and [`raw`](Self::raw) still holds what was
@@ -161,23 +160,34 @@ impl VaultAddress {
         self.sub_vault = sub_vault.into();
     }
 
-    /// The address as one a port may be written after.
+    /// The host as one a port may be written after.
     ///
     /// An ipv6 address is bracketed: the colons it is written with would otherwise read as the
-    /// ones separating it from the port.
+    /// ones separating it from the port. A name is written as it is, since none of them carry a
+    /// colon to be taken for one.
     fn host(&self) -> String {
         match self.addr.parse::<IpAddr>() {
             Ok(IpAddr::V6(_)) => format!("[{}]", self.addr),
             Ok(IpAddr::V4(_)) | Err(_) => self.addr.clone(),
         }
     }
+
+    /// The daemon's address written as the authority of a link: the host, and the port after it.
+    ///
+    /// It is where to knock and nothing more — which Vault under the daemon is meant is not part
+    /// of it, and is said to the daemon separately. This is the inverse of the reading a link's
+    /// authority gets in [`parse`](Self::parse).
+    #[must_use]
+    pub fn authority(&self) -> String {
+        format!("{}:{}", self.host(), self.port)
+    }
 }
 
-/// The ip and port `authority` names, if it names either.
+/// The host and port `authority` names, if it names either.
 ///
-/// An ip and a port is read as it is, an ip alone takes the default port, and a port alone is a
-/// port on [`LOCALHOST`]. What is none of the three is `None`, since what it might have meant is
-/// a name to be resolved and this has nothing to resolve it with.
+/// A host and a port is read as it is, a host alone takes the default port, and a port alone is a
+/// port on [`LOCALHOST`]. A host is an ip or a name, and a name is kept as it was written rather
+/// than resolved: this decides what was said, not what it turns out to point at.
 fn read_authority(authority: &str) -> Option<(String, u16)> {
     if let Ok(address) = authority.parse::<SocketAddr>() {
         return Some((address.ip().to_string(), address.port()));
@@ -187,10 +197,41 @@ fn read_authority(authority: &str) -> Option<(String, u16)> {
         return Some((ip.to_string(), VAULT_DEFAULT_PORT));
     }
 
-    authority
-        .parse::<u16>()
-        .ok()
-        .map(|port| (LOCALHOST.to_string(), port))
+    // A number that is not a port is not a host either: what was meant by a bare number is a
+    // port, and one no machine has is refused rather than read as a name spelled in digits.
+    if authority.bytes().all(|byte| byte.is_ascii_digit()) {
+        return authority
+            .parse::<u16>()
+            .ok()
+            .map(|port| (LOCALHOST.to_string(), port));
+    }
+
+    if let Some((host, port)) = authority.rsplit_once(':') {
+        return port
+            .parse::<u16>()
+            .ok()
+            .filter(|_| is_host(host))
+            .map(|port| (host.to_string(), port));
+    }
+
+    if is_host(authority) {
+        return Some((authority.to_string(), VAULT_DEFAULT_PORT));
+    }
+
+    None
+}
+
+/// Whether `name` reads as a host a daemon could be dialled at.
+///
+/// A host is written with the letters, digits, hyphens, dots and underscores a name or an ip is
+/// made of — `localhost` is the one name every machine knows. An empty name, and anything
+/// carrying a separator, whitespace or the like, is not one, and is refused here rather than
+/// handed on for a resolver to fail over.
+fn is_host(name: &str) -> bool {
+    !name.is_empty()
+        && name.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-' || byte == b'_'
+        })
 }
 
 impl fmt::Display for VaultAddress {
@@ -234,6 +275,16 @@ impl TryFrom<&str> for VaultAddress {
     }
 }
 
+impl From<VaultAddress> for String {
+    /// The link, as [`Display`](fmt::Display) writes it.
+    ///
+    /// This is how an address is written down: a Workspace keeps the link a caller would write,
+    /// so that its configuration and a command line read the same way.
+    fn from(address: VaultAddress) -> Self {
+        address.to_string()
+    }
+}
+
 impl From<SocketAddr> for VaultAddress {
     /// The root of the Vault at `address`.
     ///
@@ -273,10 +324,10 @@ impl VaultAddress {
         self.raw.clone()
     }
 
-    /// The link's ip, as the ABI spells it.
-    #[lazyffi(export = vault_address_read_ip)]
+    /// The link's host, as the ABI spells it.
+    #[lazyffi(export = vault_address_read_addr)]
     #[must_use]
-    pub fn read_ip(&self) -> String {
+    pub fn read_addr(&self) -> String {
         self.addr.clone()
     }
 
@@ -290,7 +341,7 @@ impl VaultAddress {
 
 #[cfg(test)]
 mod tests {
-    use super::{VaultAddress, parse_address};
+    use super::VaultAddress;
     use rorolala_utils_constants::{ROOT_SUB_VAULT, VAULT_DEFAULT_PORT};
     use std::net::SocketAddr;
 
@@ -306,30 +357,34 @@ mod tests {
     }
 
     #[test]
-    fn an_ip_and_a_port_is_taken_as_it_is() {
+    fn a_host_is_read_as_it_was_written() {
+        // An ip and a port, and an ip alone, which takes the port a Vault listens on.
         assert_eq!(
-            parse_address("127.0.0.1:7000", 7717).unwrap(),
-            "127.0.0.1:7000".parse::<SocketAddr>().unwrap()
-        );
-    }
-
-    #[test]
-    fn an_ip_alone_takes_the_default_port() {
-        assert_eq!(
-            parse_address("127.0.0.1", 7717).unwrap(),
-            "127.0.0.1:7717".parse::<SocketAddr>().unwrap()
+            parts("127.0.0.1:7000"),
+            ("127.0.0.1".to_string(), 7000, ROOT_SUB_VAULT.to_string())
         );
         assert_eq!(
-            parse_address("::1", 7717).unwrap(),
-            "[::1]:7717".parse::<SocketAddr>().unwrap()
+            parts("127.0.0.1"),
+            (
+                "127.0.0.1".to_string(),
+                VAULT_DEFAULT_PORT,
+                ROOT_SUB_VAULT.to_string()
+            )
         );
-    }
 
-    #[test]
-    fn what_is_not_an_address_says_which() {
-        let error = parse_address("nowhere", 7717).unwrap_err();
-
-        assert_eq!(error.target(), "nowhere");
+        // A name is a host too, and is kept as it was written rather than resolved.
+        assert_eq!(
+            parts("example.com"),
+            (
+                "example.com".to_string(),
+                VAULT_DEFAULT_PORT,
+                ROOT_SUB_VAULT.to_string()
+            )
+        );
+        assert_eq!(
+            parts("localhost:7000"),
+            ("localhost".to_string(), 7000, ROOT_SUB_VAULT.to_string())
+        );
     }
 
     #[test]
@@ -456,14 +511,38 @@ mod tests {
     }
 
     #[test]
-    fn what_names_neither_an_ip_nor_a_port_is_refused() {
-        for written in ["nowhere", "rola://nowhere", "rola://", "10.0.0.1:99999"] {
+    fn what_names_neither_a_host_nor_a_port_is_refused() {
+        for written in [
+            "",
+            "rola://",
+            "99999",
+            "10.0.0.1:99999",
+            "not a host",
+            "rola://a b",
+        ] {
             assert!(VaultAddress::parse(written).is_err(), "{written}");
         }
 
+        // What is refused is named back, so a caller can see which word it was.
         assert_eq!(
-            VaultAddress::parse("nowhere").unwrap_err().target(),
-            "nowhere"
+            VaultAddress::parse("rola://").unwrap_err().target(),
+            "rola://"
+        );
+    }
+
+    #[test]
+    fn a_link_may_name_its_host() {
+        assert_eq!(
+            parts("rola://localhost/sub"),
+            (
+                "localhost".to_string(),
+                VAULT_DEFAULT_PORT,
+                "sub".to_string()
+            )
+        );
+        assert_eq!(
+            parts("rola://example.com:7000/vaults/alpha"),
+            ("example.com".to_string(), 7000, "vaults/alpha".to_string())
         );
     }
 
@@ -492,7 +571,44 @@ mod tests {
         let address = VaultAddress::parse("rola://10.0.0.1:7000/vaults/alpha").unwrap();
 
         assert_eq!(address.read_raw(), "rola://10.0.0.1:7000/vaults/alpha");
-        assert_eq!(address.read_ip(), "10.0.0.1");
+        assert_eq!(address.read_addr(), "10.0.0.1");
         assert_eq!(address.read_port(), 7000);
+    }
+
+    #[test]
+    fn two_spellings_of_one_place_are_one_address() {
+        // What was written is not what an address is: the same place reached for in two ways
+        // is one address, which is what lets a stored one be compared with a parsed one.
+        assert_eq!(
+            VaultAddress::parse("10.0.0.1:7000").unwrap(),
+            VaultAddress::parse("rola://10.0.0.1:7000/").unwrap()
+        );
+
+        // A different place is a different address, whichever spelling it was written in.
+        assert_ne!(
+            VaultAddress::parse("rola://10.0.0.1:7000/").unwrap(),
+            VaultAddress::parse("rola://10.0.0.1:7000/vaults/alpha").unwrap()
+        );
+    }
+
+    #[test]
+    fn the_authority_is_the_daemon_without_the_sub_vault() {
+        let root = VaultAddress::parse("10.0.0.1").unwrap();
+        assert_eq!(root.authority(), format!("10.0.0.1:{VAULT_DEFAULT_PORT}"));
+
+        // Which Vault under the daemon is meant is not part of where to knock.
+        let under = VaultAddress::parse("rola://10.0.0.1:7000/vaults/alpha").unwrap();
+        assert_eq!(under.authority(), "10.0.0.1:7000");
+
+        // An ipv6 address is bracketed, so the port after it reads as the port.
+        let v6 = VaultAddress::parse("rola://[::1]:7000/sub").unwrap();
+        assert_eq!(v6.authority(), "[::1]:7000");
+
+        // A name is written as it is: there is no colon in it to be taken for the port's.
+        let named = VaultAddress::parse("rola://example.com/sub").unwrap();
+        assert_eq!(
+            named.authority(),
+            format!("example.com:{VAULT_DEFAULT_PORT}")
+        );
     }
 }
