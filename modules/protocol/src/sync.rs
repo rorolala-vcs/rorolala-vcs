@@ -110,6 +110,79 @@ impl ActionContext<'_> {
 
         Ok(Both::new(value))
     }
+
+    /// Carries `data` to the other side and hands it back held there.
+    ///
+    /// This is the shorthand for what an action wants most often from a value that belongs on
+    /// the other side: [`sync`](Self::sync) it, so both sides hold it, and then keep it only
+    /// on the side it is to end up on — [`Both::only_vault`] for one going to the Vault,
+    /// [`Both::only_workspace`] for one coming back. What goes in is what one side holds; what
+    /// comes back is the same value, held by the other.
+    ///
+    /// Which way it goes is the argument's to say: an [`OnlyWorkspace`] goes to the Vault, an
+    /// [`OnlyVault`] to the Workspace. See [`Transfer`].
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever the exchange fails with — see [`ActionError`]. In particular, a
+    /// context with no channel reports [`NoChannel`](ActionError::NoChannel).
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let seed: OnlyWorkspace<String> = ctx.only_workspace(|| "world".to_owned());
+    /// let moved: OnlyVault<String> = ctx.transfer(seed).await?;
+    /// ```
+    pub async fn transfer<Data>(&mut self, data: Data) -> Result<Data::Transferred, ActionError>
+    where
+        Data: Transfer,
+    {
+        data.transfer(self).await
+    }
+}
+
+/// A value an [`ActionContext`] can carry across to the other side.
+///
+/// It is implemented for an [`OnlyWorkspace`] and an [`OnlyVault`], so one method carries
+/// either way: the wrapper says where the value is now, and what comes back is the same value
+/// held by the other side. See [`ActionContext::transfer`].
+pub trait Transfer {
+    /// The value as it is held once it has moved: the other side's wrapper.
+    type Transferred;
+
+    /// Carries `self` to the other side of `ctx`.
+    fn transfer(
+        self,
+        ctx: &mut ActionContext<'_>,
+    ) -> impl Future<Output = Result<Self::Transferred, ActionError>> + Send;
+}
+
+impl<T> Transfer for OnlyWorkspace<T>
+where
+    T: Encodable + Send + Sync + 'static,
+{
+    type Transferred = OnlyVault<T>;
+
+    /// Syncs the value and keeps it on the Vault, which is where it has gone to.
+    async fn transfer(self, ctx: &mut ActionContext<'_>) -> Result<Self::Transferred, ActionError> {
+        let both = ctx.sync(self).await?;
+
+        Ok(both.only_vault(ctx))
+    }
+}
+
+impl<T> Transfer for OnlyVault<T>
+where
+    T: Encodable + Send + Sync + 'static,
+{
+    type Transferred = OnlyWorkspace<T>;
+
+    /// Syncs the value and keeps it on the Workspace, which is where it has gone to.
+    async fn transfer(self, ctx: &mut ActionContext<'_>) -> Result<Self::Transferred, ActionError> {
+        let both = ctx.sync(self).await?;
+
+        Ok(both.only_workspace(ctx))
+    }
 }
 
 /// A trait for values that can be requested from both a workspace and a vault.
@@ -283,6 +356,32 @@ mod tests {
             tokio::join!(workspace.sync(empty), vault.sync(sent));
         assert_eq!(*workspace_result.unwrap(), 9);
         assert_eq!(*vault_result.unwrap(), 9);
+    }
+
+    #[tokio::test]
+    async fn a_transferred_value_comes_out_held_by_the_side_it_went_to() {
+        let (client, server) = session_pair().await;
+
+        let mut workspace =
+            ActionContext::new_workspace_ctx(Account::default()).with_channel(client);
+        let mut vault = ActionContext::new_vault_ctx(Member::default()).with_channel(server);
+
+        // What the Workspace holds goes to the Vault: both sides run the same call, each doing
+        // its half, and each comes out holding it as the side it went to.
+        let sent = workspace.only_workspace(|| 7_u64);
+        let empty = vault.only_workspace(|| 0_u64);
+        let (workspace_result, vault_result) =
+            tokio::join!(workspace.transfer(sent), vault.transfer(empty));
+        assert!(workspace_result.unwrap().into_inner().is_none());
+        assert_eq!(vault_result.unwrap().into_inner(), Some(7));
+
+        // And the other way round, for a value the Vault holds.
+        let empty = workspace.only_vault(|| 0_u64);
+        let sent = vault.only_vault(|| 9_u64);
+        let (workspace_result, vault_result) =
+            tokio::join!(workspace.transfer(empty), vault.transfer(sent));
+        assert_eq!(workspace_result.unwrap().into_inner(), Some(9));
+        assert!(vault_result.unwrap().into_inner().is_none());
     }
 
     #[tokio::test]
