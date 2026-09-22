@@ -12,7 +12,7 @@ use rorolala_utils_constants::STORAGE_CONFIG_PATH;
 use rorolala_utils_location::Locate as _;
 
 use super::RorolalaStorage;
-use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR};
+use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
 use crate::{
     AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout, Manifest,
     StorageBackend as _, store_file,
@@ -205,6 +205,90 @@ async fn a_cut_content_is_told_from_a_whole_one() {
 }
 
 #[tokio::test]
+async fn what_is_already_held_is_not_written_again() {
+    let (parent, store) = store("rewrite");
+    let content: Vec<u8> = (0..8 * 1024_u32).map(|value| (value % 251) as u8).collect();
+    let file = parent.join("file");
+    fs::write(&file, &content).unwrap();
+
+    let choice = AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 1024 });
+    let key = store.write_file(&file, choice).await.unwrap();
+    let chunks: Vec<Key> = store
+        .read_manifest(&key)
+        .await
+        .unwrap()
+        .unwrap()
+        .chunks()
+        .iter()
+        .map(Chunk::key)
+        .collect();
+    assert!(chunks.len() >= 2);
+
+    // The chunks are packed, so the whole of what this content is kept as is already held.
+    store.pack(&chunks).await.unwrap();
+    for chunk in &chunks {
+        assert!(!store.object_path(chunk).is_file());
+    }
+
+    // Writing the same content again is writing nothing: a chunk that is held — packed as much as
+    // loose — is not written a second time. Without that, this would leave a loose copy of every
+    // packed chunk behind, which is the same bytes in two places.
+    let again = store.write_file(&file, choice).await.unwrap();
+    assert_eq!(again, key);
+
+    for chunk in &chunks {
+        assert!(
+            !store.object_path(chunk).is_file(),
+            "a packed chunk was written loose again"
+        );
+    }
+
+    // And what is held is still the content, read back whole.
+    let out = parent.join("out");
+    store.extract_file(&key, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), content);
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn a_manifest_is_packed_among_the_manifests() {
+    let (parent, store) = store("manifest-pack");
+    let content: Vec<u8> = (0..4 * 1024_u32).map(|value| (value % 251) as u8).collect();
+    let file = parent.join("file");
+    fs::write(&file, &content).unwrap();
+
+    let key = store
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 1024 }),
+        )
+        .await
+        .unwrap();
+    assert!(store.manifest_path(&key).is_file());
+
+    // A manifest is packed like anything else, but into a pack of its own kind, and that pack keeps
+    // its index among the manifests rather than beside the packs.
+    let made = store.pack(&[key]).await.unwrap();
+    assert!(made, "the manifest was not packed");
+
+    assert!(!store.manifest_path(&key).is_file());
+    assert!(store.index_path(PackKind::Manifest, 0).is_file());
+    assert!(!store.index_path(PackKind::Object, 0).exists());
+    assert!(store.pack_path(0).is_file());
+
+    // The manifest still reads, is still listed, and still puts the content back together.
+    assert!(store.read_manifest(&key).await.unwrap().is_some());
+    assert_eq!(store.list_manifest_keys().await.unwrap(), [key]);
+
+    let out = parent.join("out");
+    store.extract_file(&key, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), content);
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
 async fn what_is_stored_is_listed_and_can_be_dropped() {
     let (parent, store) = store("list");
 
@@ -275,10 +359,19 @@ async fn a_chunk_that_is_not_the_length_the_manifest_says_is_refused() {
         let len = if at == 0 { held.len() + 1 } else { held.len() };
         tampered.push(Chunk::new(held.key(), len));
     }
-    store
-        .write_manifest(&key, &tampered, Codec::Raw)
-        .await
-        .unwrap();
+    // Written straight down rather than through the store: what is being asked about is a manifest on
+    // the disk that disagrees with the chunks it names, which is what a store gone wrong has, and the
+    // store writes a manifest that reads.
+    let plain = tampered.encode();
+    let frame = Frame {
+        version: FRAME_VERSION,
+        codec: Codec::Raw,
+        layout: Layout::Chunked,
+        plain_len: plain.len() as u64,
+    };
+    let mut bytes = frame.encode();
+    bytes.extend_from_slice(&plain);
+    fs::write(store.manifest_path(&key), bytes).unwrap();
 
     assert!(matches!(
         store.extract_file(&key, &parent.join("out")).await,

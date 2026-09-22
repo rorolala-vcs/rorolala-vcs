@@ -9,7 +9,7 @@ use std::fs;
 use std::path::Path;
 
 use super::RorolalaStorage;
-use super::consts::{MANIFEST_DIR, OBJECTS_DIR, SNIFF_LEN};
+use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PackKind, SNIFF_LEN};
 use super::content::read_magic;
 use super::entry::{collect, exists, verify};
 use crate::{
@@ -89,15 +89,18 @@ impl StorageBackend for RorolalaStorage {
         }
 
         // What a pack holds is still held, and a caller listing a store wants every key in it
-        // whichever way the content happens to be kept.
+        // whichever way the content happens to be kept. A manifest pack names keys of its own, so
+        // both kinds are asked.
         let state = self.root_state();
-        for index in self.packs().await? {
-            let Some(directory) = self.pack_index(&state, index).await? else {
-                continue;
-            };
+        for kind in [PackKind::Object, PackKind::Manifest] {
+            for index in self.packs_of(kind).await? {
+                let Some(directory) = self.pack_index(&state, kind, index).await? else {
+                    continue;
+                };
 
-            for entry in directory.entries() {
-                keys.insert(entry.key());
+                for entry in directory.entries() {
+                    keys.insert(entry.key());
+                }
             }
         }
 
@@ -127,39 +130,44 @@ impl StorageBackend for RorolalaStorage {
         // dropped out from under it. Storage keeps no account of that — finding what is still
         // spoken for is a cleanup's to do — so removing a key that is still wanted is the caller's
         // to know better than.
-        let manifest = self.manifest_path(key);
-        let object = self.object_path(key);
-        let loose_manifest = exists(&manifest).await?;
-        let loose_object = exists(&object).await?;
+        //
+        // A key may name an object, a manifest, or both, and the two are two entries in two kinds of
+        // pack, so both kinds are asked and both loose files are dropped.
+        let mut loose = Vec::new();
+        for kind in [PackKind::Object, PackKind::Manifest] {
+            let path = self.entry_path(kind, key);
 
-        // Every pack that names the key is asked, not just the first: nothing keeps a key out of two
-        // packs, and one left behind would be a key `remove` said it had taken away and a read would
-        // still answer with.
-        let mut packed = Vec::new();
-        for index in self.packs().await? {
-            if self
-                .pack_index(&state, index)
-                .await?
-                .is_some_and(|directory| directory.find(key).is_some())
-            {
-                packed.push(index);
+            if exists(&path).await? {
+                loose.push(path);
             }
         }
 
-        if !loose_manifest && !loose_object && packed.is_empty() {
+        // Every pack that names the key is asked, not just the first: nothing keeps an entry out of
+        // two packs, and one left behind would be a key `remove` said it had taken away and a read
+        // would still answer with.
+        let mut packed = Vec::new();
+        for kind in [PackKind::Object, PackKind::Manifest] {
+            for index in self.packs_of(kind).await? {
+                if self
+                    .pack_index(&state, kind, index)
+                    .await?
+                    .is_some_and(|directory| directory.find(key).is_some())
+                {
+                    packed.push((kind, index));
+                }
+            }
+        }
+
+        if loose.is_empty() && packed.is_empty() {
             return Err(Error::NotFound(*key));
         }
 
-        if loose_manifest {
-            self.drop_entry(&manifest).await?;
+        for path in loose {
+            self.drop_entry(&path).await?;
         }
 
-        if loose_object {
-            self.drop_entry(&object).await?;
-        }
-
-        for index in packed {
-            self.remove_from_pack(&state, index, key).await?;
+        for (kind, index) in packed {
+            self.remove_from_pack(&state, kind, index, key).await?;
         }
 
         Ok(())

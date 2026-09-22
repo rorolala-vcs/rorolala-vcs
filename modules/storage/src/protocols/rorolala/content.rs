@@ -10,7 +10,7 @@ use std::fs;
 use std::path::Path;
 
 use super::RorolalaStorage;
-use super::consts::{MANIFEST_DIR, TEXT_CUT, TEXT_CUT_FROM};
+use super::consts::{MANIFEST_DIR, PackKind, TEXT_CUT, TEXT_CUT_FROM};
 use super::entry::{collect, exists, key_of, plain_len_of, verify};
 use crate::{
     AlgorithmChoice, Chunk, Chunker as _, Chunking, Codec, Error, FRAME_VERSION, Frame, Key,
@@ -28,6 +28,15 @@ impl RorolalaStorage {
     /// Returns [`Error::Io`] if the object cannot be written.
     pub async fn write_object(&self, plain: &[u8], codec: Codec) -> Result<Key, Error> {
         let key = key_of(plain);
+
+        // A key is the hash of what is under it, so an object that is already there — loose or in a
+        // pack — is the very content in hand. Writing it again would only put a loose copy beside a
+        // packed one: the same bytes in two places, which is work packing would have to undo. A write
+        // therefore writes what is not there, and nothing else.
+        if self.holds_object(&key).await? {
+            return Ok(key);
+        }
+
         let frame = Frame {
             version: FRAME_VERSION,
             codec,
@@ -78,6 +87,14 @@ impl RorolalaStorage {
         manifest: &Manifest,
         codec: Codec,
     ) -> Result<(), Error> {
+        // A manifest that is already held — loose or in a manifest pack — says how this content is put
+        // back together, and the content under a key is the content the key names, so it is not written
+        // again. Writing it again would only put a loose copy beside a packed one. A manifest that is
+        // there but does not read is written over: what this leaves behind is one that reads.
+        if self.holds_manifest(key).await? {
+            return Ok(());
+        }
+
         let plain = manifest.encode();
         let frame = Frame {
             version: FRAME_VERSION,
@@ -92,22 +109,25 @@ impl RorolalaStorage {
 
     /// Reads the manifest of the content stored under `key`, if it was stored chunked.
     ///
-    /// `None` is a content that was stored as one object rather than a manifest, which is not a
-    /// failure: how it was cut is not something the key says.
+    /// A manifest is read loose where it is loose and out of a manifest pack where it was packed, and
+    /// `None` is a content that was stored as one object rather than a manifest, which is not a failure:
+    /// how it was cut is not something the key says.
     ///
     /// # Errors
     ///
     /// Returns [`Error::Malformed`] if what is stored is not framed as this build can read.
     pub(crate) async fn read_manifest(&self, key: &Key) -> Result<Option<Manifest>, Error> {
-        let Some((frame, payload)) = self.read_entry(&self.manifest_path(key)).await? else {
+        let Some(bytes) = self.manifest_entry(key).await? else {
             return Ok(None);
         };
+        let (frame, header) = Frame::decode(&bytes)?;
 
         if frame.layout != Layout::Chunked {
             return Err(Error::Malformed);
         }
 
-        let plain = frame.codec.decode(&payload, plain_len_of(&frame)?)?;
+        let payload = bytes.get(header..).ok_or(Error::Malformed)?;
+        let plain = frame.codec.decode(payload, plain_len_of(&frame)?)?;
 
         Ok(Some(Manifest::decode(&plain)?))
     }
@@ -280,10 +300,10 @@ impl RorolalaStorage {
 
     /// Every key the store keeps a manifest for, and nothing else.
     ///
-    /// A manifest is stored under a directory of its own and is never packed — packing moves objects,
-    /// and a manifest is not one — so what is here is the whole of what the store was told to cut.
-    /// A manifest whose chunks have gone is still listed: it is still what the store was told to
-    /// keep, and what is missing is found on the read that asks for it.
+    /// A manifest is kept apart from the objects — see [`Manifest`] — so what is here is the whole of
+    /// what the store was told to cut, whether each manifest is loose or in a pack, and nothing of what
+    /// it was told to keep whole. A manifest whose chunks have gone is still listed: it is still what
+    /// the store was told to keep, and what is missing is found on the read that asks for it.
     ///
     /// # Errors
     ///
@@ -291,6 +311,17 @@ impl RorolalaStorage {
     pub async fn list_manifest_keys(&self) -> Result<Vec<Key>, Error> {
         let mut keys = BTreeSet::new();
         collect(&self.root.join(MANIFEST_DIR), &mut keys).await?;
+
+        let state = self.root_state();
+        for index in self.packs_of(PackKind::Manifest).await? {
+            let Some(directory) = self.pack_index(&state, PackKind::Manifest, index).await? else {
+                continue;
+            };
+
+            for entry in directory.entries() {
+                keys.insert(entry.key());
+            }
+        }
 
         Ok(keys.into_iter().collect())
     }

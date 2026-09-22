@@ -42,9 +42,10 @@ impl Chunk {
 /// [`Chunker`](crate::Chunker). Two stores that cut the same content differently still agree on
 /// what the content is, because the key is the hash of the content and not of the cutting.
 ///
-/// It is stored apart from [`obj`](crate::RorolalaStorage) — under a directory of its own — so
-/// that the chunks a manifest refers to can be told from the objects nothing refers to. That is
-/// what a cleanup reads to find what is an orphan and what is not.
+/// It is kept apart from [`obj`](crate::RorolalaStorage) — under a directory of its own, and in packs
+/// of its own whose indexes sit among the manifests — so that the chunks a manifest refers to can be
+/// told from the objects nothing refers to. That is what a cleanup reads to find what is an orphan and
+/// what is not, without reading a single object.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Manifest {
     /// The chunks, in the order their content appears.

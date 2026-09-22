@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use librorolala::storage::{
-    AlgorithmChoice, Chunking, Codec, Error, FRAME_MAGIC, Key, PackEntry, PackIndex,
+    AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_MAGIC, Key, PackEntry, PackIndex,
     RorolalaStorage, StorageBackend as _, internals::Internals as _,
 };
 use rorolala_utils_sandbox::Sandbox;
@@ -47,6 +47,8 @@ async fn main() {
     repacking_rolls_over_at_the_size_the_store_allows(&sandbox, &mut checked).await;
     repacking_leaves_a_store_already_laid_out_alone(&sandbox, &mut checked).await;
     repacking_leaves_a_pack_that_does_not_read_where_it_is(&sandbox, &mut checked).await;
+    a_manifest_is_packed_with_the_manifests(&sandbox, &mut checked).await;
+    rewriting_packed_content_leaves_it_packed(&sandbox, &mut checked).await;
 
     sandbox.cleanup();
     checked.report();
@@ -783,14 +785,35 @@ async fn a_content_whose_chunks_were_packed_is_still_whole(
         &format!("{read:?}"),
     );
 
-    // What the caller packs is keys; a key held as a manifest has no object of its own, so packing
-    // it has nothing to move and says so rather than making an empty pack.
-    let nothing = store.pack(&[key]).await.expect("the content key is packed");
+    // What the caller packs is keys; a key held as a manifest has no object of its own, so packing it
+    // moves the manifest — into a pack of the manifests — and makes no object of it.
+    let made = store.pack(&[key]).await.expect("the manifest is packed");
 
     checked.wants(
+        "packing a key held as a manifest packs the manifest",
+        made,
+        &format!("{made}"),
+    );
+    checked.wants(
         "a key held as a manifest is not packed as an object",
-        !nothing,
-        &format!("{nothing}"),
+        matches!(store.read_object(&key).await, Err(Error::NotFound(_))),
+        "the manifest was packed as an object",
+    );
+
+    let listed = store.list_all_keys().await.unwrap_or_default();
+    checked.wants(
+        "a packed manifest is still one of the store's keys",
+        listed.contains(&key),
+        "the key stopped being listed",
+    );
+
+    let out = sandbox.join("chunked-manifest-out");
+    let read = store.extract_file(&key, &out).await;
+
+    checked.wants(
+        "the content comes back whole with its manifest packed",
+        read.is_ok() && fs::read(&out).is_ok_and(|bytes| bytes == content),
+        &format!("{read:?}"),
     );
 }
 
@@ -1113,6 +1136,119 @@ async fn repacking_leaves_a_pack_that_does_not_read_where_it_is(
         "the pack that does not read is still there",
         store.packs().await.unwrap_or_default() == [0],
         "the pack that does not read was taken away",
+    );
+}
+
+/// A manifest is packed like anything else, into a pack of its own kind.
+async fn a_manifest_is_packed_with_the_manifests(sandbox: &Sandbox, checked: &mut Checked) {
+    let store = store(sandbox, "manifest-pack");
+    let content = repetitive(16 * 1024);
+    let file = sandbox.join("manifest-pack-content");
+    fs::write(&file, &content).expect("the content is written to a file");
+
+    let key = store
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 1024 }),
+        )
+        .await
+        .expect("the content is stored");
+
+    store.repack().await.expect("the store is laid out");
+
+    // Everything under the manifests' own directory is an index: the loose manifests are gone, and
+    // what is left is where the manifests that were packed sit.
+    let under_manifest = files(&sandbox.join("manifest-pack").join("manifest"));
+    let indexes = under_manifest
+        .iter()
+        .filter(|path| path.extension().is_some_and(|kind| kind == "idx"))
+        .count();
+    let loose = under_manifest.len() - indexes;
+
+    checked.wants(
+        "a manifest is packed with the manifests",
+        indexes > 0,
+        &format!("{indexes} manifest indexes"),
+    );
+    checked.wants(
+        "no manifest is left loose",
+        loose == 0,
+        &format!("{loose} loose manifests were left behind"),
+    );
+    checked.wants(
+        "a packed manifest is still listed",
+        store.list_manifest_keys().await.unwrap_or_default() == [key],
+        "the packed manifest was not listed",
+    );
+
+    let out = sandbox.join("manifest-pack-out");
+    checked.wants(
+        "a packed manifest still puts the content back together",
+        store
+            .extract_file(&key, &out)
+            .await
+            .is_ok_and(|()| fs::read(&out).is_ok_and(|read| read == content)),
+        "the content did not read back",
+    );
+}
+
+/// Writing content whose chunks are packed writes nothing loose beside them.
+async fn rewriting_packed_content_leaves_it_packed(sandbox: &Sandbox, checked: &mut Checked) {
+    let store = store(sandbox, "rewrite");
+    let content = repetitive(16 * 1024);
+    let file = sandbox.join("rewrite-content");
+    fs::write(&file, &content).expect("the content is written to a file");
+
+    let choice = AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 1024 });
+    let key = store
+        .write_file(&file, choice)
+        .await
+        .expect("the content is stored");
+
+    // The content is cut, so what it is stored as is chunks and a manifest naming them; packing the
+    // chunks is what would leave a loose copy of each behind on a second write.
+    let chunks: Vec<Key> = store
+        .read_manifest(&key)
+        .await
+        .expect("the manifest reads")
+        .expect("the content was cut")
+        .chunks()
+        .iter()
+        .map(Chunk::key)
+        .collect();
+    store.pack(&chunks).await.expect("the chunks are packed");
+
+    let loose_before = objects(sandbox, "rewrite");
+    let again = store
+        .write_file(&file, choice)
+        .await
+        .expect("the content is stored again");
+    let loose_after = objects(sandbox, "rewrite");
+
+    checked.wants(
+        "writing packed content again answers the same key",
+        again == key,
+        "the key changed",
+    );
+    checked.wants(
+        "packing the chunks left nothing loose",
+        loose_before == 0,
+        &format!("{loose_before} loose after packing"),
+    );
+    checked.wants(
+        "writing packed content again leaves nothing loose",
+        loose_after == 0,
+        &format!("{loose_after} loose after the second write"),
+    );
+
+    let out = sandbox.join("rewrite-out");
+    checked.wants(
+        "the content reads back whole after the second write",
+        store
+            .extract_file(&key, &out)
+            .await
+            .is_ok_and(|()| fs::read(&out).is_ok_and(|read| read == content)),
+        "the content did not read back",
     );
 }
 

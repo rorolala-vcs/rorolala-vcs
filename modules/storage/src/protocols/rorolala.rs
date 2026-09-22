@@ -50,9 +50,14 @@ use consts::{DEFAULT_CODEC, DEFAULT_CUT, MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR};
 /// <root>/rolast.toml                  what makes the directory a store
 /// <root>/obj/<hh>/<hh>/<hex>          loose objects, sharded by the digest
 /// <root>/manifest/<hh>/<hh>/<hex>     how a chunked content is put back together
-/// <root>/packed/packed_<n>.pack       many objects in one file
-/// <root>/packed/packed_<n>.idx        where each object sits inside the pack
+/// <root>/packed/packed_<n>.pack       many entries in one file, of one kind
+/// <root>/packed/packed_<n>.idx        where each object sits inside an object pack
+/// <root>/manifest/packed_<n>.idx      where each manifest sits inside a manifest pack
 /// ```
+///
+/// A pack holds one kind of entry — objects, or manifests — and a pack number names one pack: the
+/// kinds are told apart by where their indexes sit, so an object and a manifest under one key are two
+/// entries in two packs, and the manifests can be read without reading every object.
 ///
 /// What an entry holds is not what it *is*: a manifest is storage's own note about how a chunked
 /// content was laid out, and nothing here knows a file from anything else.

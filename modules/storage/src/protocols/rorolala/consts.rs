@@ -59,3 +59,16 @@ pub(super) const TEXT_CUT: Chunking = Chunking::Text {
     average: 4096,
     max: 16384,
 };
+
+/// Which of the two things a store keeps a pack holds.
+///
+/// A pack holds one kind, and the kinds are told apart by where their indexes sit — see
+/// [`index_path`](super::RorolalaStorage::index_path) — so an object and a manifest under one key are
+/// two entries in two packs and neither is mistaken for the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(super) enum PackKind {
+    /// An object: the content itself.
+    Object,
+    /// A manifest: how a chunked content was cut.
+    Manifest,
+}

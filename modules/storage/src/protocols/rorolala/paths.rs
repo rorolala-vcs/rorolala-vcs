@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use rorolala_utils_constants::STORAGE_CONFIG_PATH;
 
 use super::RorolalaStorage;
-use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, SLICE_FIRST, SLICE_SECOND};
+use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind, SLICE_FIRST, SLICE_SECOND};
 use crate::Key;
 
 impl RorolalaStorage {
@@ -32,16 +32,50 @@ impl RorolalaStorage {
         self.sharded(MANIFEST_DIR, key)
     }
 
+    /// Where the loose entry of `kind` stored under `key` sits.
+    ///
+    /// An object and a manifest of one content are two things a store keeps and two files it lays
+    /// down, so which of them a path names is said by the kind rather than left to the caller.
+    pub(super) fn entry_path(&self, kind: PackKind, key: &Key) -> PathBuf {
+        match kind {
+            PackKind::Object => self.object_path(key),
+            PackKind::Manifest => self.manifest_path(key),
+        }
+    }
+
+    /// Where the packed file of `index` sits.
+    ///
+    /// Every pack is one file, whichever kind of entry it holds: a pack number names one pack, and
+    /// what that pack is *read* with is its index — see [`index_path`](Self::index_path).
+    pub(super) fn pack_path(&self, index: u64) -> PathBuf {
+        self.root
+            .join(PACKED_DIR)
+            .join(format!("packed_{index}.pack"))
+    }
+
+    /// Where the index of the pack of `index` sits, which is what says what the pack holds.
+    ///
+    /// An object pack keeps its index beside it; a manifest pack keeps its index among the manifests,
+    /// so that reading everything that says how content was cut — which is what tells a chunk that is
+    /// spoken for from one nothing refers to — is reading one directory rather than every pack.
+    pub(super) fn index_path(&self, kind: PackKind, index: u64) -> PathBuf {
+        let directory = match kind {
+            PackKind::Object => PACKED_DIR,
+            PackKind::Manifest => MANIFEST_DIR,
+        };
+
+        self.root
+            .join(directory)
+            .join(format!("packed_{index}.idx"))
+    }
+
     /// Where the packed file of `index` sits, and where its index sits beside it.
     ///
-    /// A pack is one file of many objects with a second file that says where each one is
-    /// inside it, so the two are named together and are meant to be kept together.
+    /// This is the shape of an *object* pack, which is the one anything that knows no better means.
     pub(crate) fn pack_paths(&self, index: u64) -> (PathBuf, PathBuf) {
-        let root = self.root.join(PACKED_DIR);
-
         (
-            root.join(format!("packed_{index}.pack")),
-            root.join(format!("packed_{index}.idx")),
+            self.pack_path(index),
+            self.index_path(PackKind::Object, index),
         )
     }
 
@@ -59,11 +93,10 @@ impl RorolalaStorage {
 
 /// The pack number a pack index's name stands for, if it is one.
 ///
-/// A pack is found by its index rather than by its pack file, so this is what says which packs a
-/// store holds: a `.pack` still being written, or one whose index never arrived, is one no reader
-/// would be able to reach anyway. Only the names this build writes are read: `packed_007.idx` parses
-/// as seven, but the pack of seven is `packed_7.idx`, so listing it would name a pack nothing could
-/// then find.
+/// A pack is found by its index rather than by its pack file, so this is what says which packs a store
+/// holds: a `.pack` still being written, or one whose index never arrived, is one no reader would be
+/// able to reach anyway. Only the names this build writes are read: `packed_007.idx` parses as seven,
+/// but the pack of seven is `packed_7.idx`, so listing it would name a pack nothing could then find.
 pub(super) fn index_of_pack(name: &str) -> Option<u64> {
     name.strip_prefix("packed_")
         .and_then(|rest| rest.strip_suffix(".idx"))

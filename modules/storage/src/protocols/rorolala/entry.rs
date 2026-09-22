@@ -48,20 +48,6 @@ impl RorolalaStorage {
         }
     }
 
-    /// Reads the entry `path` names, if there is one there.
-    pub(super) async fn read_entry(&self, path: &Path) -> Result<Option<(Frame, Vec<u8>)>, Error> {
-        let bytes = match tokio::fs::read(path).await {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error.into()),
-        };
-
-        let (frame, header) = Frame::decode(&bytes)?;
-        let payload = bytes.get(header..).ok_or(Error::Malformed)?.to_vec();
-
-        Ok(Some((frame, payload)))
-    }
-
     /// Removes the temporary files a write that was cut short left behind, and answers how many.
     ///
     /// A write lays its bytes down beside where they belong and moves them into place, so a run that
@@ -133,8 +119,16 @@ pub(super) async fn entries(directory: &Path) -> Result<Vec<PathBuf>, Error> {
 }
 
 /// Every key named by a file under `directory`, which is laid out two levels deep by digest.
+///
+/// Only the sharded files are read: what is directly under `directory` is not only shard directories —
+/// a manifest store keeps its packs' indexes there too — so anything that is not a directory is not
+/// descended into.
 pub(super) async fn collect(directory: &Path, keys: &mut BTreeSet<Key>) -> Result<(), Error> {
     for first in entries(directory).await? {
+        if !is_directory(&first).await? {
+            continue;
+        }
+
         for second in entries(&first).await? {
             for file in entries(&second).await? {
                 if let Some(name) = file.file_name().and_then(|name| name.to_str())
@@ -152,6 +146,15 @@ pub(super) async fn collect(directory: &Path, keys: &mut BTreeSet<Key>) -> Resul
 /// The key a name of the digest's own width stands for, if it is one.
 fn key_from_hex(name: &str) -> Option<Key> {
     Key::from_str(name).ok()
+}
+
+/// Whether there is a directory at `path`.
+async fn is_directory(path: &Path) -> Result<bool, Error> {
+    match tokio::fs::metadata(path).await {
+        Ok(metadata) => Ok(metadata.is_dir()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// Removes the temporary files under `directory`, counting them in `removed`.
