@@ -86,6 +86,20 @@ pub const EC_ERR_PACK_NO_STORAGE: i32 = 59;
 /// `exit_codes.pack_failed`
 pub const EC_ERR_PACK_FAILED: i32 = 60;
 
+// Listing
+
+/// `exit_codes.tool_ls_storaged_no_storage`
+pub const EC_ERR_TOOL_LS_STORAGED_NO_STORAGE: i32 = 64;
+
+/// `exit_codes.tool_ls_storaged_failed`
+pub const EC_ERR_TOOL_LS_STORAGED_FAILED: i32 = 65;
+
+/// `exit_codes.tool_ls_manifests_no_storage`
+pub const EC_ERR_TOOL_LS_MANIFESTS_NO_STORAGE: i32 = 66;
+
+/// `exit_codes.tool_ls_manifests_failed`
+pub const EC_ERR_TOOL_LS_MANIFESTS_FAILED: i32 = 67;
+
 // Configuration
 
 /// `exit_codes.config_unreadable`

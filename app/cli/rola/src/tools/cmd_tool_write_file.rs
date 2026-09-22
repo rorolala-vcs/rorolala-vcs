@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use librorolala::storage::{Error as StorageError, Key, store_file};
+use librorolala::storage::{Key, store_file};
 use mingling::{
     Grouped, LazyRes,
     macros::{arg, buffer, command, help, metadata, r_eprintln, r_println, renderer},
@@ -46,7 +46,9 @@ pub fn desc_tool_write_file() -> Description {
 /// and nothing else.
 ///
 /// What is printed is the hash, on a line of its own: the same hash `rola tool-extract-file`
-/// takes, so what one command answers is what the other is asked.
+/// takes, so what one command answers is what the other is asked. Content the store cuts is named
+/// as `manifest:<digest>` rather than `blake3:<digest>`, since how it is kept is part of what the
+/// line says; either name is read back by `tool-extract-file`.
 ///
 /// The run has to be somewhere a store can be found — inside one, or inside a Vault or Workspace
 /// that keeps one.
@@ -81,13 +83,34 @@ pub fn tool_write_file(
 
     // The store is asynchronous and a command is not, so the two meet here: the content is read,
     // encoded, cut and written by the store, and a runtime of this run's own is what waits for it.
-    let written = match tokio::runtime::Runtime::new() {
-        Ok(runtime) => runtime.block_on(store_file(store, &file)),
-        Err(error) => Err(StorageError::Io(error)),
+    // The same runtime is kept for the look at how the content was kept, so the write and that look
+    // meet one store rather than two.
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return ErrorWriteFailed {
+                path: file,
+                reason: error.to_string(),
+            }
+            .into();
+        }
     };
 
-    match written {
-        Ok(hash) => ResultBlake3Hash { hash }.into(),
+    let hash = match runtime.block_on(store_file(store, &file)) {
+        Ok(hash) => hash,
+        Err(error) => {
+            return ErrorWriteFailed {
+                path: file,
+                reason: error.to_string(),
+            }
+            .into();
+        }
+    };
+
+    // Whether the content was cut is not something the hash says, so the store is asked: content kept
+    // as a manifest of chunks is named as one, so that how it is kept is part of what was answered.
+    match runtime.block_on(store.holds_manifest(&hash)) {
+        Ok(chunked) => ResultBlake3Hash { hash, chunked }.into(),
         Err(error) => ErrorWriteFailed {
             path: file,
             reason: error.to_string(),
@@ -101,11 +124,20 @@ pub fn tool_write_file(
 pub struct ResultBlake3Hash {
     /// The hash the content is kept under.
     hash: Key,
+    /// Whether the content is kept as a manifest of chunks rather than one object.
+    chunked: bool,
 }
 
 #[renderer(buffer)]
 pub fn render_result_blake3_hash(result: ResultBlake3Hash) {
-    r_println!("{}", result.hash);
+    // What is printed says how the content is kept as well as what it is: content cut into chunks is
+    // named as a manifest, so a reader can tell the two apart at a glance. A key is the same key
+    // either way, so `tool-extract-file` reads either name back.
+    if result.chunked {
+        r_println!("manifest:{}", result.hash.hex());
+    } else {
+        r_println!("{}", result.hash);
+    }
 }
 
 /// Error: no path was named.

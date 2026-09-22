@@ -5,12 +5,13 @@
 //! decision, and it decides from the content alone — so a write from a file and a write from a
 //! transfer land the same way.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
 use super::RorolalaStorage;
-use super::consts::{TEXT_CUT, TEXT_CUT_FROM};
-use super::entry::{exists, key_of, plain_len_of, verify};
+use super::consts::{MANIFEST_DIR, TEXT_CUT, TEXT_CUT_FROM};
+use super::entry::{collect, exists, key_of, plain_len_of, verify};
 use crate::{
     AlgorithmChoice, Chunk, Chunker as _, Chunking, Codec, Error, FRAME_VERSION, Frame, Key,
     Layout, Manifest, ZIP_MAGIC,
@@ -257,6 +258,41 @@ impl RorolalaStorage {
         }
 
         Ok(self.find_packed(key).await?.is_some())
+    }
+
+    /// Whether the content stored under `key` is kept as a manifest of chunks.
+    ///
+    /// A manifest is what a cut content has and an object is what a whole one has, and the two are
+    /// stored apart — see [`Manifest`] — so this says which of the two a key is kept as. A manifest
+    /// that is there but does not read is not one anything can be put back together from, so it is
+    /// answered as an object, the same way round a read takes the two.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the manifest cannot be looked for.
+    pub async fn holds_manifest(&self, key: &Key) -> Result<bool, Error> {
+        match self.read_manifest(key).await {
+            Ok(manifest) => Ok(manifest.is_some()),
+            Err(Error::Malformed) => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Every key the store keeps a manifest for, and nothing else.
+    ///
+    /// A manifest is stored under a directory of its own and is never packed — packing moves objects,
+    /// and a manifest is not one — so what is here is the whole of what the store was told to cut.
+    /// A manifest whose chunks have gone is still listed: it is still what the store was told to
+    /// keep, and what is missing is found on the read that asks for it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the manifests cannot be listed.
+    pub async fn list_manifest_keys(&self) -> Result<Vec<Key>, Error> {
+        let mut keys = BTreeSet::new();
+        collect(&self.root.join(MANIFEST_DIR), &mut keys).await?;
+
+        Ok(keys.into_iter().collect())
     }
 }
 

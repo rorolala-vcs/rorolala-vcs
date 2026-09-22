@@ -169,6 +169,42 @@ async fn a_cut_content_is_read_back_whole() {
 }
 
 #[tokio::test]
+async fn a_cut_content_is_told_from_a_whole_one() {
+    let (parent, store) = store("manifests");
+
+    let whole = store.write_object(b"kept whole", Codec::Raw).await.unwrap();
+    let content: Vec<u8> = (0..1000_u32).map(|value| (value % 251) as u8).collect();
+    let file = parent.join("file");
+    fs::write(&file, &content).unwrap();
+    let cut = store
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 64 }),
+        )
+        .await
+        .unwrap();
+
+    // Which of the two a key is kept as is what tells them apart.
+    assert!(!store.holds_manifest(&whole).await.unwrap());
+    assert!(store.holds_manifest(&cut).await.unwrap());
+
+    // And it is only the cut one that a listing of manifests names.
+    assert_eq!(store.list_manifest_keys().await.unwrap(), [cut]);
+
+    // Writing the same content back whole drops the manifest: an object is the entry then, so what
+    // the key is kept as follows the last write rather than being left over from the one before.
+    let again = store
+        .write_file(&file, AlgorithmChoice::new(Codec::Raw, Chunking::Whole))
+        .await
+        .unwrap();
+    assert_eq!(again, cut);
+    assert!(!store.holds_manifest(&cut).await.unwrap());
+    assert!(store.list_manifest_keys().await.unwrap().is_empty());
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
 async fn what_is_stored_is_listed_and_can_be_dropped() {
     let (parent, store) = store("list");
 

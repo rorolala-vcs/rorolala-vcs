@@ -13,6 +13,8 @@ rola:
             tool-keygen <PATH>  Generate an Ed25519 key pair
             tool-write-file <FILE>  Store a file's content and print its hash
             tool-extract-file <HASH> [DIR]  Write stored content out under its hash
+            tool-ls-storaged    List every object the store holds
+            tool-ls-manifests   List every content the store keeps cut
             tool-handshake      Speak the handshake action to a Vault daemon
             pack                Gather a store's loose objects into a pack
             vault               List, bind, and choose the Vaults this Workspace knows
@@ -39,6 +41,8 @@ rola:
             tool-keygen <PATH>  生成一对 Ed25519 密钥
             tool-write-file <FILE>  存储文件内容并打印其哈希
             tool-extract-file <HASH> [DIR]  按哈希将存储的内容写出
+            tool-ls-storaged    列出仓库持有的全部对象
+            tool-ls-manifests   列出仓库中分块保存的全部内容
             tool-handshake      向保险库守护进程发起握手
             pack                将仓库中的松散对象打包
             vault               列出、绑定并选择工作区已知的保险库

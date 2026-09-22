@@ -72,12 +72,19 @@ impl FromStr for Key {
     /// Reads a key written as [`Display`](fmt::Display) writes it — `blake3:<hex>` — or as the
     /// digest alone, which is how one is written when the hash is not in doubt.
     ///
+    /// `manifest:` is read in front of the digest as well as `blake3:`, since a key is the same
+    /// key however the content under it happens to be kept; a listing that says which of the two a
+    /// key is closes the loop by being readable back in.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Malformed`] if `text` is not a digest of the width this store writes, in
-    /// hex — with or without the name of the hash in front of it.
+    /// hex — with or without the name of the hash or the word `manifest` in front of it.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let hex = text.strip_prefix("blake3:").unwrap_or(text);
+        let hex = text
+            .strip_prefix("blake3:")
+            .or_else(|| text.strip_prefix("manifest:"))
+            .unwrap_or(text);
         if hex.len() != BLAKE3_HASH_LEN * 2 {
             return Err(Error::Malformed);
         }
@@ -89,5 +96,27 @@ impl FromStr for Key {
         }
 
         Ok(Self::new(digest))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr as _;
+
+    use super::Key;
+
+    #[test]
+    fn a_key_reads_with_or_without_a_name_in_front() {
+        let hex = "0f".repeat(32);
+        let expected = Key::new([0x0f; 32]);
+
+        // The digest on its own, and the two names a listing may put in front of it: a key is the
+        // same key however the content under it is kept.
+        assert_eq!(Key::from_str(&hex).unwrap(), expected);
+        assert_eq!(Key::from_str(&format!("blake3:{hex}")).unwrap(), expected);
+        assert_eq!(Key::from_str(&format!("manifest:{hex}")).unwrap(), expected);
+
+        assert!(Key::from_str("not a hash").is_err());
+        assert!(Key::from_str(&format!("manifest:{}", "0f".repeat(31))).is_err());
     }
 }

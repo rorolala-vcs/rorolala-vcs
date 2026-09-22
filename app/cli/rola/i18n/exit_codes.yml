@@ -93,6 +93,22 @@ exit_codes:
     en: "The store's objects could not be packed"
     zh-CN: 无法打包仓库中的对象
 
+  tool_ls_storaged_no_storage:
+    en: This run is nowhere a store is
+    zh-CN: 当前运行不处于任何仓库中
+
+  tool_ls_storaged_failed:
+    en: "The store's objects could not be listed"
+    zh-CN: 无法列出仓库中的对象
+
+  tool_ls_manifests_no_storage:
+    en: This run is nowhere a store is
+    zh-CN: 当前运行不处于任何仓库中
+
+  tool_ls_manifests_failed:
+    en: "The store's manifests could not be listed"
+    zh-CN: 无法列出仓库中的 manifest
+
   config_unreadable:
     en: The configuration the run works from could not be read
     zh-CN: 无法读取本次运行所依据的配置
