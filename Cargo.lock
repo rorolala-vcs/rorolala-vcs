@@ -1645,7 +1645,10 @@ dependencies = [
  "lz4",
  "rorolala-utils-constants",
  "rorolala-utils-location",
+ "serde",
+ "size",
  "tokio",
+ "toml 0.8.23",
  "zstd",
 ]
 
@@ -2027,6 +2030,12 @@ name = "siphasher"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
+
+[[package]]
+name = "size"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b6709c7b6754dca1311b3c73e79fcce40dd414c782c66d88e8823030093b02b"
 
 [[package]]
 name = "smallvec"

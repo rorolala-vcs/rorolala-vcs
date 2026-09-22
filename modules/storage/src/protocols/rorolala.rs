@@ -11,12 +11,14 @@
 //!
 //! - [`consts`] — what the layout and the choices are named by.
 //! - `paths` — where the things a store keeps sit.
+//! - `config` — what the store is told by the file that makes it a store.
 //! - `entry` — reading and writing one entry, and the file-level cares that come with it.
 //! - `content` — what a store keeps, and how it decides to keep it.
 //! - `pack` — many objects in one file, and the index that says where each one sits.
 //! - `backend` — what the store answers a caller and a peer with, the two trait impls.
 
 mod backend;
+mod config;
 mod consts;
 mod content;
 mod entry;

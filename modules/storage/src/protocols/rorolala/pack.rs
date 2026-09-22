@@ -4,9 +4,10 @@
 //! exactly as they sat loose and is found — and committed — by its index. The work here is keeping
 //! that true when packs are written, read, and taken apart again.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::io;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::SystemTime;
@@ -14,40 +15,29 @@ use std::time::SystemTime;
 use tokio::sync::Mutex as AsyncMutex;
 
 use super::RorolalaStorage;
-use super::consts::PACKED_DIR;
-use super::entry::{exists, read_range, sync_directory, write_whole_durably};
+use super::consts::{OBJECTS_DIR, PACKED_DIR};
+use super::entry::{collect, read_range, sync_directory, write_whole_durably};
 use super::paths::index_of_pack;
 use crate::{Error, Key, PackEntry, PackIndex};
 
 impl RorolalaStorage {
-    /// Packs the loose objects stored under `keys` into a pack of their own.
+    /// Packs the loose objects stored under `keys` into packs of their own.
     ///
-    /// What the pack holds is each entry exactly as it sat loose — the frame and all — so an object
+    /// What a pack holds is each entry exactly as it sat loose — the frame and all — so an object
     /// that moves into a pack is the same bytes in a different place, and every read that worked
     /// before it moved works after. This is the whole of why packing is safe to do at any time and
     /// safe to leave undone: nothing about an object depends on how many of them share a file.
     ///
     /// Keys already named by a pack are passed over, so packing the loose objects of a store does not
-    /// make a second copy of one that already has a home. Packs are changed under one lock in this
-    /// process — see `root_state` — so two packings here cannot both take one key; two *processes*
-    /// working one store still can, and what holds the store together then is
-    /// [`remove`](crate::StorageBackend::remove), which asks every pack that names the key rather
-    /// than the first. A batch with nothing loose among it makes no pack at all.
+    /// make a second copy of one that already has a home. What is written goes into as few packs as
+    /// the store's [`max_pack_size`](Self::max_pack_size) allows, so a batch larger than that limit is
+    /// laid down as several packs rather than one file no bound holds. A batch with nothing loose
+    /// among it makes no pack at all.
     ///
-    /// ```text
-    /// packed_<n>.pack      the entries one after another, byte for byte
-    /// packed_<n>.idx       where each entry starts and how long it is
-    /// ```
-    ///
-    /// That is how a pack is **written**. Once an entry is dropped from an index, the bytes it
-    /// occupied stay where they are, so a pack that has had something removed from it is no longer
-    /// one run of entries — the index is what says where each of them is, and it is read before
-    /// anything is.
-    ///
-    /// The index is written after the pack it describes, so a pack that is still being written is a
-    /// pack no reader can find yet: a pack is known by its index, not by its name. The pack's number
-    /// is claimed by creating its file before a byte is written, so two ends packing at once take
-    /// two numbers rather than one.
+    /// Packs are changed under one lock in this process — see `root_state` — so two packings here
+    /// cannot both take one key; two *processes* working one store still can, and what holds the
+    /// store together then is [`remove`](crate::StorageBackend::remove), which asks every pack that
+    /// names the key rather than the first.
     ///
     /// Whether a pack was made is all this answers: the number a pack was given is the store's own
     /// business, and what a caller wanted to know is whether the objects it handed over changed
@@ -58,8 +48,6 @@ impl RorolalaStorage {
     /// Returns [`Error::Io`] if the pack or its index cannot be written, and [`Error::Malformed`]
     /// if a path it needs cannot be named.
     pub async fn pack(&self, keys: &[Key]) -> Result<bool, Error> {
-        use tokio::io::AsyncWriteExt as _;
-
         // Changing a store's packs is one at a time within this process: what a pack holds is read,
         // changed and written back, so two changes at once would each write one that has forgotten
         // the other. See `root_state`.
@@ -68,87 +56,290 @@ impl RorolalaStorage {
 
         // The keys are taken in order so that two packs of the same objects are the same file down
         // to the byte, which is what makes a pack something a transfer can compare rather than
-        // merely read. A key named twice is one object, so it is taken once. What is held here is
-        // the keys rather than the objects: the bytes go into the pack as they are read, one object
-        // at a time, so a batch is not measured by what it holds.
+        // merely read. A key named twice is one object, so it is taken once.
         let mut ordered = keys.to_vec();
         ordered.sort_unstable();
         ordered.dedup();
 
         let packed = self.packed_keys().await?;
-        let mut loose = Vec::new();
+        let mut entries = Vec::new();
 
         for key in ordered {
             // A key a pack already names is not one to pack again: an object in two packs would be
             // one `remove` could not take away, since it would be found in the first and left in the
-            // second. A key nothing is loose under — packed already, or never written — is passed
-            // over, so a batch with nothing loose among it makes no pack at all.
+            // second.
             if packed.contains(&key) {
                 continue;
             }
 
-            if exists(&self.object_path(&key)).await? {
-                loose.push(key);
+            let path = self.object_path(&key);
+            match tokio::fs::metadata(&path).await {
+                Ok(metadata) => entries.push((key, metadata.len(), Source::Loose(path))),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
             }
         }
 
-        if loose.is_empty() {
-            return Ok(false);
+        let written = self.write_packs(&entries).await?;
+
+        // The objects live in a pack now, so the loose copies go. This is a move rather than a drop:
+        // what the key promises is still held, in another place, and a read finds it either way.
+        for (_, keys) in &written {
+            for key in keys {
+                self.drop_entry(&self.object_path(key)).await?;
+            }
         }
 
-        // The number is claimed and the pack file created before the index exists, so nothing else
-        // can take this number while this pack is being written, and no reader can reach a pack that
-        // is not finished.
-        let (index, mut pack) = self.claim_pack().await?;
-        let mut directory = PackIndex::default();
-        let mut moved = Vec::new();
-        let mut offset = 0_u64;
+        Ok(!written.is_empty())
+    }
 
-        for key in loose {
-            // A loose object the store stopped holding between the check above and here is left out:
-            // it is gone, so there is nothing to move and no entry to name.
-            let bytes = match tokio::fs::read(self.object_path(&key)).await {
-                Ok(bytes) => bytes,
-                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-                Err(error) => return Err(error.into()),
+    /// Lays the store's objects out afresh, so that as few packs hold them as the size limit allows.
+    ///
+    /// Where [`pack`](Self::pack) puts the loose objects of a batch into packs, this takes the whole
+    /// of what the store holds — the entries of every pack, and every loose object — and writes it
+    /// again, merging the packs there are into one wherever they fit under
+    /// [`max_pack_size`](Self::max_pack_size) and starting another where they do not. What each
+    /// object *is* does not change: an entry is written byte for byte as it was, so every read that
+    /// worked before works after, whatever packs there were.
+    ///
+    /// A store already laid out the way this would lay it out is left alone and answered with
+    /// `false`, so running this twice in a row rewrites nothing the second time. A pack whose index
+    /// does not read is left where it is: what it holds cannot be read here to be written again, and
+    /// dropping it would drop the only copy.
+    ///
+    /// The new packs are written and made durable before any old one is dropped, so a reader that
+    /// arrives in the middle of this finds every object in the packs it already knew; the old packs go
+    /// last, their indexes first. A store interrupted here is a store holding a pack too many rather
+    /// than one holding an object too few.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written, and
+    /// [`Error::Malformed`] if a path it needs cannot be named.
+    pub async fn repack(&self) -> Result<bool, Error> {
+        // Packs are changed one at a time within this process, the same as any other change to them —
+        // see `root_state`.
+        let state = self.root_state();
+        let _packing = state.packing.lock().await;
+
+        // Everything the store holds, wherever it holds it, under the key it is held by: an object
+        // named by two packs, or one both packed and loose, is one object here and is written once.
+        let mut existing: Vec<(u64, Arc<PackIndex>)> = Vec::new();
+        let mut entries: BTreeMap<Key, (u64, Source)> = BTreeMap::new();
+
+        for index in self.packs().await? {
+            let Some(directory) = self.pack_index(&state, index).await? else {
+                continue;
             };
 
-            pack.write_all(&bytes).await?;
-            directory.push(PackEntry::new(key, offset, bytes.len() as u64));
-            moved.push(key);
-            offset += bytes.len() as u64;
+            for entry in directory.entries() {
+                entries.insert(
+                    entry.key(),
+                    (
+                        entry.len(),
+                        Source::Packed {
+                            index,
+                            offset: entry.offset(),
+                            len: entry.len(),
+                        },
+                    ),
+                );
+            }
+
+            existing.push((index, directory));
         }
 
-        // Every key vanished between the check and the read, so the number is given back rather than
-        // a pack made of nothing.
-        if moved.is_empty() {
-            drop(pack);
-            self.drop_entry(&self.pack_paths(index).0).await?;
-            sync_directory(&self.root.join(PACKED_DIR)).await?;
+        // A loose object is read from the file it is in, and it is written in place of a pack entry
+        // that names the same key: the two are the same bytes, so this decides only which copy is
+        // dropped afterwards.
+        for key in self.loose_object_keys().await? {
+            let path = self.object_path(&key);
 
+            match tokio::fs::metadata(&path).await {
+                Ok(metadata) => {
+                    entries.insert(key, (metadata.len(), Source::Loose(path)));
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+
+        let ordered: Vec<Planned> = entries
+            .into_iter()
+            .map(|(key, (len, source))| (key, len, source))
+            .collect();
+
+        // What the store would look like written afresh, against what it looks like now: a store that
+        // is already that — every pack a group of this plan, and nothing loose — is left alone rather
+        // than written over as it stands.
+        let mut planned = packed_groups(&ordered, self.max_pack_size().await);
+        let mut current: Vec<Vec<Key>> = existing
+            .iter()
+            .map(|(_, directory)| directory.entries().iter().map(PackEntry::key).collect())
+            .collect();
+        planned.sort();
+        current.sort();
+
+        let loose = ordered
+            .iter()
+            .any(|(_, _, source)| matches!(source, Source::Loose(_)));
+        if !loose && planned == current {
             return Ok(false);
         }
 
-        // The pack's bytes are on the disk before its name is made durable, and its name before the
-        // index is written: a reader that finds this index after a crash has to find a pack that is
-        // there and all there, and bytes on the disk are not the same as a name in the directory.
-        pack.sync_all().await?;
-        drop(pack);
-        sync_directory(&self.root.join(PACKED_DIR)).await?;
+        let written = self.write_packs(&ordered).await?;
 
-        let (_, index_path) = self.pack_paths(index);
-        // The index is written to outlive a crash, and only then are the loose copies dropped —
-        // see `write_whole_durably`.
-        write_whole_durably(&index_path, &directory.encode()).await?;
+        // Nothing could be read to write again — every source was gone between being listed and being
+        // read. The store is left as it is rather than having packs dropped that what is here could
+        // not rebuild.
+        if written.is_empty() {
+            return Ok(false);
+        }
 
-        // The objects live in the pack now, so the loose copies go. This is a move rather than a
-        // drop: what the key promises is still held, in another place, and a read finds it either
-        // way.
-        for key in &moved {
-            self.drop_entry(&self.object_path(key)).await?;
+        // What is in a pack now is not loose any more; a key that was already packed is not loose at
+        // all, so the drop is a no-op for it.
+        for (_, keys) in &written {
+            for key in keys {
+                self.drop_entry(&self.object_path(key)).await?;
+            }
+        }
+
+        // The old packs go last, and only once the new ones are there. Their indexes go first, since
+        // a pack is found by its index, and a `.pack` left behind by a write cut short is garbage
+        // rather than a store that does not hold together.
+        for (index, _) in &existing {
+            self.drop_pack(&state, *index).await?;
         }
 
         Ok(true)
+    }
+
+    /// Writes `entries` into packs, each of at most the size the store allows.
+    ///
+    /// A pack's number is claimed by creating its file before a byte is written, so nothing else can
+    /// take it while this pack is being written, and no reader can reach a pack that is not finished —
+    /// a pack is found by its index, which is written last.
+    ///
+    /// What is answered is each pack that was written and the keys it holds, in the order they were
+    /// written. A pack whose entries all turned out to be gone is given back rather than left empty: a
+    /// pack nothing names is not a pack.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written.
+    async fn write_packs(&self, entries: &[Planned]) -> Result<Vec<(u64, Vec<Key>)>, Error> {
+        use tokio::io::AsyncWriteExt as _;
+
+        let max = self.max_pack_size().await;
+        let mut written = Vec::new();
+
+        for range in pack_ranges(entries, max) {
+            let mut packing = self.begin_pack().await?;
+            let index = packing.index;
+            let mut keys = Vec::new();
+
+            for (key, _, source) in &entries[range] {
+                // An entry the store stopped holding between being listed and being read is left out:
+                // it is gone, so there is nothing to move and no entry to name.
+                let Some(bytes) = self.read_source(source).await? else {
+                    continue;
+                };
+
+                packing.file.write_all(&bytes).await?;
+                packing
+                    .directory
+                    .push(PackEntry::new(*key, packing.size, bytes.len() as u64));
+                packing.size += bytes.len() as u64;
+                keys.push(*key);
+            }
+
+            // Every entry vanished, so the number is given back rather than a pack made of nothing.
+            if keys.is_empty() {
+                drop(packing);
+                self.drop_entry(&self.pack_paths(index).0).await?;
+                sync_directory(&self.root.join(PACKED_DIR)).await?;
+
+                continue;
+            }
+
+            self.finish_pack(packing).await?;
+            written.push((index, keys));
+        }
+
+        Ok(written)
+    }
+
+    /// Claims a pack's number and opens it for writing.
+    async fn begin_pack(&self) -> Result<Packing, Error> {
+        let (index, file) = self.claim_pack().await?;
+
+        Ok(Packing {
+            index,
+            file,
+            directory: PackIndex::default(),
+            size: 0,
+        })
+    }
+
+    /// Makes a written pack durable and gives it its index.
+    ///
+    /// The pack's bytes are on the disk before its name is made durable, and its name before the
+    /// index is written: a reader that finds this index after a crash has to find a pack that is there
+    /// and all there, and bytes on the disk are not the same as a name in the directory.
+    async fn finish_pack(&self, packing: Packing) -> Result<(), Error> {
+        packing.file.sync_all().await?;
+        drop(packing.file);
+        sync_directory(&self.root.join(PACKED_DIR)).await?;
+
+        let (_, index_path) = self.pack_paths(packing.index);
+
+        write_whole_durably(&index_path, &packing.directory.encode()).await
+    }
+
+    /// The bytes of one entry, wherever it is being read from.
+    ///
+    /// `None` is an entry that is not there any more, which is not a failure: what is gone cannot be
+    /// written again, and a pack is not made to name it.
+    async fn read_source(&self, source: &Source) -> Result<Option<Vec<u8>>, Error> {
+        match source {
+            Source::Loose(path) => match tokio::fs::read(path).await {
+                Ok(bytes) => Ok(Some(bytes)),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(error.into()),
+            },
+            Source::Packed { index, offset, len } => {
+                let (pack_path, _) = self.pack_paths(*index);
+
+                match read_range(&pack_path, *offset, *len).await {
+                    Ok(bytes) => Ok(Some(bytes)),
+                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+                    Err(error) => Err(error),
+                }
+            }
+        }
+    }
+
+    /// The keys of the loose objects the store holds.
+    async fn loose_object_keys(&self) -> Result<Vec<Key>, Error> {
+        let mut keys = BTreeSet::new();
+        collect(&self.root.join(OBJECTS_DIR), &mut keys).await?;
+
+        Ok(keys.into_iter().collect())
+    }
+
+    /// Drops the pack of `index`: its index first, then the pack.
+    ///
+    /// The index is what a pack is found by, so it goes before the pack does — a crash between the
+    /// two leaves a `.pack` no reader reaches rather than an index naming a pack that is not there.
+    async fn drop_pack(&self, state: &RootState, index: u64) -> Result<(), Error> {
+        let (pack_path, index_path) = self.pack_paths(index);
+
+        forget_pack_index(state, index);
+        self.drop_entry(&index_path).await?;
+        sync_directory(&self.root.join(PACKED_DIR)).await?;
+        self.drop_entry(&pack_path).await?;
+
+        sync_directory(&self.root.join(PACKED_DIR)).await
     }
 
     /// Claims the next pack's number by creating its file, and answers the number and that file.
@@ -512,6 +703,74 @@ impl RorolalaStorage {
             .last()
             .map_or(0, |last| last.saturating_add(1)))
     }
+}
+
+/// One entry to be written into a pack: its key, how long it is, and where its bytes are read from.
+type Planned = (Key, u64, Source);
+
+/// Where an entry being written into a pack is read from.
+enum Source {
+    /// The loose object file the key sits in.
+    Loose(PathBuf),
+    /// Inside the pack of a number, at an offset and of a length.
+    Packed {
+        /// The number of the pack the entry sits in.
+        index: u64,
+        /// How many bytes into that pack the entry starts.
+        offset: u64,
+        /// How many bytes of that pack the entry takes up.
+        len: u64,
+    },
+}
+
+/// A pack being written: the file, what it holds so far, and how big it is.
+struct Packing {
+    /// The number claimed for this pack.
+    index: u64,
+    /// The pack file, open for writing.
+    file: tokio::fs::File,
+    /// What the pack holds so far, in key order.
+    directory: PackIndex,
+    /// How many bytes of the pack have been written.
+    size: u64,
+}
+
+/// Where the packs of `entries` begin and end, one pack each.
+///
+/// The entries are taken in the order they are given — which is key order — and a pack is closed once
+/// the next entry would take it over `max`. An entry larger than `max` is a pack of its own, since a
+/// limit cannot be met by a single object that is over it.
+fn pack_ranges(entries: &[Planned], max: u64) -> Vec<Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    let mut size = 0_u64;
+
+    for (at, (_, len, _)) in entries.iter().enumerate() {
+        if at > start && size.saturating_add(*len) > max {
+            ranges.push(start..at);
+            start = at;
+            size = 0;
+        }
+
+        size = size.saturating_add(*len);
+    }
+
+    if start < entries.len() {
+        ranges.push(start..entries.len());
+    }
+
+    ranges
+}
+
+/// The groups of keys `entries` are written into, one group per pack.
+///
+/// This is the shape `write_packs` gives, worked out without reading a byte: it is what tells a
+/// store already laid out that way from one that is not.
+fn packed_groups(entries: &[Planned], max: u64) -> Vec<Vec<Key>> {
+    pack_ranges(entries, max)
+        .into_iter()
+        .map(|range| entries[range].iter().map(|(key, _, _)| *key).collect())
+        .collect()
 }
 
 /// What this process keeps for one store root, shared by every store of it.

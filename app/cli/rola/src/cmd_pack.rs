@@ -1,12 +1,11 @@
-//! The `rola pack` command: gather a store's loose objects into a pack.
+//! The `rola pack` command: lay a store's objects out in as few packs as its size limit allows.
 //!
-//! It is packing on its own, with nothing else around it: every object the store in hand holds is
-//! looked at, the ones still sitting loose are gathered into a pack, and what is answered is
-//! whether that changed anything. What each object *is* does not change — a pack holds the entries
-//! exactly as they sat loose — so this is a way to keep the same objects in fewer files, not a
-//! step a reader has to know happened.
+//! It is packing on its own, with nothing else around it: everything the store in hand holds — the
+//! entries of every pack, and every loose object — is written again, so that what was many packs and
+//! a scattering of loose files becomes as few packs as the store's `max_pack_size` allows. What each
+//! object *is* does not change — a pack holds the entries exactly as they sat loose — so this is a way
+//! to keep the same objects in fewer files, not a step a reader has to know happened.
 
-use librorolala::storage::StorageBackend as _;
 use mingling::{
     Grouped, LazyRes,
     macros::{buffer, command, help, metadata, r_eprintln, r_println, renderer},
@@ -31,15 +30,16 @@ pub fn desc_pack() -> Description {
     t!("pack.cmd_pack_description").to_string().into()
 }
 
-/// Gathers the store's loose objects into a pack.
+/// Lays the store's objects out in as few packs as its size limit allows.
 ///
-/// Every object a store holds sits on its own until it is packed. This looks at all of them and
-/// gathers the ones still loose into a pack — one file with an index beside it — so that fewer
-/// files carry the same objects. What each object *is* does not change: a pack holds its entries
-/// exactly as they sat loose, so every read that worked before works after.
+/// Everything the store holds is written again: the entries of every pack are gathered up with the
+/// loose objects, and the whole of it is laid down as one pack — or as several, once one would pass
+/// the store's `max_pack_size`, which is `[storage] max_pack_size` in the store's configuration and
+/// two gibibytes when that says nothing. What each object *is* does not change: a pack holds its
+/// entries exactly as they sat loose, so every read that worked before works after.
 ///
-/// An object a pack already names is left where it is, so packing a store that is already packed
-/// changes nothing; so does packing one with nothing loose.
+/// A store already laid out the way this would lay it out is left alone, so running this twice in a
+/// row changes nothing the second time. What is printed says which of the two happened.
 ///
 /// The run has to be somewhere a store can be found — inside one, or inside a Vault or Workspace
 /// that keeps one.
@@ -47,15 +47,15 @@ pub fn desc_pack() -> Description {
 /// # Errors
 ///
 /// Renders [`ErrorPackNoStorage`] when the run is nowhere a store is, and [`ErrorPackFailed`] when
-/// the store's objects could not be read or the pack could not be written.
+/// the store's objects could not be read or a pack could not be written.
 #[command(node = "pack")]
 pub fn pack(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorPackNoStorage.into();
     };
 
-    // The store is asynchronous and a command is not, so the two meet here: the keys are read and
-    // the pack written by the store, and a runtime of this run's own is what waits for it — see
+    // The store is asynchronous and a command is not, so the two meet here: the objects are read and
+    // the packs written by the store, and a runtime of this run's own is what waits for it — see
     // `cmd_tool_write_file`.
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -67,20 +67,10 @@ pub fn pack(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
         }
     };
 
-    // Which objects there are to pack is the store's to say: every key it holds is handed over,
-    // and packing passes over the ones a pack already names, so what is loose is what is packed.
-    let keys = match runtime.block_on(store.list_exist_keys()) {
-        Ok(keys) => keys,
-        Err(error) => {
-            return ErrorPackFailed {
-                reason: error.to_string(),
-            }
-            .into();
-        }
-    };
-
-    match runtime.block_on(store.pack(&keys)) {
-        Ok(packed) => ResultPacked { packed }.into(),
+    // Which objects there are and how they are laid out is the store's to say: this hands over
+    // nothing and asks for the whole of it to be laid out afresh.
+    match runtime.block_on(store.repack()) {
+        Ok(changed) => ResultPacked { changed }.into(),
         Err(error) => ErrorPackFailed {
             reason: error.to_string(),
         }
@@ -88,16 +78,16 @@ pub fn pack(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
     }
 }
 
-/// Result: the store was looked at, and answered whether a pack was made.
+/// Result: the store was laid out afresh, or already was.
 #[derive(Grouped)]
 pub struct ResultPacked {
-    /// Whether anything was loose to pack.
-    packed: bool,
+    /// Whether anything was changed.
+    changed: bool,
 }
 
 #[renderer(buffer)]
 pub fn render_result_packed(result: ResultPacked) {
-    if result.packed {
+    if result.changed {
         r_println!("{}", t!("pack.result_packed").trim());
     } else {
         r_println!("{}", t!("pack.result_nothing").trim());
@@ -115,7 +105,7 @@ pub fn render_error_pack_no_storage(_: ErrorPackNoStorage, ec: &mut ResExitCode)
     ec.exit_code = EC_ERR_PACK_NO_STORAGE;
 }
 
-/// Error: the store's objects could not be read, or the pack could not be written.
+/// Error: the store's objects could not be read, or a pack could not be written.
 #[derive(Grouped)]
 pub struct ErrorPackFailed {
     /// Why the store would not pack.

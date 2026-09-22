@@ -1487,7 +1487,10 @@ dependencies = [
  "lz4",
  "rorolala-utils-constants",
  "rorolala-utils-location",
+ "serde",
+ "size",
  "tokio",
+ "toml 0.8.23",
  "zstd",
 ]
 
@@ -1794,6 +1797,12 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "size"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b6709c7b6754dca1311b3c73e79fcce40dd414c782c66d88e8823030093b02b"
 
 [[package]]
 name = "socket2"

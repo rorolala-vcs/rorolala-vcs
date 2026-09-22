@@ -3,45 +3,46 @@ _version: 2
 pack:
   help:
     en: |
-        Gather a store's loose objects into a pack
+        Lay a store's objects out in as few packs as its size limit allows
 
         **Usage**: `rola pack`
 
-        Every object a store holds sits on its own until it is packed. This gathers the ones still
-        loose into a pack — one file with an index beside it — so that fewer files carry the same
-        objects. What each object is does not change: a pack holds its entries exactly as they sat
-        loose, so every read that worked before works after.
+        Everything the store holds is written again: the entries of every pack are gathered up with
+        the loose objects, and the whole of it is laid down as one pack — or as several, once one
+        would pass the store's `max_pack_size`, which is `[storage] max_pack_size` in the store's
+        configuration and two gibibytes when that says nothing.
 
-        An object a pack already names is left where it is, so packing a store that is already
-        packed changes nothing, and neither does packing one with nothing loose.
+        What each object is does not change: a pack holds its entries exactly as they sat loose, so
+        every read that worked before works after. A store already laid out this way is left alone, so
+        running this twice in a row changes nothing the second time.
 
-        The run has to be somewhere a store can be found: inside one, or inside a Vault or
-        Workspace that keeps one.
+        The run has to be somewhere a store can be found: inside one, or inside a Vault or Workspace
+        that keeps one.
     zh-CN: |
-        将仓库中的松散对象打包
+        将仓库中的对象整理进尽可能少的 pack，受其大小上限约束
 
         **用法**：`rola pack`
 
-        仓库持有的每个对象在被打包前都是单独存放的。本命令把仍然松散的对象收进一个 pack——一个文件，
-        旁边带一份索引——于是同样的对象由更少的文件承载。对象本身不受影响：pack 按它们在松散时的样子
-        原样存放条目，所以此前能读的，之后照样能读。
+        仓库持有的全部内容都会被重新写出：各 pack 的条目与松散对象一并收集，整体落成一个 pack——若某个
+        pack 将超过仓库的 `max_pack_size`，则落成多个。`max_pack_size` 来自仓库配置中的
+        `[storage] max_pack_size`，未配置时为 2 GiB。
 
-        已被某个 pack 记录的对象会留在原处，因此对已打包的仓库再打包不会有变化；对没有松散对象的仓库
-        打包同样没有变化。
+        对象本身不受影响：pack 按它们在松散时的样子原样存放条目，所以此前能读的，之后照样能读。已经
+        是这样布局的仓库会保持原样，因此连续运行两次不会有第二次改动。
 
         运行必须处在能发现仓库的地方：仓库内、或保有仓库的保险库／工作区内。
 
   cmd_pack_description:
-    en: Gather a store's loose objects into a pack
-    zh-CN: 将仓库中的松散对象打包
+    en: Lay a store's objects out in as few packs as its size limit allows
+    zh-CN: 将仓库中的对象整理进尽可能少的 pack
 
   result_packed:
-    en: Packed the store's loose objects
-    zh-CN: 已将仓库中的松散对象打包
+    en: Laid the store's objects out afresh
+    zh-CN: 已重新整理仓库中的对象
 
   result_nothing:
-    en: There was nothing loose to pack
-    zh-CN: 没有可打包的松散对象
+    en: The store was already laid out that way
+    zh-CN: 仓库已是这样的布局
 
   err_no_storage:
     en: This run is nowhere a store is

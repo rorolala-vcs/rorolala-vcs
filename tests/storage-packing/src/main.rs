@@ -43,6 +43,10 @@ async fn main() {
     a_packed_object_can_be_dropped(&sandbox, &mut checked).await;
     dropping_a_packed_object_leaves_the_pack_bytes_where_they_are(&sandbox, &mut checked).await;
     a_pack_left_holding_nothing_is_dropped_whole(&sandbox, &mut checked).await;
+    repacking_merges_the_packs_there_are(&sandbox, &mut checked).await;
+    repacking_rolls_over_at_the_size_the_store_allows(&sandbox, &mut checked).await;
+    repacking_leaves_a_store_already_laid_out_alone(&sandbox, &mut checked).await;
+    repacking_leaves_a_pack_that_does_not_read_where_it_is(&sandbox, &mut checked).await;
 
     sandbox.cleanup();
     checked.report();
@@ -921,6 +925,194 @@ async fn a_pack_left_holding_nothing_is_dropped_whole(sandbox: &Sandbox, checked
         "a store with no packs says it has none",
         store.packs().await.unwrap_or_default().is_empty(),
         "a pack is still listed",
+    );
+}
+
+/// Repacking gathers the packs there are into one, and reads answer as they did.
+async fn repacking_merges_the_packs_there_are(sandbox: &Sandbox, checked: &mut Checked) {
+    let store = store(sandbox, "merge");
+    let contents = contents(6, 400);
+    let mut keys = Vec::new();
+
+    for content in &contents {
+        keys.push(written(&store, content).await);
+    }
+
+    // Two batches, so the store holdings two packs is where it starts.
+    store
+        .pack(&keys[..3])
+        .await
+        .expect("the first batch is packed");
+    store
+        .pack(&keys[3..])
+        .await
+        .expect("the second batch is packed");
+
+    checked.wants(
+        "a store packed in two batches holds two packs",
+        store.packs().await.unwrap_or_default().len() == 2,
+        "the two batches did not make two packs",
+    );
+
+    let merged = store.repack().await.expect("the packs are merged");
+    checked.wants("repacking changes the store", merged, &format!("{merged}"));
+    checked.wants(
+        "the two packs become one",
+        store.packs().await.unwrap_or_default().len() == 1,
+        "the packs were not merged",
+    );
+    checked.wants(
+        "nothing is left loose after repacking",
+        objects(sandbox, "merge") == 0,
+        "an object was left loose",
+    );
+
+    let mut reads_back = true;
+    for (key, content) in keys.iter().zip(&contents) {
+        reads_back &= store
+            .read_object(key)
+            .await
+            .is_ok_and(|read| &read == content);
+    }
+
+    checked.wants(
+        "every merged object reads back as it was written",
+        reads_back,
+        "a merged object did not read back",
+    );
+}
+
+/// What one pack may hold is the store's to say, and packs roll over at it.
+async fn repacking_rolls_over_at_the_size_the_store_allows(
+    sandbox: &Sandbox,
+    checked: &mut Checked,
+) {
+    let store = store(sandbox, "rollover");
+
+    // A limit small enough that the objects cannot all sit in one pack, but well over one entry, so
+    // packs of more than one entry are still possible.
+    let limit = 2 * 1024;
+    fs::write(store.config_path(), "[storage]\nmax_pack_size = \"2KiB\"\n")
+        .expect("the configuration is written");
+
+    let contents = contents(9, 512);
+    let mut keys = Vec::new();
+    for content in &contents {
+        keys.push(written(&store, content).await);
+    }
+
+    store.repack().await.expect("the store is laid out");
+
+    let packs = store.packs().await.unwrap_or_default();
+    checked.wants(
+        "a store over the limit is laid out as several packs",
+        packs.len() > 1,
+        &format!("{} packs", packs.len()),
+    );
+
+    // No pack grows past the limit, unless one entry is over it on its own — a limit cannot be met
+    // by a single object that is bigger than it.
+    let mut within = true;
+    let mut reads_back = true;
+
+    for index in &packs {
+        let directory = store
+            .read_pack_index(*index)
+            .await
+            .expect("the index is read");
+        let total: u64 = directory.entries().iter().map(PackEntry::len).sum();
+
+        within &= total <= limit || directory.len() == 1;
+    }
+
+    for (key, content) in keys.iter().zip(&contents) {
+        reads_back &= store
+            .read_object(key)
+            .await
+            .is_ok_and(|read| &read == content);
+    }
+
+    checked.wants(
+        "no pack grows past the limit",
+        within,
+        "a pack was over the limit",
+    );
+    checked.wants(
+        "every object over a rolled-over store reads back",
+        reads_back,
+        "an object over a rolled-over store did not read back",
+    );
+}
+
+/// A store already laid out the way repacking would lay it out is left alone.
+async fn repacking_leaves_a_store_already_laid_out_alone(sandbox: &Sandbox, checked: &mut Checked) {
+    let store = store(sandbox, "steady");
+    let contents = contents(4, 300);
+    let mut keys = Vec::new();
+
+    for content in &contents {
+        keys.push(written(&store, content).await);
+    }
+
+    let first = store.repack().await.expect("the store is laid out");
+    let packs = store.packs().await.unwrap_or_default();
+    let again = store.repack().await.expect("the store is left alone");
+
+    checked.wants(
+        "laying a loose store out changes it",
+        first,
+        &format!("{first}"),
+    );
+    checked.wants(
+        "a store already laid out is left alone",
+        !again,
+        &format!("{again}"),
+    );
+    checked.wants(
+        "the packs are the ones it had",
+        store.packs().await.unwrap_or_default() == packs,
+        "the packs were written again",
+    );
+
+    let mut reads_back = true;
+    for (key, content) in keys.iter().zip(&contents) {
+        reads_back &= store
+            .read_object(key)
+            .await
+            .is_ok_and(|read| &read == content);
+    }
+
+    checked.wants(
+        "the objects read back after being left alone",
+        reads_back,
+        "an object stopped reading back",
+    );
+}
+
+/// A pack whose index does not read is left where it is, since what it holds cannot be read again.
+async fn repacking_leaves_a_pack_that_does_not_read_where_it_is(
+    sandbox: &Sandbox,
+    checked: &mut Checked,
+) {
+    let store = store(sandbox, "broken");
+    let key = written(&store, b"an object a broken index names").await;
+
+    store.pack(&[key]).await.expect("the object is packed");
+
+    let (_, index_path) = store.pack_paths(0);
+    fs::write(&index_path, b"not an index").expect("the index is spoiled");
+
+    let changed = store.repack().await.expect("repacking runs");
+
+    checked.wants(
+        "repacking does nothing while a pack will not read",
+        !changed,
+        &format!("{changed}"),
+    );
+    checked.wants(
+        "the pack that does not read is still there",
+        store.packs().await.unwrap_or_default() == [0],
+        "the pack that does not read was taken away",
     );
 }
 

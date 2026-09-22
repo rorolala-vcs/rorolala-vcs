@@ -17,6 +17,9 @@ pub use chunk::*;
 mod codec;
 pub use codec::*;
 
+mod config;
+pub use config::*;
+
 mod error;
 pub use error::*;
 
