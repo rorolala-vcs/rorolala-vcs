@@ -51,6 +51,41 @@ pub const EC_ERR_TOOL_KEYGEN_NO_KEY_DIR: i32 = 44;
 /// `exit_codes.tool_keygen_install_failed`
 pub const EC_ERR_TOOL_KEYGEN_INSTALL_FAILED: i32 = 45;
 
+/// `exit_codes.tool_write_file_argument`
+pub const EC_ERR_TOOL_WRITE_FILE_ARGUMENT: i32 = 46;
+
+/// `exit_codes.tool_write_file_no_storage`
+pub const EC_ERR_TOOL_WRITE_FILE_NO_STORAGE: i32 = 47;
+
+/// `exit_codes.tool_write_file_not_a_file`
+pub const EC_ERR_TOOL_WRITE_FILE_NOT_A_FILE: i32 = 48;
+
+/// `exit_codes.tool_write_file_failed`
+pub const EC_ERR_TOOL_WRITE_FILE_FAILED: i32 = 49;
+
+/// `exit_codes.tool_extract_file_argument`
+pub const EC_ERR_TOOL_EXTRACT_FILE_ARGUMENT: i32 = 54;
+
+/// `exit_codes.tool_extract_file_no_storage`
+pub const EC_ERR_TOOL_EXTRACT_FILE_NO_STORAGE: i32 = 55;
+
+/// `exit_codes.tool_extract_file_bad_hash`
+pub const EC_ERR_TOOL_EXTRACT_FILE_BAD_HASH: i32 = 56;
+
+/// `exit_codes.tool_extract_file_exists`
+pub const EC_ERR_TOOL_EXTRACT_FILE_EXISTS: i32 = 57;
+
+/// `exit_codes.tool_extract_file_failed`
+pub const EC_ERR_TOOL_EXTRACT_FILE_FAILED: i32 = 58;
+
+// Packing
+
+/// `exit_codes.pack_no_storage`
+pub const EC_ERR_PACK_NO_STORAGE: i32 = 59;
+
+/// `exit_codes.pack_failed`
+pub const EC_ERR_PACK_FAILED: i32 = 60;
+
 // Configuration
 
 /// `exit_codes.config_unreadable`

@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rorolala_storage::RorolalaStorage;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
 
@@ -17,13 +18,13 @@ mod init;
 pub use config::*;
 pub use error::*;
 
-/// Where the Workspace keeps its data, its configuration and its keys
+/// Where the Workspace keeps its data, its configuration, its keys and its store
 ///
 /// These are the layout [`rorolala_utils_constants`] states, re-exported so the
 /// Workspace's own spelling of where it keeps things is still one name.
 pub use rorolala_utils_constants::{
     WORKSPACE_CONFIG_PATH as CONFIG_PATH, WORKSPACE_DATA_DIR as DATA_DIR,
-    WORKSPACE_KEYS_DIR as KEYS_DIR,
+    WORKSPACE_KEYS_DIR as KEYS_DIR, WORKSPACE_STORAGE_DIR as STORAGE_DIR,
 };
 
 /// Rorolala local workspace
@@ -69,6 +70,36 @@ impl Workspace {
     #[must_use]
     pub fn config_path(&self) -> PathBuf {
         self.current_dir.join(CONFIG_PATH)
+    }
+
+    /// The store this Workspace keeps, if it has one.
+    ///
+    /// A Workspace keeps its store under [`STORAGE_DIR`] inside its data directory, and having
+    /// one is what a configuration
+    /// ([`STORAGE_CONFIG_PATH`](rorolala_utils_constants::STORAGE_CONFIG_PATH)) there says.
+    /// Nothing is made here: a Workspace without one is a Workspace without one.
+    #[must_use]
+    pub fn get_current_rola_storage(&self) -> Option<RorolalaStorage> {
+        RorolalaStorage::at(self.storage_root())
+    }
+
+    /// The store this Workspace keeps, made where it is not there yet.
+    ///
+    /// Making a store is best effort, so this always answers: a store that could not be made
+    /// is still handed back, and what failed shows up on the first read or write that needs it.
+    #[must_use]
+    pub fn get_or_create_rola_storage(&self) -> RorolalaStorage {
+        self.get_current_rola_storage()
+            .unwrap_or_else(|| RorolalaStorage::create(self.storage_root()))
+    }
+
+    /// Where the Workspace's store is rooted, with the layout's spelling walked back out of it.
+    ///
+    /// The directory is written `./.rola/storage/`, and joining that onto the Workspace's root
+    /// leaves the `./` in the middle of the path a reader is shown, so it is a path of its own
+    /// here.
+    fn storage_root(&self) -> PathBuf {
+        self.current_dir.join(STORAGE_DIR).components().collect()
     }
 }
 

@@ -27,6 +27,9 @@ pub use rorolala_errors as errors;
 /// Transport and wire protocol
 pub use rorolala_protocol as protocol;
 
+/// Storage of file data, and the layout that places it
+pub use rorolala_storage as storage;
+
 /// Client-side workspace
 pub use rorolala_workspace as workspace;
 

@@ -11,7 +11,10 @@ rola:
             key [--pem]         List every key Rorolala can reach
             account <ACCOUNT>   Name the account the work acts as, or list them
             tool-keygen <PATH>  Generate an Ed25519 key pair
+            tool-write-file <FILE>  Store a file's content and print its hash
+            tool-extract-file <HASH> [DIR]  Write stored content out under its hash
             tool-handshake      Speak the handshake action to a Vault daemon
+            pack                Gather a store's loose objects into a pack
             vault               List, bind, and choose the Vaults this Workspace knows
             explain <CMD>       Say what a number or a name means
 
@@ -34,7 +37,10 @@ rola:
             key [--pem]         列出 Rorolala 能找到的全部密钥
             account <ACCOUNT>   指定当前账户，或列出可用账户
             tool-keygen <PATH>  生成一对 Ed25519 密钥
+            tool-write-file <FILE>  存储文件内容并打印其哈希
+            tool-extract-file <HASH> [DIR]  按哈希将存储的内容写出
             tool-handshake      向保险库守护进程发起握手
+            pack                将仓库中的松散对象打包
             vault               列出、绑定并选择工作区已知的保险库
             explain <CMD>       解释某个数字或名字的含义
 

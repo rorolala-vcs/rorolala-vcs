@@ -45,6 +45,21 @@ pub const VAULT_KEYS_DIR: &str = "./keys/";
 #[lazyffi(export = ROLA_VAULT_VAULTS_DIR)]
 pub const VAULT_VAULTS_DIR: &str = "./vaults/";
 
+/// Path to the storage configuration file, inside the storage root
+///
+/// A directory is a store once it carries one, which is what a search for a local store reads
+/// to find where the store begins.
+#[lazyffi(export = ROLA_STORAGE_CONFIG_PATH)]
+pub const STORAGE_CONFIG_PATH: &str = "./rolast.toml";
+
+/// Path, inside the Workspace's data directory, where its store is kept
+#[lazyffi(export = ROLA_WORKSPACE_STORAGE_DIR)]
+pub const WORKSPACE_STORAGE_DIR: &str = "./.rola/storage/";
+
+/// Path, inside the Vault's root, where its store is kept
+#[lazyffi(export = ROLA_VAULT_STORAGE_DIR)]
+pub const VAULT_STORAGE_DIR: &str = "./storage/";
+
 /// The sub-vault an address names when it names none
 ///
 /// An address is `rola://ip:port/sub`, and the Vault at the root of a tree holds the others

@@ -10,12 +10,14 @@ use mingling::{ProgramCollect, setup::ProgramSetup};
 mod colorize;
 mod global_flag;
 mod language;
+mod storage;
 mod vault;
 mod workspace;
 
 pub use colorize::*;
 pub use global_flag::*;
 pub use language::*;
+pub use storage::*;
 pub use vault::*;
 pub use workspace::*;
 
@@ -40,5 +42,6 @@ where
         program.with_setup(GlobalFlagSetup);
         program.with_setup(VaultSetup);
         program.with_setup(WorkspaceSetup);
+        program.with_setup(RorolalaStorageSetup);
     }
 }

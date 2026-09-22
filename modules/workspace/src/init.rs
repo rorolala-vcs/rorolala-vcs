@@ -1,10 +1,11 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use rorolala_storage::RorolalaStorage;
 use rorolala_utils_configure::Config;
 use rorolala_utils_lazyffi::lazyffi;
 
-use crate::{CONFIG_PATH, CreationError, DATA_DIR, Workspace};
+use crate::{CONFIG_PATH, CreationError, DATA_DIR, STORAGE_DIR, Workspace};
 
 #[lazyffi]
 impl Workspace {
@@ -13,6 +14,9 @@ impl Workspace {
     /// The Workspace is its data directory: a directory is a Workspace once it holds
     /// one, and the configuration is written inside it, so the directory is made first
     /// and there is somewhere to write to.
+    ///
+    /// The store it keeps its objects in is made with it too, so that a Workspace that exists
+    /// has somewhere to keep them; see [`Workspace::get_current_rola_storage`].
     ///
     /// # Errors
     ///
@@ -45,6 +49,13 @@ impl Workspace {
 
         // Drop config to write it to the filesystem
         drop(config);
+
+        // The Workspace's store is made last, once the Workspace itself is there: a store is
+        // placed under a Workspace, so there is no store to speak of until there is one to
+        // place it in.
+        let storage: PathBuf = dir.join(STORAGE_DIR).components().collect();
+        let _ = RorolalaStorage::create(storage);
+
         Ok(())
     }
 }
@@ -55,10 +66,11 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use rorolala_storage::internals::Internals as _;
     use rorolala_utils_configure::Configure;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, CreationError, DATA_DIR, Workspace};
+    use crate::{CONFIG_PATH, CreationError, DATA_DIR, STORAGE_DIR, Workspace};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -93,6 +105,29 @@ mod tests {
         // And what was written is what reading it back expects to find: a configuration
         // that holds nothing yet still has to survive the format it was written in.
         crate::config::Config::read_from(&file).unwrap();
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn creating_a_workspace_makes_the_store_it_keeps_objects_in() {
+        let dir = scratch("storage");
+
+        Workspace::create(&dir).unwrap();
+
+        // The store is part of a Workspace rather than something to be set up beside it: a
+        // Workspace that exists has somewhere to keep objects the moment it does.
+        let workspace = Workspace::locate(&dir).unwrap();
+        let storage = workspace.get_current_rola_storage().unwrap();
+
+        assert_eq!(
+            storage.get_root(),
+            dir.join(STORAGE_DIR)
+                .components()
+                .collect::<PathBuf>()
+                .as_path()
+        );
+        assert!(storage.config_path().is_file());
 
         let _ = fs::remove_dir_all(&dir);
     }

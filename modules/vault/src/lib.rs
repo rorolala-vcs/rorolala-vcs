@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rorolala_storage::RorolalaStorage;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
 
@@ -26,7 +27,8 @@ pub use root_vault::*;
 /// All three are the layout [`rorolala_utils_constants`] states, re-exported so the Vault's
 /// own spelling of where it keeps things is still one name.
 pub use rorolala_utils_constants::{
-    VAULT_CONFIG_PATH as CONFIG_PATH, VAULT_KEYS_DIR as KEYS_DIR, VAULT_VAULTS_DIR as VAULTS_DIR,
+    VAULT_CONFIG_PATH as CONFIG_PATH, VAULT_KEYS_DIR as KEYS_DIR, VAULT_STORAGE_DIR as STORAGE_DIR,
+    VAULT_VAULTS_DIR as VAULTS_DIR,
 };
 
 /// Rorolala remote resource vault
@@ -77,6 +79,34 @@ impl Vault {
     #[must_use]
     pub fn config_path(&self) -> PathBuf {
         self.current_dir.join(CONFIG_PATH)
+    }
+
+    /// The store this Vault keeps, if it has one.
+    ///
+    /// A Vault keeps its store under [`STORAGE_DIR`], and having one is what a directory
+    /// carrying [`STORAGE_CONFIG_PATH`](rorolala_utils_constants::STORAGE_CONFIG_PATH) there
+    /// says. Nothing is made here: a Vault without one is a Vault without one.
+    #[must_use]
+    pub fn get_current_rola_storage(&self) -> Option<RorolalaStorage> {
+        RorolalaStorage::at(self.storage_root())
+    }
+
+    /// The store this Vault keeps, made where it is not there yet.
+    ///
+    /// Making a store is best effort, so this always answers: a store that could not be made
+    /// is still handed back, and what failed shows up on the first read or write that needs it.
+    #[must_use]
+    pub fn get_or_create_rola_storage(&self) -> RorolalaStorage {
+        self.get_current_rola_storage()
+            .unwrap_or_else(|| RorolalaStorage::create(self.storage_root()))
+    }
+
+    /// Where the Vault's store is rooted, with the layout's spelling walked back out of it.
+    ///
+    /// The directory is written `./storage/`, and joining that onto the Vault's root leaves
+    /// the `./` in the middle of the path a reader is shown, so it is a path of its own here.
+    fn storage_root(&self) -> PathBuf {
+        self.current_dir.join(STORAGE_DIR).components().collect()
     }
 }
 

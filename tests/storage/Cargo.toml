@@ -1,0 +1,10 @@
+[package]
+name = "it-storage"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+librorolala = { path = "../.." }
+rorolala-utils-sandbox = { path = "../../utils/sandbox" }
+tokio = { version = "1.53.1", features = ["fs", "macros", "rt-multi-thread"] }

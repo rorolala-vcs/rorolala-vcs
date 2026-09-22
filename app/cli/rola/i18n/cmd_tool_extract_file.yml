@@ -1,0 +1,84 @@
+_version: 2
+
+tool_extract_file:
+  help:
+    en: |
+        Take stored content back out, under the hash it is kept by
+
+        **Usage**: `rola tool-extract-file <HASH> [DIR]`
+
+        `HASH` is what `rola tool-write-file` printed: written as a digest in hex, with or
+        without the hash's name in front of it. The content is written under that digest, in
+        `DIR` — or in the current directory when none is named.
+
+        `DIR` is made if it is not there yet, so naming a path into somewhere new is a request
+        to write there rather than a mistake. A file already under the name is not written
+        over: it is reported, so that what is there is never lost to what was asked for.
+    zh-CN: |
+        按内容所用的哈希将内容取出
+
+        **用法**：`rola tool-extract-file <HASH> [DIR]`
+
+        `HASH` 就是 `rola tool-write-file` 打印出来的：写成十六进制摘要，前面带不带哈希名均可。
+        内容会以该摘要为名写入 `DIR`；不指定时写入当前目录。
+
+        `DIR` 不存在时会创建，因此指向新位置的路径是“写到这里”的请求，而不是错误。
+        若该名字下已有文件，不会覆盖，而是报错——免得已有内容被这次请求悄悄替换掉。
+
+  cmd_tool_extract_file_description:
+    en: Write stored content out under its hash
+    zh-CN: 按哈希将存储的内容写出
+
+  err_hash_missing:
+    en: No hash was named
+    zh-CN: 未指定哈希
+
+  err_hash_missing_help:
+    en: |
+        Please name the hash of the content to write out, as `rola tool-write-file` printed it
+    zh-CN: |
+        请指定要写出的内容哈希，即 `rola tool-write-file` 打印的那个
+
+  err_no_storage:
+    en: This run is nowhere a store is
+    zh-CN: 当前运行不处于任何仓库中
+
+  err_no_storage_help:
+    en: |
+        Please run this inside a store, or inside the Vault or Workspace that keeps one
+    zh-CN: |
+        请在仓库内运行，或在保有仓库的保险库／工作区内运行
+
+  err_bad_hash:
+    en: "`%{hash}` does not read as a hash"
+    zh-CN: "`%{hash}` 不是合法的哈希"
+
+  err_bad_hash_help:
+    en: |
+        A hash is a digest in hex, written with or without the hash's name in front of it, for
+        example `blake3:1f9d…`. Please check what was typed
+    zh-CN: |
+        哈希是十六进制摘要，前面带不带哈希名均可，例如 `blake3:1f9d…`。请检查输入
+
+  err_target_exists:
+    en: "%{path} is already there"
+    zh-CN: "%{path} 已存在"
+
+  err_target_exists_help:
+    en: |
+        What is stored is written under its hash, and a file already there is left as it is.
+        Please name another directory, or remove the file first
+    zh-CN: |
+        内容以它的哈希为名写出，已存在的文件会保持原样。
+        请换一个目录，或先删除该文件
+
+  err_extract_failed:
+    en: "Could not write the content of %{hash} out — %{reason}"
+    zh-CN: "无法写出 %{hash} 的内容 —— %{reason}"
+
+  err_extract_failed_help:
+    en: |
+        Please check that the store holds that content and that the directory can be written
+        to, then try again
+    zh-CN: |
+        请确认仓库中确有该内容、且目标目录可写，然后重试

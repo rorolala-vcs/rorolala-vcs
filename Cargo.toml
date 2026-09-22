@@ -11,6 +11,7 @@ members = [
     "modules/errors",
     "modules/protocol",
     "modules/protocol-macros",
+    "modules/storage",
     "modules/vault",
     "modules/workspace",
     "utils/cli-theme",
@@ -42,6 +43,7 @@ rorolala-errors = { path = "modules/errors" }
 rorolala-ffi = { path = "app/ffi" }
 rorolala-protocol = { path = "modules/protocol" }
 rorolala-protocol-macros = { path = "modules/protocol-macros" }
+rorolala-storage = { path = "modules/storage" }
 rorolala-utils-cli-theme = { path = "utils/cli-theme" }
 rorolala-utils-configure = { path = "utils/configure" }
 rorolala-utils-configure-macros = { path = "utils/configure-macros" }
@@ -73,6 +75,10 @@ serde_yaml = "0.9.34"
 toml = "0.8.23"
 bincode2 = "2.0.1"
 
+# Compression
+lz4 = "1.28.1"
+zstd = "0.13.3"
+
 # CLI Rendering
 bat = { version = "0.26.1", default-features = false, features = ["regex-fancy"] }
 colored = "3.1.1"
@@ -84,6 +90,7 @@ unicode-width = "0.2.2"
 rust-i18n = "4.2.2"
 
 # Cryptography
+blake3 = "1.8.3"
 chacha20poly1305 = "0.10.1"
 ed25519-dalek = "2.2.0"
 hkdf = "0.12.4"
@@ -124,6 +131,7 @@ rorolala-auth.workspace = true
 rorolala-daemon.workspace = true
 rorolala-errors.workspace = true
 rorolala-protocol.workspace = true
+rorolala-storage.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true

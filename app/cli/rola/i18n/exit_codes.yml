@@ -49,6 +49,50 @@ exit_codes:
     en: The directory a key pair was to be installed into could not be created
     zh-CN: 无法创建用于安装密钥对的目录
 
+  tool_write_file_argument:
+    en: "A `rola tool-write-file` command was given arguments it cannot use"
+    zh-CN: "`rola tool-write-file` 收到了无法使用的参数"
+
+  tool_write_file_no_storage:
+    en: This run is nowhere a store is
+    zh-CN: 当前运行不处于任何仓库中
+
+  tool_write_file_not_a_file:
+    en: The path named is not a file
+    zh-CN: 指定的路径不是文件
+
+  tool_write_file_failed:
+    en: The store would not take the content of a file
+    zh-CN: 仓库未能接收某文件的内容
+
+  tool_extract_file_argument:
+    en: "A `rola tool-extract-file` command was given arguments it cannot use"
+    zh-CN: "`rola tool-extract-file` 收到了无法使用的参数"
+
+  tool_extract_file_no_storage:
+    en: This run is nowhere a store is
+    zh-CN: 当前运行不处于任何仓库中
+
+  tool_extract_file_bad_hash:
+    en: What was named does not read as a hash
+    zh-CN: 指定的内容不是合法的哈希
+
+  tool_extract_file_exists:
+    en: A file is already under the name the content would be written as
+    zh-CN: 内容将要写出的名字下已有文件
+
+  tool_extract_file_failed:
+    en: Stored content could not be written out
+    zh-CN: 无法将存储的内容写出
+
+  pack_no_storage:
+    en: This run is nowhere a store is
+    zh-CN: 当前运行不处于任何仓库中
+
+  pack_failed:
+    en: "The store's objects could not be packed"
+    zh-CN: 无法打包仓库中的对象
+
   config_unreadable:
     en: The configuration the run works from could not be read
     zh-CN: 无法读取本次运行所依据的配置

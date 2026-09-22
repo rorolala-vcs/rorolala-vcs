@@ -1,9 +1,11 @@
 use rorolala_utils_configure::Config;
 use rorolala_utils_lazyffi::lazyffi;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::{CONFIG_PATH, CreationError, KEYS_DIR, Vault, config::MetaConfig};
+use rorolala_storage::RorolalaStorage;
+
+use crate::{CONFIG_PATH, CreationError, KEYS_DIR, STORAGE_DIR, Vault, config::MetaConfig};
 
 #[lazyffi]
 impl Vault {
@@ -16,6 +18,9 @@ impl Vault {
     /// The directory it keeps its keys in is made beside it, so that the key pair a Vault
     /// proves itself with has somewhere to go: a Vault is not served without one, and the tool
     /// that makes one writes into a directory that has to be there already.
+    ///
+    /// The store it keeps its objects in is made with it too, so that a Vault that exists has
+    /// somewhere to keep them; see [`Vault::get_current_rola_storage`].
     ///
     /// # Errors
     ///
@@ -53,6 +58,12 @@ impl Vault {
 
         // Drop config to write it to the filesystem
         drop(config);
+
+        // The Vault's store is made last, once the Vault itself is there: a store is placed
+        // under a Vault, so there is no store to speak of until there is one to place it in.
+        let storage: PathBuf = dir.join(STORAGE_DIR).components().collect();
+        let _ = RorolalaStorage::create(storage);
+
         Ok(())
     }
 }
@@ -63,10 +74,11 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use rorolala_storage::internals::Internals as _;
     use rorolala_utils_configure::Configure;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, CreationError, KEYS_DIR, Vault};
+    use crate::{CONFIG_PATH, CreationError, KEYS_DIR, STORAGE_DIR, Vault};
 
     /// A parent directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -111,6 +123,30 @@ mod tests {
         // A Vault is not served without a key pair of its own, and the tool that makes one
         // writes into a directory that has to be there already: making the Vault makes it.
         assert!(dir.join(KEYS_DIR).is_dir(), "{:?}", dir.join(KEYS_DIR));
+
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn creating_a_vault_makes_the_store_it_keeps_objects_in() {
+        let parent = scratch("storage");
+        let dir = parent.join("vault");
+
+        Vault::create(&dir).unwrap();
+
+        // The store is part of a Vault rather than something to be set up beside it: a Vault that
+        // exists has somewhere to keep objects the moment it does.
+        let vault = Vault::locate(&dir).unwrap();
+        let storage = vault.get_current_rola_storage().unwrap();
+
+        assert_eq!(
+            storage.get_root(),
+            dir.join(STORAGE_DIR)
+                .components()
+                .collect::<PathBuf>()
+                .as_path()
+        );
+        assert!(storage.config_path().is_file());
 
         let _ = fs::remove_dir_all(&parent);
     }
