@@ -5,12 +5,10 @@
 //! caller sees is one short file rather than the working of the store behind it.
 
 use std::collections::BTreeSet;
-use std::fs;
 use std::path::Path;
 
 use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PackKind, SNIFF_LEN};
-use super::content::read_magic;
 use super::entry::{collect, exists, verify};
 use crate::{
     AlgorithmChoice, Error, Key, Presence, ProtocolMagic, StorageBackend, TransferableBackend,
@@ -23,31 +21,11 @@ impl StorageBackend for RorolalaStorage {
 
     /// Chooses how `file` is written, from what the file in front of it says.
     ///
-    /// Three answers, and none of them needs to read the whole content to give one:
-    ///
-    /// - **A packed container** — anything that starts with a ZIP's signature, which is what a
-    ///   `.zip` and every format built on one are — is cut at the boundaries of what it packs. See
-    ///   [`Chunking::Zip`](crate::Chunking::Zip): boundaries given rather than searched for, and the
-    ///   cut that can tell what is still the same bytes it was.
-    /// - **Text** is compressed, and — once there is enough of it to be worth a manifest — cut at
-    ///   the ends of its lines, so that what a chunk holds is whole lines. See [`Text`](crate::Text):
-    ///   lines are what an edit moves, so a few of them changed costs those chunks rather than the
-    ///   file.
-    /// - **Anything else** is written the way the store was told to write, which by default is as
-    ///   it came in, whole: compressing arbitrary content is not the bargain it is for text, and
-    ///   cutting it takes a manifest to say where the pieces are.
-    ///
-    /// What any answer comes to is not written down anywhere, so a store may be told to write
-    /// differently tomorrow without a key changing.
+    /// The choice itself is the store's own — see the `choice` module — and this is the boundary's
+    /// way in, so that a caller reaches the same deciding whether it hands over a file or the bytes
+    /// of one.
     fn choose_algorithm(&self, file: &Path) -> Self::AlgorithmChoice {
-        let mut magic = [0_u8; SNIFF_LEN];
-        let filled = read_magic(file, &mut magic);
-        let size = fs::metadata(file).map_or(0, |data| data.len());
-
-        self.choose_for(
-            &magic[..filled],
-            usize::try_from(size).unwrap_or(usize::MAX),
-        )
+        self.choose_for_file(file)
     }
 
     async fn write_file(

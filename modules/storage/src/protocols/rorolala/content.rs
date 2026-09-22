@@ -1,20 +1,17 @@
 //! What a store keeps, and how it decides to keep it.
 //!
 //! Content goes down as one object or as a manifest naming chunks, and it is put back together the
-//! same way whatever it was when it went in. Which of the two it becomes is this module's one
-//! decision, and it decides from the content alone — so a write from a file and a write from a
-//! transfer land the same way.
+//! same way whatever it was when it went in. Which of the two it becomes is settled by
+//! [`choice`](super::choice) and carried in as an [`AlgorithmChoice`], so what is here is the laying
+//! down of content that has already been decided about.
 
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::Path;
 
 use super::RorolalaStorage;
-use super::consts::{MANIFEST_DIR, PackKind, TEXT_CUT, TEXT_CUT_FROM};
+use super::consts::{MANIFEST_DIR, PackKind};
 use super::entry::{collect, exists, key_of, plain_len_of, verify};
 use crate::{
-    AlgorithmChoice, Chunk, Chunker as _, Chunking, Codec, Error, FRAME_VERSION, Frame, Key,
-    Layout, Manifest, ZIP_MAGIC,
+    AlgorithmChoice, Chunk, Chunker as _, Codec, Error, FRAME_VERSION, Frame, Key, Layout, Manifest,
 };
 
 impl RorolalaStorage {
@@ -184,29 +181,6 @@ impl RorolalaStorage {
         Ok(content)
     }
 
-    /// Chooses how `content` is written, from what its opening says.
-    ///
-    /// This is the one place a store decides what to do with content, and it decides from the
-    /// content alone — so a write from a file and a write from a transfer land the same way. See
-    /// [`choose_algorithm`](crate::StorageBackend::choose_algorithm) for what each answer means.
-    pub(super) fn choose_for(&self, magic: &[u8], size: usize) -> AlgorithmChoice {
-        if starts_a_container(magic) {
-            return AlgorithmChoice::new(Codec::Raw, Chunking::Zip);
-        }
-
-        if is_text(magic) {
-            let chunking = if size < TEXT_CUT_FROM {
-                Chunking::Whole
-            } else {
-                TEXT_CUT
-            };
-
-            return AlgorithmChoice::new(Codec::Zstd, chunking);
-        }
-
-        AlgorithmChoice::new(self.codec, self.cut)
-    }
-
     /// Stores `content`, written with `choice`, and answers with its key.
     ///
     /// This is a write with the file already in hand: what a caller has is bytes rather than a path
@@ -325,40 +299,4 @@ impl RorolalaStorage {
 
         Ok(keys.into_iter().collect())
     }
-}
-
-/// Whether `magic` — the first bytes of some content — starts a signature this store recognises.
-///
-/// The only one it recognises is a ZIP's, which is what tells a packed container from content of
-/// any other kind — see [`Zip`](crate::Zip) for what a container is taken apart by.
-pub(super) fn starts_a_container(magic: &[u8]) -> bool {
-    magic.starts_with(&ZIP_MAGIC)
-}
-
-/// Whether `magic` — the first bytes of some content — reads as text.
-///
-/// A zero byte is what says content is not text, which is the rule `git` reads a file by: what a
-/// file is *for* cannot be told from its bytes, but whether it is something a person wrote can be
-/// told well enough by that much of it.
-fn is_text(magic: &[u8]) -> bool {
-    !magic.contains(&0)
-}
-
-/// Fills `magic` with the first bytes of `file`, and says how many of them were there.
-pub(super) fn read_magic(file: &Path, magic: &mut [u8]) -> usize {
-    use std::io::Read as _;
-
-    let Ok(mut handle) = fs::File::open(file) else {
-        return 0;
-    };
-
-    let mut filled = 0;
-    while filled < magic.len() {
-        match handle.read(&mut magic[filled..]) {
-            Ok(0) | Err(_) => break,
-            Ok(read) => filled += read,
-        }
-    }
-
-    filled
 }
