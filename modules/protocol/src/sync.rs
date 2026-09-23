@@ -253,9 +253,14 @@ where
 
 /// The longest value one frame will carry.
 ///
-/// A frame states its length in four bytes, so a peer could otherwise ask for
-/// four gigabytes to be allocated before sending any of it.
-const MAX_FRAME: usize = 16 * 1024 * 1024;
+/// A value states its length in four bytes, so a peer could otherwise ask for four gigabytes to be
+/// allocated before sending any of it. This is what a value is held to, on the way out as well as the
+/// way in, so what is too large to cross is refused where it is known rather than by a peer that then
+/// reads a frame it will not take.
+///
+/// What it bounds is a value *once framed*, which is why a caller carrying something larger than
+/// this — a content, or a batch — carries it in pieces rather than in one value.
+pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 
 /// Frames `value` and writes it to `channel`.
 pub(crate) async fn send_value<Inner>(

@@ -18,7 +18,7 @@
 //! twice: see [`RorolalaStorage`]'s write, which passes over what is there.
 
 use rorolala_errors::BincodeError;
-use rorolala_protocol::{ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
+use rorolala_protocol::{ActionContext, ActionError, Both, MAX_FRAME, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{
     Error as StoreError, Key, Manifest, Presence, RorolalaStorage, StorageBackend as _,
 };
@@ -34,11 +34,14 @@ pub(crate) enum Side {
 
 /// How many bytes of a blob one value carries.
 ///
-/// A value crosses as one frame, and a frame has a bound — the protocol's own, which is smaller than
-/// this and is not a store's to change — so a content bigger than that bound is carried as several
-/// values. This is deliberately well under that bound: what it means is that a content of *any* size
-/// crosses, and a smaller piece costs nothing but a few more frames.
-const PIECE: usize = 4 * 1024 * 1024;
+/// A value crosses as one frame, and a frame carries at most [`MAX_FRAME`] bytes — so a content
+/// bigger than that crosses as several values, and this is how much of it each of them takes. What
+/// is held back is the room the framing itself takes, so that a piece of this much always fits the
+/// frame it is put in, whatever the value is wrapped in on the way out.
+const PIECE: usize = MAX_FRAME - FRAMING;
+
+/// How much room the framing around one value is left.
+const FRAMING: usize = 1024;
 
 /// Makes two stores hold the same keys.
 ///
