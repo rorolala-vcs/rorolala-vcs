@@ -1,6 +1,6 @@
 //! Build script: collect the git commit hash, the rustc version, the commit
 //! date, and `workspace.package.version` from Cargo.toml, then write them out
-//! to `.cargo/temp/ref.json`.
+//! to `.cache/rs-target/ref.json`.
 //!
 //! It also generates the C header for the workspace's `#[lazyffi]` surface into
 //! `{target_dir}/{profile}/ffi_bindings/` through `rorolala-dev-bindgen`.
@@ -14,7 +14,7 @@ use std::process::Command;
 const MANIFEST_PATH: &str = "Cargo.toml";
 
 /// Directory, relative to the manifest directory, holding the generated files.
-const OUTPUT_DIR: &str = ".cargo/temp";
+const OUTPUT_DIR: &str = ".cache/rs-target";
 
 /// Name of the generated JSON file inside [`OUTPUT_DIR`].
 const OUTPUT_FILE: &str = "ref.json";

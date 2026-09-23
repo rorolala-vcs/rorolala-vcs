@@ -15,12 +15,12 @@ use std::time::{Duration, Instant};
 ///
 /// The gate sets `ROLA_BIN_DIR` to the release programs it built. Run by hand there is
 /// nothing to set: a suite is run from the directory that holds it, so the programs are the
-/// ones the workspace put beside that directory — `../.cargo/temp/release`, as seen from
+/// ones the workspace put beside that directory — `../.cache/rs-target/release`, as seen from
 /// there.
 #[must_use]
 pub fn bin_dir() -> PathBuf {
     std::env::var_os("ROLA_BIN_DIR").map_or_else(
-        || Path::new("..").join(".cargo/temp/release"),
+        || Path::new("..").join(".cache/rs-target/release"),
         PathBuf::from,
     )
 }

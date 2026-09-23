@@ -1,2 +1,2 @@
 [build]
-target-dir = "./.cargo/temp/"
+target-dir = "./.cache/rs-target/"

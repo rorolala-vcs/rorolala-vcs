@@ -11,7 +11,11 @@
 CARGO ?= cargo
 
 # Cargo's target directory, matching `.cargo/config.toml`.
-TARGET_DIR ?= .cargo/temp
+TARGET_DIR ?= .cache/rs-target
+
+# .NET's output directory, matching `Directory.Build.props`. It is under the same `.cache` as
+# cargo's, so the two toolchains' output sits in one place.
+CS_TARGET_DIR ?= .cache/cs-target
 
 # Directory `export` lays the hand-off artifacts out in.
 BUILD_DIR ?= build
@@ -54,6 +58,12 @@ ifneq ($(filter /%,$(TARGET_DIR)),)
 endif
 ifeq ($(strip $(TARGET_DIR)),)
   $(error TARGET_DIR must not be empty)
+endif
+ifneq ($(filter /%,$(CS_TARGET_DIR)),)
+  $(error CS_TARGET_DIR must be a relative path, got `$(CS_TARGET_DIR)')
+endif
+ifeq ($(strip $(CS_TARGET_DIR)),)
+  $(error CS_TARGET_DIR must not be empty)
 endif
 
 # Platform spellings. Cargo names a Unix shared library with a `lib` prefix and a
@@ -211,7 +221,7 @@ cargo-clean:
 	$(CARGO) clean
 
 # Removes everything the build ever produced: cargo's output, whatever else
-# $(TARGET_DIR) holds (the generated header, mingling's completion scripts), and the
-# exported $(BUILD_DIR).
+# $(TARGET_DIR) holds (the generated header, mingling's completion scripts), .NET's
+# output, and the exported $(BUILD_DIR).
 clean: cargo-clean
-	rm -rf $(TARGET_DIR) $(BUILD_DIR)
+	rm -rf $(TARGET_DIR) $(CS_TARGET_DIR) $(BUILD_DIR)

@@ -8,4 +8,4 @@ members = ["*"]
 
 # `*` reaches the directories a suite's own configuration and output sit in, which are not
 # suites.
-exclude = [".cargo"]
+exclude = [".cache", ".cargo"]

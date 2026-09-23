@@ -1,9 +1,9 @@
-# All temp
-/.cargo/temp
-/tests/.cargo/temp
-
 # Build
 /build/
+
+# Build output for every toolchain: cargo and .NET both write here
+.cache/
+.cargo/temp
 
 # macOS
 .DS_Store
