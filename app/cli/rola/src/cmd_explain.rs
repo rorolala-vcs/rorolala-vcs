@@ -15,8 +15,10 @@
 //! kept under the user's local data directory.
 
 use mingling::{
-    Grouped, StructuralData,
-    macros::{arg, buffer, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, StructuralData, Wrap,
+    macros::{
+        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -101,10 +103,28 @@ pub fn desc_explain_exit_code() -> Description {
 /// [`ErrorUnknownExitCode`] when the code named is not one the program states, and
 /// [`ErrorLastExitCodeUnknown`] when the recorded one is not.
 #[command(node = "explain.exit-code")]
-pub fn explain_exit_code(args: EntryExplainExitCode) -> Next {
+pub fn explain_exit_code(args: EntryExplainExitCode) -> StateExplainExitCode {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // makes this about the run before.
     let named: Option<i32> = args.pick(&arg![Option<i32>]).unwrap();
+
+    StateExplainExitCode::from(named)
+}
+
+/// The state an explanation of an exit code starts in.
+///
+/// Whether a code was named is the whole of what is said before there is anything to look up:
+/// naming none asks about the run before rather than about a code of the reader's choosing.
+#[derive(Grouped, Clone, Copy, Wrap)]
+pub struct StateExplainExitCode {
+    /// The code named, or nothing when the code the last run that failed ended with is the one
+    /// being asked about.
+    named: Option<i32>,
+}
+
+#[chain(routeify)]
+pub fn handle_explain_exit_code(state: StateExplainExitCode) -> Next {
+    let StateExplainExitCode { named } = state;
 
     let code = match named {
         Some(code) => code,

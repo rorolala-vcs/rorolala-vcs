@@ -38,30 +38,45 @@ pub fn desc_create() -> Description {
 }
 
 #[command(entry = EntryCreate, routeify)]
-pub fn create(args: EntryCreate, using_vault: &ResUsingVault) -> Next {
+pub fn create(args: EntryCreate) -> Next {
     let path: PathBuf = args
         .pick_or_route(&arg![PathBuf], || ErrorCreatePathNotProvided.into())
         .to_result()?;
 
+    StateCreatePath::from(path).into()
+}
+
+/// Represents the state data naming where a creation is asked for.
+///
+/// A path is the whole of what a creation is given: whether a Vault or a Workspace is what is
+/// made is asked for beside it, so this is the state every creation starts in, and the one a
+/// name for the current directory — `rola init` — reaches with as well.
+#[derive(Grouped, Wrap)]
+pub struct StateCreatePath {
+    /// The directory expected to be created.
+    path: PathBuf,
+}
+
+#[chain(routeify)]
+pub fn handle_create(state: StateCreatePath, using_vault: &ResUsingVault) -> Next {
+    let path = state.path;
+
     if **using_vault {
-        StateCreateVault { vault_dir: path }.into()
+        StateCreateVault::from(path).into()
     } else {
-        StateCreateWorkspace {
-            workspace_dir: path,
-        }
-        .into()
+        StateCreateWorkspace::from(path).into()
     }
 }
 
 /// Represents the state data used to create a Vault.
-#[derive(Grouped)]
+#[derive(Grouped, Wrap)]
 pub struct StateCreateVault {
     /// The directory expected to be created.
     vault_dir: PathBuf,
 }
 
 /// Represents the state data used to create a Workspace.
-#[derive(Grouped)]
+#[derive(Grouped, Wrap)]
 pub struct StateCreateWorkspace {
     /// The directory expected to be created.
     workspace_dir: PathBuf,

@@ -8,7 +8,7 @@
 use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, StructuralData,
-    macros::{buffer, command, help, metadata, r_eprintln, r_println, renderer},
+    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify},
     metadata::Description,
     res::ResExitCode,
 };
@@ -54,7 +54,21 @@ pub fn desc_tool_ls_manifests() -> Description {
 /// Renders [`ErrorManifestsNoStorage`] when the run is nowhere a store is, and
 /// [`ErrorManifestsFailed`] when the store's manifests could not be listed.
 #[command(node = "tool.ls-manifests")]
-pub fn tool_ls_manifests(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
+pub fn tool_ls_manifests() -> StateToolLsManifests {
+    StateToolLsManifests
+}
+
+/// The state a listing of the store's manifests starts in.
+///
+/// A listing names nothing: what is listed is whatever the run's store keeps cut.
+#[derive(Grouped)]
+pub struct StateToolLsManifests;
+
+#[chain(routeify)]
+pub fn handle_tool_ls_manifests(
+    _state: StateToolLsManifests,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorManifestsNoStorage.into();
     };

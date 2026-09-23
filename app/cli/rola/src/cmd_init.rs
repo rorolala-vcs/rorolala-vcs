@@ -6,7 +6,7 @@ use mingling::{
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
-use crate::cmd_create::EntryCreate;
+use crate::cmd_create::StateCreatePath;
 use crate::exit_codes::EC_HELP;
 
 #[help(buffer)]
@@ -20,8 +20,9 @@ pub fn desc_init() -> Description {
     t!("init.cmd_init_description").to_string().into()
 }
 
-#[command(entry = EntryInit)]
-pub fn init(cwd: &ResCurrentDir) -> EntryCreate {
-    // Forward the current working path to `rola create <current path>`
-    EntryCreate(vec![cwd.to_path_buf().display().to_string()])
+#[command(node = "init")]
+pub fn init(cwd: &ResCurrentDir) -> StateCreatePath {
+    // Forward the current working path to the branch `rola create <current path>` would take,
+    // so a creation is described in one place and reached from two.
+    StateCreatePath::from(cwd.to_path_buf())
 }

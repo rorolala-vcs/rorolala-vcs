@@ -10,7 +10,9 @@ use std::path::PathBuf;
 use librorolala::storage::{Error as StorageError, Key, StorageBackend as _};
 use mingling::{
     Grouped, LazyRes,
-    macros::{arg, buffer, command, help, metadata, r_eprintln, r_println, renderer},
+    macros::{
+        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -59,10 +61,7 @@ pub fn desc_tool_extract_file() -> Description {
 /// [`ErrorTargetExists`] when the file is already there, and [`ErrorExtractFailed`] when the
 /// store cannot produce the content or nothing could be written where it was asked for.
 #[command(node = "tool.extract-file")]
-pub fn tool_extract_file(
-    args: EntryToolExtractFile,
-    storage: &mut LazyRes<ResRorolalaStorage>,
-) -> Next {
+pub fn tool_extract_file(args: EntryToolExtractFile) -> Next {
     let picked = args
         .pick_or_route(&arg![String], || ErrorHashMissing.into())
         .pick(&arg![Option<PathBuf>])
@@ -71,6 +70,28 @@ pub fn tool_extract_file(
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    StateToolExtractFile { hash, dir }.into()
+}
+
+/// The state of taking content back out of the store.
+///
+/// What is asked for is a hash, and where it is asked to land is a directory — or the current
+/// one, when none is named.
+#[derive(Grouped)]
+pub struct StateToolExtractFile {
+    /// The hash whose content is asked for.
+    hash: String,
+    /// The directory the content goes into, or nothing when the current one is meant.
+    dir: Option<PathBuf>,
+}
+
+#[chain(routeify)]
+pub fn handle_tool_extract_file(
+    state: StateToolExtractFile,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+) -> Next {
+    let StateToolExtractFile { hash, dir } = state;
 
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorExtractNoStorage.into();

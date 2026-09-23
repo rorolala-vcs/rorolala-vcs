@@ -2,10 +2,10 @@ use std::path::PathBuf;
 
 use librorolala::auth::{locate_accounts, locate_members};
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, command, completion, empty_result, help, metadata, r_eprintln, r_println,
-        renderer, suggest,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln,
+        r_println, renderer, routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
@@ -51,18 +51,34 @@ pub fn desc_key() -> Description {
 /// Each key found is printed as a full path, one per line, on standard output, in the order
 /// it is looked up. Finding nothing is not a failure: it prints nothing and returns.
 #[command(node = "key", entry = EntryKey)]
-pub fn key(
-    args: EntryKey,
+pub fn key(args: EntryKey) -> StateKeyList {
+    // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
+    let flags = args.pick(&arg![KeyFlags]).unwrap();
+
+    StateKeyList::from(matches!(flags.pem, Flag::Active))
+}
+
+/// The state a listing of keys starts in.
+///
+/// Which halves of the pairs are listed is the whole of what a listing is told, so this is
+/// the one thing said about it before there is anything to look for.
+#[derive(Grouped, Clone, Copy, Wrap)]
+pub struct StateKeyList {
+    /// Whether the keys listed are the private ones, the accounts the work can act as.
+    pem: bool,
+}
+
+#[chain(routeify)]
+pub fn handle_key_list(
+    state: StateKeyList,
     vault: &mut LazyRes<ResVault>,
     workspace: &mut LazyRes<ResWorkspace>,
 ) -> Next {
+    let StateKeyList { pem } = state;
     let roots = roots(workspace.get_ref().as_ref(), vault.get_ref().as_ref());
-
-    // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let flags = args.pick(&arg![KeyFlags]).unwrap();
     let scopes = scopes();
 
-    let paths: Vec<PathBuf> = if matches!(flags.pem, Flag::Active) {
+    let paths: Vec<PathBuf> = if pem {
         locate_accounts(&roots, &scopes)
             .into_iter()
             .map(|key| key.key_path())

@@ -9,8 +9,10 @@ use std::path::PathBuf;
 
 use librorolala::storage::{Key, store_file};
 use mingling::{
-    Grouped, LazyRes, StructuralData,
-    macros::{arg, buffer, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, LazyRes, StructuralData, Wrap,
+    macros::{
+        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -62,10 +64,7 @@ pub fn desc_tool_write_file() -> Description {
 /// nowhere a store is, [`ErrorNotAFile`] when the path is not a file, and [`ErrorWriteFailed`]
 /// when the store would not take the content.
 #[command(node = "tool.write-file")]
-pub fn tool_write_file(
-    args: EntryToolWriteFile,
-    storage: &mut LazyRes<ResRorolalaStorage>,
-) -> Next {
+pub fn tool_write_file(args: EntryToolWriteFile) -> Next {
     let picked = args
         .pick_or_route(&arg![PathBuf], || ErrorFileMissing.into())
         .to_result();
@@ -73,6 +72,26 @@ pub fn tool_write_file(
         Ok(file) => file,
         Err(next) => return next,
     };
+
+    StateToolWriteFile::from(file).into()
+}
+
+/// The state of storing a file's content.
+///
+/// A path is the whole of what a write is told: how the content is kept is the store's own
+/// decision, made from the content itself.
+#[derive(Grouped, Wrap)]
+pub struct StateToolWriteFile {
+    /// The file whose content is stored.
+    path: PathBuf,
+}
+
+#[chain(routeify)]
+pub fn handle_tool_write_file(
+    state: StateToolWriteFile,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+) -> Next {
+    let file = state.path;
 
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorWriteNoStorage.into();

@@ -7,9 +7,10 @@
 
 use librorolala::protocol::VaultAddress;
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer, suggest,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
@@ -61,7 +62,18 @@ pub fn desc_vault() -> Description {
 /// none prints nothing about any, and one that cannot be found beside the current directory is
 /// an error, since there is nothing to list from.
 #[command(node = "vault")]
-pub fn vault(config: &mut LazyRes<ResWorkspaceConfig>) -> Next {
+pub fn vault() -> StateVaultList {
+    StateVaultList
+}
+
+/// The state a listing of the Workspace's Vaults starts in.
+///
+/// A listing names nothing: there is one list to read, and it is the Workspace's own.
+#[derive(Grouped)]
+pub struct StateVaultList;
+
+#[chain(routeify)]
+pub fn handle_vault_list(_state: StateVaultList, config: &mut LazyRes<ResWorkspaceConfig>) -> Next {
     match config.get_ref() {
         ResWorkspaceConfig::Read { config, .. } => ResultVaults::of(config).into(),
         ResWorkspaceConfig::Absent => ErrorWorkspaceNotExist.into(),
@@ -93,11 +105,7 @@ pub fn desc_vault_bind() -> Description {
 /// With `--set-default`, binding also [chooses](vault_set_default) the name to be reached
 /// for, which saves saying so twice.
 #[command(node = "vault.bind")]
-pub fn vault_bind(
-    args: EntryVaultBind,
-    config: &mut LazyRes<ResWorkspaceConfig>,
-    history: &mut LazyRes<ResAddressHistory>,
-) -> Next {
+pub fn vault_bind(args: EntryVaultBind) -> Next {
     let picked = args
         .pick(&arg![VaultBindFlags])
         .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
@@ -107,6 +115,38 @@ pub fn vault_bind(
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    // Picking a `Flag` cannot fail, so this is `Active` only when it was written.
+    StateVaultBind {
+        name,
+        address,
+        set_default: matches!(flags.set_default, Flag::Active),
+    }
+    .into()
+}
+
+/// The state of binding a name to a Vault address.
+#[derive(Grouped)]
+pub struct StateVaultBind {
+    /// The name the address is bound to.
+    name: String,
+    /// The address, as it was written.
+    address: String,
+    /// Whether the name is also made the one the Workspace reaches for.
+    set_default: bool,
+}
+
+#[chain(routeify)]
+pub fn handle_vault_bind(
+    binding: StateVaultBind,
+    config: &mut LazyRes<ResWorkspaceConfig>,
+    history: &mut LazyRes<ResAddressHistory>,
+) -> Next {
+    let StateVaultBind {
+        name,
+        address,
+        set_default,
+    } = binding;
 
     let Ok(address) = VaultAddress::parse(&address) else {
         return ErrorVaultAddressInvalid { address }.into();
@@ -125,8 +165,8 @@ pub fn vault_bind(
             let replaced = workspace.vaults_mut().bind(name.clone(), address.clone());
 
             // The name is bound by now, so choosing it is choosing one that can be reached
-            // for. Picking a `Flag` cannot fail, so this is `Active` only when it was written.
-            let made_default = matches!(flags.set_default, Flag::Active);
+            // for.
+            let made_default = set_default;
             if made_default {
                 let _ = workspace.default_config_mut().set_vault(name.clone());
             }
@@ -165,7 +205,7 @@ pub fn desc_vault_unbind() -> Description {
 /// passed over in silence. A name that was the one [reached for](vault_set_default) by
 /// default goes along with it: a default that named nothing would reach nowhere.
 #[command(node = "vault.unbind")]
-pub fn vault_unbind(args: EntryVaultUnbind, config: &mut LazyRes<ResWorkspaceConfig>) -> Next {
+pub fn vault_unbind(args: EntryVaultUnbind) -> Next {
     let name = match args
         .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
         .to_result()
@@ -173,6 +213,23 @@ pub fn vault_unbind(args: EntryVaultUnbind, config: &mut LazyRes<ResWorkspaceCon
         Ok(name) => name,
         Err(next) => return next,
     };
+
+    StateVaultUnbind::from(name).into()
+}
+
+/// The state of letting a name go.
+#[derive(Grouped, Wrap)]
+pub struct StateVaultUnbind {
+    /// The name that is let go.
+    name: String,
+}
+
+#[chain(routeify)]
+pub fn handle_vault_unbind(
+    state: StateVaultUnbind,
+    config: &mut LazyRes<ResWorkspaceConfig>,
+) -> Next {
+    let StateVaultUnbind { name } = state;
 
     match config.get_mut() {
         state @ ResWorkspaceConfig::Read { .. } => {
@@ -223,10 +280,7 @@ pub fn desc_vault_set_default() -> Description {
 /// a default that reached nowhere. Naming the one already chosen is not an error, only a
 /// choice made again.
 #[command(node = "vault.set-default")]
-pub fn vault_set_default(
-    args: EntryVaultSetDefault,
-    config: &mut LazyRes<ResWorkspaceConfig>,
-) -> Next {
+pub fn vault_set_default(args: EntryVaultSetDefault) -> Next {
     let name = match args
         .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
         .to_result()
@@ -234,6 +288,23 @@ pub fn vault_set_default(
         Ok(name) => name,
         Err(next) => return next,
     };
+
+    StateVaultSetDefault::from(name).into()
+}
+
+/// The state of choosing the Vault the Workspace reaches for.
+#[derive(Grouped, Wrap)]
+pub struct StateVaultSetDefault {
+    /// The name that is reached for.
+    name: String,
+}
+
+#[chain(routeify)]
+pub fn handle_vault_set_default(
+    state: StateVaultSetDefault,
+    config: &mut LazyRes<ResWorkspaceConfig>,
+) -> Next {
+    let StateVaultSetDefault { name } = state;
 
     match config.get_mut() {
         state @ ResWorkspaceConfig::Read { .. } => {

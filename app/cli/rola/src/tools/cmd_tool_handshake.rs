@@ -7,9 +7,9 @@
 
 use librorolala::daemon::action_handshake;
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
     },
     metadata::Description,
@@ -64,9 +64,28 @@ pub fn desc_tool_handshake() -> Description {
 /// [`ErrorShouldInWorkspace`]: crate::error::ErrorShouldInWorkspace
 /// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
 /// [`ActionError`]: librorolala::protocol::ActionError
-#[command(node = "tool.handshake", routeify)]
-pub fn tool_handshake(
-    args: EntryToolHandshake,
+#[command(node = "tool.handshake")]
+pub fn tool_handshake(args: EntryToolHandshake) -> StateToolHandshake {
+    // Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is reached for.
+    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+
+    StateToolHandshake::from(named)
+}
+
+/// The state of speaking the handshake to a Vault.
+///
+/// Which Vault is reached is the whole of what is said: naming none reaches for the one the
+/// Workspace reaches for by default.
+#[derive(Grouped, Wrap)]
+pub struct StateToolHandshake {
+    /// The Vault to reach, or nothing when the Workspace's own choice is reached for.
+    vault: Option<String>,
+}
+
+#[chain(routeify)]
+pub fn handle_tool_handshake(
+    state: StateToolHandshake,
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
@@ -81,13 +100,10 @@ pub fn tool_handshake(
     // did not fail, so there is a Workspace here to hand on.
     let held = workspace.get_ref().as_ref().unwrap();
 
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what
-    // lets the Workspace's own choice be the one that is reached for. `?` here is
-    // `routeify`'s: a run with nothing to reach for leaves through it.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    // `?` here is `routeify`'s: a run with nothing to reach for leaves through it.
     let target = remote
         .get_ref()
-        .vault_or_default(named.unwrap_or_default())?;
+        .vault_or_default(state.vault.unwrap_or_default())?;
 
     // `?` here is `routeify`'s as well: the account the work acts as is the resource's to
     // hand over, and a run that acts as none leaves through it.

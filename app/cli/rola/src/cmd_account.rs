@@ -8,9 +8,10 @@
 use std::path::PathBuf;
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer, suggest,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -47,25 +48,57 @@ pub fn desc_account() -> Description {
 /// acts as by default, in Rorolala's own file for the user; a name that is not an account
 /// anywhere is reported rather than recorded.
 #[command(node = "account")]
-pub fn account(
-    args: EntryAccount,
+pub fn account(args: EntryAccount) -> Next {
+    // Picking an `Option` cannot fail: an account that is absent is `None` rather than an
+    // error, so this unwrap never panics.
+    let chosen: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+
+    let Some(name) = chosen else {
+        return StateAccountList.into();
+    };
+
+    StateAccountSet::from(name).into()
+}
+
+/// The state a listing of the accounts starts in.
+///
+/// Listing names nothing, so there is nothing to say about it beyond the fact that it was
+/// asked for: what it lists is whatever any scope holds.
+#[derive(Grouped)]
+pub struct StateAccountList;
+
+#[chain(routeify)]
+pub fn handle_account_list(
+    _state: StateAccountList,
     vault: &mut LazyRes<ResVault>,
     workspace: &mut LazyRes<ResWorkspace>,
     current: &mut LazyRes<ResCurrentAccount>,
 ) -> Next {
     let names = account_names(workspace.get_ref().as_ref(), vault.get_ref().as_ref());
 
-    // Picking an `Option` cannot fail: an account that is absent is `None` rather than an
-    // error, so this unwrap never panics.
-    let chosen: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    ResultAccounts {
+        current: current.get_ref().name().map(str::to_string),
+        names,
+    }
+    .into()
+}
 
-    let Some(name) = chosen else {
-        return ResultAccounts {
-            current: current.get_ref().name().map(str::to_string),
-            names,
-        }
-        .into();
-    };
+/// The state of naming the account the work acts as.
+#[derive(Grouped, Wrap)]
+pub struct StateAccountSet {
+    /// The account that was named.
+    name: String,
+}
+
+#[chain(routeify)]
+pub fn handle_account_set(
+    state: StateAccountSet,
+    vault: &mut LazyRes<ResVault>,
+    workspace: &mut LazyRes<ResWorkspace>,
+    current: &mut LazyRes<ResCurrentAccount>,
+) -> Next {
+    let StateAccountSet { name } = state;
+    let names = account_names(workspace.get_ref().as_ref(), vault.get_ref().as_ref());
 
     if !names.contains(&name) {
         return ErrorAccountNotFound { name }.into();

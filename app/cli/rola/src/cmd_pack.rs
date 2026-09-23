@@ -8,7 +8,7 @@
 
 use mingling::{
     Grouped, LazyRes,
-    macros::{buffer, command, help, metadata, r_eprintln, r_println, renderer},
+    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify},
     metadata::Description,
     res::ResExitCode,
 };
@@ -51,7 +51,19 @@ pub fn desc_pack() -> Description {
 /// Renders [`ErrorPackNoStorage`] when the run is nowhere a store is, and [`ErrorPackFailed`] when
 /// the store's objects could not be read or a pack could not be written.
 #[command(node = "pack")]
-pub fn pack(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
+pub fn pack() -> StatePack {
+    StatePack
+}
+
+/// The state a packing run starts in.
+///
+/// A packing names nothing: what is laid out is whatever store the run works on, so the whole
+/// of what it is told is already in where the run happens to be.
+#[derive(Grouped)]
+pub struct StatePack;
+
+#[chain(routeify)]
+pub fn handle_pack(_state: StatePack, storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorPackNoStorage.into();
     };

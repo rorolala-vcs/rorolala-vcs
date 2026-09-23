@@ -5,13 +5,18 @@
 //! what it holds, and what only one of them holds crosses, so one run leaves both holding
 //! everything either had. Because that is a change to both stores, it is asked for first.
 
+// `#[chain]` copies the attributes of the function it is given onto the struct it generates,
+// so a lint allowed on the handler below is reported as defined twice. The allow lives here,
+// where it covers the one signature that needs it.
+#![allow(clippy::trivially_copy_pass_by_ref)]
+
 use librorolala::daemon::action_sync_all_async;
 use librorolala::protocol::ActionError;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, ShellContext, Suggest, Wrap,
     confirm::YesConfirm,
     macros::{
-        arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
     },
     metadata::Description,
@@ -78,10 +83,33 @@ pub fn desc_tool_sync_all() -> Description {
 // is taken by reference, which is what the injection gives it. `ResProgressSetting` is read from
 // where it is handed in for the same reason, and taking a copy of it here would be no more the
 // answer the run gave.
-#[allow(clippy::trivially_copy_pass_by_ref)]
-#[command(node = "tool.sync-all", routeify)]
-pub fn tool_sync_all(
-    args: EntryToolSyncAll,
+#[command(node = "tool.sync-all")]
+pub fn tool_sync_all(args: EntryToolSyncAll) -> StateToolSyncAll {
+    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
+    // Workspace's own choice be the one that is reached for.
+    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+
+    StateToolSyncAll::from(named)
+}
+
+/// The state of making the two stores hold the same keys.
+///
+/// Which Vault is reached is the whole of what is said: naming none reaches for the one the
+/// Workspace reaches for by default.
+#[derive(Grouped, Wrap)]
+pub struct StateToolSyncAll {
+    /// The Vault to reach, or nothing when the Workspace's own choice is reached for.
+    vault: Option<String>,
+}
+
+// `ResConfirm` is a value small enough to copy, but it is the resource the protocol's injection
+// hands in and not something this command owns: taking a copy would read a state of its own, so it
+// is taken by reference, which is what the injection gives it. `ResProgressSetting` is read from
+// where it is handed in for the same reason, and taking a copy of it here would be no more the
+// answer the run gave.
+#[chain(routeify)]
+pub fn handle_tool_sync_all(
+    state: StateToolSyncAll,
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
@@ -97,12 +125,10 @@ pub fn tool_sync_all(
     // not fail, so there is a Workspace here to hand on.
     let held = workspace.get_ref().as_ref().unwrap();
 
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
-    // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    // `?` here is `routeify`'s: a run with nothing to reach for leaves through it.
     let target = remote
         .get_ref()
-        .vault_or_default(named.unwrap_or_default())?;
+        .vault_or_default(state.vault.unwrap_or_default())?;
 
     let name = current.get_ref().must_bind()?;
     let account = account_named(&name, Some(held), None)?;

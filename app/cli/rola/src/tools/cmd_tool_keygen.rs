@@ -5,7 +5,9 @@ use std::process::Command;
 use librorolala::auth::user_keys_dir;
 use mingling::{
     Grouped,
-    macros::{arg, buffer, command, help, metadata, r_eprintln, r_println, renderer},
+    macros::{
+        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+    },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
@@ -79,7 +81,7 @@ pub fn desc_tool_keygen() -> Description {
 /// inside a directory that exists, [`ErrorNoKeyDir`] when `--install` cannot find the
 /// user's key directory, and [`ErrorInstallDir`] when it cannot create it.
 #[command(node = "tool.keygen")]
-pub fn tool_keygen(args: EntryToolKeygen) -> Next {
+pub fn tool_keygen(args: EntryToolKeygen) -> StateToolKeygen {
     // Picking cannot fail — a flag that is absent is `Inactive`, and an option or a
     // positional that is absent is `None` — so this unwrap never panics.
     let (flags, output) = args
@@ -87,10 +89,36 @@ pub fn tool_keygen(args: EntryToolKeygen) -> Next {
         .pick(&arg![Option<PathBuf>])
         .unwrap();
 
-    let install = matches!(flags.install, Flag::Active);
+    StateToolKeygen {
+        output,
+        name: flags.name,
+        install: matches!(flags.install, Flag::Active),
+    }
+}
 
-    let Some((directory, name)) = destination(output.as_deref(), flags.name.as_deref(), install)
-    else {
+/// The state of generating a key pair.
+///
+/// Where the pair goes and what it is called is the whole of what a generation is told: a path
+/// names a place, a name names the pair, and `--install` says the place is the user's own.
+#[derive(Grouped)]
+pub struct StateToolKeygen {
+    /// The path the pair was asked to be written at, or nothing when none was named.
+    output: Option<PathBuf>,
+    /// The name the pair is known by, or nothing when none was named.
+    name: Option<String>,
+    /// Whether the pair goes into the user's key directory.
+    install: bool,
+}
+
+#[chain(routeify)]
+pub fn handle_tool_keygen(state: StateToolKeygen) -> Next {
+    let StateToolKeygen {
+        output,
+        name,
+        install,
+    } = state;
+
+    let Some((directory, name)) = destination(output.as_deref(), name.as_deref(), install) else {
         return ErrorNoKeyDir.into();
     };
 

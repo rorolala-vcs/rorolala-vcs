@@ -8,7 +8,7 @@
 use librorolala::storage::{Key, StorageBackend as _};
 use mingling::{
     Grouped, LazyRes, StructuralData,
-    macros::{buffer, command, help, metadata, r_eprintln, r_println, renderer},
+    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify},
     metadata::Description,
     res::ResExitCode,
 };
@@ -52,7 +52,21 @@ pub fn desc_tool_ls_storaged() -> Description {
 /// Renders [`ErrorLsNoStorage`] when the run is nowhere a store is, and [`ErrorLsFailed`] when the
 /// store's objects could not be listed.
 #[command(node = "tool.ls-storaged")]
-pub fn tool_ls_storaged(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
+pub fn tool_ls_storaged() -> StateToolLsStoraged {
+    StateToolLsStoraged
+}
+
+/// The state a listing of the store's objects starts in.
+///
+/// A listing names nothing: what is listed is whatever the run's store holds.
+#[derive(Grouped)]
+pub struct StateToolLsStoraged;
+
+#[chain(routeify)]
+pub fn handle_tool_ls_storaged(
+    _state: StateToolLsStoraged,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorLsNoStorage.into();
     };
