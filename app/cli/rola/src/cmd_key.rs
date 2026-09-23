@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use librorolala::auth::{locate_accounts, locate_members};
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, command, completion, empty_result, help, metadata, r_eprintln, r_println,
         renderer, suggest,
@@ -14,6 +14,7 @@ use mingling::{
 use rorolala_cli_setups::{ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
+use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::EC_HELP;
@@ -104,7 +105,7 @@ pub fn complete_key(ctx: ShellContext) -> Suggest {
 }
 
 /// Result: keys were found beside the work at hand.
-#[derive(Grouped)]
+#[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultKeysFound {
     /// The full path of each key, in the order `locate` ranked them.
     paths: Vec<PathBuf>,

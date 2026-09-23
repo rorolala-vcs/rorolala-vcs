@@ -15,7 +15,7 @@
 //! kept under the user's local data directory.
 
 use mingling::{
-    Grouped,
+    Grouped, StructuralData,
     macros::{arg, buffer, command, help, metadata, r_eprintln, r_println, renderer},
     metadata::Description,
     picker::EntryPicker,
@@ -23,6 +23,7 @@ use mingling::{
 };
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
+use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{self, EC_ERR_EXPLAIN_NO_LASTEC, EC_ERR_EXPLAIN_UNKNOWN, EC_HELP};
@@ -127,7 +128,7 @@ pub fn explain_exit_code(args: EntryExplainExitCode) -> Next {
 }
 
 /// Result: an exit code was explained.
-#[derive(Grouped)]
+#[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultExitCode {
     /// The code that was asked about.
     code: i32,

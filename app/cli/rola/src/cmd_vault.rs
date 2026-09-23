@@ -7,7 +7,7 @@
 
 use librorolala::protocol::VaultAddress;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer, suggest,
     },
@@ -19,6 +19,7 @@ use rorolala_cli_setups::ResWorkspaceConfig;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_workspace::Config as WorkspaceConfig;
 use rust_i18n::t;
+use serde::Serialize;
 
 use crate::Next;
 use crate::address::ResAddressHistory;
@@ -332,7 +333,7 @@ fn positional(ctx: &ShellContext) -> usize {
 }
 
 /// Result: the Workspace's Vaults were listed.
-#[derive(Grouped)]
+#[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultVaults {
     /// Each Vault, by name and address, in name order.
     vaults: Vec<(String, String)>,

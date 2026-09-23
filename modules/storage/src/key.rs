@@ -1,6 +1,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+use serde::{Serialize, Serializer};
+
 use crate::Error;
 
 /// The width, in bytes, of a content hash.
@@ -63,6 +65,22 @@ impl fmt::Display for Key {
     /// Writes the key as the hash and the digest in hex, `blake3:…`.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "blake3:{}", self.hex())
+    }
+}
+
+impl Serialize for Key {
+    /// Writes the key the way it is written down anywhere else: as [`Display`](fmt::Display) writes
+    /// it, `blake3:<hex>`.
+    ///
+    /// A key that crossed into structured output as its digest would be thirty-two numbers that
+    /// say nothing on their own, and a reader would have to know the width and the order to put them
+    /// back together. Written as a string it is the same key an object sits under, so what comes out
+    /// of a listing is what goes back in — [`FromStr`] reads exactly this back.
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.collect_str(self)
     }
 }
 

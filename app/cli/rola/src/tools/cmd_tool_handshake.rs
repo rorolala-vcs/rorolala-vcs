@@ -7,7 +7,7 @@
 
 use librorolala::daemon::action_handshake;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -19,6 +19,7 @@ use mingling::{
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
+use serde::Serialize;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
@@ -135,7 +136,7 @@ pub fn complete_tool_handshake(
 }
 
 /// Result: the daemon answered.
-#[derive(Grouped)]
+#[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultHandshake {
     /// What the daemon answered.
     output: String,

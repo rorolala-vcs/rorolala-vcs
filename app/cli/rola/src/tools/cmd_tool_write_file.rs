@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use librorolala::storage::{Key, store_file};
 use mingling::{
-    Grouped, LazyRes,
+    Grouped, LazyRes, StructuralData,
     macros::{arg, buffer, command, help, metadata, r_eprintln, r_println, renderer},
     metadata::Description,
     picker::EntryPicker,
@@ -18,6 +18,7 @@ use mingling::{
 use rorolala_cli_setups::ResRorolalaStorage;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
+use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{
@@ -120,7 +121,7 @@ pub fn tool_write_file(
 }
 
 /// Result: the content was stored, under the hash it is named by.
-#[derive(Grouped)]
+#[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultBlake3Hash {
     /// The hash the content is kept under.
     hash: Key,

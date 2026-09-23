@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer, suggest,
     },
@@ -19,6 +19,7 @@ use mingling::{
 use rorolala_cli_setups::{ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
+use serde::Serialize;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
@@ -101,7 +102,7 @@ pub fn complete_account(
 }
 
 /// Result: the accounts the work can act as were listed.
-#[derive(Grouped)]
+#[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultAccounts {
     /// Each account name, in name order.
     names: Vec<String>,

@@ -7,7 +7,7 @@
 
 use librorolala::storage::{Key, StorageBackend as _};
 use mingling::{
-    Grouped, LazyRes,
+    Grouped, LazyRes, StructuralData,
     macros::{buffer, command, help, metadata, r_eprintln, r_println, renderer},
     metadata::Description,
     res::ResExitCode,
@@ -15,6 +15,7 @@ use mingling::{
 use rorolala_cli_setups::ResRorolalaStorage;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
+use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{
@@ -76,7 +77,7 @@ pub fn tool_ls_storaged(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
 }
 
 /// Result: what the store holds was listed.
-#[derive(Grouped)]
+#[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultLs {
     /// The keys the store holds.
     keys: Vec<Key>,

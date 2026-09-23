@@ -7,7 +7,7 @@
 
 use librorolala::storage::Key;
 use mingling::{
-    Grouped, LazyRes,
+    Grouped, LazyRes, StructuralData,
     macros::{buffer, command, help, metadata, r_eprintln, r_println, renderer},
     metadata::Description,
     res::ResExitCode,
@@ -15,6 +15,7 @@ use mingling::{
 use rorolala_cli_setups::ResRorolalaStorage;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
+use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{
@@ -78,7 +79,7 @@ pub fn tool_ls_manifests(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
 }
 
 /// Result: the manifests the store keeps were listed.
-#[derive(Grouped)]
+#[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultManifests {
     /// The keys whose content is kept as a manifest.
     keys: Vec<Key>,
