@@ -1,22 +1,23 @@
 //! Watching a run: what it says while it runs, and what becomes of it.
 //!
-//! A run says its progress down a channel — see [`rorolala_utils_progress`] — and this is
-//! what reads that channel while the run goes on: `rola` was asked how the progress should
-//! appear, and here is where that answer is carried out. Nothing is drawn on the thread the
-//! work runs on, so watching a run never slows it down.
+//! A run says its progress down a channel — see [`rorolala_utils_progress`] — and this is what
+//! reads that channel while the run goes on: `rola` was asked how the progress should appear,
+//! and here is where that answer is carried out. Nothing is drawn on the thread the work runs
+//! on, so watching a run never slows it down.
+//!
+//! The bars are [`indicatif`]'s, drawn the way Rorolala's build tooling draws its own: a task
+//! is one bar, the tasks of a run are stacked under it, and the bar carries how far it has got
+//! rather than a picture of it. The drawing is indicatif's to do and nobody else's, which is
+//! what keeps a run of this program looking like every other run of a Rust program.
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
-use std::io::{IsTerminal as _, Write as _};
+use std::io::Write as _;
 use std::thread::JoinHandle;
-use std::time::Duration;
 
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rorolala_cli_setups::ResProgressSetting;
-use rorolala_utils_progress::{
-    Direction, Progress, Signal, Transmitter, fraction, spinner_frame, task_line, total_line,
-};
+use rorolala_utils_progress::{Direction, Progress, Signal, Transmitter};
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TryRecvError;
 
 /// How many signals may be waiting to be drawn before the ones that do not fit are dropped.
 ///
@@ -25,11 +26,31 @@ use tokio::sync::mpsc::error::TryRecvError;
 /// becoming a slow run.
 const DEPTH: usize = 256;
 
-/// How long a reader waits between looks when the run has said nothing.
+/// The characters a bar is drawn with: what is behind the work, where the work is, and what is
+/// ahead of it.
+const CHARS: &str = "=> ";
+
+/// The bar the whole of a run is drawn as.
 ///
-/// The wait is what a spinner turns on, and it is short enough that the turn is smooth and
-/// long enough that a run that says nothing costs nothing.
-const POLL: Duration = Duration::from_millis(80);
+/// The width is written into the template rather than named, since a template's widths are
+/// literal: the two bars below are 28 cells for the same reason — so that a task's bar begins
+/// where every other bar of the run does.
+const WHOLE_TEMPLATE: &str = "  [{bar:28}] {pos}/{len}";
+
+/// The bar one task of a run is drawn as: which way its work moves, how far it has got, and
+/// what it is moving right now.
+const TASK_TEMPLATE: &str = "{prefix} [{bar:28}] {pos}/{len}: {msg}";
+
+/// How much of the name of a piece being moved is shown.
+///
+/// A piece is named by the key its content is kept under, and a whole key is sixty-four
+/// characters: shown in full it is longer than the line it has to fit on, so it is the head
+/// of it that is shown — enough of it to tell one piece from the next, which is all a reader
+/// is being shown it for.
+const PIECE: usize = 7;
+
+/// What is written where the rest of a piece's name was.
+const REST: &str = "...";
 
 /// A run's progress, being said to whoever was asked to hear it.
 ///
@@ -61,17 +82,9 @@ impl Reporting {
         let (transmitter, mut receiver) = Transmitter::channel(DEPTH);
         let progress = Progress::to(transmitter);
 
-        let showing = match setting {
-            ResProgressSetting::Jsonl => Showing::Records,
-            _ => Showing::Terminal {
-                drawn: 0,
-                drawable: std::io::stderr().is_terminal(),
-            },
-        };
-        let mut watcher = Watcher {
-            showing,
-            tick: 0,
-            tasks: BTreeMap::new(),
+        let mut watcher = match setting {
+            ResProgressSetting::Jsonl => Watcher::Records,
+            _ => Watcher::Terminal(Terminal::new()),
         };
 
         let watching = Some(std::thread::spawn(move || {
@@ -102,78 +115,60 @@ impl Reporting {
     }
 }
 
-/// A reader of a run's signals.
-struct Watcher {
-    /// How the run is being shown.
-    showing: Showing,
-    /// How many times the spinner has turned, which is what makes it turn.
-    tick: usize,
-    /// What has been said about each task, by the id the task is named by.
-    ///
-    /// Ids are handed out in the order tasks begin, so the map's own order is the order they
-    /// were begun in, which is the order a reader wants them drawn in.
-    tasks: BTreeMap<u64, Said>,
-}
-
 /// How a run's signals are shown.
-enum Showing {
-    /// The lines are redrawn in place on a terminal.
-    Terminal {
-        /// How many lines are on the terminal right now.
-        drawn: usize,
-        /// Whether what is being written to is a terminal at all.
-        ///
-        /// Nothing is redrawn when it is not: the control sequences that move a cursor mean
-        /// nothing to a file or a pipe, and writing them there would be noise in the record
-        /// of what the run said rather than the record itself.
-        drawable: bool,
-    },
+enum Watcher {
+    /// Bars on the terminal, a task at a time.
+    Terminal(Terminal),
     /// One record per signal, for another program to read.
     Records,
 }
 
 impl Watcher {
     /// Reads `receiver` until the run has nothing more to say.
+    ///
+    /// The reader is a thread of its own and not a task, so it waits the way a thread waits:
+    /// nothing here polls, and a run that says nothing costs nothing.
     fn watch(&mut self, receiver: &mut mpsc::Receiver<Signal>) {
-        loop {
-            match receiver.try_recv() {
-                Ok(signal) => self.take(&signal),
-                Err(TryRecvError::Empty) => {
-                    self.tick = self.tick.wrapping_add(1);
-                    self.redraw();
-                    std::thread::sleep(POLL);
-                }
-                Err(TryRecvError::Disconnected) => break,
+        while let Some(signal) = receiver.blocking_recv() {
+            match self {
+                Self::Terminal(terminal) => terminal.take(&signal),
+                Self::Records => Self::write_record(&signal),
             }
         }
+    }
 
-        // What is left on the terminal is the run's, not the reader's: it is cleared before
-        // the reader ends so that whatever is said after the run lands on a clean line.
-        self.erase();
+    /// Writes `signal` as one JSON record.
+    ///
+    /// What is written is a record rather than a picture, so it goes out whether or not
+    /// anything is being watched by a person: the reader here is another program, and a
+    /// terminal being unattended says nothing about that one.
+    fn write_record(signal: &Signal) {
+        let record = serde_json::to_string(signal).unwrap_or_default();
+        let mut stderr = std::io::stderr().lock();
+        let _ = writeln!(stderr, "{record}");
+        let _ = stderr.flush();
+    }
+}
+
+/// The bars a run is drawn as, stacked one under another.
+struct Terminal {
+    /// The bars, kept together so that they share the terminal and are redrawn as one block.
+    bars: MultiProgress,
+    /// What each bar is, by the id the task is named by.
+    drawn: BTreeMap<u64, ProgressBar>,
+}
+
+impl Terminal {
+    /// A terminal with nothing drawn on it yet.
+    fn new() -> Self {
+        Self {
+            bars: MultiProgress::new(),
+            drawn: BTreeMap::new(),
+        }
     }
 
     /// Takes one thing the run said.
     fn take(&mut self, signal: &Signal) {
-        if matches!(self.showing, Showing::Records) {
-            let _ = Self::write_record(signal);
-
-            return;
-        }
-
-        self.apply(signal);
-        self.redraw();
-    }
-
-    /// Writes `signal` as one JSON record.
-    fn write_record(signal: &Signal) -> std::io::Result<()> {
-        let record = serde_json::to_string(signal).unwrap_or_default();
-        let mut stderr = std::io::stderr().lock();
-        writeln!(stderr, "{record}")?;
-        stderr.flush()
-    }
-
-    /// Reads `signal` into what is known of the tasks.
-    fn apply(&mut self, signal: &Signal) {
         match signal {
             Signal::Begin {
                 id,
@@ -181,164 +176,124 @@ impl Watcher {
                 what,
                 direction,
                 total,
-            } => {
-                self.tasks.insert(
-                    *id,
-                    Said {
-                        parent: *parent,
-                        what: what.clone(),
-                        direction: *direction,
-                        total: *total,
-                        done: 0,
-                        doing: None,
-                    },
-                );
-
-                // A started task with no direction of its own names the piece of the task
-                // above it being done right now, rather than being a line of its own.
-                if let (Some(parent), None) = (parent, direction)
-                    && let Some(above) = self.tasks.get_mut(parent)
-                {
-                    above.doing = Some((*id, what.clone()));
-                }
-            }
+            } => self.begin(*id, *parent, what, *direction, *total),
             Signal::Advance { id, done } => {
-                if let Some(said) = self.tasks.get_mut(id)
-                    && said.direction.is_some()
-                {
-                    said.done = *done;
+                if let Some(bar) = self.drawn.get(id) {
+                    bar.set_position(*done);
                 }
             }
-            Signal::Finish { id } => {
-                let Some(said) = self.tasks.remove(id) else {
-                    return;
-                };
+            Signal::Finish { id } => self.finish(*id),
+        }
+    }
 
-                // A piece that is done is no longer being done, so the name it gave the task
-                // above it is given back — unless something else has taken its place.
-                if said.direction.is_none()
-                    && let Some(parent) = said.parent
-                    && let Some(above) = self.tasks.get_mut(&parent)
-                    && above.doing.as_ref().is_some_and(|(held, _)| *held == *id)
-                {
-                    above.doing = None;
+    /// Starts drawing a task: a bar of its own when it is one, and a name on the bar above it
+    /// when it is a piece of one.
+    fn begin(
+        &mut self,
+        id: u64,
+        parent: Option<u64>,
+        what: &str,
+        direction: Option<Direction>,
+        total: Option<u64>,
+    ) {
+        match (parent, direction) {
+            // The whole of the run: the bar every other bar is stacked under.
+            (None, _) => {
+                let bar = self.bars.add(bar(total, WHOLE_TEMPLATE));
+                self.drawn.insert(id, bar);
+            }
+            // One direction of it: a bar of its own, saying which way its work moves.
+            (Some(_), Some(direction)) => {
+                let bar = self.bars.add(bar(total, TASK_TEMPLATE));
+                bar.set_prefix(arrow(direction).to_string());
+
+                if !what.is_empty() {
+                    bar.set_message(what.to_owned());
+                }
+
+                self.drawn.insert(id, bar);
+            }
+            // A piece being done right now: not a bar of its own, but what the bar above it is
+            // moving — which is the name at the end of that bar.
+            (Some(parent), None) => {
+                if let Some(above) = self.drawn.get(&parent) {
+                    above.set_message(head(what));
                 }
             }
         }
     }
 
-    /// The lines the tasks are drawn as, in the order they were begun in.
-    fn lines(&self) -> Vec<String> {
-        let spinner = spinner_frame(self.tick);
-
-        self.tasks
-            .values()
-            .filter_map(|said| match said.direction {
-                Some(direction) => {
-                    let doing = said.doing.as_ref().map_or("", |(_, doing)| doing.as_str());
-
-                    Some(task_line(
-                        spinner,
-                        &said.what,
-                        direction,
-                        fraction(said.done, said.total),
-                        doing,
-                    ))
-                }
-                // The task above every other one is the whole of the run, and a task with no
-                // direction below it is not a line of its own.
-                None if said.parent.is_none() => {
-                    Some(total_line(spinner, fraction(said.done, said.total)))
-                }
-                None => None,
-            })
-            .collect()
-    }
-
-    /// Shows the tasks as they are now.
-    fn redraw(&mut self) {
-        if !matches!(self.showing, Showing::Terminal { drawable: true, .. }) {
-            return;
+    /// Stops drawing a task, and takes its bar off the terminal.
+    ///
+    /// A task that is over has nothing left to say, so what is left behind is the whole of the
+    /// run rather than a row of bars that have all stopped: a piece being done is not a bar at
+    /// all, so finishing one says nothing to the terminal and waits for the next name.
+    fn finish(&mut self, id: u64) {
+        if let Some(bar) = self.drawn.remove(&id) {
+            bar.finish_and_clear();
         }
-
-        let lines = self.lines();
-        let Showing::Terminal { drawn, .. } = &mut self.showing else {
-            return;
-        };
-
-        // The block is as tall as the taller of what was there and what is being drawn, since
-        // the lines that are gone still have to be written over.
-        let rows = (*drawn).max(lines.len());
-        draw(*drawn, &lines);
-        *drawn = rows;
-    }
-
-    /// Takes the lines off the terminal.
-    fn erase(&mut self) {
-        let Showing::Terminal { drawn, drawable } = &mut self.showing else {
-            return;
-        };
-
-        if !*drawable || *drawn == 0 {
-            return;
-        }
-
-        draw(*drawn, &[]);
-        *drawn = 0;
     }
 }
 
-/// What has been said about one task.
-struct Said {
-    /// The task this one is part of, when it is part of another one.
-    parent: Option<u64>,
-    /// What the task is called.
-    what: String,
-    /// Which way its work moves, when it moves any.
-    direction: Option<Direction>,
-    /// How much of the task there is in all, when that is known.
-    total: Option<u64>,
-    /// How much of the task is done.
-    done: u64,
-    /// The piece being done right now, and the task that named it.
-    doing: Option<(u64, String)>,
+/// The arrow a task's bar is prefixed with, which is what says which way its work moves.
+const fn arrow(direction: Direction) -> char {
+    match direction {
+        Direction::Up => '↑',
+        Direction::Down => '↓',
+    }
 }
 
-/// Draws `lines` over the `drawn` lines already on the terminal, and leaves the cursor where
-/// the lines begin.
+/// The head of the name of a piece being moved, and what says the rest of it is not shown.
 ///
-/// A line is redrawn rather than appended to, so what a reader watches is a block that stays
-/// where it is rather than a scroll that grows: the block is written over itself, and the
-/// cursor is put back at its first line so the next drawing can write over it again. Lines
-/// that are no longer there are cleared, so a block that shrinks leaves nothing behind it.
-fn draw(drawn: usize, lines: &[String]) {
-    let rows = drawn.max(lines.len());
-    let mut out = String::from("\r");
+/// A name shorter than the head is shown whole, and so is one the same length: there is
+/// nothing being left out of either, and a name that says everything it has to say should not
+/// be made to look as though it does not.
+fn head(what: &str) -> String {
+    let mut shown: String = what.chars().take(PIECE).collect();
 
-    if drawn > 0 {
-        // Back to the first of the lines already there; there is nowhere to go when there are
-        // none, since the cursor is where the block would begin.
-        let _ = write!(out, "\x1b[{drawn}A");
+    if what.chars().count() > PIECE {
+        shown.push_str(REST);
     }
 
-    for at in 0..rows {
-        if at > 0 {
-            out.push('\n');
-        }
+    shown
+}
 
-        // Each line is cleared before it is written, so a shorter line does not leave the tail
-        // of a longer one behind it.
-        out.push_str("\x1b[2K");
-        if let Some(line) = lines.get(at) {
-            out.push_str(line);
-        }
+/// A bar `total` long, drawn with `template`.
+///
+/// A task whose length is not known is drawn as an empty bar rather than a spinner: what this
+/// program says about its work is how much of it there is, and a task that cannot say that is
+/// a task nothing here knows how to draw.
+fn bar(total: Option<u64>, template: &str) -> ProgressBar {
+    let bar = ProgressBar::new(total.unwrap_or(0));
+
+    // UNWRAP: both templates are this program's own, so a template that will not parse is a
+    // mistake in the program rather than anything a run can bring about.
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template(template)
+            .unwrap()
+            .progress_chars(CHARS),
+    );
+
+    bar
+}
+
+#[cfg(test)]
+mod tests {
+    use super::head;
+
+    #[test]
+    fn a_key_is_shown_by_its_head_and_says_the_rest_is_left_out() {
+        assert_eq!(
+            head("5b4ac19152456173022e06a1614665a594c615ce1307d40f9a3d5006622991e4"),
+            "5b4ac19..."
+        );
     }
 
-    if rows > 1 {
-        let _ = write!(out, "\x1b[{}A", rows - 1);
+    #[test]
+    fn a_name_that_says_everything_it_has_to_say_is_shown_whole() {
+        assert_eq!(head("a key"), "a key");
+        assert_eq!(head("1234567"), "1234567");
+        assert_eq!(head(""), "");
     }
-
-    let mut stderr = std::io::stderr().lock();
-    let _ = stderr.write_all(out.as_bytes());
-    let _ = stderr.flush();
 }

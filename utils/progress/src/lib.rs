@@ -5,9 +5,6 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
 
-mod render;
-pub use render::*;
-
 mod reporter;
 pub use reporter::*;
 
