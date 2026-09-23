@@ -41,9 +41,13 @@ COMPLETION_SHELLS := sh zsh fish ps1
 # The command line programs. Each is a workspace member whose package name is also
 # its binary name, so one list drives the build, the export, and the completion
 # scripts — mingling names those `<program>_comp.<shell>` and they are exported as
-# `<program>-completion.<shell>`. The scripts call their command by name and never
-# refer to their own file name, so the exported name is free.
+# `scripts/<program>/<program>-completion.<shell>`. The scripts call their command by
+# name and never refer to their own file name, so the exported name is free.
 PROGRAMS := rola rola-daemon
+
+# Where an export puts the completion scripts: one directory per program, so what a shell's
+# setup sources is named once per program rather than once per program and shell.
+SCRIPTS_DIR := $(BUILD_DIR)/scripts
 
 # `export` and `clean` delete their destination with `rm -rf`, so refuse a path that
 # would take something else with it.
@@ -81,11 +85,12 @@ endif
 #   | ffi_bindings/rorolala_ffi.h  | $(BUILD_DIR)/lib/rorolala.h              |
 #   |                              | $(BUILD_DIR)/lib/rorolala.hpp            |
 #   | rola[.exe]                   | $(BUILD_DIR)/bin/rola[.exe]              |
-#   | mingling/<program>_comp.*    | $(BUILD_DIR)/bin/<program>-completion.*  |
+#   | mingling/<program>_comp.*    | $(BUILD_DIR)/scripts/<program>/*         |
 #
 # The header is C and C++ at once — its declarations sit in an `extern "C"` block —
 # so `.hpp` is the same file under the name a C++ project includes. The completion
-# scripts are the four shells mingling generates: sh, zsh, fish and ps1.
+# scripts are the four shells mingling generates: sh, zsh, fish and ps1, each program's
+# written into `$(SCRIPTS_DIR)/<program>/` as `<program>-completion.<shell>`.
 #
 # The import library is the one artifact only Windows has: a DLL is linked through it,
 # and the static library of the same crate needs nothing beside it, which is why the
@@ -155,9 +160,10 @@ endif
 	cp $(HEADER) $(BUILD_DIR)/lib/rorolala.hpp
 	set -e; for program in $(PROGRAMS); do \
 		cp $(RELEASE_DIR)/$${program}$(EXE_SUFFIX) $(BUILD_DIR)/bin/$${program}$(EXE_SUFFIX); \
+		mkdir -p $(SCRIPTS_DIR)/$${program}; \
 		for shell in $(COMPLETION_SHELLS); do \
 			cp $(COMPLETION_DIR)/$${program}_comp.$${shell} \
-				$(BUILD_DIR)/bin/$${program}-completion.$${shell}; \
+				$(SCRIPTS_DIR)/$${program}/$${program}-completion.$${shell}; \
 		done; \
 	done
 
