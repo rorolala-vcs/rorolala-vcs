@@ -503,6 +503,7 @@ mod tests {
         Action as _, ActionContext, ActionError, Channel, OnlyWorkspace, Socket,
     };
     use rorolala_utils_location::Locate;
+    use rorolala_utils_progress::Progress;
     use rorolala_vault::{KEYS_DIR, RootVault, VAULTS_DIR, Vault};
     use rorolala_workspace::Workspace;
     use tokio::io::{AsyncWriteExt as _, DuplexStream, duplex};
@@ -809,6 +810,7 @@ mod tests {
             &account,
             address.to_string(),
             "world".to_string(),
+            Progress::silent(),
         )
         .await
         .unwrap();

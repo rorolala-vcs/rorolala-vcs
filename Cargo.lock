@@ -1123,6 +1123,7 @@ dependencies = [
  "arg-picker",
  "mingling_core",
  "mingling_macros",
+ "serde",
 ]
 
 [[package]]
@@ -1133,6 +1134,8 @@ checksum = "8f6eb66a4e2f1a2116170c3637f1ea2e2e7e5fc649632f01f6b57360530523ac"
 dependencies = [
  "just_fmt 0.2.1",
  "might_be_async",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1513,9 +1516,12 @@ dependencies = [
  "rorolala-utils-cli-theme",
  "rorolala-utils-constants",
  "rorolala-utils-location",
+ "rorolala-utils-progress",
  "rorolala-vault",
  "rorolala-workspace",
  "rust-i18n",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
@@ -1533,6 +1539,7 @@ dependencies = [
  "rorolala-utils-location",
  "rorolala-vault",
  "rust-i18n",
+ "serde",
 ]
 
 [[package]]
@@ -1580,6 +1587,7 @@ dependencies = [
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
+ "rorolala-utils-progress",
  "rorolala-vault",
  "rorolala-workspace",
  "serde",
@@ -1628,6 +1636,7 @@ dependencies = [
  "rorolala-protocol-macros",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
+ "rorolala-utils-progress",
  "rorolala-vault",
  "rorolala-workspace",
  "serde",
@@ -1727,6 +1736,14 @@ name = "rorolala-utils-location"
 version = "0.1.0"
 dependencies = [
  "just_fmt 0.2.1",
+ "tokio",
+]
+
+[[package]]
+name = "rorolala-utils-progress"
+version = "0.1.0"
+dependencies = [
+ "serde",
  "tokio",
 ]
 

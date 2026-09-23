@@ -13,6 +13,7 @@ rorolala-utils-configure.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
+rorolala-utils-progress.workspace = true
 rorolala-vault.workspace = true
 rorolala-workspace.workspace = true
 

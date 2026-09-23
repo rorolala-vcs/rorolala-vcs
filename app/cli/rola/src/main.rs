@@ -32,6 +32,7 @@ mod error;
 mod exit_codes;
 mod keys;
 mod lastec;
+mod progress;
 mod tools;
 mod user;
 

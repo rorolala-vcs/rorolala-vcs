@@ -8,6 +8,9 @@ use rorolala_workspace::Workspace;
 /// Runs the [`ActionHandshake`](crate::ActionHandshake) action on the input it is handed, taken
 /// from `workspace`, as `account`, against the daemon at `target`.
 ///
+/// `progress` is where the action says what it is doing while it does it; a run that is not
+/// being watched hands [`Progress::silent`], and the action runs the same way either way.
+///
 /// # Errors
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
@@ -17,8 +20,9 @@ pub async fn action_handshake_async(
     account: &Account,
     target: String,
     name: String,
+    progress: Progress,
 ) -> Result<String, ActionError> {
-    proc_action::<ActionHandshake>(workspace, account, target, name).await
+    proc_action::<ActionHandshake>(workspace, account, target, name, progress).await
 }
 
 /// Runs the [`ActionHandshake`](crate::ActionHandshake) action, blocking until it has.
@@ -27,7 +31,8 @@ pub async fn action_handshake_async(
 /// caller should use instead. `workspace` is the copy the work is taken from, and the
 /// account is the one the caller names, so which identity an action runs as is theirs to
 /// say and not looked up behind their back, and the target is the daemon to reach, as a
-/// host and a port.
+/// host and a port. Nothing is said of the action's progress here: a caller outside Rust
+/// has nowhere to read it, so the action is given no one to tell.
 ///
 /// # Errors
 ///
@@ -41,11 +46,14 @@ pub fn action_handshake(
     name: String,
 ) -> Result<String, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_handshake_async(workspace, account, target, name))
+    runtime.block_on(action_handshake_async(workspace, account, target, name, Progress::silent()))
 }
 
 /// Runs the [`ActionSyncAll`](crate::ActionSyncAll) action on the input it is handed, taken
 /// from `workspace`, as `account`, against the daemon at `target`.
+///
+/// `progress` is where the action says what it is doing while it does it; a run that is not
+/// being watched hands [`Progress::silent`], and the action runs the same way either way.
 ///
 /// # Errors
 ///
@@ -56,8 +64,9 @@ pub async fn action_sync_all_async(
     account: &Account,
     target: String,
     input: String,
+    progress: Progress,
 ) -> Result<(), ActionError> {
-    proc_action::<ActionSyncAll>(workspace, account, target, input).await
+    proc_action::<ActionSyncAll>(workspace, account, target, input, progress).await
 }
 
 /// Runs the [`ActionSyncAll`](crate::ActionSyncAll) action, blocking until it has.
@@ -66,7 +75,8 @@ pub async fn action_sync_all_async(
 /// caller should use instead. `workspace` is the copy the work is taken from, and the
 /// account is the one the caller names, so which identity an action runs as is theirs to
 /// say and not looked up behind their back, and the target is the daemon to reach, as a
-/// host and a port.
+/// host and a port. Nothing is said of the action's progress here: a caller outside Rust
+/// has nowhere to read it, so the action is given no one to tell.
 ///
 /// # Errors
 ///
@@ -80,5 +90,5 @@ pub fn action_sync_all(
     input: String,
 ) -> Result<(), ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_sync_all_async(workspace, account, target, input))
+    runtime.block_on(action_sync_all_async(workspace, account, target, input, Progress::silent()))
 }

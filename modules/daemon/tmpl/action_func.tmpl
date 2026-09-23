@@ -10,6 +10,9 @@ use rorolala_workspace::Workspace;
 /// Runs the [`<<<type_name>>>`](crate::<<<type_name>>>) action on the input it is handed, taken
 /// from `workspace`, as `account`, against the daemon at `target`.
 ///
+/// `progress` is where the action says what it is doing while it does it; a run that is not
+/// being watched hands [`Progress::silent`], and the action runs the same way either way.
+///
 /// # Errors
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
@@ -19,8 +22,9 @@ pub async fn action_<<<stem>>>_async(
     account: &Account,
     target: String,
     <<<params>>>,
+    progress: Progress,
 ) -> Result<<<<output>>>, ActionError> {
-    proc_action::<<<<type_name>>>>(workspace, account, target, <<<argument>>>).await
+    proc_action::<<<<type_name>>>>(workspace, account, target, <<<argument>>>, progress).await
 }
 
 /// Runs the [`<<<type_name>>>`](crate::<<<type_name>>>) action, blocking until it has.
@@ -29,7 +33,8 @@ pub async fn action_<<<stem>>>_async(
 /// caller should use instead. `workspace` is the copy the work is taken from, and the
 /// account is the one the caller names, so which identity an action runs as is theirs to
 /// say and not looked up behind their back, and the target is the daemon to reach, as a
-/// host and a port.
+/// host and a port. Nothing is said of the action's progress here: a caller outside Rust
+/// has nowhere to read it, so the action is given no one to tell.
 ///
 /// # Errors
 ///
@@ -43,7 +48,7 @@ pub fn action_<<<stem>>>(
     <<<params>>>,
 ) -> Result<<<<output>>>, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_<<<stem>>>_async(workspace, account, target, <<<call_args>>>))
+    runtime.block_on(action_<<<stem>>>_async(workspace, account, target, <<<call_args>>>, Progress::silent()))
 }
 
 @@@ <<<

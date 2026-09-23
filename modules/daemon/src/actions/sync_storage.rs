@@ -16,12 +16,19 @@
 //! then each chunk it names — rather than the content, so the other store keeps the chunks it
 //! was given instead of cutting the whole thing again. What a store already holds is not written
 //! twice: see [`RorolalaStorage`]'s write, which passes over what is there.
+//!
+//! A run of this says what it is doing as it goes, and says it only once the two answers have
+//! crossed: until then how much has to move is not known, so a bar drawn from it would be a
+//! guess. Once it is known, the whole is one task and each direction under it is another, and
+//! the key being carried is named inside the direction it is going in — which is what a reader
+//! needs to tell a run that is moving a little from one that is moving a lot.
 
 use rorolala_errors::BincodeError;
 use rorolala_protocol::{ActionContext, ActionError, Both, MAX_FRAME, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{
     Error as StoreError, Key, Manifest, Presence, RorolalaStorage, StorageBackend as _,
 };
+use rorolala_utils_progress::Direction;
 
 /// Which side a key is being carried to.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -116,17 +123,63 @@ pub async fn sync_storage(
         }
     }
 
+    // What has to move is read from the two answers, so a run says how much of it there is
+    // before it starts rather than as it finds out. Nothing has moved yet, so this is the first
+    // thing said, and a reader watching from the start sees a bar that is empty and honest
+    // rather than one that fills up to a length it did not know it had.
+    let progress = ctx.progress();
+
+    let up: Vec<&Key> = keys
+        .iter()
+        .enumerate()
+        .filter(|(at, _)| workspace_holds.held(*at) && !vault_holds.held(*at))
+        .map(|(_, key)| key)
+        .collect();
+    let down: Vec<&Key> = keys
+        .iter()
+        .enumerate()
+        .filter(|(at, _)| vault_holds.held(*at) && !workspace_holds.held(*at))
+        .map(|(_, key)| key)
+        .collect();
+
+    let mut everything = progress.begin(
+        "",
+        Some(u64::try_from(up.len() + down.len()).unwrap_or(u64::MAX)),
+    );
+
     // The Workspace's keys go first, then the Vault's. The order is the same on both ends, and it is
     // what keeps the two in step: a key crosses in one direction only, and both know which.
-    for (at, key) in keys.iter().enumerate() {
-        if workspace_holds.held(at) && !vault_holds.held(at) {
+    if !up.is_empty() {
+        let mut task = everything.spawn(
+            Direction::Up,
+            "",
+            Some(u64::try_from(up.len()).unwrap_or(u64::MAX)),
+        );
+
+        for key in &up {
+            let working = task.doing(key.hex());
             carry(ctx, &local, key, Side::Vault).await?;
+            drop(working);
+
+            task.advance_by(1);
+            everything.advance_by(1);
         }
     }
 
-    for (at, key) in keys.iter().enumerate() {
-        if vault_holds.held(at) && !workspace_holds.held(at) {
+    if !down.is_empty() {
+        let mut task = everything.spawn(
+            Direction::Down,
+            "",
+            Some(u64::try_from(down.len()).unwrap_or(u64::MAX)),
+        );
+
+        for key in &down {
+            let working = task.doing(key.hex());
             carry(ctx, &local, key, Side::Workspace).await?;
+            drop(working);
+
+            task.advance_by(1);
+            everything.advance_by(1);
         }
     }
 

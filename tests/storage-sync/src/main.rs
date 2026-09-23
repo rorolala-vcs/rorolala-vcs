@@ -131,19 +131,34 @@ async fn main() {
         "a run that was not confirmed changed the Vault's store",
     );
 
-    // The Vault is served, and the same run is made with the question answered in advance.
+    // The Vault is served, and the same run is made with the question answered in advance. It is made
+    // with `--json` as well, which is how a run says it is being read by a program rather than watched
+    // by a person: what it is doing while it does it is then written down a record at a time, which is
+    // what the questions below read back.
     let serving = serve_vault(&root, PORT);
 
     let said = run(&mut client(
         &workspace,
         &data,
-        &["tool", "sync-all", VAULT_NAME, "--confirm"],
+        &["tool", "sync-all", VAULT_NAME, "--confirm", "--json"],
     ));
 
     checked.wants(
         "a confirmed sync is made",
         said.success(),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+    checked.wants(
+        "a watched sync says what it began and that it is over",
+        said.stderr.contains("\"signal\":\"begin\"")
+            && said.stderr.contains("\"signal\":\"finish\""),
+        &format!("it said on stderr {:?}", said.stderr.trim()),
+    );
+    checked.wants(
+        "a key says which way it crossed",
+        said.stderr.contains("\"direction\":\"up\"")
+            && said.stderr.contains("\"direction\":\"down\""),
+        &format!("it said on stderr {:?}", said.stderr.trim()),
     );
     checked.wants(
         "the Workspace holds what only the Vault had",

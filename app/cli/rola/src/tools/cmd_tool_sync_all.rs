@@ -5,7 +5,8 @@
 //! what it holds, and what only one of them holds crosses, so one run leaves both holding
 //! everything either had. Because that is a change to both stores, it is asked for first.
 
-use librorolala::daemon::action_sync_all;
+use librorolala::daemon::action_sync_all_async;
+use librorolala::protocol::ActionError;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     confirm::YesConfirm,
@@ -17,7 +18,7 @@ use mingling::{
     picker::EntryPicker,
     res::{ResConfirm, ResExitCode},
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResProgressSetting, ResWorkspace};
 use rorolala_utils_cli_theme::{help_line, trd};
 use rust_i18n::t;
 
@@ -25,6 +26,7 @@ use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::exit_codes::{EC_CANCELLED, EC_HELP};
 use crate::keys::account_named;
+use crate::progress::Reporting;
 
 #[help(buffer)]
 pub fn help_tool_sync_all(_: EntryToolSyncAll, ec: &mut ResExitCode) {
@@ -55,6 +57,9 @@ pub fn desc_tool_sync_all() -> Description {
 /// and says so. `--confirm` answers that question in advance, which is what a run without a person
 /// at the terminal should pass.
 ///
+/// The run says what it is doing while it does it, down the channel `progress` names the end of:
+/// each store is a bar that fills as its keys cross, and the key being carried is named beside it.
+///
 /// # Errors
 ///
 /// Every way this can fail is one the part that knows reports for itself, and `routeify` carries it
@@ -70,7 +75,9 @@ pub fn desc_tool_sync_all() -> Description {
 /// [`ActionError`]: librorolala::protocol::ActionError
 // `ResConfirm` is a value small enough to copy, but it is the resource the protocol's injection
 // hands in and not something this command owns: taking a copy would read a state of its own, so it
-// is taken by reference, which is what the injection gives it.
+// is taken by reference, which is what the injection gives it. `ResProgressSetting` is read from
+// where it is handed in for the same reason, and taking a copy of it here would be no more the
+// answer the run gave.
 #[allow(clippy::trivially_copy_pass_by_ref)]
 #[command(node = "tool.sync-all", routeify)]
 pub fn tool_sync_all(
@@ -79,6 +86,7 @@ pub fn tool_sync_all(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     confirm: &ResConfirm,
+    progress: &ResProgressSetting,
 ) -> Next {
     // Everything below works through the Workspace, so it is asked once, here, and taken for granted
     // after: `?` is `routeify`'s, and a run that is inside no Workspace leaves through it. `held` is
@@ -107,7 +115,23 @@ pub fn tool_sync_all(
 
     // What to sync is not named here: a full sync is everything either end holds, and the two ends
     // work that out between them. What the input carries is nothing, and the action reads none of it.
-    action_sync_all(held, &account, target.to_string(), String::new())?;
+    //
+    // The exchange is asynchronous and a command is not, so the two meet here: a runtime of this
+    // run's own is what waits for it, and the run's progress is said to a reader on a thread of its
+    // own, so that watching the exchange never slows it down. The reader is ended before anything
+    // else is said, so the lines it left on the terminal are gone by the time there are results to
+    // read.
+    let reporting = Reporting::start(*progress);
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| ActionError::Io(error.into()))?;
+    let outcome = runtime.block_on(action_sync_all_async(
+        held,
+        &account,
+        target.to_string(),
+        String::new(),
+        reporting.progress(),
+    ));
+    reporting.finish();
+    outcome?;
 
     ResultSynced.into()
 }

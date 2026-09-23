@@ -10,6 +10,7 @@ pub use actions::*;
 
 use rorolala_protocol::{Action, ActionContext, OnlyWorkspace, Socket, VaultAddress};
 use rorolala_utils_configure::Configure as _;
+use rorolala_utils_progress::Progress;
 use rorolala_workspace::Config as WorkspaceConfig;
 use tokio::net::TcpStream;
 
@@ -34,6 +35,9 @@ use crate::wire;
 /// whoever it proves itself to be, which is what lets a Workspace that knows only its own
 /// key still be challenged by a Vault.
 ///
+/// `progress` is attached to the context the action is run with, so what the action says
+/// about itself while it runs reaches whoever started it: see [`ActionContext::with_progress`].
+///
 /// # Errors
 ///
 /// Returns [`ActionError::Addr`] if `target` does not read as an address,
@@ -44,6 +48,7 @@ pub async fn proc_action<A>(
     account: &Account,
     target: String,
     input: A::Input,
+    progress: Progress,
 ) -> Result<A::Output, ActionError>
 where
     A: Action,
@@ -87,7 +92,8 @@ where
     let input = OnlyWorkspace::from(Some(input));
     let mut ctx = ActionContext::new_workspace_ctx(account.clone())
         .with_current_workspace(workspace)
-        .with_channel(channel);
+        .with_channel(channel)
+        .with_progress(progress);
 
     // What the Workspace works from is read here rather than handed in: the copy the work is
     // being taken from is the one that says it. A Workspace whose configuration will not read
@@ -120,6 +126,7 @@ mod tests {
         Account, KeyAlgorithm, KeyLocateRule, SecureStream, SigningKey, find_account,
     };
     use rorolala_protocol::{Action as _, ActionContext, ActionError, Socket};
+    use rorolala_utils_progress::Progress;
     use rorolala_workspace::Workspace;
     use tokio::net::TcpListener;
 
@@ -199,6 +206,7 @@ mod tests {
             &Account::default(),
             "rola://".to_string(),
             "world".to_string(),
+            Progress::silent(),
         )
         .await
         .unwrap_err();
@@ -216,6 +224,7 @@ mod tests {
             &Account::default(),
             "127.0.0.1:1".to_string(),
             "world".to_string(),
+            Progress::silent(),
         )
         .await
         .unwrap_err();
@@ -241,6 +250,7 @@ mod tests {
             &account,
             "127.0.0.1:1".to_string(),
             "world".to_string(),
+            Progress::silent(),
         )
         .await
         .unwrap_err();
@@ -278,6 +288,7 @@ mod tests {
             &account,
             address.to_string(),
             "world".to_string(),
+            Progress::silent(),
         )
         .await
         .unwrap_err();

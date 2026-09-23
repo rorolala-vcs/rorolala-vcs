@@ -10,6 +10,7 @@ use mingling::{ProgramCollect, setup::ProgramSetup};
 mod colorize;
 mod global_flag;
 mod language;
+mod progress;
 mod storage;
 mod vault;
 mod workspace;
@@ -17,6 +18,7 @@ mod workspace;
 pub use colorize::*;
 pub use global_flag::*;
 pub use language::*;
+pub use progress::*;
 pub use storage::*;
 pub use vault::*;
 pub use workspace::*;
@@ -27,9 +29,9 @@ pub use workspace::*;
 /// Commands are deliberately not registered here: `gen_program!()` collects
 /// commands per crate, so a command must be declared in the crate that binds it.
 ///
-/// The two setups that shape the output — the language it is written in, and how it is
-/// drawn — come first, so that everything registered after them is spoken and rendered
-/// the way the run asked for.
+/// The setups that shape the output — the language it is written in, how it is drawn and how
+/// it reports what it is doing — come first, so that everything registered after them is
+/// spoken, rendered and reported the way the run asked for.
 pub struct RorolalaSetup;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for RorolalaSetup
@@ -39,6 +41,7 @@ where
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
         program.with_setup(LanguageSetup);
         program.with_setup(ColorizeSetup);
+        program.with_setup(ProgressSetup);
         program.with_setup(GlobalFlagSetup);
         program.with_setup(VaultSetup);
         program.with_setup(WorkspaceSetup);

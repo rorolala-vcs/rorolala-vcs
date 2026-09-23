@@ -1,4 +1,5 @@
 use rorolala_auth::{Account, Member};
+use rorolala_utils_progress::Progress;
 use rorolala_vault::{Config as VaultConfig, RootVault, Vault};
 use rorolala_workspace::{Config as WorkspaceConfig, Workspace};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -86,6 +87,14 @@ pub struct ActionContext<'a> {
 
     /// The encrypted channel values are exchanged over, once one has been attached.
     channel: Option<Channel>,
+
+    /// Where the action says what it is doing while it does it.
+    ///
+    /// An action that takes a while says so through this, and the side that started the
+    /// action decides what becomes of it — a bar, a record, or nothing. It is not a value
+    /// that crosses: what one side is doing is not what the other side learns, so this is
+    /// held on whichever side the action runs and never exchanged.
+    progress: Progress,
 }
 
 /// The side on which the action occurs.
@@ -158,7 +167,7 @@ impl<'a> ActionContext<'a> {
     /// assert!(ctx.is_workspace());
     /// ```
     #[must_use]
-    pub const fn new_workspace_ctx(account: Account) -> Self {
+    pub fn new_workspace_ctx(account: Account) -> Self {
         Self {
             side: ActionSide::Workspace,
             member: OnlyVault::empty(),
@@ -170,6 +179,7 @@ impl<'a> ActionContext<'a> {
             current_vault_config: OnlyVault::empty(),
             current_root_vault_config: OnlyVault::empty(),
             channel: None,
+            progress: Progress::silent(),
         }
     }
 
@@ -185,7 +195,7 @@ impl<'a> ActionContext<'a> {
     /// assert!(ctx.is_vault());
     /// ```
     #[must_use]
-    pub const fn new_vault_ctx(member: Member) -> Self {
+    pub fn new_vault_ctx(member: Member) -> Self {
         Self {
             side: ActionSide::Vault,
             member: OnlyVault::holding(member),
@@ -197,6 +207,7 @@ impl<'a> ActionContext<'a> {
             current_vault_config: OnlyVault::empty(),
             current_root_vault_config: OnlyVault::empty(),
             channel: None,
+            progress: Progress::silent(),
         }
     }
 
@@ -274,6 +285,26 @@ impl<'a> ActionContext<'a> {
     pub fn with_channel(mut self, channel: Channel) -> Self {
         self.channel = Some(channel);
         self
+    }
+
+    /// Attaches `progress`, so the action can say what it is doing while it does it.
+    ///
+    /// A context that is given none says nothing: an action run by a program that was not
+    /// watching it has nobody to tell, and one that says its progress to nobody runs the same
+    /// way as one that is being watched.
+    #[must_use]
+    pub fn with_progress(mut self, progress: Progress) -> Self {
+        self.progress = progress;
+        self
+    }
+
+    /// Where the action says what it is doing while it does it.
+    ///
+    /// Handed out as a clone, so a part of an action that runs where the context cannot be
+    /// borrowed — inside a spawned task, say — can still be heard.
+    #[must_use]
+    pub fn progress(&self) -> Progress {
+        self.progress.clone()
     }
 
     /// The encrypted channel values are exchanged over, if one has been attached.
