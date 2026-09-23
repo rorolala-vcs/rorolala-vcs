@@ -182,3 +182,11 @@ pub const EC_ERR_EXPLAIN_UNKNOWN: i32 = 91;
 
 /// `exit_codes.explain_no_lastec`
 pub const EC_ERR_EXPLAIN_NO_LASTEC: i32 = 92;
+
+// Desktop
+
+/// `exit_codes.desktop_not_found`
+pub const EC_ERR_DESKTOP_NOT_FOUND: i32 = 94;
+
+/// `exit_codes.desktop_launch_failed`
+pub const EC_ERR_DESKTOP_LAUNCH_FAILED: i32 = 95;

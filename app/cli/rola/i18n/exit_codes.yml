@@ -200,3 +200,11 @@ exit_codes:
   explain_no_lastec:
     en: No exit code was recorded to explain
     zh-CN: 没有可供解释的历史退出码
+
+  desktop_not_found:
+    en: There is no Desktop program beside the program that was run
+    zh-CN: 所运行的程序旁边没有桌面程序
+
+  desktop_launch_failed:
+    en: The Desktop program would not start
+    zh-CN: 桌面程序无法启动

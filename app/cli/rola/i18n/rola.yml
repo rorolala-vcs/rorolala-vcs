@@ -14,6 +14,7 @@ rola:
             pack                Lay a store's objects out in as few packs as its size limit allows
             vault <CMD>         List, bind, and reach the Vaults this Workspace knows
             explain <CMD>       Say what a number or a name means
+            desktop             Open the Desktop program that sits beside this one
 
         **Flags**
             -v, --vault  Act on a Vault instead of a Workspace
@@ -37,6 +38,7 @@ rola:
             pack                将仓库中的对象整理进尽可能少的 pack
             vault <命令>        列出、绑定并连上工作区已知的保险库
             explain <CMD>       解释某个数字或名字的含义
+            desktop             打开与 rola 并排的桌面程序
 
         **标志**
             -v, --vault  操作保险库而不是工作区

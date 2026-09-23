@@ -1,0 +1,55 @@
+_version: 2
+
+desktop:
+  help:
+    en: |
+        Open the Desktop program that sits beside this one
+
+        **Usage**: `rola desktop`
+
+        The command line is a way to work without a window; the Desktop program is the window
+        for the same work. The two are exported together — this program at `bin/rola` and the
+        Desktop program at `bin/desktop/` — so this opens the one beside the program that was
+        run, and names nothing.
+
+        The language the run speaks and the directory it was made in are handed over with the
+        program, so the window opens on the same work in the same language.
+    zh-CN: |
+        打开与 rola 并排的桌面程序
+
+        **用法**：`rola desktop`
+
+        命令行是不开窗口的工作方式，桌面程序则是同一件事的窗口。两者一起导出——rola 在
+        `bin/rola`，桌面程序在 `bin/desktop/`——因此本命令打开的是所运行的 rola 旁边那一个，
+        无需指定任何名字。
+
+        本次运行所用的语言、以及运行所在目录会随程序一并交给它，窗口因此开在同样的工作、
+        同样的语言上。
+
+  cmd_desktop_description:
+    en: Open the Desktop program that sits beside this one
+    zh-CN: 打开与 rola 并排的桌面程序
+
+  result_launched:
+    en: Launched the Desktop program
+    zh-CN: 已启动桌面程序
+
+  err_not_found:
+    en: There is no Desktop program beside this one
+    zh-CN: 本程序旁边没有桌面程序
+
+  err_not_found_help:
+    en: |
+        Please run `make export`, which lays the Desktop program out beside this one
+    zh-CN: |
+        请运行 `make export`，它会把桌面程序导出到本程序旁边
+
+  err_launch_failed:
+    en: "The Desktop program would not start — %{reason}"
+    zh-CN: "桌面程序无法启动 —— %{reason}"
+
+  err_launch_failed_help:
+    en: |
+        Please check that the Desktop program can be run where it sits, then try again
+    zh-CN: |
+        请确认桌面程序在其所在位置可以运行，然后重试

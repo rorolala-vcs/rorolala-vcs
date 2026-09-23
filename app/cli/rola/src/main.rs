@@ -23,6 +23,7 @@ mod account;
 mod address;
 mod cmd_account;
 mod cmd_create;
+mod cmd_desktop;
 mod cmd_explain;
 mod cmd_init;
 mod cmd_pack;
