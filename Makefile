@@ -45,9 +45,29 @@ COMPLETION_SHELLS := sh zsh fish ps1
 # name and never refer to their own file name, so the exported name is free.
 PROGRAMS := rola rola-daemon
 
+# The .NET SDK, which publishes the Desktop program.
+DOTNET ?= dotnet
+
+# The .NET side of the workspace as one solution: the Desktop program, the translations it reads,
+# and the tests of those translations.
+SOLUTION := RorolalaSharp.sln
+
 # Where an export puts the completion scripts: one directory per program, so what a shell's
 # setup sources is named once per program rather than once per program and shell.
 SCRIPTS_DIR := $(BUILD_DIR)/scripts
+
+# The Desktop program: the project it is built from, and where an export lays it out. It is
+# laid out in a `desktop` directory of its own beside the command line programs, which is where
+# `rola desktop` reaches for it — so an export and that command name one place.
+DESKTOP_PROJECT := app/desktop/RorolalaDesktop.csproj
+DESKTOP_DIR     := $(BUILD_DIR)/bin/desktop
+
+# Publishes the Desktop program into the directory named. `dotnet publish` is the form that
+# produces a program with everything beside it that running it needs, which is what an export
+# holds; a plain build leaves a program whose dependencies are still only in the build tree.
+define publish_desktop
+$(DOTNET) publish $(DESKTOP_PROJECT) -c Release -o $(1)
+endef
 
 # `export` and `clean` delete their destination with `rm -rf`, so refuse a path that
 # would take something else with it.
@@ -95,6 +115,10 @@ endif
 # The import library is the one artifact only Windows has: a DLL is linked through it,
 # and the static library of the same crate needs nothing beside it, which is why the
 # two `.lib` files are both handed over and named apart.
+#
+# The Desktop program is not cargo's own, so it is not in the table: it is published into a
+# `desktop` directory of the command line programs, which is where `rola desktop` reaches for
+# it — so the layout an export lays down and the layout that command looks in are one.
 ifeq ($(OS),Windows_NT)
   EXE_SUFFIX    := .exe
   SHARED_SUFFIX := dll
@@ -119,19 +143,19 @@ else
   IMPORT_SUFFIX :=
 endif
 
-.PHONY: all check lib bin build export clippy doc doc-open fmt fmt-check test integration-test cargo-clean clean
+.PHONY: all check lib bin build desktop export clippy doc doc-open fmt fmt-check test integration-test dotnet-check cargo-clean clean
 
 # Default target: the full gate.
 all: check build
 
 # The full gate: the formatting of every crate, the test suites, a build of every
-# crate, clippy, the documentation, then the integration suites. Composed from the
-# targets below rather than repeating their commands.
+# crate, clippy, the documentation, the integration suites, then the .NET side. Composed
+# from the targets below rather than repeating their commands.
 #
 # `fmt-check` comes first because it is instant and it is the one that is forgotten:
 # `fmt` rewrites the sources in place, so nothing else here would notice a crate that
 # was left unformatted.
-check: fmt-check test build clippy doc integration-test
+check: fmt-check test build clippy doc integration-test dotnet-check
 
 # Builds the C ABI artifact — a release cdylib and staticlib — and, as a side effect
 # of the root build script, the C header that describes it.
@@ -146,8 +170,13 @@ bin:
 # Everything that ships: the library and the programs.
 build: lib bin
 
+# The Desktop program on its own, laid out where an export lays it out.
+desktop:
+	$(call publish_desktop,$(DESKTOP_DIR))
+
 # Lays the build out for hand-off under $(BUILD_DIR), under the names a consumer
-# links, includes and sources.
+# links, includes and sources. That is also what puts the Desktop program where
+# `rola desktop` reaches for it, so an export is what makes that command work.
 export: build
 	rm -rf $(BUILD_DIR)
 	mkdir -p $(BUILD_DIR)/lib $(BUILD_DIR)/bin
@@ -166,6 +195,7 @@ endif
 				$(SCRIPTS_DIR)/$${program}/$${program}-completion.$${shell}; \
 		done; \
 	done
+	$(call publish_desktop,$(DESKTOP_DIR))
 
 # Runs clippy over the workspace; warnings are errors.
 clippy:
@@ -220,6 +250,14 @@ integration-test: bin
 		fi; \
 	done; \
 	if [ -n "$$failed" ]; then echo "==> failed:$$failed"; exit 1; fi
+
+# Builds and tests the .NET side of the workspace — the Desktop program, the translations it reads,
+# and the tests of those translations. `test` on the solution is both halves: the projects are built
+# as what the tests depend on, and the tests are run, so a Desktop program that does not compile
+# fails here as well.
+#
+dotnet-check:
+	$(DOTNET) test $(SOLUTION) -c Release
 
 # Removes cargo's build output. $(BUILD_DIR) survives: it holds an export, not a
 # build.

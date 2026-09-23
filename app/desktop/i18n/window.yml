@@ -1,0 +1,9 @@
+_version: 2
+
+# What the window itself says. The keys are the same shape as the command line's, and a file here
+# is read by the same reader, so what is written here and what is written there are written alike.
+
+window:
+  title:
+    en: Rorolala Desktop
+    zh-CN: Rorolala 桌面

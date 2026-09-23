@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>RorolalaDesktop.I18n</RootNamespace>
+    <!-- The public surface is a contract, so every part of it is said in a comment and the
+         documentation file is what a caller reads it from. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The files are YAML, the same ones `rust-i18n` reads, so one reader reads them. -->
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tests are a project of their own under this one, and a project of its own is the
+         only one that compiles its sources; the default glob would gather them up as well. -->
+    <Compile Remove="test/**" />
+  </ItemGroup>
+
+</Project>

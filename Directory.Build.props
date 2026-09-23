@@ -1,0 +1,18 @@
+<Project>
+
+  <!--
+    Keeps every build artifact out of the source tree. Cargo's output already goes to
+    `.cache/rs-target` through `.cargo/config.toml`; this puts .NET's beside it, one
+    directory per project so two projects never share an `obj` and fight over its restore
+    assets.
+
+    This file is imported before `Microsoft.Common.props` resolves either path, which is
+    what makes setting them here, rather than in a project, take effect.
+  -->
+  <PropertyGroup>
+    <CsTargetDir>$(MSBuildThisFileDirectory).cache/cs-target/$(MSBuildProjectName)</CsTargetDir>
+    <BaseOutputPath>$(CsTargetDir)/bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(CsTargetDir)/obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+</Project>
