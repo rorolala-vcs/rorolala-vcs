@@ -43,3 +43,42 @@ pub fn action_handshake(
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(action_handshake_async(workspace, account, target, name))
 }
+
+/// Runs the [`ActionSyncAll`](crate::ActionSyncAll) action on the input it is handed, taken
+/// from `workspace`, as `account`, against the daemon at `target`.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails.
+pub async fn action_sync_all_async(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    input: String,
+) -> Result<(), ActionError> {
+    proc_action::<ActionSyncAll>(workspace, account, target, input).await
+}
+
+/// Runs the [`ActionSyncAll`](crate::ActionSyncAll) action, blocking until it has.
+///
+/// This is the entry point the C ABI exports; the `async` one above is what a Rust
+/// caller should use instead. `workspace` is the copy the work is taken from, and the
+/// account is the one the caller names, so which identity an action runs as is theirs to
+/// say and not looked up behind their back, and the target is the daemon to reach, as a
+/// host and a port.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails, or if the runtime cannot be built.
+#[rorolala_utils_lazyffi::lazyffi(export = do_action_sync_all)]
+pub fn action_sync_all(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    input: String,
+) -> Result<(), ActionError> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(action_sync_all_async(workspace, account, target, input))
+}

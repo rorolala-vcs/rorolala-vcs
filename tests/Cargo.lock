@@ -860,6 +860,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-storage-sync"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-sandbox",
+ "tokio",
+]
+
+[[package]]
 name = "it-vault-auth"
 version = "0.1.0"
 dependencies = [

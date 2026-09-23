@@ -4,5 +4,8 @@
 mod handshake;
 pub use handshake::*;
 
+mod sync_all;
+pub use sync_all::*;
+
 mod sync_storage;
 pub use sync_storage::*;

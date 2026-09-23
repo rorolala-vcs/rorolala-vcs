@@ -23,6 +23,9 @@ pub const EC_UNKNOWN_COMMAND: i32 = 13;
 /// `exit_codes.help`
 pub const EC_HELP: i32 = 2;
 
+/// `exit_codes.cancelled`
+pub const EC_CANCELLED: i32 = 3;
+
 // Creation
 
 /// `exit_codes.creation_workspace`

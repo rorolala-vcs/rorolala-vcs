@@ -1,0 +1,156 @@
+//! The `rola tool sync-all` command: make the Workspace's store and the Vault's hold the same.
+//!
+//! It is [`tool handshake`](crate::tools::cmd_tool_handshake)'s reach — a Vault the Workspace has
+//! bound, or an address — with the stores at both ends being what is spoken about: each side says
+//! what it holds, and what only one of them holds crosses, so one run leaves both holding
+//! everything either had. Because that is a change to both stores, it is asked for first.
+
+use librorolala::daemon::action_sync_all;
+use mingling::{
+    Grouped, LazyRes, ShellContext, Suggest,
+    confirm::YesConfirm,
+    macros::{
+        arg, buffer, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
+    },
+    metadata::Description,
+    picker::EntryPicker,
+    res::{ResConfirm, ResExitCode},
+};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_utils_cli_theme::{help_line, trd};
+use rust_i18n::t;
+
+use crate::Next;
+use crate::account::ResCurrentAccount;
+use crate::exit_codes::{EC_CANCELLED, EC_HELP};
+use crate::keys::account_named;
+
+#[help(buffer)]
+pub fn help_tool_sync_all(_: EntryToolSyncAll, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("tool_sync_all.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryToolSyncAll)]
+pub fn desc_tool_sync_all() -> Description {
+    t!("tool_sync_all.cmd_tool_sync_all_description")
+        .to_string()
+        .into()
+}
+
+/// Makes the stores at both ends hold the same keys.
+///
+/// `VAULT` names the Vault to reach, as [`tool handshake`](crate::tools::cmd_tool_handshake) reads
+/// it: a name the Workspace has bound, or an ip and a port, with none naming the one the Workspace
+/// reaches for by default. The exchange runs as the account the work acts as, the same one every
+/// other command acts as.
+///
+/// What crosses is what only one end holds, in whichever direction that is: a full sync is not an
+/// upload or a download, and one run leaves each store holding everything either of them had. A key
+/// is the whole of what it names — a content kept as chunks is its manifest and the chunks the
+/// manifest names — so a store that is given one keeps it the way the other store had it.
+///
+/// The run changes both stores, so it asks before it starts, and a run that is told no does nothing
+/// and says so. `--confirm` answers that question in advance, which is what a run without a person
+/// at the terminal should pass.
+///
+/// # Errors
+///
+/// Every way this can fail is one the part that knows reports for itself, and `routeify` carries it
+/// out: the run is not where the exchange is spoken from ([`ErrorShouldInWorkspace`]), the Workspace
+/// has no Vault to hand it ([`ErrorRemoteVault`]), the run acts as no account or as one no scope
+/// holds ([`ErrorNoAccount`], [`ErrorAccountUnknown`]), or the exchange itself failed
+/// ([`ActionError`]).
+///
+/// [`ErrorNoAccount`]: crate::account::ErrorNoAccount
+/// [`ErrorAccountUnknown`]: crate::keys::ErrorAccountUnknown
+/// [`ErrorShouldInWorkspace`]: crate::error::ErrorShouldInWorkspace
+/// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
+/// [`ActionError`]: librorolala::protocol::ActionError
+// `ResConfirm` is a value small enough to copy, but it is the resource the protocol's injection
+// hands in and not something this command owns: taking a copy would read a state of its own, so it
+// is taken by reference, which is what the injection gives it.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+#[command(node = "tool.sync-all", routeify)]
+pub fn tool_sync_all(
+    args: EntryToolSyncAll,
+    workspace: &mut LazyRes<ResWorkspace>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    confirm: &ResConfirm,
+) -> Next {
+    // Everything below works through the Workspace, so it is asked once, here, and taken for granted
+    // after: `?` is `routeify`'s, and a run that is inside no Workspace leaves through it. `held` is
+    // the copy the exchange is spoken from, and the same one the action is handed.
+    workspace.get_ref().check()?;
+
+    // UNWRAP: `check` above is exactly what a run without a Workspace fails with, and this run did
+    // not fail, so there is a Workspace here to hand on.
+    let held = workspace.get_ref().as_ref().unwrap();
+
+    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
+    // Workspace's own choice be the one that is reached for.
+    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let target = remote
+        .get_ref()
+        .vault_or_default(named.unwrap_or_default())?;
+
+    let name = current.get_ref().must_bind()?;
+    let account = account_named(&name, Some(held), None)?;
+
+    // Both stores are changed by this, so it is asked for rather than assumed. A run that is told no
+    // has nothing to report and nothing to undo, and says so where nothing was done.
+    if !confirm.ask::<YesConfirm>(&t!("tool_sync_all.confirm")) {
+        return ResultSyncDeclined.into();
+    }
+
+    // What to sync is not named here: a full sync is everything either end holds, and the two ends
+    // work that out between them. What the input carries is nothing, and the action reads none of it.
+    action_sync_all(held, &account, target.to_string(), String::new())?;
+
+    ResultSynced.into()
+}
+
+/// Completes what `rola tool sync-all` can be given next.
+///
+/// The Vault is reached the way [`tool handshake`](crate::tools::cmd_tool_handshake) reaches it, so
+/// what can be offered is the same: the names the Workspace has bound.
+#[completion(EntryToolSyncAll)]
+pub fn complete_tool_sync_all(
+    ctx: ShellContext,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if ctx.current_word.starts_with('-') {
+        return suggest!();
+    }
+
+    let Ok(names) = remote.get_ref().names() else {
+        return suggest!();
+    };
+
+    let mut names: Vec<String> = names.into_iter().map(str::to_string).collect();
+    names.sort();
+    names.retain(|name| name.starts_with(&ctx.current_word));
+
+    suggest! { names }
+}
+
+/// Result: the two stores were made to hold the same keys.
+#[derive(Grouped)]
+pub struct ResultSynced;
+
+#[renderer(buffer)]
+pub fn render_result_synced(_: ResultSynced) {
+    r_println!("{}", t!("tool_sync_all.result_synced").trim());
+}
+
+/// Result: the run was asked to confirm itself and was not confirmed.
+#[derive(Grouped)]
+pub struct ResultSyncDeclined;
+
+#[renderer(buffer)]
+pub fn render_result_sync_declined(_: ResultSyncDeclined, ec: &mut ResExitCode) {
+    r_eprintln!("{}", help_line!(t!("tool_sync_all.result_declined").trim()));
+    ec.exit_code = EC_CANCELLED;
+}

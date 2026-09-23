@@ -15,6 +15,7 @@ use rust_i18n::t;
 #[rustfmt::skip]
 pub const CODES: &[i32] = &[
     2,
+    3,
     11,
     12,
     13,
@@ -85,6 +86,7 @@ pub fn has_ec(code: i32) -> bool {
 pub fn explain_ec(code: i32) -> String {
     match code {
         2 => t!("exit_codes.help").to_string(),
+        3 => t!("exit_codes.cancelled").to_string(),
         11 => t!("exit_codes.already_exist").to_string(),
         12 => t!("exit_codes.not_exist").to_string(),
         13 => t!("exit_codes.unknown_command").to_string(),

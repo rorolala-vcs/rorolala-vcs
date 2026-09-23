@@ -17,6 +17,10 @@ exit_codes:
     en: Help was asked for
     zh-CN: 请求了帮助
 
+  cancelled:
+    en: The run was cancelled before it did anything
+    zh-CN: 本次运行在动手之前被取消
+
   creation_workspace:
     en: A Workspace could not be created
     zh-CN: 无法创建工作区

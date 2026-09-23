@@ -1,0 +1,49 @@
+_version: 2
+
+tool_sync_all:
+  help:
+    en: |
+        Make the stores at both ends hold the same keys
+
+        **Usage**: `rola tool sync-all [VAULT]`
+
+        `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`, or
+        an ip, with the port a Vault listens on by default when none is written. Naming none reaches
+        for the one the Workspace reaches for by default.
+
+        What crosses is what only one end holds, in whichever direction that is: this is neither an
+        upload nor a download, and one run leaves each store holding everything either of them had.
+        A key is the whole of what it names — a content kept as chunks is its manifest and the
+        chunks the manifest names — so a store that is given one keeps it the way the other store
+        had it.
+
+        Both stores are changed, so the run asks before it starts; `--confirm` answers in advance.
+    zh-CN: |
+        让两端的仓库持有相同的 key
+
+        **用法**：`rola tool sync-all [VAULT]`
+
+        `VAULT` 指定要连接的保险库：工作区已用 `rola vault bind` 绑定的名字，或一个 ip（不写端口时用
+        保险库默认监听的端口）。不指定则连接工作区默认使用的那个。
+
+        传输的是"只有一端持有"的内容，方向由谁持有决定：既不是上传也不是下载，一次运行会让两个仓库都
+        持有它们原本合计持有的全部内容。一个 key 代表它所命名的整体——分块保存的内容即它的 manifest
+        以及 manifest 点名的那些块——因此被赋予该 key 的仓库会按对方保存它的原样持有它。
+
+        两个仓库都会被改动，所以运行前会先征求确认；`--confirm` 可预先作答。
+
+  cmd_tool_sync_all_description:
+    en: Make the stores at both ends hold the same keys
+    zh-CN: 让两端的仓库持有相同的 key
+
+  confirm:
+    en: "Both stores will be changed, so that each holds everything the other has. Continue? [y/n] "
+    zh-CN: "两个仓库都会被改动，使各自持有对方所持有的全部内容。是否继续？[y/n] "
+
+  result_synced:
+    en: The stores at both ends now hold the same keys
+    zh-CN: 两端仓库现在持有相同的 key
+
+  result_declined:
+    en: Nothing was done — the sync was not confirmed
+    zh-CN: 未做任何改动 —— 同步未获确认

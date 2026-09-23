@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 use mingling::{
     macros::{buffer, gen_program, help, r_append, r_eprintln, renderer},
     res::ResExitCode,
-    setup::DefaultSetup,
+    setup::{ConfirmSetup, DefaultSetup},
 };
 use rorolala_cli_setups::RorolalaSetup;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -57,6 +57,7 @@ fn main() {
     program.with_setup(AddressHistorySetup);
     program.with_setup(CurrentAccountSetup);
     program.with_setup(LastExitCodeRecordSetup);
+    program.with_setup(ConfirmSetup);
     program.exec_and_exit();
 }
 

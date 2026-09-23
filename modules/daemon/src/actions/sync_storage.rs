@@ -25,12 +25,20 @@ use rorolala_storage::{
 
 /// Which side a key is being carried to.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Side {
+pub(crate) enum Side {
     /// To the Vault, which is where a Workspace's values go.
     Vault,
     /// To the Workspace.
     Workspace,
 }
+
+/// How many bytes of a blob one value carries.
+///
+/// A value crosses as one frame, and a frame has a bound — the protocol's own, which is smaller than
+/// this and is not a store's to change — so a content bigger than that bound is carried as several
+/// values. This is deliberately well under that bound: what it means is that a content of *any* size
+/// crosses, and a smaller piece costs nothing but a few more frames.
+const PIECE: usize = 4 * 1024 * 1024;
 
 /// Makes two stores hold the same keys.
 ///
@@ -152,22 +160,28 @@ async fn carry(
     };
 
     // What comes first says what follows: the manifest when the content is kept as chunks, and
-    // nothing when it is one object.
-    let header = pieces.as_ref().and_then(Pieces::manifest_bytes);
-    let arrived = carry_value(ctx, to, header.clone()).await?;
-    // The side that sent it already has it; the side taking reads what came.
-    let header = arrived.flatten().or(header);
+    // nothing when it is one object. An empty manifest is a content that was not cut, since a cut
+    // content is one manifest naming the chunks it was cut into and there are never none of them.
+    let manifest = pieces
+        .as_ref()
+        .and_then(Pieces::manifest_bytes)
+        .unwrap_or_default();
+    let outgoing = if sending {
+        Some(manifest.clone())
+    } else {
+        None
+    };
+    let manifest = carry_blob(ctx, to, outgoing).await?.unwrap_or(manifest);
 
-    let Some(header) = header else {
-        // One object, and it follows. The side that is not sending passes nothing; nothing of it
-        // is read.
-        let outgoing = pieces
+    if manifest.is_empty() {
+        // One object, and it follows.
+        let whole = pieces
             .as_ref()
             .and_then(Pieces::whole)
             .cloned()
             .unwrap_or_default();
 
-        if let Some(bytes) = carry_value(ctx, to, outgoing).await? {
+        if let Some(bytes) = carry_blob(ctx, to, sending.then_some(whole)).await? {
             local
                 .write_object(&bytes, local.codec())
                 .await
@@ -175,9 +189,9 @@ async fn carry(
         }
 
         return Ok(());
-    };
+    }
 
-    let manifest = Manifest::decode(&header)
+    let manifest = Manifest::decode(&manifest)
         .map_err(|error| ActionError::Codec(BincodeError::new(error.to_string())))?;
 
     // The manifest is written before the chunks arrive: a manifest whose chunks are not here yet is
@@ -192,11 +206,9 @@ async fn carry(
     let chunks = pieces.as_ref().and_then(Pieces::chunks);
     for at in 0..manifest.len() {
         // As above: what one side sends, the other passes nothing for.
-        let outgoing = chunks
-            .and_then(|chunks| chunks.get(at).cloned())
-            .unwrap_or_default();
+        let outgoing = chunks.and_then(|chunks| chunks.get(at).cloned());
 
-        if let Some(bytes) = carry_value(ctx, to, outgoing).await? {
+        if let Some(bytes) = carry_blob(ctx, to, outgoing).await? {
             local
                 .write_object(&bytes, local.codec())
                 .await
@@ -205,6 +217,48 @@ async fn carry(
     }
 
     Ok(())
+}
+
+/// Carries one blob in the direction `to` names, and answers what arrived here.
+///
+/// `blob` is what *this* side holds, and it is read only where this side is the one that has it: the
+/// side taking a blob runs nothing of the other side's, so what it passes is never looked at. What
+/// comes back is the blob when it arrived here and nothing when it left, so the same call reads the
+/// same way on both ends.
+///
+/// A blob crosses as its length and then its bytes, in pieces of no more than [`PIECE`] — which is
+/// what lets a content bigger than a frame cross at all, since no one value is ever longer than that.
+/// A blob of no bytes is still a blob: what the length says is how many bytes come, so an empty
+/// content crosses as an empty content rather than as nothing at all.
+pub(crate) async fn carry_blob(
+    ctx: &mut ActionContext<'_>,
+    to: Side,
+    blob: Option<Vec<u8>>,
+) -> Result<Option<Vec<u8>>, ActionError> {
+    let sending = blob.is_some();
+
+    // How many bytes to expect comes first, and the pieces that follow are counted from it, so the
+    // two ends agree on how many values cross without either being told a second time.
+    let announced = blob.as_ref().map_or(0, Vec::len);
+    let header = carry_value(ctx, to, announced).await?;
+    let announced = header.unwrap_or(announced);
+
+    // What the peer says it is sending is what is reserved for, not what is trusted: the pieces
+    // themselves are what the bytes are put together from.
+    let mut arrived = Vec::with_capacity(announced.min(PIECE));
+    for at in 0..announced.div_ceil(PIECE) {
+        let start = at * PIECE;
+        let outgoing = blob
+            .as_ref()
+            .map(|bytes| bytes[start..bytes.len().min(start + PIECE)].to_vec());
+
+        if let Some(piece) = carry_value(ctx, to, outgoing.unwrap_or_default()).await? {
+            arrived.extend_from_slice(&piece);
+        }
+    }
+
+    // The side that sent it has it already; the side taking reads what came.
+    Ok((!sending).then_some(arrived))
 }
 
 /// Carries one value in the direction `to` names, and answers what arrived here.

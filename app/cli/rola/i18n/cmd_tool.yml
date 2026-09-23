@@ -14,6 +14,7 @@ tool:
             ls-manifests               List every content the store keeps cut
             keygen <PATH>              Generate an Ed25519 key pair
             handshake <VAULT>          Speak the handshake action to a Vault daemon
+            sync-all [VAULT]           Make the stores at both ends hold the same keys
 
         None of this is version control: it is what sits under it — the store the content is
         kept in, the keys an account is proved with, and the words two ends exchange before
@@ -34,6 +35,7 @@ tool:
             ls-manifests               列出仓库中分块保存的全部内容
             keygen <PATH>              生成一对 Ed25519 密钥
             handshake <VAULT>          向保险库守护进程发起握手
+            sync-all [VAULT]           让两端的仓库持有相同的 key
 
         这些都不是版本控制，而是它底下那一层——存放内容的仓库、用来证明账户身份的密钥，以及两端在
         搬运任何东西之前先交换的话语。每条子命令只做其中一件事，用于检视仓库里有什么，或手工整理它。
