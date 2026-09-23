@@ -58,7 +58,7 @@ pub fn desc_desktop() -> Description {
 /// The Desktop program is where the work that a windowless run does not suit is done, so this is
 /// a way to it rather than a way to work: the program is started and the run ends, leaving it to
 /// the reader. It sits in a `desktop` directory beside the program that was run — the layout
-/// `make export` lays down — so a run reaches it without being told where it is.
+/// `./run.sh export` lays down — so a run reaches it without being told where it is.
 ///
 /// # Errors
 ///

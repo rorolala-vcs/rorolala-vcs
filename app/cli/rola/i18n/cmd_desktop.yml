@@ -40,9 +40,9 @@ desktop:
 
   err_not_found_help:
     en: |
-        Please run `make export`, which lays the Desktop program out beside this one
+        [DEV_ONLY] Please run `./run.sh export`, which lays the Desktop program out beside this one
     zh-CN: |
-        请运行 `make export`，它会把桌面程序导出到本程序旁边
+        [DEV_ONLY] 请运行 `./run.sh export`，它会把桌面程序导出到本程序旁边
 
   err_launch_failed:
     en: "The Desktop program would not start — %{reason}"
