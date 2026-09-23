@@ -19,7 +19,7 @@ error:
 
     err_unknown_help:
       en: |
-        Please run `rola account` to see the accounts there are, or `rola tool keygen` to
+        Please run `rola account` to see the accounts there are, or `rola key --generate` to
         make one
       zh-CN: |
-        请运行 `rola account` 查看已有账户，或用 `rola tool keygen` 生成一个
+        请运行 `rola account` 查看已有账户，或用 `rola key --generate` 生成一个

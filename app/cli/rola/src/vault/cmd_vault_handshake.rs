@@ -1,4 +1,4 @@
-//! The `rola tool handshake` command: speak the handshake action to a Vault.
+//! The `rola vault handshake` command: speak the handshake action to a Vault.
 //!
 //! It is the handshake on its own, with none of the work in the way: the Vault is reached
 //! where the Workspace says it answers, or at an address the caller gives, and the action runs
@@ -27,23 +27,23 @@ use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 
 #[help(buffer)]
-pub fn help_tool_handshake(_: EntryToolHandshake, ec: &mut ResExitCode) {
-    r_eprintln!("{}", trd!(t!("tool_handshake.help")).trim());
+pub fn help_vault_handshake(_: EntryVaultHandshake, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("vault_handshake.help")).trim());
     ec.exit_code = EC_HELP;
 }
 
-#[metadata(EntryToolHandshake)]
-pub fn desc_tool_handshake() -> Description {
-    t!("tool_handshake.cmd_tool_handshake_description")
+#[metadata(EntryVaultHandshake)]
+pub fn desc_vault_handshake() -> Description {
+    t!("vault_handshake.cmd_vault_handshake_description")
         .to_string()
         .into()
 }
 
 /// Speaks the handshake action to a Vault, and prints what it answers.
 ///
-/// `VAULT` names the Vault to reach: a name the Workspace has [bound](crate::cmd_vault), or an
+/// `VAULT` names the Vault to reach: a name the Workspace has [bound](crate::vault::cmd_vault), or an
 /// ip and a port. Naming none reaches for the one the Workspace
-/// [reaches for by default](crate::cmd_vault::vault_set_default). The action runs as the
+/// [reaches for by default](crate::vault::cmd_vault_set_default). The action runs as the
 /// account the work acts as — the one `rola account` names, which is the same choice every
 /// other command makes — and what it introduces itself with is that account's name, so the
 /// call needs nothing else.
@@ -64,13 +64,13 @@ pub fn desc_tool_handshake() -> Description {
 /// [`ErrorShouldInWorkspace`]: crate::error::ErrorShouldInWorkspace
 /// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
 /// [`ActionError`]: librorolala::protocol::ActionError
-#[command(node = "tool.handshake")]
-pub fn tool_handshake(args: EntryToolHandshake) -> StateToolHandshake {
+#[command(node = "vault.handshake")]
+pub fn vault_handshake(args: EntryVaultHandshake) -> StateVaultHandshake {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // lets the Workspace's own choice be the one that is reached for.
     let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
 
-    StateToolHandshake::from(named)
+    StateVaultHandshake::from(named)
 }
 
 /// The state of speaking the handshake to a Vault.
@@ -78,14 +78,14 @@ pub fn tool_handshake(args: EntryToolHandshake) -> StateToolHandshake {
 /// Which Vault is reached is the whole of what is said: naming none reaches for the one the
 /// Workspace reaches for by default.
 #[derive(Grouped, Wrap)]
-pub struct StateToolHandshake {
+pub struct StateVaultHandshake {
     /// The Vault to reach, or nothing when the Workspace's own choice is reached for.
     vault: Option<String>,
 }
 
 #[chain(routeify)]
-pub fn handle_tool_handshake(
-    state: StateToolHandshake,
+pub fn handle_vault_handshake(
+    state: StateVaultHandshake,
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
@@ -126,13 +126,13 @@ pub fn handle_tool_handshake(
     ResultHandshake { output }.into()
 }
 
-/// Completes what `rola tool handshake` can be given next.
+/// Completes what `rola vault handshake` can be given next.
 ///
 /// What can be reached by name is what the Workspace has bound, which is the same set the
 /// command itself resolves; an address is not, since there is nothing here that knows which
 /// ones are worth offering.
-#[completion(EntryToolHandshake)]
-pub fn complete_tool_handshake(
+#[completion(EntryVaultHandshake)]
+pub fn complete_vault_handshake(
     ctx: ShellContext,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {

@@ -8,11 +8,11 @@ rola:
         **Commands**
             create <PATH>       Create a Workspace at PATH, or a Vault with --vault
             init                Create a Workspace or Vault in the current directory
-            key [--pem]         List every key Rorolala can reach
+            key [--pem]         List every key Rorolala can reach, or generate one
             account <ACCOUNT>   Name the account the work acts as, or list them
-            tool <SUBCOMMAND>   A low-level toolset that is not version control
+            storage <CMD>       Read and write the content a store holds, by hand
             pack                Lay a store's objects out in as few packs as its size limit allows
-            vault               List, bind, and choose the Vaults this Workspace knows
+            vault <CMD>         List, bind, and reach the Vaults this Workspace knows
             explain <CMD>       Say what a number or a name means
 
         **Flags**
@@ -31,11 +31,11 @@ rola:
         **命令**
             create <PATH>       在 PATH 创建工作区；加 --vault 则创建保险库
             init                将当前目录创建为工作区或保险库
-            key [--pem]         列出 Rorolala 能找到的全部密钥
+            key [--pem]         列出 Rorolala 能找到的全部密钥，或生成一对
             account <ACCOUNT>   指定当前账户，或列出可用账户
-            tool <命令>         非版本控制的底层工具集
+            storage <命令>      手工读写仓库持有的内容
             pack                将仓库中的对象整理进尽可能少的 pack
-            vault               列出、绑定并选择工作区已知的保险库
+            vault <命令>        列出、绑定并连上工作区已知的保险库
             explain <CMD>       解释某个数字或名字的含义
 
         **标志**

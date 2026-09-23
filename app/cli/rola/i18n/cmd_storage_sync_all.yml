@@ -1,11 +1,11 @@
 _version: 2
 
-tool_sync_all:
+storage_sync_all:
   help:
     en: |
         Make the stores at both ends hold the same keys
 
-        **Usage**: `rola tool sync-all [VAULT]`
+        **Usage**: `rola storage sync-all [VAULT]`
 
         `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`, or
         an ip, with the port a Vault listens on by default when none is written. Naming none reaches
@@ -21,7 +21,7 @@ tool_sync_all:
     zh-CN: |
         让两端的仓库持有相同的 key
 
-        **用法**：`rola tool sync-all [VAULT]`
+        **用法**：`rola storage sync-all [VAULT]`
 
         `VAULT` 指定要连接的保险库：工作区已用 `rola vault bind` 绑定的名字，或一个 ip（不写端口时用
         保险库默认监听的端口）。不指定则连接工作区默认使用的那个。
@@ -32,7 +32,7 @@ tool_sync_all:
 
         两个仓库都会被改动，所以运行前会先征求确认；`--confirm` 可预先作答。
 
-  cmd_tool_sync_all_description:
+  cmd_storage_sync_all_description:
     en: Make the stores at both ends hold the same keys
     zh-CN: 让两端的仓库持有相同的 key
 

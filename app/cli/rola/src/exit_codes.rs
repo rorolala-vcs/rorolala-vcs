@@ -37,49 +37,51 @@ pub const EC_ERR_CREATION_VAULT: i32 = 22;
 /// `exit_codes.creation_argument`
 pub const EC_ERR_CREATION_ARGUMENT: i32 = 23;
 
-// Tools
+// Storage
 
-/// `exit_codes.tool_keygen_no_openssl`
-pub const EC_ERR_TOOL_KEYGEN_NO_OPENSSL: i32 = 41;
+/// `exit_codes.storage_write_file_argument`
+pub const EC_ERR_STORAGE_WRITE_FILE_ARGUMENT: i32 = 46;
 
-/// `exit_codes.tool_keygen_failed`
-pub const EC_ERR_TOOL_KEYGEN_FAILED: i32 = 42;
+/// `exit_codes.storage_write_file_no_storage`
+pub const EC_ERR_STORAGE_WRITE_FILE_NO_STORAGE: i32 = 47;
 
-/// `exit_codes.tool_keygen_path_not_exist`
-pub const EC_ERR_TOOL_KEYGEN_PATH_NOT_EXIST: i32 = 43;
+/// `exit_codes.storage_write_file_not_a_file`
+pub const EC_ERR_STORAGE_WRITE_FILE_NOT_A_FILE: i32 = 48;
 
-/// `exit_codes.tool_keygen_no_key_dir`
-pub const EC_ERR_TOOL_KEYGEN_NO_KEY_DIR: i32 = 44;
+/// `exit_codes.storage_write_file_failed`
+pub const EC_ERR_STORAGE_WRITE_FILE_FAILED: i32 = 49;
 
-/// `exit_codes.tool_keygen_install_failed`
-pub const EC_ERR_TOOL_KEYGEN_INSTALL_FAILED: i32 = 45;
+/// `exit_codes.storage_extract_file_argument`
+pub const EC_ERR_STORAGE_EXTRACT_FILE_ARGUMENT: i32 = 54;
 
-/// `exit_codes.tool_write_file_argument`
-pub const EC_ERR_TOOL_WRITE_FILE_ARGUMENT: i32 = 46;
+/// `exit_codes.storage_extract_file_no_storage`
+pub const EC_ERR_STORAGE_EXTRACT_FILE_NO_STORAGE: i32 = 55;
 
-/// `exit_codes.tool_write_file_no_storage`
-pub const EC_ERR_TOOL_WRITE_FILE_NO_STORAGE: i32 = 47;
+/// `exit_codes.storage_extract_file_bad_hash`
+pub const EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH: i32 = 56;
 
-/// `exit_codes.tool_write_file_not_a_file`
-pub const EC_ERR_TOOL_WRITE_FILE_NOT_A_FILE: i32 = 48;
+/// `exit_codes.storage_extract_file_exists`
+pub const EC_ERR_STORAGE_EXTRACT_FILE_EXISTS: i32 = 57;
 
-/// `exit_codes.tool_write_file_failed`
-pub const EC_ERR_TOOL_WRITE_FILE_FAILED: i32 = 49;
+/// `exit_codes.storage_extract_file_failed`
+pub const EC_ERR_STORAGE_EXTRACT_FILE_FAILED: i32 = 58;
 
-/// `exit_codes.tool_extract_file_argument`
-pub const EC_ERR_TOOL_EXTRACT_FILE_ARGUMENT: i32 = 54;
+// Keys
 
-/// `exit_codes.tool_extract_file_no_storage`
-pub const EC_ERR_TOOL_EXTRACT_FILE_NO_STORAGE: i32 = 55;
+/// `exit_codes.keygen_no_openssl`
+pub const EC_ERR_KEYGEN_NO_OPENSSL: i32 = 41;
 
-/// `exit_codes.tool_extract_file_bad_hash`
-pub const EC_ERR_TOOL_EXTRACT_FILE_BAD_HASH: i32 = 56;
+/// `exit_codes.keygen_failed`
+pub const EC_ERR_KEYGEN_FAILED: i32 = 42;
 
-/// `exit_codes.tool_extract_file_exists`
-pub const EC_ERR_TOOL_EXTRACT_FILE_EXISTS: i32 = 57;
+/// `exit_codes.keygen_no_key_dir`
+pub const EC_ERR_KEYGEN_NO_KEY_DIR: i32 = 44;
 
-/// `exit_codes.tool_extract_file_failed`
-pub const EC_ERR_TOOL_EXTRACT_FILE_FAILED: i32 = 58;
+/// `exit_codes.keygen_install_failed`
+pub const EC_ERR_KEYGEN_INSTALL_FAILED: i32 = 45;
+
+/// `exit_codes.key_argument`
+pub const EC_ERR_KEY_ARGUMENT: i32 = 68;
 
 // Packing
 
@@ -91,17 +93,17 @@ pub const EC_ERR_PACK_FAILED: i32 = 60;
 
 // Listing
 
-/// `exit_codes.tool_ls_storaged_no_storage`
-pub const EC_ERR_TOOL_LS_STORAGED_NO_STORAGE: i32 = 64;
+/// `exit_codes.storage_ls_storaged_no_storage`
+pub const EC_ERR_STORAGE_LS_STORAGED_NO_STORAGE: i32 = 64;
 
-/// `exit_codes.tool_ls_storaged_failed`
-pub const EC_ERR_TOOL_LS_STORAGED_FAILED: i32 = 65;
+/// `exit_codes.storage_ls_storaged_failed`
+pub const EC_ERR_STORAGE_LS_STORAGED_FAILED: i32 = 65;
 
-/// `exit_codes.tool_ls_manifests_no_storage`
-pub const EC_ERR_TOOL_LS_MANIFESTS_NO_STORAGE: i32 = 66;
+/// `exit_codes.storage_ls_manifests_no_storage`
+pub const EC_ERR_STORAGE_LS_MANIFESTS_NO_STORAGE: i32 = 66;
 
-/// `exit_codes.tool_ls_manifests_failed`
-pub const EC_ERR_TOOL_LS_MANIFESTS_FAILED: i32 = 67;
+/// `exit_codes.storage_ls_manifests_failed`
+pub const EC_ERR_STORAGE_LS_MANIFESTS_FAILED: i32 = 67;
 
 // Configuration
 

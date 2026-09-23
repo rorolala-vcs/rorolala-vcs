@@ -1,3 +1,12 @@
+//! The `rola key` namespace: the keys Rorolala can reach, and making one.
+//!
+//! A key is what an account is and what a member is: the private half is the identity the work
+//! acts as, and the public half is the name others know it by. Listing them and completing a
+//! name are the same list, read from the same place: what is printed is what can be completed.
+//!
+//! Making a pair is the other half of the namespace, [`key generate`](crate::key::cmd_key_generate),
+//! because both are about the same thing — the pair an account is made of.
+
 use std::path::PathBuf;
 
 use librorolala::auth::{locate_accounts, locate_members};
@@ -5,7 +14,7 @@ use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
         arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln,
-        r_println, renderer, routeify, suggest,
+        r_println, renderer, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
@@ -68,7 +77,7 @@ pub struct StateKeyList {
     pem: bool,
 }
 
-#[chain(routeify)]
+#[chain]
 pub fn handle_key_list(
     state: StateKeyList,
     vault: &mut LazyRes<ResVault>,
@@ -100,8 +109,9 @@ pub fn handle_key_list(
 
 /// Completes what `rola key` can be given next.
 ///
-/// The command has one flag and takes no other word, so only a word that starts a flag is
-/// answered at all — and only with the flags that are not already on the line.
+/// The command takes no positional word of its own and its subcommands are offered by the
+/// dispatcher, so only a word that starts a flag is answered at all — and only with the flags
+/// that are not already on the line.
 #[completion(EntryKey)]
 pub fn complete_key(ctx: ShellContext) -> Suggest {
     if !ctx.current_word.starts_with('-') {

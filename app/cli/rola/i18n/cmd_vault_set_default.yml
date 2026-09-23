@@ -1,0 +1,37 @@
+_version: 2
+
+vault_set_default:
+  help:
+    en: |
+        Choose the Vault the Workspace reaches for
+
+        **Usage**: `rola vault set-default <NAME>`
+
+        `NAME` has to be one the Workspace has bound with `rola vault bind`. It becomes what a
+        command that would otherwise ask which Vault to reach for falls back on — `rola
+        vault handshake` with nothing named, for one. Naming the one already chosen is not an
+        error, only a choice made again.
+    zh-CN: |
+        选择工作区默认使用的保险库
+
+        **用法**：`rola vault set-default <NAME>`
+
+        `NAME` 必须是工作区已用 `rola vault bind` 绑定的名字。它将成为那些本会询问
+        “要连哪个保险库”的命令的默认选择（例如不带参数的 `rola vault handshake`）。
+        重复指定当前的选择不算错误。
+
+  cmd_vault_set_default_description:
+    en: Choose the Vault the Workspace reaches for
+    zh-CN: 选择工作区默认使用的保险库
+
+  result_chosen:
+    en: The Vault reached for by default is now `%{name}`
+    zh-CN: 默认使用的保险库已设为 `%{name}`
+
+  result_changed:
+    en: The Vault reached for by default is now `%{name}`, in place of `%{previous}`
+    zh-CN: 默认使用的保险库已从 `%{previous}` 改为 `%{name}`
+
+  result_cleared:
+    en: Nothing is reached for by default now
+    zh-CN: 现在不再有默认使用的保险库

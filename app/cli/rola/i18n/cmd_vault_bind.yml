@@ -1,0 +1,63 @@
+_version: 2
+
+vault_bind:
+  help:
+    en: |
+        Bind a name to a Vault address
+
+        **Usage**: `rola vault bind [--set-default] <NAME> <ADDR>`
+
+        `NAME` is the Workspace's own shorthand for a Vault, and naming one that is already
+        bound changes what it means. `ADDR` is a host and a port, such as `127.0.0.1:7000`,
+        where the host is an ip or a name — `localhost`, say — and the port may be left out,
+        which means the one a Vault listens on by default. It may also be a full link,
+        `rola://<host>[:<port>]/<sub-vault>`, which names the Vault under the daemon's own as
+        well. The address is remembered, so a later `bind` can offer it again.
+
+        With `--set-default`, the name also becomes the one the Workspace reaches for, as if
+        `rola vault set-default` had been run once the binding was made.
+    zh-CN: |
+        将名字绑定到保险库地址
+
+        **用法**：`rola vault bind [--set-default] <NAME> <ADDR>`
+
+        `NAME` 是工作区为保险库起的简称；名字已存在时，再次绑定即为修改其含义。
+        `ADDR` 是主机与端口，例如 `127.0.0.1:7000`；主机可以是 ip，也可以是名字（如 `localhost`），
+        端口可以省略，此时使用保险库的默认端口。还可以写成完整链接
+        `rola://<主机>[:<端口>]/<子保险库>`，这样就能一并指定子保险库。
+        地址会被记住，方便下次 `bind` 时补全。
+
+        加 `--set-default` 时，该名字同时成为工作区默认使用的保险库，
+        相当于绑定完成后再执行一次 `rola vault set-default`。
+
+  cmd_vault_bind_description:
+    en: Bind a name to a Vault address
+    zh-CN: 将名字绑定到保险库地址
+
+  result_bound:
+    en: Bound %{name} to %{address}
+    zh-CN: 已将 %{name} 绑定到 %{address}
+
+  result_changed:
+    en: Changed %{name} from %{previous} to %{address}
+    zh-CN: 已将 %{name} 从 %{previous} 改为 %{address}
+
+  err_address_missing:
+    en: An address is required
+    zh-CN: 缺少地址
+
+  err_address_missing_help:
+    en: Please name the address, as in `rola vault bind origin 127.0.0.1:7000`
+    zh-CN: 请给出地址，例如 `rola vault bind origin 127.0.0.1:7000`
+
+  err_address_invalid:
+    en: "`%{address}` is not an address"
+    zh-CN: "`%{address}` 不是地址"
+
+  err_address_invalid_help:
+    en: |
+        Please write it as a host and a port, such as `127.0.0.1:7000` or `localhost:7000`,
+        or as a link, such as `rola://127.0.0.1:7000/alpha`
+    zh-CN: |
+        请写成主机与端口，例如 `127.0.0.1:7000` 或 `localhost:7000`；也可写成链接，例如
+        `rola://127.0.0.1:7000/alpha`

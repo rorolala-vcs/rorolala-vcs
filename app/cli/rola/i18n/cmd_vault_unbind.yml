@@ -1,0 +1,27 @@
+_version: 2
+
+vault_unbind:
+  help:
+    en: |
+        Let a name go
+
+        **Usage**: `rola vault unbind <NAME>`
+
+        The name stops meaning a Vault. A name that was not bound is reported rather than
+        passed over in silence. A name that was the one reached for by default goes along
+        with it, since a default that named nothing would reach nowhere.
+    zh-CN: |
+        解除名字的绑定
+
+        **用法**：`rola vault unbind <NAME>`
+
+        该名字不再指代任何保险库。名字本就没有绑定时会报错，而不是默默略过。
+        若该名字正是默认使用的保险库，默认选择会一并清除，以免指向不存在的名字。
+
+  cmd_vault_unbind_description:
+    en: Let a name go
+    zh-CN: 解除名字的绑定
+
+  result_unbound:
+    en: Unbound %{name} (%{address})
+    zh-CN: 已解除 %{name} 的绑定（%{address}）

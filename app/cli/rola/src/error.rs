@@ -11,3 +11,6 @@ pub use creation::*;
 
 mod placement;
 pub use placement::*;
+
+mod vault;
+pub use vault::*;

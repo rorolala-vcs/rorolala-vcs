@@ -1,6 +1,6 @@
-//! The `rola tool sync-all` command: make the Workspace's store and the Vault's hold the same.
+//! The `rola storage sync-all` command: make the Workspace's store and the Vault's hold the same.
 //!
-//! It is [`tool handshake`](crate::tools::cmd_tool_handshake)'s reach — a Vault the Workspace has
+//! It is [`vault handshake`](crate::vault::cmd_vault_handshake)'s reach — a Vault the Workspace has
 //! bound, or an address — with the stores at both ends being what is spoken about: each side says
 //! what it holds, and what only one of them holds crosses, so one run leaves both holding
 //! everything either had. Because that is a change to both stores, it is asked for first.
@@ -34,21 +34,21 @@ use crate::keys::account_named;
 use crate::progress::Reporting;
 
 #[help(buffer)]
-pub fn help_tool_sync_all(_: EntryToolSyncAll, ec: &mut ResExitCode) {
-    r_eprintln!("{}", trd!(t!("tool_sync_all.help")).trim());
+pub fn help_storage_sync_all(_: EntryStorageSyncAll, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("storage_sync_all.help")).trim());
     ec.exit_code = EC_HELP;
 }
 
-#[metadata(EntryToolSyncAll)]
-pub fn desc_tool_sync_all() -> Description {
-    t!("tool_sync_all.cmd_tool_sync_all_description")
+#[metadata(EntryStorageSyncAll)]
+pub fn desc_storage_sync_all() -> Description {
+    t!("storage_sync_all.cmd_storage_sync_all_description")
         .to_string()
         .into()
 }
 
 /// Makes the stores at both ends hold the same keys.
 ///
-/// `VAULT` names the Vault to reach, as [`tool handshake`](crate::tools::cmd_tool_handshake) reads
+/// `VAULT` names the Vault to reach, as [`vault handshake`](crate::vault::cmd_vault_handshake) reads
 /// it: a name the Workspace has bound, or an ip and a port, with none naming the one the Workspace
 /// reaches for by default. The exchange runs as the account the work acts as, the same one every
 /// other command acts as.
@@ -83,13 +83,13 @@ pub fn desc_tool_sync_all() -> Description {
 // is taken by reference, which is what the injection gives it. `ResProgressSetting` is read from
 // where it is handed in for the same reason, and taking a copy of it here would be no more the
 // answer the run gave.
-#[command(node = "tool.sync-all")]
-pub fn tool_sync_all(args: EntryToolSyncAll) -> StateToolSyncAll {
+#[command(node = "storage.sync-all")]
+pub fn storage_sync_all(args: EntryStorageSyncAll) -> StateStorageSyncAll {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
     let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
 
-    StateToolSyncAll::from(named)
+    StateStorageSyncAll::from(named)
 }
 
 /// The state of making the two stores hold the same keys.
@@ -97,7 +97,7 @@ pub fn tool_sync_all(args: EntryToolSyncAll) -> StateToolSyncAll {
 /// Which Vault is reached is the whole of what is said: naming none reaches for the one the
 /// Workspace reaches for by default.
 #[derive(Grouped, Wrap)]
-pub struct StateToolSyncAll {
+pub struct StateStorageSyncAll {
     /// The Vault to reach, or nothing when the Workspace's own choice is reached for.
     vault: Option<String>,
 }
@@ -108,8 +108,8 @@ pub struct StateToolSyncAll {
 // where it is handed in for the same reason, and taking a copy of it here would be no more the
 // answer the run gave.
 #[chain(routeify)]
-pub fn handle_tool_sync_all(
-    state: StateToolSyncAll,
+pub fn handle_storage_sync_all(
+    state: StateStorageSyncAll,
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
@@ -135,7 +135,7 @@ pub fn handle_tool_sync_all(
 
     // Both stores are changed by this, so it is asked for rather than assumed. A run that is told no
     // has nothing to report and nothing to undo, and says so where nothing was done.
-    if !confirm.ask::<YesConfirm>(&t!("tool_sync_all.confirm")) {
+    if !confirm.ask::<YesConfirm>(&t!("storage_sync_all.confirm")) {
         return ResultSyncDeclined.into();
     }
 
@@ -162,12 +162,12 @@ pub fn handle_tool_sync_all(
     ResultSynced.into()
 }
 
-/// Completes what `rola tool sync-all` can be given next.
+/// Completes what `rola storage sync-all` can be given next.
 ///
-/// The Vault is reached the way [`tool handshake`](crate::tools::cmd_tool_handshake) reaches it, so
+/// The Vault is reached the way [`vault handshake`](crate::vault::cmd_vault_handshake) reaches it, so
 /// what can be offered is the same: the names the Workspace has bound.
-#[completion(EntryToolSyncAll)]
-pub fn complete_tool_sync_all(
+#[completion(EntryStorageSyncAll)]
+pub fn complete_storage_sync_all(
     ctx: ShellContext,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
@@ -192,7 +192,7 @@ pub struct ResultSynced;
 
 #[renderer(buffer)]
 pub fn render_result_synced(_: ResultSynced) {
-    r_println!("{}", t!("tool_sync_all.result_synced").trim());
+    r_println!("{}", t!("storage_sync_all.result_synced").trim());
 }
 
 /// Result: the run was asked to confirm itself and was not confirmed.
@@ -201,6 +201,9 @@ pub struct ResultSyncDeclined;
 
 #[renderer(buffer)]
 pub fn render_result_sync_declined(_: ResultSyncDeclined, ec: &mut ResExitCode) {
-    r_eprintln!("{}", help_line!(t!("tool_sync_all.result_declined").trim()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("storage_sync_all.result_declined").trim())
+    );
     ec.exit_code = EC_CANCELLED;
 }

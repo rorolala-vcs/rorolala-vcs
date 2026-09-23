@@ -1,6 +1,6 @@
-//! The `rola tool extract-file` command: take content back out of the store.
+//! The `rola storage extract-file` command: take content back out of the store.
 //!
-//! It is the other half of [`tool_write_file`](crate::tools::cmd_tool_write_file): the hash that
+//! It is the other half of [`storage_write_file`](crate::storage::cmd_storage_write_file): the hash that
 //! command printed is the whole of what is needed to ask for the content back, and what comes
 //! back is the content byte for byte.
 
@@ -24,28 +24,28 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ERR_TOOL_EXTRACT_FILE_ARGUMENT, EC_ERR_TOOL_EXTRACT_FILE_BAD_HASH,
-    EC_ERR_TOOL_EXTRACT_FILE_EXISTS, EC_ERR_TOOL_EXTRACT_FILE_FAILED,
-    EC_ERR_TOOL_EXTRACT_FILE_NO_STORAGE, EC_HELP,
+    EC_ERR_STORAGE_EXTRACT_FILE_ARGUMENT, EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH,
+    EC_ERR_STORAGE_EXTRACT_FILE_EXISTS, EC_ERR_STORAGE_EXTRACT_FILE_FAILED,
+    EC_ERR_STORAGE_EXTRACT_FILE_NO_STORAGE, EC_HELP,
 };
 use crate::failure::failure;
 
 #[help(buffer)]
-pub fn help_tool_extract_file(_: EntryToolExtractFile, ec: &mut ResExitCode) {
-    r_eprintln!("{}", trd!(t!("tool_extract_file.help")).trim());
+pub fn help_storage_extract_file(_: EntryStorageExtractFile, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("storage_extract_file.help")).trim());
     ec.exit_code = EC_HELP;
 }
 
-#[metadata(EntryToolExtractFile)]
-pub fn desc_tool_extract_file() -> Description {
-    t!("tool_extract_file.cmd_tool_extract_file_description")
+#[metadata(EntryStorageExtractFile)]
+pub fn desc_storage_extract_file() -> Description {
+    t!("storage_extract_file.cmd_storage_extract_file_description")
         .to_string()
         .into()
 }
 
 /// Takes the content stored under `HASH` out of the store, into `DIR`.
 ///
-/// `HASH` is what [`rola tool write-file`](crate::tools::cmd_tool_write_file) printed: written
+/// `HASH` is what [`rola storage write-file`](crate::storage::cmd_storage_write_file) printed: written
 /// as a digest in hex, with or without the hash's name in front of it. The content is written
 /// under that digest, in `DIR` — or in the current directory when none is named.
 ///
@@ -60,8 +60,8 @@ pub fn desc_tool_extract_file() -> Description {
 /// nowhere a store is, [`ErrorBadHash`] when what was named does not read as a hash,
 /// [`ErrorTargetExists`] when the file is already there, and [`ErrorExtractFailed`] when the
 /// store cannot produce the content or nothing could be written where it was asked for.
-#[command(node = "tool.extract-file")]
-pub fn tool_extract_file(args: EntryToolExtractFile) -> Next {
+#[command(node = "storage.extract-file")]
+pub fn storage_extract_file(args: EntryStorageExtractFile) -> Next {
     let picked = args
         .pick_or_route(&arg![String], || ErrorHashMissing.into())
         .pick(&arg![Option<PathBuf>])
@@ -71,7 +71,7 @@ pub fn tool_extract_file(args: EntryToolExtractFile) -> Next {
         Err(next) => return next,
     };
 
-    StateToolExtractFile { hash, dir }.into()
+    StateStorageExtractFile { hash, dir }.into()
 }
 
 /// The state of taking content back out of the store.
@@ -79,7 +79,7 @@ pub fn tool_extract_file(args: EntryToolExtractFile) -> Next {
 /// What is asked for is a hash, and where it is asked to land is a directory — or the current
 /// one, when none is named.
 #[derive(Grouped)]
-pub struct StateToolExtractFile {
+pub struct StateStorageExtractFile {
     /// The hash whose content is asked for.
     hash: String,
     /// The directory the content goes into, or nothing when the current one is meant.
@@ -87,11 +87,11 @@ pub struct StateToolExtractFile {
 }
 
 #[chain(routeify)]
-pub fn handle_tool_extract_file(
-    state: StateToolExtractFile,
+pub fn handle_storage_extract_file(
+    state: StateStorageExtractFile,
     storage: &mut LazyRes<ResRorolalaStorage>,
 ) -> Next {
-    let StateToolExtractFile { hash, dir } = state;
+    let StateStorageExtractFile { hash, dir } = state;
 
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorExtractNoStorage.into();
@@ -122,7 +122,7 @@ pub fn handle_tool_extract_file(
         .into();
     }
 
-    // The store is asynchronous and a command is not, so the two meet here — see `tool_write_file`.
+    // The store is asynchronous and a command is not, so the two meet here — see `storage_write_file`.
     let extracted = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime.block_on(store.extract_file(&key, &path)),
         Err(error) => Err(StorageError::Io(error)),
@@ -160,7 +160,9 @@ impl Failure for ErrorHashMissing {
     }
 
     fn reason(&self) -> String {
-        t!("tool_extract_file.err_hash_missing").trim().to_string()
+        t!("storage_extract_file.err_hash_missing")
+            .trim()
+            .to_string()
     }
 }
 
@@ -171,9 +173,9 @@ pub fn render_error_hash_missing(error: ErrorHashMissing, ec: &mut ResExitCode) 
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("tool_extract_file.err_hash_missing_help").trim())
+        help_line!(t!("storage_extract_file.err_hash_missing_help").trim())
     );
-    ec.exit_code = EC_ERR_TOOL_EXTRACT_FILE_ARGUMENT;
+    ec.exit_code = EC_ERR_STORAGE_EXTRACT_FILE_ARGUMENT;
 }
 
 /// Error: the run is nowhere a store is.
@@ -186,7 +188,7 @@ impl Failure for ErrorExtractNoStorage {
     }
 
     fn reason(&self) -> String {
-        t!("tool_extract_file.err_no_storage").trim().to_string()
+        t!("storage_extract_file.err_no_storage").trim().to_string()
     }
 }
 
@@ -197,9 +199,9 @@ pub fn render_error_extract_no_storage(error: ErrorExtractNoStorage, ec: &mut Re
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("tool_extract_file.err_no_storage_help").trim())
+        help_line!(t!("storage_extract_file.err_no_storage_help").trim())
     );
-    ec.exit_code = EC_ERR_TOOL_EXTRACT_FILE_NO_STORAGE;
+    ec.exit_code = EC_ERR_STORAGE_EXTRACT_FILE_NO_STORAGE;
 }
 
 /// Error: what was named does not read as a hash.
@@ -215,7 +217,7 @@ impl Failure for ErrorBadHash {
     }
 
     fn reason(&self) -> String {
-        t!("tool_extract_file.err_bad_hash", hash = self.hash)
+        t!("storage_extract_file.err_bad_hash", hash = self.hash)
             .trim()
             .to_string()
     }
@@ -228,9 +230,9 @@ pub fn render_error_bad_hash(err: ErrorBadHash, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("tool_extract_file.err_bad_hash_help").trim())
+        help_line!(t!("storage_extract_file.err_bad_hash_help").trim())
     );
-    ec.exit_code = EC_ERR_TOOL_EXTRACT_FILE_BAD_HASH;
+    ec.exit_code = EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH;
 }
 
 /// Error: a file is already under the name the content would be written as.
@@ -247,7 +249,7 @@ impl Failure for ErrorTargetExists {
 
     fn reason(&self) -> String {
         t!(
-            "tool_extract_file.err_target_exists",
+            "storage_extract_file.err_target_exists",
             path = self.path.display().to_string()
         )
         .trim()
@@ -262,9 +264,9 @@ pub fn render_error_target_exists(err: ErrorTargetExists, ec: &mut ResExitCode) 
     r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("tool_extract_file.err_target_exists_help").trim())
+        help_line!(t!("storage_extract_file.err_target_exists_help").trim())
     );
-    ec.exit_code = EC_ERR_TOOL_EXTRACT_FILE_EXISTS;
+    ec.exit_code = EC_ERR_STORAGE_EXTRACT_FILE_EXISTS;
 }
 
 /// Error: the content could not be produced, or could not be written where it was asked for.
@@ -283,7 +285,7 @@ impl Failure for ErrorExtractFailed {
 
     fn reason(&self) -> String {
         t!(
-            "tool_extract_file.err_extract_failed",
+            "storage_extract_file.err_extract_failed",
             hash = self.hash,
             reason = self.cause
         )
@@ -299,7 +301,7 @@ pub fn render_error_extract_failed(err: ErrorExtractFailed, ec: &mut ResExitCode
     r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("tool_extract_file.err_extract_failed_help").trim())
+        help_line!(t!("storage_extract_file.err_extract_failed_help").trim())
     );
-    ec.exit_code = EC_ERR_TOOL_EXTRACT_FILE_FAILED;
+    ec.exit_code = EC_ERR_STORAGE_EXTRACT_FILE_FAILED;
 }

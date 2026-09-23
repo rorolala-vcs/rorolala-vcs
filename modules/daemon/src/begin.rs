@@ -204,7 +204,7 @@ fn vault_identity(
         eprintln!(
             "{}",
             help_line!(
-                "Please give the Vault a key pair of its own — `rola tool-keygen keys/vault` makes one in its keys directory"
+                "Please give the Vault a key pair of its own — `rola key --generate vault`, run in its keys directory, makes one there"
             )
         );
         return None;

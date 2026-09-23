@@ -1,9 +1,9 @@
-//! The `rola tool ls-manifests` command: list the content the store keeps cut.
+//! The `rola storage ls-manifests` command: list the content the store keeps cut.
 //!
-//! It is the listing for what [`tool_write_file`](crate::tools::cmd_tool_write_file) names as a
+//! It is the listing for what [`storage_write_file`](crate::storage::cmd_storage_write_file) names as a
 //! manifest: where that command says how one content was kept, this says which contents were kept
 //! that way. What is printed is named `manifest:<digest>`, so a line read here is what
-//! [`tool_extract_file`](crate::tools::cmd_tool_extract_file) takes back.
+//! [`storage_extract_file`](crate::storage::cmd_storage_extract_file) takes back.
 
 use librorolala::storage::Key;
 use mingling::{
@@ -20,19 +20,19 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ERR_TOOL_LS_MANIFESTS_FAILED, EC_ERR_TOOL_LS_MANIFESTS_NO_STORAGE, EC_HELP,
+    EC_ERR_STORAGE_LS_MANIFESTS_FAILED, EC_ERR_STORAGE_LS_MANIFESTS_NO_STORAGE, EC_HELP,
 };
 use crate::failure::failure;
 
 #[help(buffer)]
-pub fn help_tool_ls_manifests(_: EntryToolLsManifests, ec: &mut ResExitCode) {
-    r_eprintln!("{}", trd!(t!("tool_ls_manifests.help")).trim());
+pub fn help_storage_ls_manifests(_: EntryStorageLsManifests, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("storage_ls_manifests.help")).trim());
     ec.exit_code = EC_HELP;
 }
 
-#[metadata(EntryToolLsManifests)]
-pub fn desc_tool_ls_manifests() -> Description {
-    t!("tool_ls_manifests.cmd_tool_ls_manifests_description")
+#[metadata(EntryStorageLsManifests)]
+pub fn desc_storage_ls_manifests() -> Description {
+    t!("storage_ls_manifests.cmd_storage_ls_manifests_description")
         .to_string()
         .into()
 }
@@ -40,9 +40,9 @@ pub fn desc_tool_ls_manifests() -> Description {
 /// Lists every content the store keeps as a manifest of chunks, one key per line.
 ///
 /// A manifest is what a cut content has; a whole one has none. What is printed is named
-/// `manifest:<digest>` — the way [`rola tool write-file`](crate::tools::cmd_tool_write_file) names
+/// `manifest:<digest>` — the way [`rola storage write-file`](crate::storage::cmd_storage_write_file) names
 /// content it cut — and the same name is read back by
-/// [`rola tool extract-file`](crate::tools::cmd_tool_extract_file), so a line read here can be
+/// [`rola storage extract-file`](crate::storage::cmd_storage_extract_file), so a line read here can be
 /// handed straight to it. A manifest whose chunks have gone is still listed: it is still what the
 /// store was told to cut, and what is missing is found on the read that asks for it.
 ///
@@ -53,20 +53,20 @@ pub fn desc_tool_ls_manifests() -> Description {
 ///
 /// Renders [`ErrorManifestsNoStorage`] when the run is nowhere a store is, and
 /// [`ErrorManifestsFailed`] when the store's manifests could not be listed.
-#[command(node = "tool.ls-manifests")]
-pub fn tool_ls_manifests() -> StateToolLsManifests {
-    StateToolLsManifests
+#[command(node = "storage.ls-manifests")]
+pub fn storage_ls_manifests() -> StateStorageLsManifests {
+    StateStorageLsManifests
 }
 
 /// The state a listing of the store's manifests starts in.
 ///
 /// A listing names nothing: what is listed is whatever the run's store keeps cut.
 #[derive(Grouped)]
-pub struct StateToolLsManifests;
+pub struct StateStorageLsManifests;
 
 #[chain(routeify)]
-pub fn handle_tool_ls_manifests(
-    _state: StateToolLsManifests,
+pub fn handle_storage_ls_manifests(
+    _state: StateStorageLsManifests,
     storage: &mut LazyRes<ResRorolalaStorage>,
 ) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
@@ -74,7 +74,7 @@ pub fn handle_tool_ls_manifests(
     };
 
     // The store is asynchronous and a command is not, so the two meet here — see
-    // `cmd_tool_write_file`.
+    // `cmd_storage_write_file`.
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -120,7 +120,7 @@ impl Failure for ErrorManifestsNoStorage {
     }
 
     fn reason(&self) -> String {
-        t!("tool_ls_manifests.err_no_storage").trim().to_string()
+        t!("storage_ls_manifests.err_no_storage").trim().to_string()
     }
 }
 
@@ -131,9 +131,9 @@ pub fn render_error_manifests_no_storage(error: ErrorManifestsNoStorage, ec: &mu
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("tool_ls_manifests.err_no_storage_help").trim())
+        help_line!(t!("storage_ls_manifests.err_no_storage_help").trim())
     );
-    ec.exit_code = EC_ERR_TOOL_LS_MANIFESTS_NO_STORAGE;
+    ec.exit_code = EC_ERR_STORAGE_LS_MANIFESTS_NO_STORAGE;
 }
 
 /// Error: the store's manifests could not be listed.
@@ -149,7 +149,7 @@ impl Failure for ErrorManifestsFailed {
     }
 
     fn reason(&self) -> String {
-        t!("tool_ls_manifests.err_ls_failed", reason = self.cause)
+        t!("storage_ls_manifests.err_ls_failed", reason = self.cause)
             .trim()
             .to_string()
     }
@@ -162,7 +162,7 @@ pub fn render_error_manifests_failed(error: ErrorManifestsFailed, ec: &mut ResEx
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("tool_ls_manifests.err_ls_failed_help").trim())
+        help_line!(t!("storage_ls_manifests.err_ls_failed_help").trim())
     );
-    ec.exit_code = EC_ERR_TOOL_LS_MANIFESTS_FAILED;
+    ec.exit_code = EC_ERR_STORAGE_LS_MANIFESTS_FAILED;
 }

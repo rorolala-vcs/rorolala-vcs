@@ -1,4 +1,4 @@
-//! `storage-sync`: what `rola tool sync-all` does to a Workspace's store and a Vault's.
+//! `storage-sync`: what `rola storage sync-all` does to a Workspace's store and a Vault's.
 //!
 //! A program rather than a set of tests cargo runs, for the same reason the rest of them are: what
 //! it does is what a person does with a terminal — make a place to work in, keep an account, bind a
@@ -76,7 +76,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["tool", "write-file", &text(&plain_file)],
+        &["storage", "write-file", &text(&plain_file)],
     ));
     let plain: Option<Key> = said.stdout.trim().parse().ok();
 
@@ -85,7 +85,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["tool", "write-file", &text(&cut_file)],
+        &["storage", "write-file", &text(&cut_file)],
     ));
     let cut: Option<Key> = said
         .stdout
@@ -117,7 +117,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["tool", "sync-all", VAULT_NAME],
+        &["storage", "sync-all", VAULT_NAME],
     ));
 
     checked.wants(
@@ -140,7 +140,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["tool", "sync-all", VAULT_NAME, "--confirm", "--json"],
+        &["storage", "sync-all", VAULT_NAME, "--confirm", "--json"],
     ));
 
     checked.wants(
@@ -206,7 +206,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["tool", "sync-all", VAULT_NAME, "--confirm"],
+        &["storage", "sync-all", VAULT_NAME, "--confirm"],
     ));
 
     checked.wants(

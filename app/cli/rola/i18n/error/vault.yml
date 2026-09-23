@@ -1,0 +1,19 @@
+_version: 2
+
+error:
+  vault:
+    err_name_missing:
+      en: A name is required
+      zh-CN: 缺少名字
+
+    err_name_missing_help:
+      en: Please name the Vault, as in `rola vault bind origin 127.0.0.1:7000`
+      zh-CN: 请给出保险库名字，例如 `rola vault bind origin 127.0.0.1:7000`
+
+    err_not_bound:
+      en: "`%{name}` is not bound to a Vault"
+      zh-CN: "`%{name}` 未绑定到任何保险库"
+
+    err_not_bound_help:
+      en: Run `rola vault` to see the names that are bound
+      zh-CN: 运行 `rola vault` 查看已绑定的名字

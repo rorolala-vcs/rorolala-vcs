@@ -70,7 +70,7 @@ pub fn handle_pack(_state: StatePack, storage: &mut LazyRes<ResRorolalaStorage>)
 
     // The store is asynchronous and a command is not, so the two meet here: the objects are read and
     // the packs written by the store, and a runtime of this run's own is what waits for it — see
-    // `cmd_tool_write_file`.
+    // `cmd_storage_write_file`.
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {

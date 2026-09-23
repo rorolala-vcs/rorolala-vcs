@@ -33,59 +33,59 @@ exit_codes:
     en: "A `rola create` command was given arguments it cannot use"
     zh-CN: "`rola create` 收到了无法使用的参数"
 
-  tool_keygen_no_openssl:
+  keygen_no_openssl:
     en: "`openssl` could not be run"
     zh-CN: 无法运行 `openssl`
 
-  tool_keygen_failed:
+  keygen_failed:
     en: "`openssl` ran but did not produce a key"
     zh-CN: "`openssl` 已运行，但未生成密钥"
 
-  tool_keygen_path_not_exist:
-    en: The path a key was to be written to is not there
-    zh-CN: 用于写出密钥的路径不存在
-
-  tool_keygen_no_key_dir:
+  keygen_no_key_dir:
     en: "`--install` could not find the user's key directory"
     zh-CN: "`--install` 无法找到用户密钥目录"
 
-  tool_keygen_install_failed:
+  keygen_install_failed:
     en: The directory a key pair was to be installed into could not be created
     zh-CN: 无法创建用于安装密钥对的目录
 
-  tool_write_file_argument:
-    en: "A `rola tool write-file` command was given arguments it cannot use"
-    zh-CN: "`rola tool write-file` 收到了无法使用的参数"
+  key_argument:
+    en: "A `rola key` command was given arguments it cannot use"
+    zh-CN: "`rola key` 收到了无法使用的参数"
 
-  tool_write_file_no_storage:
+  storage_write_file_argument:
+    en: "A `rola storage write-file` command was given arguments it cannot use"
+    zh-CN: "`rola storage write-file` 收到了无法使用的参数"
+
+  storage_write_file_no_storage:
     en: This run is nowhere a store is
     zh-CN: 当前运行不处于任何仓库中
 
-  tool_write_file_not_a_file:
+  storage_write_file_not_a_file:
     en: The path named is not a file
     zh-CN: 指定的路径不是文件
 
-  tool_write_file_failed:
+  storage_write_file_failed:
     en: The store would not take the content of a file
     zh-CN: 仓库未能接收某文件的内容
 
-  tool_extract_file_argument:
-    en: "A `rola tool extract-file` command was given arguments it cannot use"
-    zh-CN: "`rola tool extract-file` 收到了无法使用的参数"
+  storage_extract_file_argument:
+    en: "A `rola storage extract-file` command was given arguments it cannot use"
+    zh-CN: "`rola storage extract-file` 收到了无法使用的参数"
 
-  tool_extract_file_no_storage:
+  storage_extract_file_no_storage:
     en: This run is nowhere a store is
     zh-CN: 当前运行不处于任何仓库中
 
-  tool_extract_file_bad_hash:
+  storage_extract_file_bad_hash:
     en: What was named does not read as a hash
     zh-CN: 指定的内容不是合法的哈希
 
-  tool_extract_file_exists:
+  storage_extract_file_exists:
     en: A file is already under the name the content would be written as
     zh-CN: 内容将要写出的名字下已有文件
 
-  tool_extract_file_failed:
+  storage_extract_file_failed:
     en: Stored content could not be written out
     zh-CN: 无法将存储的内容写出
 
@@ -97,19 +97,19 @@ exit_codes:
     en: "The store's objects could not be packed"
     zh-CN: 无法打包仓库中的对象
 
-  tool_ls_storaged_no_storage:
+  storage_ls_storaged_no_storage:
     en: This run is nowhere a store is
     zh-CN: 当前运行不处于任何仓库中
 
-  tool_ls_storaged_failed:
+  storage_ls_storaged_failed:
     en: "The store's objects could not be listed"
     zh-CN: 无法列出仓库中的对象
 
-  tool_ls_manifests_no_storage:
+  storage_ls_manifests_no_storage:
     en: This run is nowhere a store is
     zh-CN: 当前运行不处于任何仓库中
 
-  tool_ls_manifests_failed:
+  storage_ls_manifests_failed:
     en: "The store's manifests could not be listed"
     zh-CN: 无法列出仓库中的 manifest
 

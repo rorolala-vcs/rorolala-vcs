@@ -3,9 +3,12 @@ _version: 2
 key:
   help:
     en: |
-        List every key Rorolala can reach
+        List the keys Rorolala can reach
 
         **Usage**: `rola key [--pem]`
+
+        **Commands**
+            generate <NAME>   Generate an Ed25519 key pair under a name
 
         Every scope is searched, highest priority first: the Workspace's keys, then the
         Vault's, then the user's own stores — the local data directory, the filesystem root
@@ -16,9 +19,12 @@ key:
         private keys are listed instead, the accounts the work can act as. Finding no keys
         is not an error.
     zh-CN: |
-        列出 Rorolala 能找到的全部密钥
+        列出 Rorolala 能找到的密钥
 
         **用法**：`rola key [--pem]`
+
+        **命令**
+            generate <NAME>   按名字生成一对 Ed25519 密钥
 
         按优先级从高到低搜索每个作用域：先工作区的密钥，再保险库的，然后是用户自己的仓库
         （本地数据目录、文件系统根目录与 `ROLA_HOME`）。上方找到的名字会遮蔽下方同名的密钥。
@@ -28,8 +34,8 @@ key:
         没找到不是错误。
 
   cmd_key_description:
-    en: List every key Rorolala can reach
-    zh-CN: 列出 Rorolala 能找到的全部密钥
+    en: List the keys Rorolala can reach
+    zh-CN: 列出 Rorolala 能找到的密钥
 
   complete:
     pem:
