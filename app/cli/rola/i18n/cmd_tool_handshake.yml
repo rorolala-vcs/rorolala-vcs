@@ -5,7 +5,7 @@ tool_handshake:
     en: |
         Speak the handshake action to a Vault daemon
 
-        **Usage**: `rola tool-handshake <VAULT>`
+        **Usage**: `rola tool handshake <VAULT>`
 
         `VAULT` names the daemon to reach: a name the Workspace has bound with `rola vault
         bind`, or an ip, with the port a Vault listens on by default when none is written. The
@@ -22,7 +22,7 @@ tool_handshake:
     zh-CN: |
         向保险库守护进程发起一次握手
 
-        **用法**：`rola tool-handshake <VAULT>`
+        **用法**：`rola tool handshake <VAULT>`
 
         `VAULT` 指要连的守护进程：可以是工作区用 `rola vault bind` 绑定的名字，也可以是
         ip（不写端口时使用保险库的默认端口）。动作以当前工作所使用的账户（由 `rola account`

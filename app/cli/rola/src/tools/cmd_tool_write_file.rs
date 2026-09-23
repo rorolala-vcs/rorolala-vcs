@@ -1,4 +1,4 @@
-//! The `rola tool-write-file` command: put a file's content into the store.
+//! The `rola tool write-file` command: put a file's content into the store.
 //!
 //! It is a write with nothing else around it: a path is named, its content goes into the store a
 //! run works on, and the hash it is kept under is printed. What that hash is worth printing is
@@ -45,10 +45,10 @@ pub fn desc_tool_write_file() -> Description {
 /// is the store's own decision, made from the content itself, so what a caller says is a path
 /// and nothing else.
 ///
-/// What is printed is the hash, on a line of its own: the same hash `rola tool-extract-file`
+/// What is printed is the hash, on a line of its own: the same hash `rola tool extract-file`
 /// takes, so what one command answers is what the other is asked. Content the store cuts is named
 /// as `manifest:<digest>` rather than `blake3:<digest>`, since how it is kept is part of what the
-/// line says; either name is read back by `tool-extract-file`.
+/// line says; either name is read back by `tool extract-file`.
 ///
 /// The run has to be somewhere a store can be found — inside one, or inside a Vault or Workspace
 /// that keeps one.
@@ -58,7 +58,7 @@ pub fn desc_tool_write_file() -> Description {
 /// Renders [`ErrorFileMissing`] when no path was named, [`ErrorWriteNoStorage`] when the run is
 /// nowhere a store is, [`ErrorNotAFile`] when the path is not a file, and [`ErrorWriteFailed`]
 /// when the store would not take the content.
-#[command(node = "tool-write-file")]
+#[command(node = "tool.write-file")]
 pub fn tool_write_file(
     args: EntryToolWriteFile,
     storage: &mut LazyRes<ResRorolalaStorage>,
@@ -132,7 +132,7 @@ pub struct ResultBlake3Hash {
 pub fn render_result_blake3_hash(result: ResultBlake3Hash) {
     // What is printed says how the content is kept as well as what it is: content cut into chunks is
     // named as a manifest, so a reader can tell the two apart at a glance. A key is the same key
-    // either way, so `tool-extract-file` reads either name back.
+    // either way, so `tool extract-file` reads either name back.
     if result.chunked {
         r_println!("manifest:{}", result.hash.hex());
     } else {

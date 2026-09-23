@@ -1,9 +1,9 @@
-//! The `rola tool-ls-storaged` command: list the objects a store holds.
+//! The `rola tool ls-storaged` command: list the objects a store holds.
 //!
 //! It is the listing half of the tools: what [`tool_write_file`](crate::tools::cmd_tool_write_file)
 //! puts in and [`tool_extract_file`](crate::tools::cmd_tool_extract_file) takes out is named here,
 //! one key per line. What is printed is exactly what those two speak in, so a line read here is a
-//! hash to hand to `tool-extract-file`.
+//! hash to hand to `tool extract-file`.
 
 use librorolala::storage::{Key, StorageBackend as _};
 use mingling::{
@@ -37,7 +37,7 @@ pub fn desc_tool_ls_storaged() -> Description {
 /// Lists every object the store holds, one key per line.
 ///
 /// What is printed is the keys the store answers for — the same keys
-/// [`rola tool-extract-file`](crate::tools::cmd_tool_extract_file) takes — so a line read here is
+/// [`rola tool extract-file`](crate::tools::cmd_tool_extract_file) takes — so a line read here is
 /// a hash to hand to that command. Only what the store *holds* is listed: a manifest whose chunks
 /// have gone is not named, since it is not something there is content to read.
 ///
@@ -48,7 +48,7 @@ pub fn desc_tool_ls_storaged() -> Description {
 ///
 /// Renders [`ErrorLsNoStorage`] when the run is nowhere a store is, and [`ErrorLsFailed`] when the
 /// store's objects could not be listed.
-#[command(node = "tool-ls-storaged")]
+#[command(node = "tool.ls-storaged")]
 pub fn tool_ls_storaged(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorLsNoStorage.into();

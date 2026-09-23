@@ -1,4 +1,4 @@
-//! The `rola tool-ls-manifests` command: list the content the store keeps cut.
+//! The `rola tool ls-manifests` command: list the content the store keeps cut.
 //!
 //! It is the listing for what [`tool_write_file`](crate::tools::cmd_tool_write_file) names as a
 //! manifest: where that command says how one content was kept, this says which contents were kept
@@ -37,9 +37,9 @@ pub fn desc_tool_ls_manifests() -> Description {
 /// Lists every content the store keeps as a manifest of chunks, one key per line.
 ///
 /// A manifest is what a cut content has; a whole one has none. What is printed is named
-/// `manifest:<digest>` — the way [`rola tool-write-file`](crate::tools::cmd_tool_write_file) names
+/// `manifest:<digest>` — the way [`rola tool write-file`](crate::tools::cmd_tool_write_file) names
 /// content it cut — and the same name is read back by
-/// [`rola tool-extract-file`](crate::tools::cmd_tool_extract_file), so a line read here can be
+/// [`rola tool extract-file`](crate::tools::cmd_tool_extract_file), so a line read here can be
 /// handed straight to it. A manifest whose chunks have gone is still listed: it is still what the
 /// store was told to cut, and what is missing is found on the read that asks for it.
 ///
@@ -50,7 +50,7 @@ pub fn desc_tool_ls_manifests() -> Description {
 ///
 /// Renders [`ErrorManifestsNoStorage`] when the run is nowhere a store is, and
 /// [`ErrorManifestsFailed`] when the store's manifests could not be listed.
-#[command(node = "tool-ls-manifests")]
+#[command(node = "tool.ls-manifests")]
 pub fn tool_ls_manifests(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorManifestsNoStorage.into();

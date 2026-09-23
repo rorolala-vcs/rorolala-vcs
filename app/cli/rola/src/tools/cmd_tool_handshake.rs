@@ -1,4 +1,4 @@
-//! The `rola tool-handshake` command: speak the handshake action to a Vault.
+//! The `rola tool handshake` command: speak the handshake action to a Vault.
 //!
 //! It is the handshake on its own, with none of the work in the way: the Vault is reached
 //! where the Workspace says it answers, or at an address the caller gives, and the action runs
@@ -63,7 +63,7 @@ pub fn desc_tool_handshake() -> Description {
 /// [`ErrorShouldInWorkspace`]: crate::error::ErrorShouldInWorkspace
 /// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
 /// [`ActionError`]: librorolala::protocol::ActionError
-#[command(node = "tool-handshake", routeify)]
+#[command(node = "tool.handshake", routeify)]
 pub fn tool_handshake(
     args: EntryToolHandshake,
     workspace: &mut LazyRes<ResWorkspace>,
@@ -109,7 +109,7 @@ pub fn tool_handshake(
     ResultHandshake { output }.into()
 }
 
-/// Completes what `rola tool-handshake` can be given next.
+/// Completes what `rola tool handshake` can be given next.
 ///
 /// What can be reached by name is what the Workspace has bound, which is the same set the
 /// command itself resolves; an address is not, since there is nothing here that knows which

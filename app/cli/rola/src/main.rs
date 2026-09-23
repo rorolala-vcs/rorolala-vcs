@@ -25,6 +25,7 @@ mod cmd_account;
 mod cmd_create;
 mod cmd_explain;
 mod cmd_init;
+mod cmd_key;
 mod cmd_pack;
 mod cmd_vault;
 mod error;

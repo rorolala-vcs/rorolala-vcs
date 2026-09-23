@@ -5,9 +5,9 @@ tool_ls_storaged:
     en: |
         List every object the store holds
 
-        **Usage**: `rola tool-ls-storaged`
+        **Usage**: `rola tool ls-storaged`
 
-        What is printed is one key per line: the same keys `rola tool-extract-file` takes, so a line
+        What is printed is one key per line: the same keys `rola tool extract-file` takes, so a line
         read here is a hash to hand to that command. Only what the store holds is listed — a
         manifest whose chunks have gone is not named, since it is not something there is content to
         read.
@@ -17,9 +17,9 @@ tool_ls_storaged:
     zh-CN: |
         列出仓库持有的全部对象
 
-        **用法**：`rola tool-ls-storaged`
+        **用法**：`rola tool ls-storaged`
 
-        每行打印一个哈希，与 `rola tool-extract-file` 接受的是同一种，因此这里读到的一行可以直接交给
+        每行打印一个哈希，与 `rola tool extract-file` 接受的是同一种，因此这里读到的一行可以直接交给
         那条命令。只列出仓库确实持有的对象——块已丢失的 manifest 不会出现，因为那并没有内容可读。
 
         运行必须处在能发现仓库的地方：仓库内、或保有仓库的保险库／工作区内。

@@ -5,7 +5,7 @@ tool_keygen:
     en: |
         Generate an Ed25519 key pair with `openssl`
 
-        **Usage**: `rola tool-keygen [--name <NAME>] [--install] <PATH>`
+        **Usage**: `rola tool keygen [--name <NAME>] [--install] <PATH>`
 
         The pair is written as `<NAME>.pem` (private) and `<NAME>.pub` (public) in the
         current directory, or where `PATH` says. `NAME` is `key` unless `--name` states it,
@@ -20,7 +20,7 @@ tool_keygen:
     zh-CN: |
         使用 `openssl` 生成一对 Ed25519 密钥
 
-        **用法**：`rola tool-keygen [--name <NAME>] [--install] <PATH>`
+        **用法**：`rola tool keygen [--name <NAME>] [--install] <PATH>`
 
         默认在当前目录生成 `<NAME>.pem`（私钥）与 `<NAME>.pub`（公钥），指定 `PATH` 时写到那里。
         `NAME` 缺省为 `key`，可由 `--name` 指定；`PATH` 指代的是“这一对”而不是单个文件：
@@ -44,10 +44,10 @@ tool_keygen:
 
   err_no_openssl_help:
     en: |
-        `rola tool-keygen` generates keys with OpenSSL. Please install it and make sure
+        `rola tool keygen` generates keys with OpenSSL. Please install it and make sure
         `openssl` is on your PATH, then try again
     zh-CN: |
-        `rola tool-keygen` 使用 OpenSSL 生成密钥。请安装 OpenSSL，并确认 `openssl`
+        `rola tool keygen` 使用 OpenSSL 生成密钥。请安装 OpenSSL，并确认 `openssl`
         在 PATH 中，然后重试
 
   err_keygen_failed:

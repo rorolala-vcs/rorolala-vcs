@@ -1,4 +1,4 @@
-//! The `rola tool-extract-file` command: take content back out of the store.
+//! The `rola tool extract-file` command: take content back out of the store.
 //!
 //! It is the other half of [`tool_write_file`](crate::tools::cmd_tool_write_file): the hash that
 //! command printed is the whole of what is needed to ask for the content back, and what comes
@@ -41,7 +41,7 @@ pub fn desc_tool_extract_file() -> Description {
 
 /// Takes the content stored under `HASH` out of the store, into `DIR`.
 ///
-/// `HASH` is what [`rola tool-write-file`](crate::tools::cmd_tool_write_file) printed: written
+/// `HASH` is what [`rola tool write-file`](crate::tools::cmd_tool_write_file) printed: written
 /// as a digest in hex, with or without the hash's name in front of it. The content is written
 /// under that digest, in `DIR` — or in the current directory when none is named.
 ///
@@ -56,7 +56,7 @@ pub fn desc_tool_extract_file() -> Description {
 /// nowhere a store is, [`ErrorBadHash`] when what was named does not read as a hash,
 /// [`ErrorTargetExists`] when the file is already there, and [`ErrorExtractFailed`] when the
 /// store cannot produce the content or nothing could be written where it was asked for.
-#[command(node = "tool-extract-file")]
+#[command(node = "tool.extract-file")]
 pub fn tool_extract_file(
     args: EntryToolExtractFile,
     storage: &mut LazyRes<ResRorolalaStorage>,

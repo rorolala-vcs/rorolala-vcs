@@ -1,0 +1,45 @@
+_version: 2
+
+tool:
+  help:
+    en: |
+        A low-level toolset that is not version control
+
+        **Usage**: `rola tool <COMMAND>`
+
+        **Commands**
+            write-file <FILE>          Store a file's content, and print the hash it is kept under
+            extract-file <HASH> [DIR]  Write stored content out under its hash
+            ls-storaged                List every object the store holds
+            ls-manifests               List every content the store keeps cut
+            keygen <PATH>              Generate an Ed25519 key pair
+            handshake <VAULT>          Speak the handshake action to a Vault daemon
+
+        None of this is version control: it is what sits under it — the store the content is
+        kept in, the keys an account is proved with, and the words two ends exchange before
+        either moves anything. Each command does one of those and nothing else, so a tool is
+        for looking at what a store holds, or for putting one in order, by hand.
+
+        Nothing here is needed to use `rola`: a Vault and a Workspace keep stores of their own,
+        and what they hold is read and written for you.
+    zh-CN: |
+        非版本控制的底层工具集
+
+        **用法**：`rola tool <命令>`
+
+        **命令**
+            write-file <FILE>          存储文件内容，并打印它所用的哈希
+            extract-file <HASH> [DIR]  按哈希将存储的内容写出
+            ls-storaged                列出仓库持有的全部对象
+            ls-manifests               列出仓库中分块保存的全部内容
+            keygen <PATH>              生成一对 Ed25519 密钥
+            handshake <VAULT>          向保险库守护进程发起握手
+
+        这些都不是版本控制，而是它底下那一层——存放内容的仓库、用来证明账户身份的密钥，以及两端在
+        搬运任何东西之前先交换的话语。每条子命令只做其中一件事，用于检视仓库里有什么，或手工整理它。
+
+        使用 `rola` 并不需要这些命令：保险库和工作区各自持有仓库，其内容的存取都由程序代劳。
+
+  cmd_tool_description:
+    en: A low-level toolset that is not version control
+    zh-CN: 非版本控制的底层工具集

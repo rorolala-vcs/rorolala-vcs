@@ -5,31 +5,31 @@ tool_write_file:
     en: |
         Store a file's content, and print the hash it is kept under
 
-        **Usage**: `rola tool-write-file <FILE>`
+        **Usage**: `rola tool write-file <FILE>`
 
         `FILE` names a file, not a directory. How the content is kept — whether it is
         compressed, whether it is cut into chunks — is the store's own decision, made from the
         content itself, so what is said here is a path and nothing else.
 
         What is printed is the hash, on a line of its own. It is the same hash
-        `rola tool-extract-file` takes, so what one command answers is what the other is asked.
+        `rola tool extract-file` takes, so what one command answers is what the other is asked.
         Content the store cuts into chunks is named `manifest:<digest>` rather than
         `blake3:<digest>`, since how it is kept is part of what the line says; either name is read
-        back by `rola tool-extract-file`.
+        back by `rola tool extract-file`.
 
         The run has to be somewhere a store can be found: inside one, or inside a Vault or
         Workspace that keeps one.
     zh-CN: |
         将文件内容存入仓库，并打印它所用的哈希
 
-        **用法**：`rola tool-write-file <FILE>`
+        **用法**：`rola tool write-file <FILE>`
 
         `FILE` 是文件，不是目录。内容如何保存——是否压缩、是否分块——由仓库根据内容自行决定，
         所以这里给的只是一个路径。
 
-        打印出来的是哈希，单独一行。它与 `rola tool-extract-file` 接受的是同一个哈希，
+        打印出来的是哈希，单独一行。它与 `rola tool extract-file` 接受的是同一个哈希，
         所以一条命令给出的正是另一条命令所要的。被仓库分块保存的内容会写成 `manifest:<摘要>`
-        而不是 `blake3:<摘要>`，因为“如何保存”也是这一行要说的；两种写法 `rola tool-extract-file`
+        而不是 `blake3:<摘要>`，因为“如何保存”也是这一行要说的；两种写法 `rola tool extract-file`
         都能读回。
 
         运行必须处在能发现仓库的地方：仓库内、或保有仓库的保险库／工作区内。
@@ -45,9 +45,9 @@ tool_write_file:
   err_file_missing_help:
     en: |
         Please name the file whose content is to be stored, for example
-        `rola tool-write-file ./notes.txt`
+        `rola tool write-file ./notes.txt`
     zh-CN: |
-        请指定要存入内容的文件，例如 `rola tool-write-file ./notes.txt`
+        请指定要存入内容的文件，例如 `rola tool write-file ./notes.txt`
 
   err_no_storage:
     en: This run is nowhere a store is

@@ -5,12 +5,12 @@ tool_ls_manifests:
     en: |
         List every content the store keeps cut, as a manifest
 
-        **Usage**: `rola tool-ls-manifests`
+        **Usage**: `rola tool ls-manifests`
 
         A manifest is what a cut content has and a whole one has none, so what is printed is the
         contents the store was told to cut. Each is named `manifest:<digest>` — the way
-        `rola tool-write-file` names content it cut — and that same name is read back by
-        `rola tool-extract-file`, so a line read here can be handed straight to it. A manifest whose
+        `rola tool write-file` names content it cut — and that same name is read back by
+        `rola tool extract-file`, so a line read here can be handed straight to it. A manifest whose
         chunks have gone is still listed, since it is still what the store was told to keep.
 
         The run has to be somewhere a store can be found: inside one, or inside a Vault or
@@ -18,11 +18,11 @@ tool_ls_manifests:
     zh-CN: |
         列出仓库以 manifest 保存（即被分块）的全部内容
 
-        **用法**：`rola tool-ls-manifests`
+        **用法**：`rola tool ls-manifests`
 
         分块内容有一份 manifest，整份内容则没有，因此这里列出的是仓库被告知要分块的那些内容。每行以
-        `manifest:<摘要>` 命名——与 `rola tool-write-file` 对分块内容的命名一致——而同一个名字
-        `rola tool-extract-file` 也能读回，所以这里读到的一行可以直接交给它。块已丢失的 manifest
+        `manifest:<摘要>` 命名——与 `rola tool write-file` 对分块内容的命名一致——而同一个名字
+        `rola tool extract-file` 也能读回，所以这里读到的一行可以直接交给它。块已丢失的 manifest
         仍会列出，因为它仍是仓库被告知要保存的内容。
 
         运行必须处在能发现仓库的地方：仓库内、或保有仓库的保险库／工作区内。

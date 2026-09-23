@@ -40,11 +40,11 @@ error:
 
     err_not_chosen_help:
       en: |
-        Please name one, as in `rola tool-handshake origin` or `rola tool-handshake
+        Please name one, as in `rola tool handshake origin` or `rola tool handshake
         127.0.0.1:7717`, or run `rola vault set-default <NAME>` to choose a Vault for the
         Workspace to reach for without naming it every time
       zh-CN: |
-        请给出名字或地址，例如 `rola tool-handshake origin` 或 `rola tool-handshake 127.0.0.1:7717`；
+        请给出名字或地址，例如 `rola tool handshake origin` 或 `rola tool handshake 127.0.0.1:7717`；
         也可以运行 `rola vault set-default <NAME>` 为工作区选定默认保险库，以后就不必每次指定
 
     err_not_address:

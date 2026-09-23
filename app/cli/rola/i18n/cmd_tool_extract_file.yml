@@ -5,9 +5,9 @@ tool_extract_file:
     en: |
         Take stored content back out, under the hash it is kept by
 
-        **Usage**: `rola tool-extract-file <HASH> [DIR]`
+        **Usage**: `rola tool extract-file <HASH> [DIR]`
 
-        `HASH` is what `rola tool-write-file` printed: written as a digest in hex, with or
+        `HASH` is what `rola tool write-file` printed: written as a digest in hex, with or
         without the hash's name in front of it. The content is written under that digest, in
         `DIR` — or in the current directory when none is named.
 
@@ -17,9 +17,9 @@ tool_extract_file:
     zh-CN: |
         按内容所用的哈希将内容取出
 
-        **用法**：`rola tool-extract-file <HASH> [DIR]`
+        **用法**：`rola tool extract-file <HASH> [DIR]`
 
-        `HASH` 就是 `rola tool-write-file` 打印出来的：写成十六进制摘要，前面带不带哈希名均可。
+        `HASH` 就是 `rola tool write-file` 打印出来的：写成十六进制摘要，前面带不带哈希名均可。
         内容会以该摘要为名写入 `DIR`；不指定时写入当前目录。
 
         `DIR` 不存在时会创建，因此指向新位置的路径是“写到这里”的请求，而不是错误。
@@ -35,9 +35,9 @@ tool_extract_file:
 
   err_hash_missing_help:
     en: |
-        Please name the hash of the content to write out, as `rola tool-write-file` printed it
+        Please name the hash of the content to write out, as `rola tool write-file` printed it
     zh-CN: |
-        请指定要写出的内容哈希，即 `rola tool-write-file` 打印的那个
+        请指定要写出的内容哈希，即 `rola tool write-file` 打印的那个
 
   err_no_storage:
     en: This run is nowhere a store is

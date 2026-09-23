@@ -23,7 +23,7 @@ use crate::exit_codes::{
 /// The stem a key pair is named by when neither a name nor a path says otherwise.
 const KEY_STEM: &str = "key";
 
-/// The flags `rola tool-keygen` takes.
+/// The flags `rola tool keygen` takes.
 #[derive(Pickable)]
 struct KeygenFlags {
     /// The name the pair is known by, instead of `key`.
@@ -76,7 +76,7 @@ pub fn desc_tool_keygen() -> Description {
 /// runs and does not produce both keys, [`ErrorPathNotExist`] when the path named is not
 /// inside a directory that exists, [`ErrorNoKeyDir`] when `--install` cannot find the
 /// user's key directory, and [`ErrorInstallDir`] when it cannot create it.
-#[command(node = "tool-keygen")]
+#[command(node = "tool.keygen")]
 pub fn tool_keygen(args: EntryToolKeygen) -> Next {
     // Picking cannot fail — a flag that is absent is `Inactive`, and an option or a
     // positional that is absent is `None` — so this unwrap never panics.

@@ -153,7 +153,7 @@ vault_set_default:
 
         `NAME` has to be one the Workspace has bound with `rola vault bind`. It becomes what a
         command that would otherwise ask which Vault to reach for falls back on — `rola
-        tool-handshake` with nothing named, for one. Naming the one already chosen is not an
+        tool handshake` with nothing named, for one. Naming the one already chosen is not an
         error, only a choice made again.
     zh-CN: |
         选择工作区默认使用的保险库
@@ -161,7 +161,7 @@ vault_set_default:
         **用法**：`rola vault set-default <NAME>`
 
         `NAME` 必须是工作区已用 `rola vault bind` 绑定的名字。它将成为那些本会询问
-        “要连哪个保险库”的命令的默认选择（例如不带参数的 `rola tool-handshake`）。
+        “要连哪个保险库”的命令的默认选择（例如不带参数的 `rola tool handshake`）。
         重复指定当前的选择不算错误。
 
   cmd_vault_set_default_description:
