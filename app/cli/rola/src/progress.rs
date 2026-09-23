@@ -13,11 +13,13 @@
 use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rorolala_cli_setups::ResProgressSetting;
 use rorolala_utils_progress::{Direction, Progress, Signal, Transmitter};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::TryRecvError;
 
 /// How many signals may be waiting to be drawn before the ones that do not fit are dropped.
 ///
@@ -51,6 +53,18 @@ const PIECE: usize = 7;
 
 /// What is written where the rest of a piece's name was.
 const REST: &str = "...";
+
+/// How long a run goes unwatched before it is watched.
+///
+/// Long enough that a run which is going to be over quickly is over before the bars would
+/// have been shown, and short enough that a run which is not is watched almost from the start.
+const DELAY: Duration = Duration::from_secs(2);
+
+/// How often the clock is looked at while a run is still unwatched.
+///
+/// The reader is waiting on the clock rather than on the run, so it has to wake up for it:
+/// this is how closely it keeps to [`DELAY`], and it is the only polling anything here does.
+const LOOK: Duration = Duration::from_millis(10);
 
 /// A run's progress, being said to whoever was asked to hear it.
 ///
@@ -126,13 +140,17 @@ enum Watcher {
 impl Watcher {
     /// Reads `receiver` until the run has nothing more to say.
     ///
-    /// The reader is a thread of its own and not a task, so it waits the way a thread waits:
-    /// nothing here polls, and a run that says nothing costs nothing.
+    /// The reader is a thread of its own and not a task, so it waits the way a thread waits.
+    /// What a run that is over quickly is shown is nothing at all: see [`Terminal::watch`].
+    /// Records are not held back that way — a program reading them is reading what happened,
+    /// and a run being over quickly does not make what happened less worth having.
     fn watch(&mut self, receiver: &mut mpsc::Receiver<Signal>) {
-        while let Some(signal) = receiver.blocking_recv() {
-            match self {
-                Self::Terminal(terminal) => terminal.take(&signal),
-                Self::Records => Self::write_record(&signal),
+        match self {
+            Self::Terminal(terminal) => terminal.watch(receiver),
+            Self::Records => {
+                while let Some(signal) = receiver.blocking_recv() {
+                    Self::write_record(&signal);
+                }
             }
         }
     }
@@ -159,11 +177,48 @@ struct Terminal {
 }
 
 impl Terminal {
-    /// A terminal with nothing drawn on it yet.
+    /// A terminal with nothing drawn on it yet, and nothing let out of it yet either.
     fn new() -> Self {
         Self {
-            bars: MultiProgress::new(),
+            bars: MultiProgress::with_draw_target(ProgressDrawTarget::hidden()),
             drawn: BTreeMap::new(),
+        }
+    }
+
+    /// Reads `receiver`, letting the bars out only once the run has gone on long enough to be
+    /// worth watching.
+    ///
+    /// A run that is over in a moment has nothing to be watched for: bars that appear and are
+    /// wiped again a moment later are a flicker where there was nothing to say, and a person
+    /// reading them learns nothing they did not already know from the run having ended. So for
+    /// the first little while nothing is let out, though what the run says is read all the
+    /// same — the bars are as far along as the run is by the time they are shown — and a run
+    /// that ends inside that while is never shown at all.
+    ///
+    /// The waiting is the clock's and not the run's, so it is done by looking rather than by
+    /// blocking on something that may not come: a run can be silent for as long as it likes
+    /// and still be shown on time.
+    fn watch(&mut self, receiver: &mut mpsc::Receiver<Signal>) {
+        let started = Instant::now();
+
+        while started.elapsed() < DELAY {
+            match receiver.try_recv() {
+                Ok(signal) => self.take(&signal),
+                Err(TryRecvError::Empty) => std::thread::sleep(LOOK),
+                Err(TryRecvError::Disconnected) => return,
+            }
+        }
+
+        // The bars have been drawn all along, into nothing: letting them out now shows them as
+        // they are, and drawing them again shows them at once rather than at the next thing the
+        // run says — which may be a long way off, since this is the run's own pace.
+        self.bars.set_draw_target(ProgressDrawTarget::stderr());
+        for bar in self.drawn.values() {
+            bar.force_draw();
+        }
+
+        while let Some(signal) = receiver.blocking_recv() {
+            self.take(&signal);
         }
     }
 
