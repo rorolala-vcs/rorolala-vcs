@@ -272,6 +272,38 @@ impl RorolalaStorage {
         }
     }
 
+    /// The manifest kept under `key`, if the content is kept as chunks.
+    ///
+    /// A manifest is what says how a cut content is put back together, so this is what a caller
+    /// needs to carry a content that is kept as chunks to another store, rather than carrying the
+    /// content and letting the other end cut it all over again. What it names are the chunks, which
+    /// are objects like any other and are read with `read_object`.
+    ///
+    /// [`put_manifest`](Self::put_manifest) is the other half: a manifest that came from another
+    /// store is written down with it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the manifest cannot be looked for, and [`Error::Malformed`] if what
+    /// is there does not read as a manifest.
+    pub async fn manifest_of(&self, key: &Key) -> Result<Option<Manifest>, Error> {
+        self.read_manifest(key).await
+    }
+
+    /// Keeps `manifest` as how the content under `key` is put back together.
+    ///
+    /// This is how a manifest that arrived from another store is written down: the chunks it names
+    /// are the other store's to send, and until they are here the store does not hold the content
+    /// the key promises. What is written is framed the store's own way, so a manifest from a store
+    /// that was told to cut differently still reads here as a manifest.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the manifest cannot be written.
+    pub async fn put_manifest(&self, key: &Key, manifest: &Manifest) -> Result<(), Error> {
+        self.write_manifest(key, manifest, self.codec).await
+    }
+
     /// Every key the store keeps a manifest for, and nothing else.
     ///
     /// A manifest is kept apart from the objects — see [`Manifest`] — so what is here is the whole of

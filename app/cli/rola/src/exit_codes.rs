@@ -164,6 +164,12 @@ pub const EC_ERR_ACTION_ADDR: i32 = 88;
 /// `exit_codes.action_auth`
 pub const EC_ERR_ACTION_AUTH: i32 = 89;
 
+/// `exit_codes.action_missing_object`
+pub const EC_ERR_ACTION_MISSING_OBJECT: i32 = 90;
+
+/// `exit_codes.action_store`
+pub const EC_ERR_ACTION_STORE: i32 = 93;
+
 // Explain
 
 /// `exit_codes.explain_unknown`

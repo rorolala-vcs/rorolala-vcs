@@ -7,6 +7,7 @@ edition.workspace = true
 rorolala-auth.workspace = true
 rorolala-errors.workspace = true
 rorolala-protocol.workspace = true
+rorolala-storage.workspace = true
 rorolala-utils-cli-theme.workspace = true
 rorolala-utils-configure.workspace = true
 rorolala-utils-constants.workspace = true

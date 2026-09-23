@@ -22,6 +22,26 @@ error:
       zh-CN: |
         这是程序自身的问题，而不是所请求的内容有问题；请反馈这个情况
 
+    err_missing_object:
+      en: An object the exchange needed is held by neither side
+      zh-CN: 交易所需要的对象两侧都没有
+
+    err_missing_object_help:
+      en: |
+        Please check that the key was asked for by something that actually holds it
+      zh-CN: |
+        请确认索要该 key 的一方确实持有它
+
+    err_store:
+      en: The store failed — %{reason}
+      zh-CN: 仓库失败 —— %{reason}
+
+    err_store_help:
+      en: |
+        Please check that the store can be read and written, then try again
+      zh-CN: |
+        请确认仓库可读可写，然后重试
+
     err_value_too_large:
       en: A value was too long to fit in a frame
       zh-CN: 要发送的值太长，放不下一帧

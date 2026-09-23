@@ -1425,6 +1425,7 @@ dependencies = [
  "rorolala-auth",
  "rorolala-errors",
  "rorolala-protocol",
+ "rorolala-storage",
  "rorolala-utils-cli-theme",
  "rorolala-utils-configure",
  "rorolala-utils-constants",

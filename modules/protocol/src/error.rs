@@ -21,12 +21,17 @@ pub enum ActionError {
     NoChannel,
     /// The side that owns a value held none to send, which its side should never do.
     MissingValue,
+    /// An object the exchange was being made for was held by neither side, so there was
+    /// nowhere for it to come from.
+    MissingObject,
     /// A value was longer than a frame can carry.
     ValueTooLarge,
     /// The channel failed.
     Io(IoError),
     /// A value could not be encoded, or a frame could not be decoded.
     Codec(BincodeError),
+    /// A store on one side could not produce or take what the exchange needed.
+    Store(String),
     /// No action answers to the id asked for.
     UnknownAction(u32),
     /// What an action produced could not be turned into JSON.
@@ -43,11 +48,15 @@ impl fmt::Display for ActionError {
         match self {
             Self::NoChannel => formatter.write_str("the action context has no channel"),
             Self::MissingValue => formatter.write_str("the owning side held no value to send"),
+            Self::MissingObject => {
+                formatter.write_str("an object the exchange needed is held by neither side")
+            }
             Self::ValueTooLarge => formatter.write_str("a value was too long to frame"),
             Self::Io(source) => write!(formatter, "the channel failed: {source}"),
             Self::Codec(source) => {
                 write!(formatter, "a value could not cross the channel: {source}")
             }
+            Self::Store(source) => write!(formatter, "the store failed: {source}"),
             Self::UnknownAction(id) => write!(formatter, "no action answers to id {id}"),
             Self::Json(source) => {
                 write!(
@@ -112,6 +121,10 @@ mod tests {
             "the owning side held no value to send"
         );
         assert_eq!(
+            ActionError::MissingObject.to_string(),
+            "an object the exchange needed is held by neither side"
+        );
+        assert_eq!(
             ActionError::ValueTooLarge.to_string(),
             "a value was too long to frame"
         );
@@ -122,12 +135,22 @@ mod tests {
     }
 
     #[test]
+    fn a_store_that_failed_says_what_it_said() {
+        assert_eq!(
+            ActionError::Store("the storage failed".to_owned()).to_string(),
+            "the store failed: the storage failed"
+        );
+    }
+
+    #[test]
     fn a_variant_with_no_cause_has_no_source() {
         for error in [
             ActionError::NoChannel,
             ActionError::MissingValue,
+            ActionError::MissingObject,
             ActionError::ValueTooLarge,
             ActionError::UnknownAction(1),
+            ActionError::Store(String::new()),
         ] {
             assert!(error.source().is_none());
         }

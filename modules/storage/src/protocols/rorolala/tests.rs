@@ -289,6 +289,43 @@ async fn a_manifest_is_packed_among_the_manifests() {
 }
 
 #[tokio::test]
+async fn a_manifest_can_be_carried_to_another_store() {
+    let (parent, from) = store("carry-from");
+    let to = RorolalaStorage::create(parent.join("to"));
+
+    let content: Vec<u8> = (0..4 * 1024_u32).map(|value| (value % 251) as u8).collect();
+    let file = parent.join("file");
+    fs::write(&file, &content).unwrap();
+    let key = from
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 1024 }),
+        )
+        .await
+        .unwrap();
+
+    // What a caller has to hand on is the manifest and the chunks it names, and nothing else — the
+    // content is put back together on the other side from those.
+    let manifest = from.manifest_of(&key).await.unwrap().unwrap();
+    to.put_manifest(&key, &manifest).await.unwrap();
+
+    for chunk in manifest.chunks() {
+        let bytes = from.read_object(&chunk.key()).await.unwrap();
+        to.write_object(&bytes, Codec::Raw).await.unwrap();
+    }
+
+    // The other store holds the content, and holds it cut the way it was told to be.
+    assert!(to.holds_content(&key).await.unwrap());
+    assert!(to.manifest_of(&key).await.unwrap().is_some());
+
+    let out = parent.join("carried");
+    to.extract_file(&key, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), content);
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
 async fn what_is_stored_is_listed_and_can_be_dropped() {
     let (parent, store) = store("list");
 

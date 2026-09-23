@@ -153,6 +153,14 @@ exit_codes:
     en: The side that owned a value held none to send
     zh-CN: 持有值的一方没有可发送的内容
 
+  action_missing_object:
+    en: An object the exchange needed is held by neither side
+    zh-CN: 交易所需要的对象两侧都没有
+
+  action_store:
+    en: A store on one side failed while the exchange was being made
+    zh-CN: 交换过程中一方的仓库失败
+
   action_value_too_large:
     en: A value was too long to frame
     zh-CN: 值过长，无法装帧

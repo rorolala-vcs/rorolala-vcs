@@ -3,3 +3,6 @@
 
 mod handshake;
 pub use handshake::*;
+
+mod sync_storage;
+pub use sync_storage::*;

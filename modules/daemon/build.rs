@@ -120,16 +120,14 @@ fn main() {
     for path in action_files {
         let found = actions_in(&path).unwrap_or_else(|error| fail(&error));
 
-        // A file that declares no action is not a module of actions: it is a helper, or a
-        // draft that got past the name filter, and declaring it would compile something
-        // nothing reaches.
-        if found.is_empty() {
-            continue;
-        }
-
         let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
             fail(&format!("{}: the file name is not text", path.display()));
         };
+        // Every file under the actions directory is a module of it, whether or not it declares an
+        // action: what the action side needs that is not an action lives beside them — a primitive
+        // an action is built from, say — and declaring it is what lets it be reached. Only an
+        // action gets entry points, so a file that declares none contributes nothing to the two
+        // generated files.
         modules.push(stem.to_owned());
 
         actions.extend(found);

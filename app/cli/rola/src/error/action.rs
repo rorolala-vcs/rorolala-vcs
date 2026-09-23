@@ -8,8 +8,9 @@ use rust_i18n::t;
 
 use crate::exit_codes::{
     EC_ERR_ACTION_ADDR, EC_ERR_ACTION_AUTH, EC_ERR_ACTION_CODEC, EC_ERR_ACTION_IO,
-    EC_ERR_ACTION_JSON, EC_ERR_ACTION_MISSING_VALUE, EC_ERR_ACTION_NO_CHANNEL,
-    EC_ERR_ACTION_UNKNOWN, EC_ERR_ACTION_VALUE_TOO_LARGE,
+    EC_ERR_ACTION_JSON, EC_ERR_ACTION_MISSING_OBJECT, EC_ERR_ACTION_MISSING_VALUE,
+    EC_ERR_ACTION_NO_CHANNEL, EC_ERR_ACTION_STORE, EC_ERR_ACTION_UNKNOWN,
+    EC_ERR_ACTION_VALUE_TOO_LARGE,
 };
 
 // The error is foreign to this crate, so it is imported: that is what lets `?` route it
@@ -40,6 +41,25 @@ pub fn render_error_action(err: ErrorAction, ec: &mut ResExitCode) {
                 help_line!(t!("error.action.err_missing_value_help").trim())
             );
             ec.exit_code = EC_ERR_ACTION_MISSING_VALUE;
+        }
+        ActionError::MissingObject => {
+            r_eprintln!(
+                "{}",
+                err_line!(t!("error.action.err_missing_object").trim())
+            );
+            r_eprintln!(
+                "{}",
+                help_line!(t!("error.action.err_missing_object_help").trim())
+            );
+            ec.exit_code = EC_ERR_ACTION_MISSING_OBJECT;
+        }
+        ActionError::Store(source) => {
+            r_eprintln!(
+                "{}",
+                err_line!(t!("error.action.err_store", reason = source).trim())
+            );
+            r_eprintln!("{}", help_line!(t!("error.action.err_store_help").trim()));
+            ec.exit_code = EC_ERR_ACTION_STORE;
         }
         ActionError::ValueTooLarge => {
             r_eprintln!(
