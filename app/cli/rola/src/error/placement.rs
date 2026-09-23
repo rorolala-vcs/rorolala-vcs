@@ -13,6 +13,7 @@ use mingling::{
     macros::{buffer, import_type, r_append, r_eprintln, renderer},
     res::ResExitCode,
 };
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line};
 use rust_i18n::t;
 
@@ -20,8 +21,12 @@ use crate::exit_codes::{
     EC_ERR_CONFIG_UNREADABLE, EC_ERR_NO_REMOTE_VAULT, EC_ERR_SHOULD_IN_VAULT,
     EC_ERR_SHOULD_IN_WORKSPACE, EC_ERR_VAULT_ARGUMENT,
 };
+use crate::failure::failure;
 
 import_type!(ErrorShouldInWorkspace = rorolala_cli_setups::ErrorShouldInWorkspace);
+
+// As for the action failures: the shape is the library's, the registration is this program's.
+::mingling::macros::structural!(ErrorShouldInWorkspace);
 
 /// Reports a run that is not inside a Workspace, where the command needs one.
 #[renderer(buffer)]
@@ -39,6 +44,9 @@ pub fn render_error_should_in_workspace(_: ErrorShouldInWorkspace, ec: &mut ResE
 
 import_type!(ErrorShouldInVault = rorolala_cli_setups::ErrorShouldInVault);
 
+// As for the action failures: the shape is the library's, the registration is this program's.
+::mingling::macros::structural!(ErrorShouldInVault);
+
 /// Reports a run that is not inside a Vault, where the command needs one.
 #[renderer(buffer)]
 pub fn render_error_should_in_vault(_: ErrorShouldInVault, ec: &mut ResExitCode) {
@@ -54,6 +62,9 @@ pub fn render_error_should_in_vault(_: ErrorShouldInVault, ec: &mut ResExitCode)
 }
 
 import_type!(ErrorRemoteVault = rorolala_cli_setups::ErrorRemoteVault);
+
+// As for the action failures: the shape is the library's, the registration is this program's.
+::mingling::macros::structural!(ErrorRemoteVault);
 
 /// Reports a Workspace that cannot say which Vault a run reaches for.
 ///
@@ -107,7 +118,7 @@ pub struct ErrorConfigUnreadable {
     /// The file that could not be read.
     path: PathBuf,
     /// Why it could not be read.
-    reason: String,
+    cause: String,
 }
 
 impl ErrorConfigUnreadable {
@@ -115,30 +126,38 @@ impl ErrorConfigUnreadable {
     ///
     /// A command outside this module that needs the configuration says so through this, since
     /// the fields are the module's own.
-    pub(crate) fn new(path: PathBuf, reason: String) -> Self {
-        Self { path, reason }
+    pub(crate) fn new(path: PathBuf, cause: String) -> Self {
+        Self { path, cause }
     }
 }
+
+impl Failure for ErrorConfigUnreadable {
+    fn name(&self) -> &'static str {
+        "error_config_unreadable"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "error.placement.err_config_unreadable",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorConfigUnreadable);
 
 /// Reports the Workspace's configuration, which would not read.
 #[renderer(buffer)]
 pub fn render_error_config_unreadable(error: ErrorConfigUnreadable, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(
-            t!(
-                "error.placement.err_config_unreadable",
-                path = error.path.display().to_string()
-            )
-            .trim()
-        )
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(
             t!(
                 "error.placement.err_config_unreadable_help",
-                reason = error.reason
+                reason = error.cause
             )
             .trim()
         )

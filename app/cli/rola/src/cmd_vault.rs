@@ -16,6 +16,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResWorkspaceConfig;
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_workspace::Config as WorkspaceConfig;
 use rust_i18n::t;
@@ -26,6 +27,7 @@ use crate::address::ResAddressHistory;
 use crate::cmd_create::ErrorWorkspaceNotExist;
 use crate::error::ErrorConfigUnreadable;
 use crate::exit_codes::{EC_ERR_VAULT_ARGUMENT, EC_ERR_VAULT_NOT_BOUND, EC_HELP};
+use crate::failure::failure;
 
 /// The last word of the two `rola vault bind` is dispatched by.
 ///
@@ -477,9 +479,21 @@ pub fn render_result_vault_unbound(result: ResultVaultUnbound) {
 #[derive(Grouped)]
 pub struct ErrorVaultNameMissing;
 
+impl Failure for ErrorVaultNameMissing {
+    fn name(&self) -> &'static str {
+        "error_vault_name_missing"
+    }
+
+    fn reason(&self) -> String {
+        t!("vault_bind.err_name_missing").trim().to_string()
+    }
+}
+
+failure!(ErrorVaultNameMissing);
+
 #[renderer(buffer)]
-pub fn render_error_vault_name_missing(_: ErrorVaultNameMissing, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("vault_bind.err_name_missing").trim()));
+pub fn render_error_vault_name_missing(error: ErrorVaultNameMissing, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("vault_bind.err_name_missing_help").trim())
@@ -491,9 +505,21 @@ pub fn render_error_vault_name_missing(_: ErrorVaultNameMissing, ec: &mut ResExi
 #[derive(Grouped)]
 pub struct ErrorVaultAddressMissing;
 
+impl Failure for ErrorVaultAddressMissing {
+    fn name(&self) -> &'static str {
+        "error_vault_address_missing"
+    }
+
+    fn reason(&self) -> String {
+        t!("vault_bind.err_address_missing").trim().to_string()
+    }
+}
+
+failure!(ErrorVaultAddressMissing);
+
 #[renderer(buffer)]
-pub fn render_error_vault_address_missing(_: ErrorVaultAddressMissing, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("vault_bind.err_address_missing").trim()));
+pub fn render_error_vault_address_missing(error: ErrorVaultAddressMissing, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("vault_bind.err_address_missing_help").trim())
@@ -508,12 +534,23 @@ pub struct ErrorVaultAddressInvalid {
     address: String,
 }
 
+impl Failure for ErrorVaultAddressInvalid {
+    fn name(&self) -> &'static str {
+        "error_vault_address_invalid"
+    }
+
+    fn reason(&self) -> String {
+        t!("vault_bind.err_address_invalid", address = self.address)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorVaultAddressInvalid);
+
 #[renderer(buffer)]
 pub fn render_error_vault_address_invalid(error: ErrorVaultAddressInvalid, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("vault_bind.err_address_invalid", address = error.address).trim())
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("vault_bind.err_address_invalid_help").trim())
@@ -528,12 +565,23 @@ pub struct ErrorVaultNotBound {
     name: String,
 }
 
+impl Failure for ErrorVaultNotBound {
+    fn name(&self) -> &'static str {
+        "error_vault_not_bound"
+    }
+
+    fn reason(&self) -> String {
+        t!("vault.err_not_bound", name = self.name)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorVaultNotBound);
+
 #[renderer(buffer)]
 pub fn render_error_vault_not_bound(error: ErrorVaultNotBound, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("vault.err_not_bound", name = error.name).trim())
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("vault.err_not_bound_help").trim()));
     ec.exit_code = EC_ERR_VAULT_NOT_BOUND;
 }

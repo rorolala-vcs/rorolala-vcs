@@ -10,6 +10,7 @@ use mingling::{
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
 };
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::{PRIVATE_KEY_EXTENSION, PUBLIC_KEY_EXTENSION};
 use rust_i18n::t;
@@ -19,6 +20,7 @@ use crate::exit_codes::{
     EC_ERR_TOOL_KEYGEN_FAILED, EC_ERR_TOOL_KEYGEN_INSTALL_FAILED, EC_ERR_TOOL_KEYGEN_NO_KEY_DIR,
     EC_ERR_TOOL_KEYGEN_NO_OPENSSL, EC_ERR_TOOL_KEYGEN_PATH_NOT_EXIST, EC_HELP,
 };
+use crate::failure::failure;
 
 /// The stem a key pair is named by when neither a name nor a path says otherwise.
 const KEY_STEM: &str = "key";
@@ -99,7 +101,7 @@ pub fn tool_keygen(args: EntryToolKeygen) -> Next {
         if let Err(error) = fs::create_dir_all(&directory) {
             return ErrorInstallDir {
                 path: directory,
-                reason: error.to_string(),
+                cause: error.to_string(),
             }
             .into();
         }
@@ -212,9 +214,21 @@ pub fn render_result_key_generated(result: ResultKeyGenerated) {
 #[derive(Grouped)]
 pub struct ErrorNoOpenSsl;
 
+impl Failure for ErrorNoOpenSsl {
+    fn name(&self) -> &'static str {
+        "error_no_open_ssl"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_keygen.err_no_openssl").trim().to_string()
+    }
+}
+
+failure!(ErrorNoOpenSsl);
+
 #[renderer(buffer)]
-pub fn render_error_no_open_ssl(_: ErrorNoOpenSsl, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("tool_keygen.err_no_openssl").trim()));
+pub fn render_error_no_open_ssl(error: ErrorNoOpenSsl, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_keygen.err_no_openssl_help").trim())
@@ -226,9 +240,21 @@ pub fn render_error_no_open_ssl(_: ErrorNoOpenSsl, ec: &mut ResExitCode) {
 #[derive(Grouped)]
 pub struct ErrorKeyGenFailed;
 
+impl Failure for ErrorKeyGenFailed {
+    fn name(&self) -> &'static str {
+        "error_key_gen_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_keygen.err_keygen_failed").trim().to_string()
+    }
+}
+
+failure!(ErrorKeyGenFailed);
+
 #[renderer(buffer)]
-pub fn render_error_key_gen_failed(_: ErrorKeyGenFailed, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("tool_keygen.err_keygen_failed").trim()));
+pub fn render_error_key_gen_failed(error: ErrorKeyGenFailed, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_keygen.err_keygen_failed_help").trim())
@@ -243,16 +269,26 @@ pub struct ErrorPathNotExist {
     path: PathBuf,
 }
 
+impl Failure for ErrorPathNotExist {
+    fn name(&self) -> &'static str {
+        "error_path_not_exist"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "tool_keygen.err_path_not_exist",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorPathNotExist);
+
 #[renderer(buffer)]
 pub fn render_error_path_not_exist(err: ErrorPathNotExist, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!(
-            "tool_keygen.err_path_not_exist",
-            path = err.path.display()
-        ))
-        .trim()
-    );
+    r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_keygen.err_path_not_exist_help").trim())
@@ -264,9 +300,21 @@ pub fn render_error_path_not_exist(err: ErrorPathNotExist, ec: &mut ResExitCode)
 #[derive(Grouped)]
 pub struct ErrorNoKeyDir;
 
+impl Failure for ErrorNoKeyDir {
+    fn name(&self) -> &'static str {
+        "error_no_key_dir"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_keygen.err_no_key_dir").trim().to_string()
+    }
+}
+
+failure!(ErrorNoKeyDir);
+
 #[renderer(buffer)]
-pub fn render_error_no_key_dir(_: ErrorNoKeyDir, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("tool_keygen.err_no_key_dir").trim()));
+pub fn render_error_no_key_dir(error: ErrorNoKeyDir, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_keygen.err_no_key_dir_help").trim())
@@ -280,22 +328,30 @@ pub struct ErrorInstallDir {
     /// The directory that could not be created.
     path: PathBuf,
     /// Why it could not be created.
-    reason: String,
+    cause: String,
 }
+
+impl Failure for ErrorInstallDir {
+    fn name(&self) -> &'static str {
+        "error_install_dir"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "tool_keygen.err_install_dir",
+            path = self.path.display().to_string(),
+            reason = self.cause
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorInstallDir);
 
 #[renderer(buffer)]
 pub fn render_error_install_dir(err: ErrorInstallDir, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(
-            t!(
-                "tool_keygen.err_install_dir",
-                path = err.path.display().to_string(),
-                reason = err.reason
-            )
-            .trim()
-        )
-    );
+    r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_keygen.err_install_dir_help").trim())

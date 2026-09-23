@@ -136,6 +136,22 @@ impl ResVault {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ErrorShouldInVault;
 
+impl rorolala_errors::Failure for ErrorShouldInVault {
+    fn name(&self) -> &'static str {
+        "error_should_in_vault"
+    }
+
+    /// What went wrong, in the library's own words.
+    ///
+    /// A library has one voice and speaks in it; what a person is shown is said where the
+    /// command is, in the run's language.
+    fn reason(&self) -> String {
+        "this command works on a Vault, and this run is not inside one".to_owned()
+    }
+}
+
+rorolala_errors::failure!(ErrorShouldInVault);
+
 impl<ThisProgram> ProgramSetup<ThisProgram> for VaultSetup
 where
     ThisProgram: ProgramCollect<Enum = ThisProgram>,

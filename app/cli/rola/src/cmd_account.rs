@@ -17,6 +17,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResVault, ResWorkspace};
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
@@ -24,6 +25,7 @@ use serde::Serialize;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::exit_codes::{EC_ERR_ACCOUNT_NO_DIR, EC_ERR_ACCOUNT_NOT_FOUND, EC_HELP};
+use crate::failure::failure;
 use crate::keys::account_names;
 use crate::user::account_path;
 
@@ -154,12 +156,23 @@ pub struct ErrorAccountNotFound {
     name: String,
 }
 
+impl Failure for ErrorAccountNotFound {
+    fn name(&self) -> &'static str {
+        "error_account_not_found"
+    }
+
+    fn reason(&self) -> String {
+        t!("account.err_not_found", name = self.name)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorAccountNotFound);
+
 #[renderer(buffer)]
 pub fn render_error_account_not_found(error: ErrorAccountNotFound, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("account.err_not_found", name = error.name).trim())
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("account.err_not_found_help").trim()));
     ec.exit_code = EC_ERR_ACCOUNT_NOT_FOUND;
 }
@@ -168,9 +181,21 @@ pub fn render_error_account_not_found(error: ErrorAccountNotFound, ec: &mut ResE
 #[derive(Grouped)]
 pub struct ErrorNoUserDir;
 
+impl Failure for ErrorNoUserDir {
+    fn name(&self) -> &'static str {
+        "error_no_user_dir"
+    }
+
+    fn reason(&self) -> String {
+        t!("account.err_no_user_dir").trim().to_string()
+    }
+}
+
+failure!(ErrorNoUserDir);
+
 #[renderer(buffer)]
-pub fn render_error_no_user_dir(_: ErrorNoUserDir, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("account.err_no_user_dir").trim()));
+pub fn render_error_no_user_dir(error: ErrorNoUserDir, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("account.err_no_user_dir_help").trim()));
     ec.exit_code = EC_ERR_ACCOUNT_NO_DIR;
 }

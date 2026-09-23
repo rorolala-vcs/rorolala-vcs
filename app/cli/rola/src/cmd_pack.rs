@@ -13,11 +13,13 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResRorolalaStorage;
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::{EC_ERR_PACK_FAILED, EC_ERR_PACK_NO_STORAGE, EC_HELP};
+use crate::failure::failure;
 
 #[help(buffer)]
 pub fn help_pack(_: EntryPack, ec: &mut ResExitCode) {
@@ -61,7 +63,7 @@ pub fn pack(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
         Ok(runtime) => runtime,
         Err(error) => {
             return ErrorPackFailed {
-                reason: error.to_string(),
+                cause: error.to_string(),
             }
             .into();
         }
@@ -72,7 +74,7 @@ pub fn pack(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
     match runtime.block_on(store.repack()) {
         Ok(changed) => ResultPacked { changed }.into(),
         Err(error) => ErrorPackFailed {
-            reason: error.to_string(),
+            cause: error.to_string(),
         }
         .into(),
     }
@@ -98,9 +100,21 @@ pub fn render_result_packed(result: ResultPacked) {
 #[derive(Grouped)]
 pub struct ErrorPackNoStorage;
 
+impl Failure for ErrorPackNoStorage {
+    fn name(&self) -> &'static str {
+        "error_pack_no_storage"
+    }
+
+    fn reason(&self) -> String {
+        t!("pack.err_no_storage").trim().to_string()
+    }
+}
+
+failure!(ErrorPackNoStorage);
+
 #[renderer(buffer)]
-pub fn render_error_pack_no_storage(_: ErrorPackNoStorage, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("pack.err_no_storage").trim()));
+pub fn render_error_pack_no_storage(error: ErrorPackNoStorage, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("pack.err_no_storage_help").trim()));
     ec.exit_code = EC_ERR_PACK_NO_STORAGE;
 }
@@ -109,15 +123,26 @@ pub fn render_error_pack_no_storage(_: ErrorPackNoStorage, ec: &mut ResExitCode)
 #[derive(Grouped)]
 pub struct ErrorPackFailed {
     /// Why the store would not pack.
-    reason: String,
+    cause: String,
 }
+
+impl Failure for ErrorPackFailed {
+    fn name(&self) -> &'static str {
+        "error_pack_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!("pack.err_pack_failed", reason = self.cause)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorPackFailed);
 
 #[renderer(buffer)]
 pub fn render_error_pack_failed(error: ErrorPackFailed, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("pack.err_pack_failed", reason = error.reason).trim())
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("pack.err_pack_failed_help").trim()));
     ec.exit_code = EC_ERR_PACK_FAILED;
 }

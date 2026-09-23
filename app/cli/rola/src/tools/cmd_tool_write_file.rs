@@ -16,6 +16,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResRorolalaStorage;
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
@@ -25,6 +26,7 @@ use crate::exit_codes::{
     EC_ERR_TOOL_WRITE_FILE_ARGUMENT, EC_ERR_TOOL_WRITE_FILE_FAILED,
     EC_ERR_TOOL_WRITE_FILE_NO_STORAGE, EC_ERR_TOOL_WRITE_FILE_NOT_A_FILE, EC_HELP,
 };
+use crate::failure::failure;
 
 #[help(buffer)]
 pub fn help_tool_write_file(_: EntryToolWriteFile, ec: &mut ResExitCode) {
@@ -91,7 +93,7 @@ pub fn tool_write_file(
         Err(error) => {
             return ErrorWriteFailed {
                 path: file,
-                reason: error.to_string(),
+                cause: error.to_string(),
             }
             .into();
         }
@@ -102,7 +104,7 @@ pub fn tool_write_file(
         Err(error) => {
             return ErrorWriteFailed {
                 path: file,
-                reason: error.to_string(),
+                cause: error.to_string(),
             }
             .into();
         }
@@ -114,7 +116,7 @@ pub fn tool_write_file(
         Ok(chunked) => ResultBlake3Hash { hash, chunked }.into(),
         Err(error) => ErrorWriteFailed {
             path: file,
-            reason: error.to_string(),
+            cause: error.to_string(),
         }
         .into(),
     }
@@ -145,12 +147,21 @@ pub fn render_result_blake3_hash(result: ResultBlake3Hash) {
 #[derive(Grouped)]
 pub struct ErrorFileMissing;
 
+impl Failure for ErrorFileMissing {
+    fn name(&self) -> &'static str {
+        "error_file_missing"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_write_file.err_file_missing").trim().to_string()
+    }
+}
+
+failure!(ErrorFileMissing);
+
 #[renderer(buffer)]
-pub fn render_error_file_missing(_: ErrorFileMissing, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("tool_write_file.err_file_missing").trim())
-    );
+pub fn render_error_file_missing(error: ErrorFileMissing, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_write_file.err_file_missing_help").trim())
@@ -162,9 +173,21 @@ pub fn render_error_file_missing(_: ErrorFileMissing, ec: &mut ResExitCode) {
 #[derive(Grouped)]
 pub struct ErrorWriteNoStorage;
 
+impl Failure for ErrorWriteNoStorage {
+    fn name(&self) -> &'static str {
+        "error_write_no_storage"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_write_file.err_no_storage").trim().to_string()
+    }
+}
+
+failure!(ErrorWriteNoStorage);
+
 #[renderer(buffer)]
-pub fn render_error_write_no_storage(_: ErrorWriteNoStorage, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("tool_write_file.err_no_storage").trim()));
+pub fn render_error_write_no_storage(error: ErrorWriteNoStorage, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_write_file.err_no_storage_help").trim())
@@ -179,16 +202,26 @@ pub struct ErrorNotAFile {
     path: PathBuf,
 }
 
+impl Failure for ErrorNotAFile {
+    fn name(&self) -> &'static str {
+        "error_not_a_file"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "tool_write_file.err_not_a_file",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorNotAFile);
+
 #[renderer(buffer)]
 pub fn render_error_not_a_file(err: ErrorNotAFile, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!(
-            "tool_write_file.err_not_a_file",
-            path = err.path.display()
-        ))
-        .trim()
-    );
+    r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_write_file.err_not_a_file_help").trim())
@@ -202,20 +235,30 @@ pub struct ErrorWriteFailed {
     /// The file whose content was being stored.
     path: PathBuf,
     /// Why the store would not take it.
-    reason: String,
+    cause: String,
 }
+
+impl Failure for ErrorWriteFailed {
+    fn name(&self) -> &'static str {
+        "error_write_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "tool_write_file.err_write_failed",
+            path = self.path.display().to_string(),
+            reason = self.cause
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorWriteFailed);
 
 #[renderer(buffer)]
 pub fn render_error_write_failed(err: ErrorWriteFailed, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!(
-            "tool_write_file.err_write_failed",
-            path = err.path.display().to_string(),
-            reason = err.reason
-        ))
-        .trim()
-    );
+    r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_write_file.err_write_failed_help").trim())

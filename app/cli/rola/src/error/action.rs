@@ -17,6 +17,12 @@ use crate::exit_codes::{
 // here from a command, and what names the entry it routes to.
 import_type!(ErrorAction = librorolala::protocol::ActionError);
 
+// What the failure is written as when a run is read rather than watched is the library's own —
+// it is where the failure is known — but the registration is this program's, since that is
+// where a program's types are registered. Without it the failure would be read as nothing at
+// all, which is what a run asked for `--json` would print where the failure was.
+::mingling::macros::structural!(ErrorAction);
+
 /// Renders an action that could not run.
 ///
 /// An [`ActionError`] is what the client side raises rather than something a command builds,

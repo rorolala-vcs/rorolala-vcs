@@ -16,6 +16,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResRorolalaStorage;
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
@@ -25,6 +26,7 @@ use crate::exit_codes::{
     EC_ERR_TOOL_EXTRACT_FILE_EXISTS, EC_ERR_TOOL_EXTRACT_FILE_FAILED,
     EC_ERR_TOOL_EXTRACT_FILE_NO_STORAGE, EC_HELP,
 };
+use crate::failure::failure;
 
 #[help(buffer)]
 pub fn help_tool_extract_file(_: EntryToolExtractFile, ec: &mut ResExitCode) {
@@ -94,7 +96,7 @@ pub fn tool_extract_file(
     if let Err(error) = fs::create_dir_all(&dir) {
         return ErrorExtractFailed {
             hash,
-            reason: error.to_string(),
+            cause: error.to_string(),
         }
         .into();
     }
@@ -109,7 +111,7 @@ pub fn tool_extract_file(
         Ok(()) => ResultExtracted { path }.into(),
         Err(error) => ErrorExtractFailed {
             hash,
-            reason: error.to_string(),
+            cause: error.to_string(),
         }
         .into(),
     }
@@ -131,12 +133,21 @@ pub fn render_result_extracted(result: ResultExtracted) {
 #[derive(Grouped)]
 pub struct ErrorHashMissing;
 
+impl Failure for ErrorHashMissing {
+    fn name(&self) -> &'static str {
+        "error_hash_missing"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_extract_file.err_hash_missing").trim().to_string()
+    }
+}
+
+failure!(ErrorHashMissing);
+
 #[renderer(buffer)]
-pub fn render_error_hash_missing(_: ErrorHashMissing, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("tool_extract_file.err_hash_missing").trim())
-    );
+pub fn render_error_hash_missing(error: ErrorHashMissing, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_extract_file.err_hash_missing_help").trim())
@@ -148,12 +159,21 @@ pub fn render_error_hash_missing(_: ErrorHashMissing, ec: &mut ResExitCode) {
 #[derive(Grouped)]
 pub struct ErrorExtractNoStorage;
 
+impl Failure for ErrorExtractNoStorage {
+    fn name(&self) -> &'static str {
+        "error_extract_no_storage"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_extract_file.err_no_storage").trim().to_string()
+    }
+}
+
+failure!(ErrorExtractNoStorage);
+
 #[renderer(buffer)]
-pub fn render_error_extract_no_storage(_: ErrorExtractNoStorage, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("tool_extract_file.err_no_storage").trim())
-    );
+pub fn render_error_extract_no_storage(error: ErrorExtractNoStorage, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_extract_file.err_no_storage_help").trim())
@@ -168,12 +188,23 @@ pub struct ErrorBadHash {
     hash: String,
 }
 
+impl Failure for ErrorBadHash {
+    fn name(&self) -> &'static str {
+        "error_bad_hash"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_extract_file.err_bad_hash", hash = self.hash)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorBadHash);
+
 #[renderer(buffer)]
 pub fn render_error_bad_hash(err: ErrorBadHash, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("tool_extract_file.err_bad_hash", hash = err.hash).trim())
-    );
+    r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_extract_file.err_bad_hash_help").trim())
@@ -188,16 +219,26 @@ pub struct ErrorTargetExists {
     path: PathBuf,
 }
 
+impl Failure for ErrorTargetExists {
+    fn name(&self) -> &'static str {
+        "error_target_exists"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "tool_extract_file.err_target_exists",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorTargetExists);
+
 #[renderer(buffer)]
 pub fn render_error_target_exists(err: ErrorTargetExists, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!(
-            "tool_extract_file.err_target_exists",
-            path = err.path.display()
-        ))
-        .trim()
-    );
+    r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_extract_file.err_target_exists_help").trim())
@@ -211,22 +252,30 @@ pub struct ErrorExtractFailed {
     /// The hash whose content was being asked for.
     hash: String,
     /// Why it could not be produced or written.
-    reason: String,
+    cause: String,
 }
+
+impl Failure for ErrorExtractFailed {
+    fn name(&self) -> &'static str {
+        "error_extract_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "tool_extract_file.err_extract_failed",
+            hash = self.hash,
+            reason = self.cause
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorExtractFailed);
 
 #[renderer(buffer)]
 pub fn render_error_extract_failed(err: ErrorExtractFailed, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(
-            t!(
-                "tool_extract_file.err_extract_failed",
-                hash = err.hash,
-                reason = err.reason
-            )
-            .trim()
-        )
-    );
+    r_eprintln!("{}", err_line!(err.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_extract_file.err_extract_failed_help").trim())

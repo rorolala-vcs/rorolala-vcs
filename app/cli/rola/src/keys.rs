@@ -11,8 +11,12 @@ use librorolala::auth::{
 };
 use librorolala::{vault::Vault, workspace::Workspace};
 use mingling::Grouped;
+use rorolala_errors::Failure;
 use rorolala_utils_constants::{VAULT_KEYS_DIR, WORKSPACE_KEYS_DIR};
 use rorolala_utils_location::Locate;
+use rust_i18n::t;
+
+use crate::failure::failure;
 
 /// The directories keys are looked for in, highest priority first.
 ///
@@ -116,8 +120,23 @@ impl ErrorAccountUnknown {
     /// The name that is not an account.
     ///
     /// What is said when the error is reported, so a renderer outside this module reads it
-    /// through here rather than the field.
-    pub(crate) fn name(&self) -> &str {
+    /// through here rather than the field. It is not named `name`, since that is what
+    /// [`Failure`] calls the name of the failure itself, which is a different thing.
+    pub(crate) fn named(&self) -> &str {
         self.name.as_str()
     }
 }
+
+impl Failure for ErrorAccountUnknown {
+    fn name(&self) -> &'static str {
+        "error_account_unknown"
+    }
+
+    fn reason(&self) -> String {
+        t!("error.account.err_unknown", name = self.named())
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorAccountUnknown);

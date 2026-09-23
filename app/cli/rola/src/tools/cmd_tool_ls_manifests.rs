@@ -13,6 +13,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResRorolalaStorage;
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
@@ -21,6 +22,7 @@ use crate::Next;
 use crate::exit_codes::{
     EC_ERR_TOOL_LS_MANIFESTS_FAILED, EC_ERR_TOOL_LS_MANIFESTS_NO_STORAGE, EC_HELP,
 };
+use crate::failure::failure;
 
 #[help(buffer)]
 pub fn help_tool_ls_manifests(_: EntryToolLsManifests, ec: &mut ResExitCode) {
@@ -63,7 +65,7 @@ pub fn tool_ls_manifests(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
         Ok(runtime) => runtime,
         Err(error) => {
             return ErrorManifestsFailed {
-                reason: error.to_string(),
+                cause: error.to_string(),
             }
             .into();
         }
@@ -72,7 +74,7 @@ pub fn tool_ls_manifests(storage: &mut LazyRes<ResRorolalaStorage>) -> Next {
     match runtime.block_on(store.list_manifest_keys()) {
         Ok(keys) => ResultManifests { keys }.into(),
         Err(error) => ErrorManifestsFailed {
-            reason: error.to_string(),
+            cause: error.to_string(),
         }
         .into(),
     }
@@ -98,12 +100,21 @@ pub fn render_result_manifests(result: ResultManifests) {
 #[derive(Grouped)]
 pub struct ErrorManifestsNoStorage;
 
+impl Failure for ErrorManifestsNoStorage {
+    fn name(&self) -> &'static str {
+        "error_manifests_no_storage"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_ls_manifests.err_no_storage").trim().to_string()
+    }
+}
+
+failure!(ErrorManifestsNoStorage);
+
 #[renderer(buffer)]
-pub fn render_error_manifests_no_storage(_: ErrorManifestsNoStorage, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("tool_ls_manifests.err_no_storage").trim())
-    );
+pub fn render_error_manifests_no_storage(error: ErrorManifestsNoStorage, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_ls_manifests.err_no_storage_help").trim())
@@ -115,15 +126,26 @@ pub fn render_error_manifests_no_storage(_: ErrorManifestsNoStorage, ec: &mut Re
 #[derive(Grouped)]
 pub struct ErrorManifestsFailed {
     /// Why the store would not list.
-    reason: String,
+    cause: String,
 }
+
+impl Failure for ErrorManifestsFailed {
+    fn name(&self) -> &'static str {
+        "error_manifests_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!("tool_ls_manifests.err_ls_failed", reason = self.cause)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorManifestsFailed);
 
 #[renderer(buffer)]
 pub fn render_error_manifests_failed(error: ErrorManifestsFailed, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("tool_ls_manifests.err_ls_failed", reason = error.reason).trim())
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("tool_ls_manifests.err_ls_failed_help").trim())

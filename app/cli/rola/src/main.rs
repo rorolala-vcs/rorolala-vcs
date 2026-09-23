@@ -30,6 +30,7 @@ mod cmd_pack;
 mod cmd_vault;
 mod error;
 mod exit_codes;
+mod failure;
 mod keys;
 mod lastec;
 mod progress;

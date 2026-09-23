@@ -9,7 +9,10 @@ use std::fs;
 use std::path::Path;
 
 use mingling::{Grouped, LazyInit, ProgramCollect, setup::ProgramSetup};
+use rorolala_errors::Failure;
+use rust_i18n::t;
 
+use crate::failure::failure;
 use crate::user::account_path;
 
 /// The account the work acts as, as the program found it.
@@ -95,6 +98,18 @@ impl ResCurrentAccount {
 /// a command asks.
 #[derive(Grouped)]
 pub struct ErrorNoAccount;
+
+impl Failure for ErrorNoAccount {
+    fn name(&self) -> &'static str {
+        "error_no_account"
+    }
+
+    fn reason(&self) -> String {
+        t!("error.account.err_no_account").trim().to_string()
+    }
+}
+
+failure!(ErrorNoAccount);
 
 /// Registers the account the work acts as, so commands can read it and name it.
 ///

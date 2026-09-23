@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+rorolala-errors.workspace = true
 rorolala-utils-cli-theme.workspace = true
 rorolala-utils-configure.workspace = true
 rorolala-utils-location.workspace = true

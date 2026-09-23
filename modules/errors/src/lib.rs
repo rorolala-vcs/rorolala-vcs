@@ -10,6 +10,14 @@ use std::io;
 
 use rorolala_utils_lazyffi::lazyffi;
 
+mod failure;
+pub use failure::*;
+
+/// `serde`, re-exported so that the [`failure!`](crate::failure) macro's paths resolve in the
+/// crate it is expanded in without that crate having to depend on `serde` itself.
+#[doc(hidden)]
+pub use serde as __serde;
+
 /// What an I/O failure was, in `std`'s spelling.
 ///
 /// One variant per [`io::ErrorKind`], and named after it, so nothing a caller could

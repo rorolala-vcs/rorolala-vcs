@@ -103,6 +103,40 @@ impl From<rorolala_auth::Error> for ActionError {
     }
 }
 
+impl rorolala_errors::Failure for ActionError {
+    /// The name of the way this failed, as a program reads it.
+    ///
+    /// Every way of failing is named apart, since which one it was is the whole of what a
+    /// caller can act on: the sentences differ, and so does what may be done about them.
+    fn name(&self) -> &'static str {
+        match self {
+            Self::NoChannel => "action_error_no_channel",
+            Self::MissingValue => "action_error_missing_value",
+            Self::MissingObject => "action_error_missing_object",
+            Self::ValueTooLarge => "action_error_value_too_large",
+            Self::Io(_) => "action_error_io",
+            Self::Codec(_) => "action_error_codec",
+            Self::Store(_) => "action_error_store",
+            Self::UnknownAction(_) => "action_error_unknown_action",
+            Self::Json(_) => "action_error_json",
+            Self::Addr(_) => "action_error_addr",
+            Self::Auth(_) => "action_error_auth",
+        }
+    }
+
+    /// What happened, in the library's own words.
+    ///
+    /// A library has one voice and speaks in it: a program running a command has its own
+    /// language to say this in, and says it there. What is handed over here is what the
+    /// failure itself can say, which is why it is [`Display`](fmt::Display) and nothing
+    /// else.
+    fn reason(&self) -> String {
+        self.to_string()
+    }
+}
+
+rorolala_errors::failure!(ActionError);
+
 #[cfg(test)]
 mod tests {
     use std::error::Error as _;

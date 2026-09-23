@@ -21,12 +21,14 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{self, EC_ERR_EXPLAIN_NO_LASTEC, EC_ERR_EXPLAIN_UNKNOWN, EC_HELP};
+use crate::failure::failure;
 use crate::lastec;
 
 #[help(buffer)]
@@ -153,12 +155,21 @@ pub fn render_result_exit_code(result: ResultExitCode) {
 #[derive(Grouped)]
 pub struct ErrorNoLastExitCode;
 
+impl Failure for ErrorNoLastExitCode {
+    fn name(&self) -> &'static str {
+        "error_no_last_exit_code"
+    }
+
+    fn reason(&self) -> String {
+        t!("explain_exit_code.err_no_lastec").trim().to_string()
+    }
+}
+
+failure!(ErrorNoLastExitCode);
+
 #[renderer(buffer)]
-pub fn render_error_no_last_exit_code(_: ErrorNoLastExitCode, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("explain_exit_code.err_no_lastec").trim())
-    );
+pub fn render_error_no_last_exit_code(error: ErrorNoLastExitCode, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("explain_exit_code.err_no_lastec_help").trim())
@@ -173,12 +184,23 @@ pub struct ErrorUnknownExitCode {
     code: i32,
 }
 
+impl Failure for ErrorUnknownExitCode {
+    fn name(&self) -> &'static str {
+        "error_unknown_exit_code"
+    }
+
+    fn reason(&self) -> String {
+        t!("explain_exit_code.err_unknown_code", code = self.code)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorUnknownExitCode);
+
 #[renderer(buffer)]
 pub fn render_error_unknown_exit_code(error: ErrorUnknownExitCode, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("explain_exit_code.err_unknown_code", code = error.code).trim())
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("explain_exit_code.err_unknown_code_help").trim())
@@ -193,12 +215,23 @@ pub struct ErrorLastExitCodeUnknown {
     code: i32,
 }
 
+impl Failure for ErrorLastExitCodeUnknown {
+    fn name(&self) -> &'static str {
+        "error_last_exit_code_unknown"
+    }
+
+    fn reason(&self) -> String {
+        t!("explain_exit_code.err_lastec_unknown", code = self.code)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorLastExitCodeUnknown);
+
 #[renderer(buffer)]
 pub fn render_error_last_exit_code_unknown(error: ErrorLastExitCodeUnknown, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("explain_exit_code.err_lastec_unknown", code = error.code).trim())
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("explain_exit_code.err_lastec_unknown_help").trim())

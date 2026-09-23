@@ -207,6 +207,47 @@ pub enum ErrorRemoteVault {
     },
 }
 
+impl rorolala_errors::Failure for ErrorRemoteVault {
+    /// The name of the way no Vault could be reached, as a program reads it.
+    ///
+    /// The ways are told apart because what is to be done about them differs: work inside a
+    /// Workspace, fix the configuration the Workspace keeps, or choose a Vault for it to
+    /// reach for.
+    fn name(&self) -> &'static str {
+        match self {
+            Self::ShouldInWorkspace => "error_remote_vault_should_in_workspace",
+            Self::Unread { .. } => "error_remote_vault_unread",
+            Self::NotChosen => "error_remote_vault_not_chosen",
+            Self::NotAddress { .. } => "error_remote_vault_not_address",
+        }
+    }
+
+    /// What went wrong, in the library's own words, with what it went wrong about.
+    ///
+    /// As for [`ErrorShouldInWorkspace`]: what a person is shown is said where the command
+    /// is, in the run's language. What is added here is the file or the name the failure is
+    /// about, which is the same in any language.
+    fn reason(&self) -> String {
+        match self {
+            Self::ShouldInWorkspace => {
+                "this run is not inside a Workspace, so no Vault could have been named".to_owned()
+            }
+            Self::Unread { path, reason } => format!(
+                "the Workspace configuration at {} could not be read: {reason}",
+                path.display()
+            ),
+            Self::NotChosen => {
+                "no Vault was named to reach for, and the Workspace reaches for none".to_owned()
+            }
+            Self::NotAddress { name } => {
+                format!("`{name}` is not a Vault this Workspace knows, nor an address")
+            }
+        }
+    }
+}
+
+rorolala_errors::failure!(ErrorRemoteVault);
+
 /// The address `name` names, read as one.
 ///
 /// A name the Workspace knows says where to go, written down as the link it is; one it does not
@@ -277,6 +318,22 @@ impl ResWorkspace {
 /// work without it. [`ResWorkspace::check`] is where a command asks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ErrorShouldInWorkspace;
+
+impl rorolala_errors::Failure for ErrorShouldInWorkspace {
+    fn name(&self) -> &'static str {
+        "error_should_in_workspace"
+    }
+
+    /// What went wrong, in the library's own words.
+    ///
+    /// A library has one voice and speaks in it; what a person is shown is said where the
+    /// command is, in the run's language.
+    fn reason(&self) -> String {
+        "this command works on a Workspace, and this run is not inside one".to_owned()
+    }
+}
+
+rorolala_errors::failure!(ErrorShouldInWorkspace);
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for WorkspaceSetup
 where

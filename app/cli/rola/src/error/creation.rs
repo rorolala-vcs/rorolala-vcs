@@ -9,6 +9,9 @@ use crate::exit_codes::{EC_ERR_CREATION_VAULT, EC_ERR_CREATION_WORKSPACE};
 
 import_type!(ErrorVaultCreation = rorolala_vault::CreationError);
 
+// As for the action failures: the shape is the library's, the registration is this program's.
+::mingling::macros::structural!(ErrorVaultCreation);
+
 #[renderer(buffer)]
 pub fn render_error_vault_creation(err: ErrorVaultCreation, ec: &mut ResExitCode) {
     match err {
@@ -103,6 +106,9 @@ pub fn render_error_vault_creation(err: ErrorVaultCreation, ec: &mut ResExitCode
 }
 
 import_type!(ErrorWorkspaceCreation = rorolala_workspace::CreationError);
+
+// As for the action failures: the shape is the library's, the registration is this program's.
+::mingling::macros::structural!(ErrorWorkspaceCreation);
 
 #[renderer(buffer)]
 pub fn render_error_workspace_creation(err: ErrorWorkspaceCreation, ec: &mut ResExitCode) {

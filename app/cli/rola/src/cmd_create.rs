@@ -15,6 +15,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResUsingVault, ResVault, ResWorkspace};
+use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_location::Locate;
 use rust_i18n::t;
@@ -22,6 +23,7 @@ use rust_i18n::t;
 use crate::{
     Next,
     exit_codes::{EC_ALREADY_EXIST, EC_ERR_CREATION_ARGUMENT, EC_HELP, EC_NOT_EXIST},
+    failure::failure,
 };
 
 #[help(buffer)]
@@ -140,10 +142,22 @@ fn vault_name(path: &Path) -> Option<&OsStr> {
 #[derive(Grouped)]
 pub struct ErrorCreatePathNotProvided;
 
+impl Failure for ErrorCreatePathNotProvided {
+    fn name(&self) -> &'static str {
+        "error_create_path_not_provided"
+    }
+
+    fn reason(&self) -> String {
+        t!("create.path_not_provided").trim().to_string()
+    }
+}
+
+failure!(ErrorCreatePathNotProvided);
+
 #[renderer(buffer)]
-pub fn render_error_create_path_not_provided(_: ErrorCreatePathNotProvided) {
-    r_println!("{}", err_line!(t!("create.path_not_provided")).trim());
-    r_println!("{}", help_line!(t!("create.path_not_provided_help")).trim());
+pub fn render_error_create_path_not_provided(error: ErrorCreatePathNotProvided) {
+    r_println!("{}", err_line!(error.reason()).trim());
+    r_println!("{}", help_line!(t!("create.path_not_provided_help").trim()));
 }
 
 /// Error: what was given to name a Vault inside another is a path, not a name.
@@ -153,12 +167,23 @@ pub struct ErrorSubVaultNameIsPath {
     name: String,
 }
 
+impl Failure for ErrorSubVaultNameIsPath {
+    fn name(&self) -> &'static str {
+        "error_sub_vault_name_is_path"
+    }
+
+    fn reason(&self) -> String {
+        t!("create.sub_vault_name_is_path", name = self.name)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorSubVaultNameIsPath);
+
 #[renderer(buffer)]
 pub fn render_error_sub_vault_name_is_path(error: ErrorSubVaultNameIsPath, ec: &mut ResExitCode) {
-    r_eprintln!(
-        "{}",
-        err_line!(t!("create.sub_vault_name_is_path", name = error.name).trim())
-    );
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
         help_line!(t!("create.sub_vault_name_is_path_help").trim())
@@ -170,12 +195,24 @@ pub fn render_error_sub_vault_name_is_path(error: ErrorSubVaultNameIsPath, ec: &
 #[derive(Grouped)]
 pub struct ErrorVaultAlreadyExist;
 
+impl Failure for ErrorVaultAlreadyExist {
+    fn name(&self) -> &'static str {
+        "error_vault_already_exist"
+    }
+
+    fn reason(&self) -> String {
+        t!("common.err_vault_already_exist").trim().to_string()
+    }
+}
+
+failure!(ErrorVaultAlreadyExist);
+
 #[renderer(buffer)]
-pub fn render_error_vault_already_exist(_: ErrorVaultAlreadyExist, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("common.err_vault_already_exist")).trim());
+pub fn render_error_vault_already_exist(error: ErrorVaultAlreadyExist, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("common.err_vault_already_exist_help")).trim()
+        help_line!(t!("common.err_vault_already_exist_help").trim())
     );
     ec.exit_code = EC_ALREADY_EXIST;
 }
@@ -184,12 +221,24 @@ pub fn render_error_vault_already_exist(_: ErrorVaultAlreadyExist, ec: &mut ResE
 #[derive(Grouped)]
 pub struct ErrorVaultNotExist;
 
+impl Failure for ErrorVaultNotExist {
+    fn name(&self) -> &'static str {
+        "error_vault_not_exist"
+    }
+
+    fn reason(&self) -> String {
+        t!("common.err_vault_not_exist").trim().to_string()
+    }
+}
+
+failure!(ErrorVaultNotExist);
+
 #[renderer(buffer)]
-pub fn render_error_vault_not_exist(_: ErrorVaultNotExist, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("common.err_vault_not_exist")).trim());
+pub fn render_error_vault_not_exist(error: ErrorVaultNotExist, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("common.err_vault_not_exist_help")).trim()
+        help_line!(t!("common.err_vault_not_exist_help").trim())
     );
     ec.exit_code = EC_NOT_EXIST;
 }
@@ -198,15 +247,27 @@ pub fn render_error_vault_not_exist(_: ErrorVaultNotExist, ec: &mut ResExitCode)
 #[derive(Grouped)]
 pub struct ErrorWorkspaceAlreadyExist;
 
+impl Failure for ErrorWorkspaceAlreadyExist {
+    fn name(&self) -> &'static str {
+        "error_workspace_already_exist"
+    }
+
+    fn reason(&self) -> String {
+        t!("common.err_workspace_already_exist").trim().to_string()
+    }
+}
+
+failure!(ErrorWorkspaceAlreadyExist);
+
 #[renderer(buffer)]
-pub fn render_error_workspace_already_exist(_: ErrorWorkspaceAlreadyExist, ec: &mut ResExitCode) {
+pub fn render_error_workspace_already_exist(
+    error: ErrorWorkspaceAlreadyExist,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        err_line!(t!("common.err_workspace_already_exist")).trim()
-    );
-    r_eprintln!(
-        "{}",
-        help_line!(t!("common.err_workspace_already_exist_help")).trim()
+        help_line!(t!("common.err_workspace_already_exist_help").trim())
     );
     ec.exit_code = EC_ALREADY_EXIST;
 }
@@ -215,12 +276,24 @@ pub fn render_error_workspace_already_exist(_: ErrorWorkspaceAlreadyExist, ec: &
 #[derive(Grouped)]
 pub struct ErrorWorkspaceNotExist;
 
+impl Failure for ErrorWorkspaceNotExist {
+    fn name(&self) -> &'static str {
+        "error_workspace_not_exist"
+    }
+
+    fn reason(&self) -> String {
+        t!("common.err_workspace_not_exist").trim().to_string()
+    }
+}
+
+failure!(ErrorWorkspaceNotExist);
+
 #[renderer(buffer)]
-pub fn render_error_workspace_not_exist(_: ErrorWorkspaceNotExist, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("common.err_workspace_not_exist")).trim());
+pub fn render_error_workspace_not_exist(error: ErrorWorkspaceNotExist, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("common.err_workspace_not_exist_help")).trim()
+        help_line!(t!("common.err_workspace_not_exist_help").trim())
     );
     ec.exit_code = EC_NOT_EXIST;
 }

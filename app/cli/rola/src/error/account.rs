@@ -32,7 +32,7 @@ pub fn render_error_no_account(_: ErrorNoAccount, ec: &mut ResExitCode) {
 pub fn render_error_account_unknown(error: ErrorAccountUnknown, ec: &mut ResExitCode) {
     r_eprintln!(
         "{}",
-        err_line!(t!("error.account.err_unknown", name = error.name()).trim())
+        err_line!(t!("error.account.err_unknown", name = error.named()).trim())
     );
     r_eprintln!(
         "{}",

@@ -1469,6 +1469,7 @@ version = "0.1.0"
 dependencies = [
  "bincode2",
  "rorolala-utils-lazyffi",
+ "serde",
  "serde_json",
 ]
 
@@ -1600,6 +1601,7 @@ name = "rorolala-vault"
 version = "0.1.0"
 dependencies = [
  "just_fmt 0.2.1",
+ "rorolala-errors",
  "rorolala-storage",
  "rorolala-utils-configure",
  "rorolala-utils-constants",
@@ -1613,6 +1615,7 @@ dependencies = [
 name = "rorolala-workspace"
 version = "0.1.0"
 dependencies = [
+ "rorolala-errors",
  "rorolala-storage",
  "rorolala-utils-configure",
  "rorolala-utils-constants",
