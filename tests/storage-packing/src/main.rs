@@ -48,6 +48,8 @@ async fn main() {
     repacking_leaves_a_store_already_laid_out_alone(&sandbox, &mut checked).await;
     repacking_leaves_a_pack_that_does_not_read_where_it_is(&sandbox, &mut checked).await;
     a_manifest_is_packed_with_the_manifests(&sandbox, &mut checked).await;
+    packing_leaves_no_empty_directories(&sandbox, &mut checked).await;
+    repacking_numbers_the_packs_from_nothing(&sandbox, &mut checked).await;
     rewriting_packed_content_leaves_it_packed(&sandbox, &mut checked).await;
 
     sandbox.cleanup();
@@ -1250,6 +1252,139 @@ async fn rewriting_packed_content_leaves_it_packed(sandbox: &Sandbox, checked: &
             .is_ok_and(|()| fs::read(&out).is_ok_and(|read| read == content)),
         "the content did not read back",
     );
+}
+
+/// A packed store is not left shaped like what it used to hold.
+async fn packing_leaves_no_empty_directories(sandbox: &Sandbox, checked: &mut Checked) {
+    let store = store(sandbox, "tidy");
+    let contents = contents(6, 400);
+    let mut keys = Vec::new();
+
+    for content in &contents {
+        keys.push(written(&store, content).await);
+    }
+
+    // Something cut, so the manifests' directory has a shape of its own to leave behind.
+    let file = sandbox.join("tidy-content");
+    let cut = repetitive(16 * 1024);
+    fs::write(&file, &cut).expect("the content is written to a file");
+    let chunked = store
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 1024 }),
+        )
+        .await
+        .expect("the content is stored");
+
+    store.repack().await.expect("the store is laid out");
+
+    let root = sandbox.join("tidy");
+    checked.wants(
+        "a packed store keeps no empty directories",
+        ["obj", "manifest"]
+            .iter()
+            .all(|name| directories_under(&root.join(name)).is_empty()),
+        "a directory was left behind",
+    );
+    checked.wants(
+        "the layout's own directories stay",
+        root.join("obj").is_dir() && root.join("manifest").is_dir() && root.join("packed").is_dir(),
+        "a layout directory was taken away",
+    );
+
+    let mut reads_back = true;
+    for (key, content) in keys.iter().zip(&contents) {
+        reads_back &= store
+            .read_object(key)
+            .await
+            .is_ok_and(|read| &read == content);
+    }
+
+    let out = sandbox.join("tidy-out");
+    reads_back &= store
+        .extract_file(&chunked, &out)
+        .await
+        .is_ok_and(|()| fs::read(&out).is_ok_and(|read| read == cut));
+
+    checked.wants(
+        "nothing stopped reading back",
+        reads_back,
+        "something stopped reading back",
+    );
+}
+
+/// Packing numbers the packs from nothing, without a gap, however often it runs.
+async fn repacking_numbers_the_packs_from_nothing(sandbox: &Sandbox, checked: &mut Checked) {
+    let store = store(sandbox, "numbers");
+
+    // A limit small enough that one pack cannot hold everything.
+    fs::write(store.config_path(), "[storage]\nmax_pack_size = \"2KiB\"\n")
+        .expect("the configuration is written");
+
+    let contents = contents(9, 512);
+    let mut keys = Vec::new();
+    for content in &contents {
+        keys.push(written(&store, content).await);
+    }
+
+    store.repack().await.expect("the store is laid out");
+    let packs = store.packs().await.unwrap_or_default();
+
+    checked.wants(
+        "a store over the limit is laid out as several packs",
+        packs.len() > 1,
+        &format!("{} packs", packs.len()),
+    );
+    checked.wants(
+        "the packs are numbered from nothing, without a gap",
+        packs == (0..packs.len() as u64).collect::<Vec<u64>>(),
+        &format!("{packs:?}"),
+    );
+
+    // Raising the limit merges them, and what is left starts over at nothing rather than being given
+    // the number after the packs that are gone.
+    fs::write(store.config_path(), "[storage]\nmax_pack_size = \"2GiB\"\n")
+        .expect("the configuration is written");
+    store.repack().await.expect("the store is laid out again");
+    let packs = store.packs().await.unwrap_or_default();
+
+    checked.wants(
+        "merging leaves one pack",
+        packs.len() == 1,
+        &format!("{} packs", packs.len()),
+    );
+    checked.wants(
+        "the merged pack is numbered from nothing",
+        packs == [0],
+        &format!("{packs:?}"),
+    );
+
+    let mut reads_back = true;
+    for (key, content) in keys.iter().zip(&contents) {
+        reads_back &= store
+            .read_object(key)
+            .await
+            .is_ok_and(|read| &read == content);
+    }
+
+    checked.wants(
+        "everything still reads back",
+        reads_back,
+        "an object stopped reading back",
+    );
+}
+
+/// The directories directly under `directory`.
+fn directories_under(directory: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return Vec::new();
+    };
+
+    entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect()
 }
 
 /// A store of its own for one question, under `name` in the sandbox.

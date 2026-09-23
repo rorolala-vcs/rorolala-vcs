@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::io;
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::SystemTime;
 
@@ -21,7 +21,7 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
-use super::entry::{collect, read_range, sync_directory, write_whole_durably};
+use super::entry::{collect, is_directory, read_range, sync_directory, write_whole_durably};
 use super::paths::index_of_pack;
 use crate::{Error, Key, PackEntry, PackIndex};
 
@@ -106,6 +106,11 @@ impl RorolalaStorage {
             }
         }
 
+        if !written.is_empty() {
+            // The directories the loose entries sat in are empty now, so they go with them.
+            self.prune_empty_directories().await?;
+        }
+
         Ok(!written.is_empty())
     }
 
@@ -127,6 +132,10 @@ impl RorolalaStorage {
     /// arrives in the middle of this finds every entry in the packs it already knew; the old packs go
     /// last, their indexes first. A store interrupted here is a store holding a pack too many rather
     /// than one holding an entry too few.
+    ///
+    /// What the store is left with is numbered from nothing and without a gap — see `renumber` — so
+    /// packing a store over and over does not climb a number that says how often it was packed. The
+    /// directories the loose entries sat in, empty once they moved, go as well.
     ///
     /// # Errors
     ///
@@ -231,7 +240,85 @@ impl RorolalaStorage {
             self.drop_pack(&state, *kind, *index).await?;
         }
 
+        // The packs the store is left with are numbered from nothing, without a gap: what packs there
+        // are is the store's own business, and a number that only ever grows says how many times a
+        // store has been packed rather than what it holds.
+        self.renumber(&state, &written).await?;
+
+        // What the packing left behind is the shape of what the store used to hold — directories with
+        // nothing left in them — so those go with it.
+        self.prune_empty_directories().await?;
+
         Ok(true)
+    }
+
+    /// Renames the packs that were just written to the numbers they belong at, from nothing up.
+    ///
+    /// What a pack is found by is its index, and an index names the pack of its number, so the index
+    /// has to be at its final name before the pack is: an index whose pack is not there yet reads as a
+    /// pack holding nothing, and every entry is still found in the pack it is named by until then. The
+    /// other way round would leave an index naming a pack that is no longer there, which is every entry
+    /// in it unreachable.
+    ///
+    /// The packs are taken in the order they were written and given the numbers from nothing, so the
+    /// renaming never steps on a pack still to be moved: a pack's final number is always one that an
+    /// earlier pack has already left.
+    async fn renumber(
+        &self,
+        state: &RootState,
+        written: &[(u64, PackKind, Vec<Key>)],
+    ) -> Result<(), Error> {
+        for (at, (index, kind, _)) in written.iter().enumerate() {
+            let wanted = at as u64;
+            if wanted == *index {
+                continue;
+            }
+
+            let from_index = self.index_path(*kind, *index);
+            let to_index = self.index_path(*kind, wanted);
+            let bytes = tokio::fs::read(&from_index).await?;
+            write_whole_durably(&to_index, &bytes).await?;
+
+            tokio::fs::rename(self.pack_path(*index), self.pack_path(wanted)).await?;
+            sync_directory(&self.root.join(PACKED_DIR)).await?;
+
+            forget_pack_index(state, *kind, *index);
+            self.drop_entry(&from_index).await?;
+            sync_directory(&self.index_directory(*kind)).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Removes the directories the store left empty, so that a store that was packed is not one still
+    /// shaped like what it used to hold.
+    ///
+    /// Only what is under the layout's own directories is taken: those stay, since a store is one with
+    /// somewhere to put everything — see `create`.
+    async fn prune_empty_directories(&self) -> Result<(), Error> {
+        for directory in [OBJECTS_DIR, MANIFEST_DIR, PACKED_DIR] {
+            self.prune_empty_under(&self.root.join(directory)).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Removes the empty directories under `directory`, leaving `directory` itself.
+    async fn prune_empty_under(&self, directory: &Path) -> Result<(), Error> {
+        for child in super::entry::entries(directory).await? {
+            if !is_directory(&child).await? {
+                continue;
+            }
+
+            Box::pin(self.prune_empty_under(&child)).await?;
+
+            // Nothing is left under it, so it is nothing the store has a use for.
+            if super::entry::entries(&child).await?.is_empty() {
+                tokio::fs::remove_dir(&child).await?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Writes `entries` into packs, each of at most the size the store allows.

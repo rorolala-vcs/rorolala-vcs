@@ -149,7 +149,7 @@ fn key_from_hex(name: &str) -> Option<Key> {
 }
 
 /// Whether there is a directory at `path`.
-async fn is_directory(path: &Path) -> Result<bool, Error> {
+pub(super) async fn is_directory(path: &Path) -> Result<bool, Error> {
     match tokio::fs::metadata(path).await {
         Ok(metadata) => Ok(metadata.is_dir()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
