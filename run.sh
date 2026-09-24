@@ -16,14 +16,14 @@ cd "$(dirname "$0")" || exit 1
 
 declare -A tools
 
-for file in .run/src/bin/*.sh; do
+for file in dev/run/src/bin/*.sh; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .sh)
         tools["$name"]="sh"
     fi
 done
 
-for file in .run/src/bin/*; do
+for file in dev/run/src/bin/*; do
     if [ -f "$file" ]; then
         name=$(basename "$file")
         if [[ ! "$name" == *.* ]]; then
@@ -32,56 +32,56 @@ for file in .run/src/bin/*; do
     fi
 done
 
-for file in .run/src/bin/*.cs; do
+for file in dev/run/src/bin/*.cs; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .cs)
         tools["$name"]="cs"
     fi
 done
 
-for file in .run/src/bin/*.go; do
+for file in dev/run/src/bin/*.go; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .go)
         tools["$name"]="go"
     fi
 done
 
-for file in .run/src/bin/*.nim; do
+for file in dev/run/src/bin/*.nim; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .nim)
         tools["$name"]="nim"
     fi
 done
 
-for file in .run/src/bin/*.pl; do
+for file in dev/run/src/bin/*.pl; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .pl)
         tools["$name"]="pl"
     fi
 done
 
-for file in .run/src/bin/*.py; do
+for file in dev/run/src/bin/*.py; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .py)
         tools["$name"]="py"
     fi
 done
 
-for file in .run/src/bin/*.rb; do
+for file in dev/run/src/bin/*.rb; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .rb)
         tools["$name"]="rb"
     fi
 done
 
-for file in .run/src/bin/*.rs; do
+for file in dev/run/src/bin/*.rs; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .rs)
         tools["$name"]="rs"
     fi
 done
 
-for file in .run/src/bin/*.zig; do
+for file in dev/run/src/bin/*.zig; do
     if [ -f "$file" ]; then
         name=$(basename "$file" .zig)
         tools["$name"]="zig"
@@ -203,15 +203,15 @@ type="${tools[$target_name]}"
 
 case "$type" in
     sh)
-        chmod +x ".run/src/bin/$target_name.sh"
-        ".run/src/bin/$target_name.sh" "$@"
+        chmod +x "dev/run/src/bin/$target_name.sh"
+        "dev/run/src/bin/$target_name.sh" "$@"
         ;;
     binary)
-        chmod +x ".run/src/bin/$target_name"
-        ".run/src/bin/$target_name" "$@"
+        chmod +x "dev/run/src/bin/$target_name"
+        "dev/run/src/bin/$target_name" "$@"
         ;;
     cs)
-        temp_dir=".run/target/csproj/$target_name"
+        temp_dir="dev/run/target/csproj/$target_name"
         mkdir -p "$temp_dir"
         cat > "$temp_dir/Directory.Build.props" <<'PROPS'
 <Project>
@@ -233,27 +233,27 @@ PROPS
 
 </Project>
 CSPROJ
-        cp ".run/src/bin/$target_name.cs" "$temp_dir/Program.cs"
+        cp "dev/run/src/bin/$target_name.cs" "$temp_dir/Program.cs"
         dotnet run --project "$temp_dir/$target_name.csproj" -- "$@"
         ;;
     go)
-        go run ".run/src/bin/$target_name.go" "$@"
+        go run "dev/run/src/bin/$target_name.go" "$@"
         ;;
     nim)
-        nim r --hints:off ".run/src/bin/$target_name.nim" "$@"
+        nim r --hints:off "dev/run/src/bin/$target_name.nim" "$@"
         ;;
     pl)
-        perl ".run/src/bin/$target_name.pl" "$@"
+        perl "dev/run/src/bin/$target_name.pl" "$@"
         ;;
     py)
-        python ".run/src/bin/$target_name.py" "$@"
+        python "dev/run/src/bin/$target_name.py" "$@"
         ;;
     rb)
-        ruby ".run/src/bin/$target_name.rb" "$@"
+        ruby "dev/run/src/bin/$target_name.rb" "$@"
         ;;
     rs)
-        if [ ! -f ".run/Cargo.toml" ]; then
-            cat > ".run/Cargo.toml" <<'EOF'
+        if [ ! -f "dev/run/Cargo.toml" ]; then
+            cat > "dev/run/Cargo.toml" <<'EOF'
 [package]
 name = "run_rust"
 version = "0.1.0"
@@ -264,10 +264,10 @@ edition = "2024"
 [dependencies]
 EOF
         fi
-        cargo build --manifest-path ".run/Cargo.toml" --target-dir ".run/target" --bin "$target_name" --quiet
-        ".run/target/debug/$target_name" "$@"
+        cargo build --manifest-path "dev/run/Cargo.toml" --target-dir "dev/run/target" --bin "$target_name" --quiet
+        "dev/run/target/debug/$target_name" "$@"
         ;;
     zig)
-        zig run ".run/src/bin/$target_name.zig" "$@"
+        zig run "dev/run/src/bin/$target_name.zig" "$@"
         ;;
 esac

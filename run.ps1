@@ -14,62 +14,62 @@ Set-Location -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ErrorActio
 
 $tools = @{}
 
-if (Test-Path ".run/src/bin/*.ps1") {
-    Get-ChildItem -Path ".run/src/bin/*.ps1" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.ps1") {
+    Get-ChildItem -Path "dev/run/src/bin/*.ps1" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "ps1"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.cs") {
-    Get-ChildItem -Path ".run/src/bin/*.cs" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.cs") {
+    Get-ChildItem -Path "dev/run/src/bin/*.cs" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "cs"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.exe") {
-    Get-ChildItem -Path ".run/src/bin/*.exe" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.exe") {
+    Get-ChildItem -Path "dev/run/src/bin/*.exe" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "exe"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.go") {
-    Get-ChildItem -Path ".run/src/bin/*.go" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.go") {
+    Get-ChildItem -Path "dev/run/src/bin/*.go" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "go"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.nim") {
-    Get-ChildItem -Path ".run/src/bin/*.nim" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.nim") {
+    Get-ChildItem -Path "dev/run/src/bin/*.nim" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "nim"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.pl") {
-    Get-ChildItem -Path ".run/src/bin/*.pl" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.pl") {
+    Get-ChildItem -Path "dev/run/src/bin/*.pl" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "pl"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.py") {
-    Get-ChildItem -Path ".run/src/bin/*.py" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.py") {
+    Get-ChildItem -Path "dev/run/src/bin/*.py" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "py"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.rb") {
-    Get-ChildItem -Path ".run/src/bin/*.rb" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.rb") {
+    Get-ChildItem -Path "dev/run/src/bin/*.rb" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "rb"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.rs") {
-    Get-ChildItem -Path ".run/src/bin/*.rs" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.rs") {
+    Get-ChildItem -Path "dev/run/src/bin/*.rs" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "rs"; Path = $_.FullName }
     }
 }
 
-if (Test-Path ".run/src/bin/*.zig") {
-    Get-ChildItem -Path ".run/src/bin/*.zig" | ForEach-Object {
+if (Test-Path "dev/run/src/bin/*.zig") {
+    Get-ChildItem -Path "dev/run/src/bin/*.zig" | ForEach-Object {
         $tools[$_.BaseName] = @{ Type = "zig"; Path = $_.FullName }
     }
 }
@@ -158,7 +158,7 @@ switch ($info.Type) {
         & $info.Path @script_args
     }
     "cs" {
-        $temp_dir = ".run/target/csproj/$target_name"
+        $temp_dir = "dev/run/target/csproj/$target_name"
         $null = New-Item -ItemType Directory -Path $temp_dir -Force
 
         $props_content = @'
@@ -207,7 +207,7 @@ switch ($info.Type) {
         ruby $info.Path $script_args
     }
     "rs" {
-        if (-not (Test-Path ".run/Cargo.toml")) {
+        if (-not (Test-Path "dev/run/Cargo.toml")) {
 @"
 [package]
 name = "run_rust"
@@ -217,12 +217,12 @@ edition = "2024"
 [workspace]
 
 [dependencies]
-"@ | Set-Content -Path ".run/Cargo.toml"
+"@ | Set-Content -Path "dev/run/Cargo.toml"
         }
-        cargo build --manifest-path ".run/Cargo.toml" --target-dir ".run/target" --bin $target_name --quiet
-        $binary = ".run/target/debug/$target_name.exe"
+        cargo build --manifest-path "dev/run/Cargo.toml" --target-dir "dev/run/target" --bin $target_name --quiet
+        $binary = "dev/run/target/debug/$target_name.exe"
         if (-not (Test-Path $binary)) {
-            $binary = ".run/target/debug/$target_name"
+            $binary = "dev/run/target/debug/$target_name"
         }
         & $binary $script_args
     }
