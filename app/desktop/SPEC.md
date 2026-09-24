@@ -1,0 +1,792 @@
+# Rorolala Desktop — Specification
+
+**Status:** normative. This document is the specification for the Desktop program. The document
+is version-controlled.
+
+**Scope:** the Desktop program at `app/desktop` (Avalonia, `net8.0`). It does not specify the
+`rola` command line, the C ABI, or the storage engine, except where this program depends on them.
+
+**Change rule:** every decision below is deliberate. A change to a decision is a change to this
+document first, then to the code.
+
+## Table of Contents
+
+- [1. Purpose and Scope](#1-purpose-and-scope)
+- [2. Terminology](#2-terminology)
+- [3. Architecture](#3-architecture)
+  - [3.1 Host kernel](#31-host-kernel)
+  - [3.2 Contract assembly](#32-contract-assembly)
+  - [3.3 Plugins](#33-plugins)
+  - [3.4 Shared and private assemblies](#34-shared-and-private-assemblies)
+- [4. Plugin Model](#4-plugin-model)
+  - [4.1 Discovery](#41-discovery)
+  - [4.2 Identity and manifest](#42-identity-and-manifest)
+  - [4.3 Assembly loading](#43-assembly-loading)
+  - [4.4 Contract and Avalonia version check](#44-contract-and-avalonia-version-check)
+  - [4.5 Dependencies and load order](#45-dependencies-and-load-order)
+  - [4.6 Lifecycle and reload](#46-lifecycle-and-reload)
+- [5. Configuration](#5-configuration)
+  - [5.1 Location](#51-location)
+  - [5.2 plugins.json](#52-pluginsjson)
+  - [5.3 preference.json](#53-preferencejson)
+  - [5.4 Validation and failure](#54-validation-and-failure)
+  - [5.5 Exit codes](#55-exit-codes)
+  - [5.6 Startup sequence](#56-startup-sequence)
+- [6. Extension Points](#6-extension-points)
+  - [6.1 Overview](#61-overview)
+  - [6.2 Top menu](#62-top-menu)
+  - [6.3 Context menus](#63-context-menus)
+  - [6.4 Navigation buttons](#64-navigation-buttons)
+  - [6.5 Docks](#65-docks)
+  - [6.6 Open hooks](#66-open-hooks)
+  - [6.7 Icon badges](#67-icon-badges)
+  - [6.8 Themes](#68-themes)
+  - [6.9 Languages](#69-languages)
+- [7. Dock System](#7-dock-system)
+  - [7.1 Registration](#71-registration)
+  - [7.2 Open modes and placement](#72-open-modes-and-placement)
+  - [7.3 Instances and layout persistence](#73-instances-and-layout-persistence)
+  - [7.4 Core docks](#74-core-docks)
+  - [7.5 Bundled plugin docks](#75-bundled-plugin-docks)
+- [8. Open Hook Pipeline](#8-open-hook-pipeline)
+  - [8.1 Request state](#81-request-state)
+  - [8.2 Stages and order](#82-stages-and-order)
+  - [8.3 Rejection](#83-rejection)
+  - [8.4 Exceptions](#84-exceptions)
+  - [8.5 After-open](#85-after-open)
+- [9. Icon Badges](#9-icon-badges)
+- [10. Theming](#10-theming)
+- [11. Internationalization](#11-internationalization)
+- [12. Logging](#12-logging)
+- [13. Rorolala Capability Injection](#13-rorolala-capability-injection)
+- [14. Failure Model](#14-failure-model)
+  - [14.1 Fatal failures](#141-fatal-failures)
+  - [14.2 Non-fatal failures](#142-non-fatal-failures)
+  - [14.3 Popup and log deduplication](#143-popup-and-log-deduplication)
+- [15. Configuration Reference](#15-configuration-reference)
+- [16. Contract Reference](#16-contract-reference)
+- [17. Feel and Interaction Craft](#17-feel-and-interaction-craft)
+- [18. Non-Goals](#18-non-goals)
+- [19. Open Items](#19-open-items)
+- [20. References](#20-references)
+
+## 1. Purpose and Scope
+
+Desktop is a **pure file browser**. It carries no version-control semantics of its own. It provides
+a window, navigation, docking, menus, and the basic interaction of opening a file or a directory.
+Everything that is specific to Rorolala — recognising a Workspace or a Vault, opening an asset with
+its history, syncing, comparing — is contributed by **plugins**.
+
+The program is a host for plugins. The host is the shell; plugins are the substance; `rola` is the
+source of capability.
+
+This specification covers:
+
+- how plugins are discovered, loaded, ordered, and identified;
+- the configuration files that drive the program and the plugins;
+- every extension point the host exposes;
+- the behaviour of the program when something fails.
+
+## 2. Terminology
+
+| Term | Meaning |
+| --- | --- |
+| **Host** | The Desktop program itself: window, dock host, menu bar, plugin loader, logging, theming, i18n. |
+| **Kernel** | The part of the host that is always present and cannot be disabled: the plugin manager and the log. |
+| **Contract** | The shared assembly `RorolalaDesktop.Contract` that both host and plugins compile against. |
+| **Plugin** | A .NET assembly that implements `IRolaPlugin` and is loaded by the host. |
+| **PluginId** | The stable identity of a plugin. A dotted snake_case string, e.g. `rorolala.file_system`. |
+| **Dock** | A panel hosted in the dock area. Identified by a globally unique `DockNameId`. |
+| **Entry** | A filesystem item shown by the browser: a file or a directory. |
+| **nameid** | A stable, human-readable identifier (used for plugins and docks) as opposed to a runtime numeric handle. |
+
+## 3. Architecture
+
+### 3.1 Host kernel
+
+The host owns exactly this, and no more:
+
+- the application window, the always-present top menu bar, and the dock area;
+- the plugin loader and the plugin manager;
+- configuration loading and validation;
+- the `rola` capability service (`IRola`);
+- i18n aggregation, theming, and logging;
+- the open pipeline.
+
+Anything that can be a plugin is a plugin. The two exceptions are the **plugin manager** and the
+**log**, which are kernel because the program must remain diagnosable and recoverable.
+
+### 3.2 Contract assembly
+
+All extension points are declared in one assembly, `RorolalaDesktop.Contract`. Both the host and
+every plugin reference it. The contract assembly is the only interface between them; the host does
+not expose its own internal types.
+
+Because plugins manipulate Avalonia controls directly (Section 3.3), the contract also references
+Avalonia. The contract assembly version and the Avalonia version together form the **plugin ABI**
+(Section 4.4).
+
+### 3.3 Plugins
+
+- Plugins are .NET assemblies (`.dll` on every platform).
+- Plugins are loaded with a custom `AssemblyLoadContext`.
+- Plugins **may manipulate Avalonia controls directly**. The contract does not hide the UI toolkit.
+  This is a deliberate trade: it keeps the contract small and lets plugin authors write real UI,
+  at the cost of coupling every plugin to the Avalonia version named by the contract.
+- A plugin declares its identity, display-name key, contract version, and dependencies
+  (Section 4.2).
+- A plugin receives the host services through `IPluginHost` at initialization (Section 16).
+
+### 3.4 Shared and private assemblies
+
+The load context delegates the following to the host's default load context, so that there is
+exactly one copy of each in the process:
+
+- the contract assembly, `RorolalaDesktop.Contract`;
+- Avalonia and its satellites;
+- the .NET base class libraries.
+
+Everything else resolves from the plugin's own directory. Resolving Avalonia or the contract
+privately would produce a second, incompatible copy of those types; a `Control` built by such a copy
+is not the host's `Control` and cannot be inserted into the host's visual tree.
+
+## 4. Plugin Model
+
+### 4.1 Discovery
+
+- The host scans the `plugins/` directory beside the program executable for plugin assemblies.
+- A plugin assembly contains exactly one type implementing `IRolaPlugin`.
+- Discovery is by assembly, not by the configuration file. `plugins.json` records user state for
+  plugins that have been discovered; it never lists where a plugin lives.
+
+### 4.2 Identity and manifest
+
+Every plugin exposes a `PluginManifest`:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `Id` | `PluginId` | Stable identity. Globally unique. |
+| `DisplayNameKey` | `string` | An i18n key; the host renders it to obtain the plugin's display name. |
+| `ContractVersion` | `Version` | The contract version the plugin was compiled against. |
+| `Dependencies` | `IReadOnlyList<PluginId>` | Other plugins that must be loaded first. |
+
+`PluginId` grammar: `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$` — dotted snake_case segments, for
+example `rorolala.file_system`. The identifier is permanent: it is written into user configuration
+and into dock layout, so it must not change once shipped.
+
+### 4.3 Assembly loading
+
+- One `PluginLoadContext` is used for all plugin assemblies. A single context keeps a shared
+  private dependency to one copy, so two plugins that depend on the same library see the same
+  types. Per-plugin isolation is not a goal because plugins may depend on one another.
+- The context delegates shared assemblies (Section 3.4) to the default load context and resolves
+  everything else from the plugin directories.
+- The host **does not support unloading** a plugin assembly in-process. Enabling, disabling, or
+  reordering plugins takes effect on the next start (Section 4.6).
+
+### 4.4 Contract and Avalonia version check
+
+At load, the host compares:
+
+- the plugin's `ContractVersion` against the host's contract version;
+- the plugin's referenced Avalonia version against the host's Avalonia version.
+
+On a mismatch the host **refuses to load that plugin** and reports it (Section 14.2). It does not
+attempt to load it and fail later at first use.
+
+### 4.5 Dependencies and load order
+
+- Dependencies are declared by the plugin, never by the user.
+- The host checks dependencies at startup:
+  - a dependency that is not discovered, or is disabled, or failed to load;
+  - a dependency cycle.
+  Each is a **validation failure** and is fatal (Section 5.4).
+- Load order is: dependency topological order first; within one dependency tier, the user `order`
+  from `plugins.json`; ties broken by `PluginId` ordinal order, so the result is deterministic.
+- A user ordering that contradicts the dependency order is **not fatal**. The host keeps the
+  correct topological order and reports, in the plugin manager, "X must come after Y". This
+  satisfies both requirements: the user is told who must follow whom, and a mere ordering mistake
+  does not prevent the program from starting.
+
+### 4.6 Lifecycle and reload
+
+1. The host parses its own arguments (`-Lang:`, `-CurrentDir:`).
+2. It loads and validates `preference.json` and `plugins.json`.
+3. It discovers plugins and validates them against the configuration.
+4. It computes the load order and loads the assemblies.
+5. It calls `IRolaPlugin.Initialize(IPluginHost)` on each plugin in load order.
+6. Plugins register extension points during initialization.
+7. The host applies the theme, resolves the language, and shows the window.
+
+Enable/disable and order changes are written to `plugins.json` by the plugin manager and take
+effect on the next start. There is no hot reload and no unload.
+
+## 5. Configuration
+
+### 5.1 Location
+
+Both files live under the user's data directory, following the same convention as the `rola`
+command line, whose user-level key directory is `rola/keys` under that root. On Linux this is:
+
+```text
+~/.local/share/rola/desktop/plugins.json
+~/.local/share/rola/desktop/preference.json
+```
+
+The exact root is whatever the platform's data-directory resolution returns; `dirs` semantics
+apply, and `~/.local/share` is the Linux form only.
+
+### 5.2 plugins.json
+
+`plugins.json` stores **user state only**. It does not list plugin paths, dependencies, contract
+versions, or display names — those are declared by the plugin itself.
+
+```json
+{
+  "_version": 1,
+  "plugins": {
+    "rorolala.file_system": { "enabled": true, "order": 0 },
+    "rorolala.shelf":       { "enabled": true, "order": 1 }
+  }
+}
+```
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `_version` | integer | yes | Schema version. Currently `1`. |
+| `plugins` | object | yes | Map of `PluginId` to a state entry. |
+| `plugins.<id>.enabled` | boolean | no | Whether the plugin loads. Defaults to `true`. |
+| `plugins.<id>.order` | integer | no | User ordering within one dependency tier. Defaults to `0`. |
+
+If the file does not exist, the host treats every discovered plugin as enabled with order `0` and
+writes a default file. A missing file is not a validation failure; an unreadable or invalid one is.
+
+### 5.3 preference.json
+
+```json
+{
+  "_version": 1,
+  "theme": "rorolala.theme.default",
+  "language": "zh-CN",
+  "plugin": {
+    "rorolala.file_system": { "view": "tree" }
+  }
+}
+```
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `_version` | integer | yes | Schema version. Currently `1`. |
+| `theme` | string | no | Theme provider id. `"fluent"` means FluentTheme alone. Defaults to `rorolala.theme.default`. |
+| `language` | string | no | Fallback locale, used only when `rola desktop` passes no `-Lang:`. |
+| `plugin` | object | no | Per-plugin configuration, keyed by `PluginId`. The host does not interpret the contents. |
+
+If the file does not exist, the host uses the defaults above and writes it. A missing file is not a
+validation failure; an unreadable or invalid one is.
+
+A plugin reads its own section through `IPluginConfig.ReadKeyAs<T>(key)` (Section 16). The host
+never interprets plugin keys.
+
+### 5.4 Validation and failure
+
+The following are **fatal**: the reason is written to standard error and the process exits with the
+code in Section 5.5.
+
+- `plugins.json` or `preference.json` is unreadable, malformed, or not valid JSON;
+- `_version` is absent or names a version the host does not support;
+- a `PluginId` key is repeated, or names no discovered plugin;
+- a declared dependency is missing, disabled, or forms a cycle;
+- `preference.json` names a theme that no provider supplies.
+
+The following are **not fatal**:
+
+- a user `order` that contradicts the dependency order (reported in the plugin manager);
+- a plugin that fails the contract or Avalonia version check (that plugin is not loaded);
+- a plugin that throws during initialization (that plugin is not loaded).
+
+### 5.5 Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Clean exit. |
+| `1` | `plugins.json` failed to load or validate. |
+| `2` | `preference.json` failed to load or validate. |
+| `3` | `preference.json` references a theme or plugin that is not available. |
+
+The code is accompanied by a human-readable reason on standard error. No dialog is used: a failure
+at this stage happens before the window exists.
+
+### 5.6 Startup sequence
+
+The order of Section 4.6 is normative. In particular, plugins are loaded before the theme is
+applied, because the selected theme may be supplied by a plugin.
+
+## 6. Extension Points
+
+### 6.1 Overview
+
+A plugin receives `IPluginHost` at initialization and registers through it. The extension points
+are:
+
+| # | Extension point | Registered through |
+| --- | --- | --- |
+| 1 | Languages | `IPluginHost.I18n` |
+| 2 | Themes | `IPluginHost.Themes` |
+| 3 | Context menus | `IPluginHost.ContextMenus` |
+| 4 | Navigation buttons | `IPluginHost.Navigation` |
+| 5 | Docks | `IPluginHost.Docks` |
+| 6 | Open hooks and icon badges | `IPluginHost.OpenHooks`, `IPluginHost.IconBadges` |
+| 7 | Top menu | `IPluginHost.Menu` |
+
+Registration happens during `Initialize`. A plugin registered after the window is shown is not
+supported.
+
+### 6.2 Top menu
+
+- The top menu bar is **always present**.
+- The host provides:
+  - `File / Open Directory`;
+  - `Window /`, populated from the registered docks. A dock with open mode `Toggle` appears as a
+    toggle; a dock with open mode `New` appears as a create entry.
+  - `Window / Plugin Manager` (kernel, always present);
+  - `Window / Log` (kernel, always present).
+- A plugin may add top-level menus and items, addressed by a menu path. Menu labels are i18n keys.
+- A plugin that injects into File System must declare a dependency on the File System plugin
+  (Section 4.5).
+
+### 6.3 Context menus
+
+A plugin registers items for one or more of three contexts:
+
+- **Directory** — right-click on a directory;
+- **File** — right-click on a file;
+- **Empty space** — right-click on empty area.
+
+Each item carries a label key, an order, an optional icon, and a command invoked with the
+`ContextTarget` that was right-clicked. Items from different plugins are ordered by plugin load
+order and then by the item's order value.
+
+### 6.4 Navigation buttons
+
+A plugin may add buttons to the navigation area: a label or icon key, an order, and a command
+invoked with the current directory.
+
+### 6.5 Docks
+
+See Section 7.
+
+### 6.6 Open hooks
+
+See Section 8.
+
+### 6.7 Icon badges
+
+See Section 9.
+
+### 6.8 Themes
+
+A plugin may register an `IThemeProvider` (Section 10). The selected theme is named in
+`preference.json`.
+
+### 6.9 Languages
+
+A plugin registers a translation directory (Section 11). It may also register additional locales
+for a language picker.
+
+## 7. Dock System
+
+### 7.1 Registration
+
+A dock is registered with a `DockRegistration`:
+
+| Field | Meaning |
+| --- | --- |
+| `Owner` | The registering `PluginId` (the kernel for core docks). |
+| `DockNameId` | Globally unique stable id, by convention `<plugin-id>.<dock>`. Used for layout persistence and for the `Window` menu. |
+| `DisplayNameKey` | i18n key for the dock title. |
+| `OpenMode` | `Toggle` or `New` (Section 7.2). |
+| `DefaultPlacement` | The placement used when the dock is created without an explicit one (Section 7.2). |
+| `Create` | Factory producing a new dock view for a requested placement. |
+
+### 7.2 Open modes and placement
+
+- `OpenMode.Toggle` — at most one instance exists. Activating it from the menu or the manager shows
+  or hides it. The instance is keyed by `DockNameId`.
+- `OpenMode.New` — every activation creates a new instance. File System uses `New`; this is what
+  "copyable" means.
+- `DockPlacement` is one of `Left`, `Right`, `Bottom`, `Center`, `Float`.
+- The default placement is declared for each creation: the factory receives the requested
+  placement, which defaults to the registration's `DefaultPlacement`.
+
+### 7.3 Instances and layout persistence
+
+- Each live instance has a runtime handle assigned by the host. The handle is never written to
+  configuration.
+- Layout persistence uses the stable `DockNameId` plus an instance ordinal, so the set of open
+  docks, their placements, and their sizes survive a restart.
+- Because a `New` dock may have several instances, the persisted form records an ordinal per
+  `DockNameId`.
+
+### 7.4 Core docks
+
+| Dock | DockNameId | Open mode | Notes |
+| --- | --- | --- | --- |
+| Plugin Manager | `rorolala.core.plugin_manager` | Toggle | Kernel. Cannot be disabled. Enabled/disabled state and ordering of plugins are edited here. |
+| Log | `rorolala.core.log` | Toggle | Kernel. Unity-style output at levels Trace, Debug, Info, Warn, Error (Section 12). |
+
+Both are always available from `Window`.
+
+### 7.5 Bundled plugin docks
+
+| Dock | Plugin | Open mode | Content |
+| --- | --- | --- | --- |
+| File System | `rorolala.file_system` | `New` | Views: Tree, Grid, List. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
+
+The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
+
+## 8. Open Hook Pipeline
+
+### 8.1 Request state
+
+An open is performed on an `OpenRequest`:
+
+| Field | Meaning |
+| --- | --- |
+| `Target` | The entry being opened (path, kind). |
+| `Verdict` | `Continue` or `Reject`. |
+| `RejectReasonKey` | i18n key explaining a rejection. |
+| `State` | A mutable bag for hooks to pass values forward. |
+
+### 8.2 Stages and order
+
+The pipeline runs in stages, in this order:
+
+1. **CanOpen** — each hook may reject.
+2. **BeforeOpen** — each hook may transform the request or reject.
+3. The host performs the open.
+4. **AfterOpen** — each hook is notified; it cannot reject.
+
+Within a stage, hooks run in plugin load order (Section 4.5). A hook receives the request as
+produced by its predecessor, and returns the request to pass on. A hook may therefore change what
+later hooks see.
+
+### 8.3 Rejection
+
+- A hook rejects by setting `Verdict = Reject` (or returning a null request).
+- Rejection is **final**: the open does not happen, and no later hook may overturn it. The pipeline
+  stops.
+
+### 8.4 Exceptions
+
+- A hook that throws is **skipped**. The request passes to the next hook exactly as it was received
+  by the failed hook — never half-modified.
+- The host records the failure, names the skipped plugin, and raises a popup (Section 14.3).
+- A thrown exception is **not** a rejection. The behaviour is deliberately fail-open: a broken hook
+  does not block the user.
+
+### 8.5 After-open
+
+The AfterOpen stage is a notification. It cannot reject and its returned request is ignored; it
+exists for plugins that react to a completed open.
+
+## 9. Icon Badges
+
+- The File System plugin provides the default icon library and composes the final icon.
+- A plugin contributes badges through `IIconBadgeProvider`, which has two methods:
+  1. `Cares(Entry entry)` — a fast, convention-based check of whether the plugin has anything to
+     say about this entry. The result is cached.
+  2. `GetBadge(Entry entry)` — the badge to add, as a position and an icon key. The result is
+     cached.
+- Badges from several providers are placed by **offset**, in provider order. Overlap and overflow
+  are permitted; no clipping rule is imposed.
+- Caches live for the session and are invalidated on restart. Because a restart is also how plugins
+  are reloaded, this is sufficient.
+
+## 10. Theming
+
+- `FluentTheme` is **always loaded as the base theme**. Avalonia controls require it.
+- The theme named by `preference.json` is applied as an **overlay** on top of the base.
+- `RorolalaTheme` is a **built-in** theme provider, not a plugin. It is currently a Simple
+  placeholder: fonts, spacing, and accent colour only. It is the default value of `theme`.
+- A plugin-provided theme is treated identically to a built-in theme; only its origin differs.
+- The value `"fluent"` selects FluentTheme with no overlay.
+- If the named theme has no provider, the program exits with code `3` (Section 5.5).
+- A theme change takes effect on the next start.
+
+## 11. Internationalization
+
+- The host reads translations in the format already used by the command line: YAML files under a
+  directory, one node per key, each leaf a locale-to-form mapping, `%{name}` placeholders filled by
+  position. `RolaI18N` in `utils/desktop-i18n` is the existing reader.
+- `RolaI18N` is extended from one translation directory to **several**:
+  - the host registers its own directory first;
+  - each plugin registers its own directory during initialization, in load order.
+- Merge rule: **first registration wins**. A key already supplied is not replaced by a later
+  directory.
+- Every plugin key is namespaced. The prefix is the plugin's `PluginId` in snake_case, that is, the
+  dotted id with `.` replaced by `_`. For `rorolala.file_system` the prefix is
+  `rorolala_file_system`, and the plugin's display name key might be
+  `rorolala_file_system.name`. The prefix is a writing convention that prevents collisions; it is
+  not the merge mechanism.
+- Locale fallback is `en`. A key that no file states, or that is stated in no language the program
+  speaks, reads as the key itself.
+- The language is chosen by the command line and passed to the program as `-Lang:`. When the
+  program is started on its own, `preference.json`'s `language` is the fallback.
+
+## 12. Logging
+
+- The kernel provides a Log dock (`Window / Log`) with five levels, ordered Trace, Debug, Info,
+  Warn, Error.
+- Plugins log through `IPluginHost.Log`.
+- The Log dock displays entries with their level, source plugin, message, and repeat count. It is a
+  view over the host's log, not a second logging system.
+- Log entries and popups share one deduplication service (Section 14.3): a repeated notification
+  increments a count instead of adding a line or a second popup.
+
+## 13. Rorolala Capability Injection
+
+- The host exposes `IRola` to plugins, implemented over the existing C ABI (`librorolala`), which
+  is built from `app/ffi` over the `#[lazyffi]` exports.
+- Plugins call `IRola`. They do not invoke the `rola` command line, and they do not reimplement
+  Rorolala semantics.
+- The initial surface, corresponding to what the C ABI exports today:
+  - locate a Workspace; locate a Vault; create either;
+  - locate, find, count, and read members and accounts;
+  - run the `handshake` and `sync_all` actions;
+  - start the Vault daemon;
+  - read Workspace and Vault configuration.
+- **Known gap:** file-level storage operations (`storage write-file`, `storage extract-file`,
+  `pack`) exist only in the command line and have no C ABI export yet. A plugin that needs them
+  must wait for those exports; this specification does not permit shelling out as a workaround.
+
+## 14. Failure Model
+
+### 14.1 Fatal failures
+
+Fatal failures are those in Section 5.4. They write a reason to standard error and exit with the
+code from Section 5.5. The program does not attempt to show a window, and it does not fall back to
+a default configuration. This is deliberate: a silently ignored configuration error is worse than
+a loud stop, and the files are plain JSON that a person can edit.
+
+The known cost: the plugin manager, which is the natural place to repair plugin configuration, is
+itself inside the program that refuses to start. Recovery is by editing the file, guided by the
+reason on standard error.
+
+### 14.2 Non-fatal failures
+
+The following do not stop the program:
+
+- a plugin failing the contract or Avalonia version check — it is not loaded, and its dependents
+  are not loaded;
+- a plugin throwing during initialization — it is not loaded, and its dependents are not loaded;
+- a plugin contradicting the load order — the correct order is kept and the plugin manager reports
+  who must follow whom;
+- an open hook throwing — it is skipped (Section 8.4).
+
+They are reported in the Log dock and, where the user must act, in a popup.
+
+### 14.3 Popup and log deduplication
+
+- The kernel has **one** deduplication service, shared by popups and by the Log dock. There is no
+  second mechanism.
+- A notification is identified by a **hash of its combined content**: level, source, message, and
+  the values formatted into it.
+- Identical content is deduplicated. A popup is shown once; the Log dock keeps one entry and
+  increments its repeat count.
+- Content that differs by even a little is a distinct notification: a new popup is shown and a new
+  log entry is recorded.
+- Distinctness is scoped to one session; a restart starts with an empty table.
+
+## 15. Configuration Reference
+
+### plugins.json
+
+```jsonc
+{
+  "_version": 1,
+  "plugins": {
+    "<PluginId>": { "enabled": true, "order": 0 }
+  }
+}
+```
+
+### preference.json
+
+```jsonc
+{
+  "_version": 1,
+  "theme": "rorolala.theme.default",   // or "fluent", or a plugin theme id
+  "language": "zh-CN",                 // fallback only
+  "plugin": {
+    "<PluginId>": { "<key>": "<value>" }
+  }
+}
+```
+
+### Data directory
+
+```text
+<user data dir>/rola/desktop/plugins.json
+<user data dir>/rola/desktop/preference.json
+```
+
+## 16. Contract Reference
+
+The following is the contract surface. Names are part of the contract assembly version.
+
+```csharp
+namespace RorolalaDesktop.Contract;
+
+public readonly record struct PluginId(string Value);
+
+public sealed record PluginManifest(
+    PluginId Id,
+    string DisplayNameKey,
+    Version ContractVersion,
+    IReadOnlyList<PluginId> Dependencies);
+
+public interface IRolaPlugin
+{
+    PluginManifest Manifest { get; }
+    void Initialize(IPluginHost host);
+}
+
+public interface IPluginHost
+{
+    ILog Log { get; }
+    II18n I18n { get; }
+    IRola Rola { get; }
+    IPluginConfig Config { get; }
+    IMenuRegistry Menu { get; }
+    IContextMenuRegistry ContextMenus { get; }
+    INavigationRegistry Navigation { get; }
+    IDockRegistry Docks { get; }
+    IOpenHookRegistry OpenHooks { get; }
+    IIconBadgeRegistry IconBadges { get; }
+    IThemeRegistry Themes { get; }
+}
+
+public interface II18n
+{
+    void RegisterDirectory(string directory);
+}
+
+public interface IPluginConfig
+{
+    T? ReadKeyAs<T>(string key, T? fallback = default);
+}
+
+public interface IRola { /* Section 13 */ }
+
+public interface ILog
+{
+    void Trace(string message);
+    void Debug(string message);
+    void Info(string message);
+    void Warn(string message);
+    void Error(string message);
+}
+
+public enum ContextMenuTarget { Directory, File, EmptySpace }
+
+public interface IContextMenuRegistry
+{
+    void Add(ContextMenuTarget target, ContextMenuItem item);
+}
+
+public sealed record ContextMenuItem(
+    string LabelKey,
+    int Order,
+    Action<ContextTarget> Command);
+
+public interface IMenuRegistry
+{
+    void AddTopLevel(string labelKey, int order);
+    void AddItem(string menuPath, MenuItem item);
+}
+
+public enum DockOpenMode { Toggle, New }
+public enum DockPlacement { Left, Right, Bottom, Center, Float }
+
+public sealed record DockRegistration(
+    PluginId Owner,
+    string DockNameId,
+    string DisplayNameKey,
+    DockOpenMode OpenMode,
+    DockPlacement DefaultPlacement,
+    Func<DockPlacement, IDockView> Create);
+
+public interface IDockView
+{
+    Avalonia.Controls.Control View { get; }
+    IReadOnlyList<DockHeaderCommand> HeaderCommands { get; }
+}
+
+public enum OpenStage { CanOpen, BeforeOpen, AfterOpen }
+
+public sealed class OpenRequest
+{
+    public required Entry Target { get; init; }
+    public OpenVerdict Verdict { get; set; } = OpenVerdict.Continue;
+    public string? RejectReasonKey { get; set; }
+    public IDictionary<string, object?> State { get; } = new Dictionary<string, object?>();
+}
+
+public enum OpenVerdict { Continue, Reject }
+
+public interface IOpenHook
+{
+    OpenStage Stage { get; }
+    OpenRequest? OnOpen(OpenRequest request); // null => reject; throw => skip
+}
+
+public interface IIconBadgeProvider
+{
+    bool Cares(Entry entry);
+    Badge? GetBadge(Entry entry);
+}
+
+public sealed record Badge(int Position, string IconKey);
+
+public interface IThemeProvider
+{
+    string ThemeId { get; }
+    IReadOnlyList<Avalonia.Styling.IStyle> Styles { get; }
+}
+```
+
+## 17. Feel and Interaction Craft
+
+Users operate Desktop in long, high-intensity sessions. **Feel is a first-class requirement**, not
+polish applied at the end: response latency, keyboard flow, focus and selection behaviour, dock
+resizing, scrolling, and the absence of surprise count as much as correctness does.
+
+This section is deliberately a placeholder. The concrete criteria — what must be instant, what must
+never move under the cursor, what the keyboard must always be able to reach — are to be worked out
+**with the user**, and recorded here. Until they are, no decision may trade feel away for
+implementation convenience without raising it explicitly.
+
+## 18. Non-Goals
+
+- Desktop does not implement version-control semantics; those live in `rola` and in plugins.
+- Desktop does not support in-process plugin unloading or hot reload.
+- Desktop does not sandbox plugins. A plugin is trusted code in the host process.
+- Desktop does not provide a neutral UI description layer; plugins use Avalonia directly.
+- Desktop does not shell out to the `rola` command line to obtain capabilities.
+
+## 19. Open Items
+
+1. The real design of `RorolalaTheme`, replacing the Simple placeholder.
+2. The concrete feel criteria (Section 17), to be agreed with the user.
+3. The contract assembly versioning policy: increment rule and compatibility range.
+4. The JSON schema versioning policy for `plugins.json` and `preference.json`.
+5. The persisted dock-layout file format (placement and sizes per `DockNameId` and ordinal).
+
+## 20. References
+
+- `app/ffi` and `src/lib.rs` — the C ABI surface used by `IRola`.
+- `utils/desktop-i18n` — `RolaI18N`, the translation reader to be extended for several directories.
+- `app/cli/rola/src/cmd_desktop.rs` — how the command line starts this program and hands over the
+  language and the current directory.
+- `AGENTS.md` — repository conventions, including the English rule for documentation.
