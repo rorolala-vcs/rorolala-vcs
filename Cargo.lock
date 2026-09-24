@@ -1842,6 +1842,7 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "serde",
+ "tokio",
  "toml 0.8.23",
 ]
 

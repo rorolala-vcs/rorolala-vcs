@@ -23,9 +23,84 @@ use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
 use super::entry::{collect, is_directory, read_range, sync_directory, write_whole_durably};
 use super::paths::index_of_pack;
-use crate::{Error, Key, PackEntry, PackIndex};
+use crate::{Error, Key, LockingGuard, PackEntry, PackIndex};
+
+impl LockingGuard<RorolalaStorage> {
+    /// Packs the loose entries stored under `keys`, of either kind, into packs of their own.
+    ///
+    /// This is packing with the store's lock held, and the lock is what this is for: a pack is read,
+    /// changed and written back, so two runs doing that at once would each write a pack that had
+    /// forgotten the other's. The guard holds the lock for the whole of the packing, so a run with a
+    /// guard is the only one packing — a run that would rather not wait for another finds the store
+    /// locked and is told so.
+    ///
+    /// What a pack holds is each entry exactly as it sat loose — the frame and all — so an entry that
+    /// moves into a pack is the same bytes in a different place, and every read that worked before it
+    /// moved works after. This is the whole of why packing is safe to do at any time and safe to leave
+    /// undone: nothing about an entry depends on how many of them share a file.
+    ///
+    /// A key may be loose as an object, as a manifest, or as both, and the two are different entries:
+    /// each is packed unless a pack of its own kind already names it. What is written goes into as many
+    /// packs as the store's `max_pack_size` allows — one kind of entry to a pack — so a batch larger
+    /// than that limit is laid down as several packs rather than one file no bound holds. A batch with
+    /// nothing loose among it makes no pack at all.
+    ///
+    /// Whether a pack was made is all this answers: the number a pack was given is the store's own
+    /// business, and what a caller wanted to know is whether the entries it handed over changed
+    /// anything.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the pack or its index cannot be written, and [`Error::Malformed`]
+    /// if a path it needs cannot be named.
+    pub async fn pack(&self, keys: &[Key]) -> Result<bool, Error> {
+        let store: &RorolalaStorage = self;
+
+        store.pack(keys).await
+    }
+
+    /// Lays the store's entries out afresh, so that as few packs hold them as the size limit allows.
+    ///
+    /// This is [`pack`](Self::pack) widened to the whole store, and it is held the same way: the
+    /// laying out happens with the store's lock on, so it is not done twice at once, and a run that
+    /// cannot take the lock is told rather than left to write over another's work.
+    ///
+    /// Where packing puts the loose entries of a batch into packs, this takes the whole of what the
+    /// store holds — the entries of every pack, and every loose entry, of either kind — and writes it
+    /// again, merging the packs there are into one wherever they fit under the store's `max_pack_size`
+    /// and starting another where they do not. What each entry *is* does not change: an entry is
+    /// written byte for byte as it was, so every read that worked before works after, whatever packs
+    /// there were.
+    ///
+    /// A store already laid out the way this would lay it out is left alone and answered with `false`,
+    /// so running this twice in a row rewrites nothing the second time. A pack whose index does not
+    /// read is left where it is: what it holds cannot be read here to be written again, and dropping it
+    /// would drop the only copy.
+    ///
+    /// The new packs are written and made durable before any old one is dropped, so a reader that
+    /// arrives in the middle of this finds every entry in the packs it already knew; the old packs go
+    /// last, their indexes first. A store interrupted here is a store holding a pack too many rather
+    /// than one holding an entry too few.
+    ///
+    /// What the store is left with is numbered from nothing and without a gap, so packing a store over
+    /// and over does not climb a number that says how often it was packed. The directories the loose
+    /// entries sat in, empty once they moved, go as well.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written, and
+    /// [`Error::Malformed`] if a path it needs cannot be named.
+    pub async fn repack(&self) -> Result<bool, Error> {
+        let store: &RorolalaStorage = self;
+
+        store.repack().await
+    }
+}
 
 impl RorolalaStorage {
+    /// The packing itself, with no lock around it: reach it through [`LockingGuard::pack`], which
+    /// holds the store against another run for the whole of the work.
+    ///
     /// Packs the loose entries stored under `keys`, of either kind, into packs of their own.
     ///
     /// What a pack holds is each entry exactly as it sat loose — the frame and all — so an entry that
@@ -40,9 +115,10 @@ impl RorolalaStorage {
     /// holds. A batch with nothing loose among it makes no pack at all.
     ///
     /// Packs are changed under one lock in this process — see `root_state` — so two packings here
-    /// cannot both take one key; two *processes* working one store still can, and what holds the store
-    /// together then is [`remove`](crate::StorageBackend::remove), which asks every pack that names the
-    /// key rather than the first.
+    /// cannot both take one key. Keeping two *processes* apart is the caller's side of it, which is
+    /// what [`LockingGuard::pack`] is: what holds a store together when an entry is taken away while
+    /// another run reads is [`remove`](crate::StorageBackend::remove), which asks every pack that
+    /// names the key rather than the first.
     ///
     /// Whether a pack was made is all this answers: the number a pack was given is the store's own
     /// business, and what a caller wanted to know is whether the entries it handed over changed
@@ -52,7 +128,7 @@ impl RorolalaStorage {
     ///
     /// Returns [`Error::Io`] if the pack or its index cannot be written, and [`Error::Malformed`]
     /// if a path it needs cannot be named.
-    pub async fn pack(&self, keys: &[Key]) -> Result<bool, Error> {
+    pub(crate) async fn pack(&self, keys: &[Key]) -> Result<bool, Error> {
         // Changing a store's packs is one at a time within this process: what a pack holds is read,
         // changed and written back, so two changes at once would each write one that has forgotten
         // the other. See `root_state`.
@@ -114,6 +190,8 @@ impl RorolalaStorage {
         Ok(!written.is_empty())
     }
 
+    /// The laying out itself, with no lock around it: reach it through [`LockingGuard::repack`].
+    ///
     /// Lays the store's entries out afresh, so that as few packs hold them as the size limit allows.
     ///
     /// Where [`pack`](Self::pack) puts the loose entries of a batch into packs, this takes the whole of
@@ -141,7 +219,7 @@ impl RorolalaStorage {
     ///
     /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written, and
     /// [`Error::Malformed`] if a path it needs cannot be named.
-    pub async fn repack(&self) -> Result<bool, Error> {
+    pub(crate) async fn repack(&self) -> Result<bool, Error> {
         // Packs are changed one at a time within this process, the same as any other change to them —
         // see `root_state`.
         let state = self.root_state();

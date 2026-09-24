@@ -20,3 +20,11 @@ business, so what a caller hands over and gets back does not change when the bac
 Where a store puts what it keeps is its own business too: the paths are not part of this boundary.
 What a test has to see of the placing is in [`internals`](internals), which is a store's own view of
 itself rather than something a caller asks for.
+
+## Locking
+
+A store is changed one run at a time: [`Lockable::lock`] hands out a [`LockingGuard`] that holds the
+store for as long as it lives. The changes that need that — [`LockingGuard::pack`] and
+[`LockingGuard::repack`], which read a store's packs, change them and write them back — are reached
+through a guard and nowhere else, so a run that would lose another's work cannot start the work at
+all.

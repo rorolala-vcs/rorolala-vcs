@@ -11,6 +11,7 @@ rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
 serde.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 toml.workspace = true

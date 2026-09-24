@@ -14,8 +14,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use librorolala::storage::{
-    AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_MAGIC, Key, PackEntry, PackIndex,
-    RorolalaStorage, StorageBackend as _, internals::Internals as _,
+    AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_MAGIC, Key, Lockable as _, PackEntry,
+    PackIndex, RorolalaStorage, StorageBackend as _, internals::Internals as _,
 };
 use rorolala_utils_sandbox::Sandbox;
 
@@ -27,7 +27,7 @@ async fn main() {
     packing_moves_objects_into_a_pack(&sandbox, &mut checked).await;
     packing_leaves_the_pack_as_one_run_of_entries(&sandbox, &mut checked).await;
     packing_what_is_packed_already_makes_no_pack(&sandbox, &mut checked).await;
-    two_packs_at_once_take_two_numbers(&sandbox, &mut checked).await;
+    a_store_being_packed_is_not_packed_again(&sandbox, &mut checked).await;
     a_number_already_taken_is_passed_over(&sandbox, &mut checked).await;
     a_key_a_pack_names_is_not_packed_again(&sandbox, &mut checked).await;
     a_key_packed_at_once_is_taken_from_every_pack(&sandbox, &mut checked).await;
@@ -73,7 +73,13 @@ async fn packing_moves_objects_into_a_pack(sandbox: &Sandbox, checked: &mut Chec
         "the objects were not all loose",
     );
 
-    let made = store.pack(&keys).await.expect("the objects are packed");
+    let made = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&keys)
+        .await
+        .expect("the objects are packed");
     checked.wants("packing a batch makes a pack", made, &format!("{made}"));
     checked.wants(
         "the pack it made is the first",
@@ -133,7 +139,13 @@ async fn packing_leaves_the_pack_as_one_run_of_entries(sandbox: &Sandbox, checke
         keys.push(written(&store, content).await);
     }
 
-    store.pack(&keys).await.expect("the objects are packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&keys)
+        .await
+        .expect("the objects are packed");
 
     let (pack_path, _) = store.pack_paths(0);
     let pack = fs::read(&pack_path).expect("the pack is read");
@@ -181,8 +193,17 @@ async fn packing_what_is_packed_already_makes_no_pack(sandbox: &Sandbox, checked
         keys.push(written(&store, content).await);
     }
 
-    let first = store.pack(&keys).await.expect("the objects are packed");
+    let first = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&keys)
+        .await
+        .expect("the objects are packed");
     let again = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&keys)
         .await
         .expect("the objects are packed again");
@@ -196,6 +217,9 @@ async fn packing_what_is_packed_already_makes_no_pack(sandbox: &Sandbox, checked
 
     let next = written(&store, b"a later object").await;
     let second = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[next])
         .await
         .expect("the later object is packed");
@@ -208,42 +232,70 @@ async fn packing_what_is_packed_already_makes_no_pack(sandbox: &Sandbox, checked
     );
 }
 
-/// Two packs asked for at once take two numbers, and neither batch loses an object to the other.
+/// A store being packed is not packed again: a run that finds the lock taken is told so.
 ///
-/// A number reached by a directory scan is a number two ends can both reach; the pack file is
-/// created to claim it, so one of the two is turned away and moves on. Without that, the losing
-/// batch's pack is overwritten — and its loose copies are already gone — so this is where the
-/// promise is kept that packing never drops what it moved.
-async fn two_packs_at_once_take_two_numbers(sandbox: &Sandbox, checked: &mut Checked) {
-    let store = store(sandbox, "at-once");
-    let first = written(&store, b"the first batch").await;
-    let second = written(&store, b"the second batch").await;
-    let unique = [first];
-    let later = [second];
+/// A pack is read, changed and written back, so two runs at one store would each write a pack that
+/// had forgotten the other's — and the losing batch's loose copies are gone by the time its pack is
+/// overwritten, so nothing would hold it. Keeping them apart is what the lock is for, and it is one
+/// file at the store's root rather than one per opener: a second store over the same directory is
+/// turned away just the same. Where two packings were once raced for two numbers, what is asked now
+/// is the lock itself — that a run which would rather not wait is told to come back, and that the
+/// store is packable again once the guard goes.
+async fn a_store_being_packed_is_not_packed_again(sandbox: &Sandbox, checked: &mut Checked) {
+    let store = store(sandbox, "being-packed");
+    let key = written(&store, b"the batch").await;
 
-    let (left, right) = tokio::join!(store.pack(&unique), store.pack(&later));
-    let left = left.expect("the first batch is packed");
-    let right = right.expect("the second batch is packed");
+    let guard = store.lock().await.expect("the store is free to lock");
 
     checked.wants(
-        "two packs asked for at once both happen",
-        left && right,
-        &format!("{left} and {right}"),
+        "a store being packed is not locked again",
+        store.lock().await.is_err(),
+        "the store was locked twice",
+    );
+
+    // The lock is one file at the root rather than one per opener, so a store made the same way over
+    // the same directory is the same place, and is refused the same.
+    let other = RorolalaStorage::at(sandbox.join("being-packed"))
+        .expect("the store made a moment ago is found");
+    checked.wants(
+        "another store of one directory is not locked either",
+        other.lock().await.is_err(),
+        "another store over one directory took the lock",
     );
     checked.wants(
-        "the two packs take two numbers",
-        store.packs().await.unwrap_or_default() == [0, 1],
-        "the two packs did not take two numbers",
+        "a store being packed says it is locked",
+        store.is_locking(),
+        "the store did not say it was locked",
+    );
+
+    drop(guard);
+
+    checked.wants(
+        "a store whose guard has gone is not locked",
+        !store.is_locking(),
+        "the store still says it is locked after the guard went",
+    );
+
+    let made = store
+        .lock()
+        .await
+        .expect("the lock is free once the guard has gone")
+        .pack(&[key])
+        .await
+        .expect("the object is packed");
+
+    checked.wants(
+        "the batch is packed once the lock is free",
+        made,
+        &format!("{made}"),
     );
     checked.wants(
-        "the store holds both packs",
-        store.packs().await.unwrap_or_default().len() == 2,
-        "the store does not hold two packs",
-    );
-    checked.wants(
-        "neither batch lost an object to the other",
-        store.read_object(&first).await.is_ok() && store.read_object(&second).await.is_ok(),
-        "an object from one of the batches is not there",
+        "the object packed after the lock was given back reads back",
+        store
+            .read_object(&key)
+            .await
+            .is_ok_and(|read| read == b"the batch"),
+        "the packed object did not read back",
     );
 }
 
@@ -257,7 +309,13 @@ async fn a_number_already_taken_is_passed_over(sandbox: &Sandbox, checked: &mut 
     fs::write(&orphan, b"an orphan pack").expect("the orphan pack is written");
 
     let key = written(&store, b"the object").await;
-    let made = store.pack(&[key]).await.expect("the object is packed");
+    let made = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&[key])
+        .await
+        .expect("the object is packed");
 
     checked.wants("the object is packed", made, &format!("{made}"));
     checked.wants(
@@ -290,11 +348,20 @@ async fn a_key_a_pack_names_is_not_packed_again(sandbox: &Sandbox, checked: &mut
     let content = b"the object";
     let key = written(&store, content).await;
 
-    store.pack(&[key]).await.expect("the object is packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&[key])
+        .await
+        .expect("the object is packed");
 
     // The loose copy is written again, as a run that stopped before dropping it would leave it.
     let _again = written(&store, content).await;
     let packed = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[key])
         .await
         .expect("the object is packed again");
@@ -320,7 +387,13 @@ async fn a_key_a_pack_names_is_not_packed_again(sandbox: &Sandbox, checked: &mut
 async fn a_key_packed_at_once_is_taken_from_every_pack(sandbox: &Sandbox, checked: &mut Checked) {
     let store = store(sandbox, "every-pack");
     let key = written(&store, b"the object").await;
-    store.pack(&[key]).await.expect("the object is packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&[key])
+        .await
+        .expect("the object is packed");
 
     // A second pack naming the same key, as two packs written for it at once would leave.
     let directory = store
@@ -399,7 +472,13 @@ async fn two_removes_at_once_both_take_effect(sandbox: &Sandbox, checked: &mut C
         keys.push(written(&store, content).await);
     }
 
-    store.pack(&keys).await.expect("the objects are packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&keys)
+        .await
+        .expect("the objects are packed");
     let (first, second) = (keys[1], keys[4]);
 
     let (left, right) = tokio::join!(store.remove(&first), other.remove(&second));
@@ -454,7 +533,13 @@ async fn two_removes_at_once_both_take_effect(sandbox: &Sandbox, checked: &mut C
 async fn a_pack_whose_index_does_not_read_is_reported(sandbox: &Sandbox, checked: &mut Checked) {
     let store = store(sandbox, "reported");
     let key = written(&store, b"the object").await;
-    store.pack(&[key]).await.expect("the object is packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&[key])
+        .await
+        .expect("the object is packed");
 
     checked.wants(
         "a store that holds together reports nothing broken",
@@ -486,7 +571,13 @@ async fn a_pack_that_changes_is_read_afresh(sandbox: &Sandbox, checked: &mut Che
         keys.push(written(&store, content).await);
     }
 
-    store.pack(&keys).await.expect("the objects are packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&keys)
+        .await
+        .expect("the objects are packed");
 
     // Reading one warms whatever was remembered of the pack.
     checked.wants(
@@ -524,6 +615,9 @@ async fn a_pack_changed_by_another_writer_is_read_afresh(sandbox: &Sandbox, chec
     let second = written(&store, b"the object another writer drops").await;
 
     store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[first, second])
         .await
         .expect("the objects are packed");
@@ -567,6 +661,9 @@ async fn a_number_given_back_is_not_answered_with_the_pack_that_had_it(
     let first = written(&store, b"the first object").await;
 
     store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[first])
         .await
         .expect("the first object is packed");
@@ -584,6 +681,9 @@ async fn a_number_given_back_is_not_answered_with_the_pack_that_had_it(
 
     let second = written(&store, b"the second object").await;
     let made = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[second])
         .await
         .expect("the second object is packed");
@@ -621,7 +721,13 @@ async fn a_change_made_through_another_store_is_seen(sandbox: &Sandbox, checked:
         keys.push(written(&store, content).await);
     }
 
-    store.pack(&keys).await.expect("the objects are packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&keys)
+        .await
+        .expect("the objects are packed");
     checked.wants(
         "an object reads back before another store acts",
         store.read_object(&keys[0]).await.is_ok(),
@@ -657,10 +763,16 @@ async fn an_index_that_does_not_read_hides_only_its_own_pack(
     // The pack that is to go wrong is written first, so a read that finds the good pack is one that
     // had to walk past the bad one to get there.
     store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[lost])
         .await
         .expect("the first object is packed");
     store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[kept])
         .await
         .expect("the second object is packed");
@@ -700,10 +812,16 @@ async fn an_index_that_is_gone_hides_only_its_own_pack(sandbox: &Sandbox, checke
     let kept = written(&store, b"the object that is kept").await;
 
     store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[lost])
         .await
         .expect("the first object is packed");
     store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&[kept])
         .await
         .expect("the second object is packed");
@@ -770,7 +888,13 @@ async fn a_content_whose_chunks_were_packed_is_still_whole(
         ),
     );
 
-    store.pack(&chunks).await.expect("the chunks are packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&chunks)
+        .await
+        .expect("the chunks are packed");
 
     checked.wants(
         "packing the chunks leaves none of them loose",
@@ -789,7 +913,13 @@ async fn a_content_whose_chunks_were_packed_is_still_whole(
 
     // What the caller packs is keys; a key held as a manifest has no object of its own, so packing it
     // moves the manifest — into a pack of the manifests — and makes no object of it.
-    let made = store.pack(&[key]).await.expect("the manifest is packed");
+    let made = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&[key])
+        .await
+        .expect("the manifest is packed");
 
     checked.wants(
         "packing a key held as a manifest packs the manifest",
@@ -829,7 +959,13 @@ async fn a_packed_object_can_be_dropped(sandbox: &Sandbox, checked: &mut Checked
         keys.push(written(&store, content).await);
     }
 
-    store.pack(&keys).await.expect("the objects are packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&keys)
+        .await
+        .expect("the objects are packed");
     let gone = keys[2];
 
     store
@@ -898,7 +1034,13 @@ async fn dropping_a_packed_object_leaves_the_pack_bytes_where_they_are(
         keys.push(written(&store, content).await);
     }
 
-    store.pack(&keys).await.expect("the objects are packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&keys)
+        .await
+        .expect("the objects are packed");
     let (pack_path, _) = store.pack_paths(0);
     let before = fs::metadata(&pack_path).expect("the pack is there").len();
 
@@ -937,7 +1079,13 @@ async fn a_pack_left_holding_nothing_is_dropped_whole(sandbox: &Sandbox, checked
     let store = store(sandbox, "empty");
     let key = written(&store, b"the only object").await;
 
-    store.pack(&[key]).await.expect("the object is packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&[key])
+        .await
+        .expect("the object is packed");
     store.remove(&key).await.expect("the object is dropped");
 
     let (pack_path, index_path) = store.pack_paths(0);
@@ -965,10 +1113,16 @@ async fn repacking_merges_the_packs_there_are(sandbox: &Sandbox, checked: &mut C
 
     // Two batches, so the store holdings two packs is where it starts.
     store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&keys[..3])
         .await
         .expect("the first batch is packed");
     store
+        .lock()
+        .await
+        .expect("the store is free to lock")
         .pack(&keys[3..])
         .await
         .expect("the second batch is packed");
@@ -979,7 +1133,13 @@ async fn repacking_merges_the_packs_there_are(sandbox: &Sandbox, checked: &mut C
         "the two batches did not make two packs",
     );
 
-    let merged = store.repack().await.expect("the packs are merged");
+    let merged = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("the packs are merged");
     checked.wants("repacking changes the store", merged, &format!("{merged}"));
     checked.wants(
         "the two packs become one",
@@ -1026,7 +1186,13 @@ async fn repacking_rolls_over_at_the_size_the_store_allows(
         keys.push(written(&store, content).await);
     }
 
-    store.repack().await.expect("the store is laid out");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("the store is laid out");
 
     let packs = store.packs().await.unwrap_or_default();
     checked.wants(
@@ -1079,9 +1245,21 @@ async fn repacking_leaves_a_store_already_laid_out_alone(sandbox: &Sandbox, chec
         keys.push(written(&store, content).await);
     }
 
-    let first = store.repack().await.expect("the store is laid out");
+    let first = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("the store is laid out");
     let packs = store.packs().await.unwrap_or_default();
-    let again = store.repack().await.expect("the store is left alone");
+    let again = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("the store is left alone");
 
     checked.wants(
         "laying a loose store out changes it",
@@ -1122,12 +1300,24 @@ async fn repacking_leaves_a_pack_that_does_not_read_where_it_is(
     let store = store(sandbox, "broken");
     let key = written(&store, b"an object a broken index names").await;
 
-    store.pack(&[key]).await.expect("the object is packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&[key])
+        .await
+        .expect("the object is packed");
 
     let (_, index_path) = store.pack_paths(0);
     fs::write(&index_path, b"not an index").expect("the index is spoiled");
 
-    let changed = store.repack().await.expect("repacking runs");
+    let changed = store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("repacking runs");
 
     checked.wants(
         "repacking does nothing while a pack will not read",
@@ -1156,7 +1346,13 @@ async fn a_manifest_is_packed_with_the_manifests(sandbox: &Sandbox, checked: &mu
         .await
         .expect("the content is stored");
 
-    store.repack().await.expect("the store is laid out");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("the store is laid out");
 
     // Everything under the manifests' own directory is an index: the loose manifests are gone, and
     // what is left is where the manifests that were packed sit.
@@ -1218,7 +1414,13 @@ async fn rewriting_packed_content_leaves_it_packed(sandbox: &Sandbox, checked: &
         .iter()
         .map(Chunk::key)
         .collect();
-    store.pack(&chunks).await.expect("the chunks are packed");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .pack(&chunks)
+        .await
+        .expect("the chunks are packed");
 
     let loose_before = objects(sandbox, "rewrite");
     let again = store
@@ -1276,7 +1478,13 @@ async fn packing_leaves_no_empty_directories(sandbox: &Sandbox, checked: &mut Ch
         .await
         .expect("the content is stored");
 
-    store.repack().await.expect("the store is laid out");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("the store is laid out");
 
     let root = sandbox.join("tidy");
     checked.wants(
@@ -1327,7 +1535,13 @@ async fn repacking_numbers_the_packs_from_nothing(sandbox: &Sandbox, checked: &m
         keys.push(written(&store, content).await);
     }
 
-    store.repack().await.expect("the store is laid out");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("the store is laid out");
     let packs = store.packs().await.unwrap_or_default();
 
     checked.wants(
@@ -1345,7 +1559,13 @@ async fn repacking_numbers_the_packs_from_nothing(sandbox: &Sandbox, checked: &m
     // the number after the packs that are gone.
     fs::write(store.config_path(), "[storage]\nmax_pack_size = \"2GiB\"\n")
         .expect("the configuration is written");
-    store.repack().await.expect("the store is laid out again");
+    store
+        .lock()
+        .await
+        .expect("the store is free to lock")
+        .repack()
+        .await
+        .expect("the store is laid out again");
     let packs = store.packs().await.unwrap_or_default();
 
     checked.wants(

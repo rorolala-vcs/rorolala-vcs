@@ -25,6 +25,18 @@ pub const WORKSPACE_CONFIG_PATH: &str = "./.rola/workspace.toml";
 #[lazyffi(export = ROLA_WORKSPACE_KEYS_DIR)]
 pub const WORKSPACE_KEYS_DIR: &str = "./.rola/auth/";
 
+/// Path to a directory's lock file, besides whatever names the directory
+///
+/// A place is locked while this file is there, and unlocked while it is not — so a lock is
+/// something a person can see, and take away, without a tool.
+pub const LOCK_FILE: &str = "lock";
+
+/// Path to the Workspace's lock file
+///
+/// A Workspace keeps its lock beside the rest of its data rather than at its root: the root is
+/// where the work is, and the lock is about the Workspace's own bookkeeping.
+pub const WORKSPACE_LOCK_PATH: &str = "./.rola/lock";
+
 /// Path to the Vault configuration file, inside the vault root
 #[lazyffi(export = ROLA_VAULT_CONFIG_PATH)]
 pub const VAULT_CONFIG_PATH: &str = "./vault.toml";

@@ -7,18 +7,21 @@
 
 use std::path::{Path, PathBuf};
 
-use rorolala_storage::RorolalaStorage;
+use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage};
+use rorolala_utils_constants::LOCK_FILE;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
 
 mod config;
 mod error;
+mod ffi;
 mod init;
 mod keys;
 mod root_vault;
 
 pub use config::*;
 pub use error::*;
+pub use ffi::*;
 pub use keys::*;
 pub use root_vault::*;
 
@@ -62,6 +65,21 @@ impl Locate for Vault {
 
     fn get_root(&self) -> &Path {
         self.current_dir.as_path()
+    }
+}
+
+impl Lockable for Vault {
+    /// The lock sits at the Vault's root, beside the configuration that makes the directory one.
+    ///
+    /// A Vault is found by sniffing upwards to the nearest configuration, so a Vault inside another
+    /// locks its own root and not the one holding it: the lock belongs to the Vault the run is in,
+    /// and is not passed down from above.
+    fn lock_path(&self) -> PathBuf {
+        self.current_dir.join(LOCK_FILE)
+    }
+
+    async fn lock(&self) -> Result<LockingGuard<Self>, LockError> {
+        LockingGuard::acquire(self.clone(), self.lock_path()).await
     }
 }
 

@@ -6,6 +6,7 @@
 //! object *is* does not change — a pack holds the entries exactly as they sat loose — so this is a way
 //! to keep the same objects in fewer files, not a step a reader has to know happened.
 
+use librorolala::storage::Lockable as _;
 use mingling::{
     Grouped, LazyRes,
     macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify},
@@ -18,7 +19,7 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
-use crate::exit_codes::{EC_ERR_PACK_FAILED, EC_ERR_PACK_NO_STORAGE, EC_HELP};
+use crate::exit_codes::{EC_ERR_PACK_FAILED, EC_ERR_PACK_LOCKED, EC_ERR_PACK_NO_STORAGE, EC_HELP};
 use crate::failure::failure;
 
 #[help(buffer)]
@@ -43,13 +44,18 @@ pub fn desc_pack() -> Description {
 /// A store already laid out the way this would lay it out is left alone, so running this twice in a
 /// row changes nothing the second time. What is printed says which of the two happened.
 ///
+/// The store is locked for the whole of the work, so a run packing one is the only run packing it.
+/// A store another run holds the lock of is not waited for — the run is told, and nothing is
+/// changed.
+///
 /// The run has to be somewhere a store can be found — inside one, or inside a Vault or Workspace
 /// that keeps one.
 ///
 /// # Errors
 ///
-/// Renders [`ErrorPackNoStorage`] when the run is nowhere a store is, and [`ErrorPackFailed`] when
-/// the store's objects could not be read or a pack could not be written.
+/// Renders [`ErrorPackNoStorage`] when the run is nowhere a store is, [`ErrorPackLocked`] when the
+/// store is locked by another run, and [`ErrorPackFailed`] when the store's objects could not be
+/// read or a pack could not be written.
 #[command(node = "pack")]
 pub fn pack() -> StatePack {
     StatePack
@@ -82,8 +88,19 @@ pub fn handle_pack(_state: StatePack, storage: &mut LazyRes<ResRorolalaStorage>)
     };
 
     // Which objects there are and how they are laid out is the store's to say: this hands over
-    // nothing and asks for the whole of it to be laid out afresh.
-    match runtime.block_on(store.repack()) {
+    // nothing and asks for the whole of it to be laid out afresh — under the store's lock, so that
+    // nothing else is packing the same store while it happens.
+    let guard = match runtime.block_on(store.lock()) {
+        Ok(guard) => guard,
+        Err(error) => {
+            return ErrorPackLocked {
+                cause: error.to_string(),
+            }
+            .into();
+        }
+    };
+
+    match runtime.block_on(guard.repack()) {
         Ok(changed) => ResultPacked { changed }.into(),
         Err(error) => ErrorPackFailed {
             cause: error.to_string(),
@@ -157,4 +174,32 @@ pub fn render_error_pack_failed(error: ErrorPackFailed, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("pack.err_pack_failed_help").trim()));
     ec.exit_code = EC_ERR_PACK_FAILED;
+}
+
+/// Error: another run holds the store's lock.
+#[derive(Grouped)]
+pub struct ErrorPackLocked {
+    /// Why the store would not lock.
+    cause: String,
+}
+
+impl Failure for ErrorPackLocked {
+    fn name(&self) -> &'static str {
+        "error_pack_locked"
+    }
+
+    fn reason(&self) -> String {
+        t!("pack.err_pack_locked", reason = self.cause)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorPackLocked);
+
+#[renderer(buffer)]
+pub fn render_error_pack_locked(error: ErrorPackLocked, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("pack.err_pack_locked_help").trim()));
+    ec.exit_code = EC_ERR_PACK_LOCKED;
 }

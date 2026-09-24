@@ -17,6 +17,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
 use just_fmt::fmt_path_str;
+use rorolala_storage::{LockError, Lockable, LockingGuard};
 use rorolala_utils_location::Locate;
 use tokio::fs;
 
@@ -92,6 +93,21 @@ impl DerefMut for RootVault {
 impl From<RootVault> for Vault {
     fn from(root: RootVault) -> Self {
         root.vault
+    }
+}
+
+impl Lockable for RootVault {
+    /// The lock sits at the root's own root — the outermost Vault's, not the one a run is in.
+    ///
+    /// A root reads through to a [`Vault`], so without this a lock taken through the root would be
+    /// the *nearest* Vault's and one run could hold the root while another changed the same Vault
+    /// by name. What is locked here is the directory the whole tree hangs from.
+    fn lock_path(&self) -> PathBuf {
+        self.vault.lock_path()
+    }
+
+    async fn lock(&self) -> Result<LockingGuard<Self>, LockError> {
+        LockingGuard::acquire(self.clone(), self.lock_path()).await
     }
 }
 

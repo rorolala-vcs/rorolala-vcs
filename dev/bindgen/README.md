@@ -1,6 +1,7 @@
 # rorolala-dev-bindgen
 
-Generates the C header for Rorolala's `#[lazyffi]` surface.
+Generates the C header for Rorolala's C surface: the `#[lazyffi]` exports, and the
+symbols the sources declare as their own — see [Raw exports](#raw-exports).
 
 A general-purpose generator (cbindgen) cannot render `#[lazyffi]` output, because the
 generated signatures are written in terms of associated types
@@ -210,6 +211,56 @@ does not have.
 
 The doc line is generated, not written in the Rust source: null is the whole of what
 `None` means to C, so the header is the only place it can be said.
+
+### Raw exports
+
+Beside the `#[lazyffi]` surface, the sources declare C symbols of their own: a function
+marked `#[no_mangle]` with a C ABI is a symbol under its Rust name, and its Rust signature
+*is* its C one. There is nothing to convert, so the generator spells the signature as written
+and checks that every type it names is declared.
+
+| Rust | header |
+| --- | --- |
+| `*const T`, `*mut T` | `const T *`, `T *` |
+| `i32`, `usize`, `bool`, `f64` … | `int32_t`, `uintptr_t`, `bool`, `double` … |
+| `*const c_char`, `*mut c_void` | `const char *`, `void *` |
+| no return, or `-> ()` | `void` |
+
+`c_char` is why the route has scalars of its own: C's `char` is a byte and Rust's `char` is a
+scalar, so a byte string is written `*const c_char` and comes out `const char *` — while Rust's
+`char` stays `uint32_t`, as it is everywhere else.
+
+What the generator cannot know is what a pointer points at. A name this header defines is used
+as the header declares it; a name it does not is taken at its word and declared as an opaque
+struct above the declarations, leaving what the type means to the source. For a lock the header
+has no type for, the source declares one of its own —
+`pub type RolaVaultLocking = LockingGuard<Vault>;` — and names it in the signature:
+
+```c
+typedef struct RolaVaultLocking RolaVaultLocking;
+
+RolaVaultLocking * RolaVault_get_locking_guard(const RolaVault * vault);
+```
+
+The alias is the source's to write, because its name is the whole of what C is told — and its
+documentation is what the declaration carries, following the same rule as everything else: the
+first line, and the `# FFI` section. Write the explanation where the name is and the header
+repeats it. The lookup is deliberately local, though: an alias is read from the file the
+signature is written in and from nowhere else, because following the name further would be
+resolving it, which is what this route does not do. A name with no alias to hand is declared
+bare, and a name in a signature that carries parameters of its own is reported, since C has
+nothing to fill them with.
+
+A name held **by value** is the one position that has to be a type C can lay out, so a name the
+header does not define is reported there — and so is an opaque type, an incomplete one having no
+layout, and a `c_void`, which is only ever what a pointer points at. A reference is reported
+too: a raw export writes what C names, and a `&str` is not a C string — it is a pointer and a
+length.
+
+A function named after a type the header defines is reported, because the two share one
+namespace in C; two raw exports claiming one name are reported for the same reason. The names
+themselves are neither prefixed nor renamed: `#[no_mangle]` is what makes a symbol the Rust
+name, so the header writes it as the source did.
 
 ### Name resolution is by the last path segment
 

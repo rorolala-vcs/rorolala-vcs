@@ -29,6 +29,9 @@ pub use frame::*;
 mod key;
 pub use key::*;
 
+mod locking;
+pub use locking::*;
+
 mod manifest;
 pub use manifest::*;
 

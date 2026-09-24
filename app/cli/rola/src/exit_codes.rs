@@ -91,6 +91,9 @@ pub const EC_ERR_PACK_NO_STORAGE: i32 = 59;
 /// `exit_codes.pack_failed`
 pub const EC_ERR_PACK_FAILED: i32 = 60;
 
+/// `exit_codes.pack_locked`
+pub const EC_ERR_PACK_LOCKED: i32 = 69;
+
 // Listing
 
 /// `exit_codes.storage_ls_storaged_no_storage`

@@ -47,6 +47,21 @@
 //! or a field is documented on the member that mirrors it, since that is where a
 //! C reader looks.
 //!
+//! # Raw exports
+//!
+//! Beside `#[lazyffi]`, the sources declare C symbols of their own: a function marked
+//! `#[no_mangle]` with a C ABI is a symbol under its Rust name, and its Rust signature *is*
+//! its C one. There are no conversions to reason about there, so what is rendered is the
+//! signature itself, and what is checked is that every type it names is declared.
+//!
+//! What cannot be known is what a pointer points at. A name this header defines is used as
+//! the header declares it; a name it does not is taken at its word and declared as an opaque
+//! struct, leaving what the type means to the source — and documented by the alias beside the
+//! signature that named it, so the header can say what the name is for. A name **held by
+//! value** is the exception, since C has to be able to lay it out: one the header does not
+//! define, or one that is opaque, or one carrying parameters of its own, is reported rather
+//! than emitted.
+//!
 //! # Name resolution
 //!
 //! Types are resolved by their **last path segment**, so an export in one crate can
@@ -88,8 +103,8 @@ use rorolala_utils_lazyffi_core::{
 };
 use syn::{
     Attribute, Expr, ExprLit, Fields, FnArg, GenericArgument, ImplItem, Item, ItemConst, ItemEnum,
-    ItemFn, ItemImpl, ItemStruct, Lit, Meta, Pat, PathArguments, ReceiverKind, ReturnType,
-    Signature, Type, spanned::Spanned,
+    ItemFn, ItemImpl, ItemStruct, ItemType, Lit, Meta, Pat, PathArguments, PointerMutability,
+    ReceiverKind, ReturnType, Signature, Type, spanned::Spanned,
 };
 
 /// File name of the generated header.
@@ -331,6 +346,15 @@ struct Exports {
     functions: Vec<(ItemFn, Origin)>,
     /// Exported `impl` blocks.
     impls: Vec<(ItemImpl, Origin)>,
+    /// Functions declaring a C symbol of their own rather than being exported by
+    /// `#[lazyffi]`.
+    raws: Vec<(ItemFn, Origin)>,
+    /// Type aliases, read for the words they carry and nothing else.
+    ///
+    /// A raw export is free to point at a name this header knows nothing about, and the alias
+    /// beside it is where that name is explained; see [`render_raw`]. The alias's own type is
+    /// never read — this generator does not expand one, and nothing else here has a use for it.
+    aliases: Vec<(ItemType, Origin)>,
 }
 
 /// Scans `dir` recursively, collecting `#[lazyffi]` items.
@@ -405,6 +429,12 @@ fn collect_items(items: &[Item], origin: &Origin, exports: &mut Exports) {
             Item::Fn(item) if has_lazyffi(&item.attrs) => {
                 exports.functions.push((item.clone(), origin.clone()));
             }
+            Item::Fn(item) if is_raw_export(item) => {
+                exports.raws.push((item.clone(), origin.clone()));
+            }
+            Item::Type(item) => {
+                exports.aliases.push((item.clone(), origin.clone()));
+            }
             Item::Impl(item) if has_lazyffi(&item.attrs) => {
                 exports.impls.push((item.clone(), origin.clone()));
             }
@@ -424,6 +454,49 @@ fn is_lazyffi(attr: &Attribute) -> bool {
         .segments
         .last()
         .is_some_and(|segment| segment.ident == "lazyffi")
+}
+
+/// Whether a function declares a C symbol of its own.
+///
+/// The marker is `#[no_mangle]`, which is what says the symbol is the Rust name verbatim,
+/// together with a C ABI, which is what says a C caller can reach it: `#[no_mangle]` alone is
+/// a Rust symbol under a name C cannot call, and an `extern "C"` without it is a symbol
+/// under a name only Rust knows.
+///
+/// Being `pub` is deliberately not asked for. A private `#[no_mangle]` function is still a
+/// symbol, and leaving it out of the header would hide a declaration rather than avoid one.
+fn is_raw_export(item: &ItemFn) -> bool {
+    let c_abi = item
+        .sig
+        .abi
+        .as_ref()
+        .is_some_and(|abi| abi.name.as_ref().is_none_or(|name| name.value() == "C"));
+
+    c_abi && item.attrs.iter().any(is_no_mangle)
+}
+
+/// Whether one attribute is `#[no_mangle]`, in any of its spellings.
+///
+/// Edition 2024 wants the `unsafe` around it, so the attribute arrives either as itself or as
+/// one entry of an `unsafe(...)` list. Both name the same attribute, and both are read.
+fn is_no_mangle(attr: &Attribute) -> bool {
+    if attr.path().is_ident("no_mangle") {
+        return true;
+    }
+
+    if !attr.path().is_ident("unsafe") {
+        return false;
+    }
+
+    let mut found = false;
+    let _ = attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("no_mangle") {
+            found = true;
+        }
+        Ok(())
+    });
+
+    found
 }
 
 /// Reads `export = <Name>` from the `#[lazyffi]` attribute, if present.
@@ -835,6 +908,21 @@ fn scalar_c_type(rust: &str) -> Option<&'static str> {
         "u64" => "uint64_t",
         "u128" => "unsigned __int128",
         "usize" => "uintptr_t",
+        _ => return None,
+    })
+}
+
+/// C spelling of the names a raw export may write that are C's own types rather than Rust
+/// scalars.
+///
+/// They are `std::ffi`'s, and they exist in a signature only because that signature is a C
+/// one: C's `char` is a byte and Rust's `char` is not, so a byte string a raw export takes is
+/// written `*const c_char` and comes out `const char *`, while Rust's own `char` stays the
+/// scalar it is — see [`scalar_c_type`].
+fn c_only_type(rust: &str) -> Option<&'static str> {
+    Some(match rust {
+        "c_char" => "char",
+        "c_void" => "void",
         _ => return None,
     })
 }
@@ -1538,6 +1626,13 @@ fn render(exports: &Exports) -> Result<String, Vec<Diagnostic>> {
     for (item, origin) in &exports.impls {
         render_impl(&mut out, item, origin, &reprs, &mut diagnostics);
     }
+    render_raw(
+        &mut out,
+        &exports.raws,
+        &exports.aliases,
+        &reprs,
+        &mut diagnostics,
+    );
 
     if !diagnostics.is_empty() {
         return Err(diagnostics);
@@ -1716,6 +1811,345 @@ fn render_impl(
             &mut reporting,
             &label,
         );
+    }
+}
+
+/// The names the preamble declares, before anything the sources hold.
+///
+/// They are the two the surface needs whether or not a source mentions them: the string
+/// release, and the one result type. A raw export naming one of them has nothing to add — see
+/// [`render_raw`].
+fn preamble_names() -> BTreeSet<String> {
+    BTreeSet::from([
+        FREE_STRING.to_string(),
+        RESULT_REPR.to_string(),
+        tag_type_name(RESULT_REPR),
+    ])
+}
+
+/// The documentation an alias declared in `file` gives the name `name`.
+///
+/// A name a raw export points at is explained where that name is declared, which is the file
+/// the signature is written in: aliases are read for their words and for nothing else, so this
+/// is a lookup and not a resolution — one file's aliases, keyed by name. An alias somewhere
+/// else is missed on purpose, and a name with no alias anywhere is declared bare; see
+/// [`render_raw`].
+fn alias_docs<'a>(
+    aliases: &'a BTreeMap<&'a Path, BTreeMap<String, Vec<String>>>,
+    file: &Path,
+    name: &str,
+) -> &'a [String] {
+    aliases
+        .get(file)
+        .and_then(|held| held.get(name))
+        .map_or(&[], Vec::as_slice)
+}
+
+/// Renders the functions the sources declare as C symbols of their own.
+///
+/// These are not `#[lazyffi]` wrappers: their Rust name is the symbol and their Rust signature
+/// is the C one, so there is nothing to convert and no repr to look up. What is left is
+/// spelling the signature in C and making sure every type it names is declared — the header's
+/// own types as the header declares them, and anything else as an opaque struct left for the
+/// source to mean something by.
+///
+/// The declarations go in one block of their own, after everything the header defines, with the
+/// opaque names declared first so that every one of them is there before it is pointed at. An
+/// opaque name carries the documentation of the alias beside the signature that named it: an
+/// unclear name is worth a sentence, and the sentence is already written where the name is.
+fn render_raw(
+    out: &mut String,
+    raws: &[(ItemFn, Origin)],
+    aliases: &[(ItemType, Origin)],
+    reprs: &Reprs,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if raws.is_empty() {
+        return;
+    }
+
+    // The words each file's aliases carry, so that a name a signature points at can be
+    // documented by the alias beside it — see `alias_docs`.
+    let mut aliases_by_file: BTreeMap<&Path, BTreeMap<String, Vec<String>>> = BTreeMap::new();
+    for (item, origin) in aliases {
+        aliases_by_file
+            .entry(origin.path.as_path())
+            .or_default()
+            .insert(item.ident.to_string(), doc_lines(&item.attrs));
+    }
+
+    let mut forward: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut rendered: Vec<String> = Vec::new();
+    let mut declared: BTreeMap<String, (PathBuf, usize)> = BTreeMap::new();
+    let preamble = preamble_names();
+
+    for (item, origin) in raws {
+        let rust_name = item.sig.ident.to_string();
+        let line = item.sig.ident.span().start().line;
+        let mut reporting = Reporting::new(origin, diagnostics);
+
+        // The string release is declared by hand, and the source that defines it is the same
+        // symbol: C may see a function declared repeatedly, so the header simply says it once.
+        if preamble.contains(&rust_name) {
+            continue;
+        }
+
+        // A type is not so forgiving. A type and a function share one namespace in C, so a
+        // declaration named after a type the header defines would be rejected by the compiler
+        // rather than by this generator.
+        if reprs.names.contains(&rust_name) {
+            reporting.report(
+                line,
+                &rust_name,
+                format!("`{rust_name}` is already a type the header defines"),
+            );
+            continue;
+        }
+
+        if let Some((first, first_line)) = declared.get(&rust_name) {
+            reporting.report(
+                line,
+                &rust_name,
+                format!(
+                    "`{rust_name}` is declared already, from {}:{first_line}",
+                    first.display()
+                ),
+            );
+            continue;
+        }
+
+        let mut named: BTreeSet<String> = BTreeSet::new();
+        let Some(declaration) = render_raw_signature(item, &mut reporting, reprs, &mut named)
+        else {
+            continue;
+        };
+
+        // Whatever the signature referred to and the header does not define becomes a
+        // declaration of its own here. One already collected keeps its words; one that is new
+        // takes the alias's — and two signatures naming one type are documented once, by
+        // whichever of them has an alias to hand.
+        for name in named {
+            let held = forward.entry(name.clone()).or_default();
+            if held.is_empty() {
+                *held = alias_docs(&aliases_by_file, &origin.path, &name).to_vec();
+            }
+        }
+
+        declared.insert(rust_name, (origin.path.clone(), line));
+        rendered.push(format!(
+            "{}{declaration}\n\n",
+            render_doc(&doc_lines(&item.attrs), "")
+        ));
+    }
+
+    if rendered.is_empty() {
+        return;
+    }
+
+    out.push_str(
+        "\n/*\n * The exports the sources declare as C symbols of their own, with the signatures they\n \
+         * wrote rather than one generated for them. A struct declared here and nowhere above is\n \
+         * opaque: what it means is the source's to say.\n */\n\n",
+    );
+
+    for (name, docs) in &forward {
+        // A typedef rather than a bare `struct`, since that is the name the signatures are
+        // written with — and the shape every other opaque type in this header has.
+        out.push_str(&render_doc(docs, ""));
+        let _ = writeln!(out, "typedef struct {name} {name};\n");
+    }
+
+    for declaration in &rendered {
+        out.push_str(declaration);
+    }
+}
+
+/// Renders the declaration of one raw export.
+///
+/// `named` collects the names the header has to declare for the pointers to point at. It is the
+/// caller's to declare them, and its to document them, since only the caller knows which file
+/// the signature came from.
+fn render_raw_signature(
+    item: &ItemFn,
+    reporting: &mut Reporting<'_>,
+    reprs: &Reprs,
+    named: &mut BTreeSet<String>,
+) -> Option<String> {
+    let name = item.sig.ident.to_string();
+
+    if !item.sig.generics.params.is_empty() {
+        reporting.report(
+            item.sig.generics.span().start().line,
+            &name,
+            "a raw export cannot be generic: C has nothing to fill the parameters with".to_string(),
+        );
+        return None;
+    }
+
+    let mut params = Vec::new();
+    let mut whole = true;
+    for input in &item.sig.inputs {
+        let FnArg::Typed(pat_type) = input else {
+            reporting.report(
+                input.span().start().line,
+                &name,
+                "a raw export is a free function: it has no receiver to spell".to_string(),
+            );
+            return None;
+        };
+
+        let Pat::Ident(pat_ident) = &*pat_type.pat else {
+            reporting.report(
+                pat_type.pat.span().start().line,
+                &name,
+                "a raw export requires plain identifier parameters".to_string(),
+            );
+            return None;
+        };
+
+        // A parameter that cannot be spelled is reported and left out rather than ending the
+        // pass: one run then names every parameter it could not read. What comes out is not a
+        // declaration anything takes, and it is not written — a diagnostic is enough to stop
+        // the header being produced at all.
+        match raw_c_type(&pat_type.ty, reporting, reprs, named, true, &name) {
+            Some(spelling) => params.push(format!("{spelling} {}", pat_ident.ident)),
+            None => whole = false,
+        }
+    }
+
+    if !whole {
+        return None;
+    }
+
+    let returns = match &item.sig.output {
+        ReturnType::Default => "void".to_string(),
+        ReturnType::Type(_, ty) if is_unit(ty) => "void".to_string(),
+        ReturnType::Type(_, ty) => raw_c_type(ty, reporting, reprs, named, true, &name)?,
+    };
+
+    Some(if params.is_empty() {
+        format!("{returns} {name}(void);")
+    } else {
+        format!("{returns} {name}({});", params.join(", "))
+    })
+}
+
+/// The C spelling of a type a raw export's signature names.
+///
+/// The signature is already written the way C writes one, so this is mostly a matter of putting
+/// the tokens in C's order: a scalar is itself, a pointer is the `*` after what it points at,
+/// and a name is that name. A name this header defines is used as the header declares it;
+/// anything else is taken at its word and declared opaque, since what a pointer points at is the
+/// source's business. `by_value` is what tells the two apart, and it is the one position that
+/// has to be a type C can lay out.
+fn raw_c_type(
+    ty: &Type,
+    reporting: &mut Reporting<'_>,
+    reprs: &Reprs,
+    named: &mut BTreeSet<String>,
+    by_value: bool,
+    item: &str,
+) -> Option<String> {
+    match ty {
+        Type::Ptr(pointer) => {
+            let inner = raw_c_type(&pointer.elem, reporting, reprs, named, false, item)?;
+            // `*const` is the one a C caller may keep as `const`; a bare `*` and `*mut` are
+            // both writable.
+            let constness = if matches!(pointer.mutability, PointerMutability::Const(_)) {
+                "const "
+            } else {
+                ""
+            };
+
+            Some(format!("{constness}{inner} *"))
+        }
+
+        Type::Path(path) if path.qself.is_none() => {
+            let segment = path.path.segments.last()?;
+            let name = segment.ident.to_string();
+            let line = segment.ident.span().start().line;
+
+            if !matches!(segment.arguments, PathArguments::None) {
+                reporting.report(
+                    line,
+                    item,
+                    format!(
+                        "`{name}` carries parameters of its own, which C has nothing to name: \
+                         give the one type it stands for a name of its own, as an alias"
+                    ),
+                );
+                return None;
+            }
+
+            if let Some(scalar) = scalar_c_type(&name) {
+                return Some(scalar.to_string());
+            }
+
+            if let Some(c_name) = c_only_type(&name) {
+                // `void` is the one C type that is only ever what a pointer points at.
+                if by_value && c_name == "void" {
+                    reporting.report(
+                        line,
+                        item,
+                        format!(
+                            "`{name}` is not a type C can hold: it is what a pointer points at"
+                        ),
+                    );
+                    return None;
+                }
+
+                return Some(c_name.to_string());
+            }
+
+            // An exported `struct` has no layout C can see, so it is a handle like any other.
+            if reprs.opaque.contains(&name) {
+                if by_value {
+                    reporting.report(
+                        line,
+                        item,
+                        format!("`{name}` is opaque: C can only hold a pointer to one"),
+                    );
+                    return None;
+                }
+
+                return Some(name);
+            }
+
+            if reprs.names.contains(&name) {
+                return Some(name);
+            }
+
+            // A name the header knows nothing about is the source's to mean: what is pointed at
+            // never has to be complete. Held by value it does, and that is not something this
+            // generator can promise.
+            if by_value {
+                reporting.report(
+                    line,
+                    item,
+                    format!(
+                        "`{name}` is not a type the header knows, so C can only hold a pointer \
+                         to one: name it behind a `*const` or a `*mut`, or export it"
+                    ),
+                );
+                return None;
+            }
+
+            named.insert(name.clone());
+            Some(name)
+        }
+
+        other => {
+            reporting.report(
+                other.span().start().line,
+                item,
+                format!(
+                    "`{}` has no C spelling of its own: a raw export writes what C names, so its \
+                     signature says a scalar or a raw pointer",
+                    compact(other)
+                ),
+            );
+            None
+        }
     }
 }
 
@@ -2517,5 +2951,279 @@ pub const fn total(value: i32) -> i32 { value }
             header.contains("- `Ok`: nothing; the payload is null"),
             "{header}"
         );
+    }
+
+    /// A vault, a lock on one C has no type for, and the three calls that are the whole of
+    /// what it does with one — which is the shape a raw export exists for.
+    const RAW: &str = r#"
+/// A vault.
+#[lazyffi(export = RolaVault)]
+pub struct Vault {}
+
+/// A lock on a vault, as C holds it.
+pub type RolaVaultLocking = LockingGuard<Vault>;
+
+/// Whether the vault is locked.
+///
+/// # FFI
+/// Answers whether the lock file is there.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn RolaVault_is_locking(vault: *const RolaVault) -> bool { todo!() }
+
+/// Locks the vault.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn RolaVault_get_locking_guard(
+    vault: *const RolaVault,
+) -> *mut RolaVaultLocking { todo!() }
+
+/// Releases a guard.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn RolaVault_drop_locking_guard(guard: *mut RolaVaultLocking) { todo!() }
+"#;
+
+    #[test]
+    fn a_raw_export_is_declared_as_it_is_written() {
+        let header = header_for(RAW);
+
+        // The names are the source's own: `#[no_mangle]` is what makes the symbol the Rust
+        // name, so nothing is prefixed or converted on the way out.
+        assert!(
+            header.contains("bool RolaVault_is_locking(const RolaVault * vault);"),
+            "{header}"
+        );
+        assert!(
+            header.contains(
+                "RolaVaultLocking * RolaVault_get_locking_guard(const RolaVault * vault);"
+            ),
+            "{header}"
+        );
+        assert!(
+            header.contains("void RolaVault_drop_locking_guard(RolaVaultLocking * guard);"),
+            "{header}"
+        );
+
+        // What C is pointed at but cannot be told about is declared, and declared before
+        // anything points at it.
+        let declared = header
+            .find("typedef struct RolaVaultLocking RolaVaultLocking;")
+            .expect("the opaque name is declared");
+        let pointed = header
+            .find("RolaVaultLocking * RolaVault_get_locking_guard")
+            .expect("the opaque name is pointed at");
+        assert!(declared < pointed, "{header}");
+
+        // The vault is a type the header already declares, so it is not declared a second
+        // time — and the one it declares is the one the signature points at.
+        assert_eq!(
+            header
+                .matches("typedef struct RolaVault RolaVault;")
+                .count(),
+            1,
+            "{header}"
+        );
+
+        // Documentation travels the way it does for any other export.
+        assert!(
+            header.contains("Answers whether the lock file is there."),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_raw_export_spells_cs_own_types() {
+        // C's `char` is a byte and Rust's is not, so a byte string is written `c_char`; a
+        // name from `std::ffi` is what says so, and `void` is reached the same way.
+        let header = header_for(
+            r#"
+/// Reads a name into a buffer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn takes_text(
+    name: *const c_char,
+    out: *const c_void,
+    len: usize,
+) -> i32 { todo!() }
+"#,
+        );
+
+        assert!(
+            header.contains(
+                "int32_t takes_text(const char * name, const void * out, uintptr_t len);"
+            ),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_function_that_declares_no_c_symbol_is_left_alone() {
+        // `#[no_mangle]` without a C ABI is a Rust symbol C cannot call, and a C ABI without
+        // `#[no_mangle]` is a symbol under a name only Rust knows. Neither is a declaration
+        // this header can write.
+        let header = header_for(
+            r#"
+/// A Rust symbol.
+#[no_mangle]
+pub fn rust_abi() {}
+
+/// A Rust name.
+pub extern "C" fn rust_name() {}
+"#,
+        );
+
+        assert!(!header.contains("rust_abi"), "{header}");
+        assert!(!header.contains("rust_name"), "{header}");
+    }
+
+    #[test]
+    fn a_raw_export_naming_what_c_cannot_be_told_is_reported() {
+        // A name carrying parameters of its own has no C spelling: C has nothing to fill them
+        // with, so the source has to name the one type it stands for.
+        let error = error_for(
+            r#"
+/// Locks something.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn take(held: *mut LockingGuard<Vault>) { todo!() }
+"#,
+        );
+        assert!(error.contains("carries parameters of its own"), "{error}");
+
+        // A name held by value has to be a type C can lay out, whatever the source knows
+        // about it.
+        let error = error_for(
+            r#"
+/// Locks something.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn take(held: Vault, count: &usize) { todo!() }
+"#,
+        );
+        assert!(
+            error.contains("`Vault` is not a type the header knows"),
+            "{error}"
+        );
+        // A reference is not what C names either: `&str` is a pointer and a length.
+        assert!(error.contains("has no C spelling of its own"), "{error}");
+    }
+
+    #[test]
+    fn a_raw_export_holding_an_opaque_type_by_value_is_reported() {
+        // An exported `struct` is an incomplete type in C, so a pointer to one is the only
+        // way it can appear — including here.
+        let error = error_for(
+            r#"
+/// A vault.
+#[lazyffi(export = RolaVault)]
+pub struct Vault {}
+
+/// Takes a vault.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn take(vault: RolaVault) { todo!() }
+"#,
+        );
+
+        assert!(error.contains("`RolaVault` is opaque"), "{error}");
+    }
+
+    #[test]
+    fn an_opaque_name_is_documented_by_the_alias_beside_it() {
+        // The name a raw signature points at is explained where that name is declared, and
+        // only the two parts of the alias's docs a C reader wants travel — the same rule every
+        // other export follows.
+        let documented = header_for(
+            r#"
+/// A lock on a vault.
+///
+/// # FFI
+/// Opaque: reached only through the two calls below.
+///
+/// # Invariants
+/// Never shared.
+pub type RolaVaultLocking = LockingGuard<Vault>;
+
+/// Locks the vault.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn RolaVault_lock(vault: *const RolaVault) -> *mut RolaVaultLocking {
+    todo!()
+}
+"#,
+        );
+
+        // The comment sits on the declaration of the name, not on the calls that use it, and
+        // only the two parts of the alias's docs a C reader wants travel.
+        let expected = "/**\n * A lock on a vault.\n *\n * Opaque: reached only through the two calls below.\n */\ntypedef struct RolaVaultLocking RolaVaultLocking;";
+        assert!(documented.contains(expected), "{documented}");
+        assert!(!documented.contains("Never shared."), "{documented}");
+    }
+
+    #[test]
+    fn a_name_an_alias_elsewhere_declares_is_declared_bare() {
+        // An alias is read from the file the signature is written in and from nowhere else:
+        // following the name further would be resolving it, which is what this route does not
+        // do. A name with no alias to hand is declared and left at that.
+        let elsewhere = header_for_each(&[
+            (
+                "locks.rs",
+                "/// A lock on a vault.\npub type RolaVaultLocking = LockingGuard<Vault>;\n",
+            ),
+            (
+                "calls.rs",
+                "/// Locks the vault.\n#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn RolaVault_lock(vault: *const RolaVault) -> *mut RolaVaultLocking { todo!() }\n",
+            ),
+        ]);
+
+        assert!(
+            elsewhere.contains("typedef struct RolaVaultLocking RolaVaultLocking;"),
+            "{elsewhere}"
+        );
+        assert!(!elsewhere.contains("A lock on a vault."), "{elsewhere}");
+    }
+
+    #[test]
+    fn a_symbol_the_header_already_declares_is_not_declared_twice() {
+        // The string release is part of the surface whether or not a source mentions it, and
+        // the source that defines it is the symbol the preamble already declares.
+        let header = header_for(
+            r#"
+/// Releases a C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_string(ptr: *mut c_char) { todo!() }
+"#,
+        );
+
+        assert_eq!(header.matches("void free_string(").count(), 1, "{header}");
+    }
+
+    #[test]
+    fn a_raw_export_claiming_a_name_the_header_holds_is_reported() {
+        // A type and a function share one namespace in C, so the two cannot be declared
+        // together even though Rust is happy to name them the same.
+        let error = error_for(
+            r#"
+/// A vault.
+#[lazyffi(export = RolaVault)]
+pub struct Vault {}
+
+/// A vault, again.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn RolaVault() { todo!() }
+"#,
+        );
+        assert!(
+            error.contains("already a type the header defines"),
+            "{error}"
+        );
+
+        // And two functions cannot claim one symbol: the linker would reject the result, so
+        // the header stops at the second of them instead.
+        let error = error_for(
+            r#"
+/// One.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn RolaVault_is_locking() { todo!() }
+
+/// The other.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn RolaVault_is_locking(userdata: *mut c_void) { todo!() }
+"#,
+        );
+        assert!(error.contains("is declared already"), "{error}");
     }
 }

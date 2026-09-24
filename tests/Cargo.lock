@@ -1622,6 +1622,7 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "serde",
+ "tokio",
 ]
 
 [[package]]

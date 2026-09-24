@@ -16,6 +16,9 @@ pack:
         every read that worked before works after. A store already laid out this way is left alone, so
         running this twice in a row changes nothing the second time.
 
+        The store is locked for the whole of the work, so a store another run is packing is not packed
+        at the same time: the run is told, and nothing is changed.
+
         The run has to be somewhere a store can be found: inside one, or inside a Vault or Workspace
         that keeps one.
     zh-CN: |
@@ -29,6 +32,9 @@ pack:
 
         对象本身不受影响：pack 按它们在松散时的样子原样存放条目，所以此前能读的，之后照样能读。已经
         是这样布局的仓库会保持原样，因此连续运行两次不会有第二次改动。
+
+        整个过程中仓库会被锁定，因此另一个运行正在打包时不会同时打包：本次运行会被告知，且什么都不
+        改动。
 
         运行必须处在能发现仓库的地方：仓库内、或保有仓库的保险库／工作区内。
 
@@ -63,3 +69,14 @@ pack:
         Please check that the store can be read and written, then try again
     zh-CN: |
         请确认仓库可读可写，然后重试
+
+  err_pack_locked:
+    en: "The store could not be locked — %{reason}"
+    zh-CN: "无法锁定仓库 —— %{reason}"
+
+  err_pack_locked_help:
+    en: |
+        Please check that no other run is packing this store, and that no lock was left behind by
+        one that did not finish
+    zh-CN: |
+        请确认没有其他运行正在打包该仓库，也没有未结束的运行留下锁文件

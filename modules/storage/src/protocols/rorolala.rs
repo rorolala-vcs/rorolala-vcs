@@ -33,10 +33,10 @@ mod tests;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rorolala_utils_constants::STORAGE_CONFIG_PATH;
+use rorolala_utils_constants::{LOCK_FILE, STORAGE_CONFIG_PATH};
 use rorolala_utils_location::{Locate, LocateHelper};
 
-use crate::{Chunking, Codec};
+use crate::{Chunking, Codec, LockError, Lockable, LockingGuard};
 use consts::{DEFAULT_CODEC, DEFAULT_CUT, MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR};
 
 /// Rorolala's store of objects, kept under the content addresses they are named by.
@@ -87,6 +87,21 @@ impl Locate for RorolalaStorage {
 
     fn get_root(&self) -> &Path {
         self.root.as_path()
+    }
+}
+
+impl Lockable for RorolalaStorage {
+    /// The lock sits at the store's root, beside the configuration that makes the directory one.
+    ///
+    /// A store is one place whether it is reached through a Workspace, a Vault, or on its own, so
+    /// there is one lock for it either way — the lock is not per-opener, and a run that holds it
+    /// through a Vault holds it against a run that reached the same store directly.
+    fn lock_path(&self) -> PathBuf {
+        self.root.join(LOCK_FILE)
+    }
+
+    async fn lock(&self) -> Result<LockingGuard<Self>, LockError> {
+        LockingGuard::acquire(self.clone(), self.lock_path()).await
     }
 }
 

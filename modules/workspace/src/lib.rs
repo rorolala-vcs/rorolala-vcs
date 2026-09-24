@@ -7,16 +7,18 @@
 
 use std::path::{Path, PathBuf};
 
-use rorolala_storage::RorolalaStorage;
+use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
 
 mod config;
 mod error;
+mod ffi;
 mod init;
 
 pub use config::*;
 pub use error::*;
+pub use ffi::*;
 
 /// Where the Workspace keeps its data, its configuration, its keys and its store
 ///
@@ -24,7 +26,8 @@ pub use error::*;
 /// Workspace's own spelling of where it keeps things is still one name.
 pub use rorolala_utils_constants::{
     WORKSPACE_CONFIG_PATH as CONFIG_PATH, WORKSPACE_DATA_DIR as DATA_DIR,
-    WORKSPACE_KEYS_DIR as KEYS_DIR, WORKSPACE_STORAGE_DIR as STORAGE_DIR,
+    WORKSPACE_KEYS_DIR as KEYS_DIR, WORKSPACE_LOCK_PATH as LOCK_PATH,
+    WORKSPACE_STORAGE_DIR as STORAGE_DIR,
 };
 
 /// Rorolala local workspace
@@ -59,6 +62,18 @@ impl Locate for Workspace {
 
     fn get_root(&self) -> &Path {
         self.current_dir.as_path()
+    }
+}
+
+impl Lockable for Workspace {
+    /// The lock sits inside the data directory, beside the rest of what the Workspace keeps for
+    /// itself rather than at the root the work is in.
+    fn lock_path(&self) -> PathBuf {
+        self.current_dir.join(LOCK_PATH).components().collect()
+    }
+
+    async fn lock(&self) -> Result<LockingGuard<Self>, LockError> {
+        LockingGuard::acquire(self.clone(), self.lock_path()).await
     }
 }
 
