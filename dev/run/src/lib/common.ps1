@@ -72,6 +72,11 @@ $Programs = @('rola', 'rola-daemon')
 # and the tests of those translations.
 $Solution = 'RorolalaSharp.sln'
 
+# The .NET integration suites under `tests/`, a solution of their own: they run the built Desktop
+# program the way a caller meets it, so they are not built with the solution above and do not appear
+# in its dependency graph — the same split the cargo suites make.
+$ItSolution = 'tests/RorolalaSharp.IntegrationTests.sln'
+
 # Where an export puts the completion scripts: one directory per program, so what a shell's setup
 # sources is named once per program rather than once per program and shell.
 $ScriptsDir = "$BuildDir/scripts"

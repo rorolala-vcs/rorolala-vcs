@@ -7,5 +7,6 @@ resolver = "3"
 members = ["*"]
 
 # `*` reaches the directories a suite's own configuration and output sit in, which are not
-# suites.
-exclude = [".cache", ".cargo"]
+# suites, and the .NET integration suites, which are projects rather than cargo packages — they run
+# the Desktop program the way a caller meets it, and are run by `dotnet-integration-test`.
+exclude = [".cache", ".cargo", "desktop-config", "desktop-host", "desktop-plugins"]

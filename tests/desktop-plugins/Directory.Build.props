@@ -1,0 +1,29 @@
+<Project>
+
+  <!--
+    The fixture plugins: real plugin assemblies, loaded by the host's own load context, so what the
+    integration suite exercises is the contract boundary rather than a stand-in for it.
+
+    This file is nearer a fixture than the root `Directory.Build.props`, so MSBuild finds it first
+    walking up and must be told to bring the root one in as well — it takes the first it finds, not
+    all of them.
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)../../Directory.Build.props" />
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A plugin compiles against the contract and nothing else, which is exactly what the host
+         hands it at run time. -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../app/desktop/Contract/RorolalaDesktop.Contract.csproj" />
+  </ItemGroup>
+
+</Project>

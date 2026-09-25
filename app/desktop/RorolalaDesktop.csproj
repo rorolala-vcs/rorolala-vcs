@@ -30,6 +30,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The host's own types are not part of the contract, so nothing outside sees them but the
+         integration suite that drives the host directly. -->
+    <InternalsVisibleTo Include="RorolalaDesktopHost.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- What the window says is read from beside the program rather than built into it, following
          the command line, which reads its own from the same shape of file. The glob is updated
          rather than added to: the files are already items, and one item of one name is one item. -->
