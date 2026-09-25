@@ -7,9 +7,12 @@ rorolala_file_system:
   name:
     en: File System
     zh-CN: 文件系统
-  dock:
-    en: File System
-    zh-CN: 文件系统
+  directories:
+    en: Directories
+    zh-CN: 目录
+  tree:
+    en: Folder Tree
+    zh-CN: 文件导览
   navigation:
     en: Navigation
     zh-CN: 导航
@@ -20,9 +23,6 @@ rorolala_file_system:
   layout_grid:
     en: Grid
     zh-CN: 网格
-  layout_tree:
-    en: Tree
-    zh-CN: 树
 
   root:
     en: Root

@@ -437,6 +437,14 @@ A dock is registered with a `DockRegistration`:
   docks, their placements, and their sizes survive a restart.
 - Because a `New` dock may have several instances, the persisted form records an ordinal per
   `DockNameId`.
+- A dock may also **keep what it was** — which layout it is in, what it has open — as text under its
+  own keys, and the host writes it into the same record. It is one dock's state rather than the
+  plugin's: two instances of one dock keep two sets of it, and a dock that is closed takes its own
+  away. A key a dock never wrote reads as nothing, so a dock with nothing to remember is a dock that
+  does not use this at all (`IDockState`, Section 16).
+- A dock that keeps something while it is being restored keeps it in memory. What is written down is
+  written when the docks are all there: a layout written mid-restore would be a layout with every dock
+  further down the file dropped from it.
 
 ### 7.4 Core docks
 
@@ -451,11 +459,18 @@ Both are always available from `Window`.
 
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
-| File System | `rorolala.file_system` | `New` | Views: Tree, Grid, List, chosen by a view switch in the dock itself. The tree reads a step when it is opened, and offers no expander on a step with nothing under it. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| Directories | `rorolala.file_system` | `New` | One directory's entries, as a list or a grid, chosen by a switch in the dock itself and kept with the dock (§7.3). Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. Placed at the left by default. |
 | File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and an address to type. Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
+
+A tree is a dock of its own rather than a third layout of the directory dock. A tree is not another
+way of reading one directory — it is a way of walking the ones under a place, and it is rooted at the
+base, which the location is not — so the two belong on screen at once, and neither is a mode of the
+other. What the directory dock's switch chooses between is therefore a list and a grid, and nothing
+else.
 
 ### 7.6 Headers and the strip
 
@@ -516,8 +531,9 @@ root's parent is the computer, which is how a drive list is left; the computer h
 Switching the location in one dock therefore switches it in all of them, and the navigation dock is
 shown and hidden on its own — closing a browser does not close it.
 
-The view switch stays in each browser dock rather than moving with the navigation: which layout
-entries are read in is a property of the dock reading them.
+The view switch stays in the directory dock rather than moving with the navigation: which layout
+entries are read in is a property of the dock reading them. The **tree** is the one view rooted
+somewhere else — at the base (§7.6) — and it is a dock of its own for that reason.
 
 ## 8. Open Hook Pipeline
 
@@ -871,8 +887,15 @@ public sealed record DockRegistration(
 
 public interface IDockView
 {
-    Avalonia.Controls.Control View { get; }
+    Control View { get; }
     IReadOnlyList<DockHeaderCommand> HeaderCommands { get; }
+    void Restored(IDockState state) { }
+}
+
+public interface IDockState
+{
+    string? Read(string key);
+    void Write(string key, string value);
 }
 
 public enum OpenStage { CanOpen, BeforeOpen, AfterOpen }

@@ -21,6 +21,17 @@ internal sealed class LayoutDock
     [JsonPropertyName("placement")]
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public DockPlacement Placement { get; set; }
+
+    /// <summary>
+    /// What the dock remembered about itself, by key.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the placement rather than in the plugin's own preferences, because it is one dock's
+    /// state and not the plugin's: two instances of one dock are two sets of it, and a dock that is
+    /// closed takes its own away with it.
+    /// </remarks>
+    [JsonPropertyName("meta")]
+    public Dictionary<string, string> Meta { get; set; } = [];
 }
 
 /// <summary>
@@ -29,7 +40,8 @@ internal sealed class LayoutDock
 /// <remarks>
 /// The record is the stable name id plus an instance ordinal rather than any runtime handle, so it
 /// keeps its meaning across versions of the program and versions of the plugins. The region sizes
-/// are the sizes to restore, and are updated as the user drags the splitters.
+/// are the sizes to restore, and are updated as the user drags the splitters; what a dock kept about
+/// itself is written down with it, so that a dock comes back as it was and not only where it was.
 /// </remarks>
 internal sealed class DockLayout
 {

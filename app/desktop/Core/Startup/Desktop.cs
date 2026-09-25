@@ -44,6 +44,14 @@ internal sealed class Desktop
         RegisterKernel(services);
         _state.Plugins.InitializeAll(services);
 
+        // What a dock keeps about itself is written down as soon as it is kept, so that a run that
+        // ends badly is not the thing that loses it. Subscribed here rather than on the window, and
+        // before the restore rather than after it, because restoring a dock is itself a dock keeping
+        // something: a dock that keeps anything while it is being restored would be keeping it before
+        // there was a window to hear about it.
+        services.Docks.StateChanged += () =>
+            LayoutStore.Save(services.Log, services.Docks.Snapshot());
+
         // The layout is restored once every dock is registered, since a saved layout addresses docks
         // by name and a name nothing answers to is dropped. On a first run there is no layout and no
         // dock is opened: which docks should start open is not something this program decides yet.

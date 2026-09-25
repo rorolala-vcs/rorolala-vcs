@@ -36,6 +36,15 @@ internal sealed class DockInstance
     /// </remarks>
     public bool IsOpen { get; set; } = true;
 
+    /// <summary>
+    /// What the dock remembered about itself, which the layout keeps.
+    /// </summary>
+    /// <remarks>
+    /// Held here rather than in the view, because a view is the plugin's and this is the host's to
+    /// write down: what the view keeps, it keeps through this.
+    /// </remarks>
+    public Dictionary<string, string> Meta { get; } = new(StringComparer.Ordinal);
+
     /// <summary>The dock's stable name id.</summary>
     public string DockNameId => Registration.DockNameId;
 

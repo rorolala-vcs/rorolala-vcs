@@ -45,6 +45,31 @@ public enum DockPlacement
 public sealed record DockHeaderCommand(string LabelKey, Action Command, string? IconKey = null);
 
 /// <summary>
+/// What a dock remembers about itself between runs.
+/// </summary>
+/// <remarks>
+/// A dock's own state — which layout it is in, what it has open — belongs to the plugin that made the
+/// dock and is kept by the host: it is written into the dock layout beside the dock's placement, so a
+/// dock comes back where it was and as it was.
+/// <para>
+/// What is kept is text, because the layout is a file a person may read and edit; a plugin with a
+/// structure to keep writes it down as text and reads it back.
+/// </para>
+/// </remarks>
+public interface IDockState
+{
+    /// <summary>Reads what was kept under a key.</summary>
+    /// <param name="key">The key it was kept under.</param>
+    /// <returns>What was kept, or nothing when nothing was.</returns>
+    string? Read(string key);
+
+    /// <summary>Keeps a value under a key, to be read back when the dock is made again.</summary>
+    /// <param name="key">The key to keep it under.</param>
+    /// <param name="value">What to keep.</param>
+    void Write(string key, string value);
+}
+
+/// <summary>
 /// One dock's view, as the host holds it.
 /// </summary>
 /// <remarks>
@@ -59,6 +84,17 @@ public interface IDockView
 
     /// <summary>Commands shown in the dock's own header.</summary>
     IReadOnlyList<DockHeaderCommand> HeaderCommands { get; }
+
+    /// <summary>
+    /// Takes what the dock remembered about itself, and does nothing with it by default.
+    /// </summary>
+    /// <remarks>
+    /// A view is made before it is told what it was, so that a dock with nothing to remember — every
+    /// dock the first time it is opened — is made the same way as one that has. A view that keeps
+    /// nothing about itself therefore does not override this, and one that does reads its own keys.
+    /// </remarks>
+    /// <param name="state">What the dock kept, and where the next of it is kept.</param>
+    void Restored(IDockState state) { }
 }
 
 /// <summary>

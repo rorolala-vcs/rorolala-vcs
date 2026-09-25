@@ -4,27 +4,37 @@ using RorolalaDesktop.Contract;
 namespace FileSystemPlugin;
 
 /// <summary>
-/// The File System plugin: the browser, and everything it contributes to the host.
+/// The File System plugin: the location, and the docks that show it.
 /// </summary>
 /// <remarks>
 /// It is a plugin like any other — the host discovers it, checks its contract and Avalonia versions,
 /// and starts it — but it ships with the program and is enabled by default, because a browser is
 /// what the shell is for (Section 7.5).
 /// <para>
-/// What it owns is deliberately more than a dock: the location every dock it opens looks at, the
-/// entries there, their icons, the menus opened on them, and the navigation that switches where that
-/// is. The host is the shell around it.
+/// What it owns is deliberately more than a dock: the location every dock it opens looks at, the base
+/// the tree is rooted at, the entries there, their icons, the menus opened on them, and the navigation
+/// that switches where that is. The host is the shell around it.
 /// </para>
 /// </remarks>
 public sealed class FileSystemPlugin : IRolaPlugin
 {
     /// <summary>
-    /// The stable name of the browser dock.
+    /// The stable name of the directory dock.
+    /// </summary>
+    /// <remarks>
+    /// Written into dock layout, so it must not change once shipped. It says <c>browser</c> because
+    /// that is what the dock was called before the tree was taken out of it (Section 7.5), and a name
+    /// written into a user's layout is not a name to correct.
+    /// </remarks>
+    public const string DirectoryDockNameId = "rorolala.file_system.browser";
+
+    /// <summary>
+    /// The stable name of the file navigation dock.
     /// </summary>
     /// <remarks>
     /// Written into dock layout, so it must not change once shipped.
     /// </remarks>
-    public const string BrowserDockNameId = "rorolala.file_system.browser";
+    public const string TreeDockNameId = "rorolala.file_system.tree";
 
     /// <summary>
     /// The stable name of the navigation dock.
@@ -56,11 +66,22 @@ public sealed class FileSystemPlugin : IRolaPlugin
         host.Docks.Register(
             new DockRegistration(
                 Manifest.Id,
-                BrowserDockNameId,
-                "rorolala_file_system.dock",
+                DirectoryDockNameId,
+                "rorolala_file_system.directories",
                 DockOpenMode.New,
                 DockPlacement.Center,
-                _ => new BrowserDock(host, browser)
+                _ => new DirectoryDock(host, browser)
+            )
+        );
+
+        host.Docks.Register(
+            new DockRegistration(
+                Manifest.Id,
+                TreeDockNameId,
+                "rorolala_file_system.tree",
+                DockOpenMode.Toggle,
+                DockPlacement.Left,
+                _ => new TreeDock(host, browser)
             )
         );
 

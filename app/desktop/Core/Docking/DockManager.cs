@@ -33,6 +33,13 @@ internal sealed class DockManager
     /// <summary>How many instances of each dock name have been made.</summary>
     private readonly Dictionary<string, int> _ordinals = new(StringComparer.Ordinal);
 
+    /// <summary>Whether the saved docks are being opened, and so are not all here yet.</summary>
+    private bool _restoring;
+
+    /// <summary>What a dock remembers when it is opened for the first time, which is nothing.</summary>
+    private static readonly IReadOnlyDictionary<string, string> Nothing =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <summary>Every live instance, in the order they were made.</summary>
     private readonly List<DockInstance> _instances = [];
 
@@ -56,6 +63,16 @@ internal sealed class DockManager
 
     /// <summary>Raised whenever the set of open docks or their placement changes.</summary>
     public event Action? Changed;
+
+    /// <summary>
+    /// Raised whenever a dock keeps something about itself.
+    /// </summary>
+    /// <remarks>
+    /// Told apart from <see cref="Changed"/> because the two are answered differently: a change to the
+    /// docks is a change to the area, which is rebuilt, where what a dock remembers about itself is
+    /// nothing the area draws — only the layout file has to hear about it.
+    /// </remarks>
+    public event Action? StateChanged;
 
     /// <summary>The region sizes, read when the area is built and updated as the splitters move.</summary>
     public DockLayout Layout { get; } = new();
@@ -117,7 +134,15 @@ internal sealed class DockManager
     /// <param name="registration">The dock.</param>
     /// <param name="placement">Where to place the new instance.</param>
     /// <returns>The new instance, or nothing when its view could not be made.</returns>
-    public DockInstance? Create(DockRegistration registration, DockPlacement placement)
+    public DockInstance? Create(DockRegistration registration, DockPlacement placement) =>
+        Create(registration, placement, Nothing);
+
+    /// <summary>Makes a new dock instance, told what that dock remembered last time.</summary>
+    private DockInstance? Create(
+        DockRegistration registration,
+        DockPlacement placement,
+        IReadOnlyDictionary<string, string> kept
+    )
     {
         IDockView view;
 
@@ -151,7 +176,29 @@ internal sealed class DockManager
             IsOpen = true,
         };
 
+        foreach (var (key, value) in kept)
+        {
+            instance.Meta[key] = value;
+        }
+
         _instances.Add(instance);
+
+        // Told after it exists and before it is drawn, so that a view which reads what it kept has
+        // read it by the time the area draws it, and a view which kept nothing is none the wiser.
+        // A view that throws here is a dock that does not open, as one that throws while being made.
+        try
+        {
+            view.Restored(new DockState(instance, this));
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _log.Record(
+                LogLevel.Error,
+                Core.Source,
+                $"`{registration.DockNameId}` could not take what it remembered: {error.Message}"
+            );
+        }
+
         Raise();
 
         return instance;
@@ -211,21 +258,35 @@ internal sealed class DockManager
         Layout.BottomHeight = layout.BottomHeight;
         Layout.TopHeight = layout.TopHeight;
 
-        foreach (var saved in layout.Docks)
+        // Nothing a dock keeps about itself is written down while this runs, and that is not a
+        // nicety: what would be written is a snapshot of the docks that happen to be open yet, which
+        // is a layout with every dock further down the file dropped from it. A dock that keeps
+        // something while it is being restored keeps it in memory, and the next write — of anything —
+        // takes it with it.
+        _restoring = true;
+
+        try
         {
-            var registration = _registry.Find(saved.DockNameId);
-
-            if (registration is null)
+            foreach (var saved in layout.Docks)
             {
-                _log.Record(
-                    LogLevel.Debug,
-                    Core.Source,
-                    $"the saved layout names `{saved.DockNameId}`, which no dock registers"
-                );
-                continue;
-            }
+                var registration = _registry.Find(saved.DockNameId);
 
-            Create(registration, saved.Placement);
+                if (registration is null)
+                {
+                    _log.Record(
+                        LogLevel.Debug,
+                        Core.Source,
+                        $"the saved layout names `{saved.DockNameId}`, which no dock registers"
+                    );
+                    continue;
+                }
+
+                Create(registration, saved.Placement, saved.Meta);
+            }
+        }
+        finally
+        {
+            _restoring = false;
         }
     }
 
@@ -254,6 +315,7 @@ internal sealed class DockManager
                     DockNameId = instance.DockNameId,
                     Ordinal = instance.Ordinal,
                     Placement = instance.Placement,
+                    Meta = new Dictionary<string, string>(instance.Meta, StringComparer.Ordinal),
                 }
             );
         }
@@ -272,4 +334,50 @@ internal sealed class DockManager
 
     /// <summary>Tells the area to rebuild.</summary>
     private void Raise() => Changed?.Invoke();
+
+    /// <summary>
+    /// One dock's own memory: what it kept, and what it keeps next.
+    /// </summary>
+    /// <remarks>
+    /// The keys are the dock's own business and the keeping is the host's, so nothing here is a
+    /// contract with any particular dock: what a dock writes is what it reads back, and a key it never
+    /// writes reads as nothing.
+    /// </remarks>
+    private sealed class DockState : IDockState
+    {
+        /// <summary>The dock whose memory this is.</summary>
+        private readonly DockInstance _instance;
+
+        /// <summary>The manager to tell when the memory changed, so the layout is written.</summary>
+        private readonly DockManager _manager;
+
+        /// <summary>Makes a view of one dock's memory.</summary>
+        /// <param name="instance">The dock whose memory this is.</param>
+        /// <param name="manager">The manager to tell when it changes.</param>
+        public DockState(DockInstance instance, DockManager manager)
+        {
+            _instance = instance;
+            _manager = manager;
+        }
+
+        /// <inheritdoc />
+        public string? Read(string key) =>
+            _instance.Meta.TryGetValue(key, out var kept) ? kept : null;
+
+        /// <inheritdoc />
+        public void Write(string key, string value)
+        {
+            if (_instance.Meta.TryGetValue(key, out var kept) && kept == value)
+            {
+                return;
+            }
+
+            _instance.Meta[key] = value;
+
+            if (!_manager._restoring)
+            {
+                _manager.StateChanged?.Invoke();
+            }
+        }
+    }
 }

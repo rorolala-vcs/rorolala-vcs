@@ -2,7 +2,7 @@ using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
 
-/// <summary>How the browser lays its entries out.</summary>
+/// <summary>How a directory's entries are laid out.</summary>
 internal enum BrowserView
 {
     /// <summary>One entry to a line.</summary>
@@ -10,9 +10,6 @@ internal enum BrowserView
 
     /// <summary>Entries as tiles, wrapping across the width.</summary>
     Grid,
-
-    /// <summary>Directories as a tree, opened downward.</summary>
-    Tree,
 }
 
 /// <summary>
