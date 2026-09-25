@@ -25,12 +25,20 @@ namespace RorolalaDesktop.Theming;
 /// Nothing is rounded, nothing is raised, nothing moves; what is animated is colour and opacity only.
 /// </para>
 /// <para>
-/// The accent is lemon, and it is written into <em>Fluent's own</em> accent resources rather than
-/// applied control by control. Fluent draws a selected row, a focused field, a checked box and a
-/// hyperlink from those resources, so naming them once is what makes the whole program lemon instead
+/// The accent is lemon, and it is written into <em>the base theme's own</em> accent resources rather
+/// than applied control by control. The base theme draws a selected row, a checked box and a text
+/// selection from those resources, so naming them once is what makes the whole program lemon instead
 /// of a lemon patch on a blue theme — and it is why the few rules below are about geometry and ink
-/// rather than about colour. Only the ink needs care: Fluent puts white on an accent fill, which on
-/// lemon is 1.2:1, so everything that sits on the accent is repainted near-black, at 14.9:1.
+/// rather than about colour.
+/// </para>
+/// <para>
+/// The ink on the accent needs a rule of its own. The base theme writes white on it, which on lemon is
+/// 1.2:1, so everything the accent fills is written in near-black, at 14.9:1.
+/// </para>
+/// <para>
+/// The three tints the chrome is drawn with are this theme's own, because the base theme has none: its
+/// neutrals are all opaque, and a band of chrome has to be a tint of whatever is behind it to sit on
+/// the window and on the content alike. They are given per variant, as the ink of that variant.
 /// </para>
 /// <para>
 /// The shell marks the surfaces it owns with classes, which is how a rule here addresses a dock
@@ -76,29 +84,23 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// </remarks>
     private static readonly FontFamily Face = new("fonts:Inter#Inter");
 
-    /// <summary>A tint over whatever is behind: a chrome band, and what a hovered surface takes.</summary>
-    private const string Tint = "SystemControlBackgroundListLowBrush";
+    /// <summary>A band of chrome: a tint of the variant's own ink, drawn by this theme.</summary>
+    private const string Tint = "rorolala.theme.tint";
 
     /// <summary>The same tint one step stronger, for the two places that have to stand out from a band.</summary>
-    private const string DeeperTint = "SystemControlBackgroundBaseLowBrush";
+    private const string DeeperTint = "rorolala.theme.tint.deeper";
 
     /// <summary>A hairline, for the rule between chrome and content and for the edge of a control.</summary>
-    private const string Line = "SystemControlForegroundBaseLowBrush";
+    private const string Line = "rorolala.theme.line";
 
-    /// <summary>The accent, as a colour Fluent derives its accent brushes from.</summary>
+    /// <summary>The accent, as the colour the base theme derives its accent brushes from.</summary>
     private static readonly Color Lemon = Color.FromRgb(0xBF, 0xFF, 0x00);
-
-    /// <summary>The accent lightened, which is what an accent-darkened thing takes on hover.</summary>
-    private static readonly Color LemonLight = Color.FromRgb(0xD4, 0xFF, 0x4D);
 
     /// <summary>The accent darkened, which is what an accent takes while it is held.</summary>
     private static readonly Color LemonDeep = Color.FromRgb(0xA6, 0xE0, 0x00);
 
     /// <summary>What is written on the accent. Near-black, because white on lemon cannot be read.</summary>
     private static readonly Color OnLemon = Color.FromRgb(0x12, 0x1A, 0x00);
-
-    /// <summary>What an accent mark that is switched off is tinted with.</summary>
-    private static readonly Color LemonOff = Color.FromArgb(0x66, 0xBF, 0xFF, 0x00);
 
     /// <summary>The red a close is everywhere, which is the one thing in the program that is not the accent.</summary>
     private static readonly Color Closed = Color.FromRgb(0xC4, 0x2B, 0x1C);
@@ -114,7 +116,8 @@ internal sealed class RorolalaTheme : IThemeProvider
         [Palette(), .. Type(), .. Chrome(), .. Content(), .. Parts()];
 
     /// <summary>
-    /// The accent, written into the base theme's own accent resources.
+    /// The accent, written into the base theme's own accent resources, and the tints of this theme's
+    /// own.
     /// </summary>
     /// <remarks>
     /// A style carries resources as readily as it carries setters, and a style added after the base
@@ -122,10 +125,9 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// The entries are given twice, once per variant, because a lookup reads the dictionary of the
     /// variant it is resolving for and never a default one.
     /// <para>
-    /// Both the colours and the brushes are named. The dark variant derives its accent brushes from
-    /// the colours; the light variant names its brushes outright, so overriding the colours alone
-    /// would leave half the program blue in one variant — which is what happened the first time this
-    /// was tried.
+    /// Both the colours and the brushes are named, because the base theme's brushes are built from its
+    /// colours only in one of the two variants: naming the colours alone left half the program blue in
+    /// the other, which is what happened the first time this was tried.
     /// </para>
     /// </remarks>
     private static Style Palette()
@@ -136,37 +138,56 @@ internal sealed class RorolalaTheme : IThemeProvider
         {
             ThemeDictionaries =
             {
-                [ThemeVariant.Light] = Accents(),
-                [ThemeVariant.Dark] = Accents(),
+                [ThemeVariant.Light] = Accents(
+                    Color.FromArgb(0x0F, 0x00, 0x00, 0x00),
+                    Color.FromArgb(0x1F, 0x00, 0x00, 0x00),
+                    Color.FromArgb(0x33, 0x00, 0x00, 0x00)
+                ),
+                [ThemeVariant.Dark] = Accents(
+                    Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF),
+                    Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF),
+                    Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)
+                ),
             },
         };
 
         return style;
     }
 
-    /// <summary>What the accent is, for one variant.</summary>
-    private static ResourceDictionary Accents() =>
+    /// <summary>
+    /// What one variant's palette is.
+    /// </summary>
+    /// <param name="tint">A band of chrome.</param>
+    /// <param name="deeper">The same, one step stronger.</param>
+    /// <param name="line">A hairline.</param>
+    private static ResourceDictionary Accents(Color tint, Color deeper, Color line) =>
         new()
         {
-            ["SystemAccentColor"] = Lemon,
-            ["SystemAccentColorLight1"] = LemonLight,
-            ["SystemAccentColorLight2"] = Color.FromRgb(0xE4, 0xFF, 0x80),
-            ["SystemAccentColorLight3"] = Color.FromRgb(0xF2, 0xFF, 0xC2),
-            ["SystemAccentColorDark1"] = LemonDeep,
-            ["SystemAccentColorDark2"] = Color.FromRgb(0x8B, 0xBF, 0x00),
-            ["SystemAccentColorDark3"] = Color.FromRgb(0x6E, 0x99, 0x00),
+            // The accent family, which is what the base theme fills a selected row, opens a drop-down
+            // and clicks a box with. The alphas are the base theme's own, so the washes stay washes.
+            ["ThemeAccentColor"] = Lemon,
+            ["ThemeAccentColor2"] = WithAlpha(Lemon, 0x99),
+            ["ThemeAccentColor3"] = WithAlpha(Lemon, 0x66),
+            ["ThemeAccentColor4"] = WithAlpha(Lemon, 0x33),
+            ["ThemeAccentBrush"] = Fill(Lemon),
+            ["ThemeAccentBrush2"] = Fill(WithAlpha(Lemon, 0x99)),
+            ["ThemeAccentBrush3"] = Fill(WithAlpha(Lemon, 0x66)),
+            ["ThemeAccentBrush4"] = Fill(WithAlpha(Lemon, 0x33)),
 
-            ["SystemControlBackgroundAccentBrush"] = Fill(Lemon),
-            ["SystemControlForegroundAccentBrush"] = Fill(Lemon),
-            ["SystemControlHighlightAccentBrush"] = Fill(Lemon),
-            ["SystemControlHighlightAltAccentBrush"] = Fill(Lemon),
-            ["SystemControlHighlightListAccentLowBrush"] = Fill(Lemon),
-            ["SystemControlHighlightListAccentMediumBrush"] = Fill(Lemon),
-            ["SystemControlHighlightListAccentHighBrush"] = Fill(Lemon),
-            ["SystemControlHighlightAltListAccentLowBrush"] = Fill(Lemon),
-            ["SystemControlHighlightAltListAccentMediumBrush"] = Fill(Lemon),
-            ["SystemControlHighlightAltListAccentHighBrush"] = Fill(Lemon),
-            ["SystemControlDisabledAccentBrush"] = Fill(LemonOff),
+            // What sits on the accent: the base theme writes white there, which lemon cannot carry.
+            ["HighlightForegroundColor"] = OnLemon,
+            ["HighlightForegroundBrush"] = Fill(OnLemon),
+
+            // The highlight the base theme keeps apart from its accent family — a tick, a selection of
+            // text — which would otherwise stay blue while everything else went lemon.
+            ["HighlightColor"] = Lemon,
+            ["HighlightBrush"] = Fill(Lemon),
+            ["HighlightColor2"] = LemonDeep,
+            ["HighlightBrush2"] = Fill(LemonDeep),
+
+            [Tint] = Fill(tint),
+            [DeeperTint] = Fill(deeper),
+            [Line] = Fill(line),
         };
 
     /// <summary>What the whole program is set in.</summary>
@@ -391,14 +412,15 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// The template parts the base theme colours itself, and the few the accent makes wrong.
     /// </summary>
     /// <remarks>
-    /// Fluent draws most states on a control's template rather than on the control — a selected row's
-    /// fill, a focused field's edge, the tick in a box — so a rule for the control cannot reach them,
-    /// and the part has to be named. Every rule here carries an activator as well as the part name:
-    /// Avalonia ranks an activated setter above a template binding and above a plain setter, which is
-    /// what it takes to be heard over a base theme on a state it has already styled.
+    /// The base theme draws most states on a control's template rather than on the control — a selected
+    /// row's fill, a focused field's edge, the tick in a box — so a rule for the control cannot reach
+    /// them, and the part has to be named. Every rule here carries an activator as well as the part
+    /// name: Avalonia ranks an activated setter above a template binding and above a plain setter,
+    /// which is what it takes to be heard over the base theme's styling of the same place.
     /// <para>
-    /// The fills need no rule at all: they follow the accent resources. What is left is the ink on
-    /// them, the one-pixel edges, and the fades.
+    /// The fills mostly need no rule at all, since they follow the accent resources; the ones that do
+    /// are the box that is filled with it and the ink that cannot be white on it. The rest is the
+    /// field's edge and the fades.
     /// </para>
     /// </remarks>
     private static Style[] Parts() =>
@@ -406,27 +428,26 @@ internal sealed class RorolalaTheme : IThemeProvider
             Ink(selector => selector.OfType<ListBoxItem>(), "PART_ContentPresenter"),
             Ink(selector => selector.OfType<ComboBoxItem>(), "PART_ContentPresenter"),
             Ink(selector => selector.OfType<TreeViewItem>(), "PART_HeaderPresenter"),
+
+            // A checked box is filled with the accent and ticked in the ink that can be read on it,
+            // where the base theme leaves the box empty and draws the tick in the accent.
             On(
-                selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("CheckGlyph"),
+                selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("border"),
+                Fixed(Border.BackgroundProperty, Lemon),
+                Fixed(Border.BorderBrushProperty, Lemon)
+            ),
+            On(
+                selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("checkMark"),
                 new Setter(Shape.FillProperty, new SolidColorBrush(OnLemon))
             ),
 
+            // A field keeps its one pixel when it takes focus, and takes it in the accent: the base
+            // theme brightens its border instead, which is a change of the same weight and no help
+            // about where the keyboard is.
             On(
-                selector => selector.OfType<CheckBox>().Template().Name("NormalRectangle"),
-                new Setter(Border.CornerRadiusProperty, Square),
-                new Setter(Border.BorderThicknessProperty, Edge)
-            ),
-            On(
-                selector => selector.OfType<TextBox>().Template().Name("PART_BorderElement"),
-                new Setter(Border.CornerRadiusProperty, Square),
-                new Setter(Border.BorderThicknessProperty, Edge)
-            ),
-
-            // The field keeps its one pixel when it takes focus, rather than the two the base theme
-            // draws, so that the edge that says "here" is the same edge as everywhere else.
-            On(
-                selector => selector.OfType<TextBox>().Class(":focus").Template().Name("PART_BorderElement"),
-                new Setter(Border.BorderThicknessProperty, Edge)
+                selector => selector.OfType<TextBox>().Class(":focus").Template().Name("border"),
+                new Setter(Border.BorderThicknessProperty, Edge),
+                Fixed(Border.BorderBrushProperty, Lemon)
             ),
 
             // Every part that changes colour on a state fades into it, which is all the motion there
@@ -440,12 +461,12 @@ internal sealed class RorolalaTheme : IThemeProvider
                 new Setter(ContentPresenter.TransitionsProperty, Fading())
             ),
             On(
-                selector => selector.OfType<TemplatedControl>().Template().Name("PART_BorderElement"),
+                selector => selector.OfType<TemplatedControl>().Template().Name("border"),
                 new Setter(Border.TransitionsProperty, Fading())
             ),
             On(
-                selector => selector.OfType<TemplatedControl>().Template().Name("NormalRectangle"),
-                new Setter(Border.TransitionsProperty, Fading())
+                selector => selector.OfType<TemplatedControl>().Template().Name("checkMark"),
+                new Setter(Shape.TransitionsProperty, Fading())
             ),
         ];
 
@@ -548,4 +569,8 @@ internal sealed class RorolalaTheme : IThemeProvider
 
     /// <summary>A brush of one colour.</summary>
     private static IBrush Fill(Color colour) => new SolidColorBrush(colour);
+
+    /// <summary>The same colour, at another alpha.</summary>
+    private static Color WithAlpha(Color colour, byte alpha) =>
+        Color.FromArgb(alpha, colour.R, colour.G, colour.B);
 }

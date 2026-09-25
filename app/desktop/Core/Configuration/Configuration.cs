@@ -42,7 +42,7 @@ internal sealed class PreferenceConfiguration
     /// <summary>The locale used when neither the command line nor the file names one.</summary>
     public const string DefaultLanguage = "en";
 
-    /// <summary>The id of the theme to apply, or <c>fluent</c> for the base theme alone.</summary>
+    /// <summary>The id of the theme to apply, or <c>simple</c> for the base theme alone.</summary>
     public string Theme { get; set; } = DefaultTheme;
 
     /// <summary>The fallback locale, used only when the command line passes no language.</summary>

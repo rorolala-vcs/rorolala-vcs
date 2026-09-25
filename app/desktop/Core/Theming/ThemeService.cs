@@ -9,10 +9,17 @@ namespace RorolalaDesktop.Theming;
 /// Applies the theme <c>preference.json</c> names as an overlay on the base theme.
 /// </summary>
 /// <remarks>
-/// <c>FluentTheme</c> is always loaded as the base, because Avalonia's controls need it; the named
-/// theme is layered on top. The value <c>fluent</c> means the base alone. A theme with no provider
-/// stops the program before the window exists, since the user's preference cannot be honoured
-/// (Section 5.5). A change of theme takes effect on the next start.
+/// <c>SimpleTheme</c> is always loaded as the base, because Avalonia's controls need a theme to have a
+/// template at all; the named theme is layered on top. The value <c>simple</c> means the base alone. A
+/// theme with no provider stops the program before the window exists, since the user's preference
+/// cannot be honoured (Section 5.5). A change of theme takes effect on the next start.
+/// <para>
+/// Simple rather than Fluent is the base by design: Fluent is a whole look, and half of what an
+/// overlay writes on top of it is spent overriding what Fluent had already decided — its resources,
+/// its rounded templates, its accent family. Simple decides little, so a theme on top of it says what
+/// it means. What it costs is that Simple is plain: a hover it does not draw is a hover nobody draws
+/// (Section 10).
+/// </para>
 /// <para>
 /// The overlay is added to <c>Application.Styles</c> once, before the window is made, and that order
 /// is load-bearing rather than tidy. Avalonia re-applies the whole list to every element that is
@@ -24,7 +31,7 @@ namespace RorolalaDesktop.Theming;
 internal sealed class ThemeService
 {
     /// <summary>The id that means the base theme with no overlay.</summary>
-    public const string Fluent = "fluent";
+    public const string Simple = "simple";
 
     /// <summary>Where the registered themes are.</summary>
     private readonly ThemeRegistry _themes;
@@ -40,7 +47,7 @@ internal sealed class ThemeService
     /// <exception cref="ConfigurationFailure">No provider supplies that id.</exception>
     public void Apply(string themeId)
     {
-        if (themeId == Fluent)
+        if (themeId == Simple)
         {
             return;
         }

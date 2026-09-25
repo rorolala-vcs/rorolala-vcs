@@ -278,7 +278,7 @@ writes a default file. A missing file is not a validation failure; an unreadable
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `_version` | integer | yes | Schema version. Currently `1`. |
-| `theme` | string | no | Theme provider id. `"fluent"` means FluentTheme alone. Defaults to `rorolala.theme.default`. |
+| `theme` | string | no | Theme provider id. `"simple"` means SimpleTheme alone. Defaults to `rorolala.theme.default`. |
 | `language` | string | no | Fallback locale, used only when `rola desktop` passes no `-Lang:`. |
 | `plugin` | object | no | Per-plugin configuration, keyed by `PluginId`. The host does not interpret the contents. |
 
@@ -554,7 +554,12 @@ exists for plugins that react to a completed open.
 
 ## 10. Theming
 
-- `FluentTheme` is **always loaded as the base theme**. Avalonia controls require it.
+- `SimpleTheme` is **always loaded as the base theme**. Avalonia's controls have no template without one.
+- The base is Simple rather than Fluent, deliberately. Fluent is a whole look, and an overlay on it
+  spends half its rules overriding what Fluent had already decided — its resources, its rounded
+  templates, its accent family. Simple decides little, so a theme on top of it says what it means. What
+  that costs is that Simple draws little of its own: a hover it does not draw is a hover nobody draws,
+  and what the design below does not state is left plain.
 - The theme named by `preference.json` is applied as an **overlay** on top of the base.
 - `RorolalaTheme` is a **built-in** theme provider, not a plugin. It is the default value of `theme`.
 - The design is Win10-flat:
@@ -572,12 +577,15 @@ exists for plugins that react to a completed open.
   - **Close is the one red thing.** The close button at the end of a strip draws nothing until the
     pointer is on it, and then fills with the red a close is everywhere. It is the only colour in the
     program that is not the accent or a tint of the variant's ink.
-- The accent is **lemon green** — `#BFFF00`, lightened to `#D4FF4D` when an accent-darkened thing is
-  hovered, darkened to `#A6E000` while it is held, `#66BFFF00` when it is disabled. It is written into
-  **Fluent's own accent resources** rather than applied control by control, so that a selected row, a
-  focused field, a checked box and a hyperlink are all lemon from one definition. Only the ink on the
-  accent needs a rule of its own: Fluent writes white on an accent fill, which on lemon is 1.2:1, so
-  everything the accent fills is written in near-black (`#121A00`, 14.9:1).
+- The accent is **lemon green** — `#BFFF00`, at the base theme's own alphas for its washes
+  (`#99BFFF00`, `#66BFFF00`, `#33BFFF00`), darkened to `#A6E000` where the base theme wants a second
+  highlight. It is written into **the base theme's own accent resources** rather than applied control
+  by control, so that a selected row, a checked box and a selection of text are all lemon from one
+  definition. The ink on the accent needs a rule of its own: the base theme writes white on it, which
+  on lemon is 1.2:1, so everything the accent fills is written in near-black (`#121A00`, 14.9:1).
+- The three tints the chrome is drawn with are **the theme's own**, because the base theme has none to
+  borrow: every neutral it ships is opaque, and a band of chrome has to be a tint of whatever is behind
+  it to sit on the window and on the content alike. Each is keyed per variant, as that variant's ink.
 - The type is **Inter**, which the program ships. The theme names it through the font collection
   (`fonts:Inter#Inter`), because a family name on its own is looked for among the system's fonts, is
   not there, and falls back silently to the platform's face.
@@ -602,8 +610,11 @@ exists for plugins that react to a completed open.
   | `dock-drop-zone` | Where a dragged dock would land. |
 
   The drop zone is the one mark a theme need not style. The dock area asks the base theme for its
-  accent and its tint by name, because a drag affordance has to be visible under a theme that says
-  nothing about it; what a theme supplies is the edge it wears and the fade it arrives with.
+  accent and for that accent at its faintest by name, because a drag affordance has to be visible
+  under a theme that says nothing about it; what a theme supplies is the edge it wears and the fade it
+  arrives with. Those two names are the base theme's, so the dock area names the base theme as surely
+  as if it named its type: a base with different resource names would leave the drop zone without an
+  edge, and nothing would say so.
 
   A splitter draws nothing until the pointer is on it, and then a hairline of the accent through its
   middle. The grab is four pixels wide, which is what it has to stay for a hand to find it, and a line
@@ -612,7 +623,9 @@ exists for plugins that react to a completed open.
   bare grab with nothing to see, which is what the base theme alone does.
 
 - A plugin-provided theme is treated identically to a built-in theme; only its origin differs.
-- The value `"fluent"` selects FluentTheme with no overlay.
+- The value `"simple"` selects SimpleTheme with no overlay. A `preference.json` still naming
+  `"fluent"` — the base theme's name before Section 10 changed it — stops the program with code `3`,
+  since no provider supplies it.
 - If the named theme has no provider, the program exits with code `3` (Section 5.5).
 - A theme change takes effect on the next start.
 
@@ -718,7 +731,7 @@ They are reported in the Log dock and, where the user must act, in a popup.
 ```jsonc
 {
   "_version": 1,
-  "theme": "rorolala.theme.default",   // or "fluent", or a plugin theme id
+  "theme": "rorolala.theme.default",   // or "simple", or a plugin theme id
   "language": "zh-CN",                 // fallback only
   "plugin": {
     "<PluginId>": { "<key>": "<value>" }

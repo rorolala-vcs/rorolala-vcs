@@ -96,11 +96,16 @@ internal sealed class DockArea : UserControl
     /// Asked for by name rather than named here: which colour the accent is belongs to the theme, and
     /// a theme that says nothing about drop zones — the base one alone — still has an accent for this
     /// to take. A colour written here instead would be one no theme could change.
+    /// <para>
+    /// The name is the base theme's, so the base theme is named here as surely as if its type were:
+    /// swapping the base for one with different resource names means changing these two lines, and
+    /// nothing would say so but a drop zone that quietly lost its edge.
+    /// </para>
     /// </remarks>
-    private const string AccentKey = "SystemControlHighlightAccentBrush";
+    private const string AccentKey = "ThemeAccentBrush";
 
-    /// <summary>The base theme's tint, and the little the drop zone is filled with.</summary>
-    private const string WashKey = "SystemControlBackgroundBaseLowBrush";
+    /// <summary>The base theme's accent at its faintest, and the little the drop zone is filled with.</summary>
+    private const string WashKey = "ThemeAccentBrush4";
 
     /// <summary>The docks and where they are.</summary>
     private readonly DockManager _manager;

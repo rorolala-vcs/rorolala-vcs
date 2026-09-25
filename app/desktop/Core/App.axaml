@@ -5,6 +5,9 @@
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.Styles>
-        <FluentTheme />
+        <!-- The base theme every overlay is layered onto. It is the plainest Avalonia ships: rectangular
+             controls, opaque neutral colours, and no accent of its own beyond one brush family — which is
+             what makes it a base a theme can be built on rather than one it has to fight. -->
+        <SimpleTheme />
     </Application.Styles>
 </Application>

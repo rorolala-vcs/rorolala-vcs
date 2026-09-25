@@ -21,13 +21,13 @@ public sealed class ThemeTests
         Assert.Equal("rorolala.theme.default", PreferenceConfiguration.DefaultTheme);
     }
 
-    /// <summary>The id <c>fluent</c> means the base theme alone, which needs no provider.</summary>
+    /// <summary>The id <c>simple</c> means the base theme alone, which needs no provider.</summary>
     [Fact]
-    public void FluentMeansTheBaseThemeAlone()
+    public void SimpleMeansTheBaseThemeAlone()
     {
         var service = new ThemeService(new ThemeRegistry());
 
-        service.Apply(ThemeService.Fluent);
+        service.Apply(ThemeService.Simple);
     }
 
     /// <summary>A theme with no provider stops the program with its own code.</summary>
