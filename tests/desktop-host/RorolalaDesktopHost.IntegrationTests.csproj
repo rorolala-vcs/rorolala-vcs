@@ -26,7 +26,7 @@
   <ItemGroup>
     <!-- The host itself. This suite drives its own types — the configuration, the plugin manager,
          the registries, the log — rather than only the contract it publishes. -->
-    <ProjectReference Include="../../app/desktop/RorolalaDesktop.csproj" />
+    <ProjectReference Include="../../app/desktop/Core/RorolalaDesktop.csproj" />
   </ItemGroup>
 
   <ItemGroup>

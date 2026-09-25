@@ -1,0 +1,39 @@
+_version: 2
+
+# What the File System browser says. Every key is namespaced by the plugin's identity — the id with
+# dots underscored — which is the convention that keeps two plugins' keys apart.
+
+rorolala_file_system:
+  name:
+    en: File System
+    zh-CN: 文件系统
+  dock:
+    en: File System
+    zh-CN: 文件系统
+
+  layout_list:
+    en: List
+    zh-CN: 列表
+  layout_grid:
+    en: Grid
+    zh-CN: 网格
+  layout_tree:
+    en: Tree
+    zh-CN: 树
+
+  open:
+    en: Open
+    zh-CN: 打开
+  reveal:
+    en: Show in File Manager
+    zh-CN: 在文件管理器中显示
+  copy_path:
+    en: Copy Path
+    zh-CN: 复制路径
+  refresh:
+    en: Refresh
+    zh-CN: 刷新
+
+  not_a_directory:
+    en: "`%{path}` is not a directory"
+    zh-CN: "`%{path}` 不是目录"

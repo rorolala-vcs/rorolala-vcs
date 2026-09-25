@@ -26,10 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Contract/**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- The host's own types are not part of the contract, so nothing outside sees them but the
          integration suite that drives the host directly. -->
     <InternalsVisibleTo Include="RorolalaDesktopHost.IntegrationTests" />
@@ -44,9 +40,11 @@
 
   <ItemGroup>
     <!-- The host compiles against the same contract its plugins do, so the two agree by
-         construction rather than by being kept in step by hand. -->
-    <ProjectReference Include="Contract/RorolalaDesktop.Contract.csproj" />
-    <ProjectReference Include="../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+         construction rather than by being kept in step by hand. The contract sits beside the core
+         rather than inside it: it is the boundary between the host and its plugins, not a part of
+         either. -->
+    <ProjectReference Include="../Contract/RorolalaDesktop.Contract.csproj" />
+    <ProjectReference Include="../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
   </ItemGroup>
 
 </Project>

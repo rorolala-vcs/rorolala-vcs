@@ -64,8 +64,14 @@ SCRIPTS_DIR="$BUILD_DIR/scripts"
 # The Desktop program: the project it is built from, and where an export lays it out. It is laid out
 # in a `desktop` directory of its own beside the command line programs, which is where
 # `rola desktop` reaches for it — so an export and that command name one place.
-DESKTOP_PROJECT=app/desktop/RorolalaDesktop.csproj
+DESKTOP_PROJECT=app/desktop/Core/RorolalaDesktop.csproj
 DESKTOP_DIR="$BUILD_DIR/bin/desktop"
+
+# The plugins that ship with the Desktop program. Each is a project of its own, built apart from the
+# program that discovers it, and laid out only when something is run or handed over. The name of the
+# directory holding the project is also the assembly's name, which is what says which files to take
+# from the output it was built into.
+DESKTOP_PLUGINS="app/desktop/plugins/FileSystemPlugin"
 
 # Asks the runner for another script, the way a `make` target asked for another target.
 again() {
@@ -78,6 +84,27 @@ again() {
 publish_desktop() {
 	# shellcheck disable=SC2086
 	$DOTNET publish "$DESKTOP_PROJECT" -c Release -o "$1"
+}
+
+# Builds each plugin that ships with the Desktop program and lays it where the program looks for it:
+# its assembly and its translations under `plugins/` beside the program. Only those are taken. The
+# contract and Avalonia the plugin was built against are the host's own copies, delegated to rather
+# than carried, so laying them down would be laying down a second of each.
+publish_plugins() {
+	for project in $DESKTOP_PLUGINS; do
+		name=$(basename "$project")
+		output="$CS_TARGET_DIR/$name/bin/Release/net8.0"
+
+		# shellcheck disable=SC2086
+		$DOTNET build "$project/$name.csproj" -c Release
+
+		mkdir -p "$DESKTOP_DIR/plugins"
+		cp "$output/$name.dll" "$DESKTOP_DIR/plugins/"
+
+		if [ -d "$output/i18n" ]; then
+			cp -r "$output/i18n" "$DESKTOP_DIR/plugins/"
+		fi
+	done
 }
 
 # `export` and `clean` delete a destination with `rm -rf`, so refuse a path that would take

@@ -35,7 +35,7 @@
   <ItemGroup>
     <!-- Built, not referenced: what is tested is the program a caller runs, so it is compiled first
          and then started as a program rather than called into. -->
-    <ProjectReference Include="../../app/desktop/RorolalaDesktop.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../app/desktop/Core/RorolalaDesktop.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
