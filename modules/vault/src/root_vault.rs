@@ -172,7 +172,14 @@ impl RootVault {
         // What `fmt_path_str` leaves is relative to whatever it is joined onto, so a path that
         // is still absolute — an input that came in as one — is read as the relative path it
         // names instead: `join` would otherwise let an absolute path replace the root outright.
-        let relative = normalized.trim_start_matches('/');
+        //
+        // Two spellings of absolute have to be taken off. A leading separator is one, and a drive
+        // letter is the other: `fmt_path_str` unifies separators to `/` but keeps the `C:` of a
+        // Windows path, and `join` reads `C:/...` as absolute and replaces the root with it. The
+        // prefix is stripped over the *text* rather than with `Path::strip_prefix`, whose
+        // `Prefix` component exists on Windows only — the rule would then hold on one platform
+        // and not the other, which is the failure this is here to stop.
+        let relative = Self::strip_drive_prefix(normalized.trim_start_matches('/'));
 
         // A path that names the root itself is the root: `fmt_path_str` writes nothing, `.` and
         // `./` all as a path walking to where it started, and what is at the root is the Vault
@@ -190,6 +197,32 @@ impl RootVault {
             Some(Vault::at(dir))
         } else {
             None
+        }
+    }
+
+    /// The path without the drive prefix a Windows absolute path carries, if it has one.
+    ///
+    /// A prefix is one letter, a colon, and a separator that may be absent: `fmt_path_str` writes
+    /// `C:/a` for both `C:\a` and `C:/a`, and a bare `C:` names the drive itself. Anything else —
+    /// `server/share` from a UNC path, `vaults/alpha`, a path with no colon — is handed back as
+    /// it stands.
+    fn strip_drive_prefix(path: &str) -> &str {
+        // The prefix is ASCII, so looking at the first bytes cannot split a character; a path
+        // shorter than the prefix is not one.
+        let bytes = path.as_bytes();
+        let drive = matches!(bytes, [letter, b':', ..] if letter.is_ascii_alphabetic());
+
+        if !drive {
+            return path;
+        }
+
+        // What the colon is followed by decides: the separator belongs to the prefix, nothing
+        // means the path named the drive itself, and anything else is a relative path that
+        // happens to carry a colon — `vaults/a:b`, say — and was never a prefix at all.
+        match bytes.get(2) {
+            Some(b'/') => &path[3..],
+            None => "",
+            Some(_) => path,
         }
     }
 
@@ -242,6 +275,77 @@ mod tests {
 
     use super::RootVault;
     use crate::{CONFIG_PATH, VAULTS_DIR, Vault};
+
+    /// A drive prefix is taken off whatever spelling of one arrives, and a colon that is part of
+    /// a name rather than a prefix is left where it is.
+    ///
+    /// The unix arms hold on Windows too, and the other way round: the rule is over the text, not
+    /// over what this platform would call absolute.
+    #[test]
+    fn a_drive_prefix_is_taken_off_and_nothing_else_is() {
+        for (given, wanted) in [
+            ("C:/a/b", "a/b"),
+            ("c:/a", "a"),
+            // A bare drive names the drive, which is no path under it.
+            ("C:", ""),
+            ("C:/", ""),
+            // A colon that is not a prefix: two names with colons in them, and a relative path
+            // that happens to carry one.
+            ("server/share", "server/share"),
+            ("vaults/alpha", "vaults/alpha"),
+            ("vaults/a:b", "vaults/a:b"),
+            ("CC:/a", "CC:/a"),
+            ("/a/b", "/a/b"),
+            ("", ""),
+        ] {
+            assert_eq!(
+                RootVault::strip_drive_prefix(given),
+                wanted,
+                "given `{given}`"
+            );
+        }
+    }
+
+    /// A path that names somewhere else outright is looked for under the root, whatever
+    /// spelling it used to say so.
+    #[tokio::test]
+    async fn a_path_that_names_somewhere_else_outright_stays_under_the_root() {
+        let parent = scratch("outright");
+        let dir = parent.join("vault");
+        vault_at(&dir);
+
+        // A Vault beside the root, reached by naming where it sits rather than by climbing to it.
+        let beside = parent.join("beside");
+        vault_at(&beside);
+
+        let root = RootVault::locate(&dir).unwrap();
+
+        // The path this platform writes, which is a drive prefix on Windows and a leading
+        // separator elsewhere, is read as the relative path it names and finds nothing.
+        assert!(
+            root.get_vault_by_path(beside.to_str().unwrap())
+                .await
+                .is_none()
+        );
+
+        // The Windows spelling is checked on every platform rather than only the one it belongs
+        // to: the rule is over the text, so a drive prefix is taken off here as it is there —
+        // which is what the failure this guards against did not do.
+        assert!(
+            root.get_vault_by_path("C:/elsewhere/../elsewhere")
+                .await
+                .is_none()
+        );
+
+        // A path that is nothing but a prefix names no path at all, so it comes back as the root
+        // rather than as the drive it was written for.
+        assert_eq!(
+            root.get_vault_by_path("Z:/").await.unwrap().get_root(),
+            dir.as_path()
+        );
+
+        let _ = fs::remove_dir_all(&parent);
+    }
 
     /// A parent directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
