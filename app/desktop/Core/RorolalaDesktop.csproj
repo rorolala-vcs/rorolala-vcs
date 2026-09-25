@@ -45,6 +45,10 @@
          either. -->
     <ProjectReference Include="../Contract/RorolalaDesktop.Contract.csproj" />
     <ProjectReference Include="../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <!-- Carried rather than used. A plugin's dependencies are what the host itself carries, since
+         nothing but a plugin's own assembly is laid beside it; the icons are one of them, so the
+         host has to have them for a plugin to be allowed to ask for them (Section 3.4). -->
+    <ProjectReference Include="../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj" />
   </ItemGroup>
 
 </Project>

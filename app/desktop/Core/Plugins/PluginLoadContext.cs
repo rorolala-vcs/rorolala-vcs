@@ -64,6 +64,7 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
 
         return name == "RorolalaDesktop.Contract"
             || name == "RorolalaDesktopI18n"
+            || name == "RorolalaDesktopSysIcons"
             || name.StartsWith("Avalonia", StringComparison.Ordinal)
             || name.StartsWith("System", StringComparison.Ordinal)
             || name.StartsWith("Microsoft.", StringComparison.Ordinal)

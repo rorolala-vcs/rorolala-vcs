@@ -144,12 +144,22 @@ The load context delegates the following to the host's default load context, so 
 exactly one copy of each in the process:
 
 - the contract assembly, `RorolalaDesktop.Contract`;
+- the translations, `RorolalaDesktopI18n`: it holds the registered directories and the chosen locale
+  as static state, so a plugin with its own copy would hold its own and be reading what nobody
+  registered;
+- the icons, `RorolalaDesktopSysIcons`, which asks the system for the picture it gives a file or a
+  directory (Section 9);
 - Avalonia and its satellites;
 - the .NET base class libraries.
 
-Everything else resolves from the plugin's own directory. Resolving Avalonia or the contract
-privately would produce a second, incompatible copy of those types; a `Control` built by such a copy
-is not the host's `Control` and cannot be inserted into the host's visual tree.
+Everything else resolves from the plugin's own directory. What has to be understood about that
+sentence is that **a plugin cannot depend on anything else**: only a plugin's own assembly and its
+translations are laid beside it, so a dependency the host does not carry is a dependency that is
+nowhere to be found at the moment the plugin is loaded. The list above is therefore the authority on
+what a plugin may depend on, and adding a facility to it is done by having the host carry it — and by
+naming it here. Resolving Avalonia or the contract privately would produce a second, incompatible copy
+of those types; a `Control` built by such a copy is not the host's `Control` and cannot be inserted
+into the host's visual tree.
 
 ## 4. Plugin Model
 
@@ -556,7 +566,19 @@ exists for plugins that react to a completed open.
 
 ## 9. Icon Badges
 
-- The File System plugin provides the default icon library and composes the final icon.
+- The File System plugin provides the default icon library and composes the final icon. An entry is
+  drawn with the icon **the system gives it** rather than one the program ships: a folder icon is the
+  desktop's to draw, and one shipped here would look wrong on every desktop but the one it was drawn
+  for. The library that reads them is `utils/desktop-sys-icons`; what it does per system is:
+  - **Linux** — a freedesktop desktop, read through its icon theme: the theme named by the desktop,
+    then what that theme inherits, then `hicolor`. A theme keeps a folder as an SVG more often than as
+    a PNG (Papirus, Adwaita and Breeze all do), so the system's own renderer draws it, at the size
+    asked for, once.
+  - **Windows** — the shell, asked about the kind of thing rather than about a path, so every folder
+    has the same picture and nothing has to exist on disk.
+  - **Anywhere else, and wherever a system has nothing to give** — a mark the File System plugin draws
+    itself, which says which of the two kinds a row is.
+  What is not there yet is a picture per kind of file: a file is drawn as a file, not as a kind of one.
 - A plugin contributes badges through `IIconBadgeProvider`, which has two methods:
   1. `Cares(Entry entry)` — a fast, convention-based check of whether the plugin has anything to
      say about this entry. The result is cached.
@@ -925,6 +947,8 @@ Agreed so far:
 
 - `app/ffi` and `src/lib.rs` — the C ABI surface used by `IRola`.
 - `utils/desktop-i18n` — `RolaI18N`, the translation reader to be extended for several directories.
+- `utils/desktop-sys-icons` — `SysIcons`, which asks the system for the icon it gives a file or a
+directory (Section 9).
 - `app/cli/rola/src/cmd_desktop.rs` — how the command line starts this program and hands over the
   language and the current directory.
 - `AGENTS.md` — repository conventions, including the English rule for documentation.

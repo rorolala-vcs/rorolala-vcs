@@ -20,9 +20,11 @@
 
   <ItemGroup>
     <!-- The contract is the only thing the host and a plugin agree on; the translations are read by
-         the same reader the host uses, so what this plugin says is said the way the host says it. -->
+         the same reader the host uses, so what this plugin says is said the way the host says it; and
+         the icons are the system's own, which is what a desktop expects a folder to be drawn with. -->
     <ProjectReference Include="../../Contract/RorolalaDesktop.Contract.csproj" />
     <ProjectReference Include="../../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <ProjectReference Include="../../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj" />
   </ItemGroup>
 
   <ItemGroup>
