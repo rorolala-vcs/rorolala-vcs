@@ -483,7 +483,7 @@ Both are always available from `Window`.
 
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
-| Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): rows of names below 60%, tiles above it. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): a table of rows below 60%, tiles above it. The table's columns are the icon, the name, the permissions, when it was last written and how large it is — and the permissions column is left out on Windows, which does not carry what those letters say. A column is made wider or narrower by the grab between it and its neighbour, which is drawn as the grab between two regions is (§10), and the name is the column that takes what is left over, so the table is as wide as the dock whatever the columns are. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
 | Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. Placed at the left by default. |
 | File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and an address to type. Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
@@ -493,10 +493,10 @@ The File System plugin is a plugin, but it is shipped with the program and is en
 A tree is a dock of its own rather than a third layout of the directory dock. A tree is not another
 way of reading one directory — it is a way of walking the ones under a place, and it is rooted at the
 base, which the location is not — so the two belong on screen at once, and neither is a mode of the
-other. What the directory dock's zoom decides is therefore whether the entries are read as rows of names
-or as tiles, and nothing else: there is one scale, and the arrangement follows from it, because a grid of
-pictures too small to look at is a grid nobody asked for. The zoom is a slider in the dock's own corner,
-and `Ctrl` and a turn of the wheel over the dock move it.
+other. What the directory dock's zoom decides is therefore whether the entries are read as a table of
+rows or as tiles, and nothing else: there is one scale, and the arrangement follows from it, because a
+grid of pictures too small to look at is a grid nobody asked for. The zoom is a slider in the dock's own
+corner, and `Ctrl` and a turn of the wheel over the dock move it.
 
 A tree reads a step when it is opened, and that is why what it offers is the closing of steps and never
 their opening: opening every step at once would read every directory under the base, which is the one
@@ -698,7 +698,7 @@ exists for plugins that react to a completed open.
   | `dock-title` | A dock's header. |
   | `selected` | The header of the dock the region is showing, in addition to `dock-title`. |
   | `dock-close` | The button that closes the dock a region is showing. |
-  | `dock-splitter` | The grab between regions. |
+  | `dock-splitter` | The grab between two regions, and the grab between two of a table's columns: four pixels wide. |
   | `dock-splitter-columns` / `dock-splitter-rows` | The same grab, saying which way it resizes. |
   | `dock-drop-zone` | Where a dragged dock would land. |
   | `dock-drop-target` | The zone a dragged dock is being aimed at, in addition to `dock-drop-zone`. |
@@ -717,6 +717,10 @@ exists for plugins that react to a completed open.
   that wide would be a bar; so the hairline is drawn inside the grab rather than being it, and the
   class says which way it runs. A look that styles neither of the two classes leaves the splitter a
   bare grab with nothing to see, which is what the base theme alone does.
+
+  A table's columns are moved by the same grab: the same classes, the same four pixels, the same
+  hairline. The two are one thing to look at and one thing to drag, and a grab between two columns
+  drawn as anything else would be a second answer to a question this section has already answered.
 
 - A change to `theme.json` takes effect on the **next start**. The look is applied once, before the
   window is made.

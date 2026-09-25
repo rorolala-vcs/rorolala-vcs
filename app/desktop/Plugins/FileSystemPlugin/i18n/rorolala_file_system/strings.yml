@@ -17,6 +17,24 @@ rorolala_file_system:
     en: Navigation
     zh-CN: 导航
 
+  # What the table's columns are headed. The permissions column is not shown where the system carries
+  # no such thing, so its key is only ever asked for on a system that has one.
+  column_icon:
+    en: Icon
+    zh-CN: 图标
+  column_name:
+    en: Name
+    zh-CN: 名字
+  column_permissions:
+    en: Permissions
+    zh-CN: 权限
+  column_modified:
+    en: Modified
+    zh-CN: 修改时间
+  column_size:
+    en: Size
+    zh-CN: 大小
+
   root:
     en: Root
     zh-CN: 根目录
