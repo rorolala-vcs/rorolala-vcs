@@ -35,6 +35,25 @@ namespace RorolalaDesktop.Docking;
 /// </remarks>
 internal sealed class DockArea : UserControl
 {
+    /// <summary>
+    /// The class a region's header strip carries, for a theme to address it by.
+    /// </summary>
+    /// <remarks>
+    /// The shell marks the surfaces it owns so that a theme — this host's, or a plugin's — can style
+    /// them without knowing what a dock is. The names are part of Section 10, since a plugin's theme
+    /// has to write them as literals.
+    /// </remarks>
+    public const string HeadersClass = "dock-headers";
+
+    /// <summary>The class a dock's own header carries.</summary>
+    public const string TitleClass = "dock-title";
+
+    /// <summary>The class the header of the dock a region is showing carries.</summary>
+    public const string SelectedClass = "selected";
+
+    /// <summary>The class a region's splitter carries.</summary>
+    public const string SplitterClass = "dock-splitter";
+
     /// <summary>The narrowest a column region is allowed to become.</summary>
     private const double MinColumn = 120;
 
@@ -193,8 +212,9 @@ internal sealed class DockArea : UserControl
         {
             Name = name;
 
-            DockPanel.SetDock(Headers, Dock.Top);
-            Panel.Children.Add(Headers);
+            Strip.Child = Headers;
+            DockPanel.SetDock(Strip, Dock.Top);
+            Panel.Children.Add(Strip);
             Panel.Children.Add(Content);
         }
 
@@ -203,6 +223,16 @@ internal sealed class DockArea : UserControl
 
         /// <summary>The region itself: headers above, docks below.</summary>
         public DockPanel Panel { get; } = new();
+
+        /// <summary>
+        /// The strip the headers sit in.
+        /// </summary>
+        /// <remarks>
+        /// A border around the headers rather than a background on them, because a theme's chrome is a
+        /// surface with an edge under it, and a <see cref="StackPanel"/> has a background but no
+        /// border. Nothing is padded here: the headers bring their own margins.
+        /// </remarks>
+        public Border Strip { get; } = new() { Classes = { HeadersClass } };
 
         /// <summary>The headers, one per dock the region was given.</summary>
         public StackPanel Headers { get; } =
@@ -324,7 +354,7 @@ internal sealed class DockArea : UserControl
     private void ConfigureSplitter(GridSplitter splitter, GridResizeDirection direction, Region region)
     {
         splitter.ResizeDirection = direction;
-        splitter.Background = Brushes.Transparent;
+        splitter.Classes.Add(SplitterClass);
 
         if (direction == GridResizeDirection.Columns)
         {
@@ -429,6 +459,7 @@ internal sealed class DockArea : UserControl
         var title = Header(instance.Title);
         var commands = new List<Button>();
 
+        title.Classes.Add(TitleClass);
         title.Click += (_, _) => Select(instance);
 
         // Taken on the way down. A button answers for its own press, and marks it handled while
@@ -519,7 +550,10 @@ internal sealed class DockArea : UserControl
 
             placed.View.IsVisible = shown;
             placed.Title.IsVisible = instance.IsOpen;
-            placed.Title.FontWeight = shown ? FontWeight.SemiBold : FontWeight.Normal;
+
+            // Which dock the region is showing is a class rather than a weight, so that what a
+            // selected header looks like is a theme's to decide and not this file's.
+            placed.Title.Classes.Set(SelectedClass, shown);
 
             foreach (var command in placed.Commands)
             {

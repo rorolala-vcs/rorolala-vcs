@@ -21,6 +21,15 @@ namespace RorolalaDesktop;
 /// </remarks>
 public partial class MainWindow : Window
 {
+    /// <summary>
+    /// The class the menu bar carries, for a theme to address it by.
+    /// </summary>
+    /// <remarks>
+    /// The shell marks the surfaces it owns so that a theme can style them without knowing what is in
+    /// them. The name is part of Section 10, since a plugin's theme writes it as a literal.
+    /// </remarks>
+    public const string MenuBarClass = "menu-bar";
+
     /// <summary>The label key of the menu the registered docks appear under.</summary>
     private const string WindowMenu = "menu.window";
 
@@ -48,6 +57,10 @@ public partial class MainWindow : Window
 
         BuildMenu();
         DockAreaHost.Content = new DockArea(_services.Docks, _services.I18n);
+
+        // Marked here rather than in the markup, so that the name a theme matches on is written once
+        // and read by both.
+        MainMenu.Classes.Add(MenuBarClass);
 
         // A dock can be closed, opened, or dragged to another region by hand as well as from the
         // menu, so the checks are refreshed and the layout written whenever the docks change — a

@@ -13,6 +13,13 @@ namespace RorolalaDesktop.Theming;
 /// theme is layered on top. The value <c>fluent</c> means the base alone. A theme with no provider
 /// stops the program before the window exists, since the user's preference cannot be honoured
 /// (Section 5.5). A change of theme takes effect on the next start.
+/// <para>
+/// The overlay is added to <c>Application.Styles</c> once, before the window is made, and that order
+/// is load-bearing rather than tidy. Avalonia re-applies the whole list to every element that is
+/// already styled when the list grows, and on that second pass the base theme's setters win over the
+/// overlay's: a style added after the window exists silently stops applying to what is already on
+/// screen. Nothing may therefore be added to <c>Application.Styles</c> after this has run.
+/// </para>
 /// </remarks>
 internal sealed class ThemeService
 {

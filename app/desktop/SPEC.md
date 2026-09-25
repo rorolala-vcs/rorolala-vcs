@@ -518,8 +518,30 @@ exists for plugins that react to a completed open.
 
 - `FluentTheme` is **always loaded as the base theme**. Avalonia controls require it.
 - The theme named by `preference.json` is applied as an **overlay** on top of the base.
-- `RorolalaTheme` is a **built-in** theme provider, not a plugin. It is currently a Simple
-  placeholder: fonts, spacing, and accent colour only. It is the default value of `theme`.
+- `RorolalaTheme` is a **built-in** theme provider, not a plugin. It is the default value of `theme`.
+- `RorolalaTheme` is an overlay in substance and not only in position: every colour it names is one
+  of Fluent's own resources, so the light and dark variants and the user's accent colour are Fluent's
+  and there is no second palette to keep in step. What it decides is shape and emphasis — the
+  typeface, the sizes, the spacing, the radii, which surfaces read as chrome, and how the dock a
+  region is showing is marked.
+- The type is **Inter**, which the program ships. The theme names it through the font collection
+  (`fonts:Inter#Inter`), because a family name on its own is looked for among the system's fonts, is
+  not there, and falls back silently to the platform's face.
+- The overlay is applied before the window is made. That order is load-bearing rather than tidy:
+  growing `Application.Styles` after elements have been styled makes the base theme's setters win on
+  those elements on the re-application that follows, so an overlay added late stops applying to
+  everything already on screen, and says nothing about it.
+- The shell marks the surfaces a theme may address. The marks are part of this section, because a
+  theme a plugin supplies has to write them as literals:
+
+  | Class | On |
+  | --- | --- |
+  | `menu-bar` | The menu bar. |
+  | `dock-headers` | A region's header strip. |
+  | `dock-title` | A dock's header. |
+  | `selected` | The header of the dock the region is showing, in addition to `dock-title`. |
+  | `dock-splitter` | The grab between regions. |
+
 - A plugin-provided theme is treated identically to a built-in theme; only its origin differs.
 - The value `"fluent"` selects FluentTheme with no overlay.
 - If the named theme has no provider, the program exits with code `3` (Section 5.5).
@@ -788,7 +810,8 @@ implementation convenience without raising it explicitly.
 
 ## 19. Open Items
 
-1. The real design of `RorolalaTheme`, replacing the Simple placeholder.
+1. `RorolalaTheme` is no longer the Simple placeholder, but what it is now is a first pass; it is to
+   be revised with the user, together with the feel criteria of Section 17.
 2. The concrete feel criteria (Section 17), to be agreed with the user.
 3. The contract assembly versioning policy: increment rule and compatibility range.
 4. The JSON schema versioning policy for `plugins.json` and `preference.json`.
