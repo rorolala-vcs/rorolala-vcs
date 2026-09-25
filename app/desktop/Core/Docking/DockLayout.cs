@@ -45,6 +45,9 @@ internal sealed class DockLayout
     /// <summary>The height the bottom region starts at, in pixels.</summary>
     public const double DefaultBottomHeight = 180;
 
+    /// <summary>The height the top region starts at, in pixels.</summary>
+    public const double DefaultTopHeight = 72;
+
     /// <summary>The schema version written.</summary>
     [JsonPropertyName("_version")]
     public int Version { get; set; } = SchemaVersion;
@@ -60,6 +63,10 @@ internal sealed class DockLayout
     /// <summary>The height of the bottom region, in pixels.</summary>
     [JsonPropertyName("bottomHeight")]
     public double BottomHeight { get; set; } = DefaultBottomHeight;
+
+    /// <summary>The height of the top region, in pixels.</summary>
+    [JsonPropertyName("topHeight")]
+    public double TopHeight { get; set; } = DefaultTopHeight;
 
     /// <summary>The docks that were open, in the order they are restored in.</summary>
     [JsonPropertyName("docks")]

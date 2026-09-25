@@ -19,6 +19,9 @@ public enum DockOpenMode
 /// <summary>Where a dock view is placed in the dock area.</summary>
 public enum DockPlacement
 {
+    /// <summary>The top region.</summary>
+    Top,
+
     /// <summary>The left region.</summary>
     Left,
 

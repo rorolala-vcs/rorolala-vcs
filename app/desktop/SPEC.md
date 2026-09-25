@@ -414,7 +414,7 @@ A dock is registered with a `DockRegistration`:
   or hides it. The instance is keyed by `DockNameId`.
 - `OpenMode.New` — every activation creates a new instance. File System uses `New`; this is what
   "copyable" means.
-- `DockPlacement` is one of `Left`, `Right`, `Bottom`, `Center`, `Float`.
+- `DockPlacement` is one of `Top`, `Left`, `Right`, `Bottom`, `Center`, `Float`.
 - The default placement is declared for each creation: the factory receives the requested
   placement, which defaults to the registration's `DefaultPlacement`.
 
@@ -441,6 +441,7 @@ Both are always available from `Window`.
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
 | File System | `rorolala.file_system` | `New` | Views: Tree, Grid, List. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, an address to type, and the view switch (Tree, Grid, List). Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
@@ -707,7 +708,7 @@ public interface IMenuRegistry
 }
 
 public enum DockOpenMode { Toggle, New }
-public enum DockPlacement { Left, Right, Bottom, Center, Float }
+public enum DockPlacement { Top, Left, Right, Bottom, Center, Float }
 
 public sealed record DockRegistration(
     PluginId Owner,

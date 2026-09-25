@@ -35,8 +35,11 @@ namespace RorolalaDesktop.Docking;
 /// </remarks>
 internal sealed class DockArea : UserControl
 {
-    /// <summary>The smallest a region is allowed to become.</summary>
-    private const double MinRegion = 120;
+    /// <summary>The narrowest a column region is allowed to become.</summary>
+    private const double MinColumn = 120;
+
+    /// <summary>The shortest a row region is allowed to become.</summary>
+    private const double MinRow = 56;
 
     /// <summary>How wide a splitter is.</summary>
     private const double SplitterSize = 4;
@@ -68,6 +71,9 @@ internal sealed class DockArea : UserControl
     /// <summary>The three columns: left, centre, right.</summary>
     private readonly Grid _middle = new();
 
+    /// <summary>The region along the top.</summary>
+    private readonly Region _top = new("top");
+
     /// <summary>The region to the left.</summary>
     private readonly Region _left = new("left");
 
@@ -79,6 +85,9 @@ internal sealed class DockArea : UserControl
 
     /// <summary>The region along the bottom.</summary>
     private readonly Region _bottom = new("bottom");
+
+    /// <summary>The splitter under the top region.</summary>
+    private readonly GridSplitter _topSplitter = new();
 
     /// <summary>The splitter between the left region and the centre.</summary>
     private readonly GridSplitter _leftSplitter = new();
@@ -214,11 +223,11 @@ internal sealed class DockArea : UserControl
     /// <summary>Lays the regions, the splitters, and the drop zones out once.</summary>
     private void Build()
     {
-        _middle.ColumnDefinitions.Add(new ColumnDefinition(RegionLength(_manager.Layout.LeftWidth)));
+        _middle.ColumnDefinitions.Add(new ColumnDefinition(ColumnLength(_manager.Layout.LeftWidth)));
         _middle.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         _middle.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         _middle.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        _middle.ColumnDefinitions.Add(new ColumnDefinition(RegionLength(_manager.Layout.RightWidth)));
+        _middle.ColumnDefinitions.Add(new ColumnDefinition(ColumnLength(_manager.Layout.RightWidth)));
 
         Grid.SetColumn(_left.Panel, 0);
         Grid.SetColumn(_leftSplitter, 1);
@@ -226,6 +235,7 @@ internal sealed class DockArea : UserControl
         Grid.SetColumn(_rightSplitter, 3);
         Grid.SetColumn(_right.Panel, 4);
 
+        ConfigureSplitter(_topSplitter, GridResizeDirection.Rows, _top);
         ConfigureSplitter(_leftSplitter, GridResizeDirection.Columns, _left);
         ConfigureSplitter(_rightSplitter, GridResizeDirection.Columns, _right);
         ConfigureSplitter(_bottomSplitter, GridResizeDirection.Rows, _bottom);
@@ -236,14 +246,20 @@ internal sealed class DockArea : UserControl
         _middle.Children.Add(_rightSplitter);
         _middle.Children.Add(_right.Panel);
 
+        _root.RowDefinitions.Add(new RowDefinition(RowLength(_manager.Layout.TopHeight)));
+        _root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         _root.RowDefinitions.Add(new RowDefinition(GridLength.Star));
         _root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        _root.RowDefinitions.Add(new RowDefinition(RegionLength(_manager.Layout.BottomHeight)));
+        _root.RowDefinitions.Add(new RowDefinition(RowLength(_manager.Layout.BottomHeight)));
 
-        Grid.SetRow(_middle, 0);
-        Grid.SetRow(_bottomSplitter, 1);
-        Grid.SetRow(_bottom.Panel, 2);
+        Grid.SetRow(_top.Panel, 0);
+        Grid.SetRow(_topSplitter, 1);
+        Grid.SetRow(_middle, 2);
+        Grid.SetRow(_bottomSplitter, 3);
+        Grid.SetRow(_bottom.Panel, 4);
 
+        _root.Children.Add(_top.Panel);
+        _root.Children.Add(_topSplitter);
         _root.Children.Add(_middle);
         _root.Children.Add(_bottomSplitter);
         _root.Children.Add(_bottom.Panel);
@@ -261,28 +277,30 @@ internal sealed class DockArea : UserControl
         Content = _surface;
     }
 
-    /// <summary>Lays out the four zones a dragged dock could land in.</summary>
+    /// <summary>Lays out the five zones a dragged dock could land in.</summary>
     private void Zones()
     {
-        // Columns and rows in the same fractions the zones are read in, so what is lit is where the
-        // pointer would have to be.
+        // Columns and rows in the same fractions the zones are read in, so what is lit up is where
+        // the pointer would have to be: a quarter at each edge of each axis, the middle left over.
         _zones.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
         _zones.ColumnDefinitions.Add(new ColumnDefinition(2, GridUnitType.Star));
         _zones.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-        _zones.RowDefinitions.Add(new RowDefinition(3, GridUnitType.Star));
+        _zones.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
+        _zones.RowDefinitions.Add(new RowDefinition(2, GridUnitType.Star));
         _zones.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
 
-        Add(DockPlacement.Left, 0, 0, 1);
-        Add(DockPlacement.Center, 1, 0, 1);
-        Add(DockPlacement.Right, 2, 0, 1);
-        Add(DockPlacement.Bottom, 0, 1, 3);
+        Add(DockPlacement.Top, 0, 0, 3);
+        Add(DockPlacement.Left, 0, 1, 1);
+        Add(DockPlacement.Center, 1, 1, 1);
+        Add(DockPlacement.Right, 2, 1, 1);
+        Add(DockPlacement.Bottom, 0, 2, 3);
 
         _zones.IsHitTestVisible = false;
         _zones.IsVisible = false;
 
         return;
 
-        void Add(DockPlacement placement, int column, int row, int span)
+        void Add(DockPlacement placement, int column, int row, int columns)
         {
             var zone = new Border
             {
@@ -294,7 +312,7 @@ internal sealed class DockArea : UserControl
             };
 
             Grid.SetColumn(zone, column);
-            Grid.SetColumnSpan(zone, span);
+            Grid.SetColumnSpan(zone, columns);
             Grid.SetRow(zone, row);
 
             _zones.Children.Add(zone);
@@ -325,6 +343,10 @@ internal sealed class DockArea : UserControl
     {
         switch (region.Name)
         {
+            case "top":
+                _manager.Layout.TopHeight = _root.RowDefinitions[0].ActualHeight;
+                break;
+
             case "left":
                 _manager.Layout.LeftWidth = _middle.ColumnDefinitions[0].ActualWidth;
                 break;
@@ -334,7 +356,7 @@ internal sealed class DockArea : UserControl
                 break;
 
             case "bottom":
-                _manager.Layout.BottomHeight = _root.RowDefinitions[2].ActualHeight;
+                _manager.Layout.BottomHeight = _root.RowDefinitions[4].ActualHeight;
                 break;
 
             default:
@@ -511,26 +533,33 @@ internal sealed class DockArea : UserControl
     /// <summary>Collapses the regions that hold nothing, and sizes the ones that do not.</summary>
     private void Arrange()
     {
+        var top = Open(_top).Count > 0;
         var left = Open(_left).Count > 0;
         var right = Open(_right).Count > 0;
         var bottom = Open(_bottom).Count > 0;
 
+        _top.Panel.IsVisible = top;
+        _topSplitter.IsVisible = top;
+        _root.RowDefinitions[0].Height = top
+            ? RowLength(_manager.Layout.TopHeight)
+            : new GridLength(0);
+
         _left.Panel.IsVisible = left;
         _leftSplitter.IsVisible = left;
         _middle.ColumnDefinitions[0].Width = left
-            ? RegionLength(_manager.Layout.LeftWidth)
+            ? ColumnLength(_manager.Layout.LeftWidth)
             : new GridLength(0);
 
         _right.Panel.IsVisible = right;
         _rightSplitter.IsVisible = right;
         _middle.ColumnDefinitions[4].Width = right
-            ? RegionLength(_manager.Layout.RightWidth)
+            ? ColumnLength(_manager.Layout.RightWidth)
             : new GridLength(0);
 
         _bottom.Panel.IsVisible = bottom;
         _bottomSplitter.IsVisible = bottom;
-        _root.RowDefinitions[2].Height = bottom
-            ? RegionLength(_manager.Layout.BottomHeight)
+        _root.RowDefinitions[4].Height = bottom
+            ? RowLength(_manager.Layout.BottomHeight)
             : new GridLength(0);
     }
 
@@ -692,9 +721,9 @@ internal sealed class DockArea : UserControl
     /// Which region a point in the area would land a dock in.
     /// </summary>
     /// <remarks>
-    /// The sides and the bottom are the outer quarter of the area: what is left is the centre, so a
-    /// drag that stays in the middle goes to the middle. A point outside the area lands nowhere,
-    /// which is what letting go of a drag outside the area means.
+    /// Every edge is the outer quarter of the area on its axis, and the middle is what is left over,
+    /// so a drag that stays in the middle goes to the middle. A point outside the area lands
+    /// nowhere, which is what letting go of a drag outside the area means.
     /// </remarks>
     private DockPlacement? ZoneFor(Point at)
     {
@@ -710,6 +739,11 @@ internal sealed class DockArea : UserControl
         )
         {
             return null;
+        }
+
+        if (at.Y < bounds.Height * ZoneEdge)
+        {
+            return DockPlacement.Top;
         }
 
         if (at.Y > bounds.Height * (1 - ZoneEdge))
@@ -749,12 +783,13 @@ internal sealed class DockArea : UserControl
             .ToList();
 
     /// <summary>Every region of the area.</summary>
-    private Region[] Regions() => [_left, _center, _right, _bottom];
+    private Region[] Regions() => [_top, _left, _center, _right, _bottom];
 
     /// <summary>The region a placement names.</summary>
     private Region RegionFor(DockPlacement placement) =>
         placement switch
         {
+            DockPlacement.Top => _top,
             DockPlacement.Left => _left,
             DockPlacement.Right => _right,
             DockPlacement.Bottom => _bottom,
@@ -779,6 +814,9 @@ internal sealed class DockArea : UserControl
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-    /// <summary>A region's size, never smaller than the least it may be.</summary>
-    private static GridLength RegionLength(double size) => new(Math.Max(MinRegion, size));
+    /// <summary>A column's size, never narrower than the least it may be.</summary>
+    private static GridLength ColumnLength(double size) => new(Math.Max(MinColumn, size));
+
+    /// <summary>A row's size, never shorter than the least it may be.</summary>
+    private static GridLength RowLength(double size) => new(Math.Max(MinRow, size));
 }

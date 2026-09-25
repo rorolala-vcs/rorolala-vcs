@@ -209,6 +209,7 @@ internal sealed class DockManager
         Layout.LeftWidth = layout.LeftWidth;
         Layout.RightWidth = layout.RightWidth;
         Layout.BottomHeight = layout.BottomHeight;
+        Layout.TopHeight = layout.TopHeight;
 
         foreach (var saved in layout.Docks)
         {
@@ -237,6 +238,7 @@ internal sealed class DockManager
             LeftWidth = Layout.LeftWidth,
             RightWidth = Layout.RightWidth,
             BottomHeight = Layout.BottomHeight,
+            TopHeight = Layout.TopHeight,
         };
 
         foreach (
