@@ -98,7 +98,11 @@ function Assert-Exit {
 function Invoke-Script {
     param([Parameter(Mandatory = $true, Position = 0)][string] $Name)
 
-    & "$PSScriptRoot/../../../run.ps1" $Name
+    # Four levels, not three: `$PSScriptRoot` inside a function defined here is this file's own
+    # directory — `dev/run/src/lib` — while in the body of a script that dot-sources it, it is that
+    # script's directory. The shell side needs no such count, since `RUN=./run.sh` is resolved
+    # against the working directory the runner has already set to the repository root.
+    & "$PSScriptRoot/../../../../run.ps1" $Name
     Assert-Exit
 }
 
