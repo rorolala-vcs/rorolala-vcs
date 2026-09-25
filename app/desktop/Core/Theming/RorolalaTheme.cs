@@ -9,36 +9,37 @@ using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Styling;
 using RorolalaDesktop.Docking;
-using IThemeProvider = RorolalaDesktop.Contract.IThemeProvider;
 
 namespace RorolalaDesktop.Theming;
 
 /// <summary>
-/// The built-in theme: one accent, flat rectangles, and one-pixel edges.
+/// The look: one accent, flat rectangles, and one-pixel edges.
 /// </summary>
 /// <remarks>
-/// It is not a plugin, though it is treated exactly like one: the host registers it, so it is there
-/// even with no plugins at all, and it is the default value of <c>theme</c> in <c>preference.json</c>.
+/// It is the program's own and there is only one of it. What a run chooses is the variant it is drawn
+/// in and the accent, and both are read before the window is made (Section 10). Everything else here is
+/// stated rather than configured, which is what makes the program look like one thing.
 /// <para>
 /// The design is a Win10 one: every surface is a rectangle, every edge is one pixel, hover is a
 /// neutral tint rather than the accent, and the accent is spent on one thing — what is selected.
 /// Nothing is rounded, nothing is raised, nothing moves; what is animated is colour and opacity only.
 /// </para>
 /// <para>
-/// The accent is lemon, and it is written into <em>the base theme's own</em> accent resources rather
-/// than applied control by control. The base theme draws a selected row, a checked box and a text
-/// selection from those resources, so naming them once is what makes the whole program lemon instead
-/// of a lemon patch on a blue theme — and it is why the few rules below are about geometry and ink
+/// The accent is written into <em>the base theme's own</em> accent resources rather than applied
+/// control by control. The base theme draws a selected row, a checked box and a text selection from
+/// those resources, so naming them once is what makes the whole program accented instead of an
+/// accented patch on a blue theme — and it is why the few rules below are about geometry and ink
 /// rather than about colour.
 /// </para>
 /// <para>
-/// The ink on the accent needs a rule of its own. The base theme writes white on it, which on lemon is
-/// 1.2:1, so everything the accent fills is written in near-black, at 14.9:1.
+/// The ink on the accent needs a rule of its own, because the base theme writes white there and white
+/// is unreadable on a light accent — and which colour the accent is belongs to the user.
 /// </para>
 /// <para>
-/// The three tints the chrome is drawn with are this theme's own, because the base theme has none: its
-/// neutrals are all opaque, and a band of chrome has to be a tint of whatever is behind it to sit on
-/// the window and on the content alike. They are given per variant, as the ink of that variant.
+/// The three tints the chrome is drawn with are this theme's own, because the base theme has none to
+/// borrow: its neutrals are all opaque, and a band of chrome has to be a tint of whatever is behind
+/// it to sit on the window and on the content alike. They are given per variant, as the ink of that
+/// variant.
 /// </para>
 /// <para>
 /// The shell marks the surfaces it owns with classes, which is how a rule here addresses a dock
@@ -46,14 +47,37 @@ namespace RorolalaDesktop.Theming;
 /// <see cref="DockArea.HeadersClass"/> on a region's header strip,
 /// <see cref="DockArea.TitleClass"/> on a dock's header — with <see cref="DockArea.SelectedClass"/>
 /// on the one being shown — <see cref="DockArea.SplitterClass"/> on the grab between regions, and
-/// <see cref="DockArea.DropZoneClass"/> on where a dragged dock would land. A theme a plugin
-/// supplies is free to use the same marks (Section 10).
+/// <see cref="DockArea.DropZoneClass"/> on where a dragged dock would land.
 /// </para>
 /// </remarks>
-internal sealed class RorolalaTheme : IThemeProvider
+internal sealed class RorolalaTheme
 {
-    /// <summary>The id <c>preference.json</c> names this theme by.</summary>
-    public const string Id = "rorolala.theme.default";
+    /// <summary>
+    /// The look, in the one colour the user chooses.
+    /// </summary>
+    /// <remarks>
+    /// One colour is configured and everything accented follows from it: the accent family the base
+    /// theme fills a selected row, a checked box and a selection of text from; the accent's held state;
+    /// and the ink that can be read on it. Nothing else is derived, because every colour derived from a
+    /// colour is another colour that can disagree with it.
+    /// </remarks>
+    /// <param name="accent">The colour anything accented is drawn in.</param>
+    public RorolalaTheme(Color accent)
+    {
+        _accent = accent;
+
+        // The accent a held surface takes: the same colour one step down, by a factor rather than by a
+        // second colour picked by hand, so that every accent has one. On lemon this is `#A6DE00`, which
+        // is the held colour that was picked for it by hand.
+        _held = Scaled(accent, 0.87);
+
+        // What is written on the accent: black or white, whichever can be read on it. The base theme
+        // writes white there, which is right for the blue it was written for and unreadable on a light
+        // accent — and which colour the accent is belongs to the user, so it cannot be known here.
+        _ink = InkOn(accent);
+
+        Styles = [Palette(), .. Type(), .. Chrome(), .. Content(), .. Parts()];
+    }
 
     /// <summary>The size every word is set at.</summary>
     private const double BodySize = 13.0;
@@ -93,27 +117,23 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// <summary>A hairline, for the rule between chrome and content and for the edge of a control.</summary>
     private const string Line = "rorolala.theme.line";
 
-    /// <summary>The accent, as the colour the base theme derives its accent brushes from.</summary>
-    private static readonly Color Lemon = Color.FromRgb(0xBF, 0xFF, 0x00);
-
-    /// <summary>The accent darkened, which is what an accent takes while it is held.</summary>
-    private static readonly Color LemonDeep = Color.FromRgb(0xA6, 0xE0, 0x00);
-
-    /// <summary>What is written on the accent. Near-black, because white on lemon cannot be read.</summary>
-    private static readonly Color OnLemon = Color.FromRgb(0x12, 0x1A, 0x00);
-
     /// <summary>The red a close is everywhere, which is the one thing in the program that is not the accent.</summary>
     private static readonly Color Closed = Color.FromRgb(0xC4, 0x2B, 0x1C);
 
     /// <summary>The same red, while it is held.</summary>
     private static readonly Color ClosedDeep = Color.FromRgb(0x9E, 0x22, 0x16);
 
-    /// <inheritdoc />
-    public string ThemeId => Id;
+    /// <summary>The colour anything accented is drawn in.</summary>
+    private readonly Color _accent;
 
-    /// <inheritdoc />
-    public IReadOnlyList<IStyle> Styles { get; } =
-        [Palette(), .. Type(), .. Chrome(), .. Content(), .. Parts()];
+    /// <summary>The accent a held or pressed surface takes.</summary>
+    private readonly Color _held;
+
+    /// <summary>What is written on a surface filled with the accent.</summary>
+    private readonly Color _ink;
+
+    /// <summary>The styles the look is made of, built once when the look is.</summary>
+    public IReadOnlyList<IStyle> Styles { get; }
 
     /// <summary>
     /// The accent, written into the base theme's own accent resources, and the tints of this theme's
@@ -130,7 +150,7 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// the other, which is what happened the first time this was tried.
     /// </para>
     /// </remarks>
-    private static Style Palette()
+    private Style Palette()
     {
         var style = new Style(selector => selector.OfType<Window>());
 
@@ -160,30 +180,31 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// <param name="tint">A band of chrome.</param>
     /// <param name="deeper">The same, one step stronger.</param>
     /// <param name="line">A hairline.</param>
-    private static ResourceDictionary Accents(Color tint, Color deeper, Color line) =>
+    private ResourceDictionary Accents(Color tint, Color deeper, Color line) =>
         new()
         {
             // The accent family, which is what the base theme fills a selected row, opens a drop-down
             // and clicks a box with. The alphas are the base theme's own, so the washes stay washes.
-            ["ThemeAccentColor"] = Lemon,
-            ["ThemeAccentColor2"] = WithAlpha(Lemon, 0x99),
-            ["ThemeAccentColor3"] = WithAlpha(Lemon, 0x66),
-            ["ThemeAccentColor4"] = WithAlpha(Lemon, 0x33),
-            ["ThemeAccentBrush"] = Fill(Lemon),
-            ["ThemeAccentBrush2"] = Fill(WithAlpha(Lemon, 0x99)),
-            ["ThemeAccentBrush3"] = Fill(WithAlpha(Lemon, 0x66)),
-            ["ThemeAccentBrush4"] = Fill(WithAlpha(Lemon, 0x33)),
+            ["ThemeAccentColor"] = _accent,
+            ["ThemeAccentColor2"] = WithAlpha(_accent, 0x99),
+            ["ThemeAccentColor3"] = WithAlpha(_accent, 0x66),
+            ["ThemeAccentColor4"] = WithAlpha(_accent, 0x33),
+            ["ThemeAccentBrush"] = Fill(_accent),
+            ["ThemeAccentBrush2"] = Fill(WithAlpha(_accent, 0x99)),
+            ["ThemeAccentBrush3"] = Fill(WithAlpha(_accent, 0x66)),
+            ["ThemeAccentBrush4"] = Fill(WithAlpha(_accent, 0x33)),
 
-            // What sits on the accent: the base theme writes white there, which lemon cannot carry.
-            ["HighlightForegroundColor"] = OnLemon,
-            ["HighlightForegroundBrush"] = Fill(OnLemon),
+            // What sits on the accent: the base theme writes white there, which a light accent cannot
+            // carry.
+            ["HighlightForegroundColor"] = _ink,
+            ["HighlightForegroundBrush"] = Fill(_ink),
 
             // The highlight the base theme keeps apart from its accent family — a tick, a selection of
-            // text — which would otherwise stay blue while everything else went lemon.
-            ["HighlightColor"] = Lemon,
-            ["HighlightBrush"] = Fill(Lemon),
-            ["HighlightColor2"] = LemonDeep,
-            ["HighlightBrush2"] = Fill(LemonDeep),
+            // text — which would otherwise stay blue while everything else went accented.
+            ["HighlightColor"] = _accent,
+            ["HighlightBrush"] = Fill(_accent),
+            ["HighlightColor2"] = _held,
+            ["HighlightBrush2"] = Fill(_held),
 
             [Tint] = Fill(tint),
             [DeeperTint] = Fill(deeper),
@@ -216,7 +237,7 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// shown, when it is drawn in the accent: a header that grew an edge when selected would shift the
     /// headers beside it sideways under the very pointer that selected it.
     /// </remarks>
-    private static Style[] Chrome() =>
+    private Style[] Chrome() =>
         [
             On(
                 selector => selector.OfType<Menu>().Class(MainWindow.MenuBarClass),
@@ -241,7 +262,7 @@ internal sealed class RorolalaTheme : IThemeProvider
             On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(DockArea.SelectedClass),
                 Brushed(TemplatedControl.BackgroundProperty, DeeperTint),
-                Fixed(TemplatedControl.BorderBrushProperty, Lemon),
+                Fixed(TemplatedControl.BorderBrushProperty, _accent),
                 new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold)
             ),
 
@@ -256,7 +277,7 @@ internal sealed class RorolalaTheme : IThemeProvider
                         .Class(":pointerover")
                         .Template()
                         .Name("PART_ContentPresenter"),
-                Fixed(ContentPresenter.BorderBrushProperty, Lemon)
+                Fixed(ContentPresenter.BorderBrushProperty, _accent)
             ),
 
             // The button that closes a region's shown dock, at the far end of the strip: nothing at
@@ -340,9 +361,9 @@ internal sealed class RorolalaTheme : IThemeProvider
 
     /// <summary>The controls the kernel and the plugins build their content out of.</summary>
     /// <remarks>
-    /// Geometry and spacing only: Fluent's own brushes already say what a control is made of and
-    /// change with the variant, and the accent is already lemon, so nothing here names a colour except
-    /// the edge a surface wears.
+    /// Geometry and spacing only: the base theme's own brushes already say what a control is made of and
+    /// change with the variant, and the accent is named in that theme's own resources, so nothing here
+    /// names a colour except the edge a surface wears.
     /// <para>
     /// A rule here cannot make a tooltip's text smaller by setting the size on the tooltip: the rule
     /// for <see cref="TextBlock"/> sets a size on every text, and a set value beats an inherited one.
@@ -429,7 +450,7 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// field's edge and the fades.
     /// </para>
     /// </remarks>
-    private static Style[] Parts() =>
+    private Style[] Parts() =>
         [
             Ink(selector => selector.OfType<ListBoxItem>(), "PART_ContentPresenter"),
             Ink(selector => selector.OfType<ComboBoxItem>(), "PART_ContentPresenter"),
@@ -439,12 +460,12 @@ internal sealed class RorolalaTheme : IThemeProvider
             // where the base theme leaves the box empty and draws the tick in the accent.
             On(
                 selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("border"),
-                Fixed(Border.BackgroundProperty, Lemon),
-                Fixed(Border.BorderBrushProperty, Lemon)
+                Fixed(Border.BackgroundProperty, _accent),
+                Fixed(Border.BorderBrushProperty, _accent)
             ),
             On(
                 selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("checkMark"),
-                new Setter(Shape.FillProperty, new SolidColorBrush(OnLemon))
+                new Setter(Shape.FillProperty, new SolidColorBrush(_ink))
             ),
 
             // A field keeps its one pixel when it takes focus, and takes it in the accent: the base
@@ -453,7 +474,7 @@ internal sealed class RorolalaTheme : IThemeProvider
             On(
                 selector => selector.OfType<TextBox>().Class(":focus").Template().Name("border"),
                 new Setter(Border.BorderThicknessProperty, Edge),
-                Fixed(Border.BorderBrushProperty, Lemon)
+                Fixed(Border.BorderBrushProperty, _accent)
             ),
 
             // Every part that changes colour on a state fades into it, which is all the motion there
@@ -480,13 +501,14 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// What is written on a surface filled with the accent.
     /// </summary>
     /// <remarks>
-    /// Fluent fills a selected row with the accent and then puts white on it, which is right for the
-    /// blue it was written for and unreadable on lemon. Near-black is what lemon can carry.
+    /// The base theme fills a selected row with the accent and then puts white on it, which is right
+    /// for the blue it was written for and unreadable on a light accent. Black or white by contrast is
+    /// what any accent can carry.
     /// </remarks>
-    private static Style Ink(Func<Selector?, Selector> ofType, string part) =>
+    private Style Ink(Func<Selector?, Selector> ofType, string part) =>
         On(
             selector => ofType(selector).Class(":selected").Template().Name(part),
-            new Setter(ContentPresenter.ForegroundProperty, new SolidColorBrush(OnLemon))
+            new Setter(ContentPresenter.ForegroundProperty, new SolidColorBrush(_ink))
         );
 
     /// <summary>
@@ -498,7 +520,7 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// pixel of line inside four pixels of grip is to paint the grip clear and the middle of it not.
     /// </remarks>
     /// <param name="vertical">Whether the line runs down the splitter rather than across it.</param>
-    private static IBrush Hairline(bool vertical)
+    private IBrush Hairline(bool vertical)
     {
         // Half a pixel, as the fraction of the band's width the stop offsets are in.
         var half = 0.5 / DockArea.SplitterSize;
@@ -516,8 +538,8 @@ internal sealed class RorolalaTheme : IThemeProvider
             {
                 new GradientStop(clear, 0),
                 new GradientStop(clear, 0.5 - half),
-                new GradientStop(Lemon, 0.5 - half),
-                new GradientStop(Lemon, 0.5 + half),
+                new GradientStop(_accent, 0.5 - half),
+                new GradientStop(_accent, 0.5 + half),
                 new GradientStop(clear, 0.5 + half),
                 new GradientStop(clear, 1),
             },
@@ -552,6 +574,61 @@ internal sealed class RorolalaTheme : IThemeProvider
     /// <summary>A setter whose value is one of this theme's own colours.</summary>
     private static Setter Fixed(AvaloniaProperty property, Color colour) =>
         new(property, new SolidColorBrush(colour));
+
+    /// <summary>
+    /// What is written on a surface filled with an accent.
+    /// </summary>
+    /// <remarks>
+    /// Black or white, whichever can be read on the accent. It is the one thing about a chosen accent
+    /// that cannot be read off the colour by eye, which is why it is worked out rather than picked, and
+    /// why it is open to the tests as well as used here.
+    /// </remarks>
+    /// <param name="accent">The colour anything accented is drawn in.</param>
+    /// <returns>The ink to write on it.</returns>
+    internal static Color InkOn(Color accent) =>
+        Contrasts(Colors.Black, accent) >= Contrasts(Colors.White, accent)
+            ? Colors.Black
+            : Colors.White;
+
+    /// <summary>
+    /// One colour stepped towards black by a factor.
+    /// </summary>
+    /// <remarks>
+    /// A factor rather than a colour: the accent is the user's to choose, and a held state that was a
+    /// second chosen colour would be one every other accent did without.
+    /// </remarks>
+    private static Color Scaled(Color colour, double factor) =>
+        Color.FromRgb(
+            (byte)Math.Round(colour.R * factor),
+            (byte)Math.Round(colour.G * factor),
+            (byte)Math.Round(colour.B * factor)
+        );
+
+    /// <summary>
+    /// How much one colour stands out from another, as the ratio a reader's legibility is held to.
+    /// </summary>
+    /// <remarks>
+    /// The one number that answers "can this be read on that" without knowing which colour either is,
+    /// which is what a chosen accent leaves to be worked out.
+    /// </remarks>
+    private static double Contrasts(Color one, Color other)
+    {
+        var (lighter, darker) = Luminance(one) > Luminance(other) ? (one, other) : (other, one);
+
+        return (Luminance(lighter) + 0.05) / (Luminance(darker) + 0.05);
+    }
+
+    /// <summary>A colour's relative luminance, as the contrast ratio is defined over.</summary>
+    private static double Luminance(Color colour) =>
+        (0.2126 * Channel(colour.R)) + (0.7152 * Channel(colour.G)) + (0.0722 * Channel(colour.B));
+
+    /// <summary>One channel, linearised from the value a display writes.</summary>
+    private static double Channel(byte value)
+    {
+        var encoded = value / 255.0;
+
+        return encoded <= 0.03928 ? encoded / 12.92 : Math.Pow((encoded + 0.055) / 1.055, 2.4);
+    }
 
     /// <summary>The fade a surface takes a new colour with.</summary>
     private static Transitions Fading() => Fading(Fade);

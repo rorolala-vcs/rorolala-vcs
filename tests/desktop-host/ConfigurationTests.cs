@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
@@ -23,14 +24,83 @@ public sealed class ConfigurationTests
     {
         var preference = ConfigurationLoader.LoadPreference();
 
-        Assert.Equal("rorolala.theme.default", preference.Theme);
         Assert.Equal("en", preference.Language);
         Assert.True(File.Exists(ConfigPaths.Preference));
         Assert.Contains(
-            "\"_version\": 1",
+            "\"_version\": 2",
             File.ReadAllText(ConfigPaths.Preference),
             StringComparison.Ordinal
         );
+    }
+
+    /// <summary>A missing theme file is written as the documented defaults, in the documented spellings.</summary>
+    [Fact]
+    public void AThemeFileThatIsNotThereIsWrittenAsTheDocumentedDefaults()
+    {
+        var theme = ConfigurationLoader.LoadTheme();
+
+        Assert.Equal(ColorMode.System, theme.Mode);
+        Assert.Equal(ThemeConfiguration.DefaultAccent, theme.Accent);
+        Assert.True(File.Exists(ConfigPaths.Theme));
+
+        // Read back as text, because what the file says is what a person edits: the accent has to be
+        // the six digits the file documents rather than whatever a colour prints itself as.
+        var written = File.ReadAllText(ConfigPaths.Theme);
+        Assert.Contains("\"_version\": 1", written, StringComparison.Ordinal);
+        Assert.Contains("\"mode\": \"system\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"accent\": \"#BFFF00\"", written, StringComparison.Ordinal);
+    }
+
+    /// <summary>A theme file that will not read stops the program with its own code.</summary>
+    [Fact]
+    public void AThemeFileThatIsNotJsonIsRefusedWithTheThemeCode()
+    {
+        Given(ConfigPaths.Theme, "{ not json");
+
+        var failure = Assert.Throws<ConfigurationFailure>(ConfigurationLoader.LoadTheme);
+
+        Assert.Equal(ExitCode.Theme, failure.Code);
+        Assert.Contains("not valid JSON", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A mode that is none of the three is refused rather than defaulted.</summary>
+    [Fact]
+    public void AModeThatNamesNoVariantIsRefused()
+    {
+        Given(ConfigPaths.Theme, """{"_version": 1, "mode": "dusk"}""");
+
+        var failure = Assert.Throws<ConfigurationFailure>(ConfigurationLoader.LoadTheme);
+
+        Assert.Equal(ExitCode.Theme, failure.Code);
+        Assert.Contains("system, light or dark", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>An accent that is not six digits after the hash is refused rather than approximated.</summary>
+    [Theory]
+    [InlineData("BFFF00")]
+    [InlineData("#FFF")]
+    [InlineData("#FFBFFF00")]
+    [InlineData("#BFFFGG")]
+    public void AnAccentThatIsNotSixDigitsIsRefused(string accent)
+    {
+        Given(ConfigPaths.Theme, $$"""{"_version": 1, "accent": "{{accent}}"}""");
+
+        var failure = Assert.Throws<ConfigurationFailure>(ConfigurationLoader.LoadTheme);
+
+        Assert.Equal(ExitCode.Theme, failure.Code);
+        Assert.Contains("#RRGGBB", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The variant and accent a theme file states are the ones read back.</summary>
+    [Fact]
+    public void TheModeAndAccentAThemeFileStatesAreRead()
+    {
+        Given(ConfigPaths.Theme, """{"_version": 1, "mode": "dark", "accent": "#3366FF"}""");
+
+        var theme = ConfigurationLoader.LoadTheme();
+
+        Assert.Equal(ColorMode.Dark, theme.Mode);
+        Assert.Equal(Color.FromRgb(0x33, 0x66, 0xFF), theme.Accent);
     }
 
     /// <summary>A missing plugins file states no plugin rather than being a mistake.</summary>
@@ -145,7 +215,7 @@ public sealed class ConfigurationTests
     {
         Given(
             ConfigPaths.Preference,
-            """{"_version": 1, "plugin": {"it.alpha": {"view": "tree", "depth": 4, "flat": false}}}"""
+            """{"_version": 2, "plugin": {"it.alpha": {"view": "tree", "depth": 4, "flat": false}}}"""
         );
 
         var preference = ConfigurationLoader.LoadPreference();

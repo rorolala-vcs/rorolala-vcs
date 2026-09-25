@@ -1,24 +1,19 @@
 using Avalonia;
+using Avalonia.Styling;
 using RorolalaDesktop.Configuration;
-using RorolalaDesktop.Contract;
-using RorolalaDesktop.Hosting;
 
 namespace RorolalaDesktop.Theming;
 
 /// <summary>
-/// Applies the theme <c>preference.json</c> names as an overlay on the base theme.
+/// Applies how the program looks: the one look it has, in the two things the user chooses about it.
 /// </summary>
 /// <remarks>
-/// <c>SimpleTheme</c> is always loaded as the base, because Avalonia's controls need a theme to have a
-/// template at all; the named theme is layered on top. The value <c>simple</c> means the base alone. A
-/// theme with no provider stops the program before the window exists, since the user's preference
-/// cannot be honoured (Section 5.5). A change of theme takes effect on the next start.
+/// There is one look and it is the program's own (Section 10). What a run chooses is the variant it is
+/// drawn in and the accent everything accented is drawn in, both read from <c>theme.json</c> before
+/// there is a window.
 /// <para>
-/// Simple rather than Fluent is the base by design: Fluent is a whole look, and half of what an
-/// overlay writes on top of it is spent overriding what Fluent had already decided — its resources,
-/// its rounded templates, its accent family. Simple decides little, so a theme on top of it says what
-/// it means. What it costs is that Simple is plain: a hover it does not draw is a hover nobody draws
-/// (Section 10).
+/// The base theme is already loaded, because Avalonia's controls have no template without one, so what
+/// is applied here is the overlay that says what the program looks like.
 /// </para>
 /// <para>
 /// The overlay is added to <c>Application.Styles</c> once, before the window is made, and that order
@@ -28,50 +23,38 @@ namespace RorolalaDesktop.Theming;
 /// screen. Nothing may therefore be added to <c>Application.Styles</c> after this has run.
 /// </para>
 /// </remarks>
-internal sealed class ThemeService
+internal static class ThemeService
 {
-    /// <summary>The id that means the base theme with no overlay.</summary>
-    public const string Simple = "simple";
-
-    /// <summary>Where the registered themes are.</summary>
-    private readonly ThemeRegistry _themes;
-
-    /// <summary>Makes a service over the registered themes.</summary>
-    /// <param name="themes">Where the registered themes are.</param>
-    public ThemeService(ThemeRegistry themes) => _themes = themes;
-
     /// <summary>
-    /// Applies the named theme.
+    /// Applies the look, in the variant and the accent the user chose.
     /// </summary>
-    /// <param name="themeId">The id <c>preference.json</c> names.</param>
-    /// <exception cref="ConfigurationFailure">No provider supplies that id.</exception>
-    public void Apply(string themeId)
+    /// <param name="theme">What the user chose.</param>
+    public static void Apply(ThemeConfiguration theme)
     {
-        if (themeId == Simple)
+        if (Application.Current is not { } application)
         {
             return;
         }
 
-        var provider = _themes.Find(themeId);
+        // Set on the application rather than named by the overlay: which of the two variants is being
+        // drawn is every colour the base theme owns, and `System` is a variant that goes on following
+        // the desktop as the desktop changes.
+        application.RequestedThemeVariant = Variant(theme.Mode);
 
-        if (provider is null)
+        foreach (var style in new RorolalaTheme(theme.Accent).Styles)
         {
-            throw new ConfigurationFailure(
-                ExitCode.Unavailable,
-                $"{ConfigPaths.Preference}: no theme provider supplies `{themeId}`"
-            );
-        }
-
-        var styles = Application.Current?.Styles;
-
-        if (styles is null)
-        {
-            return;
-        }
-
-        foreach (var style in provider.Styles)
-        {
-            styles.Add(style);
+            application.Styles.Add(style);
         }
     }
+
+    /// <summary>The variant a mode stands for.</summary>
+    /// <param name="mode">The mode the file names.</param>
+    /// <returns>The variant to draw in.</returns>
+    private static ThemeVariant Variant(ColorMode mode) =>
+        mode switch
+        {
+            ColorMode.Light => ThemeVariant.Light,
+            ColorMode.Dark => ThemeVariant.Dark,
+            _ => ThemeVariant.Default,
+        };
 }

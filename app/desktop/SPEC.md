@@ -29,9 +29,10 @@ document first, then to the code.
   - [5.1 Location](#51-location)
   - [5.2 plugins.json](#52-pluginsjson)
   - [5.3 preference.json](#53-preferencejson)
-  - [5.4 Validation and failure](#54-validation-and-failure)
-  - [5.5 Exit codes](#55-exit-codes)
-  - [5.6 Startup sequence](#56-startup-sequence)
+  - [5.4 theme.json](#54-themejson)
+  - [5.5 Validation and failure](#55-validation-and-failure)
+  - [5.6 Exit codes](#56-exit-codes)
+  - [5.7 Startup sequence](#57-startup-sequence)
 - [6. Extension Points](#6-extension-points)
   - [6.1 Overview](#61-overview)
   - [6.2 Top menu](#62-top-menu)
@@ -40,8 +41,7 @@ document first, then to the code.
   - [6.5 Docks](#65-docks)
   - [6.6 Open hooks](#66-open-hooks)
   - [6.7 Icon badges](#67-icon-badges)
-  - [6.8 Themes](#68-themes)
-  - [6.9 Languages](#69-languages)
+  - [6.8 Languages](#68-languages)
 - [7. Dock System](#7-dock-system)
   - [7.1 Registration](#71-registration)
   - [7.2 Open modes and placement](#72-open-modes-and-placement)
@@ -211,7 +211,7 @@ attempt to load it and fail later at first use.
 - The host checks dependencies at startup:
   - a dependency that is not discovered, or is disabled, or failed to load;
   - a dependency cycle.
-  Each is a **validation failure** and is fatal (Section 5.4).
+  Each is a **validation failure** and is fatal (Section 5.5).
 - Load order is: dependency topological order first; within one dependency tier, the user `order`
   from `plugins.json`; ties broken by `PluginId` ordinal order, so the result is deterministic.
 - A user ordering that contradicts the dependency order is **not fatal**. The host keeps the
@@ -227,7 +227,7 @@ attempt to load it and fail later at first use.
 4. It computes the load order and loads the assemblies.
 5. It calls `IRolaPlugin.Initialize(IPluginHost)` on each plugin in load order.
 6. Plugins register extension points during initialization.
-7. The host applies the theme, resolves the language, and shows the window.
+7. The host applies the look, resolves the language, and shows the window.
 
 Enable/disable and order changes are written to `plugins.json` by the plugin manager and take
 effect on the next start. There is no hot reload and no unload.
@@ -242,6 +242,7 @@ command line, whose user-level key directory is `rola/keys` under that root. On 
 ```text
 ~/.local/share/rola/desktop/plugins.json
 ~/.local/share/rola/desktop/preference.json
+~/.local/share/rola/desktop/theme.json
 ```
 
 The exact root is whatever the platform's data-directory resolution returns; `dirs` semantics
@@ -276,8 +277,7 @@ writes a default file. A missing file is not a validation failure; an unreadable
 
 ```json
 {
-  "_version": 1,
-  "theme": "rorolala.theme.default",
+  "_version": 2,
   "language": "zh-CN",
   "plugin": {
     "rorolala.file_system": { "view": "tree" }
@@ -287,8 +287,7 @@ writes a default file. A missing file is not a validation failure; an unreadable
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `_version` | integer | yes | Schema version. Currently `1`. |
-| `theme` | string | no | Theme provider id. `"simple"` means SimpleTheme alone. Defaults to `rorolala.theme.default`. |
+| `_version` | integer | yes | Schema version. Currently `2`. |
 | `language` | string | no | Fallback locale, used only when `rola desktop` passes no `-Lang:`. |
 | `plugin` | object | no | Per-plugin configuration, keyed by `PluginId`. The host does not interpret the contents. |
 
@@ -298,16 +297,40 @@ validation failure; an unreadable or invalid one is.
 A plugin reads its own section through `IPluginConfig.ReadKeyAs<T>(key)` (Section 16). The host
 never interprets plugin keys.
 
-### 5.4 Validation and failure
+### 5.4 theme.json
+
+```json
+{
+  "_version": 1,
+  "mode": "system",
+  "accent": "#BFFF00"
+}
+```
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `_version` | integer | yes | Schema version. Currently `1`. |
+| `mode` | string | no | `system`, `light` or `dark`. `system` follows the desktop and goes on following it. Defaults to `system`. |
+| `accent` | string | no | The colour anything accented is drawn in, as `#RRGGBB`. Defaults to `#BFFF00`. |
+
+If the file does not exist, the host uses the defaults above and writes it. A missing file is not a
+validation failure; an unreadable or invalid one is.
+
+These two are the whole of what is configurable about how the program looks (Section 10). It is a
+file of its own rather than a section of `preference.json` because these are not a preference about
+the program but what the program is drawn in, and nothing else belongs beside them.
+
+### 5.5 Validation and failure
 
 The following are **fatal**: the reason is written to standard error and the process exits with the
-code in Section 5.5.
+code in Section 5.6.
 
-- `plugins.json` or `preference.json` is unreadable, malformed, or not valid JSON;
+- `plugins.json`, `preference.json` or `theme.json` is unreadable, malformed, or not valid JSON;
 - `_version` is absent or names a version the host does not support;
 - a `PluginId` key is repeated, or names no discovered plugin;
 - a declared dependency is missing, disabled, or forms a cycle;
-- `preference.json` names a theme that no provider supplies.
+- `theme.json` names a `mode` that is none of `system`, `light` and `dark`, or an `accent` that is not
+  exactly `#RRGGBB`.
 
 The following are **not fatal**:
 
@@ -315,22 +338,25 @@ The following are **not fatal**:
 - a plugin that fails the contract or Avalonia version check (that plugin is not loaded);
 - a plugin that throws during initialization (that plugin is not loaded).
 
-### 5.5 Exit codes
+### 5.6 Exit codes
 
 | Code | Meaning |
 | --- | --- |
 | `0` | Clean exit. |
 | `1` | `plugins.json` failed to load or validate. |
 | `2` | `preference.json` failed to load or validate. |
-| `3` | `preference.json` references a theme or plugin that is not available. |
+| `3` | The configuration names a plugin that is not available. |
+| `4` | `theme.json` failed to load or validate. |
 
 The code is accompanied by a human-readable reason on standard error. No dialog is used: a failure
 at this stage happens before the window exists.
 
-### 5.6 Startup sequence
+### 5.7 Startup sequence
 
-The order of Section 4.6 is normative. In particular, plugins are loaded before the theme is
-applied, because the selected theme may be supplied by a plugin.
+The order of Section 4.6 is normative. In particular the look is applied after the plugins and before
+the window: after, because the run is assembled in one direction — the shell, then what the plugins
+add to it, then how it is drawn — and before, because a style added once something has been styled
+stops applying to it, and says nothing about it (Section 10).
 
 ## 6. Extension Points
 

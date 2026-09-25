@@ -232,28 +232,4 @@ internal sealed class IconBadgeRegistry
         _providers.OrderBy(provider => provider.Position).Select(provider => provider.Value).ToArray();
 }
 
-/// <summary>The themes, built-in and plugin-supplied alike.</summary>
-internal sealed class ThemeRegistry
-{
-    /// <summary>Every theme, in registration order.</summary>
-    private readonly List<Owned<IThemeProvider>> _themes = [];
-
-    /// <summary>Registers a theme.</summary>
-    /// <param name="owner">The plugin registering it, or the kernel for a built-in theme.</param>
-    /// <param name="provider">The theme to register.</param>
-    public void Add(PluginId owner, IThemeProvider provider) =>
-        _themes.Add(new Owned<IThemeProvider>(owner, 0, provider));
-
-    /// <summary>Every theme that was registered.</summary>
-    public IReadOnlyList<IThemeProvider> Themes =>
-        _themes.Select(theme => theme.Value).ToArray();
-
-    /// <summary>
-    /// The theme an id names, or nothing.
-    /// </summary>
-    /// <remarks>The first registration wins when two themes carry one id.</remarks>
-    /// <param name="themeId">The id <c>preference.json</c> names.</param>
-    /// <returns>The theme, or nothing when no provider supplies that id.</returns>
-    public IThemeProvider? Find(string themeId) =>
-        _themes.FirstOrDefault(theme => theme.Value.ThemeId == themeId)?.Value;
-}
+/// <summary>The icon badge providers plugins contribute.</summary>

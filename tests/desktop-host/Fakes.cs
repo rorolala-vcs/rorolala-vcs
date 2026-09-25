@@ -19,23 +19,3 @@ internal sealed class FakeDockView : IDockView
     /// <inheritdoc />
     public IReadOnlyList<DockHeaderCommand> HeaderCommands => [];
 }
-
-/// <summary>
-/// A theme that is never applied.
-/// </summary>
-/// <remarks>
-/// Nothing here needs Avalonia's styling system, so the stand-in states an id and no styles, which
-/// is what theme selection reads.
-/// </remarks>
-internal sealed class FakeTheme : RorolalaDesktop.Contract.IThemeProvider
-{
-    /// <summary>Makes a theme with one id.</summary>
-    /// <param name="themeId">The id <c>preference.json</c> would name.</param>
-    public FakeTheme(string themeId) => ThemeId = themeId;
-
-    /// <inheritdoc />
-    public string ThemeId { get; }
-
-    /// <inheritdoc />
-    public IReadOnlyList<Avalonia.Styling.IStyle> Styles => [];
-}

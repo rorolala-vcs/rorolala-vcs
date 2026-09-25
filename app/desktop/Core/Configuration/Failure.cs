@@ -14,8 +14,11 @@ internal enum ExitCode
     /// <summary><c>preference.json</c> failed to load or validate.</summary>
     Preference = 2,
 
-    /// <summary><c>preference.json</c> names a theme or plugin that is not available.</summary>
+    /// <summary><c>preference.json</c> names a plugin that is not available.</summary>
     Unavailable = 3,
+
+    /// <summary><c>theme.json</c> failed to load or validate.</summary>
+    Theme = 4,
 }
 
 /// <summary>
@@ -24,7 +27,7 @@ internal enum ExitCode
 /// <remarks>
 /// The reason is written to standard error and the process exits with <see cref="Code"/>. The
 /// program does not fall back to a default configuration: a silently ignored configuration error is
-/// worse than a loud stop, and both files are plain JSON a person can edit. The natural place to
+/// worse than a loud stop, and the files are plain JSON a person can edit. The natural place to
 /// repair plugin configuration — the plugin manager — is inside the program that refuses to start,
 /// so recovery is by editing the file, guided by the reason on standard error.
 /// </remarks>

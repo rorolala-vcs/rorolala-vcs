@@ -41,7 +41,6 @@ internal static class Host
             Docks = new DockManager(new DockRegistry(), i18n, log, popups),
             OpenHooks = new OpenHookRegistry(),
             IconBadges = new IconBadgeRegistry(),
-            Themes = new ThemeRegistry(),
         };
     }
 }

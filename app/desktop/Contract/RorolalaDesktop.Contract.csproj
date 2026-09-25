@@ -9,7 +9,7 @@
     <!-- The version a plugin was built against is this assembly's version, and a plugin's manifest
          states it; the host compares the two. The surface is a contract, so every part of it is said
          in a comment and the documentation file is what a plugin author reads it from. -->
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>

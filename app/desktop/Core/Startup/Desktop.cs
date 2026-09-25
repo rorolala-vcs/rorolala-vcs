@@ -11,14 +11,14 @@ using RorolalaDesktop.Theming;
 namespace RorolalaDesktop;
 
 /// <summary>
-/// Assembles the host: the shared services, the kernel's own docks and menus, the plugins, and the
-/// theme.
+/// Assembles the host: the shared services, the kernel's own docks and menus, the plugins, and how the
+/// program is drawn.
 /// </summary>
 /// <remarks>
 /// The order here is the one Section 4.6 lays down. The kernel's docks and menus are registered
-/// first, then the plugins are initialized and register theirs, and only then is the theme applied —
-/// because the theme the user chose may be one a plugin supplies. The window is made last, so a
-/// theme that no provider supplies still stops the program before there is a window to show.
+/// first, then the plugins are initialized and register theirs, and then the look is applied — the run
+/// is assembled in one direction, and how it is drawn comes after what it is made of. The window is
+/// made last, because the look has to be applied before anything is drawn.
 /// </remarks>
 internal sealed class Desktop
 {
@@ -33,10 +33,9 @@ internal sealed class Desktop
     public Desktop(DesktopState state) => _state = state;
 
     /// <summary>
-    /// Builds the services, starts the plugins, applies the theme, and makes the window.
+    /// Builds the services, starts the plugins, applies the look, and makes the window.
     /// </summary>
     /// <returns>The window, which the caller shows.</returns>
-    /// <exception cref="ConfigurationFailure">The named theme has no provider.</exception>
     public MainWindow Start()
     {
         var services = Services();
@@ -59,7 +58,7 @@ internal sealed class Desktop
 
         Report(services);
 
-        new ThemeService(services.Themes).Apply(_state.Preference.Theme);
+        ThemeService.Apply(_state.Theme);
 
         var window = new MainWindow(services);
 
@@ -90,13 +89,11 @@ internal sealed class Desktop
             Docks = new DockManager(new DockRegistry(), i18n, log, popups),
             OpenHooks = new OpenHookRegistry(),
             IconBadges = new IconBadgeRegistry(),
-            Themes = new ThemeRegistry(),
         };
     }
 
     /// <summary>
-    /// Registers what the kernel itself provides: the top menu bar, the two core docks, and the
-    /// built-in theme.
+    /// Registers what the kernel itself provides: the top menu bar and the two core docks.
     /// </summary>
     private void RegisterKernel(HostServices services)
     {
@@ -137,8 +134,6 @@ internal sealed class Desktop
             "menu.file",
             new MenuItem("item.open_directory", 0, () => OpenDirectory(services))
         );
-
-        services.Themes.Add(Kernel, new RorolalaTheme());
     }
 
     /// <summary>

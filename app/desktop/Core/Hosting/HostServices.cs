@@ -50,9 +50,6 @@ internal sealed class HostServices
     /// <summary>The icon badge providers.</summary>
     public required IconBadgeRegistry IconBadges { get; init; }
 
-    /// <summary>The themes.</summary>
-    public required ThemeRegistry Themes { get; init; }
-
     /// <summary>The host as one plugin sees it.</summary>
     /// <param name="id">The plugin's identity.</param>
     /// <param name="position">The plugin's place in the load order.</param>
@@ -75,8 +72,7 @@ internal sealed class PluginHost
         INavigationRegistry,
         IDockRegistry,
         IOpenHookRegistry,
-        IIconBadgeRegistry,
-        IThemeRegistry
+        IIconBadgeRegistry
 {
     /// <summary>Everything the host holds.</summary>
     private readonly HostServices _services;
@@ -131,9 +127,6 @@ internal sealed class PluginHost
     public IIconBadgeRegistry IconBadges => this;
 
     /// <inheritdoc />
-    public IThemeRegistry Themes => this;
-
-    /// <inheritdoc />
     void IMenuRegistry.AddTopLevel(string labelKey, int order) =>
         _services.Menu.AddTopLevel(_id, _position, labelKey, order);
 
@@ -159,7 +152,4 @@ internal sealed class PluginHost
     /// <inheritdoc />
     void IIconBadgeRegistry.Add(IIconBadgeProvider provider) =>
         _services.IconBadges.Add(_id, _position, provider);
-
-    /// <inheritdoc />
-    void IThemeRegistry.Add(IThemeProvider provider) => _services.Themes.Add(_id, provider);
 }

@@ -69,6 +69,30 @@ public sealed class DesktopConfigTests
         Assert.Contains("_version", run.Error, StringComparison.Ordinal);
     }
 
+    /// <summary>A theme file that is not JSON stops with code four.</summary>
+    [Fact]
+    public void AThemeFileThatIsNotJsonStopsWithCodeFour()
+    {
+        var run = Start(plugins: null, preference: null, theme: "{ not json");
+
+        Assert.Equal(4, run.ExitCode);
+        Assert.Contains("not valid JSON", run.Error, StringComparison.Ordinal);
+    }
+
+    /// <summary>An accent that is not a colour stops with code four.</summary>
+    [Fact]
+    public void AnAccentThatIsNotAColourStopsWithCodeFour()
+    {
+        var run = Start(
+            plugins: null,
+            preference: null,
+            theme: """{"_version": 1, "accent": "lemon"}"""
+        );
+
+        Assert.Equal(4, run.ExitCode);
+        Assert.Contains("#RRGGBB", run.Error, StringComparison.Ordinal);
+    }
+
     /// <summary>The program under test, where it was built beside the solution.</summary>
     private static string Program { get; } =
         typeof(DesktopConfigTests)
@@ -83,9 +107,10 @@ public sealed class DesktopConfigTests
     /// <param name="preference">
     /// The whole of <c>preference.json</c>, or nothing to leave the file away.
     /// </param>
+    /// <param name="theme">The whole of <c>theme.json</c>, or nothing to leave the file away.</param>
     /// <returns>What the program exited with, and what it said on standard error.</returns>
     /// <exception cref="InvalidOperationException">The program did not stop.</exception>
-    private static Run Start(string? plugins, string? preference)
+    private static Run Start(string? plugins, string? preference, string? theme = null)
     {
         var data = Path.Combine(Path.GetTempPath(), $"rorolala-config-{Guid.NewGuid():N}");
         var configuration = Path.Combine(data, "rola", "desktop");
@@ -99,6 +124,11 @@ public sealed class DesktopConfigTests
         if (preference is not null)
         {
             File.WriteAllText(Path.Combine(configuration, "preference.json"), preference);
+        }
+
+        if (theme is not null)
+        {
+            File.WriteAllText(Path.Combine(configuration, "theme.json"), theme);
         }
 
         var start = new ProcessStartInfo("dotnet")

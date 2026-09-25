@@ -39,7 +39,4 @@ public interface IPluginHost
 
     /// <summary>Where the plugin adds icon badges.</summary>
     IIconBadgeRegistry IconBadges { get; }
-
-    /// <summary>Where the plugin registers themes.</summary>
-    IThemeRegistry Themes { get; }
 }

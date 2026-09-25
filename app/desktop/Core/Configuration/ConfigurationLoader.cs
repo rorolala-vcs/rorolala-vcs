@@ -1,18 +1,18 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Avalonia.Media;
 using RorolalaDesktop.Contract;
 
 namespace RorolalaDesktop.Configuration;
 
 /// <summary>
-/// Reads and writes the two configuration files, and refuses what it cannot.
+/// Reads and writes the configuration files, and refuses what it cannot.
 /// </summary>
 /// <remarks>
 /// A file that is not there is not a mistake: the program uses the defaults and writes a file, so
-/// that the next run and the plugin manager have something to edit. A file that is there but
-/// unreadable, malformed, or names something this program does not support stops the program with a
-/// reason on standard error (Section 14.1), because a silently ignored configuration error is worse
-/// than a loud stop.
+/// that the next run has something to edit. A file that is there but unreadable, malformed, or names
+/// something this program does not support stops the program with a reason on standard error
+/// (Section 14.1), because a silently ignored configuration error is worse than a loud stop.
 /// <para>
 /// The JSON is read a property at a time rather than deserialized into a type, so that a repeated
 /// key — which a deserializer would quietly keep the last of — is caught and refused.
@@ -67,6 +67,26 @@ internal static class ConfigurationLoader
         );
 
         return ParsePreference(document.RootElement, path);
+    }
+
+    /// <summary>
+    /// Reads <c>theme.json</c>, writing and answering the defaults when the file is not there.
+    /// </summary>
+    /// <exception cref="ConfigurationFailure">The file is unreadable, malformed, or unsupported.</exception>
+    public static ThemeConfiguration LoadTheme()
+    {
+        var path = ConfigPaths.Theme;
+
+        if (!File.Exists(path))
+        {
+            var defaults = new ThemeConfiguration();
+            WriteTheme(defaults);
+            return defaults;
+        }
+
+        using var document = ParseJson(ReadText(path, ExitCode.Theme), path, ExitCode.Theme);
+
+        return ParseTheme(document.RootElement, path);
     }
 
     /// <summary>
@@ -132,7 +152,6 @@ internal static class ConfigurationLoader
         var dto = new PreferenceDto
         {
             Version = PreferenceConfiguration.SchemaVersion,
-            Theme = config.Theme,
             Language = config.Language,
         };
 
@@ -142,6 +161,20 @@ internal static class ConfigurationLoader
         }
 
         Write(ConfigPaths.Preference, dto, ExitCode.Preference);
+    }
+
+    /// <summary>Writes the two things the user chooses about how the program looks.</summary>
+    /// <param name="config">What to write.</param>
+    public static void WriteTheme(ThemeConfiguration config)
+    {
+        var dto = new ThemeDto
+        {
+            Version = ThemeConfiguration.SchemaVersion,
+            Mode = Name(config.Mode),
+            Accent = Hex(config.Accent),
+        };
+
+        Write(ConfigPaths.Theme, dto, ExitCode.Theme);
     }
 
     /// <summary>Reads the shape of <c>plugins.json</c>.</summary>
@@ -244,16 +277,6 @@ internal static class ConfigurationLoader
 
         var config = new PreferenceConfiguration();
 
-        if (root.TryGetProperty("theme", out var theme))
-        {
-            if (theme.ValueKind != JsonValueKind.String)
-            {
-                throw Fail(ExitCode.Preference, path, "`theme` must be a string");
-            }
-
-            config.Theme = theme.GetString()!;
-        }
-
         if (root.TryGetProperty("language", out var language))
         {
             if (language.ValueKind != JsonValueKind.String)
@@ -271,6 +294,109 @@ internal static class ConfigurationLoader
 
         return config;
     }
+
+    /// <summary>Reads the shape of <c>theme.json</c>.</summary>
+    private static ThemeConfiguration ParseTheme(JsonElement root, string path)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw Fail(ExitCode.Theme, path, "the file must be a JSON object");
+        }
+
+        CheckVersion(root, path, ExitCode.Theme, ThemeConfiguration.SchemaVersion);
+
+        var config = new ThemeConfiguration();
+
+        if (root.TryGetProperty("mode", out var mode))
+        {
+            if (mode.ValueKind != JsonValueKind.String)
+            {
+                throw Fail(ExitCode.Theme, path, "`mode` must be a string");
+            }
+
+            config.Mode = ParseMode(mode.GetString()!, path);
+        }
+
+        if (root.TryGetProperty("accent", out var accent))
+        {
+            if (accent.ValueKind != JsonValueKind.String)
+            {
+                throw Fail(ExitCode.Theme, path, "`accent` must be a string");
+            }
+
+            config.Accent = ParseAccent(accent.GetString()!, path);
+        }
+
+        return config;
+    }
+
+    /// <summary>
+    /// The variant a name stands for, refusing a name that is none of them.
+    /// </summary>
+    /// <remarks>
+    /// Compared without case: the three are words a person types, and a capital letter is not a
+    /// different variant to be refused over.
+    /// </remarks>
+    private static ColorMode ParseMode(string name, string path) =>
+        name.ToLowerInvariant() switch
+        {
+            "system" => ColorMode.System,
+            "light" => ColorMode.Light,
+            "dark" => ColorMode.Dark,
+            _ => throw Fail(
+                ExitCode.Theme,
+                path,
+                $"`mode` must be system, light or dark, not `{name}`"
+            ),
+        };
+
+    /// <summary>
+    /// The colour an accent's text stands for, refusing text that is not one.
+    /// </summary>
+    /// <remarks>
+    /// Exactly six digits after the hash, which is what the file documents and what the writer writes:
+    /// eight would be a value carrying an alpha the accent has no use for, and three would be a second
+    /// spelling of a colour already spelled here.
+    /// </remarks>
+    private static Color ParseAccent(string text, string path)
+    {
+        if (text.Length != 7 || text[0] != '#' || !IsHex(text.AsSpan(1)))
+        {
+            throw Fail(ExitCode.Theme, path, $"`accent` must be #RRGGBB, not `{text}`");
+        }
+
+        return Color.FromRgb(
+            Convert.ToByte(text[1..3], 16),
+            Convert.ToByte(text[3..5], 16),
+            Convert.ToByte(text[5..7], 16)
+        );
+    }
+
+    /// <summary>Whether every character is a hexadecimal digit.</summary>
+    private static bool IsHex(ReadOnlySpan<char> text)
+    {
+        foreach (var character in text)
+        {
+            if (!Uri.IsHexDigit(character))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The name a variant is written under, which is one of the three the file accepts.</summary>
+    private static string Name(ColorMode mode) =>
+        mode switch
+        {
+            ColorMode.Light => "light",
+            ColorMode.Dark => "dark",
+            _ => "system",
+        };
+
+    /// <summary>The accent as the file writes it: six digits, whatever the colour's alpha is.</summary>
+    private static string Hex(Color colour) => $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}";
 
     /// <summary>Reads every plugin's own section, keeping each value as it stands.</summary>
     private static void ParsePluginSections(
@@ -419,14 +545,24 @@ internal static class ConfigurationLoader
         [JsonPropertyName("_version")]
         public int Version { get; set; }
 
-        [JsonPropertyName("theme")]
-        public string Theme { get; set; } = PreferenceConfiguration.DefaultTheme;
-
         [JsonPropertyName("language")]
         public string Language { get; set; } = PreferenceConfiguration.DefaultLanguage;
 
         [JsonPropertyName("plugin")]
         public Dictionary<string, Dictionary<string, JsonElement>> Plugin { get; set; } =
             new(StringComparer.Ordinal);
+    }
+
+    /// <summary>How <c>theme.json</c> is written.</summary>
+    private sealed class ThemeDto
+    {
+        [JsonPropertyName("_version")]
+        public int Version { get; set; }
+
+        [JsonPropertyName("mode")]
+        public string Mode { get; set; } = Name(ThemeConfiguration.DefaultMode);
+
+        [JsonPropertyName("accent")]
+        public string Accent { get; set; } = Hex(ThemeConfiguration.DefaultAccent);
     }
 }

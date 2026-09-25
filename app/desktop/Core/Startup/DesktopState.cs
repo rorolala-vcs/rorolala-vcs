@@ -16,6 +16,9 @@ internal sealed class DesktopState
     /// <summary>The user's preferences.</summary>
     public required PreferenceConfiguration Preference { get; init; }
 
+    /// <summary>The two things the user chooses about how the program looks.</summary>
+    public required ThemeConfiguration Theme { get; init; }
+
     /// <summary>The plugins, discovered and ordered.</summary>
     public required PluginManager Plugins { get; init; }
 }
@@ -39,10 +42,16 @@ internal static class DesktopStartup
         // reasons below, and the plugins are read second so that discovery can check the file's keys
         // against what was actually found.
         var preference = ConfigurationLoader.LoadPreference();
+        var theme = ConfigurationLoader.LoadTheme();
         var plugins = new PluginManager(PluginDirectory);
 
         plugins.Load(ConfigurationLoader.LoadPlugins());
 
-        return new DesktopState { Preference = preference, Plugins = plugins };
+        return new DesktopState
+        {
+            Preference = preference,
+            Theme = theme,
+            Plugins = plugins,
+        };
     }
 }
