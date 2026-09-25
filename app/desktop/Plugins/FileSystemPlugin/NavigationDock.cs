@@ -76,7 +76,7 @@ internal sealed class NavigationControl : UserControl
                 Go(_address.Text);
             }
         };
-        _address.LostFocus += (_, _) => _address.Text = _browser.Current;
+        _address.LostFocus += (_, _) => _address.Text = Address(_browser.Current);
 
         var toolbar = new StackPanel
         {
@@ -119,27 +119,43 @@ internal sealed class NavigationControl : UserControl
         _back.IsEnabled = _browser.CanGoBack;
         _forward.IsEnabled = _browser.CanGoForward;
         _up.IsEnabled = _browser.CanGoUp;
-        _address.Text = _browser.Current;
+        _address.Text = Address(_browser.Current);
     }
+
+    /// <summary>
+    /// What the address says a location is.
+    /// </summary>
+    /// <remarks>
+    /// The computer is the one place that has no path to type, so it is named instead — and the name
+    /// is read back in <see cref="Go"/>, which is what a field that shows a word has to do.
+    /// </remarks>
+    private static string Address(string directory) =>
+        Browser.IsComputer(directory)
+            ? RolaI18N.Get("rorolala_file_system.computer")
+            : directory;
 
     /// <summary>Goes to a directory typed into the address bar.</summary>
     private void Go(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            _address.Text = _browser.Current;
+            _address.Text = Address(_browser.Current);
 
             return;
         }
 
+        var directory = path == RolaI18N.Get("rorolala_file_system.computer")
+            ? Browser.Computer
+            : path;
+
         // The address writes the location, and a path that is not a directory is refused by it: what
         // is left here is saying so and putting back what the location says.
-        if (_browser.Go(path))
+        if (_browser.Go(directory))
         {
             return;
         }
 
         _host.Log.Warn(RolaI18N.Get("rorolala_file_system.not_a_directory", path));
-        _address.Text = _browser.Current;
+        _address.Text = Address(_browser.Current);
     }
 }

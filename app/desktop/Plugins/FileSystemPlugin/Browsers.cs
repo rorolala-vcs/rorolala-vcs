@@ -4,17 +4,71 @@ using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
 
 namespace FileSystemPlugin;
 
 /// <summary>What an entry is called on screen.</summary>
 internal static class Names
 {
-    /// <summary>The last part of an entry's path, or the whole path when there is no last part.</summary>
+    /// <summary>
+    /// The name of a path: its last part, or the whole of it when there is no last part.
+    /// </summary>
+    /// <remarks>
+    /// The computer is the one place that has no name of its own, having no path: what it is called is
+    /// a word rather than a piece of one.
+    /// </remarks>
     /// <param name="entry">The entry to name.</param>
     /// <returns>The name to show.</returns>
     public static string Show(Entry entry) =>
-        Path.GetFileName(entry.Path) is { Length: > 0 } name ? name : entry.Path;
+        Browser.IsComputer(entry.Path)
+            ? RolaI18N.Get("rorolala_file_system.computer")
+            : Path.GetFileName(entry.Path) is { Length: > 0 } name
+                ? name
+                : entry.Path;
+}
+
+/// <summary>What a listing is: the entries, under the way up when there is one.</summary>
+/// <remarks>
+/// The way up is the listing's own row rather than an entry, because an entry is a path and a view
+/// names it by that path's last part — and the way up is called <c>..</c> whatever it leads to.
+/// </remarks>
+internal static class Listings
+{
+    /// <summary>Puts the entries under the way up, if there is one.</summary>
+    /// <param name="browser">Where the browser is, which the way up moves.</param>
+    /// <param name="entries">The entries themselves.</param>
+    /// <returns>What the listing shows.</returns>
+    public static Control Stage(Browser browser, Control entries)
+    {
+        if (browser.Parent is not { } parent)
+        {
+            return entries;
+        }
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(4, 3),
+        };
+
+        row.Children.Add(Icons.For(new Entry(parent, EntryKind.Directory)));
+        row.Children.Add(
+            new TextBlock { Text = "..", VerticalAlignment = VerticalAlignment.Center }
+        );
+
+        // Opened by a second tap, like the entries under it, which is what it is one of in all but
+        // name.
+        row.DoubleTapped += (_, _) => browser.Up();
+
+        var staged = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(row, Dock.Top);
+        staged.Children.Add(row);
+        staged.Children.Add(entries);
+
+        return staged;
+    }
 }
 
 /// <summary>The entries as one row each.</summary>
@@ -41,7 +95,7 @@ internal sealed class ListBrowser : UserControl
             }
         };
 
-        Content = list;
+        Content = Listings.Stage(browser, list);
     }
 
     /// <summary>One entry as a row: its icon, then its name.</summary>
@@ -83,7 +137,7 @@ internal sealed class GridBrowser : UserControl
             tiles.Children.Add(Tile(entry, actions));
         }
 
-        Content = new ScrollViewer { Content = tiles, ContextMenu = actions.Empty() };
+        Content = Listings.Stage(browser, new ScrollViewer { Content = tiles, ContextMenu = actions.Empty() });
     }
 
     /// <summary>One entry as a tile: its icon above its name.</summary>
@@ -126,13 +180,13 @@ internal sealed class GridBrowser : UserControl
 /// </remarks>
 internal sealed class TreeBrowser : UserControl
 {
-    /// <summary>Makes the tree layout rooted at the directory being looked at.</summary>
+    /// <summary>Makes the tree layout rooted at the base directory.</summary>
     /// <param name="browser">Where the browser is, which the tree reads and switches.</param>
     /// <param name="actions">What a directory does when it is chosen or right-clicked.</param>
     public TreeBrowser(Browser browser, BrowserActions actions)
     {
         var tree = new TreeView { ContextMenu = actions.Empty() };
-        tree.Items.Add(Node(browser, browser.Current, actions));
+        tree.Items.Add(Node(browser, browser.BaseDir, actions));
 
         Content = tree;
     }
@@ -162,7 +216,7 @@ internal sealed class TreeBrowser : UserControl
             read = true;
             item.Items.Clear();
 
-            foreach (var child in Subdirectories(path))
+            foreach (var child in Children(path))
             {
                 item.Items.Add(Node(browser, child, actions));
             }
@@ -209,10 +263,16 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Whether a directory holds any directory at all, or nothing when it cannot be read.</summary>
     /// <remarks>
     /// Read to the first entry rather than counted to the last: the whole of a large directory is not
-    /// worth reading to answer what one entry already answers.
+    /// worth reading to answer what one entry already answers. The computer is the exception, holding
+    /// nothing but the few drives, which are read outright.
     /// </remarks>
     private static bool HoldsAny(string path)
     {
+        if (Browser.IsComputer(path))
+        {
+            return Browser.Read(path).Count > 0;
+        }
+
         try
         {
             return System.IO.Directory.EnumerateDirectories(path).Any();
@@ -222,6 +282,12 @@ internal sealed class TreeBrowser : UserControl
             return false;
         }
     }
+
+    /// <summary>The directories directly under one, by name, or the drives when it is the computer.</summary>
+    private static IReadOnlyList<string> Children(string path) =>
+        Browser.IsComputer(path)
+            ? Browser.Read(path).Select(entry => entry.Path).ToArray()
+            : Subdirectories(path);
 
     /// <summary>The directories directly under one, by name, or nothing when it cannot be read.</summary>
     private static IReadOnlyList<string> Subdirectories(string path)

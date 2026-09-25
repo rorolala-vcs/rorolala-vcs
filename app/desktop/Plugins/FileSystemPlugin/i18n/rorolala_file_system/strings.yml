@@ -24,6 +24,16 @@ rorolala_file_system:
     en: Tree
     zh-CN: 树
 
+  root:
+    en: Root
+    zh-CN: 根目录
+  set_base:
+    en: Set as Base
+    zh-CN: 设为基准
+  computer:
+    en: This PC
+    zh-CN: 此电脑
+
   open:
     en: Open
     zh-CN: 打开

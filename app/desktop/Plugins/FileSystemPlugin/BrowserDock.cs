@@ -62,8 +62,20 @@ internal sealed class BrowserControl : UserControl
     /// <summary>The layout this dock reads the entries in.</summary>
     private BrowserView _view = BrowserView.List;
 
+    /// <summary>Where the browser was when this dock last drew it, so a step can be told from a redraw.</summary>
+    private string? _drawn;
+
+    /// <summary>The base it last drew, or nothing while it has drawn nothing.</summary>
+    private string? _drawnBase;
+
+    /// <summary>What the entries were when this dock last drew them, so a reread can be told from a step.</summary>
+    private IReadOnlyList<Entry>? _drawnEntries;
+
     /// <summary>The view the entries are read in.</summary>
     private readonly ComboBox _views = new();
+
+    /// <summary>The button that roots the tree at the top of the platform.</summary>
+    private readonly Button _root = new();
 
     /// <summary>Whichever layout is being shown.</summary>
     private readonly ContentControl _content = new();
@@ -89,14 +101,19 @@ internal sealed class BrowserControl : UserControl
 
         FillViews();
 
-        // Over the entries rather than under them, and to the right: it reads as the view of the pane
-        // it sits in, and it stays out of the way of the toolbar above, which is another dock.
+        _root.Content = RolaI18N.Get("rorolala_file_system.root");
+        _root.Click += (_, _) => _browser.SetBase(Browser.Root());
+
+        // Over the entries rather than under them: it reads as the view of the pane it sits in, and it
+        // stays out of the way of the toolbar above, which is another dock.
         var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
+            Spacing = 4,
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(4),
         };
+        bar.Children.Add(_root);
         bar.Children.Add(_views);
 
         var panel = new DockPanel { LastChildFill = true };
@@ -119,22 +136,51 @@ internal sealed class BrowserControl : UserControl
 
         _views.SelectionChanged += (_, _) =>
         {
-            // Choosing a layout draws the same entries again, which is a redraw and not a change of
-            // where the browser is: the location is one, and every view of it shows the same thing.
             if (_views.SelectedItem is ComboBoxItem { Tag: BrowserView view } && view != _view)
             {
                 _view = view;
-                Update();
+                Draw();
             }
         };
     }
 
-    /// <summary>Draws what is there, the way this dock reads it.</summary>
+    /// <summary>
+    /// Draws what is there, the way this dock reads it, when a change is one this dock would show.
+    /// </summary>
+    /// <remarks>
+    /// A tree is rooted at the base directory and not at the location, so a step through directories
+    /// does not redraw it: the whole point of a base is that what the user opened stays open, and a
+    /// tree built again on every step would fold up under the pointer that stepped.
+    /// </remarks>
     private void Update()
+    {
+        var rooted = _drawnBase != _browser.BaseDir;
+        var stepped =
+            _drawn != _browser.Current || !ReferenceEquals(_drawnEntries, _browser.Entries);
+
+        if (_drawnBase is null || (_view == BrowserView.Tree ? rooted : rooted || stepped))
+        {
+            Draw();
+
+            return;
+        }
+
+        Rooting();
+    }
+
+    /// <summary>Draws what is there, the way this dock reads it.</summary>
+    private void Draw()
     {
         _content.Content = ContentFor(_view);
         _views.SelectedIndex = Array.FindIndex(Views, entry => entry.View == _view);
+        _drawn = _browser.Current;
+        _drawnBase = _browser.BaseDir;
+        _drawnEntries = _browser.Entries;
+        Rooting();
     }
+
+    /// <summary>Shows the button that roots the tree at the top only where there is a tree to root.</summary>
+    private void Rooting() => _root.IsVisible = _view == BrowserView.Tree;
 
     /// <summary>The control showing the entries in one layout.</summary>
     private Control ContentFor(BrowserView view) =>
@@ -157,6 +203,15 @@ internal sealed class BrowserControl : UserControl
         menu.Items.Add(
             Item("rorolala_file_system.copy_path", () => Openers.Copy(this, entry.Path, _host.Log.Error))
         );
+
+        // A directory can be made the base of the tree from wherever it is seen, which is what makes
+        // the tree a view of the place being worked in rather than of wherever the browser started.
+        if (entry.Kind == EntryKind.Directory)
+        {
+            menu.Items.Add(
+                Item("rorolala_file_system.set_base", () => _browser.SetBase(entry.Path))
+            );
+        }
 
         return menu;
     }

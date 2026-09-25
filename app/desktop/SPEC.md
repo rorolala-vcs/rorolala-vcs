@@ -469,12 +469,19 @@ Behaviour:
 - Closing a `Toggle` dock hides it; closing a `New` dock discards the instance (Section 7.2). Either
   way the region settles on another of its docks, or is empty and collapses its strip.
 
-The File System has **one location**, and every dock it opens is a view onto it. The browser docks
-differ in the layout they read the entries in and in nothing else; the navigation dock shows the one
-address and walks the one history. Two docks cannot be looking at two places, which is what makes an
-address mean one thing.
+The File System has **one location** and **one base**. Every dock it opens is a view of the location;
+the tree is rooted at the base. The browser docks differ in the layout they read the entries in and in
+nothing else; the navigation dock shows the one address and walks the one history. Two docks cannot be
+looking at two places, which is what makes an address mean one thing.
 
-There is therefore exactly one way the location changes, and four things that ask it to:
+The **base** is the directory the tree is rooted at, and it is what keeps the tree usable: a place to
+work in rather than the whole filesystem. It starts at wherever the program was run. It is set from a
+directory's own menu, wherever that directory is seen, and setting it goes there as well — the tree is
+a view of the place being worked in, and a base the browser is not in would show somewhere else. The
+tree keeps the steps a user has opened while the location moves, because it is rooted at the base
+rather than at the location.
+
+There is therefore exactly one way the location changes, and five things that ask it to:
 
 1. A path typed into the **address** and entered. What is typed may be relative or have a step in it;
    the location is held in full, so the address says where the browser actually went.
@@ -482,11 +489,19 @@ There is therefore exactly one way the location changes, and four things that as
    only mean going there, and it happens on the first click rather than the second.
 3. A directory **opened in a list**.
 4. A directory **opened in a grid**.
+5. **`..`**, the row a listing puts above its entries, which goes to the directory holding the one
+   being looked at. A listing has it only when there is one further up.
 
-All four go through the same call, which refuses anything that is not a directory rather than leaving
-the browser somewhere that cannot be read; the address is the one that has to say so, since it is the
-only one of the four a user can get wrong. The navigation dock's arrows walk the history that
-switching the location leaves behind.
+All five go through the same call, which refuses anything that is not a directory rather than leaving
+the browser somewhere that cannot be read. The address is the one a user can get wrong, so it is the
+one that says so. The navigation dock's arrows walk the history that switching the location leaves
+behind.
+
+**The top of the platform** is where the tree's *Root* button goes, and what it roots the tree at: the
+root on Unix, which is a directory like any other, and the computer on Windows, which is where the
+drives are chosen from. Windows has no path naming every drive at once, so that one place is held as
+the empty path, which no directory can be, and the views name it rather than printing it. A drive
+root's parent is the computer, which is how a drive list is left; the computer has no parent.
 
 Switching the location in one dock therefore switches it in all of them, and the navigation dock is
 shown and hidden on its own — closing a browser does not close it.
