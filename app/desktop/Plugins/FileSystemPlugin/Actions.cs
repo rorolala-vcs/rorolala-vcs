@@ -102,8 +102,18 @@ internal static class Actions
         return menu;
     }
 
-    /// <summary>One menu item, named by a translation key.</summary>
-    private static MenuItem Item(string key, Action action)
+    /// <summary>
+    /// One menu item, named by a translation key.
+    /// </summary>
+    /// <remarks>
+    /// Open to the views as well as to the menus here, so that a view with an item of its own to add —
+    /// the tree closes every step from its root — adds one that is named the way the items around it
+    /// are named rather than spelling a label out.
+    /// </remarks>
+    /// <param name="key">The translation key the item is named by.</param>
+    /// <param name="action">What choosing it does.</param>
+    /// <returns>The item.</returns>
+    public static MenuItem Item(string key, Action action)
     {
         var item = new MenuItem { Header = RolaI18N.Get(key) };
         item.Click += (_, _) => action();

@@ -148,19 +148,25 @@ internal sealed class TreeBrowser : UserControl
     }
 
     /// <summary>One directory as a step of the tree, reading its children when first opened.</summary>
+    /// <param name="path">The directory the step stands for.</param>
     private TreeViewItem Node(string path)
     {
-        var item = new TreeViewItem { Header = Header(path) };
+        var item = new TreeViewItem();
         var read = false;
 
         // A step with nothing under it is given no child at all, and that is what leaves it without an
         // expander: one that cannot be opened must not be offered as though it could. The step that
         // has something under it gets a child that is never shown, so that it can be opened at all;
-        // it is replaced the first time the step is.
-        if (HoldsAny(path))
+        // it is replaced the first time the step is. What it holds is also what says whether there is
+        // anything worth offering to close under it (see Header).
+        var holds = HoldsAny(path);
+
+        if (holds)
         {
             item.Items.Add(new TreeViewItem { Header = "\u2026" });
         }
+
+        item.Header = Header(path, holds ? () => Collapse(item) : null);
 
         item.Expanded += (_, _) =>
         {
@@ -202,17 +208,29 @@ internal sealed class TreeBrowser : UserControl
     /// by the time the presenter is reached.
     /// </para>
     /// </remarks>
-    private Control Header(string path)
+    /// <param name="path">The directory the row names.</param>
+    /// <param name="collapse">What closes every step under the row, or nothing where it has no steps under it.</param>
+    private Control Header(string path, Action? collapse)
     {
         var entry = new Entry(path, EntryKind.Directory);
         var name = Names.Show(entry);
+        var menu = _actions.Menu(this, entry);
+
+        // Offered by every row with steps under it, which is the same row that is given an expander, since
+        // closing them all is worth offering where there is more than one to close. What is not offered is
+        // the other half — opening them all — since that would read every directory under the row, which is
+        // what a tree read a step at a time is for avoiding.
+        if (collapse is not null)
+        {
+            menu.Items.Add(Actions.Item("rorolala_file_system.collapse_all", collapse));
+        }
 
         // The menu is opened by the control the row is in rather than by the row, since one of the
         // things it does — putting a path on the clipboard — is reached through a control on screen.
         var row = new Border
         {
             Background = Brushes.Transparent,
-            ContextMenu = _actions.Menu(this, entry),
+            ContextMenu = menu,
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -233,6 +251,26 @@ internal sealed class TreeBrowser : UserControl
         row.DoubleTapped += (_, e) => e.Handled = true;
 
         return row;
+    }
+
+    /// <summary>
+    /// Closes every step under a row, and the row itself.
+    /// </summary>
+    /// <remarks>
+    /// Walked rather than closed by setting the one row: closing a step hides the steps under it whether
+    /// or not they are closed, so opening it again would show the whole walk the reader had taken down
+    /// through it, which is the state this is asked for to leave. Only the steps that were opened are
+    /// there to walk, which is what a tree read a step at a time has.
+    /// </remarks>
+    /// <param name="row">The row to close everything under.</param>
+    private static void Collapse(TreeViewItem row)
+    {
+        row.IsExpanded = false;
+
+        foreach (var step in row.Items.OfType<TreeViewItem>())
+        {
+            Collapse(step);
+        }
     }
 
     /// <summary>Whether a directory holds any directory at all, or nothing when it cannot be read.</summary>

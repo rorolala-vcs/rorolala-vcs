@@ -460,7 +460,7 @@ Both are always available from `Window`.
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
 | Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): rows of names below 60%, tiles above it. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
-| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. Placed at the left by default. |
+| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. Placed at the left by default. |
 | File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and an address to type. Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
@@ -473,6 +473,11 @@ other. What the directory dock's zoom decides is therefore whether the entries a
 or as tiles, and nothing else: there is one scale, and the arrangement follows from it, because a grid of
 pictures too small to look at is a grid nobody asked for. The zoom is a slider in the dock's own corner,
 and `Ctrl` and a turn of the wheel over the dock move it.
+
+A tree reads a step when it is opened, and that is why what it offers is the closing of steps and never
+their opening: opening every step at once would read every directory under the base, which is the one
+thing a tree read a step at a time is arranged to avoid. Closing them all is the cheap direction, and it
+is offered by every row that has steps under it.
 
 ### 7.6 Headers and the strip
 

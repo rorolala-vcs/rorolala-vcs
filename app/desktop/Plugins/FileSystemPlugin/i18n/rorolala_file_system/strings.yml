@@ -23,6 +23,9 @@ rorolala_file_system:
   set_base:
     en: Set as Base
     zh-CN: 设为基准
+  collapse_all:
+    en: Collapse All
+    zh-CN: 全部折叠
   computer:
     en: This PC
     zh-CN: 此电脑
