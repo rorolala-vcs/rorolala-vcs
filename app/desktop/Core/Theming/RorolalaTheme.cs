@@ -348,14 +348,26 @@ internal sealed class RorolalaTheme
                 new Setter(TemplatedControl.BackgroundProperty, Hairline(vertical: false))
             ),
 
-            // Where a dragged dock would land. Its colours are the dock area's to ask for — a drag has
-            // to be visible under a theme that says nothing about it — so what is left here is the
-            // edge it wears and the fade it arrives with.
+            // Where a dragged dock could land. All of them are drawn while a drag is on, because they are
+            // the question — which regions are there to land in — and the one being aimed at is drawn in
+            // the accent, because it is the answer. The others are a tint of the variant's ink: white over
+            // a dark program, black over a light one, which is what the tint family is.
             On(
                 selector => selector.OfType<Border>().Class(DockArea.DropZoneClass),
                 new Setter(Border.BorderThicknessProperty, Edge),
                 new Setter(Border.CornerRadiusProperty, Square),
+                Brushed(Border.BackgroundProperty, DeeperTint),
+                Brushed(Border.BorderBrushProperty, Line),
                 new Setter(Border.TransitionsProperty, Fading(Light))
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Border>()
+                        .Class(DockArea.DropZoneClass)
+                        .Class(DockArea.DropTargetClass),
+                Fixed(Border.BackgroundProperty, WithAlpha(_accent, 0x33)),
+                Fixed(Border.BorderBrushProperty, _accent)
             ),
         ];
 

@@ -24,10 +24,12 @@ namespace RorolalaDesktop.Docking;
 /// deliberate move is a drag, and that move is done by taking the dock out of one region and
 /// putting it in another, in that order.
 /// <para>
-/// Dragging a header shows where the dock would land before it is let go of: the area divides into
-/// the regions a drop could mean, and the one the pointer is over is lit. The four zones are shown
-/// whether or not anything is in them, so a region that is empty and taking no space can still be
-/// what a drag is aimed at.
+/// Dragging a header shows where the dock would land before it is let go of: every region a drop could
+/// mean is drawn, and the one the pointer is over is picked out. A box is drawn where the region it
+/// stands for is — the band of the area that place in the layout has — so what a drag shows is where the
+/// dock will be rather than merely that something will happen. A region that is empty and taking no
+/// space is drawn too, at the size the layout remembers for it, which is the size it takes when the dock
+/// arrives.
 /// </para>
 /// <para>
 /// A region with nothing open in it takes no space, and its splitter goes with it, so an empty left
@@ -64,6 +66,11 @@ internal sealed class DockArea : UserControl
     /// <summary>The class the zone a dragged dock would land in carries.</summary>
     public const string DropZoneClass = "dock-drop-zone";
 
+    /// <summary>
+    /// The class the zone a dragged dock is being aimed at carries, in addition to <see cref="DropZoneClass"/>.
+    /// </summary>
+    public const string DropTargetClass = "dock-drop-target";
+
     /// <summary>The class the button that closes the dock a region is showing carries.</summary>
     public const string CloseClass = "dock-close";
 
@@ -83,29 +90,8 @@ internal sealed class DockArea : UserControl
     /// <summary>How far a pointer moves before a press becomes a drag rather than a click.</summary>
     private const double DragThreshold = 4;
 
-    /// <summary>How much of a side is that side, as a fraction of the whole.</summary>
-    private const double ZoneEdge = 0.25;
-
     /// <summary>How large a floating dock's window opens.</summary>
     private static readonly Size FloatSize = new(560, 400);
-
-    /// <summary>
-    /// The base theme's accent, which is what a drop zone is drawn in.
-    /// </summary>
-    /// <remarks>
-    /// Asked for by name rather than named here: which colour the accent is belongs to the theme, and
-    /// a theme that says nothing about drop zones — the base one alone — still has an accent for this
-    /// to take. A colour written here instead would be one no theme could change.
-    /// <para>
-    /// The name is the base theme's, so the base theme is named here as surely as if its type were:
-    /// swapping the base for one with different resource names means changing these two lines, and
-    /// nothing would say so but a drop zone that quietly lost its edge.
-    /// </para>
-    /// </remarks>
-    private const string AccentKey = "ThemeAccentBrush";
-
-    /// <summary>The base theme's accent at its faintest, and the little the drop zone is filled with.</summary>
-    private const string WashKey = "ThemeAccentBrush4";
 
     /// <summary>The docks and where they are.</summary>
     private readonly DockManager _manager;
@@ -149,7 +135,7 @@ internal sealed class DockArea : UserControl
     /// <summary>The splitter above the bottom region.</summary>
     private readonly GridSplitter _bottomSplitter = new();
 
-    /// <summary>The four zones a dragged dock could land in, shown only while one is dragged.</summary>
+    /// <summary>The boxes a dragged dock could land in, drawn over the area while one is dragged.</summary>
     private readonly Grid _zones = new();
 
     /// <summary>What each dock that is placed in a region was given, by the dock.</summary>
@@ -400,48 +386,72 @@ internal sealed class DockArea : UserControl
         Content = _surface;
     }
 
-    /// <summary>Lays out the five zones a dragged dock could land in.</summary>
+    /// <summary>
+    /// Makes one box per region a dock could land in.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here says where a box is or what it looks like. Where is worked out as a drag is shown,
+    /// because a region moves when the user moves a splitter; what it looks like is Section 10's.
+    /// </remarks>
     private void Zones()
     {
-        // Columns and rows in the same fractions the zones are read in, so what is lit up is where
-        // the pointer would have to be: a quarter at each edge of each axis, the middle left over.
-        _zones.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-        _zones.ColumnDefinitions.Add(new ColumnDefinition(2, GridUnitType.Star));
-        _zones.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-        _zones.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
-        _zones.RowDefinitions.Add(new RowDefinition(2, GridUnitType.Star));
-        _zones.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
-
-        Add(DockPlacement.Top, 0, 0, 3);
-        Add(DockPlacement.Left, 0, 1, 1);
-        Add(DockPlacement.Center, 1, 1, 1);
-        Add(DockPlacement.Right, 2, 1, 1);
-        Add(DockPlacement.Bottom, 0, 2, 3);
+        Add(DockPlacement.Top);
+        Add(DockPlacement.Left);
+        Add(DockPlacement.Center);
+        Add(DockPlacement.Right);
+        Add(DockPlacement.Bottom);
 
         _zones.IsHitTestVisible = false;
 
         return;
 
-        void Add(DockPlacement placement, int column, int row, int columns)
+        void Add(DockPlacement placement)
         {
             var zone = new Border
             {
                 Classes = { DropZoneClass },
-                Margin = new Thickness(2),
                 Opacity = 0,
             };
-
-            zone.Bind(Border.BorderBrushProperty, new DynamicResourceExtension(AccentKey));
-            zone.Bind(Border.BackgroundProperty, new DynamicResourceExtension(WashKey));
-
-            Grid.SetColumn(zone, column);
-            Grid.SetColumnSpan(zone, columns);
-            Grid.SetRow(zone, row);
 
             _zones.Children.Add(zone);
             _lit[placement] = zone;
         }
     }
+
+    /// <summary>
+    /// Where the five boxes are, in the area's own coordinates.
+    /// </summary>
+    /// <remarks>
+    /// A box is a band of the area: the top and the bottom are as wide as the whole of it, and the left,
+    /// the middle and the right share the band left between them. What a band is worth is the size the
+    /// layout remembers for that region, never less than the least a region may become — which is what
+    /// gives a region that is empty and taking no space a box to aim at, drawn at the size it will have
+    /// when a dock arrives. The five tile the area, so no point in it is over none of them.
+    /// </remarks>
+    private Dictionary<DockPlacement, Rect> Boxes()
+    {
+        var width = Bounds.Width;
+        var height = Bounds.Height;
+        var layout = _manager.Layout;
+
+        var top = Math.Clamp(Math.Max(MinRow, layout.TopHeight), 0, height);
+        var bottom = Math.Clamp(height - Math.Max(MinRow, layout.BottomHeight), top, height);
+        var left = Math.Clamp(Math.Max(MinColumn, layout.LeftWidth), 0, width);
+        var right = Math.Clamp(width - Math.Max(MinColumn, layout.RightWidth), left, width);
+
+        return new Dictionary<DockPlacement, Rect>
+        {
+            [DockPlacement.Top] = new(0, 0, width, top),
+            [DockPlacement.Bottom] = new(0, bottom, width, height - bottom),
+            [DockPlacement.Left] = new(0, top, left, bottom - top),
+            [DockPlacement.Right] = new(right, top, width - right, bottom - top),
+            [DockPlacement.Center] = new(left, top, right - left, bottom - top),
+        };
+    }
+
+    /// <summary>The margin that puts a box where its rectangle is, in an area this size.</summary>
+    private Thickness Inset(Rect box) =>
+        new(box.X, box.Y, Bounds.Width - box.Right, Bounds.Height - box.Bottom);
 
     /// <summary>Sets up one splitter, remembering the region's size when it is let go.</summary>
     private void ConfigureSplitter(GridSplitter splitter, GridResizeDirection direction, Region region)
@@ -870,56 +880,49 @@ internal sealed class DockArea : UserControl
     /// Which region a point in the area would land a dock in.
     /// </summary>
     /// <remarks>
-    /// Every edge is the outer quarter of the area on its axis, and the middle is what is left over,
-    /// so a drag that stays in the middle goes to the middle. A point outside the area lands
+    /// The box the point is in — the boxes that are drawn, so that what is being pointed at and what is
+    /// picked out are one answer instead of two that can disagree. A point outside the area lands
     /// nowhere, which is what letting go of a drag outside the area means.
     /// </remarks>
     private DockPlacement? ZoneFor(Point at)
     {
-        var bounds = Bounds;
-
-        if (
-            bounds.Width <= 0
-            || bounds.Height <= 0
-            || at.X < 0
-            || at.Y < 0
-            || at.X > bounds.Width
-            || at.Y > bounds.Height
-        )
+        if (Bounds.Width <= 0 || Bounds.Height <= 0 || !Bounds.Contains(at))
         {
             return null;
         }
 
-        if (at.Y < bounds.Height * ZoneEdge)
+        foreach (var (placement, box) in Boxes())
         {
-            return DockPlacement.Top;
+            if (box.Contains(at))
+            {
+                return placement;
+            }
         }
 
-        if (at.Y > bounds.Height * (1 - ZoneEdge))
-        {
-            return DockPlacement.Bottom;
-        }
-
-        if (at.X < bounds.Width * ZoneEdge)
-        {
-            return DockPlacement.Left;
-        }
-
-        return at.X > bounds.Width * (1 - ZoneEdge)
-            ? DockPlacement.Right
-            : DockPlacement.Center;
+        return null;
     }
 
-    /// <summary>Shows the zone a dock would land in, and takes the others away.</summary>
+    /// <summary>
+    /// Shows every place a dragged dock could land, and picks out the one the pointer is over.
+    /// </summary>
     /// <remarks>
-    /// Faded rather than shown and hidden, so that a drag reads as the zone lighting up instead of
-    /// appearing; the fade itself belongs to a theme, so a theme with none still lights it, at once.
+    /// Every box is up while one is dragged: the point of them is to say what the choices are, so one
+    /// drawn at a time would be one choice shown and four unknown. The one being aimed at takes a class
+    /// rather than a colour, so that what being aimed at looks like is the look's to decide.
     /// </remarks>
-    private void Preview(DockPlacement? placement)
+    private void Preview(DockPlacement? target)
     {
-        foreach (var (landing, zone) in _lit)
+        var boxes = _dragging is null ? null : Boxes();
+
+        foreach (var (placement, zone) in _lit)
         {
-            zone.Opacity = placement is { } at && at == landing ? 1 : 0;
+            if (boxes is not null)
+            {
+                zone.Margin = Inset(boxes[placement]);
+            }
+
+            zone.Opacity = boxes is null ? 0 : 1;
+            zone.Classes.Set(DropTargetClass, boxes is not null && placement == target);
         }
     }
 
