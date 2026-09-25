@@ -11,8 +11,9 @@ namespace FileSystemPlugin;
 /// and starts it — but it ships with the program and is enabled by default, because a browser is
 /// what the shell is for (Section 7.5).
 /// <para>
-/// What it owns is deliberately more than a dock: the entries, their icons, the menus opened on
-/// them, and the navigation that moves between directories. The host is the shell around it.
+/// What it owns is deliberately more than a dock: the location every dock it opens looks at, the
+/// entries there, their icons, the menus opened on them, and the navigation that switches where that
+/// is. The host is the shell around it.
 /// </para>
 /// </remarks>
 public sealed class FileSystemPlugin : IRolaPlugin
@@ -47,10 +48,10 @@ public sealed class FileSystemPlugin : IRolaPlugin
     {
         host.I18n.RegisterDirectory(Translations());
 
-        // One navigator for the whole plugin. The browsers are made per dock and the navigation dock
-        // is made once, in whatever order the user opens them, so the only way the toolbar can reach
-        // a browser is through something both factories were given.
-        var navigator = new Navigator();
+        // One location for the whole plugin. Every dock it opens is a view onto it — the browser
+        // docks differ in layout and in nothing else, and the navigation dock has one address and one
+        // history to show — so there is one thing to make and both factories are handed it.
+        var browser = new Browser(Start());
 
         host.Docks.Register(
             new DockRegistration(
@@ -59,7 +60,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.dock",
                 DockOpenMode.New,
                 DockPlacement.Center,
-                _ => new BrowserDock(host, navigator)
+                _ => new BrowserDock(host, browser)
             )
         );
 
@@ -70,9 +71,23 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.navigation",
                 DockOpenMode.Toggle,
                 DockPlacement.Top,
-                _ => new NavigationDock(host, navigator)
+                _ => new NavigationDock(host, browser)
             )
         );
+    }
+
+    /// <summary>The directory to look at when nothing has said otherwise.</summary>
+    /// <remarks>
+    /// Where the program was started, which is where a run was made, falling back to the user's own
+    /// directory when that is not somewhere that can be read.
+    /// </remarks>
+    private static string Start()
+    {
+        var here = Environment.CurrentDirectory;
+
+        return System.IO.Directory.Exists(here)
+            ? here
+            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     }
 
     /// <summary>

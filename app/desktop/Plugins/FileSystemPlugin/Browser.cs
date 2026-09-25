@@ -16,13 +16,17 @@ internal enum BrowserView
 }
 
 /// <summary>
-/// Where the browser is, where it has been, and what it is showing.
+/// Where the browser is, where it has been, and what is there.
 /// </summary>
 /// <remarks>
-/// This is the browser's own state, kept by the plugin rather than the host: what a directory holds,
-/// and where the user has been, are the browser's to know. One instance belongs to one dock
-/// instance, so two File System docks browse apart from each other — which is what open mode
-/// <c>New</c> means.
+/// One per plugin, not one per dock: the File System has one location, and every dock it opens is a
+/// view onto it — how the entries are laid out differs from dock to dock, the directory does not. A
+/// second dock is therefore a second look at the same place rather than a place of its own, which is
+/// what lets the navigation dock have one address to show and one history to walk.
+/// <para>
+/// The state is the browser's own, kept by the plugin rather than the host: what a directory holds,
+/// and where the user has been, are the browser's to know.
+/// </para>
 /// </remarks>
 internal sealed class Browser
 {
@@ -61,25 +65,43 @@ internal sealed class Browser
     /// <summary>Whether going up has anywhere to go.</summary>
     public bool CanGoUp => System.IO.Directory.GetParent(_current) is not null;
 
-    /// <summary>The layout the entries are shown in.</summary>
-    public BrowserView View { get; private set; } = BrowserView.List;
-
     /// <summary>What the directory holds, directories first and then by name.</summary>
     public IReadOnlyList<Entry> Entries => _entries;
 
-    /// <summary>Shows a directory, remembering where it came from.</summary>
-    /// <param name="directory">The directory to show.</param>
-    public void Go(string directory)
+    /// <summary>
+    /// Switches which directory is being looked at.
+    /// </summary>
+    /// <remarks>
+    /// The one way the location changes, whatever asked for it: a path typed into the address, a
+    /// directory clicked in the tree, or one opened in a list or a grid. A path that is not a
+    /// directory is refused rather than shown, so that a caller need not check first and cannot
+    /// leave the browser somewhere that cannot be read.
+    /// <para>
+    /// Going to where it already is reads the directory again, which is what the address typed
+    /// unchanged asks for.
+    /// </para>
+    /// </remarks>
+    /// <param name="directory">The directory to look at.</param>
+    /// <returns>Whether it went there.</returns>
+    public bool Go(string directory)
     {
+        if (!System.IO.Directory.Exists(directory))
+        {
+            return false;
+        }
+
         if (Same(directory, _current))
         {
             Refresh();
-            return;
+
+            return true;
         }
 
         _back.Add(_current);
         _forward.Clear();
         Move(directory);
+
+        return true;
     }
 
     /// <summary>Shows what was shown before, if anything was.</summary>
@@ -126,20 +148,14 @@ internal sealed class Browser
         Changed?.Invoke();
     }
 
-    /// <summary>Shows the entries in another layout.</summary>
-    /// <param name="view">The layout to show.</param>
-    public void Show(BrowserView view)
-    {
-        View = view;
-        Changed?.Invoke();
-    }
-
     /// <summary>Moves without touching the history, for back, forward and up.</summary>
-    /// <param name="directory">The directory to show.</param>
+    /// <param name="directory">The directory to look at.</param>
     private void Move(string directory)
     {
-        _current = directory;
-        _entries = Read(directory);
+        // Held in full rather than as it was given: what is typed may be relative or have a step in
+        // it, and the address is what says where the browser actually is.
+        _current = Path.GetFullPath(directory);
+        _entries = Read(_current);
         Changed?.Invoke();
     }
 

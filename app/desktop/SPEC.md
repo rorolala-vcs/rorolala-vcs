@@ -469,15 +469,30 @@ Behaviour:
 - Closing a `Toggle` dock hides it; closing a `New` dock discards the instance (Section 7.2). Either
   way the region settles on another of its docks, or is empty and collapses its strip.
 
-The navigation dock drives the *active* browser: the one the user last reached into, and the newest
-while none has been touched. Several browser docks therefore stay independent (§7.2) under one
-navigation dock, which is what its `Toggle` open mode requires. While no browser is open the dock
-shows its controls disabled rather than hiding them, and it is shown and hidden on its own — closing
-a browser does not close it.
+The File System has **one location**, and every dock it opens is a view onto it. The browser docks
+differ in the layout they read the entries in and in nothing else; the navigation dock shows the one
+address and walks the one history. Two docks cannot be looking at two places, which is what makes an
+address mean one thing.
 
-The view switch stays in the browser rather than moving with the navigation: which layout entries are
-read in is a property of the browser reading them, so each browser has its own and two browsers may
-read theirs differently.
+There is therefore exactly one way the location changes, and four things that ask it to:
+
+1. A path typed into the **address** and entered. What is typed may be relative or have a step in it;
+   the location is held in full, so the address says where the browser actually went.
+2. A directory **clicked in the tree**. The tree holds nothing but directories, so choosing one can
+   only mean going there, and it happens on the first click rather than the second.
+3. A directory **opened in a list**.
+4. A directory **opened in a grid**.
+
+All four go through the same call, which refuses anything that is not a directory rather than leaving
+the browser somewhere that cannot be read; the address is the one that has to say so, since it is the
+only one of the four a user can get wrong. The navigation dock's arrows walk the history that
+switching the location leaves behind.
+
+Switching the location in one dock therefore switches it in all of them, and the navigation dock is
+shown and hidden on its own — closing a browser does not close it.
+
+The view switch stays in each browser dock rather than moving with the navigation: which layout
+entries are read in is a property of the dock reading them.
 
 ## 8. Open Hook Pipeline
 

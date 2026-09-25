@@ -117,28 +117,28 @@ internal sealed class GridBrowser : UserControl
     }
 }
 
-/// <summary>The directories under the one being shown, as a tree opened downward.</summary>
+/// <summary>The directories under the one being looked at, as a tree opened downward.</summary>
 /// <remarks>
 /// A step of the tree is read when it is first opened, so a directory with many directories under
 /// it costs nothing until the user looks there.
 /// </remarks>
 internal sealed class TreeBrowser : UserControl
 {
-    /// <summary>Makes the tree layout rooted at what the browser is showing.</summary>
-    /// <param name="browser">What is being shown.</param>
-    /// <param name="actions">What an entry does when it is activated or right-clicked.</param>
+    /// <summary>Makes the tree layout rooted at the directory being looked at.</summary>
+    /// <param name="browser">Where the browser is, which the tree reads and switches.</param>
+    /// <param name="actions">What a directory does when it is chosen or right-clicked.</param>
     public TreeBrowser(Browser browser, BrowserActions actions)
     {
         var tree = new TreeView { ContextMenu = actions.Empty() };
-        tree.Items.Add(Node(browser.Current, actions));
+        tree.Items.Add(Node(browser, browser.Current, actions));
 
         Content = tree;
     }
 
     /// <summary>One directory as a step of the tree, reading its children when first opened.</summary>
-    private static TreeViewItem Node(string path, BrowserActions actions)
+    private static TreeViewItem Node(Browser browser, string path, BrowserActions actions)
     {
-        var item = new TreeViewItem { Header = Header(path, actions) };
+        var item = new TreeViewItem { Header = Header(browser, path, actions) };
         var read = false;
 
         // A child that is never shown, so that the step can be opened at all; it is replaced the
@@ -157,15 +157,23 @@ internal sealed class TreeBrowser : UserControl
 
             foreach (var child in Subdirectories(path))
             {
-                item.Items.Add(Node(child, actions));
+                item.Items.Add(Node(browser, child, actions));
             }
         };
 
         return item;
     }
 
-    /// <summary>One directory's header: its icon and its name, and what right-clicking does.</summary>
-    private static Control Header(string path, BrowserActions actions)
+    /// <summary>
+    /// One directory's header: its icon and its name, and what choosing it does.
+    /// </summary>
+    /// <remarks>
+    /// A click switches the location there and then, rather than waiting for a second one: the tree
+    /// is nothing but directories, so choosing one can only mean going to it, and the address says so
+    /// the moment it happens. A step is opened by its own chevron, so opening one does not come
+    /// through here.
+    /// </remarks>
+    private static Control Header(Browser browser, string path, BrowserActions actions)
     {
         var entry = new Entry(path, EntryKind.Directory);
         var name = Names.Show(entry);
@@ -186,7 +194,7 @@ internal sealed class TreeBrowser : UserControl
             }
         );
 
-        row.DoubleTapped += (_, _) => actions.Activate(entry);
+        row.Tapped += (_, _) => browser.Go(path);
 
         return row;
     }

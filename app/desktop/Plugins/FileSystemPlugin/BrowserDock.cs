@@ -12,9 +12,8 @@ internal sealed class BrowserDock : IDockView
 {
     /// <summary>Makes a browser dock for one plain placement.</summary>
     /// <param name="host">The host, for logging what the browser cannot do.</param>
-    /// <param name="navigator">The browsers, which this one joins while it is shown.</param>
-    public BrowserDock(IPluginHost host, Navigator navigator) =>
-        View = new BrowserControl(host, navigator);
+    /// <param name="browser">The one location, which this dock is a view onto.</param>
+    public BrowserDock(IPluginHost host, Browser browser) => View = new BrowserControl(host, browser);
 
     /// <inheritdoc />
     public Control View { get; }
@@ -34,12 +33,12 @@ internal sealed record BrowserActions(
 );
 
 /// <summary>
-/// The browser's control: one directory, shown in one of the three layouts.
+/// The browser's control: the location, laid out one of the three ways.
 /// </summary>
 /// <remarks>
 /// Navigation is not here: back, forward, up, refresh and the address are a dock of their own
-/// (Section 7.5), so that a browser keeps to what a browser is — where it has been, and what is
-/// there. The view switch is here, because which layout entries are read in is the browser's own.
+/// (Section 7.5). What is here is the layout, and the layout is the one thing about a browser dock
+/// that is its own — where it is looking is the same wherever else it is looked at.
 /// </remarks>
 internal sealed class BrowserControl : UserControl
 {
@@ -54,11 +53,14 @@ internal sealed class BrowserControl : UserControl
     /// <summary>The host, which is where a failure the browser cannot handle is reported.</summary>
     private readonly IPluginHost _host;
 
-    /// <summary>Where the browser is and has been.</summary>
+    /// <summary>Where the browser is, which every dock looks at the same one of.</summary>
     private readonly Browser _browser;
 
     /// <summary>What the layouts do, shared by all three so they behave alike.</summary>
     private readonly BrowserActions _actions;
+
+    /// <summary>The layout this dock reads the entries in.</summary>
+    private BrowserView _view = BrowserView.List;
 
     /// <summary>The view the entries are read in.</summary>
     private readonly ComboBox _views = new();
@@ -68,22 +70,22 @@ internal sealed class BrowserControl : UserControl
 
     /// <summary>Makes the browser's control.</summary>
     /// <param name="host">The host, for logging what the browser cannot do.</param>
-    /// <param name="navigator">The browsers, which this one joins while it is shown.</param>
-    public BrowserControl(IPluginHost host, Navigator navigator)
+    /// <param name="browser">The one location, which this dock is a view onto.</param>
+    public BrowserControl(IPluginHost host, Browser browser)
     {
         _host = host;
-        _browser = new Browser(Start());
+        _browser = browser;
         _actions = new BrowserActions(Activate, MenuFor, EmptyMenu);
 
-        // Joining and leaving on the visual tree rather than in the constructor and on a close: a
-        // dock dragged to another region is taken out and put back, which is a departure and a
-        // return for a dock that never closed.
-        AttachedToVisualTree += (_, _) => navigator.Add(_browser);
-        DetachedFromVisualTree += (_, _) => navigator.Remove(_browser);
-
-        // The last browser the user reached into is the one the navigation dock drives, and reaching
-        // into one is focusing anything in it.
-        GotFocus += (_, _) => navigator.Activate(_browser);
+        // Listening while it is on screen rather than for as long as it exists: a dock that was
+        // closed is not a view of anything, and one that was dragged to another region is taken off
+        // the tree and put back, which is a departure and a return for a dock that never closed.
+        AttachedToVisualTree += (_, _) =>
+        {
+            _browser.Changed += Update;
+            Update();
+        };
+        DetachedFromVisualTree += (_, _) => _browser.Changed -= Update;
 
         FillViews();
 
@@ -104,22 +106,7 @@ internal sealed class BrowserControl : UserControl
 
         Content = panel;
 
-        _browser.Changed += Update;
         Update();
-    }
-
-    /// <summary>The directory to show when a dock is opened with nothing to say.</summary>
-    /// <remarks>
-    /// Where the program was started, which is where a run was made, falling back to the user's own
-    /// directory when that is not somewhere that can be read.
-    /// </remarks>
-    private static string Start()
-    {
-        var here = Environment.CurrentDirectory;
-
-        return System.IO.Directory.Exists(here)
-            ? here
-            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     }
 
     /// <summary>Fills the view switch with the three layouts.</summary>
@@ -132,20 +119,21 @@ internal sealed class BrowserControl : UserControl
 
         _views.SelectionChanged += (_, _) =>
         {
-            // Choosing a layout is what changes it; being shown the browser's own layout is not a
-            // choice, and acting on it would put the browser into a loop of showing itself.
-            if (_views.SelectedItem is ComboBoxItem { Tag: BrowserView view } && view != _browser.View)
+            // Choosing a layout draws the same entries again, which is a redraw and not a change of
+            // where the browser is: the location is one, and every view of it shows the same thing.
+            if (_views.SelectedItem is ComboBoxItem { Tag: BrowserView view } && view != _view)
             {
-                _browser.Show(view);
+                _view = view;
+                Update();
             }
         };
     }
 
-    /// <summary>Shows the layout the browser is in.</summary>
+    /// <summary>Draws what is there, the way this dock reads it.</summary>
     private void Update()
     {
-        _content.Content = ContentFor(_browser.View);
-        _views.SelectedIndex = Array.FindIndex(Views, entry => entry.View == _browser.View);
+        _content.Content = ContentFor(_view);
+        _views.SelectedIndex = Array.FindIndex(Views, entry => entry.View == _view);
     }
 
     /// <summary>The control showing the entries in one layout.</summary>
