@@ -2,16 +2,6 @@ using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
 
-/// <summary>How a directory's entries are laid out.</summary>
-internal enum BrowserView
-{
-    /// <summary>One entry to a line.</summary>
-    List,
-
-    /// <summary>Entries as tiles, wrapping across the width.</summary>
-    Grid,
-}
-
 /// <summary>
 /// Where the browser is, where it has been, and what is there.
 /// </summary>
@@ -37,6 +27,18 @@ internal sealed class Browser
     /// </remarks>
     public const string Computer = "";
 
+    /// <summary>
+    /// The name of the way up rather than a directory: what a listing leads one step out of itself by.
+    /// </summary>
+    /// <remarks>
+    /// A name no directory can have, which is why it can stand for the step out of the listing: the entries
+    /// around it are named by their own last part, and one of them being called <c>..</c> would be a
+    /// directory the filesystem does not allow. It carries no path of its own — where it leads is the
+    /// listing's parent rather than anything written down on it — so what handles it must ask rather than
+    /// resolve it.
+    /// </remarks>
+    public const string UpName = "..";
+
     /// <summary>Where it has been, most recent last.</summary>
     private readonly List<string> _back = [];
 
@@ -49,6 +51,9 @@ internal sealed class Browser
     /// <summary>What the directory held when it was last read.</summary>
     private IReadOnlyList<Entry> _entries;
 
+    /// <summary>What a listing shows of it, which is those entries with the way up before them.</summary>
+    private IReadOnlyList<Entry> _shown;
+
     /// <summary>Makes a browser onto a directory.</summary>
     /// <param name="directory">The directory to look at, and to root the tree at.</param>
     public Browser(string directory)
@@ -56,6 +61,7 @@ internal sealed class Browser
         _current = directory;
         BaseDir = directory;
         _entries = Read(directory);
+        _shown = Stage(directory, _entries);
     }
 
     /// <summary>
@@ -70,6 +76,10 @@ internal sealed class Browser
     /// <summary>Whether a path names the computer rather than a directory.</summary>
     /// <param name="path">The path to ask about.</param>
     public static bool IsComputer(string path) => path.Length == 0;
+
+    /// <summary>Whether a path names the way up rather than a directory.</summary>
+    /// <param name="path">The path to ask about.</param>
+    public static bool IsUp(string path) => string.Equals(path, UpName, StringComparison.Ordinal);
 
     /// <summary>
     /// The entries one location holds, without going there.
@@ -114,6 +124,17 @@ internal sealed class Browser
 
     /// <summary>What the directory holds, directories first and then by name.</summary>
     public IReadOnlyList<Entry> Entries => _entries;
+
+    /// <summary>
+    /// The entries as a listing shows them: the way up, when there is somewhere to go, and then the entries.
+    /// </summary>
+    /// <remarks>
+    /// The way up is one of the listing's entries rather than a row of the view's own, so that it is laid
+    /// out, selected and scrolled with the rest of them — and so that a grid, which is not rows at all,
+    /// does not have to say how a row is drawn. It is staged here rather than in each view because both
+    /// views show the same listing, and a second one staging its own would eventually stage something else.
+    /// </remarks>
+    public IReadOnlyList<Entry> Shown => _shown;
 
     /// <summary>
     /// Switches which directory is being looked at.
@@ -224,6 +245,7 @@ internal sealed class Browser
     public void Refresh()
     {
         _entries = Read(_current);
+        _shown = Stage(_current, _entries);
         Changed?.Invoke();
     }
 
@@ -236,8 +258,17 @@ internal sealed class Browser
         // and is held as it is.
         _current = IsComputer(directory) ? directory : Path.GetFullPath(directory);
         _entries = Read(_current);
+        _shown = Stage(_current, _entries);
         Changed?.Invoke();
     }
+
+    /// <summary>Puts the way up before a directory's entries, when there is somewhere further up.</summary>
+    /// <param name="directory">The directory the entries were read from.</param>
+    /// <param name="entries">What it holds.</param>
+    private static IReadOnlyList<Entry> Stage(string directory, IReadOnlyList<Entry> entries) =>
+        ParentOf(directory) is null
+            ? entries
+            : [new Entry(UpName, EntryKind.Directory), .. entries];
 
     /// <summary>
     /// The directory holding one, or nothing when there is nowhere further up.

@@ -17,13 +17,6 @@ rorolala_file_system:
     en: Navigation
     zh-CN: 导航
 
-  layout_list:
-    en: List
-    zh-CN: 列表
-  layout_grid:
-    en: Grid
-    zh-CN: 网格
-
   root:
     en: Root
     zh-CN: 根目录

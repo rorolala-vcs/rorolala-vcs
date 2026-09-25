@@ -16,59 +16,20 @@ internal static class Names
     /// </summary>
     /// <remarks>
     /// The computer is the one place that has no name of its own, having no path: what it is called is
-    /// a word rather than a piece of one.
+    /// a word rather than a piece of one. The way up is the other, and is named before it is looked at —
+    /// the name it would be read as is <c>..</c>, which is a lucky accident of the path rather than what
+    /// it is called.
     /// </remarks>
     /// <param name="entry">The entry to name.</param>
     /// <returns>The name to show.</returns>
     public static string Show(Entry entry) =>
-        Browser.IsComputer(entry.Path)
-            ? RolaI18N.Get("rorolala_file_system.computer")
-            : Path.GetFileName(entry.Path) is { Length: > 0 } name
-                ? name
-                : entry.Path;
-}
-
-/// <summary>What a listing is: the entries, under the way up when there is one.</summary>
-/// <remarks>
-/// The way up is the listing's own row rather than an entry, because an entry is a path and a view
-/// names it by that path's last part — and the way up is called <c>..</c> whatever it leads to.
-/// </remarks>
-internal static class Listings
-{
-    /// <summary>Puts the entries under the way up, if there is one.</summary>
-    /// <param name="browser">Where the browser is, which the way up moves.</param>
-    /// <param name="entries">The entries themselves.</param>
-    /// <returns>What the listing shows.</returns>
-    public static Control Stage(Browser browser, Control entries)
-    {
-        if (browser.Parent is not { } parent)
-        {
-            return entries;
-        }
-
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(4, 3),
-        };
-
-        row.Children.Add(Icons.For(new Entry(parent, EntryKind.Directory)));
-        row.Children.Add(
-            new TextBlock { Text = "..", VerticalAlignment = VerticalAlignment.Center }
-        );
-
-        // Opened by a second tap, like the entries under it, which is what it is one of in all but
-        // name.
-        row.DoubleTapped += (_, _) => browser.Up();
-
-        var staged = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(row, Dock.Top);
-        staged.Children.Add(row);
-        staged.Children.Add(entries);
-
-        return staged;
-    }
+        Browser.IsUp(entry.Path)
+            ? Browser.UpName
+            : Browser.IsComputer(entry.Path)
+                ? RolaI18N.Get("rorolala_file_system.computer")
+                : Path.GetFileName(entry.Path) is { Length: > 0 } name
+                    ? name
+                    : entry.Path;
 }
 
 /// <summary>The entries as one row each.</summary>
@@ -86,7 +47,7 @@ internal sealed class ListBrowser : UserControl
 
         var list = new ListBox
         {
-            ItemsSource = browser.Entries,
+            ItemsSource = browser.Shown,
             ItemTemplate = new FuncDataTemplate<Entry>((entry, _) => Row(entry), true),
             ContextMenu = actions.Empty(this),
         };
@@ -100,7 +61,7 @@ internal sealed class ListBrowser : UserControl
             }
         };
 
-        Content = Listings.Stage(browser, list);
+        Content = list;
     }
 
     /// <summary>One entry as a row: its icon, then its name.</summary>
@@ -130,53 +91,100 @@ internal sealed class ListBrowser : UserControl
 /// <summary>The entries as tiles, wrapping across the width.</summary>
 internal sealed class GridBrowser : UserControl
 {
+    /// <summary>How much room is left around a tile's icon and name.</summary>
+    private const int Around = 10;
+
+    /// <summary>
+    /// What a tile is filled with while the pointer is over it, where the theme names no tint of its own.
+    /// </summary>
+    /// <remarks>
+    /// A grey rather than a shade of the accent: what a theme says a hover is is its own business, and this
+    /// is only what is drawn when there is no theme to say.
+    /// </remarks>
+    private static readonly IBrush Neutral = new SolidColorBrush(Color.Parse("#1F808080"));
+
+    /// <summary>
+    /// The theme's own hover tint.
+    /// </summary>
+    /// <remarks>
+    /// Named here rather than read off a control because a plugin has no other way to ask for the theme's
+    /// palette; a program wearing no theme answers with nothing and the tile falls back to grey.
+    /// </remarks>
+    private const string Tint = "rorolala.theme.tint.deeper";
+
     /// <summary>What an entry does when it is opened or right-clicked.</summary>
     private readonly BrowserActions _actions;
+
+    /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
+    private readonly int _icon;
 
     /// <summary>Makes the grid layout over what the browser holds.</summary>
     /// <param name="browser">What is being shown.</param>
     /// <param name="actions">What an entry does when it is opened or right-clicked.</param>
-    public GridBrowser(Browser browser, BrowserActions actions)
+    /// <param name="icon">How large an icon is at the zoom this dock is at.</param>
+    public GridBrowser(Browser browser, BrowserActions actions, int icon)
     {
         _actions = actions;
+        _icon = icon;
 
         var tiles = new WrapPanel { Orientation = Orientation.Horizontal };
 
-        foreach (var entry in browser.Entries)
+        foreach (var entry in browser.Shown)
         {
             tiles.Children.Add(Tile(entry));
         }
 
-        Content = Listings.Stage(browser, new ScrollViewer { Content = tiles, ContextMenu = actions.Empty(this) });
+        Content = new ScrollViewer { Content = tiles, ContextMenu = actions.Empty(this) };
     }
 
-    /// <summary>One entry as a tile: its icon above its name.</summary>
+    /// <summary>One entry as a tile: its icon above its name, on one line and cut off when it is too long.</summary>
+    /// <remarks>
+    /// The name is as wide as the icon and not one pixel wider, so that the two read as one column rather
+    /// than as a picture with a caption under it that happens to start somewhere else. What does not fit is
+    /// taken off the end rather than wrapped, because a tile of two lines is a tile of another height, and a
+    /// row of tiles that are not the same height is not a row.
+    /// </remarks>
     private Control Tile(Entry entry)
     {
-        var icon = Icons.For(entry);
-        icon.HorizontalAlignment = HorizontalAlignment.Center;
-
-        var tile = new StackPanel
+        var tile = new Border
         {
-            Width = 104,
-            Spacing = 4,
-            Margin = new Thickness(6),
+            Padding = new Thickness(Around),
+            Margin = new Thickness(4),
             ContextMenu = _actions.Menu(this, entry),
+            Child = new StackPanel
+            {
+                Spacing = 6,
+                Children =
+                {
+                    Icons.For(entry, _icon),
+                    new TextBlock
+                    {
+                        Text = Names.Show(entry),
+                        Width = _icon,
+                        TextAlignment = TextAlignment.Center,
+                        TextWrapping = TextWrapping.NoWrap,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                    },
+                },
+            },
         };
 
-        tile.Children.Add(icon);
-        tile.Children.Add(
-            new TextBlock
-            {
-                Text = Names.Show(entry),
-                TextWrapping = TextWrapping.Wrap,
-                TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-            }
-        );
-
+        // The whole tile answers the pointer rather than the picture or the word alone, so that the target
+        // under it is the thing that is about to be opened.
+        tile.PointerEntered += (_, _) => tile.Background = Hover(tile);
+        tile.PointerExited += (_, _) => tile.Background = null;
         tile.DoubleTapped += (_, _) => _actions.Activate(entry);
 
         return tile;
     }
+
+    /// <summary>
+    /// What a tile is washed with while the pointer is over it.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the theme while the pointer is over the tile rather than worked out when the tile is made,
+    /// because a control is built before it is anywhere a theme reaches.
+    /// </remarks>
+    private static IBrush Hover(Control tile) =>
+        tile.TryGetResource(Tint, null, out var found) && found is IBrush brush ? brush : Neutral;
 }

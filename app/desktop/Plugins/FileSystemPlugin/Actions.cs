@@ -41,13 +41,38 @@ internal static class Actions
             from => Empty(host, browser, from)
         );
 
-    /// <summary>Opens an entry: a directory is gone to, a file is handed to the system.</summary>
-    private static void Open(IPluginHost host, Browser browser, Entry entry) =>
+    /// <summary>
+    /// Opens an entry: the way up goes up, a directory is gone to, a file is handed to the system.
+    /// </summary>
+    /// <remarks>
+    /// The way up is turned into a step here rather than resolved like a path, because it carries no path:
+    /// what it leads to is the listing's parent, which only the browser knows.
+    /// </remarks>
+    private static void Open(IPluginHost host, Browser browser, Entry entry)
+    {
+        if (Browser.IsUp(entry.Path))
+        {
+            browser.Up();
+
+            return;
+        }
+
         Openers.Open(entry, browser, host.Log.Error);
+    }
 
     /// <summary>The menu opened on one entry.</summary>
     private static ContextMenu Menu(IPluginHost host, Browser browser, Control from, Entry entry)
     {
+        // The way up is not a place: there is nothing under it to reveal, nothing to put on the clipboard
+        // and nothing to root a tree at, so what can be done with it is the one thing it is for.
+        if (Browser.IsUp(entry.Path))
+        {
+            var up = new ContextMenu();
+            up.Items.Add(Item("rorolala_file_system.open", () => browser.Up()));
+
+            return up;
+        }
+
         var menu = new ContextMenu();
         menu.Items.Add(Item("rorolala_file_system.open", () => Open(host, browser, entry)));
         menu.Items.Add(Item("rorolala_file_system.reveal", () => Openers.Reveal(entry, host.Log.Error)));

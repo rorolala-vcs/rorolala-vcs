@@ -437,7 +437,7 @@ A dock is registered with a `DockRegistration`:
   docks, their placements, and their sizes survive a restart.
 - Because a `New` dock may have several instances, the persisted form records an ordinal per
   `DockNameId`.
-- A dock may also **keep what it was** — which layout it is in, what it has open — as text under its
+- A dock may also **keep what it was** — the zoom it is reading at, what it has open — as text under its
   own keys, and the host writes it into the same record. It is one dock's state rather than the
   plugin's: two instances of one dock keep two sets of it, and a dock that is closed takes its own
   away. A key a dock never wrote reads as nothing, so a dock with nothing to remember is a dock that
@@ -459,7 +459,7 @@ Both are always available from `Window`.
 
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
-| Directories | `rorolala.file_system` | `New` | One directory's entries, as a list or a grid, chosen by a switch in the dock itself and kept with the dock (§7.3). Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): rows of names below 60%, tiles above it. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
 | Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. Placed at the left by default. |
 | File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and an address to type. Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
@@ -469,8 +469,10 @@ The File System plugin is a plugin, but it is shipped with the program and is en
 A tree is a dock of its own rather than a third layout of the directory dock. A tree is not another
 way of reading one directory — it is a way of walking the ones under a place, and it is rooted at the
 base, which the location is not — so the two belong on screen at once, and neither is a mode of the
-other. What the directory dock's switch chooses between is therefore a list and a grid, and nothing
-else.
+other. What the directory dock's zoom decides is therefore whether the entries are read as rows of names
+or as tiles, and nothing else: there is one scale, and the arrangement follows from it, because a grid of
+pictures too small to look at is a grid nobody asked for. The zoom is a slider in the dock's own corner,
+and `Ctrl` and a turn of the wheel over the dock move it.
 
 ### 7.6 Headers and the strip
 
@@ -514,7 +516,7 @@ There is therefore exactly one way the location changes, and five things that as
    only mean going there, and it happens on the first click rather than the second.
 3. A directory **opened in a list**.
 4. A directory **opened in a grid**.
-5. **`..`**, the row a listing puts above its entries, which goes to the directory holding the one
+5. **`..`**, the entry a listing puts before its entries, which goes to the directory holding the one
    being looked at. A listing has it only when there is one further up.
 
 All five go through the same call, which refuses anything that is not a directory rather than leaving
@@ -531,9 +533,10 @@ root's parent is the computer, which is how a drive list is left; the computer h
 Switching the location in one dock therefore switches it in all of them, and the navigation dock is
 shown and hidden on its own — closing a browser does not close it.
 
-The view switch stays in the directory dock rather than moving with the navigation: which layout
-entries are read in is a property of the dock reading them. The **tree** is the one view rooted
-somewhere else — at the base (§7.6) — and it is a dock of its own for that reason.
+The zoom stays in the directory dock rather than moving with the navigation: how large the entries are
+read is a property of the dock reading them, and so is whether that makes them rows or tiles. The
+**tree** is the one view rooted somewhere else — at the base (§7.6) — and it is a dock of its own for
+that reason.
 
 ## 8. Open Hook Pipeline
 
