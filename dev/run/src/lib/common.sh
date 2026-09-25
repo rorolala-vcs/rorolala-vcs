@@ -71,7 +71,11 @@ DESKTOP_DIR="$BUILD_DIR/bin/desktop"
 # program that discovers it, and laid out only when something is run or handed over. The name of the
 # directory holding the project is also the assembly's name, which is what says which files to take
 # from the output it was built into.
-DESKTOP_PLUGINS="app/desktop/plugins/FileSystemPlugin"
+#
+# The source tree spells the directory `Plugins` and the program spells the directory it scans
+# `plugins`; the two are deliberately not made to match. What a program looks in is its own business,
+# and the tree's spelling is the tree's.
+DESKTOP_PLUGINS="app/desktop/Plugins/FileSystemPlugin"
 
 # Asks the runner for another script, the way a `make` target asked for another target.
 again() {

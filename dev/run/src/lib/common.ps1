@@ -86,7 +86,11 @@ $DesktopDir = "$BuildDir/bin/desktop"
 # program that discovers it, and laid out only when something is run or handed over. The name of the
 # directory holding the project is also the assembly's name, which is what says which files to take
 # from the output it was built into.
-$DesktopPlugins = @('app/desktop/plugins/FileSystemPlugin')
+#
+# The source tree spells the directory `Plugins` and the program spells the directory it scans
+# `plugins`; the two are deliberately not made to match. What a program looks in is its own business,
+# and the tree's spelling is the tree's.
+$DesktopPlugins = @('app/desktop/Plugins/FileSystemPlugin')
 
 # PowerShell carries on after a native command that failed, which is the opposite of what a gate
 # wants: `set -e` stops the shell scripts, and this is what stops a script here. It is called after
