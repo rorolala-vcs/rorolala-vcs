@@ -10,6 +10,9 @@ rorolala_file_system:
   dock:
     en: File System
     zh-CN: 文件系统
+  navigation:
+    en: Navigation
+    zh-CN: 导航
 
   layout_list:
     en: List

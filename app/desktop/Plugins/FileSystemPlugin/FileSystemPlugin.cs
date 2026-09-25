@@ -25,6 +25,14 @@ public sealed class FileSystemPlugin : IRolaPlugin
     /// </remarks>
     public const string BrowserDockNameId = "rorolala.file_system.browser";
 
+    /// <summary>
+    /// The stable name of the navigation dock.
+    /// </summary>
+    /// <remarks>
+    /// Written into dock layout, so it must not change once shipped.
+    /// </remarks>
+    public const string NavigationDockNameId = "rorolala.file_system.navigation";
+
     /// <inheritdoc />
     public PluginManifest Manifest { get; } =
         new(
@@ -39,6 +47,11 @@ public sealed class FileSystemPlugin : IRolaPlugin
     {
         host.I18n.RegisterDirectory(Translations());
 
+        // One navigator for the whole plugin. The browsers are made per dock and the navigation dock
+        // is made once, in whatever order the user opens them, so the only way the toolbar can reach
+        // a browser is through something both factories were given.
+        var navigator = new Navigator();
+
         host.Docks.Register(
             new DockRegistration(
                 Manifest.Id,
@@ -46,7 +59,18 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.dock",
                 DockOpenMode.New,
                 DockPlacement.Center,
-                _ => new BrowserDock(host)
+                _ => new BrowserDock(host, navigator)
+            )
+        );
+
+        host.Docks.Register(
+            new DockRegistration(
+                Manifest.Id,
+                NavigationDockNameId,
+                "rorolala_file_system.navigation",
+                DockOpenMode.Toggle,
+                DockPlacement.Top,
+                _ => new NavigationDock(host, navigator)
             )
         );
     }

@@ -652,9 +652,6 @@ internal sealed class DockArea : UserControl
     /// </remarks>
     private void Take(DockInstance instance, PointerPressedEventArgs e)
     {
-        // TEMPORARY: diagnosing the drag, taken out once it is settled.
-        Console.Error.WriteLine($"rola-drag: press {instance.DockNameId}");
-
         _dragging = instance;
         _from = e.GetPosition(this);
         _moved = false;
@@ -678,9 +675,6 @@ internal sealed class DockArea : UserControl
             }
 
             _moved = true;
-
-            // TEMPORARY: diagnosing the drag, taken out once it is settled.
-            Console.Error.WriteLine("rola-drag: dragging");
         }
 
         Preview(ZoneFor(at));
@@ -695,11 +689,6 @@ internal sealed class DockArea : UserControl
         var left = e.InitialPressMouseButton == MouseButton.Left;
 
         Cancel();
-
-        // TEMPORARY: diagnosing the drag, taken out once it is settled.
-        Console.Error.WriteLine(
-            $"rola-drag: release left={left} moved={moved} zone={ZoneFor(at)}"
-        );
 
         // A press that never moved is a click, and selecting the dock is what a click means; a
         // release belonging to another button ends the gesture without moving anything.

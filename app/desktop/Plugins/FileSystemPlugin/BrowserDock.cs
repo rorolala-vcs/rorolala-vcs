@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Layout;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -13,7 +12,9 @@ internal sealed class BrowserDock : IDockView
 {
     /// <summary>Makes a browser dock for one plain placement.</summary>
     /// <param name="host">The host, for logging what the browser cannot do.</param>
-    public BrowserDock(IPluginHost host) => View = new BrowserControl(host);
+    /// <param name="navigator">The browsers, which this one joins while it is shown.</param>
+    public BrowserDock(IPluginHost host, Navigator navigator) =>
+        View = new BrowserControl(host, navigator);
 
     /// <inheritdoc />
     public Control View { get; }
@@ -33,14 +34,23 @@ internal sealed record BrowserActions(
 );
 
 /// <summary>
-/// The browser's control: a toolbar over one of the three layouts.
+/// The browser's control: one directory, shown in one of the three layouts.
 /// </summary>
 /// <remarks>
-/// The toolbar is the browser's own, not a host region: where the browser has been, and where it
-/// goes next, is the browser's business, and the host has no idea what a directory is.
+/// Navigation is not here: back, forward, up, refresh and the address are a dock of their own
+/// (Section 7.5), so that a browser keeps to what a browser is — where it has been, and what is
+/// there. The view switch is here, because which layout entries are read in is the browser's own.
 /// </remarks>
 internal sealed class BrowserControl : UserControl
 {
+    /// <summary>The layouts an entry set can be read in, with the key each is named by.</summary>
+    private static readonly (BrowserView View, string Key)[] Views =
+    [
+        (BrowserView.List, "rorolala_file_system.layout_list"),
+        (BrowserView.Grid, "rorolala_file_system.layout_grid"),
+        (BrowserView.Tree, "rorolala_file_system.layout_tree"),
+    ];
+
     /// <summary>The host, which is where a failure the browser cannot handle is reported.</summary>
     private readonly IPluginHost _host;
 
@@ -50,57 +60,46 @@ internal sealed class BrowserControl : UserControl
     /// <summary>What the layouts do, shared by all three so they behave alike.</summary>
     private readonly BrowserActions _actions;
 
-    /// <summary>The path being shown, and the place to type another.</summary>
-    private readonly TextBox _address = new();
+    /// <summary>The view the entries are read in.</summary>
+    private readonly ComboBox _views = new();
 
-    private readonly Button _back = Arrow("\u2190");
-    private readonly Button _forward = Arrow("\u2192");
-    private readonly Button _up = Arrow("\u2191");
-    private readonly Button _refresh = Arrow("\u27f3");
-    private readonly ComboBox _layouts = new();
+    /// <summary>Whichever layout is being shown.</summary>
     private readonly ContentControl _content = new();
 
     /// <summary>Makes the browser's control.</summary>
     /// <param name="host">The host, for logging what the browser cannot do.</param>
-    public BrowserControl(IPluginHost host)
+    /// <param name="navigator">The browsers, which this one joins while it is shown.</param>
+    public BrowserControl(IPluginHost host, Navigator navigator)
     {
         _host = host;
         _browser = new Browser(Start());
         _actions = new BrowserActions(Activate, MenuFor, EmptyMenu);
 
-        _back.Click += (_, _) => _browser.Back();
-        _forward.Click += (_, _) => _browser.Forward();
-        _up.Click += (_, _) => _browser.Up();
-        _refresh.Click += (_, _) => _browser.Refresh();
+        // Joining and leaving on the visual tree rather than in the constructor and on a close: a
+        // dock dragged to another region is taken out and put back, which is a departure and a
+        // return for a dock that never closed.
+        AttachedToVisualTree += (_, _) => navigator.Add(_browser);
+        DetachedFromVisualTree += (_, _) => navigator.Remove(_browser);
 
-        _address.Width = 320;
-        _address.KeyDown += (_, args) =>
-        {
-            if (args.Key == Key.Enter)
-            {
-                Go(_address.Text);
-            }
-        };
-        _address.LostFocus += (_, _) => _address.Text = _browser.Current;
+        // The last browser the user reached into is the one the navigation dock drives, and reaching
+        // into one is focusing anything in it.
+        GotFocus += (_, _) => navigator.Activate(_browser);
 
-        Layouts();
+        FillViews();
 
-        var toolbar = new StackPanel
+        // Over the entries rather than under them, and to the right: it reads as the view of the pane
+        // it sits in, and it stays out of the way of the toolbar above, which is another dock.
+        var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 4,
-            Margin = new Thickness(6),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(4),
         };
-        toolbar.Children.Add(_back);
-        toolbar.Children.Add(_forward);
-        toolbar.Children.Add(_up);
-        toolbar.Children.Add(_refresh);
-        toolbar.Children.Add(_address);
-        toolbar.Children.Add(_layouts);
+        bar.Children.Add(_views);
 
         var panel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(toolbar, Dock.Top);
-        panel.Children.Add(toolbar);
+        DockPanel.SetDock(bar, Dock.Top);
+        panel.Children.Add(bar);
         panel.Children.Add(_content);
 
         Content = panel;
@@ -108,15 +107,6 @@ internal sealed class BrowserControl : UserControl
         _browser.Changed += Update;
         Update();
     }
-
-    /// <summary>The browser's toolbar buttons: a glyph, since they are arrows and a cycle.</summary>
-    private static Button Arrow(string glyph) =>
-        new()
-        {
-            Content = glyph,
-            Padding = new Thickness(8, 2),
-            MinWidth = 30,
-        };
 
     /// <summary>The directory to show when a dock is opened with nothing to say.</summary>
     /// <remarks>
@@ -132,39 +122,30 @@ internal sealed class BrowserControl : UserControl
             : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     }
 
-    /// <summary>Fills the layout switch with the three layouts.</summary>
-    private void Layouts()
+    /// <summary>Fills the view switch with the three layouts.</summary>
+    private void FillViews()
     {
-        foreach (
-            var (view, key) in new (BrowserView View, string Key)[]
-            {
-                (BrowserView.List, "rorolala_file_system.layout_list"),
-                (BrowserView.Grid, "rorolala_file_system.layout_grid"),
-                (BrowserView.Tree, "rorolala_file_system.layout_tree"),
-            }
-        )
+        foreach (var (view, key) in Views)
         {
-            _layouts.Items.Add(new ComboBoxItem { Content = RolaI18N.Get(key), Tag = view });
+            _views.Items.Add(new ComboBoxItem { Content = RolaI18N.Get(key), Tag = view });
         }
 
-        _layouts.SelectedIndex = 0;
-        _layouts.SelectionChanged += (_, _) =>
+        _views.SelectionChanged += (_, _) =>
         {
-            if (_layouts.SelectedItem is ComboBoxItem { Tag: BrowserView view })
+            // Choosing a layout is what changes it; being shown the browser's own layout is not a
+            // choice, and acting on it would put the browser into a loop of showing itself.
+            if (_views.SelectedItem is ComboBoxItem { Tag: BrowserView view } && view != _browser.View)
             {
                 _browser.Show(view);
             }
         };
     }
 
-    /// <summary>Brings the toolbar and the content back in step with the browser.</summary>
+    /// <summary>Shows the layout the browser is in.</summary>
     private void Update()
     {
-        _back.IsEnabled = _browser.CanGoBack;
-        _forward.IsEnabled = _browser.CanGoForward;
-        _up.IsEnabled = _browser.CanGoUp;
-        _address.Text = _browser.Current;
         _content.Content = ContentFor(_browser.View);
+        _views.SelectedIndex = Array.FindIndex(Views, entry => entry.View == _browser.View);
     }
 
     /// <summary>The control showing the entries in one layout.</summary>
@@ -211,26 +192,5 @@ internal sealed class BrowserControl : UserControl
         item.Click += (_, _) => action();
 
         return item;
-    }
-
-    /// <summary>Goes to a directory typed into the address bar.</summary>
-    private void Go(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            _address.Text = _browser.Current;
-
-            return;
-        }
-
-        if (!System.IO.Directory.Exists(path))
-        {
-            _host.Log.Warn(RolaI18N.Get("rorolala_file_system.not_a_directory", path));
-            _address.Text = _browser.Current;
-
-            return;
-        }
-
-        _browser.Go(path);
     }
 }

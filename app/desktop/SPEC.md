@@ -440,11 +440,21 @@ Both are always available from `Window`.
 
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
-| File System | `rorolala.file_system` | `New` | Views: Tree, Grid, List. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
-| File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, an address to type, and the view switch (Tree, Grid, List). Placed at the top by default. |
+| File System | `rorolala.file_system` | `New` | Views: Tree, Grid, List, chosen by a view switch in the dock itself. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and an address to type. Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
+
+The navigation dock drives the *active* browser: the one the user last reached into, and the newest
+while none has been touched. Several browser docks therefore stay independent (§7.2) under one
+navigation dock, which is what its `Toggle` open mode requires. While no browser is open the dock
+shows its controls disabled rather than hiding them, and it is shown and hidden on its own — closing
+a browser does not close it.
+
+The view switch stays in the browser rather than moving with the navigation: which layout entries are
+read in is a property of the browser reading them, so each browser has its own and two browsers may
+read theirs differently.
 
 ## 8. Open Hook Pipeline
 
