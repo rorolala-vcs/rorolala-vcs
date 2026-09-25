@@ -119,8 +119,10 @@ internal sealed class GridBrowser : UserControl
 
 /// <summary>The directories under the one being looked at, as a tree opened downward.</summary>
 /// <remarks>
-/// A step of the tree is read when it is first opened, so a directory with many directories under
-/// it costs nothing until the user looks there.
+/// A step is read when it is first opened, so a directory with many directories under it costs a
+/// listing only when the user looks there. Whether a step offers an expander at all is settled before
+/// that, and costs one entry of the step: a step with nothing under it is given no children, and the
+/// base theme draws no chevron for one that has none.
 /// </remarks>
 internal sealed class TreeBrowser : UserControl
 {
@@ -141,9 +143,14 @@ internal sealed class TreeBrowser : UserControl
         var item = new TreeViewItem { Header = Header(browser, path, actions) };
         var read = false;
 
-        // A child that is never shown, so that the step can be opened at all; it is replaced the
-        // first time the step is.
-        item.Items.Add(new TreeViewItem { Header = "\u2026" });
+        // A step with nothing under it is given no child at all, and that is what leaves it without an
+        // expander: one that cannot be opened must not be offered as though it could. The step that
+        // has something under it gets a child that is never shown, so that it can be opened at all;
+        // it is replaced the first time the step is.
+        if (HoldsAny(path))
+        {
+            item.Items.Add(new TreeViewItem { Header = "\u2026" });
+        }
 
         item.Expanded += (_, _) =>
         {
@@ -197,6 +204,23 @@ internal sealed class TreeBrowser : UserControl
         row.Tapped += (_, _) => browser.Go(path);
 
         return row;
+    }
+
+    /// <summary>Whether a directory holds any directory at all, or nothing when it cannot be read.</summary>
+    /// <remarks>
+    /// Read to the first entry rather than counted to the last: the whole of a large directory is not
+    /// worth reading to answer what one entry already answers.
+    /// </remarks>
+    private static bool HoldsAny(string path)
+    {
+        try
+        {
+            return System.IO.Directory.EnumerateDirectories(path).Any();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The directories directly under one, by name, or nothing when it cannot be read.</summary>

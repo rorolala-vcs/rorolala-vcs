@@ -441,7 +441,7 @@ Both are always available from `Window`.
 
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
-| File System | `rorolala.file_system` | `New` | Views: Tree, Grid, List, chosen by a view switch in the dock itself. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| File System | `rorolala.file_system` | `New` | Views: Tree, Grid, List, chosen by a view switch in the dock itself. The tree reads a step when it is opened, and offers no expander on a step with nothing under it. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
 | File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and an address to type. Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
