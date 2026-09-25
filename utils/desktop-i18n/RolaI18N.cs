@@ -4,15 +4,22 @@ namespace RorolalaDesktop.I18n;
 /// The written forms the Desktop program speaks in, read from the files the command line keeps.
 /// </summary>
 /// <remarks>
-/// The files are the ones <c>rust-i18n</c> reads, and they are read the same way: YAML, under one
-/// directory, where each node is a key and each leaf is that key written in every language it has
-/// been written in. A form leaves places for values as <c>%{name}</c>, and the values go in by
-/// order rather than by name — see <see cref="Get(string, object?)"/>.
+/// The files are the ones <c>rust-i18n</c> reads, and they are read the same way: YAML, where each
+/// node is a key and each leaf is that key written in every language it has been written in. A form
+/// leaves places for values as <c>%{name}</c>, and the values go in by order rather than by name —
+/// see <see cref="Get(string, object?)"/>.
 /// <para>
-/// Where the files are read from and which language is spoken are both set once, before anything
-/// asks for a form: <see cref="SetTranslationDirectory"/> and <see cref="SetLocale"/>. What they
-/// were set to is readable back, so a program that has been handed both — the way the Desktop
-/// program is handed the language the command line chose — can say what it is speaking.
+/// Several directories may be read together, which is how the host and each of its plugins state
+/// what they say in one place: the host registers its directory first and each plugin registers its
+/// own during initialization, and a key already supplied is not replaced by a later directory.
+/// <see cref="SetTranslationDirectory"/> names one directory on its own, and
+/// <see cref="RegisterTranslationDirectory"/> adds one after those already named.
+/// </para>
+/// <para>
+/// Where the files are read from and which language is spoken are both set before anything asks for
+/// a form: <see cref="SetTranslationDirectory"/> and <see cref="SetLocale"/>. What they were set to
+/// is readable back, so a program that has been handed both — the way the Desktop program is handed
+/// the language the command line chose — can say what it is speaking.
 /// </para>
 /// <para>
 /// A key that is in no file, and a key written in no language the program speaks, both read as the
@@ -25,8 +32,8 @@ public static class RolaI18N
     /// <summary>The language spoken when the program has been asked for none.</summary>
     private const string Fallback = "en";
 
-    /// <summary>The directory the translation files are read from.</summary>
-    public static string? TranslationDirectory { get; private set; }
+    /// <summary>The directories the translation files are read from, in registration order.</summary>
+    private static readonly List<string> Directories = [];
 
     /// <summary>The language the program speaks in, as the files name it — <c>zh-CN</c>.</summary>
     public static string? Locale { get; private set; }
@@ -37,8 +44,18 @@ public static class RolaI18N
     /// <summary>Every node the files state, once they have been read.</summary>
     private static Dictionary<string, Dictionary<string, string>>? _nodes;
 
-    /// <summary>Where the nodes were read from, so a change of directory is noticed.</summary>
+    /// <summary>Which directories the nodes were read from, so a change is noticed.</summary>
     private static string? _readFrom;
+
+    /// <summary>
+    /// The directory the translation files are first read from, or nothing when none is registered.
+    /// </summary>
+    public static string? TranslationDirectory => Directories.Count > 0 ? Directories[0] : null;
+
+    /// <summary>
+    /// Every directory the translation files are read from, in the order they were registered.
+    /// </summary>
+    public static IReadOnlyList<string> TranslationDirectories => Directories;
 
     /// <summary>
     /// Names the directory the translation files are read from.
@@ -57,7 +74,39 @@ public static class RolaI18N
 
         lock (Gate)
         {
-            TranslationDirectory = directory;
+            Directories.Clear();
+            Directories.Add(directory);
+            _nodes = null;
+            _readFrom = null;
+        }
+    }
+
+    /// <summary>
+    /// Adds a directory the translation files are read from, after the ones already registered.
+    /// </summary>
+    /// <remarks>
+    /// The directories are read in registration order and a key an earlier directory states is not
+    /// replaced by a later one — first registration wins. The host registers its own directory
+    /// before the plugins register theirs, so a plugin cannot overwrite what the host says, and a
+    /// plugin loaded first is not overwritten by one loaded after it.
+    /// <para>
+    /// A directory registered twice is one directory: what it states is already in.
+    /// </para>
+    /// </remarks>
+    /// <param name="directory">A directory every translation file sits under, however deep.</param>
+    /// <exception cref="ArgumentException"><paramref name="directory"/> is empty.</exception>
+    public static void RegisterTranslationDirectory(string directory)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(directory);
+
+        lock (Gate)
+        {
+            if (Directories.Contains(directory, StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            Directories.Add(directory);
             _nodes = null;
             _readFrom = null;
         }
@@ -293,28 +342,44 @@ public static class RolaI18N
     /// </summary>
     private static Dictionary<string, Dictionary<string, string>> Nodes()
     {
-        var directory =
-            TranslationDirectory
-            ?? throw new InvalidOperationException(
-                "no translation directory has been named; call SetTranslationDirectory first"
-            );
-
         lock (Gate)
         {
-            if (_nodes is not null && _readFrom == directory)
+            if (Directories.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "no translation directory has been named; call SetTranslationDirectory first"
+                );
+            }
+
+            var readFrom = string.Join('\n', Directories);
+
+            if (_nodes is not null && _readFrom == readFrom)
             {
                 return _nodes;
             }
 
-            if (!Directory.Exists(directory))
+            var nodes = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+
+            foreach (var directory in Directories)
             {
-                throw new DirectoryNotFoundException(
-                    $"the translation directory {directory} is not there"
-                );
+                if (!Directory.Exists(directory))
+                {
+                    throw new DirectoryNotFoundException(
+                        $"the translation directory {directory} is not there"
+                    );
+                }
+
+                // First registration wins: what an earlier directory states is kept as it is. Within
+                // one directory a later file still replaces an earlier one, since the files there are
+                // one set and their read order is by path.
+                foreach (var (key, forms) in TranslationFiles.Read(directory))
+                {
+                    nodes.TryAdd(key, forms);
+                }
             }
 
-            _nodes = TranslationFiles.Read(directory);
-            _readFrom = directory;
+            _nodes = nodes;
+            _readFrom = readFrom;
 
             return _nodes;
         }

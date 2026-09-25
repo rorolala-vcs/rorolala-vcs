@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using RorolalaDesktop.Configuration;
 using RorolalaDesktop.I18n;
 
 namespace RorolalaDesktop;
@@ -20,6 +21,12 @@ class Program
     /// the export put it. Null when this program is started on its own.
     public static string? CurrentDirectory { get; private set; }
 
+    /// What the run worked out before Avalonia started.
+    ///
+    /// Recorded the way the language is: Avalonia makes the window itself, so the window's side of
+    /// the program asks for what was worked out rather than being handed it.
+    public static DesktopState? State { get; private set; }
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -30,18 +37,33 @@ class Program
         // reader asks for it without asking whether the answer has arrived yet.
         Record(args);
 
-        // Read before anything is drawn, from beside the program — an export lays them there — and
-        // in the language the command line chose. Started on its own there is no language to set,
-        // and the files' own fallback speaks.
+        // The host's own directory is named before any plugin's: merging is first-registration-wins,
+        // so a plugin cannot overwrite a word the host says.
         RolaI18N.SetTranslationDirectory(Path.Combine(AppContext.BaseDirectory, "i18n"));
 
-        if (Language is { } language)
+        DesktopState state;
+
+        try
         {
-            RolaI18N.SetLocale(language);
+            // Configuration and the plugin load order, worked out before Avalonia starts, so that a
+            // failure here is a reason on standard error and an exit code while there is still no
+            // window to put a dialog in.
+            state = DesktopStartup.Load();
+        }
+        catch (ConfigurationFailure failure)
+        {
+            Console.Error.WriteLine(failure.Message);
+            Environment.Exit((int)failure.Code);
+
+            return;
         }
 
-        BuildAvaloniaApp()
-            .StartWithClassicDesktopLifetime(args);
+        // The command line's choice wins; started on its own, the file's fallback speaks.
+        RolaI18N.SetLocale(Language ?? state.Preference.Language);
+
+        State = state;
+
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.
