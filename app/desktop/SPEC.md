@@ -518,9 +518,10 @@ The strip is one row, left to right:
 
 Behaviour:
 
-- **Dragging** a tab or the drag area with the left button moves the dock: the zones light up and the
-  dock lands in the one it is let go of over (Section 7.2). A drag that never leaves the threshold is
-  a click, and a click on a tab shows that dock.
+- **Dragging** a tab or the drag area with the left button moves the dock: every zone a drop could
+  mean is drawn, the one the pointer is over is picked out in the accent, and the dock lands in the one
+  it is let go of over (Section 7.2). A drag that never leaves the threshold is a click, and a click on
+  a tab shows that dock.
 - **Middle-clicking** a tab or the drag area closes the dock, without dragging anything.
 - Closing a `Toggle` dock hides it; closing a `New` dock discards the instance (Section 7.2). Either
   way the region settles on another of its docks, or is empty and collapses its strip.
@@ -660,7 +661,7 @@ exists for plugins that react to a completed open.
     pointer, and the red a close fills with.
   - **The accent is spent on selection.** Selected rows, tree rows, drop-down rows and a checked box
     are filled with it; so is the underline of the dock a region is showing, a splitter under the
-    pointer, and the edge of a drop zone. Nothing else is accented.
+    pointer, and the zone a dragged dock is aimed at. Nothing else is accented.
   - **Nothing moves.** A mark that appears on selection reserves its space when it is not there, and
     no state change alters a size.
   - **Close is the one red thing.** The close button at the end of a strip draws nothing until the
@@ -700,13 +701,16 @@ exists for plugins that react to a completed open.
   | `dock-splitter` | The grab between regions. |
   | `dock-splitter-columns` / `dock-splitter-rows` | The same grab, saying which way it resizes. |
   | `dock-drop-zone` | Where a dragged dock would land. |
+  | `dock-drop-target` | The zone a dragged dock is being aimed at, in addition to `dock-drop-zone`. |
 
-  The drop zone is the one mark the look need not style. The dock area asks the base theme for its
-  accent and for that accent at its faintest by name, because a drag affordance has to be visible
-  whether or not the look says anything about it; what the look gives it is the edge it wears and the
-  fade it arrives with. Those two names are the base theme's, so the dock area names the base theme as
-  surely as if it named its type: a base with different resource names would leave the drop zone
-  without an edge, and nothing would say so.
+  A drop zone is drawn where the region it stands for is: that region's band of the area, as wide or as
+  tall as the layout remembers for it and never less than the least a region may become. What a drag
+  shows is therefore where the dock will be, and a region that is empty and taking no space still has a
+  box to aim at. Every zone is up while a drag is on, filled with a tint of the variant's ink — white
+  over a dark program, black over a light one. The one the pointer is over carries `dock-drop-target` as
+  well and is drawn in the accent: the others are the question, which regions there are to land in, and
+  that one is the answer. The dock area asks the look for nothing here — the boxes are the look's to
+  draw.
 
   A splitter draws nothing until the pointer is on it, and then a hairline of the accent through its
   middle. The grab is four pixels wide, which is what it has to stay for a hand to find it, and a line
