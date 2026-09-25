@@ -48,6 +48,7 @@ document first, then to the code.
   - [7.3 Instances and layout persistence](#73-instances-and-layout-persistence)
   - [7.4 Core docks](#74-core-docks)
   - [7.5 Bundled plugin docks](#75-bundled-plugin-docks)
+  - [7.6 Headers and the strip](#76-headers-and-the-strip)
 - [8. Open Hook Pipeline](#8-open-hook-pipeline)
   - [8.1 Request state](#81-request-state)
   - [8.2 Stages and order](#82-stages-and-order)
@@ -446,6 +447,28 @@ Both are always available from `Window`.
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
 
+### 7.6 Headers and the strip
+
+Each region has one strip above its content, and one dock out of those open in the region is shown.
+The strip is one row, left to right:
+
+1. **The tabs.** One header per dock open in the region, each as narrow as its word. Choosing one
+   shows it. The header of the dock being shown is marked by a class, not by a size (Section 10).
+2. **The drag area.** The rest of the strip belongs to the dock being shown, and is what it is
+   dragged by. It draws nothing and shows a move cursor; the tabs are too narrow to be the only place
+   a dock can be grabbed.
+3. **The header commands** the shown dock brought with it, if any.
+4. **The close button**, at the far end, which closes the dock being shown.
+
+Behaviour:
+
+- **Dragging** a tab or the drag area with the left button moves the dock: the zones light up and the
+  dock lands in the one it is let go of over (Section 7.2). A drag that never leaves the threshold is
+  a click, and a click on a tab shows that dock.
+- **Middle-clicking** a tab or the drag area closes the dock, without dragging anything.
+- Closing a `Toggle` dock hides it; closing a `New` dock discards the instance (Section 7.2). Either
+  way the region settles on another of its docks, or is empty and collapses its strip.
+
 The navigation dock drives the *active* browser: the one the user last reached into, and the newest
 while none has been touched. Several browser docks therefore stay independent (§7.2) under one
 navigation dock, which is what its `Toggle` open mode requires. While no browser is open the dock
@@ -519,14 +542,32 @@ exists for plugins that react to a completed open.
 - `FluentTheme` is **always loaded as the base theme**. Avalonia controls require it.
 - The theme named by `preference.json` is applied as an **overlay** on top of the base.
 - `RorolalaTheme` is a **built-in** theme provider, not a plugin. It is the default value of `theme`.
-- `RorolalaTheme` is an overlay in substance and not only in position: every colour it names is one
-  of Fluent's own resources, so the light and dark variants and the user's accent colour are Fluent's
-  and there is no second palette to keep in step. What it decides is shape and emphasis — the
-  typeface, the sizes, the spacing, the radii, which surfaces read as chrome, and how the dock a
-  region is showing is marked.
+- The design is Win10-flat:
+  - **Rectangles.** Nothing is rounded; every surface has a `CornerRadius` of zero.
+  - **One-pixel edges.** Anything with an outline wears a 1 px `BorderThickness`, in the 20 % ink of
+    the variant. A focused field keeps its one pixel rather than the two the base theme draws.
+  - **Hover is neutral.** A surface under the pointer takes a tint of the variant's ink, not the
+    accent. The two exceptions are marks rather than surfaces: the hairline a splitter shows under the
+    pointer, and the red a close fills with.
+  - **The accent is spent on selection.** Selected rows, tree rows, drop-down rows and a checked box
+    are filled with it; so is the underline of the dock a region is showing, a splitter under the
+    pointer, and the edge of a drop zone. Nothing else is accented.
+  - **Nothing moves.** A mark that appears on selection reserves its space when it is not there, and
+    no state change alters a size.
+  - **Close is the one red thing.** The close button at the end of a strip draws nothing until the
+    pointer is on it, and then fills with the red a close is everywhere. It is the only colour in the
+    program that is not the accent or a tint of the variant's ink.
+- The accent is **lemon green** — `#BFFF00`, lightened to `#D4FF4D` when an accent-darkened thing is
+  hovered, darkened to `#A6E000` while it is held, `#66BFFF00` when it is disabled. It is written into
+  **Fluent's own accent resources** rather than applied control by control, so that a selected row, a
+  focused field, a checked box and a hyperlink are all lemon from one definition. Only the ink on the
+  accent needs a rule of its own: Fluent writes white on an accent fill, which on lemon is 1.2:1, so
+  everything the accent fills is written in near-black (`#121A00`, 14.9:1).
 - The type is **Inter**, which the program ships. The theme names it through the font collection
   (`fonts:Inter#Inter`), because a family name on its own is looked for among the system's fonts, is
   not there, and falls back silently to the platform's face.
+- **Motion** is colour and opacity only, never position or size, and never longer than 150 ms: every
+  part that changes colour on a state fades into it, and a drop zone fades in.
 - The overlay is applied before the window is made. That order is load-bearing rather than tidy:
   growing `Application.Styles` after elements have been styled makes the base theme's setters win on
   those elements on the re-application that follows, so an overlay added late stops applying to
@@ -540,7 +581,20 @@ exists for plugins that react to a completed open.
   | `dock-headers` | A region's header strip. |
   | `dock-title` | A dock's header. |
   | `selected` | The header of the dock the region is showing, in addition to `dock-title`. |
+  | `dock-close` | The button that closes the dock a region is showing. |
   | `dock-splitter` | The grab between regions. |
+  | `dock-splitter-columns` / `dock-splitter-rows` | The same grab, saying which way it resizes. |
+  | `dock-drop-zone` | Where a dragged dock would land. |
+
+  The drop zone is the one mark a theme need not style. The dock area asks the base theme for its
+  accent and its tint by name, because a drag affordance has to be visible under a theme that says
+  nothing about it; what a theme supplies is the edge it wears and the fade it arrives with.
+
+  A splitter draws nothing until the pointer is on it, and then a hairline of the accent through its
+  middle. The grab is four pixels wide, which is what it has to stay for a hand to find it, and a line
+  that wide would be a bar; so the hairline is drawn inside the grab rather than being it, and the
+  class says which way it runs. A theme that styles neither of the two classes leaves the splitter a
+  bare grab with nothing to see, which is what the base theme alone does.
 
 - A plugin-provided theme is treated identically to a built-in theme; only its origin differs.
 - The value `"fluent"` selects FluentTheme with no overlay.
@@ -800,6 +854,12 @@ never move under the cursor, what the keyboard must always be able to reach — 
 **with the user**, and recorded here. Until they are, no decision may trade feel away for
 implementation convenience without raising it explicitly.
 
+Agreed so far:
+
+- **Motion.** What a change of state is communicated with is colour and opacity, never position or
+  size, and never over 150 ms. Nothing moves under the pointer, and a mark that appears on selection
+  reserves its space while it is not there (Section 10).
+
 ## 18. Non-Goals
 
 - Desktop does not implement version-control semantics; those live in `rola` and in plugins.
@@ -810,8 +870,9 @@ implementation convenience without raising it explicitly.
 
 ## 19. Open Items
 
-1. `RorolalaTheme` is no longer the Simple placeholder, but what it is now is a first pass; it is to
-   be revised with the user, together with the feel criteria of Section 17.
+1. `RorolalaTheme`'s design is settled as far as Section 10 states it — Win10-flat, lemon accent,
+   colour-only motion — but it is a first pass at the details (which surfaces take an edge, how dense
+   the rows are) and is to be revised with the user.
 2. The concrete feel criteria (Section 17), to be agreed with the user.
 3. The contract assembly versioning policy: increment rule and compatibility range.
 4. The JSON schema versioning policy for `plugins.json` and `preference.json`.

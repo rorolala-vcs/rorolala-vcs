@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
@@ -54,6 +55,18 @@ internal sealed class DockArea : UserControl
     /// <summary>The class a region's splitter carries.</summary>
     public const string SplitterClass = "dock-splitter";
 
+    /// <summary>The class a splitter that resizes columns carries, in addition to <see cref="SplitterClass"/>.</summary>
+    public const string SplitterColumnsClass = "dock-splitter-columns";
+
+    /// <summary>The class a splitter that resizes rows carries, in addition to <see cref="SplitterClass"/>.</summary>
+    public const string SplitterRowsClass = "dock-splitter-rows";
+
+    /// <summary>The class the zone a dragged dock would land in carries.</summary>
+    public const string DropZoneClass = "dock-drop-zone";
+
+    /// <summary>The class the button that closes the dock a region is showing carries.</summary>
+    public const string CloseClass = "dock-close";
+
     /// <summary>The narrowest a column region is allowed to become.</summary>
     private const double MinColumn = 120;
 
@@ -61,7 +74,11 @@ internal sealed class DockArea : UserControl
     private const double MinRow = 56;
 
     /// <summary>How wide a splitter is.</summary>
-    private const double SplitterSize = 4;
+    /// <remarks>
+    /// Published, because a theme draws a line through the middle of one: the width it is drawn in is
+    /// this, and a line of another width would not be centred in it.
+    /// </remarks>
+    public const double SplitterSize = 4;
 
     /// <summary>How far a pointer moves before a press becomes a drag rather than a click.</summary>
     private const double DragThreshold = 4;
@@ -72,8 +89,18 @@ internal sealed class DockArea : UserControl
     /// <summary>How large a floating dock's window opens.</summary>
     private static readonly Size FloatSize = new(560, 400);
 
-    /// <summary>What a zone a dragged dock would land in is lit with.</summary>
-    private static readonly Color Highlight = Color.FromArgb(0x66, 0x2a, 0x7d, 0xff);
+    /// <summary>
+    /// The base theme's accent, which is what a drop zone is drawn in.
+    /// </summary>
+    /// <remarks>
+    /// Asked for by name rather than named here: which colour the accent is belongs to the theme, and
+    /// a theme that says nothing about drop zones — the base one alone — still has an accent for this
+    /// to take. A colour written here instead would be one no theme could change.
+    /// </remarks>
+    private const string AccentKey = "SystemControlHighlightAccentBrush";
+
+    /// <summary>The base theme's tint, and the little the drop zone is filled with.</summary>
+    private const string WashKey = "SystemControlBackgroundBaseLowBrush";
 
     /// <summary>The docks and where they are.</summary>
     private readonly DockManager _manager;
@@ -189,12 +216,6 @@ internal sealed class DockArea : UserControl
 
         /// <summary>The header that selects it, and that a drag is taken from.</summary>
         public required Button Title { get; init; }
-
-        /// <summary>The header commands the dock brought with it.</summary>
-        public required IReadOnlyList<Button> Commands { get; init; }
-
-        /// <summary>The header that closes it.</summary>
-        public required Button Close { get; init; }
     }
 
     /// <summary>
@@ -203,6 +224,13 @@ internal sealed class DockArea : UserControl
     /// <remarks>
     /// Every dock the region was given stays in <see cref="Content"/>, and the one being shown is
     /// the only one that is visible. <see cref="Selected"/> is which that is.
+    /// <para>
+    /// The strip is one row of four: the docks' headers as tabs, then the area the shown dock is
+    /// dragged by, then what the shown dock brought in its own header, then the button that closes it.
+    /// The commands and the close belong to the region rather than to each dock because there is one
+    /// strip and the tabs are as narrow as their words: a title that filled the strip could not leave
+    /// room for a tab beside it, and one close per dock would sit in the middle of the row.
+    /// </para>
     /// </remarks>
     private sealed class Region
     {
@@ -212,7 +240,24 @@ internal sealed class DockArea : UserControl
         {
             Name = name;
 
-            Strip.Child = Headers;
+            Close = new Button { Classes = { CloseClass }, Content = "\u2715" };
+
+            Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+            Grid.SetColumn(Headers, 0);
+            Grid.SetColumn(Drag, 1);
+            Grid.SetColumn(Commands, 2);
+            Grid.SetColumn(Close, 3);
+
+            Bar.Children.Add(Headers);
+            Bar.Children.Add(Drag);
+            Bar.Children.Add(Commands);
+            Bar.Children.Add(Close);
+
+            Strip.Child = Bar;
             DockPanel.SetDock(Strip, Dock.Top);
             Panel.Children.Add(Strip);
             Panel.Children.Add(Content);
@@ -234,14 +279,51 @@ internal sealed class DockArea : UserControl
         /// </remarks>
         public Border Strip { get; } = new() { Classes = { HeadersClass } };
 
+        /// <summary>The strip's one row: the tabs, the drag area, the commands, and the close.</summary>
+        public Grid Bar { get; } = new();
+
         /// <summary>The headers, one per dock the region was given.</summary>
         public StackPanel Headers { get; } =
             new()
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 2,
-                Margin = new Thickness(4, 2),
+
+                // No bottom margin: a header's own edge is meant to land on the header strip's, so
+                // that the one being shown reads as an underline along the bottom of the strip.
+                Margin = new Thickness(4, 2, 4, 0),
             };
+
+        /// <summary>
+        /// The area between the tabs and the commands, which is what the shown dock is dragged by.
+        /// </summary>
+        /// <remarks>
+        /// A drag needs somewhere to start that is not a label, and the tabs are as narrow as their
+        /// words. What is left of the strip belongs to what is being shown. Nothing is drawn here,
+        /// but it must not be transparent to the pointer, or a drag from it would fall through to
+        /// whatever is underneath.
+        /// </remarks>
+        public Border Drag { get; } =
+            new()
+            {
+                Background = Brushes.Transparent,
+                Cursor = new Cursor(StandardCursorType.SizeAll),
+            };
+
+        /// <summary>The header commands of the dock being shown.</summary>
+        public StackPanel Commands { get; } =
+            new()
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 2,
+                Margin = new Thickness(0, 2, 0, 0),
+            };
+
+        /// <summary>The button that closes the dock being shown.</summary>
+        public Button Close { get; }
+
+        /// <summary>The dock whose commands the strip is showing, which is what <see cref="Commands"/> was built for.</summary>
+        public DockInstance? Shown { get; set; }
 
         /// <summary>Every dock the region was given, of which one is visible at a time.</summary>
         public Panel Content { get; } = new();
@@ -297,6 +379,12 @@ internal sealed class DockArea : UserControl
         foreach (var region in Regions())
         {
             region.Panel.Background = Brushes.Transparent;
+
+            // The drag area and the close belong to whatever the region is showing at the time they
+            // are used rather than to a dock, since the two outlive every dock that passes through
+            // the region.
+            region.Drag.PointerPressed += (_, e) => Take(region.Selected, e);
+            region.Close.Click += (_, _) => CloseShown(region);
         }
 
         Zones();
@@ -326,7 +414,6 @@ internal sealed class DockArea : UserControl
         Add(DockPlacement.Bottom, 0, 2, 3);
 
         _zones.IsHitTestVisible = false;
-        _zones.IsVisible = false;
 
         return;
 
@@ -334,12 +421,13 @@ internal sealed class DockArea : UserControl
         {
             var zone = new Border
             {
-                Background = new SolidColorBrush(Highlight),
-                BorderBrush = new SolidColorBrush(Highlight),
-                BorderThickness = new Thickness(2),
+                Classes = { DropZoneClass },
                 Margin = new Thickness(2),
-                IsVisible = false,
+                Opacity = 0,
             };
+
+            zone.Bind(Border.BorderBrushProperty, new DynamicResourceExtension(AccentKey));
+            zone.Bind(Border.BackgroundProperty, new DynamicResourceExtension(WashKey));
 
             Grid.SetColumn(zone, column);
             Grid.SetColumnSpan(zone, columns);
@@ -355,6 +443,9 @@ internal sealed class DockArea : UserControl
     {
         splitter.ResizeDirection = direction;
         splitter.Classes.Add(SplitterClass);
+        splitter.Classes.Add(
+            direction == GridResizeDirection.Columns ? SplitterColumnsClass : SplitterRowsClass
+        );
 
         if (direction == GridResizeDirection.Columns)
         {
@@ -453,11 +544,10 @@ internal sealed class DockArea : UserControl
         }
     }
 
-    /// <summary>Makes one dock's view and headers, which it keeps for as long as it lives.</summary>
+    /// <summary>Makes a dock's view and its header, which it keeps for as long as it lives.</summary>
     private Placed Make(DockInstance instance)
     {
         var title = Header(instance.Title);
-        var commands = new List<Button>();
 
         title.Classes.Add(TitleClass);
         title.Click += (_, _) => Select(instance);
@@ -471,24 +561,12 @@ internal sealed class DockArea : UserControl
             RoutingStrategies.Tunnel
         );
 
-        foreach (var command in instance.View.HeaderCommands)
-        {
-            var button = Header(_i18n.Get(command.LabelKey));
-            button.Click += (_, _) => command.Command();
-            commands.Add(button);
-        }
-
-        var close = Header("\u2715");
-        close.Click += (_, _) => _manager.Close(instance);
-
         return new Placed
         {
             Instance = instance,
             Region = RegionFor(instance.Placement),
             View = instance.View.View,
             Title = title,
-            Commands = commands,
-            Close = close,
         };
     }
 
@@ -497,13 +575,6 @@ internal sealed class DockArea : UserControl
     {
         region.Content.Children.Add(placed.View);
         region.Headers.Children.Add(placed.Title);
-
-        foreach (var command in placed.Commands)
-        {
-            region.Headers.Children.Add(command);
-        }
-
-        region.Headers.Children.Add(placed.Close);
         placed.Region = region;
         region.Selected = placed.Instance;
     }
@@ -513,13 +584,6 @@ internal sealed class DockArea : UserControl
     {
         placed.Region.Content.Children.Remove(placed.View);
         placed.Region.Headers.Children.Remove(placed.Title);
-
-        foreach (var command in placed.Commands)
-        {
-            placed.Region.Headers.Children.Remove(command);
-        }
-
-        placed.Region.Headers.Children.Remove(placed.Close);
 
         if (ReferenceEquals(placed.Region.Selected, placed.Instance))
         {
@@ -554,13 +618,52 @@ internal sealed class DockArea : UserControl
             // Which dock the region is showing is a class rather than a weight, so that what a
             // selected header looks like is a theme's to decide and not this file's.
             placed.Title.Classes.Set(SelectedClass, shown);
+        }
 
-            foreach (var command in placed.Commands)
-            {
-                command.IsVisible = instance.IsOpen;
-            }
+        foreach (var region in Regions())
+        {
+            BindCommands(region);
+        }
+    }
 
-            placed.Close.IsVisible = instance.IsOpen;
+    /// <summary>
+    /// Makes a region's strip show what the dock it settled on brought in its own header.
+    /// </summary>
+    /// <remarks>
+    /// Rebuilt only when the dock being shown changes: this runs on every change to the set of open
+    /// docks, and buttons made again on each of those would lose the pointer resting on them.
+    /// </remarks>
+    private void BindCommands(Region region)
+    {
+        var shown = region.Selected;
+
+        if (ReferenceEquals(region.Shown, shown))
+        {
+            return;
+        }
+
+        region.Shown = shown;
+        region.Commands.Children.Clear();
+
+        if (shown is null)
+        {
+            return;
+        }
+
+        foreach (var command in shown.View.HeaderCommands)
+        {
+            var button = Header(_i18n.Get(command.LabelKey));
+            button.Click += (_, _) => command.Command();
+            region.Commands.Children.Add(button);
+        }
+    }
+
+    /// <summary>Closes the dock a region is showing, which is what its close button does.</summary>
+    private void CloseShown(Region region)
+    {
+        if (region.Selected is { } shown)
+        {
+            _manager.Close(shown);
         }
     }
 
@@ -683,8 +786,12 @@ internal sealed class DockArea : UserControl
     /// reading it there is what kept the drag from starting at all — and the release knows what
     /// began the gesture without having to be told.
     /// </para>
+    /// <para>
+    /// The dock is the one named by the header that was pressed, or — from the strip's drag area —
+    /// whichever the region is showing at that moment.
+    /// </para>
     /// </remarks>
-    private void Take(DockInstance instance, PointerPressedEventArgs e)
+    private void Take(DockInstance? instance, PointerPressedEventArgs e)
     {
         _dragging = instance;
         _from = e.GetPosition(this);
@@ -714,19 +821,33 @@ internal sealed class DockArea : UserControl
         Preview(ZoneFor(at));
     }
 
-    /// <summary>Lands a dragged dock in the region it was let go of over.</summary>
+    /// <summary>Lands a dragged dock in the region it was let go of over, or closes it on a middle click.</summary>
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         var instance = _dragging;
         var moved = _moved;
         var at = e.GetPosition(this);
-        var left = e.InitialPressMouseButton == MouseButton.Left;
+        var button = e.InitialPressMouseButton;
 
         Cancel();
 
+        if (instance is null)
+        {
+            return;
+        }
+
+        // The middle button is the gesture that closes a dock: a header is where a dock is grabbed,
+        // so it is where one is let go of for good.
+        if (button == MouseButton.Middle)
+        {
+            _manager.Close(instance);
+
+            return;
+        }
+
         // A press that never moved is a click, and selecting the dock is what a click means; a
         // release belonging to another button ends the gesture without moving anything.
-        if (left && instance is not null && moved && ZoneFor(at) is { } placement)
+        if (button == MouseButton.Left && moved && ZoneFor(at) is { } placement)
         {
             _manager.Move(instance, placement);
         }
@@ -784,14 +905,16 @@ internal sealed class DockArea : UserControl
             : DockPlacement.Center;
     }
 
-    /// <summary>Shows the zones while a dock is dragged, and lights the one it would land in.</summary>
+    /// <summary>Shows the zone a dock would land in, and takes the others away.</summary>
+    /// <remarks>
+    /// Faded rather than shown and hidden, so that a drag reads as the zone lighting up instead of
+    /// appearing; the fade itself belongs to a theme, so a theme with none still lights it, at once.
+    /// </remarks>
     private void Preview(DockPlacement? placement)
     {
-        _zones.IsVisible = placement is not null;
-
         foreach (var (landing, zone) in _lit)
         {
-            zone.IsVisible = placement is { } at && at == landing;
+            zone.Opacity = placement is { } at && at == landing ? 1 : 0;
         }
     }
 
