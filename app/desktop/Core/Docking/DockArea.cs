@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using RorolalaDesktop.Contract;
@@ -8,15 +10,24 @@ using RorolalaDesktop.Hosting;
 namespace RorolalaDesktop.Docking;
 
 /// <summary>
-/// The dock area: the regions a dock can be placed in, and the headers that choose between them.
+/// The dock area: the regions a dock can be placed in, the headers that choose between them, and
+/// the dragging that moves one from a region to another.
 /// </summary>
 /// <remarks>
 /// A region keeps every dock it was given and shows one of them at a time, rather than rebuilding
 /// itself when the set of open docks changes. That is not an optimisation: a control has one
 /// parent, and a view moved from one container into another can be caught mid-move — which is what
-/// <c>The control … already has a visual parent</c> is. Nothing here is ever re-parented. A dock is
-/// put in its region once, when it is made; taken out once, when it is closed for good; and shown,
-/// hidden, or made the region's own in between, which is all that opening and closing it means.
+/// <c>The control … already has a visual parent</c> is. Nothing here is re-parented as a side
+/// effect of something else. A dock is put in its region once, when it is made; taken out once,
+/// when it is closed for good; and shown, hidden, or made the region's own in between. The one
+/// deliberate move is a drag, and that move is done by taking the dock out of one region and
+/// putting it in another, in that order.
+/// <para>
+/// Dragging a header shows where the dock would land before it is let go of: the area divides into
+/// the regions a drop could mean, and the one the pointer is over is lit. The four zones are shown
+/// whether or not anything is in them, so a region that is empty and taking no space can still be
+/// what a drag is aimed at.
+/// </para>
 /// <para>
 /// A region with nothing open in it takes no space, and its splitter goes with it, so an empty left
 /// or right strip never sits there eating clicks.
@@ -30,14 +41,26 @@ internal sealed class DockArea : UserControl
     /// <summary>How wide a splitter is.</summary>
     private const double SplitterSize = 4;
 
+    /// <summary>How far a pointer moves before a press becomes a drag rather than a click.</summary>
+    private const double DragThreshold = 4;
+
+    /// <summary>How much of a side is that side, as a fraction of the whole.</summary>
+    private const double ZoneEdge = 0.25;
+
     /// <summary>How large a floating dock's window opens.</summary>
     private static readonly Size FloatSize = new(560, 400);
+
+    /// <summary>What a zone a dragged dock would land in is lit with.</summary>
+    private static readonly Color Highlight = Color.FromArgb(0x66, 0x2a, 0x7d, 0xff);
 
     /// <summary>The docks and where they are.</summary>
     private readonly DockManager _manager;
 
     /// <summary>The host's translations, for dock titles and header commands.</summary>
     private readonly I18nService _i18n;
+
+    /// <summary>The area, with the drop zones drawn over it.</summary>
+    private readonly Grid _surface = new();
 
     /// <summary>The whole area: the three columns above, and the bottom region below them.</summary>
     private readonly Grid _root = new();
@@ -66,11 +89,26 @@ internal sealed class DockArea : UserControl
     /// <summary>The splitter above the bottom region.</summary>
     private readonly GridSplitter _bottomSplitter = new();
 
+    /// <summary>The four zones a dragged dock could land in, shown only while one is dragged.</summary>
+    private readonly Grid _zones = new();
+
     /// <summary>What each dock that is placed in a region was given, by the dock.</summary>
     private readonly Dictionary<DockInstance, Placed> _placed = [];
 
     /// <summary>The window each floating dock lives in, by the dock.</summary>
     private readonly Dictionary<DockInstance, Window> _floats = [];
+
+    /// <summary>The zone each placement is drawn by.</summary>
+    private readonly Dictionary<DockPlacement, Border> _lit = [];
+
+    /// <summary>The dock being dragged, if one is.</summary>
+    private DockInstance? _dragging;
+
+    /// <summary>Where the pointer was when the drag began.</summary>
+    private Point _from;
+
+    /// <summary>Whether the pointer has moved far enough to be dragging rather than clicking.</summary>
+    private bool _moved;
 
     /// <summary>Whether a float is being closed by this area rather than by the user.</summary>
     private bool _closingFloat;
@@ -84,28 +122,52 @@ internal sealed class DockArea : UserControl
         _i18n = i18n;
 
         Build();
+
+        // A header is a button, and a button keeps the pointer while it is pressed; the drag is
+        // followed from here, where the events arrive anyway once they have bubbled out of it.
+        AddHandler(
+            InputElement.PointerMovedEvent,
+            OnPointerMoved,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true
+        );
+        AddHandler(
+            InputElement.PointerReleasedEvent,
+            OnPointerReleased,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true
+        );
+        AddHandler(InputElement.PointerCaptureLostEvent, (_, _) => Cancel());
+
         _manager.Changed += Rebuild;
         Rebuild();
     }
 
     /// <summary>What one dock was given when it was placed.</summary>
-    /// <param name="Region">The region it sits in.</param>
-    /// <param name="View">Its control, which is a child of the region's content panel.</param>
-    /// <param name="Title">The header that selects it.</param>
-    /// <param name="Commands">The header commands it brought with it.</param>
-    /// <param name="Close">The header that closes it.</param>
-    private sealed record Placed(
-        Region Region,
-        Control View,
-        Button Title,
-        IReadOnlyList<Button> Commands,
-        Button Close
-    );
+    /// <remarks>
+    /// The region is the one thing about this that changes: a dock dragged to another region keeps
+    /// everything else it was given and is taken out of one region and put in the other.
+    /// </remarks>
+    private sealed class Placed
+    {
+        /// <summary>The dock this was made for.</summary>
+        public required DockInstance Instance { get; init; }
 
-    /// <summary>One dock and the window showing it.</summary>
-    /// <param name="Instance">The dock.</param>
-    /// <param name="Window">The window it is shown in.</param>
-    private sealed record Floating(DockInstance Instance, Window Window);
+        /// <summary>The region the dock sits in.</summary>
+        public required Region Region { get; set; }
+
+        /// <summary>The dock's control.</summary>
+        public required Control View { get; init; }
+
+        /// <summary>The header that selects it, and that a drag is taken from.</summary>
+        public required Button Title { get; init; }
+
+        /// <summary>The header commands the dock brought with it.</summary>
+        public required IReadOnlyList<Button> Commands { get; init; }
+
+        /// <summary>The header that closes it.</summary>
+        public required Button Close { get; init; }
+    }
 
     /// <summary>
     /// One region: a strip of headers over the docks themselves.
@@ -130,7 +192,7 @@ internal sealed class DockArea : UserControl
         /// <summary>The name this region's size is remembered under.</summary>
         public string Name { get; }
 
-        /// <summary>The region: headers above, docks below.</summary>
+        /// <summary>The region itself: headers above, docks below.</summary>
         public DockPanel Panel { get; } = new();
 
         /// <summary>The headers, one per dock the region was given.</summary>
@@ -145,11 +207,11 @@ internal sealed class DockArea : UserControl
         /// <summary>Every dock the region was given, of which one is visible at a time.</summary>
         public Panel Content { get; } = new();
 
-        /// <summary>Which of them is being shown.</summary>
+        /// <summary>Which of its docks is being shown.</summary>
         public DockInstance? Selected { get; set; }
     }
 
-    /// <summary>Lays the regions and the splitters out once.</summary>
+    /// <summary>Lays the regions, the splitters, and the drop zones out once.</summary>
     private void Build()
     {
         _middle.ColumnDefinitions.Add(new ColumnDefinition(RegionLength(_manager.Layout.LeftWidth)));
@@ -186,12 +248,58 @@ internal sealed class DockArea : UserControl
         _root.Children.Add(_bottomSplitter);
         _root.Children.Add(_bottom.Panel);
 
-        foreach (var region in new[] { _left, _center, _right, _bottom })
+        foreach (var region in Regions())
         {
             region.Panel.Background = Brushes.Transparent;
         }
 
-        Content = _root;
+        Zones();
+
+        _surface.Children.Add(_root);
+        _surface.Children.Add(_zones);
+
+        Content = _surface;
+    }
+
+    /// <summary>Lays out the four zones a dragged dock could land in.</summary>
+    private void Zones()
+    {
+        // Columns and rows in the same fractions the zones are read in, so what is lit is where the
+        // pointer would have to be.
+        _zones.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+        _zones.ColumnDefinitions.Add(new ColumnDefinition(2, GridUnitType.Star));
+        _zones.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+        _zones.RowDefinitions.Add(new RowDefinition(3, GridUnitType.Star));
+        _zones.RowDefinitions.Add(new RowDefinition(1, GridUnitType.Star));
+
+        Add(DockPlacement.Left, 0, 0, 1);
+        Add(DockPlacement.Center, 1, 0, 1);
+        Add(DockPlacement.Right, 2, 0, 1);
+        Add(DockPlacement.Bottom, 0, 1, 3);
+
+        _zones.IsHitTestVisible = false;
+        _zones.IsVisible = false;
+
+        return;
+
+        void Add(DockPlacement placement, int column, int row, int span)
+        {
+            var zone = new Border
+            {
+                Background = new SolidColorBrush(Highlight),
+                BorderBrush = new SolidColorBrush(Highlight),
+                BorderThickness = new Thickness(2),
+                Margin = new Thickness(2),
+                IsVisible = false,
+            };
+
+            Grid.SetColumn(zone, column);
+            Grid.SetColumnSpan(zone, span);
+            Grid.SetRow(zone, row);
+
+            _zones.Children.Add(zone);
+            _lit[placement] = zone;
+        }
     }
 
     /// <summary>Sets up one splitter, remembering the region's size when it is let go.</summary>
@@ -234,7 +342,7 @@ internal sealed class DockArea : UserControl
         }
     }
 
-    /// <summary>Brings the area back in step with what is registered, open and shown.</summary>
+    /// <summary>Brings the area back in step with what is registered, open, and where.</summary>
     private void Rebuild()
     {
         Forget();
@@ -255,69 +363,121 @@ internal sealed class DockArea : UserControl
                 continue;
             }
 
-            placed.Region.Content.Children.Remove(placed.View);
-            placed.Region.Headers.Children.Remove(placed.Title);
-
-            foreach (var command in placed.Commands)
-            {
-                placed.Region.Headers.Children.Remove(command);
-            }
-
-            placed.Region.Headers.Children.Remove(placed.Close);
-
-            if (ReferenceEquals(placed.Region.Selected, instance))
-            {
-                placed.Region.Selected = null;
-            }
-
+            Detach(placed);
             _placed.Remove(instance);
         }
     }
 
-    /// <summary>Gives the docks that are new to the area their place in it.</summary>
+    /// <summary>Puts every dock where it says it is, moving the ones that have been dragged.</summary>
     private void Place()
     {
         foreach (var instance in _manager.Instances)
         {
-            if (_placed.ContainsKey(instance) || instance.Placement == DockPlacement.Float)
+            if (instance.Placement == DockPlacement.Float)
             {
                 continue;
             }
 
             var region = RegionFor(instance.Placement);
-            var title = Header(instance.Title);
-            var commands = new List<Button>();
 
-            title.Click += (_, _) => Select(region, instance);
-
-            foreach (var command in instance.View.HeaderCommands)
+            if (!_placed.TryGetValue(instance, out var placed))
             {
-                var button = Header(_i18n.Get(command.LabelKey));
-                button.Click += (_, _) => command.Command();
-                commands.Add(button);
+                placed = Make(instance);
+                Attach(placed, region);
+                _placed[instance] = placed;
+
+                continue;
             }
 
-            var close = Header("\u2715");
-            close.Click += (_, _) => _manager.Close(instance);
-
-            region.Content.Children.Add(instance.View.View);
-            region.Headers.Children.Add(title);
-
-            foreach (var command in commands)
+            if (ReferenceEquals(placed.Region, region))
             {
-                region.Headers.Children.Add(command);
+                continue;
             }
 
-            region.Headers.Children.Add(close);
+            // The one move there is: taken out of the region it was in, put in the other, in that
+            // order, so it is never in two places nor in none.
+            Detach(placed);
+            Attach(placed, region);
+        }
+    }
 
-            _placed[instance] = new Placed(region, instance.View.View, title, commands, close);
+    /// <summary>Makes one dock's view and headers, which it keeps for as long as it lives.</summary>
+    private Placed Make(DockInstance instance)
+    {
+        var title = Header(instance.Title);
+        var commands = new List<Button>();
+
+        title.Click += (_, _) => Select(instance);
+
+        // Taken on the way down. A button answers for its own press, and marks it handled while
+        // doing so, so an ordinary handler here would never be called: the press is over before it
+        // reaches one. A tunnelling handler is reached first, which is the only way in.
+        title.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, e) => Take(instance, e),
+            RoutingStrategies.Tunnel
+        );
+
+        foreach (var command in instance.View.HeaderCommands)
+        {
+            var button = Header(_i18n.Get(command.LabelKey));
+            button.Click += (_, _) => command.Command();
+            commands.Add(button);
+        }
+
+        var close = Header("\u2715");
+        close.Click += (_, _) => _manager.Close(instance);
+
+        return new Placed
+        {
+            Instance = instance,
+            Region = RegionFor(instance.Placement),
+            View = instance.View.View,
+            Title = title,
+            Commands = commands,
+            Close = close,
+        };
+    }
+
+    /// <summary>Puts a dock into a region, and makes it the one the region is showing.</summary>
+    private static void Attach(Placed placed, Region region)
+    {
+        region.Content.Children.Add(placed.View);
+        region.Headers.Children.Add(placed.Title);
+
+        foreach (var command in placed.Commands)
+        {
+            region.Headers.Children.Add(command);
+        }
+
+        region.Headers.Children.Add(placed.Close);
+        placed.Region = region;
+        region.Selected = placed.Instance;
+    }
+
+    /// <summary>Takes a dock out of its region, leaving the region as if it had not been there.</summary>
+    private static void Detach(Placed placed)
+    {
+        placed.Region.Content.Children.Remove(placed.View);
+        placed.Region.Headers.Children.Remove(placed.Title);
+
+        foreach (var command in placed.Commands)
+        {
+            placed.Region.Headers.Children.Remove(command);
+        }
+
+        placed.Region.Headers.Children.Remove(placed.Close);
+
+        if (ReferenceEquals(placed.Region.Selected, placed.Instance))
+        {
+            placed.Region.Selected = null;
         }
     }
 
     /// <summary>Makes sure each region is showing one of the docks open in it.</summary>
     private void Settle()
     {
-        foreach (var region in new[] { _left, _center, _right, _bottom })
+        foreach (var region in Regions())
         {
             var open = Open(region);
 
@@ -441,11 +601,141 @@ internal sealed class DockArea : UserControl
         return window;
     }
 
-    /// <summary>Shows one dock of a region rather than the one that was shown.</summary>
-    private void Select(Region region, DockInstance instance)
+    /// <summary>Shows one dock of its region rather than the one that was shown.</summary>
+    private void Select(DockInstance instance)
     {
-        region.Selected = instance;
+        RegionFor(instance.Placement).Selected = instance;
         Show();
+    }
+
+    /// <summary>
+    /// Remembers that a drag may have started on a header.
+    /// </summary>
+    /// <remarks>
+    /// A press is not a drag: what separates the two is how far the pointer goes before it is let
+    /// go of, which is why nothing is done here but writing down where it started.
+    /// <para>
+    /// Which button asked for the gesture is settled at the release rather than here. What a
+    /// pointer event says about its own buttons at the moment of the press is not to be trusted —
+    /// reading it there is what kept the drag from starting at all — and the release knows what
+    /// began the gesture without having to be told.
+    /// </para>
+    /// </remarks>
+    private void Take(DockInstance instance, PointerPressedEventArgs e)
+    {
+        // TEMPORARY: diagnosing the drag, taken out once it is settled.
+        Console.Error.WriteLine($"rola-drag: press {instance.DockNameId}");
+
+        _dragging = instance;
+        _from = e.GetPosition(this);
+        _moved = false;
+    }
+
+    /// <summary>Lights the zone a dragged dock would land in.</summary>
+    private void OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragging is null)
+        {
+            return;
+        }
+
+        var at = e.GetPosition(this);
+
+        if (!_moved)
+        {
+            if (Distance(at, _from) < DragThreshold)
+            {
+                return;
+            }
+
+            _moved = true;
+
+            // TEMPORARY: diagnosing the drag, taken out once it is settled.
+            Console.Error.WriteLine("rola-drag: dragging");
+        }
+
+        Preview(ZoneFor(at));
+    }
+
+    /// <summary>Lands a dragged dock in the region it was let go of over.</summary>
+    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        var instance = _dragging;
+        var moved = _moved;
+        var at = e.GetPosition(this);
+        var left = e.InitialPressMouseButton == MouseButton.Left;
+
+        Cancel();
+
+        // TEMPORARY: diagnosing the drag, taken out once it is settled.
+        Console.Error.WriteLine(
+            $"rola-drag: release left={left} moved={moved} zone={ZoneFor(at)}"
+        );
+
+        // A press that never moved is a click, and selecting the dock is what a click means; a
+        // release belonging to another button ends the gesture without moving anything.
+        if (left && instance is not null && moved && ZoneFor(at) is { } placement)
+        {
+            _manager.Move(instance, placement);
+        }
+    }
+
+    /// <summary>Forgets a drag that is over, whatever ended it.</summary>
+    private void Cancel()
+    {
+        _dragging = null;
+        _moved = false;
+        Preview(null);
+    }
+
+    /// <summary>
+    /// Which region a point in the area would land a dock in.
+    /// </summary>
+    /// <remarks>
+    /// The sides and the bottom are the outer quarter of the area: what is left is the centre, so a
+    /// drag that stays in the middle goes to the middle. A point outside the area lands nowhere,
+    /// which is what letting go of a drag outside the area means.
+    /// </remarks>
+    private DockPlacement? ZoneFor(Point at)
+    {
+        var bounds = Bounds;
+
+        if (
+            bounds.Width <= 0
+            || bounds.Height <= 0
+            || at.X < 0
+            || at.Y < 0
+            || at.X > bounds.Width
+            || at.Y > bounds.Height
+        )
+        {
+            return null;
+        }
+
+        if (at.Y > bounds.Height * (1 - ZoneEdge))
+        {
+            return DockPlacement.Bottom;
+        }
+
+        if (at.X < bounds.Width * ZoneEdge)
+        {
+            return DockPlacement.Left;
+        }
+
+        return at.X > bounds.Width * (1 - ZoneEdge)
+            ? DockPlacement.Right
+            : DockPlacement.Center;
+    }
+
+    /// <summary>Shows the zones while a dock is dragged, and lights the one it would land in.</summary>
+    private void Preview(DockPlacement? placement)
+    {
+        _zones.IsVisible = placement is not null;
+
+        foreach (var (landing, zone) in _lit)
+        {
+            zone.IsVisible = placement is { } at && at == landing;
+        }
     }
 
     /// <summary>The docks open in one region, in the order they were made.</summary>
@@ -458,6 +748,9 @@ internal sealed class DockArea : UserControl
             )
             .ToList();
 
+    /// <summary>Every region of the area.</summary>
+    private Region[] Regions() => [_left, _center, _right, _bottom];
+
     /// <summary>The region a placement names.</summary>
     private Region RegionFor(DockPlacement placement) =>
         placement switch
@@ -467,6 +760,15 @@ internal sealed class DockArea : UserControl
             DockPlacement.Bottom => _bottom,
             _ => _center,
         };
+
+    /// <summary>How far apart two points are.</summary>
+    private static double Distance(Point left, Point right)
+    {
+        var x = left.X - right.X;
+        var y = left.Y - right.Y;
+
+        return Math.Sqrt((x * x) + (y * y));
+    }
 
     /// <summary>A header: a small button that names, commands, or closes a dock.</summary>
     private static Button Header(string text) =>

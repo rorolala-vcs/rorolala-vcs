@@ -177,6 +177,26 @@ internal sealed class DockManager
     }
 
     /// <summary>
+    /// Puts a dock in another region, which is what dragging its header does.
+    /// </summary>
+    /// <remarks>
+    /// A placement is the same thing a registration declares for a new dock, so one moved by hand
+    /// is written to the layout like any other and comes back where it was left.
+    /// </remarks>
+    /// <param name="instance">The dock to move.</param>
+    /// <param name="placement">The region to move it to.</param>
+    public void Move(DockInstance instance, DockPlacement placement)
+    {
+        if (instance.Placement == placement)
+        {
+            return;
+        }
+
+        instance.Placement = placement;
+        Raise();
+    }
+
+    /// <summary>
     /// Opens the docks a saved layout names, at the placements it names.
     /// </summary>
     /// <remarks>

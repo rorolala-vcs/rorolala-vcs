@@ -49,9 +49,10 @@ public partial class MainWindow : Window
         BuildMenu();
         DockAreaHost.Content = new DockArea(_services.Docks, _services.I18n);
 
-        // A dock can be closed from its tab as well as from the menu, so the checks are refreshed
-        // whenever the set of open docks changes rather than only when the menu itself is used.
-        _services.Docks.Changed += RefreshDocks;
+        // A dock can be closed, opened, or dragged to another region by hand as well as from the
+        // menu, so the checks are refreshed and the layout written whenever the docks change — a
+        // dock moved by hand is remembered from then on, not only if the run ends tidily.
+        _services.Docks.Changed += DocksChanged;
 
         Opened += (_, _) => ShowPopups();
         Closing += (_, _) => LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
@@ -128,6 +129,13 @@ public partial class MainWindow : Window
             _docks.Add((registration, entry));
             menu.Items.Add(entry);
         }
+    }
+
+    /// <summary>Keeps the menu in step with the docks, and writes the layout they came to.</summary>
+    private void DocksChanged()
+    {
+        RefreshDocks();
+        LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
     }
 
     /// <summary>Keeps the toggle checks in step with which docks are shown.</summary>
