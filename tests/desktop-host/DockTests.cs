@@ -99,10 +99,8 @@ public sealed class DockTests
         restored.Restore(saved);
 
         Assert.Equal(
-            manager.Instances.Select(instance => (instance.DockNameId, instance.Placement)).ToArray(),
-            restored.Instances
-                .Select(instance => (instance.DockNameId, instance.Placement))
-                .ToArray()
+            saved.Docks.Select(dock => (dock.DockNameId, dock.Placement)).ToArray(),
+            restored.Snapshot().Docks.Select(dock => (dock.DockNameId, dock.Placement)).ToArray()
         );
     }
 
