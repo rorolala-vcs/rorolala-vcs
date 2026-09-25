@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -188,6 +189,18 @@ internal sealed class TreeBrowser : UserControl
     /// is nothing but directories, so choosing one can only mean going to it, and the address says so
     /// the moment it happens. A step is opened by its own chevron, so opening one does not come
     /// through here.
+    /// <para>
+    /// What is clicked is the band the row is drawn in and not the word written in it, which is why the
+    /// band is given a background at all: a panel with none is not hit anywhere its children are not, so
+    /// a click on the space after a name would select the row and leave the location where it was.
+    /// </para>
+    /// <para>
+    /// The base theme opens and closes a step on a double click of a row as well, which leaves the chevron
+    /// as one of two ways rather than the way. That gesture is taken from it here, and taken from the row
+    /// rather than from the tree: the base theme's handler is on the row's own presenter — above it and
+    /// below the tree — and a gesture taken by a handler on the row is a gesture that has already been taken
+    /// by the time the presenter is reached.
+    /// </para>
     /// </remarks>
     private Control Header(string path)
     {
@@ -196,23 +209,28 @@ internal sealed class TreeBrowser : UserControl
 
         // The menu is opened by the control the row is in rather than by the row, since one of the
         // things it does — putting a path on the clipboard — is reached through a control on screen.
-        var row = new StackPanel
+        var row = new Border
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
+            Background = Brushes.Transparent,
             ContextMenu = _actions.Menu(this, entry),
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    Icons.For(entry),
+                    new TextBlock
+                    {
+                        Text = name.Length > 0 ? name : path,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
+                },
+            },
         };
 
-        row.Children.Add(Icons.For(entry));
-        row.Children.Add(
-            new TextBlock
-            {
-                Text = name.Length > 0 ? name : path,
-                VerticalAlignment = VerticalAlignment.Center,
-            }
-        );
-
         row.Tapped += (_, _) => _browser.Go(path);
+        row.DoubleTapped += (_, e) => e.Handled = true;
 
         return row;
     }

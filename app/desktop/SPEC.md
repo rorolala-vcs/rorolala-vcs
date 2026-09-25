@@ -460,7 +460,7 @@ Both are always available from `Window`.
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
 | Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): rows of names below 60%, tiles above it. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
-| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. Placed at the left by default. |
+| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. Placed at the left by default. |
 | File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and an address to type. Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
