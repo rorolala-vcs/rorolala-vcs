@@ -248,6 +248,10 @@ command line, whose user-level key directory is `rola/keys` under that root. On 
 The exact root is whatever the platform's data-directory resolution returns; `dirs` semantics
 apply, and `~/.local/share` is the Linux form only.
 
+Every file carries a `_version`, and every one of them is fixed at `1` and read by no other: the
+program is experimental, keeps nothing compatible, and a shape that changes is simply written by the
+one writer of these files (§19.4).
+
 ### 5.2 plugins.json
 
 `plugins.json` stores **user state only**. It does not list plugin paths, dependencies, contract
@@ -277,7 +281,7 @@ writes a default file. A missing file is not a validation failure; an unreadable
 
 ```json
 {
-  "_version": 2,
+  "_version": 1,
   "language": "zh-CN",
   "plugin": {
     "rorolala.file_system": { "view": "tree" }
@@ -287,7 +291,7 @@ writes a default file. A missing file is not a validation failure; an unreadable
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `_version` | integer | yes | Schema version. Currently `2`. |
+| `_version` | integer | yes | Schema version. Fixed at `1`. |
 | `language` | string | no | Fallback locale, used only when `rola desktop` passes no `-Lang:`. |
 | `plugin` | object | no | Per-plugin configuration, keyed by `PluginId`. The host does not interpret the contents. |
 
@@ -309,7 +313,7 @@ never interprets plugin keys.
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `_version` | integer | yes | Schema version. Currently `1`. |
+| `_version` | integer | yes | Schema version. Fixed at `1`. |
 | `mode` | string | no | `system`, `light` or `dark`. `system` follows the desktop and goes on following it. Defaults to `system`. |
 | `accent` | string | no | The colour anything accented is drawn in, as `#RRGGBB`. Defaults to `#BFFF00`. |
 
@@ -368,12 +372,11 @@ are:
 | # | Extension point | Registered through |
 | --- | --- | --- |
 | 1 | Languages | `IPluginHost.I18n` |
-| 2 | Themes | `IPluginHost.Themes` |
-| 3 | Context menus | `IPluginHost.ContextMenus` |
-| 4 | Navigation buttons | `IPluginHost.Navigation` |
-| 5 | Docks | `IPluginHost.Docks` |
-| 6 | Open hooks and icon badges | `IPluginHost.OpenHooks`, `IPluginHost.IconBadges` |
-| 7 | Top menu | `IPluginHost.Menu` |
+| 2 | Context menus | `IPluginHost.ContextMenus` |
+| 3 | Navigation buttons | `IPluginHost.Navigation` |
+| 4 | Docks | `IPluginHost.Docks` |
+| 5 | Open hooks and icon badges | `IPluginHost.OpenHooks`, `IPluginHost.IconBadges` |
+| 6 | Top menu | `IPluginHost.Menu` |
 
 Registration happens during `Initialize`. A plugin registered after the window is shown is not
 supported.
@@ -420,12 +423,7 @@ See Section 8.
 
 See Section 9.
 
-### 6.8 Themes
-
-A plugin may register an `IThemeProvider` (Section 10). The selected theme is named in
-`preference.json`.
-
-### 6.9 Languages
+### 6.8 Languages
 
 A plugin registers a translation directory (Section 11). It may also register additional locales
 for a language picker.
@@ -647,8 +645,12 @@ exists for plugins that react to a completed open.
   templates, its accent family. Simple decides little, so a theme on top of it says what it means. What
   that costs is that Simple draws little of its own: a hover it does not draw is a hover nobody draws,
   and what the design below does not state is left plain.
-- The theme named by `preference.json` is applied as an **overlay** on top of the base.
-- `RorolalaTheme` is a **built-in** theme provider, not a plugin. It is the default value of `theme`.
+- The look is **one thing and it is not extensible**. There is no theme extension point: a plugin
+  cannot supply one, and the look is not chosen by id. `RorolalaTheme` is applied as an **overlay** on
+  top of the base, and it is the only overlay there is.
+- What a run chooses is two things and no more (Section 5.4): the **variant** it is drawn in and the
+  **accent**. Everything else in this section is stated rather than configured, which is what makes two
+  runs of the program look like one program.
 - The design is Win10-flat:
   - **Rectangles.** Nothing is rounded; every surface has a `CornerRadius` of zero.
   - **One-pixel edges.** Anything with an outline wears a 1 px `BorderThickness`, in the 20 % ink of
@@ -664,16 +666,19 @@ exists for plugins that react to a completed open.
   - **Close is the one red thing.** The close button at the end of a strip draws nothing until the
     pointer is on it, and then fills with the red a close is everywhere. It is the only colour in the
     program that is not the accent or a tint of the variant's ink.
-- The accent is **lemon green** — `#BFFF00`, at the base theme's own alphas for its washes
-  (`#99BFFF00`, `#66BFFF00`, `#33BFFF00`), darkened to `#A6E000` where the base theme wants a second
-  highlight. It is written into **the base theme's own accent resources** rather than applied control
-  by control, so that a selected row, a checked box and a selection of text are all lemon from one
-  definition. The ink on the accent needs a rule of its own: the base theme writes white on it, which
-  on lemon is 1.2:1, so everything the accent fills is written in near-black (`#121A00`, 14.9:1).
-- The three tints the chrome is drawn with are **the theme's own**, because the base theme has none to
+- The accent is **the one colour the user chooses** in `theme.json`, lemon (`#BFFF00`) until it is
+  changed. Everything accented is derived from it and nothing else is: the base theme's accent family
+  at the base theme's own alphas (`#99…`, `#66…`, `#33…`), the held state one step down (87 % of each
+  channel, which on lemon is `#A6DE00`), and the ink written on it. It is written into **the base
+  theme's own accent resources** rather than applied control by control, so that a selected row, a
+  checked box and a selection of text are all the accent from one definition.
+- The ink on the accent is **black or white, whichever can be read on it**, worked out by contrast
+  ratio. The base theme writes white there, which is right for the blue it was written for and wrong
+  for anything light — and which colour the accent is belongs to the user, so it cannot be stated here.
+- The three tints the chrome is drawn with are **the look's own**, because the base theme has none to
   borrow: every neutral it ships is opaque, and a band of chrome has to be a tint of whatever is behind
   it to sit on the window and on the content alike. Each is keyed per variant, as that variant's ink.
-- The type is **Inter**, which the program ships. The theme names it through the font collection
+- The type is **Inter**, which the program ships. The look names it through the font collection
   (`fonts:Inter#Inter`), because a family name on its own is looked for among the system's fonts, is
   not there, and falls back silently to the platform's face.
 - **Motion** is colour and opacity only, never position or size, and never longer than 150 ms: every
@@ -682,8 +687,8 @@ exists for plugins that react to a completed open.
   growing `Application.Styles` after elements have been styled makes the base theme's setters win on
   those elements on the re-application that follows, so an overlay added late stops applying to
   everything already on screen, and says nothing about it.
-- The shell marks the surfaces a theme may address. The marks are part of this section, because a
-  theme a plugin supplies has to write them as literals:
+- The shell marks the surfaces it owns, so that the look addresses them without knowing what a dock
+  is. A plugin drawing into one of those surfaces may take the same marks:
 
   | Class | On |
   | --- | --- |
@@ -696,25 +701,21 @@ exists for plugins that react to a completed open.
   | `dock-splitter-columns` / `dock-splitter-rows` | The same grab, saying which way it resizes. |
   | `dock-drop-zone` | Where a dragged dock would land. |
 
-  The drop zone is the one mark a theme need not style. The dock area asks the base theme for its
+  The drop zone is the one mark the look need not style. The dock area asks the base theme for its
   accent and for that accent at its faintest by name, because a drag affordance has to be visible
-  under a theme that says nothing about it; what a theme supplies is the edge it wears and the fade it
-  arrives with. Those two names are the base theme's, so the dock area names the base theme as surely
-  as if it named its type: a base with different resource names would leave the drop zone without an
-  edge, and nothing would say so.
+  whether or not the look says anything about it; what the look gives it is the edge it wears and the
+  fade it arrives with. Those two names are the base theme's, so the dock area names the base theme as
+  surely as if it named its type: a base with different resource names would leave the drop zone
+  without an edge, and nothing would say so.
 
   A splitter draws nothing until the pointer is on it, and then a hairline of the accent through its
   middle. The grab is four pixels wide, which is what it has to stay for a hand to find it, and a line
   that wide would be a bar; so the hairline is drawn inside the grab rather than being it, and the
-  class says which way it runs. A theme that styles neither of the two classes leaves the splitter a
+  class says which way it runs. A look that styles neither of the two classes leaves the splitter a
   bare grab with nothing to see, which is what the base theme alone does.
 
-- A plugin-provided theme is treated identically to a built-in theme; only its origin differs.
-- The value `"simple"` selects SimpleTheme with no overlay. A `preference.json` still naming
-  `"fluent"` — the base theme's name before Section 10 changed it — stops the program with code `3`,
-  since no provider supplies it.
-- If the named theme has no provider, the program exits with code `3` (Section 5.5).
-- A theme change takes effect on the next start.
+- A change to `theme.json` takes effect on the **next start**. The look is applied once, before the
+  window is made.
 
 ## 11. Internationalization
 
@@ -766,8 +767,8 @@ exists for plugins that react to a completed open.
 
 ### 14.1 Fatal failures
 
-Fatal failures are those in Section 5.4. They write a reason to standard error and exit with the
-code from Section 5.5. The program does not attempt to show a window, and it does not fall back to
+Fatal failures are those in Section 5.5. They write a reason to standard error and exit with the
+code from Section 5.6. The program does not attempt to show a window, and it does not fall back to
 a default configuration. This is deliberate: a silently ignored configuration error is worse than
 a loud stop, and the files are plain JSON that a person can edit.
 
@@ -818,11 +819,20 @@ They are reported in the Log dock and, where the user must act, in a popup.
 ```jsonc
 {
   "_version": 1,
-  "theme": "rorolala.theme.default",   // or "simple", or a plugin theme id
   "language": "zh-CN",                 // fallback only
   "plugin": {
     "<PluginId>": { "<key>": "<value>" }
   }
+}
+```
+
+### theme.json
+
+```jsonc
+{
+  "_version": 1,
+  "mode": "system",     // system | light | dark
+  "accent": "#BFFF00"   // #RRGGBB
 }
 ```
 
@@ -831,6 +841,7 @@ They are reported in the Log dock and, where the user must act, in a popup.
 ```text
 <user data dir>/rola/desktop/plugins.json
 <user data dir>/rola/desktop/preference.json
+<user data dir>/rola/desktop/theme.json
 ```
 
 ## 16. Contract Reference
@@ -866,7 +877,6 @@ public interface IPluginHost
     IDockRegistry Docks { get; }
     IOpenHookRegistry OpenHooks { get; }
     IIconBadgeRegistry IconBadges { get; }
-    IThemeRegistry Themes { get; }
 }
 
 public interface II18n
@@ -957,12 +967,6 @@ public interface IIconBadgeProvider
 }
 
 public sealed record Badge(int Position, string IconKey);
-
-public interface IThemeProvider
-{
-    string ThemeId { get; }
-    IReadOnlyList<Avalonia.Styling.IStyle> Styles { get; }
-}
 ```
 
 ## 17. Feel and Interaction Craft
@@ -992,12 +996,19 @@ Agreed so far:
 
 ## 19. Open Items
 
-1. `RorolalaTheme`'s design is settled as far as Section 10 states it — Win10-flat, lemon accent,
-   colour-only motion — but it is a first pass at the details (which surfaces take an edge, how dense
-   the rows are) and is to be revised with the user.
+1. The look's design is settled as far as Section 10 states it — Win10-flat, colour-only motion, the
+   accent the user's to choose — but it is a first pass at the details (which surfaces take an edge,
+   how dense the rows are) and is to be revised with the user.
 2. The concrete feel criteria (Section 17), to be agreed with the user.
-3. The contract assembly versioning policy: increment rule and compatibility range.
-4. The JSON schema versioning policy for `plugins.json` and `preference.json`.
+3. The contract assembly versioning policy: increment rule and compatibility range. Nothing is done
+   about it yet, and by decision: the program is experimental, the one plugin that is built with it is
+   built from this tree, and removing the theme extension point therefore moved no version. The host
+   still compares `Major.Minor.Build` exactly, so a plugin built against any other revision is refused.
+4. The JSON schema versioning policy for `plugins.json`, `preference.json` and `theme.json`, and
+   decided for now: **every file's `_version` is fixed at `1`, and the host reads no other**. The
+   program is experimental and keeps nothing compatible, so a number that counted shape changes would
+   count changes nobody needs warning about; a shape that changes is written by the one writer of these
+   files, under the same `_version`.
 5. The persisted dock-layout file format (placement and sizes per `DockNameId` and ordinal).
 
 ## 20. References

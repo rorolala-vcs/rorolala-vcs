@@ -14,6 +14,11 @@ namespace RorolalaDesktop.Configuration;
 /// something this program does not support stops the program with a reason on standard error
 /// (Section 14.1), because a silently ignored configuration error is worse than a loud stop.
 /// <para>
+/// Every file's <c>_version</c> is fixed at the lowest one and the host reads no other, because
+/// nothing is kept compatible at this stage: a shape that changes is a shape the one writer of these
+/// files writes, and there is no older shape left to read (Section 19.4).
+/// </para>
+/// <para>
 /// The JSON is read a property at a time rather than deserialized into a type, so that a repeated
 /// key — which a deserializer would quietly keep the last of — is caught and refused.
 /// </para>

@@ -86,7 +86,7 @@ internal sealed class PluginsConfiguration
 internal sealed class PreferenceConfiguration
 {
     /// <summary>The schema version this program reads and writes.</summary>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 1;
 
     /// <summary>The locale used when neither the command line nor the file names one.</summary>
     public const string DefaultLanguage = "en";

@@ -27,7 +27,7 @@ public sealed class ConfigurationTests
         Assert.Equal("en", preference.Language);
         Assert.True(File.Exists(ConfigPaths.Preference));
         Assert.Contains(
-            "\"_version\": 2",
+            "\"_version\": 1",
             File.ReadAllText(ConfigPaths.Preference),
             StringComparison.Ordinal
         );
@@ -215,7 +215,7 @@ public sealed class ConfigurationTests
     {
         Given(
             ConfigPaths.Preference,
-            """{"_version": 2, "plugin": {"it.alpha": {"view": "tree", "depth": 4, "flat": false}}}"""
+            """{"_version": 1, "plugin": {"it.alpha": {"view": "tree", "depth": 4, "flat": false}}}"""
         );
 
         var preference = ConfigurationLoader.LoadPreference();
