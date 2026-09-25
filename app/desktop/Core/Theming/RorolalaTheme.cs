@@ -363,7 +363,13 @@ internal sealed class RorolalaTheme : IThemeProvider
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
                 new Setter(Layoutable.MinHeightProperty, RowHeight),
                 new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge)
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                // A field is a row tall and the ink in it is one line, so the two are not the same height, and
+                // the base theme aligns the whole of a field's content by this: left as it comes, the line
+                // stands at the top of the box. Left alone across, since that same alignment sizes the field's
+                // content where it is set — narrowed to the text, the field would no longer be typed in past
+                // its end.
+                new Setter(TextBox.VerticalContentAlignmentProperty, VerticalAlignment.Center)
             ),
             On(
                 selector => selector.OfType<ComboBox>(),
