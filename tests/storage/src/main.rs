@@ -18,11 +18,11 @@ use librorolala::storage::{
     AlgorithmChoice, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout, RorolalaStorage,
     StorageBackend as _, internals::Internals as _, store_file,
 };
-use rorolala_utils_sandbox::Sandbox;
+use rorolala_utils_sandbox::{Guard, Sandbox};
 
 #[tokio::main]
 async fn main() {
-    let sandbox = Sandbox::new("storage");
+    let sandbox = Guard::new("storage");
     let store = RorolalaStorage::create(sandbox.join("store"));
     let mut checked = Checked::default();
 
@@ -38,7 +38,6 @@ async fn main() {
     a_cut_content_whose_chunk_is_gone_is_named_but_not_held(&sandbox, &mut checked).await;
     content_that_does_not_hold_together_is_refused(&sandbox, &mut checked).await;
 
-    sandbox.cleanup();
     checked.report();
 }
 

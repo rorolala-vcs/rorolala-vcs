@@ -20,7 +20,7 @@ use std::time::Duration;
 use librorolala::storage::{Codec, Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vault::{CONFIG_PATH, KEYS_DIR, Vault, locate_vault};
 use librorolala::workspace::{Workspace, locate_workspace};
-use rorolala_utils_sandbox::{Sandbox, Serving, command, run, serve};
+use rorolala_utils_sandbox::{Guard, Serving, command, run, serve};
 
 /// The port the Vault serves on.
 const PORT: u16 = 7931;
@@ -36,7 +36,7 @@ const STARTUP: Duration = Duration::from_secs(10);
 
 #[tokio::main]
 async fn main() {
-    let sandbox = Sandbox::new("storage-sync");
+    let sandbox = Guard::new("storage-sync");
     // Where the program keeps what it keeps for itself, so that a run of it here touches nothing
     // the machine's own runs keep.
     let data = sandbox.join("data");
@@ -107,7 +107,6 @@ async fn main() {
     );
 
     let (Some(plain), Some(cut)) = (plain, cut) else {
-        sandbox.cleanup();
         checked.report();
         unreachable!("a run without the keys it needs has been reported");
     };
@@ -240,7 +239,6 @@ async fn main() {
     );
 
     serving.stop();
-    sandbox.cleanup();
     checked.report();
 }
 

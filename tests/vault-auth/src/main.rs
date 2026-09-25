@@ -20,7 +20,7 @@ use librorolala::auth::{Account, KeyLocateRule, find_account};
 use librorolala::daemon::action_handshake;
 use librorolala::vault::{CONFIG_PATH, KEYS_DIR, VAULTS_DIR, Vault};
 use librorolala::workspace::{Workspace, locate_workspace};
-use rorolala_utils_sandbox::{Sandbox, Serving, command, run, serve};
+use rorolala_utils_sandbox::{Guard, Serving, command, run, serve};
 
 /// The port the root Vault serves on.
 const ROOT_PORT: u16 = 7911;
@@ -32,7 +32,7 @@ const ALPHA_PORT: u16 = 7912;
 const STARTUP: Duration = Duration::from_secs(10);
 
 fn main() {
-    let sandbox = Sandbox::new("vault-auth");
+    let sandbox = Guard::new("vault-auth");
     let root = sandbox.join("root");
     let alpha = root.join(VAULTS_DIR).join("alpha");
     let workspace = sandbox.join("ws");
@@ -113,7 +113,6 @@ fn main() {
         serving.stop();
     }
 
-    sandbox.cleanup();
     checked.report();
 }
 

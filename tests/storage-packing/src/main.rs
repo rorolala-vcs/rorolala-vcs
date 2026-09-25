@@ -17,11 +17,11 @@ use librorolala::storage::{
     AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_MAGIC, Key, Lockable as _, PackEntry,
     PackIndex, RorolalaStorage, StorageBackend as _, internals::Internals as _,
 };
-use rorolala_utils_sandbox::Sandbox;
+use rorolala_utils_sandbox::{Guard, Sandbox};
 
 #[tokio::main]
 async fn main() {
-    let sandbox = Sandbox::new("storage-packing");
+    let sandbox = Guard::new("storage-packing");
     let mut checked = Checked::default();
 
     packing_moves_objects_into_a_pack(&sandbox, &mut checked).await;
@@ -52,7 +52,6 @@ async fn main() {
     repacking_numbers_the_packs_from_nothing(&sandbox, &mut checked).await;
     rewriting_packed_content_leaves_it_packed(&sandbox, &mut checked).await;
 
-    sandbox.cleanup();
     checked.report();
 }
 

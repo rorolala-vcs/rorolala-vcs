@@ -8,8 +8,8 @@ of its own to write files in, the programs themselves, and a way to start one th
 and stop it again. That is what this crate is — the part of running a program that every
 suite does, kept in one place so that a suite is only what it is checking.
 
-A [`Sandbox`] is the directory: named after the suite, emptied when it is made and removed
-when [`Sandbox::cleanup`] is called, so a rerun starts clean and a run leaves nothing
-behind. The programs come from [`bin_dir`], and [`command`], [`run`] and [`serve`] turn
-one of them into a command, a finished run whose output can be read, or a process that is
-still serving.
+A [`Sandbox`] is the directory: named after the suite, emptied when [`Guard::new`] makes it
+and removed when the [`Guard`] it is made into goes out of scope, so a rerun starts clean
+and a run leaves nothing behind. The programs come from [`bin_dir`], and [`command`],
+[`run`] and [`serve`] turn one of them into a command, a finished run whose output can be
+read, or a process that is still serving — which [`Serving`] is the guard for.

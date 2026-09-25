@@ -7,6 +7,7 @@
 
 use std::fs;
 use std::net::{TcpStream, ToSocketAddrs};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -116,27 +117,13 @@ pub fn serve(command: &mut Command, at: impl ToSocketAddrs, within: Duration) ->
 /// A directory of its own for one suite's run.
 ///
 /// It is named after the suite and the process, so two runs at once do not meet, and it is
-/// emptied when it is made, so a rerun starts clean.
+/// emptied when it is made, so a rerun starts clean. A suite never holds one directly: it is
+/// [`Guard::new`] that makes one, and holding the guard is what keeps it.
 pub struct Sandbox {
     dir: PathBuf,
 }
 
 impl Sandbox {
-    /// Makes a sandbox for the suite named `label`, emptied first so a rerun starts clean.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the directory cannot be made, which no suite can get past anyway.
-    #[must_use]
-    pub fn new(label: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("rolavcs-{label}-{}", std::process::id()));
-
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("the sandbox");
-
-        Self { dir }
-    }
-
     /// The directory itself.
     #[must_use]
     pub fn dir(&self) -> &Path {
@@ -148,13 +135,56 @@ impl Sandbox {
     pub fn join(&self, path: impl AsRef<Path>) -> PathBuf {
         self.dir.join(path)
     }
+}
 
-    /// Removes the sandbox and everything in it.
+/// A sandbox that takes itself away when it goes out of scope.
+///
+/// It is what a suite holds while it works, so a directory is never left behind by a suite that
+/// forgot to say so: the sandbox goes when the guard does, whether the suite returned, returned
+/// early, or unwound out of a panic.
+///
+/// It is the same shape as [`Serving`], which stops the program it started when it goes out of
+/// scope — a guard is how the part that has to happen afterwards is made to happen whatever
+/// happens first. What is reached through the guard is the sandbox it holds, handed out as the
+/// sandbox it is.
+pub struct Guard {
+    sandbox: Sandbox,
+}
+
+impl Guard {
+    /// Makes a sandbox for the suite named `label`, emptied first so a rerun starts clean.
     ///
-    /// It is asked for rather than done when the sandbox goes out of scope, so that a suite
-    /// that panicked leaves behind whatever it had made to be looked at.
-    pub fn cleanup(self) {
-        let _ = fs::remove_dir_all(&self.dir);
+    /// A sandbox is only ever held as the guard over it, so there is no way to have one that
+    /// nothing takes away: the directory lives exactly as long as the guard does. Everything a
+    /// suite writes is written through the guard, and the whole directory goes when it goes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the directory cannot be made, which no suite can get past anyway.
+    #[must_use]
+    pub fn new(label: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("rolavcs-{label}-{}", std::process::id()));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("the sandbox");
+
+        Self {
+            sandbox: Sandbox { dir },
+        }
+    }
+}
+
+impl Deref for Guard {
+    type Target = Sandbox;
+
+    fn deref(&self) -> &Self::Target {
+        &self.sandbox
+    }
+}
+
+impl Drop for Guard {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.sandbox.dir);
     }
 }
 
@@ -225,18 +255,20 @@ impl Drop for Serving {
 
 #[cfg(test)]
 mod tests {
-    use super::Sandbox;
+    use super::Guard;
 
     #[test]
     fn a_sandbox_is_made_empty_and_taken_away_whole() {
-        let sandbox = Sandbox::new("a-sandbox-is-made-empty-and-taken-away-whole");
-        assert!(sandbox.dir().is_dir());
-        assert_eq!(sandbox.dir().read_dir().expect("the sandbox").count(), 0);
+        let dir = {
+            let sandbox = Guard::new("a-sandbox-is-made-empty-and-taken-away-whole");
+            assert!(sandbox.dir().is_dir());
+            assert_eq!(sandbox.dir().read_dir().expect("the sandbox").count(), 0);
 
-        std::fs::write(sandbox.join("kept"), b"x").expect("writing in the sandbox");
-        let dir = sandbox.dir().to_path_buf();
-        sandbox.cleanup();
+            std::fs::write(sandbox.join("kept"), b"x").expect("writing in the sandbox");
 
-        assert!(!dir.exists());
+            sandbox.dir().to_path_buf()
+        };
+
+        assert!(!dir.exists(), "the sandbox goes when the guard does");
     }
 }
