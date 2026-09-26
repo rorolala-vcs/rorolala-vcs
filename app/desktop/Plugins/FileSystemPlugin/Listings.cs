@@ -1148,6 +1148,18 @@ internal sealed class ListBrowser : EntryView
     /// </remarks>
     private const int NameColumn = 1;
 
+    /// <summary>
+    /// How much room is left above and below each row, and below the last of them.
+    /// </summary>
+    /// <remarks>
+    /// The room is not only looks: a frame (§7.7) is begun where no entry is, so a table whose rows met edge
+    /// to edge would be a table a frame could never start in — every point would be on a row. It is left on
+    /// the **item** rather than inside it, for the reason the grid leaves it there (§7.5): an item's own area
+    /// is what answers the pointer, so room left inside it is room it still covers. It is left vertically
+    /// only, since room at the sides would carry the columns away from the headings standing over them.
+    /// </remarks>
+    private const int Gap = 3;
+
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
     private readonly Column[] _values = Values();
 
@@ -1172,8 +1184,17 @@ internal sealed class ListBrowser : EntryView
 
         // The header is not in the list, so the list's own inset would push every row's columns one way and
         // leave the header's where they were — a table whose headings stand a few pixels off their data.
-        // Both are inset by their list item alone, which is what puts them on the same line.
-        List.Padding = new Thickness(0);
+        // Both are inset by their list item alone, which is what puts them on the same line. What is left is
+        // room below the last row for a frame to begin in.
+        List.Padding = new Thickness(0, 0, 0, Gap);
+
+        // Room between the rows, on the item rather than inside it, and vertical only.
+        List.Styles.Add(
+            new Style(selector => selector.OfType<ListBoxItem>())
+            {
+                Setters = { new Setter(Layoutable.MarginProperty, new Thickness(0, Gap, 0, Gap)) },
+            }
+        );
 
         var header = Header();
 
@@ -1494,6 +1515,18 @@ internal sealed class GridBrowser : EntryView
     private const int Around = 10;
 
     /// <summary>
+    /// How much room is left around each tile, and so between one and the next.
+    /// </summary>
+    /// <remarks>
+    /// The room is not only looks: a frame (§7.7) is begun where no entry is, so a grid whose tiles met
+    /// edge to edge would be a grid a frame could never start in — every point would be on a tile. It is left
+    /// on the **item** rather than on the tile drawn inside it, because it is the item's own area that answers
+    /// the pointer: room left on what the item holds is room the item still covers, and a frame begun there
+    /// would be a frame begun on the entry.
+    /// </remarks>
+    private const int Gap = 6;
+
+    /// <summary>
     /// What a tile is filled with while the pointer is over it, where the theme names no tint of its own.
     /// </summary>
     /// <remarks>
@@ -1533,18 +1566,20 @@ internal sealed class GridBrowser : EntryView
         // horizontal scroll is taken off here, which is what makes the panel wrap.
         ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
 
-        // Tiles state their own spacing, so the list's own inset comes off as well; it is the table that
-        // wants the inset's alignment with its header, not this.
-        List.Padding = new Thickness(0);
+        // Tiles state their own spacing, so the list's own inset becomes that spacing rather than the
+        // table's: it is the table that wants the inset's alignment with its header, not this. What is left is
+        // a band around the whole grid for a frame to begin in.
+        List.Padding = new Thickness(Gap);
 
-        // A tile is its own target, so the list item's inset is taken off: an inset here would space the
-        // tiles by a number the table chose, and a wrapped grid states its own.
+        // A tile is its own target, so the list item's inset is taken off; and the room between tiles is
+        // left here, on the item, rather than on the tile it holds.
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
                 Setters =
                 {
                     new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(Gap)),
                     new Setter(Layoutable.MinHeightProperty, 0.0),
                 },
             }
@@ -1605,7 +1640,6 @@ internal sealed class GridBrowser : EntryView
         var tile = new Border
         {
             Padding = new Thickness(Around),
-            Margin = new Thickness(4),
             Child = new StackPanel
             {
                 Spacing = 6,

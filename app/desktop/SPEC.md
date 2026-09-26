@@ -497,6 +497,14 @@ All three are always available from `Window`.
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
 
+**The entries are laid out with room between them**: the tiles apart on both axes, the rows of the table
+apart vertically, and the room below the last row as well. That room is not only looks — selection needs
+there to be a place an entry is not, or a frame could never be begun (§7.7) — and it is left on the
+**item** the toolkit's list holds each entry in rather than on what that item draws, because it is the
+item's own area that answers the pointer: room left inside an item is room the item still covers. Room at
+the sides of a row is not left at all, since it would carry the row's columns away from the headings
+standing over them.
+
 A tree is a dock of its own rather than a third layout of the directory dock. A tree is not another
 way of reading one directory — it is a way of walking the ones under a place, and it is rooted at the
 base, which the location is not — so the two belong on screen at once, and neither is a mode of the
@@ -587,8 +595,9 @@ the window and the docks and knows nothing of entries.
   `Shift` takes everything between the entry the pointer or keyboard last landed on and the one
   clicked, in the order the listing shows. Chosen entries are filled with the accent (§10). Clicking
   the **space around the entries** drops the choice, and dragging from there draws a **frame** — a band
-  in the accent — and chooses every entry it covers as it is drawn. Right-clicking keeps an existing
-  choice when the entry is already in it, so a menu can be opened on a set.
+  in the accent — and chooses every entry it covers as it is drawn. The entries are spaced apart so that
+  there is such a space between them (§7.5). Right-clicking keeps an existing choice when the entry is
+  already in it, so a menu can be opened on a set.
 - **The keyboard.** Arrow keys step — in the table one row at a time, in the tiles one tile across and
   one row down, so the arrows mean where the eye goes rather than the next index. `Home` and `End` go
   to the ends of the listing, `PageUp` and `PageDown` by a screenful. `Shift` extends from where the
