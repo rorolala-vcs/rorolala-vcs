@@ -22,7 +22,7 @@ namespace RorolalaFSAgent;
 internal sealed record ThemeChoice(ThemeVariant Variant, Color Primary)
 {
     /// <summary>The primary used when the file names none: the Desktop's own default.</summary>
-    private static readonly Color DefaultPrimary = Color.FromRgb(0x00, 0xBC, 0xD4);
+    private static readonly Color DefaultPrimary = Color.FromRgb(0xB2, 0xEB, 0xF2);
 
     /// <summary>Reads the look from the Desktop's data directory, defaulting where it cannot.</summary>
     public static ThemeChoice Load()

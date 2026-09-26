@@ -312,9 +312,9 @@ written by hand still works. The program writes this file when the user changes 
 {
   "_version": 1,
   "mode": "system",
-  "primary": "#B5E61D",
-  "primaryText": "#1B2600",
-  "accent": "#5CC8FF"
+  "primary": "#B2EBF2",
+  "primaryText": "#0E2427",
+  "accent": "#F8BBD0"
 }
 ```
 
@@ -322,9 +322,9 @@ written by hand still works. The program writes this file when the user changes 
 | --- | --- | --- | --- |
 | `_version` | integer | yes | Schema version. Fixed at `1`. |
 | `mode` | string | no | `system`, `light` or `dark`. `system` follows the desktop and goes on following it. Absent means `system`. |
-| `primary` | string | no | The colour what is chosen is drawn in, as `#RRGGBB`. Absent means `#B5E61D`. |
+| `primary` | string | no | The colour what is chosen is drawn in, as `#RRGGBB`. Absent means `#B2EBF2`. |
 | `primaryText` | string | no | What is written on a surface filled with the primary, as `#RRGGBB`. Absent means the look works it out by contrast (Section 10). |
-| `accent` | string | no | The colour the drag marks are drawn in, as `#RRGGBB`. Absent means `#5CC8FF`. |
+| `accent` | string | no | The colour the drag marks are drawn in, as `#RRGGBB`. Absent means `#F8BBD0`. |
 
 Every field is optional, and **a field that is not there is the default rather than a choice of it**
 (Section 10). That is what makes taking a choice back possible: the panel's *Reset* removes the field
@@ -844,7 +844,7 @@ exists for plugins that react to a completed open.
 - The type is **the platform's own**, as the design uses it. The program ships no face, so two machines
   showing the same colours are the same program either way.
 - **The ink on the primary** is the one the file names if it names one, and black or white by contrast
-  ratio if it does not. The design names its own — a green-black rather than a plain black on a lime —
+  ratio if it does not. The design names its own — a dark tone of its own hue rather than a plain black —
   which is why it is a field rather than a rule.
 - **Motion** is colour and opacity only, never position or size, and everything takes **120 ms**: a hover,
   a press, a drop zone lighting up, a field taking focus. There is no longer move; a chosen row arrives
@@ -1014,9 +1014,9 @@ They are reported in the Log dock and, where the user must act, in a popup.
 {
   "_version": 1,
   "mode": "system",      // system | light | dark, or absent for the default
-  "primary": "#B5E61D",  // #RRGGBB, or absent for the default
-  "primaryText": "#1B2600", // #RRGGBB, or absent to have the look work it out
-  "accent": "#5CC8FF"    // #RRGGBB, or absent for the default
+  "primary": "#B2EBF2",  // #RRGGBB, or absent for the default
+  "primaryText": "#0E2427", // #RRGGBB, or absent to have the look work it out
+  "accent": "#F8BBD0"    // #RRGGBB, or absent for the default
 }
 ```
 

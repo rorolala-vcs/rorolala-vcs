@@ -49,29 +49,28 @@ internal sealed class ThemeConfiguration
     /// The primary used when the file names none.
     /// </summary>
     /// <remarks>
-    /// The lime of the design this look comes from, so that a run with no file is the look the design
-    /// was drawn in.
+    /// A pale cyan: a light, quiet brand colour that the ink on it can be read against.
     /// </remarks>
-    public static readonly Color DefaultPrimary = Color.FromRgb(0xB5, 0xE6, 0x1D);
+    public static readonly Color DefaultPrimary = Color.FromRgb(0xB2, 0xEB, 0xF2);
 
     /// <summary>
     /// The accent used when the file names none.
     /// </summary>
     /// <remarks>
-    /// A sky blue, and the second colour of the design's own palette. It is spent only on the marks a
-    /// drag draws, never on a selection, so that a mark can always be told from a choice.
+    /// A pale pink, and spent only on the marks a drag draws — never on a selection, so that a mark can
+    /// always be told from a choice.
     /// </remarks>
-    public static readonly Color DefaultAccent = Color.FromRgb(0x5C, 0xC8, 0xFF);
+    public static readonly Color DefaultAccent = Color.FromRgb(0xF8, 0xBB, 0xD0);
 
     /// <summary>
-    /// What is written on the primary when the file names none: a near-black green.
+    /// What is written on the primary when the file names none.
     /// </summary>
     /// <remarks>
-    /// The design names its own ink for its own primary rather than working one out, and a green-black
-    /// on a lime reads better than a black. A primary the user chooses has no such name, so the look
+    /// A dark tone of the primary's own hue, the way the design this look comes from names its own ink for
+    /// its own lime rather than working one out. A primary the user chooses has no such name, so the look
     /// works one out by contrast when the file states none (Section 10).
     /// </remarks>
-    public static readonly Color DefaultPrimaryText = Color.FromRgb(0x1B, 0x26, 0x00);
+    public static readonly Color DefaultPrimaryText = Color.FromRgb(0x0E, 0x24, 0x27);
 
     /// <summary>The variant the program is drawn in, or nothing when the file names none.</summary>
     public ColorMode? Mode { get; set; }
