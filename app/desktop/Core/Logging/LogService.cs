@@ -46,6 +46,21 @@ internal sealed class LogService
         Entries.Add(entry);
     }
 
+    /// <summary>
+    /// Empties the log.
+    /// </summary>
+    /// <remarks>
+    /// What has been counted stays counted: the table distinctness is decided from is shared with
+    /// popups, and emptying it would make a notification the user has already been shown appear again. A
+    /// line said again after a clear therefore reads with the count it had, which is the price of one
+    /// table rather than two (Section 14.3).
+    /// </remarks>
+    public void Clear()
+    {
+        _byKey.Clear();
+        Entries.Clear();
+    }
+
     /// <summary>The log as one plugin sees it, naming the plugin on every line.</summary>
     /// <param name="source">The plugin's identity or display name.</param>
     /// <returns>A log that writes as that source.</returns>

@@ -23,15 +23,23 @@ internal sealed class LogDock : IDockView
     /// <summary>The view this dock shows.</summary>
     private readonly LogView _view;
 
+    /// <summary>The log the view is over, which the one command here acts on.</summary>
+    private readonly LogService _log;
+
     /// <summary>Makes the dock over the log it shows.</summary>
     /// <param name="log">The host's log.</param>
-    public LogDock(LogService log) => _view = new LogView(log);
+    public LogDock(LogService log)
+    {
+        _log = log;
+        _view = new LogView(log);
+    }
 
     /// <inheritdoc />
     public Control View => _view;
 
     /// <inheritdoc />
-    public IReadOnlyList<DockHeaderCommand> HeaderCommands => [];
+    public IReadOnlyList<DockHeaderCommand> HeaderCommands =>
+        [new DockHeaderCommand("log.clear", _log.Clear)];
 }
 
 /// <summary>The Log dock's control: each distinct line once, with its repeat count.</summary>

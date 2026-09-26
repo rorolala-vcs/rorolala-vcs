@@ -91,14 +91,35 @@ internal abstract class EntryView : UserControl
     private Point _framedAt;
     private bool _mayFrame;
 
-    /// <summary>Whether a frame is being drawn, and the band it is drawn with.</summary>
+    /// <summary>Whether a frame is being drawn.</summary>
     private bool _framing;
-    private readonly Border _band = new()
+
+    /// <summary>The band a frame is drawn with.</summary>
+    private readonly Border _band = Band();
+
+    /// <summary>
+    /// The band a frame is drawn with: a border of the primary and a wash of it inside.
+    /// </summary>
+    /// <remarks>
+    /// Both are bound rather than read, because a resource read where the view is built is read before
+    /// the view is anywhere a theme reaches — and a band that fell back to a colour of its own would be a
+    /// second answer to what the primary is.
+    /// </remarks>
+    private static Border Band()
     {
-        IsVisible = false,
-        IsHitTestVisible = false,
-        BorderThickness = new Thickness(1),
-    };
+        var band = new Border
+        {
+            IsVisible = false,
+            IsHitTestVisible = false,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5),
+        };
+
+        band[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.primary");
+        band[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.selection");
+
+        return band;
+    }
 
     /// <summary>What the band is drawn over, filling the view and taking no pointer of its own.</summary>
     private readonly Canvas _over = new() { IsHitTestVisible = false };
@@ -202,8 +223,14 @@ internal abstract class EntryView : UserControl
     /// <summary>The entry the pointer or the keyboard last landed on, or nothing before either has.</summary>
     protected Entry? Lead => _lead >= 0 && _lead < Browser.Shown.Count ? Browser.Shown[_lead] : null;
 
-    /// <summary>The room the panel leaves around what it holds, which is the design's own padding.</summary>
-    protected virtual Thickness PanelPadding => new(24, 16, 24, 60);
+    /// <summary>
+    /// How much room a view leaves around what it draws.
+    /// </summary>
+    /// <remarks>
+    /// Tight, because a listing is a card with its own edge and a wide frame around it only pushes the
+    /// entries away from the dock they are read in.
+    /// </remarks>
+    protected virtual Thickness PanelPadding => new(12, 8, 12, 16);
 
     /// <summary>
     /// Puts what the view is made of on screen, on the panel and with the frame's band drawn over it.
@@ -757,13 +784,11 @@ internal abstract class EntryView : UserControl
     {
         var frame = new Rect(_framedAt, e.GetPosition(this)).Normalize();
 
-        _band.BorderBrush = Resource("ThemeAccentBrush", Brushes.DodgerBlue);
-        _band.Background = Resource("ThemeAccentBrush4", Brushes.Transparent);
+        _band.IsVisible = true;
         Canvas.SetLeft(_band, frame.X);
         Canvas.SetTop(_band, frame.Y);
         _band.Width = frame.Width;
         _band.Height = frame.Height;
-        _band.IsVisible = true;
 
         var chosen = new List<int>();
 
@@ -838,7 +863,9 @@ internal abstract class EntryView : UserControl
     /// <param name="key">The resource key.</param>
     /// <param name="fallback">What to draw with where the look defines nothing under the key.</param>
     private IBrush Resource(string key, IBrush fallback) =>
-        this.TryGetResource(key, null, out var found) && found is IBrush brush ? brush : fallback;
+        TopLevel.GetTopLevel(this)?.TryFindResource(key, null, out var found) == true && found is IBrush brush
+            ? brush
+            : fallback;
 
     /// <summary>
     /// Starts a drag of the choice as it stood when the pointer went down.
@@ -1095,7 +1122,7 @@ internal abstract class EntryView : UserControl
                 continue;
             }
 
-            Paint(row, Resource("ThemeAccentBrush4", new SolidColorBrush(Color.FromArgb(0x33, 0x80, 0x80, 0x80))));
+            Paint(row, Resource("rorolala.selection", new SolidColorBrush(Color.FromArgb(0x33, 0x80, 0x80, 0x80))));
             _marked = row;
 
             return;
@@ -1237,16 +1264,17 @@ internal sealed class ListBrowser : EntryView
         List.Padding = new Thickness(0);
         List.BorderThickness = new Thickness(0);
 
-        // Rows meet edge to edge on the card, and are told apart by the line under each of them rather than by
-        // room between them: the room was only ever there to make the two differ. The item keeps the design's
-        // row height, and its own inset is taken off so that the header and the rows share one edge.
+        // The item keeps the design's row height, and its own inset is taken off so that the header and the
+        // rows share one edge. The four pixels left between two rows are the line's room and the frame's: the
+        // rows are told apart by the line under each, and the room around it is the only place a press can
+        // land that is not on an entry — which is where a frame is begun from (Section 7.7).
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
                 Setters =
                 {
                     new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                    new Setter(Layoutable.MarginProperty, new Thickness(0)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(0, 2, 0, 2)),
                     new Setter(Layoutable.MinHeightProperty, 30.0),
                     new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
                 },
@@ -1356,7 +1384,8 @@ internal sealed class ListBrowser : EntryView
 
         var cells = new List<Control?>
         {
-            Head(RolaI18N.Get("rorolala_file_system.column_icon")),
+            // The icon column is its own heading, with no word over it: the entries say what they are.
+            Head(string.Empty),
             Head(RolaI18N.Get("rorolala_file_system.column_name")),
         };
 
@@ -1692,7 +1721,7 @@ internal sealed class GridBrowser : EntryView
     }
 
     /// <inheritdoc />
-    protected override Thickness PanelPadding => new(16);
+    protected override Thickness PanelPadding => new(12);
 
     /// <summary>One entry as a tile: its icon above its name, on one line and cut off when it is too long.</summary>
     /// <remarks>

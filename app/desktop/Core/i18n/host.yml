@@ -116,3 +116,6 @@ log:
   count:
     en: Count
     zh-CN: 次数
+  clear:
+    en: Clear
+    zh-CN: 清空

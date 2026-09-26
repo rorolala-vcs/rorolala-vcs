@@ -127,8 +127,18 @@ internal sealed class RorolalaTheme
     /// <summary>The height of a row of a list, a tree, or a field.</summary>
     private const double RowHeight = 30.0;
 
-    /// <summary>The height of a band of chrome: the menu bar, a region's header strip, a toolbar.</summary>
+    /// <summary>The height of a band of chrome: a region's header strip and a toolbar.</summary>
     private const double BarHeight = 36.0;
+
+    /// <summary>
+    /// The height of the menu bar, which is a fifth shorter than the other bands.
+    /// </summary>
+    /// <remarks>
+    /// A menu bar is read and then left alone, where a strip carries the tabs and the commands that are
+    /// worked in all session: the same height made the one thing that is only looked at as heavy as the
+    /// things that are used.
+    /// </remarks>
+    private const double MenuBarHeight = 29.0;
 
     /// <summary>How rounded a card is.</summary>
     private static readonly CornerRadius Radius = new(8);
@@ -688,6 +698,10 @@ internal sealed class RorolalaTheme
                 selector => selector.OfType<MenuItem>(),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
+                // Centred, because the menu bar is taller than a menu item: left stretched, an item's
+                // word sits at its top and the bar reads as if it were two rows high.
+                new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Center),
+                new Setter(ContentControl.VerticalContentAlignmentProperty, VerticalAlignment.Center),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
             On(
@@ -909,7 +923,7 @@ internal sealed class RorolalaTheme
                 Brushed(TemplatedControl.BackgroundProperty, Elevated),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
                 Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
-                new Setter(Layoutable.MinHeightProperty, BarHeight),
+                new Setter(Layoutable.MinHeightProperty, MenuBarHeight),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 0))
             ),
             On(
