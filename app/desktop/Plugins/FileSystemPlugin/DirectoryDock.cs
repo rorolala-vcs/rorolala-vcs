@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -395,15 +396,16 @@ internal sealed class DirectoryControl : UserControl
     }
 
     /// <summary>
-    /// Takes the keyboard back into the dock, which is where a dock's own keys are answered from.
+    /// Takes the keyboard back into the listing, which is where a dock's keys are answered from.
     /// </summary>
     /// <remarks>
     /// The listing and not the dock itself: the keys are taken at the top of the dock and handed to the view being
-    /// read, so a view that is not focused is a view that never receives one. It is what the address asks for when
-    /// an edit ends, so that typing a path and pressing Return leaves the keyboard where the keys are
-    /// (Section 7.7).
+    /// read, so a view that is not focused is a view that never receives one. Deferred to the next turn of the
+    /// loop, because the listing it goes into has just been made and has not been laid out yet — a keyboard asked
+    /// of a control that is not arranged yet is a keyboard it forgets, the same reason the address defers its own
+    /// selection (Section 7.7).
     /// </remarks>
-    private void Seated() => _view?.Listen();
+    private void Seated() => Dispatcher.UIThread.Post(() => _view?.Listen());
 
     /// <summary>
     /// Reads the keys a dock answers for the whole of itself.
@@ -470,11 +472,23 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Draws what is there, at the zoom this dock reads it.</summary>
     private void Draw()
     {
+        // Whether the keyboard is inside the view about to be replaced. It matters because replacing the view is
+        // what a step and a zoom change both do, and the control that had the keyboard is then no longer in the
+        // tree — so every key after walking into another directory would go unanswered, with nothing anywhere
+        // saying why. A view replaced while the keyboard was somewhere else (the zoom, say) leaves it there.
+        var on = Keys.On(this);
+        var seating = _view is { } was && Keys.Holds(on, was);
+
         _view = _zoom.Value > GridAbove
             ? new GridBrowser(_host, Location, _actions, _clip, Icons.SizeAt(_zoom.Value))
             : new ListBrowser(_host, Location, _actions, _clip);
 
         _content.Content = _view;
+
+        if (seating)
+        {
+            Seated();
+        }
 
         _drawn = Location.Shown;
     }

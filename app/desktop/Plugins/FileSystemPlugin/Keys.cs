@@ -1,5 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
@@ -70,6 +72,35 @@ internal static class Keys
         e.Handled = true;
 
         return true;
+    }
+
+    /// <summary>The element the keyboard is on in a control's window, or nothing where it is nowhere.</summary>
+    /// <param name="anywhere">A control, which is how its window is reached.</param>
+    /// <returns>What the keyboard is on.</returns>
+    public static IInputElement? On(Control anywhere) =>
+        TopLevel.GetTopLevel(anywhere)?.FocusManager?.GetFocusedElement();
+
+    /// <summary>Whether the keyboard is on a control, at it or anywhere under it.</summary>
+    /// <remarks>
+    /// What a dock asks before it swaps the view being read for another one: a view replaced from under the
+    /// keyboard takes the keyboard with it, because the control that had it is no longer in the tree — and a dock
+    /// answers its keys at the top of itself, so a keyboard that is nowhere is a dock whose keys do nothing
+    /// (Section 7.7).
+    /// </remarks>
+    /// <param name="on">What the keyboard is on, or nothing.</param>
+    /// <param name="view">The control to ask about.</param>
+    /// <returns>Whether they are the same control, or one holds the other.</returns>
+    public static bool Holds(IInputElement? on, Visual view)
+    {
+        for (var at = on as Visual; at is not null; at = at.GetVisualParent())
+        {
+            if (ReferenceEquals(at, view))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>A key as a person writes it, for saying which one was pressed.</summary>

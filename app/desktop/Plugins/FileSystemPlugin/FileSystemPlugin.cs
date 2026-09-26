@@ -69,7 +69,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
         var at = Start();
         var shared = new Shared(at);
         var browser = new Browser(shared, at);
-        var clip = new Clip();
+        var clip = new Clip(host.Log);
 
         // A browser with nothing watching the filesystem is told to look again when the program is come back to:
         // a change another program made is most likely to have happened while it was in front.

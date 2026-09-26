@@ -29,6 +29,13 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal sealed class Clip
 {
+    /// <summary>Where what a paste is about to do is said.</summary>
+    private readonly ILog _log;
+
+    /// <summary>Makes a clipboard over the log a paste says what it found in.</summary>
+    /// <param name="log">Where a paste says what it read and where it is putting it.</param>
+    public Clip(ILog log) => _log = log;
+
     /// <summary>The paths a cut has offered to a paste, until that paste happens.</summary>
     private readonly HashSet<string> _moving = new(StringComparer.Ordinal);
 
@@ -98,6 +105,15 @@ internal sealed class Clip
                 paths = [.. _held];
             }
 
+            if (paths.Count == 0)
+            {
+                // Said, and the offer is left as it stands rather than cleared: nothing was pasted, and a cut that
+                // is still on a clipboard this program cannot read is still a cut.
+                _log.Info("paste: nothing readable on the clipboard");
+
+                return;
+            }
+
             var pasted = false;
 
             // A **cut** into the directory an entry already sits in is nothing to do, and one that was asked
@@ -107,6 +123,10 @@ internal sealed class Clip
                 .Where(path => IsCut(path) && !string.Equals(Holding(path), into, StringComparison.Ordinal))
                 .ToArray();
             var copying = paths.Where(path => !IsCut(path)).ToArray();
+
+            // Said before anything is done with them, so that a paste that does nothing reads as a paste that
+            // had nothing to do rather than as a key that was never pressed (Section 7.7).
+            _log.Info($"paste into `{into}`: {moving.Length} to move, {copying.Length} to copy");
 
             // One call each, so that a question about a taken name is asked once for the batch rather than
             // once per item.

@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -179,11 +180,23 @@ internal sealed class TreeControl : UserControl
     private void Draw()
     {
         var was = _content.Content as TreeBrowser;
+
+        // Whether the keyboard is inside the tree about to be replaced, for the reason a listing is asked about as
+        // well: a view replaced from under the keyboard takes it away, and this dock answers its keys at the top of
+        // itself — so a tree rebuilt while it had the keyboard would answer nothing afterwards.
+        var seating = was is { } old && Keys.Holds(Keys.On(this), old);
+
         IReadOnlyList<string> opened = was is null ? [] : was.Opened();
 
         var tree = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions, _clip);
         _content.Content = tree;
         tree.Reopen(opened, was?.Chosen());
+
+        if (seating)
+        {
+            // Deferred, because the tree it goes into has just been made and is not laid out yet.
+            Dispatcher.UIThread.Post(() => (_content.Content as TreeBrowser)?.Listen());
+        }
 
         _drawn = _browser.BaseDir;
     }
@@ -229,6 +242,17 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>The row wearing the drop mark, so that it can be taken off again.</summary>
     private Border? _marked;
+
+    /// <summary>
+    /// The step that is chosen, or nothing where none is.
+    /// </summary>
+    /// <remarks>
+    /// Kept here rather than read back from the toolkit's selection, because what choosing a row does here is go
+    /// there: a row is a step, and whether the toolkit also calls it selected is not something the clipboard's
+    /// keys can act on. It is remembered across a rebuild along with the open steps, since being read again is
+    /// what a rebuilt tree is (Section 7.7).
+    /// </remarks>
+    private string? _chosen;
 
     /// <summary>The press a drag of a step would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _pressed;
@@ -438,6 +462,16 @@ internal sealed class TreeBrowser : UserControl
     }
 
     /// <summary>
+    /// Puts the keyboard in the tree, which is where this dock's keys are answered from.
+    /// </summary>
+    /// <remarks>
+    /// The tree itself and not a row: a row is built into it, and what a keyboard on the tree reaches is the step
+    /// that is chosen under it — and being built again is exactly what a tree that lost the keyboard looks like
+    /// from here (Section 7.7).
+    /// </remarks>
+    public void Listen() => _tree.Focus();
+
+    /// <summary>
     /// The steps that are open, outermost first.
     /// </summary>
     /// <remarks>
@@ -453,11 +487,8 @@ internal sealed class TreeBrowser : UserControl
         return opened;
     }
 
-    /// <summary>The step that is chosen, or nothing where none is or where it is the computer.</summary>
-    public string? Chosen() =>
-        _tree.SelectedItem is TreeViewItem item && item.Tag is string path && !Browser.IsComputer(path)
-            ? path
-            : null;
+    /// <summary>The step that is chosen, or nothing where none is.</summary>
+    public string? Chosen() => _chosen;
 
     /// <summary>
     /// Opens the steps that were open, in the order they are given, and chooses what was chosen.
@@ -485,6 +516,7 @@ internal sealed class TreeBrowser : UserControl
 
         if (chosen is not null && Find(_tree.Items, chosen) is { } pick)
         {
+            _chosen = chosen;
             pick.IsSelected = true;
         }
     }
@@ -561,6 +593,25 @@ internal sealed class TreeBrowser : UserControl
             // after a name answers: a background taken away would take that click with it.
             row.Background = Brushes.Transparent;
             _marked = null;
+        }
+    }
+
+    /// <summary>
+    /// Chooses a step, which is what the clipboard's keys act on.
+    /// </summary>
+    /// <remarks>
+    /// Going there is the caller's, because choosing and going are one gesture here: what is done here is
+    /// remembering it, and having the row drawn as the chosen one so that what a copy or a cut is about is what the
+    /// eye says it is.
+    /// </remarks>
+    /// <param name="path">The step to choose.</param>
+    private void Choose(string path)
+    {
+        _chosen = path;
+
+        if (Find(_tree.Items, path) is { } item)
+        {
+            item.IsSelected = true;
         }
     }
 
@@ -755,6 +806,7 @@ internal sealed class TreeBrowser : UserControl
                 return;
             }
 
+            Choose(path);
             _browser.Go(path);
         };
 
