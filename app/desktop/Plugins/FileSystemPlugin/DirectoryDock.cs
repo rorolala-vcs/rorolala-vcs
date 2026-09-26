@@ -199,7 +199,7 @@ internal sealed class DirectoryControl : UserControl
         // The toolbar is the dock's own rather than a dock beside it: the arrows and the address act on the
         // location being read, and they belong over the entries they act on (Section 7.5). What the dock keeps
         // beside them is handed in, so that the toolbar does not have to know what a dock remembers.
-        _bar = new NavigationBar(_host, Location, _trailing);
+        _bar = new NavigationBar(_host, Location, _trailing) { Left = Seated };
 
         // What is left at the foot is the zoom alone, which is the one thing about reading a directory that has
         // nothing to do with where it is.
@@ -395,6 +395,17 @@ internal sealed class DirectoryControl : UserControl
     }
 
     /// <summary>
+    /// Takes the keyboard back into the dock, which is where a dock's own keys are answered from.
+    /// </summary>
+    /// <remarks>
+    /// The listing and not the dock itself: the keys are taken at the top of the dock and handed to the view being
+    /// read, so a view that is not focused is a view that never receives one. It is what the address asks for when
+    /// an edit ends, so that typing a path and pressing Return leaves the keyboard where the keys are
+    /// (Section 7.7).
+    /// </remarks>
+    private void Seated() => _view?.Listen();
+
+    /// <summary>
     /// Reads the keys a dock answers for the whole of itself.
     /// </summary>
     /// <remarks>
@@ -406,14 +417,14 @@ internal sealed class DirectoryControl : UserControl
     /// <param name="e">The key.</param>
     private void Keyed(object? sender, KeyEventArgs e)
     {
-        if (Keys.Again(e, _whole))
+        if (Keys.Again(e, _whole, _host.Log))
         {
             return;
         }
 
         if (_view is { } view)
         {
-            _ = Keys.Clipboard(e, new Clipboard(view.Copy, view.Cut, view.Paste));
+            _ = Keys.Clipboard(e, new Clipboard(view.Copy, view.Cut, view.Paste), _host.Log);
         }
     }
 

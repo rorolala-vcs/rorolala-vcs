@@ -156,32 +156,34 @@ internal sealed class TreeControl : UserControl
     /// <param name="e">The key.</param>
     private void Keyed(object? sender, KeyEventArgs e)
     {
-        if (Keys.Again(e, _browser))
+        if (Keys.Again(e, _browser, _host.Log))
         {
             return;
         }
 
         if (_content.Content is TreeBrowser tree)
         {
-            _ = Keys.Clipboard(e, new Clipboard(tree.Copy, tree.Cut, tree.Paste));
+            _ = Keys.Clipboard(e, new Clipboard(tree.Copy, tree.Cut, tree.Paste), _host.Log);
         }
     }
 
     /// <summary>
-    /// Builds the tree over the base, keeping the steps that were open.
+    /// Builds the tree over the base, keeping the steps that were open and what was chosen.
     /// </summary>
     /// <remarks>
-    /// The steps are asked of the tree being replaced rather than kept here, because they are what that tree was
-    /// drawn with: a directory whose contents have moved is a tree to build again — a step may have come or gone
-    /// — and a user who has walked down into a step should not be put back at the base for it.
+    /// The steps and the choice are asked of the tree being replaced rather than kept here, because they are
+    /// what that tree was drawn with: a directory whose contents have moved is a tree to build again — a step
+    /// may have come or gone — and a user who has walked down into a step should not be put back at the base for
+    /// it, nor lose the step the clipboard's keys would act on.
     /// </remarks>
     private void Draw()
     {
-        var opened = _content.Content is TreeBrowser was ? was.Opened() : [];
+        var was = _content.Content as TreeBrowser;
+        IReadOnlyList<string> opened = was is null ? [] : was.Opened();
 
         var tree = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions, _clip);
         _content.Content = tree;
-        tree.Reopen(opened);
+        tree.Reopen(opened, was?.Chosen());
 
         _drawn = _browser.BaseDir;
     }
@@ -451,15 +453,27 @@ internal sealed class TreeBrowser : UserControl
         return opened;
     }
 
+    /// <summary>The step that is chosen, or nothing where none is or where it is the computer.</summary>
+    public string? Chosen() =>
+        _tree.SelectedItem is TreeViewItem item && item.Tag is string path && !Browser.IsComputer(path)
+            ? path
+            : null;
+
     /// <summary>
-    /// Opens the steps that were open, in the order they are given.
+    /// Opens the steps that were open, in the order they are given, and chooses what was chosen.
     /// </summary>
     /// <remarks>
     /// One at a time and outermost first, because opening a step is what reads the steps under it: a step asked
     /// for before its parent is open is a step with no row to find yet.
+    /// <para>
+    /// The choice is restored with them because it is what the clipboard's keys act on (Section 7.7): a tree that
+    /// came back from being read again with nothing chosen would answer <c>Ctrl+C</c>, <c>Ctrl+X</c> and
+    /// <c>Ctrl+V</c> by doing nothing at all, which reads as the keys being broken.
+    /// </para>
     /// </remarks>
     /// <param name="opened">The paths of the steps to open, outermost first.</param>
-    public void Reopen(IReadOnlyList<string> opened)
+    /// <param name="chosen">The step to choose, or nothing where none was.</param>
+    public void Reopen(IReadOnlyList<string> opened, string? chosen)
     {
         foreach (var path in opened)
         {
@@ -467,6 +481,11 @@ internal sealed class TreeBrowser : UserControl
             {
                 item.IsExpanded = true;
             }
+        }
+
+        if (chosen is not null && Find(_tree.Items, chosen) is { } pick)
+        {
+            pick.IsSelected = true;
         }
     }
 
@@ -578,12 +597,6 @@ internal sealed class TreeBrowser : UserControl
             _actions.Paste(this, path);
         }
     }
-
-    /// <summary>The step that is chosen, or nothing where none is chosen or where it is the computer.</summary>
-    private string? Chosen() =>
-        _tree.SelectedItem is TreeViewItem item && item.Tag is string path && !Browser.IsComputer(path)
-            ? path
-            : null;
 
     /// <summary>Fades a row whose step is cut, so that it reads as on its way out.</summary>
     /// <param name="row">The row.</param>

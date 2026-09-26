@@ -70,7 +70,14 @@ internal sealed class BrowserActions
         if (Offered(entries) is { Count: > 0 } files)
         {
             _clip.Copy(from, files, _host.Log.Error);
+            _host.Log.Info($"copy: {files.Count} on the clipboard");
+
+            return;
         }
+
+        // Said as well, so that a copy that did nothing says why rather than looking like a key that never
+        // arrived (Section 7.7).
+        _host.Log.Info("copy: nothing chosen");
     }
 
     /// <summary>Cuts entries to the clipboard, which a paste then moves.</summary>
@@ -81,7 +88,12 @@ internal sealed class BrowserActions
         if (Offered(entries) is { Count: > 0 } files)
         {
             _clip.Cut(from, files, _host.Log.Error);
+            _host.Log.Info($"cut: {files.Count} on the clipboard, to be moved");
+
+            return;
         }
+
+        _host.Log.Info("cut: nothing chosen");
     }
 
     /// <summary>Pastes what is on the clipboard into a directory.</summary>
@@ -93,8 +105,12 @@ internal sealed class BrowserActions
         // paste can land in on any platform.
         if (Browser.IsComputer(into))
         {
+            _host.Log.Info("paste: the computer is not a place to paste into");
+
             return;
         }
+
+        _host.Log.Info($"paste into `{into}`");
 
         // Every location reads its directory again, and not only this one's: what was pasted went into a
         // directory another dock may be the one looking at, a dock being able to be out of step.

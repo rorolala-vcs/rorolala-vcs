@@ -177,6 +177,17 @@ internal sealed class NavigationBar : UserControl
     }
 
     /// <summary>
+    /// What the dock does when the address is done with the keyboard: where it goes back to.
+    /// </summary>
+    /// <remarks>
+    /// Set by the dock that makes the bar, because the bar does not know what is being read under it. It matters
+    /// because a dock answers its keys at the top of itself, which is only reached while the keyboard is
+    /// somewhere inside it — and this bar hides its field when an edit ends, so a keyboard left in that field
+    /// would be a keyboard in nothing, with every key after it going unanswered (Section 7.7).
+    /// </remarks>
+    public Action? Left { get; set; }
+
+    /// <summary>
     /// Shows and switches another location.
     /// </summary>
     /// <remarks>
@@ -241,7 +252,7 @@ internal sealed class NavigationBar : UserControl
 
         // Leaving the field is leaving the edit: what was typed was not committed, so the address goes back
         // to saying where the browser actually is.
-        _address.LostFocus += (_, _) => Rest();
+        _address.LostFocus += (_, _) => Leave();
 
         // Taken on the way down, before the item under the pointer can take the keyboard: the field is what a
         // user is typing into, and focus leaving it would end the edit rather than take what was picked.
@@ -286,6 +297,20 @@ internal sealed class NavigationBar : UserControl
     }
 
     /// <summary>
+    /// Ends an edit the way the user ended it, which gives the keyboard back to the dock.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="Rest"/>, which a location changing of its own accord calls as well: the keyboard is
+    /// then wherever it was and must not be taken from it, while an edit the user ended is one whose keyboard is
+    /// owed back to what the address was named for.
+    /// </remarks>
+    private void Leave()
+    {
+        Rest();
+        Left?.Invoke();
+    }
+
+    /// <summary>
     /// What a key means while the address is being typed into.
     /// </summary>
     /// <remarks>
@@ -300,7 +325,7 @@ internal sealed class NavigationBar : UserControl
         {
             case Key.Escape:
                 args.Handled = true;
-                Rest();
+                Leave();
 
                 break;
 
@@ -309,6 +334,10 @@ internal sealed class NavigationBar : UserControl
 
                 // A picked completion is a whole path and is gone to as one; otherwise what was typed is.
                 Go(Picked() ?? _address.Text);
+
+                // The keyboard goes back to the listing rather than nowhere: the field it was in is hidden by
+                // the navigation itself, and a key pressed after naming a directory is meant for the directory.
+                Leave();
 
                 break;
 

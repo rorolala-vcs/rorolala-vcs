@@ -382,6 +382,17 @@ internal abstract class EntryView : UserControl
     public void Paste() => Actions.Paste(this, Browser.Current);
 
     /// <summary>
+    /// Puts the keyboard in the listing, so that the dock's own keys reach it again.
+    /// </summary>
+    /// <remarks>
+    /// The listing is where a dock answers its keys from: they are taken at the top of the dock and passed to the
+    /// view being read, so a keyboard that is nowhere in the dock is a dock whose keys do nothing. That is what
+    /// happens when the address — which hides itself when an edit ends — was where the keyboard was
+    /// (Section 7.7).
+    /// </remarks>
+    public void Listen() => List.Focus();
+
+    /// <summary>
     /// What a shortcut acts on.
     /// </summary>
     /// <remarks>
