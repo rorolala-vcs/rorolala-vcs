@@ -506,7 +506,7 @@ All three are always available from `Window`.
 | --- | --- | --- | --- |
 | Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): a table of rows below 60%, tiles above it. The table's columns are the icon, the name, the permissions, when it was last written and how large it is — and the permissions column is left out on Windows, which does not carry what those letters say. A column is made wider or narrower by the grab between it and its neighbour, which is drawn as the grab between two regions is (§10), and the name is the column that takes what is left over, so the table is as wide as the dock whatever the columns are. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
 | Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. Placed at the left by default. |
-| File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and an address to type. Placed at the top by default. |
+| File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and the address. The address is **read** as crumbs and becomes a **field** when it is clicked, with the whole path in it and chosen; `Return` goes there, and `Esc` or leaving the field gives the crumbs back. A path that is not a directory changes nothing rather than moving the browser, and says so. While it is typed into, the filesystem is asked what the path could be and the answers are listed under the field (§7.5). Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
@@ -578,7 +578,10 @@ rather than at the location.
 There is therefore exactly one way the location changes, and five things that ask it to:
 
 1. A path typed into the **address** and entered. What is typed may be relative or have a step in it;
-   the location is held in full, so the address says where the browser actually went.
+   the location is held in full, so the address says where the browser actually went. The address is a
+   field only while it is being typed into: at rest it is the path read as crumbs, so it is read rather
+   than edited by accident, and a path that is not a directory is refused there rather than leaving the
+   browser somewhere that cannot be read.
 2. A directory **clicked in the tree**. The tree holds nothing but directories, so choosing one can
    only mean going there, and it happens on the first click rather than the second.
 3. A directory **opened in a list**.
@@ -592,6 +595,16 @@ All five go through the same call, which refuses anything that is not a director
 the browser somewhere that cannot be read. The address is the one a user can get wrong, so it is the
 one that says so. The navigation dock's arrows walk the history that switching the location leaves
 behind.
+
+**The address completes what is typed into it**, by asking the filesystem: what is in the field is split
+into the directory it is under and the beginning of a name, that directory is listed, and the entries
+whose names begin with what was typed are offered under the field. It completes a name rather than
+searches, which is what a filesystem can answer for at every keystroke. What is offered is what the
+listing would show — the entries the platform hides are kept out while they are hidden — directories
+come first and then by name, and there are never more than a score of them. The arrows walk the offers
+without the caret leaving the field, `Tab` or a click writes one into the field, and a directory is
+written with its separator after it so that a path can be walked a step at a time. `Return` commits,
+whether what is committed was picked or typed.
 
 **The top of the platform** is where the tree's *Root* button goes, and what it roots the tree at: the
 root on Unix, which is a directory like any other, and the computer on Windows, which is where the

@@ -1,10 +1,15 @@
 using System.IO;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -31,12 +36,18 @@ internal sealed class NavigationDock : IDockView
 }
 
 /// <summary>
-/// The navigation toolbar: back, forward, up, refresh, and an address to type.
+/// The navigation toolbar: back, forward, up, refresh, and the address.
 /// </summary>
 /// <remarks>
 /// It is a view of the location like any browser dock, and the one place the location can be typed
 /// into: the address reads what is being looked at and writes where to look, and the arrows walk the
 /// history that changing it leaves behind (Section 7.5).
+/// <para>
+/// The address is two things in one place, the way an address bar is: a line of crumbs that says where
+/// the browser is, and — once it is clicked — a field with the whole path in it, chosen, that can be
+/// typed over. Nothing is typed into until it is asked for, so the path is always read rather than
+/// edited by accident, and the field goes back to crumbs when the edit ends.
+/// </para>
 /// <para>
 /// The view switch is not here, because it is not navigation: which layout entries are read in is a
 /// property of the dock reading them, and each dock keeps its own.
@@ -47,21 +58,41 @@ internal sealed class NavigationControl : UserControl
     /// <summary>The name the toolbar opens with, which is the program's own and not a translation.</summary>
     private const string Brand = "Rorolala";
 
+    /// <summary>
+    /// How many completions are offered at once.
+    /// </summary>
+    /// <remarks>
+    /// Enough to pick from and few enough to take in: a list longer than this is a list nobody reads down,
+    /// and the point is to save typing rather than to browse.
+    /// </remarks>
+    private const int Completions = 20;
+
     /// <summary>The host, which is where a failure navigation cannot handle is reported.</summary>
     private readonly IPluginHost _host;
 
     /// <summary>The location, which this toolbar shows and switches.</summary>
     private readonly Browser _browser;
 
-    /// <summary>The path being shown, and the place to type another.</summary>
-    private readonly TextBox _address = new();
-
-    /// <summary>The address as crumbs, which is how it is read; the field beside them is how it is typed.</summary>
+    /// <summary>The path being read, which is what the address is until it is clicked.</summary>
     private readonly StackPanel _crumbs = new()
     {
         Orientation = Orientation.Horizontal,
         Spacing = 2,
         VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>The path being typed, shown in place of the crumbs while there is one.</summary>
+    private readonly TextBox _address = new() { IsVisible = false };
+
+    /// <summary>What the typed path could be, asked of the filesystem as it is typed.</summary>
+    private readonly ListBox _suggestions = new() { MaxHeight = 240, MinWidth = 360, Focusable = false };
+
+    /// <summary>The list of completions, under the field while there is anywhere to go.</summary>
+    private readonly Popup _drop = new()
+    {
+        Placement = PlacementMode.BottomEdgeAlignedLeft,
+        IsLightDismissEnabled = true,
+        IsOpen = false,
     };
 
     private readonly Button _back = Arrow("\u2190");
@@ -82,29 +113,17 @@ internal sealed class NavigationControl : UserControl
         _up.Click += (_, _) => _browser.Up();
         _refresh.Click += (_, _) => _browser.Refresh();
 
-        // The field is as wide as the design's own address: the crumbs beside it carry the whole path, so
-        // the field only has to be wide enough to type into rather than to read.
-        _address.Width = 210;
-        _address.KeyDown += (_, args) =>
-        {
-            if (args.Key == Key.Enter)
-            {
-                Go(_address.Text);
-            }
-        };
-        _address.LostFocus += (_, _) => _address.Text = Address(_browser.Current);
+        FillAddress();
 
-        var tools = new StackPanel
+        // Clicking the crumbs, or anywhere along the address, is what starts an edit: the whole band is the
+        // field's target, because a path is one thing rather than a row of words.
+        var area = new Panel
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Background = Brushes.Transparent,
             VerticalAlignment = VerticalAlignment.Center,
+            Children = { _crumbs, _address, _drop },
         };
-        tools.Children.Add(_back);
-        tools.Children.Add(_forward);
-        tools.Children.Add(_up);
-        tools.Children.Add(_refresh);
-        tools.Children.Add(_address);
+        area.PointerPressed += (_, _) => Edit();
 
         var mark = new Border
         {
@@ -122,16 +141,25 @@ internal sealed class NavigationControl : UserControl
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             VerticalAlignment = VerticalAlignment.Center,
-        };
-        brand.Children.Add(mark);
-        brand.Children.Add(
-            new TextBlock
+            Children =
             {
-                Text = Brand,
-                FontWeight = FontWeight.Bold,
-                VerticalAlignment = VerticalAlignment.Center,
-            }
-        );
+                mark,
+                new TextBlock
+                {
+                    Text = Brand,
+                    FontWeight = FontWeight.Bold,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            },
+        };
+
+        var tools = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _back, _forward, _up, _refresh },
+        };
 
         // The crumbs are clipped rather than wrapped: a path longer than the band is cut off at the end
         // rather than pushing the tools off the bar.
@@ -144,10 +172,10 @@ internal sealed class NavigationControl : UserControl
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(brand, 0);
-        Grid.SetColumn(_crumbs, 1);
+        Grid.SetColumn(area, 1);
         Grid.SetColumn(tools, 2);
         bar.Children.Add(brand);
-        bar.Children.Add(_crumbs);
+        bar.Children.Add(area);
         bar.Children.Add(tools);
 
         var band = new Border
@@ -188,14 +216,135 @@ internal sealed class NavigationControl : UserControl
             VerticalAlignment = VerticalAlignment.Center,
         };
 
+    /// <summary>Sets the field and the list of completions up, and what each of them does.</summary>
+    private void FillAddress()
+    {
+        _suggestions.ItemTemplate = new FuncDataTemplate<string>(
+            (path, _) =>
+                new TextBlock
+                {
+                    Text = path,
+                    Classes = { "mono", "caption" },
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            true
+        );
+
+        _drop.Child = _suggestions;
+        _drop.PlacementTarget = _address;
+
+        _address.KeyDown += (_, args) => Keyed(args);
+        _address.TextChanged += (_, _) => Suggest();
+
+        // Leaving the field is leaving the edit: what was typed was not committed, so the address goes back
+        // to saying where the browser actually is.
+        _address.LostFocus += (_, _) => Rest();
+
+        // Taken on the way down, before the item under the pointer can take the keyboard: the field is what a
+        // user is typing into, and focus leaving it would end the edit rather than take what was picked.
+        _suggestions.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, args) => Pick(args),
+            RoutingStrategies.Tunnel
+        );
+    }
+
+    /// <summary>Starts an edit: the whole path in a field, chosen, ready to be typed over.</summary>
+    /// <remarks>
+    /// Chosen and focused in the next turn of the loop rather than here, because a field that has just been
+    /// made visible has not been laid out yet, and a selection asked of it now is a selection it forgets.
+    /// </remarks>
+    private void Edit()
+    {
+        if (_address.IsVisible)
+        {
+            return;
+        }
+
+        _address.Text = Address(_browser.Current);
+        _crumbs.IsVisible = false;
+        _address.IsVisible = true;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            _address.Focus();
+            _address.SelectAll();
+        });
+    }
+
+    /// <summary>Ends an edit: the crumbs, and no completions.</summary>
+    private void Rest()
+    {
+        Close();
+        _address.IsVisible = false;
+        _crumbs.IsVisible = true;
+    }
+
+    /// <summary>
+    /// What a key means while the address is being typed into.
+    /// </summary>
+    /// <remarks>
+    /// The arrows walk the completions rather than the text, the way an address bar does: the caret stays
+    /// where it is and the list is what moves, so that Return can take what is picked without the hand
+    /// leaving the row.
+    /// </remarks>
+    /// <param name="args">The key.</param>
+    private void Keyed(KeyEventArgs args)
+    {
+        switch (args.Key)
+        {
+            case Key.Escape:
+                args.Handled = true;
+                Rest();
+
+                break;
+
+            case Key.Enter:
+                args.Handled = true;
+
+                // A picked completion is a whole path and is gone to as one; otherwise what was typed is.
+                Go(Picked() ?? _address.Text);
+
+                break;
+
+            case Key.Down:
+                args.Handled = true;
+                Walk(1);
+
+                break;
+
+            case Key.Up:
+                args.Handled = true;
+                Walk(-1);
+
+                break;
+
+            case Key.Tab:
+                if (Picked() is { } choice)
+                {
+                    args.Handled = true;
+                    Take(choice);
+                }
+
+                break;
+
+            default:
+                break;
+        }
+    }
+
     /// <summary>Brings the toolbar in step with the location.</summary>
     private void Update()
     {
         _back.IsEnabled = _browser.CanGoBack;
         _forward.IsEnabled = _browser.CanGoForward;
         _up.IsEnabled = _browser.CanGoUp;
-        _address.Text = Address(_browser.Current);
+
         ShowCrumbs();
+
+        // An edit is abandoned when the location changes under it: what was being typed was a direction
+        // somewhere else, and the browser has just gone elsewhere by another way.
+        Rest();
     }
 
     /// <summary>
@@ -213,11 +362,6 @@ internal sealed class NavigationControl : UserControl
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries
         );
-
-        if (parts.Length == 0)
-        {
-            return;
-        }
 
         for (var at = 0; at < parts.Length; at++)
         {
@@ -254,6 +398,205 @@ internal sealed class NavigationControl : UserControl
     }
 
     /// <summary>
+    /// Offers what the typed path could be, asked of the filesystem as it is typed.
+    /// </summary>
+    /// <remarks>
+    /// What is typed is split into the directory it is under and the beginning of a name, and that directory
+    /// is listed: an address bar completes a name rather than searching, and the directory in hand is what a
+    /// filesystem can answer for at every keystroke.
+    /// <para>
+    /// A directory that cannot be listed offers nothing rather than a reason: the path is still being typed,
+    /// and a complaint over it would be noise. Hiding entries hides them from the completions too, because
+    /// what is offered is what is in the listing.
+    /// </para>
+    /// </remarks>
+    private void Suggest()
+    {
+        if (!_address.IsVisible)
+        {
+            return;
+        }
+
+        var split = Split(_address.Text ?? string.Empty, _browser.Current);
+
+        if (split is not { } where)
+        {
+            Close();
+
+            return;
+        }
+
+        var (directory, prefix) = where;
+
+        string[] found;
+
+        try
+        {
+            found = System.IO.Directory
+                .EnumerateFileSystemEntries(directory)
+                .Where(entry => Path.GetFileName(entry).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .Where(entry => _browser.ShowHidden || !Hidden(entry))
+                .OrderBy(entry => Path.GetFileName(entry), StringComparer.OrdinalIgnoreCase)
+                .Take(Completions)
+                .Select(entry => (Path: entry, Directory: System.IO.Directory.Exists(entry)))
+                // Directories first, then by name, which is the order a listing reads in rather than a second
+                // one of its own.
+                .OrderByDescending(entry => entry.Directory)
+                .ThenBy(entry => Path.GetFileName(entry.Path), StringComparer.OrdinalIgnoreCase)
+                .Select(entry => entry.Path)
+                .ToArray();
+        }
+        catch (Exception error)
+            when (error is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            Close();
+
+            return;
+        }
+
+        if (found.Length == 0)
+        {
+            Close();
+
+            return;
+        }
+
+        _suggestions.ItemsSource = found;
+        _suggestions.SelectedIndex = -1;
+        _drop.IsOpen = true;
+    }
+
+    /// <summary>Puts the completions away.</summary>
+    private void Close()
+    {
+        _drop.IsOpen = false;
+        _suggestions.ItemsSource = null;
+        _suggestions.SelectedIndex = -1;
+    }
+
+    /// <summary>
+    /// The directory a typed path is under, and the beginning of the name in it.
+    /// </summary>
+    /// <remarks>
+    /// A path that ends with a separator has no name in it yet, so the whole of it is the directory; anything
+    /// else is split at the last separator. What has no directory in front of it is read against the one being
+    /// looked at, which is what makes a relative address complete at all — and a directory that is not one
+    /// completes nothing, since there is nothing to list.
+    /// </remarks>
+    /// <param name="typed">What is in the field.</param>
+    /// <param name="current">The directory being looked at, which a relative path is against.</param>
+    /// <returns>The directory and the name, or nothing when there is nothing to list.</returns>
+    private static (string Directory, string Prefix)? Split(string typed, string current)
+    {
+        if (typed.Length == 0)
+        {
+            return null;
+        }
+
+        var ends = Ends(typed);
+        var cut = ends
+            ? typed.Length
+            : typed.LastIndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]) + 1;
+
+        var head = typed[..cut];
+        var name = ends ? string.Empty : typed[cut..];
+
+        var directory = head.Length == 0
+            ? current
+            : Path.IsPathRooted(head)
+                ? head
+                : Path.Combine(current, head);
+
+        // A root trims to nothing, and nothing names no directory: what a path was rooted at is the root.
+        directory = directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        if (directory.Length == 0)
+        {
+            directory = Path.GetPathRoot(head) ?? string.Empty;
+        }
+
+        return directory.Length > 0 && System.IO.Directory.Exists(directory)
+            ? (directory, name)
+            : null;
+    }
+
+    /// <summary>Whether a typed path ends at a step of its own rather than in the middle of a name.</summary>
+    /// <param name="typed">What is in the field.</param>
+    private static bool Ends(string typed) =>
+        typed[^1] == Path.DirectorySeparatorChar || typed[^1] == Path.AltDirectorySeparatorChar;
+
+    /// <summary>
+    /// Whether the platform hides an item, which is what the completions keep out with the listing.
+    /// </summary>
+    /// <remarks>
+    /// Read here rather than carried on an entry, because what is being asked about is a path from the field
+    /// rather than an entry of the listing — and the answer is the same rule either way.
+    /// </remarks>
+    /// <param name="path">The item.</param>
+    private static bool Hidden(string path) => Browser.IsHidden(path);
+
+    /// <summary>The completion that is picked, or nothing while none is.</summary>
+    private string? Picked() => _drop.IsOpen ? _suggestions.SelectedItem as string : null;
+
+    /// <summary>Moves the pick through the completions, wrapping at either end.</summary>
+    /// <param name="step">Which way.</param>
+    private void Walk(int step)
+    {
+        var count = _suggestions.ItemCount;
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        var at = _suggestions.SelectedIndex + step;
+
+        _suggestions.SelectedIndex = at < 0 ? count - 1 : at % count;
+    }
+
+    /// <summary>
+    /// Takes a completion into the field.
+    /// </summary>
+    /// <remarks>
+    /// A directory is written with the separator after it, which is how a hand continues from one step into the
+    /// next; a file is written as it is, since there is nowhere under it to go. The list is asked again from
+    /// what was written, by the keystroke that follows rather than here.
+    /// <para>
+    /// Taking rather than going is deliberate: the field is where the path is being built, and filling it lets
+    /// a path be walked a step at a time. Return is what commits, whether what is committed was picked or typed.
+    /// </para>
+    /// </remarks>
+    /// <param name="path">The completion taken.</param>
+    private void Take(string path) =>
+        _address.Text = System.IO.Directory.Exists(path)
+            ? path + Path.DirectorySeparatorChar
+            : path;
+
+    /// <summary>What a press on the list picked, taken before the item can take the keyboard.</summary>
+    /// <param name="args">The press.</param>
+    private void Pick(PointerPressedEventArgs args)
+    {
+        if (
+            args.Source is not Visual source
+            || source.FindAncestorOfType<ListBoxItem>() is not { } item
+            || _suggestions.ItemsSource is not IEnumerable<string> paths
+        )
+        {
+            return;
+        }
+
+        var at = _suggestions.IndexFromContainer(item);
+
+        if (at < 0)
+        {
+            return;
+        }
+
+        args.Handled = true;
+        Take(paths.ElementAt(at));
+    }
+
+    /// <summary>
     /// What the address says a location is.
     /// </summary>
     /// <remarks>
@@ -265,28 +608,30 @@ internal sealed class NavigationControl : UserControl
             ? RolaI18N.Get("rorolala_file_system.computer")
             : directory;
 
-    /// <summary>Goes to a directory typed into the address bar.</summary>
+    /// <summary>
+    /// Goes to a path typed into the address, and puts the address back to reading.
+    /// </summary>
+    /// <remarks>
+    /// A path that is not a directory leaves the location where it was: the address is the one thing a user
+    /// can get wrong, so it is the one that says so, rather than the browser going somewhere unreadable
+    /// (Section 7.5). Either way the field gives way to the crumbs, which say where the browser now is.
+    /// </remarks>
+    /// <param name="path">What was typed.</param>
     private void Go(string? path)
     {
-        if (string.IsNullOrWhiteSpace(path))
+        if (!string.IsNullOrWhiteSpace(path))
         {
-            _address.Text = Address(_browser.Current);
+            var directory = path == RolaI18N.Get("rorolala_file_system.computer")
+                ? Browser.Computer
+                : path;
 
-            return;
+            if (!_browser.Go(directory))
+            {
+                _host.Log.Warn(RolaI18N.Get("rorolala_file_system.not_a_directory", path));
+            }
         }
 
-        var directory = path == RolaI18N.Get("rorolala_file_system.computer")
-            ? Browser.Computer
-            : path;
-
-        // The address writes the location, and a path that is not a directory is refused by it: what
-        // is left here is saying so and putting back what the location says.
-        if (_browser.Go(directory))
-        {
-            return;
-        }
-
-        _host.Log.Warn(RolaI18N.Get("rorolala_file_system.not_a_directory", path));
-        _address.Text = Address(_browser.Current);
+        // The browser raising the change puts the crumbs right; this only ends the edit.
+        Rest();
     }
 }

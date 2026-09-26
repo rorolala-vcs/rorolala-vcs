@@ -325,9 +325,13 @@ internal sealed class Browser
     /// dot-name is read the same way there by everything that is not Explorer, so both count there. Asking
     /// for the attribute can fail on an item this process may not touch, and an item that cannot be asked
     /// about is shown rather than hidden: hiding something for not being inspectable is the worse mistake.
+    /// <para>
+    /// It is the browser's rule rather than a listing's, because the completions an address offers keep the
+    /// same entries out — a path that cannot be reached by typing it is not an address.
+    /// </para>
     /// </remarks>
     /// <param name="path">The item.</param>
-    private static bool IsHidden(string path)
+    public static bool IsHidden(string path)
     {
         var name = Path.GetFileName(path);
 
