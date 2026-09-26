@@ -183,6 +183,10 @@ internal sealed class DirectoryControl : UserControl
         // that stopped working where it is wanted most.
         AddHandler(PointerWheelChangedEvent, Wheeled, RoutingStrategies.Tunnel);
 
+        // And on the way down for the same reason: F5 is answered wherever in the dock the keyboard is, so that
+        // a listing that happened to have the keyboard would not be the only place it worked.
+        AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
+
         FillZoom();
         FillHidden();
         FillSync();
@@ -386,6 +390,11 @@ internal sealed class DirectoryControl : UserControl
             Draw();
         };
     }
+
+    /// <summary>Takes the key that asks for the filesystem to be looked at again.</summary>
+    /// <param name="sender">The dock.</param>
+    /// <param name="e">The key.</param>
+    private void Keyed(object? sender, KeyEventArgs e) => Keys.Again(e, _whole);
 
     /// <summary>
     /// Takes a turn of the wheel with control held as a step of zoom.

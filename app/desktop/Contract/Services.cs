@@ -141,3 +141,17 @@ public sealed record PluginSetting(
 /// the exports are; the file-level storage operations are a known gap with no export yet.
 /// </remarks>
 public interface IRola { }
+
+/// <summary>
+/// The host's windows being come back to.
+/// </summary>
+/// <remarks>
+/// A plugin that reads the world outside the program — a filesystem, a device, a share — has nothing to tell it
+/// that the user went away and came back, which is the moment something out there is most likely to have changed.
+/// The host knows, because its windows tell it, so the host says so.
+/// </remarks>
+public interface IRefocus
+{
+    /// <summary>Raised when one of the host's windows is activated again.</summary>
+    event Action? Regained;
+}

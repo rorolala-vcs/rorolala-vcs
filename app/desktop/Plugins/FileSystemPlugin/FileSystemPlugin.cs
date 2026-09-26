@@ -71,6 +71,10 @@ public sealed class FileSystemPlugin : IRolaPlugin
         var browser = new Browser(shared, at);
         var clip = new Clip();
 
+        // A browser with nothing watching the filesystem is told to look again when the program is come back to:
+        // a change another program made is most likely to have happened while it was in front.
+        host.Refocus.Regained += browser.Touch;
+
         host.Docks.Register(
             new DockRegistration(
                 Manifest.Id,

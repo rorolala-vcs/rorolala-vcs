@@ -94,6 +94,10 @@ internal sealed class TreeControl : UserControl
             _browser.Reread -= Draw;
         };
 
+        // Taken on the way down, like the keys a listing answers: F5 is a key the dock answers wherever in it the
+        // keyboard is, rather than only where a row was clicked.
+        AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
+
         _root.Content = RolaI18N.Get("rorolala_file_system.root");
         _root.Padding = new Thickness(7, 2);
         _root.Click += (_, _) => _browser.SetBase(Browser.Root());
@@ -134,6 +138,11 @@ internal sealed class TreeControl : UserControl
             Draw();
         }
     }
+
+    /// <summary>Takes the key that asks for the filesystem to be looked at again.</summary>
+    /// <param name="sender">The dock.</param>
+    /// <param name="e">The key.</param>
+    private void Keyed(object? sender, KeyEventArgs e) => Keys.Again(e, _browser);
 
     /// <summary>
     /// Builds the tree over the base, keeping the steps that were open.

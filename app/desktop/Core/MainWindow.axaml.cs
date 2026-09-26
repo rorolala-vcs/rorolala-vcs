@@ -58,7 +58,7 @@ public partial class MainWindow : Window
         }
 
         BuildMenu();
-        DockAreaHost.Content = new DockArea(_services.Docks, _services.I18n);
+        DockAreaHost.Content = new DockArea(_services.Docks, _services.I18n, _services.Refocus);
 
         // Marked here rather than in the markup, so that the name a theme matches on is written once
         // and read by both.
@@ -68,6 +68,10 @@ public partial class MainWindow : Window
         // menu, so the checks are refreshed and the layout written whenever the docks change — a
         // dock moved by hand is remembered from then on, not only if the run ends tidily.
         _services.Docks.Changed += DocksChanged;
+
+        // Coming back to the window is when something outside the program is most likely to have changed what
+        // a plugin reads, so what the host is told about it is said on to the plugins here (Section 16).
+        Activated += (_, _) => _services.Refocus.Regain();
 
         Opened += (_, _) => ShowPopups();
         Closing += (_, _) => LayoutStore.Save(_services.Log, _services.Docks.Snapshot());

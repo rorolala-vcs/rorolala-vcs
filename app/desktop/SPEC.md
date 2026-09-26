@@ -686,6 +686,13 @@ the window and the docks and knows nothing of entries.
   so no picture of one is floated for it, and on X11 the source of a drag is told nothing of the pointer while
   it is on — the card is placed from the positions the drop side is told, and is therefore only ever where this
   window is. A drag from another program carries no card, because what it carries is that program's to draw.
+- **Looking again.** Nothing watches the filesystem, so a change another program made is found when a user
+  looks: **`F5`** in a dock is a user asking for it, and a **window of the host's being come back to** is the
+  moment such a change would have been made. The key is the dock's own (`Keys`), taken at the top of a dock so
+  that it is answered wherever in the dock the keyboard is; the window is the host's, and it is said through the
+  contract (Section 16) rather than by a dock watching a window of its own. Either way every location reads its
+  directory again, so one occasion is one look for the whole File System. The tree, which draws more than one
+  directory, reads the steps it has open again and keeps them open (§7.6).
 
 ### 7.8 The file agent
 
@@ -1092,6 +1099,7 @@ public interface IPluginHost
     IDockRegistry Docks { get; }
     IOpenHookRegistry OpenHooks { get; }
     IIconBadgeRegistry IconBadges { get; }
+    IRefocus Refocus { get; }
 }
 
 public interface II18n
@@ -1119,6 +1127,12 @@ public sealed record PluginSetting(
     IReadOnlyList<SettingOption>? Options = null);
 
 public interface IRola { /* Section 13 */ }
+
+/// <summary>Raised by the host when one of its windows is activated again.</summary>
+public interface IRefocus
+{
+    event Action? Regained;
+}
 
 public interface ILog
 {

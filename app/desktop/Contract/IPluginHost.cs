@@ -39,4 +39,7 @@ public interface IPluginHost
 
     /// <summary>Where the plugin adds icon badges.</summary>
     IIconBadgeRegistry IconBadges { get; }
+
+    /// <summary>When one of the host's windows is come back to.</summary>
+    IRefocus Refocus { get; }
 }

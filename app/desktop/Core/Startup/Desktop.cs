@@ -98,6 +98,7 @@ internal sealed class Desktop
             Navigation = new NavigationRegistry(),
             Docks = new DockManager(new DockRegistry(), i18n, log, popups),
             OpenHooks = new OpenHookRegistry(),
+            Refocus = new Refocus(),
             IconBadges = new IconBadgeRegistry(),
         };
     }

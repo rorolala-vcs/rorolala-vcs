@@ -47,6 +47,8 @@ internal static class Host
             Docks = new DockManager(new DockRegistry(), i18n, log, popups),
             OpenHooks = new OpenHookRegistry(),
             IconBadges = new IconBadgeRegistry(),
+            // Nothing activates a window in a headless test, so nothing is ever raised on it.
+            Refocus = new Refocus(),
         };
     }
 }

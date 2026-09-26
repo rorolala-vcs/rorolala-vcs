@@ -176,13 +176,18 @@ internal sealed class DockArea : UserControl
     /// <summary>Whether a float is being closed by this area rather than by the user.</summary>
     private bool _closingFloat;
 
+    /// <summary>What the host tells the plugins when one of its windows is come back to.</summary>
+    private readonly Refocus _refocus;
+
     /// <summary>Makes the area over the manager it shows.</summary>
     /// <param name="manager">The docks and where they are.</param>
     /// <param name="i18n">The host's translations.</param>
-    public DockArea(DockManager manager, I18nService i18n)
+    /// <param name="refocus">What a window being come back to is said through.</param>
+    public DockArea(DockManager manager, I18nService i18n, Refocus refocus)
     {
         _manager = manager;
         _i18n = i18n;
+        _refocus = refocus;
 
         Build();
 
@@ -815,6 +820,10 @@ internal sealed class DockArea : UserControl
             Height = FloatSize.Height,
             Content = instance.View.View,
         };
+
+        // A dock floated into a window of its own is come back to as much as the main window is, and the dock's
+        // view reads the same things either way: the activation of either is the same occasion.
+        window.Activated += (_, _) => _refocus.Regain();
 
         window.Closed += (_, _) =>
         {

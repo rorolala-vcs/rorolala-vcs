@@ -1,3 +1,5 @@
+using Avalonia.Threading;
+
 namespace FileSystemPlugin;
 
 /// <summary>
@@ -18,6 +20,9 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal sealed class Shared
 {
+    /// <summary>Whether a read has been asked for and is waiting for the turn to end.</summary>
+    private bool _asked;
+
     /// <summary>The directory the tree is rooted at.</summary>
     private string _base;
 
@@ -50,13 +55,29 @@ internal sealed class Shared
     public event Action? Touched;
 
     /// <summary>
-    /// Says that the files may have changed.
+    /// Says that the files may have changed, which every location reads its directory again for.
     /// </summary>
     /// <remarks>
-    /// Whoever calls it defers it: a read that answered the event a drop arrived in would rebuild the view
-    /// answering it.
+    /// Deferred to the end of the turn and said at most once in it. Deferred, because whoever asks has just
+    /// finished an event and reading a directory again rebuilds the views showing it — one of which may be the
+    /// view answering that event. Once a turn, because several things that finish together are one change to go
+    /// and look for.
     /// </remarks>
-    public void Touch() => Touched?.Invoke();
+    public void Touch()
+    {
+        if (_asked)
+        {
+            return;
+        }
+
+        _asked = true;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            _asked = false;
+            Touched?.Invoke();
+        });
+    }
 
     /// <summary>
     /// The directory the tree is rooted at, which a directory's own menu sets.
