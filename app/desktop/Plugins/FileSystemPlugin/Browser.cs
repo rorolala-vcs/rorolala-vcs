@@ -109,6 +109,16 @@ internal sealed class Browser : IDisposable
     /// <summary>Raised whenever where the browser is looking, or what the tree is rooted at, changes.</summary>
     public event Action? Changed;
 
+    /// <summary>
+    /// Raised when the directory has been read again, which is what the files having changed looks like here.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="Changed"/>, which also says where the browser went: a tree is rooted at the base and
+    /// is not rearranged by a step, but what lies under the steps it has read may have moved — which is a thing
+    /// only a view that draws more than the one directory has to read again for.
+    /// </remarks>
+    public event Action? Reread;
+
     /// <summary>The directory being looked at.</summary>
     public string Current => _current;
 
@@ -267,6 +277,7 @@ internal sealed class Browser : IDisposable
         _entries = Read(_current);
         _shown = Stage(_current, _entries);
         Changed?.Invoke();
+        Reread?.Invoke();
     }
 
     /// <summary>

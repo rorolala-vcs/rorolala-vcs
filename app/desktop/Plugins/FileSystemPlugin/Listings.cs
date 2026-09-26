@@ -8,9 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using Avalonia.Styling;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -70,9 +68,6 @@ internal abstract class EntryView : UserControl
     /// the eye passes over it rather than being left out of the listing.
     /// </remarks>
     private const double HiddenOpacity = 0.55;
-
-    /// <summary>How far the pointer moves with the button down before it drags or frames rather than clicks.</summary>
-    private const double Frame = 4;
 
     /// <summary>How long a run of typed letters stays one run.</summary>
     private static readonly TimeSpan Typing = TimeSpan.FromSeconds(1);
@@ -148,9 +143,6 @@ internal abstract class EntryView : UserControl
 
     /// <summary>The press a drag would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _from;
-
-    /// <summary>What the drag in flight carries, for the taking away that a move out of the program owes.</summary>
-    private IReadOnlyList<Entry> _carried = [];
 
     /// <summary>The row wearing the drop mark, so that it can be taken off again.</summary>
     private Control? _marked;
@@ -765,7 +757,7 @@ internal abstract class EntryView : UserControl
         {
             var slid = e.GetPosition(List) - _slip;
 
-            if (Math.Abs(slid.X) >= Frame || Math.Abs(slid.Y) >= Frame)
+            if (Math.Abs(slid.X) >= Drag.Slip || Math.Abs(slid.Y) >= Drag.Slip)
             {
                 Started();
             }
@@ -782,7 +774,7 @@ internal abstract class EntryView : UserControl
 
         if (!_framing)
         {
-            if (Math.Abs(away.X) < Frame && Math.Abs(away.Y) < Frame)
+            if (Math.Abs(away.X) < Drag.Slip && Math.Abs(away.Y) < Drag.Slip)
             {
                 return;
             }
@@ -895,11 +887,11 @@ internal abstract class EntryView : UserControl
     /// Starts a drag of the choice as it stood when the pointer went down.
     /// </summary>
     /// <remarks>
-    /// The files are offered themselves as well as their paths written out, so that a file manager receives
-    /// them as files and a text field as text. What the platform does with the drag is its own business: this
-    /// hands over the data and waits to be told what became of it (Section 19.6).
+    /// What is left to decide here is what a drag of a listing carries: the whole choice when the press landed
+    /// on a chosen entry, and that entry alone when it did not. Everything after that is the same for every view
+    /// that can be dragged from (<see cref="Drag.Away"/>).
     /// </remarks>
-    private async void Started()
+    private void Started()
     {
         var from = _from;
         var pressed = _slippedAt;
@@ -909,10 +901,7 @@ internal abstract class EntryView : UserControl
         _from = null;
         _atPress = [];
 
-        if (from is null ||
-            pressed < 0 ||
-            pressed >= Browser.Shown.Count ||
-            TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+        if (from is null || pressed < 0 || pressed >= Browser.Shown.Count)
         {
             return;
         }
@@ -930,51 +919,7 @@ internal abstract class EntryView : UserControl
             return;
         }
 
-        var transfer = new DataTransfer();
-
-        foreach (var entry in carrying)
-        {
-            var item = entry.Kind == EntryKind.Directory
-                ? (IStorageItem?)await storage.TryGetFolderFromPathAsync(entry.Path)
-                : await storage.TryGetFileFromPathAsync(entry.Path);
-
-            if (item is not null)
-            {
-                transfer.Add(DataTransferItem.CreateFile(item));
-            }
-        }
-
-        transfer.Add(DataTransferItem.CreateText(string.Join(Environment.NewLine, carrying.Select(entry => entry.Path))));
-
-        _carried = carrying;
-        Drops.Answered = false;
-
-        // What the card shows, which the view under the pointer draws rather than the one that started the drag.
-        Ghost.Carrying = dragged;
-
-        try
-        {
-            var effect = await DragDrop.DoDragDropAsync(from, transfer, DragDropEffects.Move | DragDropEffects.Copy);
-
-            // A move another program made is a move this program has to finish: the other program copied the
-            // files it was handed, and the originals are the source's to take away. A move this program
-            // answered itself already moved them, which is what Drops.Answered records — taking them away again
-            // would delete what was just carried, and the reading of the directory is left to the drop that did
-            // the moving: a read taken here would be taken before that move had been made.
-            if (effect == DragDropEffects.Move && !Drops.Answered)
-            {
-                await FileOps.Remove(_carried, Host.Log.Error);
-                Later();
-            }
-        }
-        catch (Exception error) when (error is not OutOfMemoryException)
-        {
-            Host.Log.Error(error.Message);
-        }
-
-        _carried = [];
-        Ghost.Carrying = null;
-        _ghost.Unghost();
+        Drag.Away(Browser, from, carrying, dragged, Host.Log.Error);
     }
 
     /// <summary>Says whether a drag may land here, and lights the directory it would land in.</summary>
@@ -1007,18 +952,6 @@ internal abstract class EntryView : UserControl
         _ghost.Unghost();
         _drops.Dropped(e);
     }
-
-    /// <summary>
-    /// Says the files may have changed, to be read again not before this event is over.
-    /// </summary>
-    /// <remarks>
-    /// Every location's directory and not only this one's, because the operation that has just finished may have
-    /// changed a directory this dock is not the one showing: a move is answered by the dock it was dropped on,
-    /// and the entries may have been dragged out of another dock — which, a dock being able to be out of step,
-    /// may be looking at a directory of its own. Deferring is the other half of it: reading a directory again
-    /// rebuilds the views showing it, and one of them may be the view answering the event.
-    /// </remarks>
-    private void Later() => Dispatcher.UIThread.Post(Browser.Touch);
 
     /// <summary>
     /// <summary>Where a drag would land, or nothing where it may not land here at all.</summary>

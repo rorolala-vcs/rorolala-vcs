@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -84,9 +85,14 @@ internal sealed class TreeControl : UserControl
         AttachedToVisualTree += (_, _) =>
         {
             _browser.Changed += Update;
+            _browser.Reread += Draw;
             Draw();
         };
-        DetachedFromVisualTree += (_, _) => _browser.Changed -= Update;
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _browser.Changed -= Update;
+            _browser.Reread -= Draw;
+        };
 
         _root.Content = RolaI18N.Get("rorolala_file_system.root");
         _root.Padding = new Thickness(7, 2);
@@ -129,10 +135,22 @@ internal sealed class TreeControl : UserControl
         }
     }
 
-    /// <summary>Builds the tree over the base.</summary>
+    /// <summary>
+    /// Builds the tree over the base, keeping the steps that were open.
+    /// </summary>
+    /// <remarks>
+    /// The steps are asked of the tree being replaced rather than kept here, because they are what that tree was
+    /// drawn with: a directory whose contents have moved is a tree to build again — a step may have come or gone
+    /// — and a user who has walked down into a step should not be put back at the base for it.
+    /// </remarks>
     private void Draw()
     {
-        _content.Content = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions);
+        var opened = _content.Content is TreeBrowser was ? was.Opened() : [];
+
+        var tree = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions);
+        _content.Content = tree;
+        tree.Reopen(opened);
+
         _drawn = _browser.BaseDir;
     }
 }
@@ -149,8 +167,14 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Where the browser is, which the tree reads and switches.</summary>
     private readonly Browser _browser;
 
+    /// <summary>The host, for what a drag cannot do.</summary>
+    private readonly IPluginHost _host;
+
     /// <summary>What the rows do, which is what every other view of the location does.</summary>
     private readonly BrowserActions _actions;
+
+    /// <summary>The tree itself, which the open steps are gathered from when it is built again.</summary>
+    private readonly TreeView _tree;
 
     /// <summary>How a drag is taken here: which step it would land in, and which row is lit.</summary>
     private readonly Drops _drops;
@@ -169,19 +193,38 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>The row wearing the drop mark, so that it can be taken off again.</summary>
     private Border? _marked;
 
+    /// <summary>The press a drag of a step would begin from, while it may still become one.</summary>
+    private PointerPressedEventArgs? _pressed;
+
+    /// <summary>Where that press landed and which step it was on, while it may still become a drag.</summary>
+    private Point _slip;
+    private string? _slipped;
+
+    /// <summary>
+    /// Whether that press became a drag.
+    /// </summary>
+    /// <remarks>
+    /// A step of the tree is both a place and a thing: choosing one goes there, and dragging one carries it
+    /// there. Which of the two a press was is settled by whether it turned into a drag before it was let go, and
+    /// the answer is kept until the next press so that the release of a drag is not also a step.
+    /// </remarks>
+    private bool _dragged;
+
     /// <summary>Makes the tree rooted at a directory.</summary>
-    /// <param name="host">The host, for what a drop cannot do.</param>
+    /// <param name="host">The host, for what a drop or a drag cannot do.</param>
     /// <param name="browser">Where the browser is, which the tree reads and switches.</param>
     /// <param name="root">The directory the tree is rooted at.</param>
     /// <param name="actions">What a directory does when it is chosen or right-clicked.</param>
     public TreeBrowser(IPluginHost host, Browser browser, string root, BrowserActions actions)
     {
         _browser = browser;
+        _host = host;
         _actions = actions;
         _drops = new Drops(host, browser, Landing, Mark);
 
         var tree = new TreeView { ContextMenu = actions.Empty(this) };
         tree.Items.Add(Node(root));
+        _tree = tree;
 
         // A drag is taken over the whole tree and not over the rows alone: the space beside and below them is
         // not a directory, and a drag let go there is refused by saying so rather than by saying nothing.
@@ -190,6 +233,12 @@ internal sealed class TreeBrowser : UserControl
         AddHandler(DragDrop.DragOverEvent, DraggedOver);
         AddHandler(DragDrop.DragLeaveEvent, DraggedOff);
         AddHandler(DragDrop.DropEvent, Dropped);
+
+        // Taken on the way down, before the row reads them, so that a drag can begin from the press that would
+        // otherwise only choose the step: nothing here is marked handled, so choosing still happens as well.
+        AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
 
         var over = new Canvas { IsHitTestVisible = false };
         _ghost = new Ghost(over);
@@ -249,20 +298,166 @@ internal sealed class TreeBrowser : UserControl
     /// for it is not somewhere a drag can go either.
     /// </remarks>
     /// <param name="e">The drag.</param>
-    private Land? Landing(DragEventArgs e)
+    private Land? Landing(DragEventArgs e) =>
+        e.DataTransfer.Contains(DataFormat.File) &&
+        Step(e.GetPosition(this)) is { } path &&
+        !Browser.IsComputer(path)
+            ? new Land(path, path)
+            : null;
+
+    /// <summary>
+    /// Takes a press as the beginning of a drag of the step it landed on.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is decided until the pointer has moved far enough to say the hand meant a drag rather than a click
+    /// (<see cref="Drag.Slip"/>), so a press that only chooses a step still chooses it. The computer is not
+    /// carried: it stands for the drives rather than being one of them.
+    /// </remarks>
+    /// <param name="sender">The tree.</param>
+    /// <param name="e">The press.</param>
+    private void Pressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.DataTransfer.Contains(DataFormat.File))
+        _dragged = false;
+        _pressed = null;
+        _slipped = null;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            return null;
+            return;
         }
 
         var at = e.GetPosition(this);
 
+        if (Step(at) is not { } path || Browser.IsComputer(path))
+        {
+            return;
+        }
+
+        _pressed = e;
+        _slip = at;
+        _slipped = path;
+    }
+
+    /// <summary>Starts the drag of a step once the press has slipped far enough to mean one.</summary>
+    /// <param name="sender">The tree.</param>
+    /// <param name="e">The move.</param>
+    private void Moved(object? sender, PointerEventArgs e)
+    {
+        if (_slipped is not { } path || _pressed is not { } from)
+        {
+            return;
+        }
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        var slid = e.GetPosition(this) - _slip;
+
+        if (Math.Abs(slid.X) < Drag.Slip && Math.Abs(slid.Y) < Drag.Slip)
+        {
+            return;
+        }
+
+        _pressed = null;
+        _slipped = null;
+        _dragged = true;
+
+        var entry = new Entry(path, EntryKind.Directory);
+
+        Drag.Away(_browser, from, [entry], entry, _host.Log.Error);
+    }
+
+    /// <summary>Lets a press that never became a drag go, so that it is read as the step it was.</summary>
+    /// <param name="sender">The tree.</param>
+    /// <param name="e">The release.</param>
+    private void Released(object? sender, PointerReleasedEventArgs e)
+    {
+        _pressed = null;
+        _slipped = null;
+    }
+
+    /// <summary>The step under a point, or nothing where no step is there.</summary>
+    /// <param name="at">The point, in this view's own coordinates.</param>
+    private string? Step(Point at)
+    {
         for (var visual = this.GetVisualAt(at) as Visual; visual is not null; visual = visual.GetVisualParent())
         {
             if (visual is TreeViewItem item && item.Tag is string path)
             {
-                return Browser.IsComputer(path) ? null : new Land(path, path);
+                return path;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The steps that are open, outermost first.
+    /// </summary>
+    /// <remarks>
+    /// In the order they are drawn, so that a step is opened before the steps under it are asked for: what is
+    /// under a step is not read until it is opened, and a step that was never read holds no row to find.
+    /// </remarks>
+    /// <returns>The paths of the steps that are open.</returns>
+    public IReadOnlyList<string> Opened()
+    {
+        var opened = new List<string>();
+        Walk(_tree.Items, opened);
+
+        return opened;
+    }
+
+    /// <summary>
+    /// Opens the steps that were open, in the order they are given.
+    /// </summary>
+    /// <remarks>
+    /// One at a time and outermost first, because opening a step is what reads the steps under it: a step asked
+    /// for before its parent is open is a step with no row to find yet.
+    /// </remarks>
+    /// <param name="opened">The paths of the steps to open, outermost first.</param>
+    public void Reopen(IReadOnlyList<string> opened)
+    {
+        foreach (var path in opened)
+        {
+            if (Find(_tree.Items, path) is { } item)
+            {
+                item.IsExpanded = true;
+            }
+        }
+    }
+
+    /// <summary>Gathers the open steps under some items, outermost first.</summary>
+    /// <param name="items">The items to walk.</param>
+    /// <param name="opened">Where the paths are gathered.</param>
+    private static void Walk(ItemCollection items, List<string> opened)
+    {
+        foreach (var item in items.OfType<TreeViewItem>())
+        {
+            if (item.Tag is string path && item.IsExpanded)
+            {
+                opened.Add(path);
+                Walk(item.Items, opened);
+            }
+        }
+    }
+
+    /// <summary>The row standing for a directory, or nothing where the tree has no such row.</summary>
+    /// <param name="items">The items to look under.</param>
+    /// <param name="path">The directory to look for.</param>
+    private static TreeViewItem? Find(ItemCollection items, string path)
+    {
+        foreach (var item in items.OfType<TreeViewItem>())
+        {
+            if (item.Tag is string here && string.Equals(here, path, StringComparison.Ordinal))
+            {
+                return item;
+            }
+
+            if (Find(item.Items, path) is { } under)
+            {
+                return under;
             }
         }
 
@@ -442,7 +637,18 @@ internal sealed class TreeBrowser : UserControl
             },
         };
 
-        row.Tapped += (_, _) => _browser.Go(path);
+        row.Tapped += (_, _) =>
+        {
+            // A press that became a drag is not also a step: the drag took the pointer, and a hand letting go of
+            // one is putting something down rather than choosing a place.
+            if (_dragged)
+            {
+                return;
+            }
+
+            _browser.Go(path);
+        };
+
         row.DoubleTapped += (_, e) => e.Handled = true;
 
         _rows.Add((path, row));

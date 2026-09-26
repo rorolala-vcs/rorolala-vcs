@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -79,7 +81,7 @@ internal sealed class Drops
 
         _mark(land.Row);
 
-        return Copying(e) ? DragDropEffects.Copy : DragDropEffects.Move;
+        return e.KeyModifiers.HasFlag(KeyModifiers.Control) ? DragDropEffects.Copy : DragDropEffects.Move;
     }
 
     /// <summary>Takes a drag off the view: nothing is lit any more.</summary>
@@ -109,7 +111,7 @@ internal sealed class Drops
         Answered = true;
         e.Handled = true;
 
-        var copy = Copying(e) || e.DragEffects == DragDropEffects.Copy;
+        var copy = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.DragEffects == DragDropEffects.Copy;
 
         // Into the directory it is already in is a move that would only rename it, or a copy that makes a
         // second one. Neither is what letting go inside one directory means, so neither is offered.
@@ -131,7 +133,7 @@ internal sealed class Drops
             await FileOps.Move(paths, into, _host.Log.Error);
         }
 
-        Later();
+        Again(_browser);
     }
 
     /// <summary>
@@ -139,16 +141,13 @@ internal sealed class Drops
     /// </summary>
     /// <remarks>
     /// Every location's directory and not only one's, because the operation that has just finished may have
-    /// changed a directory this dock is not the one showing: a move is answered by the dock it was dropped on,
+    /// changed a directory another dock is the one showing: a move is answered by the dock it was dropped on,
     /// and the entries may have been dragged out of another dock — which, a dock being able to be out of step,
     /// may be looking at a directory of its own. Deferring is the other half of it: reading a directory again
     /// rebuilds the views showing it, and one of them may be the view answering the event.
     /// </remarks>
-    private void Later() => Dispatcher.UIThread.Post(_browser.Touch);
-
-    /// <summary>Whether the drag is one to copy rather than to move, which is what holding a control asks for.</summary>
-    /// <param name="e">The drag.</param>
-    private static bool Copying(DragEventArgs e) => e.KeyModifiers.HasFlag(KeyModifiers.Control);
+    /// <param name="through">A location to say it through, since every location reads its directory again.</param>
+    private static void Again(Browser through) => Dispatcher.UIThread.Post(through.Touch);
 
     /// <summary>The paths a drag carries, whether it brought them as files or as text.</summary>
     /// <param name="data">What the drag carries.</param>
@@ -172,11 +171,99 @@ internal sealed class Drops
             ? []
             : text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(FileOps.Bare)
-                .Where(path => File.Exists(path) || System.IO.Directory.Exists(path))
+                .Where(path => File.Exists(path) || Directory.Exists(path))
                 .ToArray();
     }
 
     /// <summary>The directory an entry sits in, for telling a move that would go nowhere.</summary>
     /// <param name="path">The path to ask about.</param>
     private static string ParentOf(string path) => Path.GetDirectoryName(FileOps.Bare(path)) ?? string.Empty;
+}
+
+/// <summary>
+/// The other half of the protocol: handing entries to the platform as a drag.
+/// </summary>
+/// <remarks>
+/// One answer for every view that can be dragged from, for the reason the drop side is one answer: what a drag
+/// carries and what finishing it owes do not depend on how the rows are drawn.
+/// </remarks>
+internal static class Drag
+{
+    /// <summary>
+    /// How far the pointer moves with the button held before it drags or frames rather than clicks.
+    /// </summary>
+    /// <remarks>
+    /// Both gestures begin at the same press, so both need the same slack before they may begin: a press that has
+    /// moved a pixel is still a click in the hand, and one that has moved this far is not.
+    /// </remarks>
+    public const double Slip = 4;
+
+    /// <summary>
+    /// Hands entries over as a drag, and finishes what that leaves unfinished.
+    /// </summary>
+    /// <remarks>
+    /// The files are offered themselves as well as their paths written out, so that a file manager receives them
+    /// as files and a text field as text. What the platform does with the drag is its own business: this hands
+    /// over the data and waits to be told what became of it (Section 19.6). A move another program made is a
+    /// move this program has to finish, the other program having only copied the files it was handed; a move one
+    /// of this program's own docks answered has already moved them, which is what <see cref="Drops.Answered"/>
+    /// records — taking them away again would delete what was just carried.
+    /// </remarks>
+    /// <param name="through">A location to say a read through, since every location reads its directory again.</param>
+    /// <param name="from">The press the drag begins at, which is what the platform is handed.</param>
+    /// <param name="carrying">What to carry, in the order the view shows it.</param>
+    /// <param name="lead">The entry the drag took hold of, whose picture the card carries.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    public static async void Away(
+        Browser through,
+        PointerPressedEventArgs from,
+        IReadOnlyList<Entry> carrying,
+        Entry lead,
+        Action<string> failed
+    )
+    {
+        if (TopLevel.GetTopLevel(from.Source as Visual)?.StorageProvider is not { } storage)
+        {
+            return;
+        }
+
+        var transfer = new DataTransfer();
+
+        foreach (var entry in carrying)
+        {
+            var item = entry.Kind == EntryKind.Directory
+                ? (IStorageItem?)await storage.TryGetFolderFromPathAsync(entry.Path)
+                : await storage.TryGetFileFromPathAsync(entry.Path);
+
+            if (item is not null)
+            {
+                transfer.Add(DataTransferItem.CreateFile(item));
+            }
+        }
+
+        transfer.Add(DataTransferItem.CreateText(string.Join(Environment.NewLine, carrying.Select(entry => entry.Path))));
+
+        Drops.Answered = false;
+        Ghost.Carrying = lead;
+
+        try
+        {
+            var effect = await DragDrop.DoDragDropAsync(from, transfer, DragDropEffects.Move | DragDropEffects.Copy);
+
+            if (effect == DragDropEffects.Move && !Drops.Answered)
+            {
+                await FileOps.Remove([.. carrying], failed);
+
+                // Said here and not left to the drop, because the drop that moved them was another program's: the
+                // entries were removed by this one, and the listing that held them has to be read again.
+                Dispatcher.UIThread.Post(through.Touch);
+            }
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            failed(error.Message);
+        }
+
+        Ghost.Carrying = null;
+    }
 }
