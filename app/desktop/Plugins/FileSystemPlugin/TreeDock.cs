@@ -30,7 +30,7 @@ internal sealed class TreeDock : IDockView
     /// <param name="browser">The one location and base, which the tree is rooted at.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
     public TreeDock(IPluginHost host, Browser browser, Clip clip) =>
-        _view = new TreeControl(host, browser, new BrowserActions(host, browser, clip));
+        _view = new TreeControl(host, browser, new BrowserActions(host, browser, clip), clip);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -63,6 +63,9 @@ internal sealed class TreeControl : UserControl
     /// <summary>What the rows do, which is what every other view of the location does.</summary>
     private readonly BrowserActions _actions;
 
+    /// <summary>What a copy or a cut has put within reach of a paste, which a cut step is drawn faded from.</summary>
+    private readonly Clip _clip;
+
     /// <summary>The button that roots the tree at the top of the platform.</summary>
     private readonly Button _root = new() { Classes = { "ghost" } };
 
@@ -76,11 +79,13 @@ internal sealed class TreeControl : UserControl
     /// <param name="host">The host, for what a drop cannot do.</param>
     /// <param name="browser">The one location and base, which the tree is rooted at.</param>
     /// <param name="actions">What the rows do.</param>
-    public TreeControl(IPluginHost host, Browser browser, BrowserActions actions)
+    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
+    public TreeControl(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
     {
         _host = host;
         _browser = browser;
         _actions = actions;
+        _clip = clip;
 
         AttachedToVisualTree += (_, _) =>
         {
@@ -139,10 +144,28 @@ internal sealed class TreeControl : UserControl
         }
     }
 
-    /// <summary>Takes the key that asks for the filesystem to be looked at again.</summary>
+    /// <summary>
+    /// Reads the keys a dock answers for the whole of itself.
+    /// </summary>
+    /// <remarks>
+    /// Read again on <c>F5</c>, and the three the clipboard answers, over the step that is chosen: a tree is a
+    /// view of directories, and a directory is what a copy, a cut and a paste are about as much as an entry of a
+    /// listing is (Section 7.7).
+    /// </remarks>
     /// <param name="sender">The dock.</param>
     /// <param name="e">The key.</param>
-    private void Keyed(object? sender, KeyEventArgs e) => Keys.Again(e, _browser);
+    private void Keyed(object? sender, KeyEventArgs e)
+    {
+        if (Keys.Again(e, _browser))
+        {
+            return;
+        }
+
+        if (_content.Content is TreeBrowser tree)
+        {
+            _ = Keys.Clipboard(e, new Clipboard(tree.Copy, tree.Cut, tree.Paste));
+        }
+    }
 
     /// <summary>
     /// Builds the tree over the base, keeping the steps that were open.
@@ -156,7 +179,7 @@ internal sealed class TreeControl : UserControl
     {
         var opened = _content.Content is TreeBrowser was ? was.Opened() : [];
 
-        var tree = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions);
+        var tree = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions, _clip);
         _content.Content = tree;
         tree.Reopen(opened);
 
@@ -181,6 +204,9 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>What the rows do, which is what every other view of the location does.</summary>
     private readonly BrowserActions _actions;
+
+    /// <summary>What a copy or a cut has put within reach of a paste, which a cut step is drawn faded from.</summary>
+    private readonly Clip _clip;
 
     /// <summary>The tree itself, which the open steps are gathered from when it is built again.</summary>
     private readonly TreeView _tree;
@@ -224,11 +250,13 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="browser">Where the browser is, which the tree reads and switches.</param>
     /// <param name="root">The directory the tree is rooted at.</param>
     /// <param name="actions">What a directory does when it is chosen or right-clicked.</param>
-    public TreeBrowser(IPluginHost host, Browser browser, string root, BrowserActions actions)
+    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
+    public TreeBrowser(IPluginHost host, Browser browser, string root, BrowserActions actions, Clip clip)
     {
         _browser = browser;
         _host = host;
         _actions = actions;
+        _clip = clip;
         _drops = new Drops(host, browser, Landing, Mark);
 
         var tree = new TreeView { ContextMenu = actions.Empty(this) };
@@ -248,6 +276,11 @@ internal sealed class TreeBrowser : UserControl
         AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
+
+        // Redrawn while on screen, like the listing beside it: a dock that was closed is not a view of anything
+        // to keep in step.
+        AttachedToVisualTree += (_, _) => _clip.Changed += Repaint;
+        DetachedFromVisualTree += (_, _) => _clip.Changed -= Repaint;
 
         var over = new Canvas { IsHitTestVisible = false };
         _ghost = new Ghost(over);
@@ -512,6 +545,60 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
+    /// <summary>Copies the chosen step to the clipboard.</summary>
+    public void Copy()
+    {
+        if (Chosen() is { } path)
+        {
+            _actions.Copy(this, [new Entry(path, EntryKind.Directory)]);
+        }
+    }
+
+    /// <summary>Cuts the chosen step to the clipboard, which a paste then moves.</summary>
+    public void Cut()
+    {
+        if (Chosen() is { } path)
+        {
+            _actions.Cut(this, [new Entry(path, EntryKind.Directory)]);
+        }
+    }
+
+    /// <summary>
+    /// Pastes what is on the clipboard into the chosen step.
+    /// </summary>
+    /// <remarks>
+    /// Into the step that is chosen and not into the base: a tree is walked by choosing steps, so the step a user
+    /// last chose is the directory a paste here is about. With nothing chosen there is nowhere to paste, and
+    /// nothing happens.
+    /// </remarks>
+    public void Paste()
+    {
+        if (Chosen() is { } path)
+        {
+            _actions.Paste(this, path);
+        }
+    }
+
+    /// <summary>The step that is chosen, or nothing where none is chosen or where it is the computer.</summary>
+    private string? Chosen() =>
+        _tree.SelectedItem is TreeViewItem item && item.Tag is string path && !Browser.IsComputer(path)
+            ? path
+            : null;
+
+    /// <summary>Fades a row whose step is cut, so that it reads as on its way out.</summary>
+    /// <param name="row">The row.</param>
+    /// <param name="path">The step it stands for.</param>
+    private void Fade(Border row, string path) => row.Opacity = _clip.IsCut(path) ? _clip.Faded : 1.0;
+
+    /// <summary>Draws the cut state again on every row on screen.</summary>
+    private void Repaint()
+    {
+        foreach (var (path, row) in _rows)
+        {
+            Fade(row, path);
+        }
+    }
+
     /// <summary>
     /// What the tree says where the base holds nothing under it.
     /// </summary>
@@ -661,6 +748,7 @@ internal sealed class TreeBrowser : UserControl
         row.DoubleTapped += (_, e) => e.Handled = true;
 
         _rows.Add((path, row));
+        Fade(row, path);
 
         return row;
     }

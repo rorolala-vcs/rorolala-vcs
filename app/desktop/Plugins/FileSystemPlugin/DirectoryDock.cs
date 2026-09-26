@@ -133,6 +133,9 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Whichever arrangement the zoom amounts to.</summary>
     private readonly ContentControl _content = new();
 
+    /// <summary>The view being read, which is what a copy or a paste in this dock is about.</summary>
+    private EntryView? _view;
+
     /// <summary>This dock's own location, while it is out of step, and nothing while it follows the whole.</summary>
     private Browser? _own;
 
@@ -391,10 +394,28 @@ internal sealed class DirectoryControl : UserControl
         };
     }
 
-    /// <summary>Takes the key that asks for the filesystem to be looked at again.</summary>
+    /// <summary>
+    /// Reads the keys a dock answers for the whole of itself.
+    /// </summary>
+    /// <remarks>
+    /// Read again on <c>F5</c>, which is the dock's own key, and the three the clipboard answers, which are
+    /// taken here rather than by the listing so that they are answered wherever the keyboard is in the dock —
+    /// after a zoom was dragged as much as after an entry was clicked (Section 7.7).
+    /// </remarks>
     /// <param name="sender">The dock.</param>
     /// <param name="e">The key.</param>
-    private void Keyed(object? sender, KeyEventArgs e) => Keys.Again(e, _whole);
+    private void Keyed(object? sender, KeyEventArgs e)
+    {
+        if (Keys.Again(e, _whole))
+        {
+            return;
+        }
+
+        if (_view is { } view)
+        {
+            _ = Keys.Clipboard(e, new Clipboard(view.Copy, view.Cut, view.Paste));
+        }
+    }
 
     /// <summary>
     /// Takes a turn of the wheel with control held as a step of zoom.
@@ -438,9 +459,11 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Draws what is there, at the zoom this dock reads it.</summary>
     private void Draw()
     {
-        _content.Content = _zoom.Value > GridAbove
+        _view = _zoom.Value > GridAbove
             ? new GridBrowser(_host, Location, _actions, _clip, Icons.SizeAt(_zoom.Value))
             : new ListBrowser(_host, Location, _actions, _clip);
+
+        _content.Content = _view;
 
         _drawn = Location.Shown;
     }

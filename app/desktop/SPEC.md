@@ -505,7 +505,7 @@ All three are always available from `Window`.
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
 | Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): a table of rows below 60%, tiles above it. At its top is the browser's own toolbar — back, forward, up, refresh, and the address — and at its foot the zoom, both part of this dock rather than docks beside it (§7.5); the end of that toolbar carries the toggle for hidden entries and the toggle for following the whole (§7.5), which is what lets one dock look at a directory of its own. The table's columns are the icon, the name, the permissions, when it was last written and how large it is — and the permissions column is left out on Windows, which does not carry what those letters say. A column is made wider or narrower by the grab between it and its neighbour, which is drawn as the grab between two regions is (§10), and the name is the column that takes what is left over, so the table is as wide as the dock whatever the columns are. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
-| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. A step is both a place to go and a thing to carry: a drag is let go in the tree as well as in a listing — a step is a directory a drag can land in, and the space beside and below the steps is not — and a step is dragged out of the tree as well (§7.7). Placed at the left by default. |
+| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. A step is both a place to go and a thing to carry: a drag is let go in the tree as well as in a listing — a step is a directory a drag can land in, and the space beside and below the steps is not — and a step is dragged out of the tree as well (§7.7). The clipboard's three keys act in it as they do in a listing, over the step that is chosen, and a step that was cut is drawn faded until the paste (§7.7). Placed at the left by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
@@ -659,10 +659,14 @@ the window and the docks and knows nothing of entries.
   the way up is never matched, being a place rather than a name. `Ctrl+A` chooses every entry.
 - **Clipboard.** `Ctrl+C` copies the chosen entries and `Ctrl+X` cuts them; `Ctrl+V` pastes into the
   directory being looked at. The paths go on the **system clipboard** — as files and as text — so a
-  copy can be pasted into another program and a copy taken in another program can be pasted here. An
-  entry that was cut is drawn faded until the paste, and that paste **moves** it, while anything else
-  is copied. A name already taken in the destination is left where it is and a free name is made
-  beside it (`name (2)`), so a paste never overwrites.
+  copy can be pasted into another program and a copy taken in another program can be pasted here, and the
+  same three keys act in the **tree** over the step that is chosen there. They are taken at the top of a dock
+  rather than by the listing, so that they are answered wherever the keyboard is inside it — after a zoom was
+  dragged as much as after an entry was clicked — while a field is left alone, because in the address
+  `Ctrl+C` copies the words written in it. An entry that was cut is drawn **faded** until the paste, in a
+  listing and in the tree alike, and that paste **moves** it while anything else is copied. A name already
+  taken in the destination is left where it is and a free name is made beside it (`name (2)`), so a paste
+  never overwrites.
 - **Dragging to move.** Dragging chosen entries onto a directory moves them into it — and onto the
   listing's **way up**, which moves them into the directory holding the one being looked at, since that is
   the place the entry stands for. A drag can leave the program or arrive from another one: the toolkit's

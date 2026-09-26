@@ -42,6 +42,17 @@ internal sealed class Clip
     /// <param name="path">The entry's path.</param>
     public bool IsCut(string path) => _moving.Contains(path);
 
+    /// <summary>
+    /// How faded an entry is drawn while it is cut, so that it reads as on its way out.
+    /// </summary>
+    /// <remarks>
+    /// A property rather than a constant of the class, because a control's own <c>Clip</c> — the geometry one
+    /// draws with — is what the name <c>Clip</c> means there, so a view cannot reach a constant of this one by
+    /// name. Kept here rather than by a view because a listing and a tree both draw entries, and two answers to
+    /// how faded a cut one is would be two answers to one question.
+    /// </remarks>
+    public double Faded => 0.45;
+
     /// <summary>Puts entries on the clipboard to be copied, and takes back any earlier cut.</summary>
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
     /// <param name="entries">What to copy.</param>

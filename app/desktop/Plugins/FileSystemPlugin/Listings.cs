@@ -57,12 +57,7 @@ internal static class Names
 /// </remarks>
 internal abstract class EntryView : UserControl
 {
-    /// <summary>How faded an entry is while it is cut, so that it reads as on its way out.</summary>
-    private const double CutOpacity = 0.45;
-
-    /// <summary>
-    /// How faded an entry the platform hides is drawn, while hidden entries are shown.
-    /// </summary>
+    /// <summary>How faded an entry the platform hides is drawn, while hidden entries are shown.</summary>
     /// <remarks>
     /// Fainter rather than gone: what is hidden is still an entry of the directory, and it is dimmed so that
     /// the eye passes over it rather than being left out of the listing.
@@ -429,7 +424,7 @@ internal abstract class EntryView : UserControl
     /// <param name="entry">What it stands for.</param>
     protected virtual void Apply(Control row, Entry entry) =>
         row.Opacity = Clipboard.IsCut(entry.Path)
-            ? CutOpacity
+            ? Clipboard.Faded
             : entry.Hidden
                 ? HiddenOpacity
                 : 1.0;
@@ -449,8 +444,8 @@ internal abstract class EntryView : UserControl
     /// <remarks>
     /// The arrows step, <c>Home</c>, <c>End</c>, <c>PageUp</c> and <c>PageDown</c> go further,
     /// <c>Shift</c> extends from where the last step landed, and <c>Enter</c> opens. Everything else — the
-    /// toolkit's own select-all among it, and the clipboard, which is the dock's and handled there — is
-    /// left to the list.
+    /// toolkit's own select-all among it — is left to the list, and the clipboard is the dock's and answered
+    /// there (Section 7.7).
     /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The key.</param>
@@ -459,28 +454,6 @@ internal abstract class EntryView : UserControl
         _modifiers = e.KeyModifiers;
 
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
-
-        if (control)
-        {
-            switch (e.Key)
-            {
-                case Key.C:
-                    Copy();
-                    e.Handled = true;
-                    break;
-                case Key.X:
-                    Cut();
-                    e.Handled = true;
-                    break;
-                case Key.V:
-                    Paste();
-                    e.Handled = true;
-                    break;
-            }
-
-            return;
-        }
 
         switch (e.Key)
         {
