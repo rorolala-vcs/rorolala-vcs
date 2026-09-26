@@ -60,8 +60,10 @@ public sealed class FileSystemPlugin : IRolaPlugin
 
         // One location for the whole plugin. Every dock it opens is a view onto it — the browser
         // docks differ in layout and in nothing else, and the navigation dock has one address and one
-        // history to show — so there is one thing to make and both factories are handed it.
+        // history to show — so there is one thing to make and both factories are handed it. The clipboard
+        // is shared the same way: a copy made in one directory dock is a copy the other can paste.
         var browser = new Browser(Start());
+        var clip = new Clip();
 
         host.Docks.Register(
             new DockRegistration(
@@ -70,7 +72,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.directories",
                 DockOpenMode.New,
                 DockPlacement.Center,
-                _ => new DirectoryDock(host, browser)
+                _ => new DirectoryDock(host, browser, clip)
             )
         );
 
@@ -81,7 +83,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.tree",
                 DockOpenMode.Toggle,
                 DockPlacement.Left,
-                _ => new TreeDock(host, browser)
+                _ => new TreeDock(host, browser, clip)
             )
         );
 

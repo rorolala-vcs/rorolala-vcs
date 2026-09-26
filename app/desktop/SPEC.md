@@ -49,6 +49,7 @@ document first, then to the code.
   - [7.4 Core docks](#74-core-docks)
   - [7.5 Bundled plugin docks](#75-bundled-plugin-docks)
   - [7.6 Headers and the strip](#76-headers-and-the-strip)
+  - [7.7 Browser interaction](#77-browser-interaction)
 - [8. Open Hook Pipeline](#8-open-hook-pipeline)
   - [8.1 Request state](#81-request-state)
   - [8.2 Stages and order](#82-stages-and-order)
@@ -568,6 +569,34 @@ read is a property of the dock reading them, and so is whether that makes them r
 **tree** is the one view rooted somewhere else — at the base (§7.6) — and it is a dock of its own for
 that reason.
 
+### 7.7 Browser interaction
+
+The two directory layouts — the table and the tiles — are one browser seen two ways, and they are
+driven alike. Everything here belongs to the File System plugin, not to the host: the host supplies
+the window and the docks and knows nothing of entries.
+
+- **Selection.** Clicking an entry chooses it alone; `Ctrl` adds it to, or takes it from, the choice;
+  `Shift` takes everything between the entry the pointer or keyboard last landed on and the one
+  clicked, in the order the listing shows. Chosen entries are filled with the accent (§10). Right-
+  clicking keeps an existing choice when the entry is already in it, so a menu can be opened on a set.
+- **The keyboard.** Arrow keys step — in the table one row at a time, in the tiles one tile across and
+  one row down, so the arrows mean where the eye goes rather than the next index. `Home` and `End` go
+  to the ends of the listing, `PageUp` and `PageDown` by a screenful. `Shift` extends from where the
+  keyboard last landed; `Enter` opens the entry it is on. Typing letters picks the next entry whose
+  name starts with them, and a run of letters is forgotten a second after the last one. `Ctrl+A`
+  chooses every entry.
+- **Clipboard.** `Ctrl+C` copies the chosen entries and `Ctrl+X` cuts them; `Ctrl+V` pastes into the
+  directory being looked at. The paths go on the **system clipboard** — as files and as text — so a
+  copy can be pasted into another program and a copy taken in another program can be pasted here. An
+  entry that was cut is drawn faded until the paste, and that paste **moves** it, while anything else
+  is copied. A name already taken in the destination is left where it is and a free name is made
+  beside it (`name (2)`), so a paste never overwrites.
+- **Dragging to move.** Dragging chosen entries onto a directory is to move them into it. **Not yet
+  implemented** (§19.6). When it is, it will be the plugin's own gesture rather than the toolkit's, for
+  a reason that is a fact about the platform and not a preference: Avalonia 11.3.22 has no drag source
+  on X11 (§19.6), so a drag between programs cannot begin there at all. Only a drag within the program
+  would be offered, and the platform's own drop handling left for the platforms that carry it.
+
 ## 8. Open Hook Pipeline
 
 ### 8.1 Request state
@@ -1018,6 +1047,16 @@ Agreed so far:
    count changes nobody needs warning about; a shape that changes is written by the one writer of these
    files, under the same `_version`.
 5. The persisted dock-layout file format (placement and sizes per `DockNameId` and ordinal).
+6. **Dragging between programs is unavailable on X11 in Avalonia 11.3.22.** `Avalonia.X11` registers
+   no `IPlatformDragSource`, and `DragDrop.DoDragDropAsync` returns `None` when there is none, so a
+   drag cannot begin — not to another program, and not within this one through the toolkit. The XDND
+   protocol is implemented only from Avalonia 12. Two ways out, with their costs:
+   - **Stay on 11.3.22** and hand-roll the in-program drag (§7.7), leaving external drag unavailable
+     here until the toolkit is upgraded. Cost: a bespoke gesture, and two of the three drag cases
+     asked for stay impossible on this platform.
+   - **Upgrade to Avalonia 12.** Cost: a migration of the whole look, the contract's Avalonia-facing
+     surface, the icon reader and the tests, and the plugin ABI moves with it (§4.4).
+   Undecided; §7.7 states the in-program gesture as the current position.
 
 ## 20. References
 

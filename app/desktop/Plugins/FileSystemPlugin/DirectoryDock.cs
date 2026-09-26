@@ -18,8 +18,9 @@ internal sealed class DirectoryDock : IDockView
     /// <summary>Makes a directory dock.</summary>
     /// <param name="host">The host, for logging what the directory cannot do.</param>
     /// <param name="browser">The one location, which this dock is a view of.</param>
-    public DirectoryDock(IPluginHost host, Browser browser) =>
-        _view = new DirectoryControl(host, browser);
+    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
+    public DirectoryDock(IPluginHost host, Browser browser, Clip clip) =>
+        _view = new DirectoryControl(host, browser, clip);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -82,6 +83,12 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Where the browser is, which every dock looks at the same one of.</summary>
     private readonly Browser _browser;
 
+    /// <summary>The host, which the views are made over.</summary>
+    private readonly IPluginHost _host;
+
+    /// <summary>What a copy or a cut has put within reach of a paste.</summary>
+    private readonly Clip _clip;
+
     /// <summary>What the views do, so that every view of the location behaves alike.</summary>
     private readonly BrowserActions _actions;
 
@@ -100,10 +107,13 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Makes the directory's control.</summary>
     /// <param name="host">The host, for logging what the directory cannot do.</param>
     /// <param name="browser">The one location, which this dock is a view of.</param>
-    public DirectoryControl(IPluginHost host, Browser browser)
+    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
+    public DirectoryControl(IPluginHost host, Browser browser, Clip clip)
     {
+        _host = host;
+        _clip = clip;
         _browser = browser;
-        _actions = Actions.For(host, browser);
+        _actions = new BrowserActions(host, browser, clip);
 
         // Listening while it is on screen rather than for as long as it exists: a dock that was
         // closed is not a view of anything, and one that was dragged to another region is taken off
@@ -223,8 +233,8 @@ internal sealed class DirectoryControl : UserControl
     private void Draw()
     {
         _content.Content = _zoom.Value > GridAbove
-            ? new GridBrowser(_browser, _actions, Icons.SizeAt(_zoom.Value))
-            : new ListBrowser(_browser, _actions);
+            ? new GridBrowser(_host, _browser, _actions, _clip, Icons.SizeAt(_zoom.Value))
+            : new ListBrowser(_host, _browser, _actions, _clip);
 
         _drawn = _browser.Shown;
     }

@@ -1,11 +1,14 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Selection;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -35,8 +38,478 @@ internal static class Names
                     : entry.Path;
 }
 
+/// <summary>
+/// What both ways of reading a directory have in common: the choice, the keyboard, and the menus.
+/// </summary>
+/// <remarks>
+/// One directory is read two ways — as a table of rows and as tiles — and the two are one browser seen
+/// twice rather than two browsers. Everything a user does to an entry, short of how it is laid out, is
+/// therefore written once here: what a click means, what the arrows and the typed letters mean, and what
+/// the menu on a choice offers. A view supplies the arrangement and a face for one entry, and inherits
+/// the rest.
+/// <para>
+/// The choice is the toolkit's own list selection, because it is exactly the one asked for — a click
+/// chooses, <c>Ctrl</c> adds or removes, <c>Shift</c> takes a range — and because the look already fills
+/// a chosen row with the accent (§10). What is added here is only what the toolkit does not have: the
+/// arrows within a wrapped grid, the typed letters, and a menu that knows about a set.
+/// </para>
+/// </remarks>
+internal abstract class EntryView : UserControl
+{
+    /// <summary>How faded an entry is while it is cut, so that it reads as on its way out.</summary>
+    private const double CutOpacity = 0.45;
+
+    /// <summary>How long a run of typed letters stays one run.</summary>
+    private static readonly TimeSpan Typing = TimeSpan.FromSeconds(1);
+
+    /// <summary>How tall a row is where nothing on screen says, which is only ever a first guess.</summary>
+    private const double RowGuess = 26.0;
+
+    /// <summary>Every row on screen, so that a faded cut and a moved column reach all of them.</summary>
+    private readonly List<(Entry Entry, Control Row)> _rows = [];
+
+    /// <summary>Where the pointer or the keyboard last landed, which is what a range and an open begin at.</summary>
+    private int _lead = -1;
+
+    /// <summary>The letters typed since the last pause, and when the last of them was typed.</summary>
+    private string _typed = string.Empty;
+    private DateTime _typedAt = DateTime.MinValue;
+
+    /// <summary>The modifiers the last key was pressed with, which text input does not carry itself.</summary>
+    private KeyModifiers _modifiers;
+
+    /// <summary>Sets up the shared behaviour over one list.</summary>
+    /// <param name="host">The host, for what cannot be done.</param>
+    /// <param name="browser">The location the entries belong to.</param>
+    /// <param name="actions">What the entries do when opened or given a menu.</param>
+    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
+    protected EntryView(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
+    {
+        Host = host;
+        Browser = browser;
+        Actions = actions;
+        Clipboard = clip;
+
+        List = new ListBox
+        {
+            ItemsSource = browser.Shown,
+            SelectionMode = SelectionMode.Multiple,
+            Background = Brushes.Transparent,
+            ItemTemplate = new FuncDataTemplate<Entry>((entry, _) => Item(entry), true),
+        };
+
+        // The menu on the space around the entries. An entry carries one of its own, and the toolkit
+        // takes the nearest, so this one is the empty space by construction.
+        List.ContextMenu = actions.Empty(this);
+
+        // All three are taken on the way down, before the list reads them itself: the arrows are replaced
+        // by ones that know about a wrapped grid, and Enter and the typed letters are not the toolkit's
+        // at all. A handler that let the list act first would be correcting an action already taken.
+        List.AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
+        List.AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
+        List.AddHandler(TextInputEvent, Typed, RoutingStrategies.Tunnel);
+
+        List.DoubleTapped += Opened;
+
+        // Repainting only while on screen, like the browser itself: a dock that was closed is not a view
+        // of anything to keep in step.
+        AttachedToVisualTree += (_, _) => Clipboard.Changed += Repaint;
+        DetachedFromVisualTree += (_, _) => Clipboard.Changed -= Repaint;
+    }
+
+    /// <summary>The host, for what cannot be done.</summary>
+    protected IPluginHost Host { get; }
+
+    /// <summary>The location the entries belong to.</summary>
+    protected Browser Browser { get; }
+
+    /// <summary>What the entries do when opened or given a menu.</summary>
+    protected BrowserActions Actions { get; }
+
+    /// <summary>What a copy or a cut has put within reach of a paste.</summary>
+    protected Clip Clipboard { get; }
+
+    /// <summary>The list every entry is a row or a tile of.</summary>
+    protected ListBox List { get; }
+
+    /// <summary>Every row on screen, so that a column move can reach the ones drawn as a table.</summary>
+    protected IReadOnlyList<(Entry Entry, Control Row)> Rows => _rows;
+
+    /// <summary>The entry the pointer or the keyboard last landed on, or nothing before either has.</summary>
+    protected Entry? Lead => _lead >= 0 && _lead < Browser.Shown.Count ? Browser.Shown[_lead] : null;
+
+    /// <summary>
+    /// One entry as a row or a tile, which is the one thing a view supplies.
+    /// </summary>
+    /// <remarks>
+    /// Called by the toolkit when it realises an item, and by no view directly, so a view may build it out
+    /// of anything the selection and the theme do not reach.
+    /// </remarks>
+    /// <param name="entry">The entry to draw.</param>
+    /// <returns>What stands for the entry.</returns>
+    protected abstract Control Item(Entry entry);
+
+    /// <summary>
+    /// How many entries stand side by side, which is what an up or down arrow steps by.
+    /// </summary>
+    /// <remarks>
+    /// One for anything that stacks, since a step up or down one row is a step of one entry; a wrapped
+    /// grid answers with the number the layout put on a line, read from the layout rather than worked out,
+    /// because how wide a tile is is the view's own business.
+    /// </remarks>
+    protected virtual int Columns() => 1;
+
+    /// <summary>
+    /// Finishes a row or a tile: the menu on it, how faded it is, and the record of it on screen.
+    /// </summary>
+    /// <remarks>
+    /// The menu is filled when it opens rather than when it is made, because a view's rows are made once
+    /// and the toolkit reuses them: what the menu is about is the choice as it stands at the moment of
+    /// opening, which is later.
+    /// </remarks>
+    /// <param name="entry">What the row stands for.</param>
+    /// <param name="row">The row to finish.</param>
+    /// <returns>The row.</returns>
+    protected Control Prepared(Entry entry, Control row)
+    {
+        var menu = new ContextMenu();
+        menu.Opening += (_, _) => Actions.Fill(menu, this, Chosen(entry));
+        row.ContextMenu = menu;
+
+        Apply(row, entry);
+
+        _rows.Add((entry, row));
+        row.DetachedFromVisualTree += (_, _) =>
+        {
+            for (var at = _rows.Count - 1; at >= 0; at--)
+            {
+                if (ReferenceEquals(_rows[at].Row, row))
+                {
+                    _rows.RemoveAt(at);
+                }
+            }
+        };
+
+        return row;
+    }
+
+    /// <summary>What a menu opened on an entry is about: the whole choice when that entry is in it.</summary>
+    /// <param name="entry">The entry the menu was opened on.</param>
+    protected IReadOnlyList<Entry> Chosen(Entry entry)
+    {
+        var chosen = Chosen();
+
+        return chosen.Any(item => string.Equals(item.Path, entry.Path, StringComparison.Ordinal))
+            ? chosen
+            : [entry];
+    }
+
+    /// <summary>The chosen entries, in the order the listing shows.</summary>
+    protected IReadOnlyList<Entry> Chosen()
+    {
+        var shown = Browser.Shown;
+        var chosen = new List<Entry>();
+
+        foreach (var at in List.Selection.SelectedIndexes)
+        {
+            if (at >= 0 && at < shown.Count)
+            {
+                chosen.Add(shown[at]);
+            }
+        }
+
+        return chosen;
+    }
+
+    /// <summary>How faded a row is, which is its entry being cut and nothing else.</summary>
+    /// <param name="row">The row to fade.</param>
+    /// <param name="entry">What it stands for.</param>
+    protected virtual void Apply(Control row, Entry entry) =>
+        row.Opacity = Clipboard.IsCut(entry.Path) ? CutOpacity : 1.0;
+
+    /// <summary>Draws the cut state again on every row that is on screen.</summary>
+    private void Repaint()
+    {
+        foreach (var (entry, row) in _rows)
+        {
+            Apply(row, entry);
+        }
+    }
+
+    /// <summary>
+    /// Reads a key the list would otherwise read, because it means something more here.
+    /// </summary>
+    /// <remarks>
+    /// The clipboard is taken with <c>Ctrl</c> held, the arrows step, <c>Home</c>, <c>End</c>,
+    /// <c>PageUp</c> and <c>PageDown</c> go further, <c>Shift</c> extends from where the last step landed,
+    /// and <c>Enter</c> opens. Everything else — the toolkit's own select-all among it — is left to the
+    /// list.
+    /// </remarks>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The key.</param>
+    private void Keyed(object? sender, KeyEventArgs e)
+    {
+        _modifiers = e.KeyModifiers;
+
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
+
+        if (control)
+        {
+            switch (e.Key)
+            {
+                case Key.C:
+                    Actions.Copy(this, Chosen());
+                    e.Handled = true;
+                    break;
+                case Key.X:
+                    Actions.Cut(this, Chosen());
+                    e.Handled = true;
+                    break;
+                case Key.V:
+                    Actions.Paste(this, Browser.Current);
+                    e.Handled = true;
+                    break;
+            }
+
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.Enter:
+                if (Lead is { } lead)
+                {
+                    Actions.Open(lead);
+                }
+
+                e.Handled = true;
+                break;
+            case Key.Up:
+                Step(-Columns(), shift);
+                e.Handled = true;
+                break;
+            case Key.Down:
+                Step(Columns(), shift);
+                e.Handled = true;
+                break;
+
+            // Across is a step of one only where entries stand side by side; in a column of rows it is
+            // left to the toolkit, which does nothing with it here.
+            case Key.Left when Columns() > 1:
+                Step(-1, shift);
+                e.Handled = true;
+                break;
+            case Key.Right when Columns() > 1:
+                Step(1, shift);
+                e.Handled = true;
+                break;
+            case Key.Home:
+                To(0, shift);
+                e.Handled = true;
+                break;
+            case Key.End:
+                To(Browser.Shown.Count - 1, shift);
+                e.Handled = true;
+                break;
+            case Key.PageUp:
+                Step(-Page(), shift);
+                e.Handled = true;
+                break;
+            case Key.PageDown:
+                Step(Page(), shift);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Takes a run of typed letters as a move to the next entry that begins with them.
+    /// </summary>
+    /// <remarks>
+    /// The run is forgotten a second after the last letter, so the same letter can begin a new run — which
+    /// is what makes typing one letter a second time go to the next entry rather than wait for a name that
+    /// starts with two. Searching starts after where the last move landed, so a run walks the entries that
+    /// begin with it, and only wraps when it runs off the end.
+    /// </remarks>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The text typed.</param>
+    private void Typed(object? sender, TextInputEventArgs e)
+    {
+        var text = e.Text;
+
+        if (_modifiers.HasFlag(KeyModifiers.Control) ||
+            _modifiers.HasFlag(KeyModifiers.Alt) ||
+            string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        _typed = now - _typedAt > Typing ? text : _typed + text;
+        _typedAt = now;
+
+        var at = Seek(_typed, _lead + 1);
+
+        if (at < 0)
+        {
+            at = Seek(_typed, 0);
+        }
+
+        if (at < 0)
+        {
+            return;
+        }
+
+        To(at, false);
+        e.Handled = true;
+    }
+
+    /// <summary>The first entry from a place on that begins with what was typed, or nothing.</summary>
+    /// <param name="typed">What was typed.</param>
+    /// <param name="from">Where to start looking.</param>
+    private int Seek(string typed, int from)
+    {
+        var shown = Browser.Shown;
+
+        for (var step = 0; step < shown.Count; step++)
+        {
+            var at = (((from + step) % shown.Count) + shown.Count) % shown.Count;
+
+            if (Names.Show(shown[at]).StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+            {
+                return at;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>Steps from where the last step or click landed, or to an end where none has.</summary>
+    /// <param name="by">How far to step, in entries.</param>
+    /// <param name="shift">Whether the step extends the choice rather than replacing it.</param>
+    private void Step(int by, bool shift)
+    {
+        if (_lead < 0)
+        {
+            To(by < 0 ? Browser.Shown.Count - 1 : 0, false);
+
+            return;
+        }
+
+        To(_lead + by, shift);
+    }
+
+    /// <summary>
+    /// Moves to an entry, choosing it alone or taking the range from where the last one landed.
+    /// </summary>
+    /// <remarks>
+    /// The range is taken from the last entry landed on rather than from the toolkit's own anchor, so that
+    /// a click and a step agree about where a range grows from: both leave that entry here. Replacing the
+    /// choice with the range is what makes a second <c>Shift</c> and arrow grow the same range rather than
+    /// adding a second one.
+    /// </remarks>
+    /// <param name="target">The entry to move to, clamped to the listing.</param>
+    /// <param name="shift">Whether to take the range rather than the one entry.</param>
+    private void To(int target, bool shift)
+    {
+        var count = Browser.Shown.Count;
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        target = Math.Clamp(target, 0, count - 1);
+
+        var selection = List.Selection;
+
+        using (selection.BatchUpdate())
+        {
+            selection.Clear();
+
+            if (shift && _lead >= 0 && _lead != target)
+            {
+                selection.SelectRange(_lead, target);
+            }
+            else
+            {
+                selection.Select(target);
+            }
+        }
+
+        _lead = target;
+        List.ScrollIntoView(target);
+    }
+
+    /// <summary>
+    /// How many entries a screenful is, which is a line of them times the lines that fit.
+    /// </summary>
+    /// <remarks>
+    /// Read from what is on screen rather than assumed, so that a dock resized tall pages further and a
+    /// zoomed grid pages by its own rows.
+    /// </remarks>
+    private int Page()
+    {
+        var tall = List.ContainerFromIndex(0)?.Bounds.Height ?? 0;
+
+        if (tall <= 0)
+        {
+            tall = RowGuess;
+        }
+
+        var lines = Math.Max(1, (int)(List.Bounds.Height / tall));
+
+        return Math.Max(1, Columns() * lines);
+    }
+
+    /// <summary>Remembers where the pointer went down, since a menu and a step begin there.</summary>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The press.</param>
+    private void Pressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (IndexAt(e.Source) is var at && at >= 0)
+        {
+            _lead = at;
+        }
+    }
+
+    /// <summary>Opens the entry a double-click landed on.</summary>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The tap.</param>
+    private void Opened(object? sender, TappedEventArgs e)
+    {
+        if (IndexAt(e.Source) is var at && at >= 0 && at < Browser.Shown.Count)
+        {
+            Actions.Open(Browser.Shown[at]);
+        }
+    }
+
+    /// <summary>
+    /// The entry an event landed on, or nothing where it landed on the space around them.
+    /// </summary>
+    /// <remarks>
+    /// Walked up to the item rather than asked of the selection, because a double-click on the space beside
+    /// the entries has no entry and must open nothing, and because the selection may hold entries the event
+    /// did not touch.
+    /// </remarks>
+    /// <param name="source">Where the event came from.</param>
+    private int IndexAt(object? source)
+    {
+        for (var visual = source as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is ListBoxItem item && List.IndexFromContainer(item) is var at && at >= 0)
+            {
+                return at;
+            }
+        }
+
+        return -1;
+    }
+}
+
 /// <summary>The entries as a table, one to a line.</summary>
-internal sealed class ListBrowser : UserControl
+internal sealed class ListBrowser : EntryView
 {
     /// <summary>How wide the column of icons is: enough for the word over it.</summary>
     private const double IconColumn = 30;
@@ -79,9 +552,6 @@ internal sealed class ListBrowser : UserControl
     /// </remarks>
     private const int NameColumn = 1;
 
-    /// <summary>What an entry does when it is opened or right-clicked.</summary>
-    private readonly BrowserActions _actions;
-
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
     private readonly Column[] _values = Values();
 
@@ -91,45 +561,25 @@ internal sealed class ListBrowser : UserControl
     /// <summary>The row of column names, which every row is kept in step with.</summary>
     private readonly Grid _header = new();
 
-    /// <summary>The list the rows are in.</summary>
-    private readonly ListBox _list;
-
-    /// <summary>Every row that is on screen, so that a column moved reaches all of them.</summary>
-    private readonly List<Grid> _rows = [];
-
     /// <summary>Where a grab was taken, and how wide the two columns each side of it were then.</summary>
     private (int Left, int Right, double At, double LeftWas, double RightWas)? _grabbed;
 
     /// <summary>Makes the table over what the browser holds.</summary>
+    /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="browser">What is being shown.</param>
-    /// <param name="actions">What an entry does when it is opened or right-clicked.</param>
-    public ListBrowser(Browser browser, BrowserActions actions)
+    /// <param name="actions">What an entry does when it is opened or given a menu.</param>
+    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
+    public ListBrowser(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
+        : base(host, browser, actions, clip)
     {
-        _actions = actions;
         _widths = Widths();
-
-        _list = new ListBox
-        {
-            ItemsSource = browser.Shown,
-            ItemTemplate = new FuncDataTemplate<Entry>((entry, _) => Row(entry), true),
-            ContextMenu = actions.Empty(this),
-        };
-
-        // Selecting precedes the second tap, so what was activated is what is selected.
-        _list.DoubleTapped += (_, _) =>
-        {
-            if (_list.SelectedItem is Entry entry)
-            {
-                actions.Activate(entry);
-            }
-        };
 
         var header = Header();
 
         var panel = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(header, Dock.Top);
         panel.Children.Add(header);
-        panel.Children.Add(_list);
+        panel.Children.Add(List);
 
         Content = panel;
     }
@@ -145,6 +595,10 @@ internal sealed class ListBrowser : UserControl
         Func<Facts, string> Value,
         TextAlignment Align = TextAlignment.Left
     );
+
+    /// <summary>One entry as a row: its icon, its name, and what each column of values says.</summary>
+    /// <param name="entry">The entry to draw.</param>
+    protected override Control Item(Entry entry) => Prepared(entry, Row(entry));
 
     /// <summary>
     /// The columns after the name, in the order they are shown.
@@ -186,7 +640,7 @@ internal sealed class ListBrowser : UserControl
     }
 
     /// <summary>The columns of the table, as the widths stand.</summary>
-    private ColumnDefinitions Columns()
+    private ColumnDefinitions Definitions()
     {
         var columns = new ColumnDefinitions();
 
@@ -210,7 +664,7 @@ internal sealed class ListBrowser : UserControl
     /// </remarks>
     private Control Header()
     {
-        _header.ColumnDefinitions = Columns();
+        _header.ColumnDefinitions = Definitions();
 
         var cells = new List<Control?>
         {
@@ -245,6 +699,7 @@ internal sealed class ListBrowser : UserControl
     }
 
     /// <summary>One entry as a row: its icon, its name, and what each column of values says.</summary>
+    /// <param name="entry">The entry to draw.</param>
     private Control Row(Entry entry)
     {
         var facts = Stats.Of(entry);
@@ -261,13 +716,8 @@ internal sealed class ListBrowser : UserControl
             cells.Add(Cell(column.Value(facts), column.Align));
         }
 
-        var row = new Grid { ColumnDefinitions = Columns() };
+        var row = new Grid { ColumnDefinitions = Definitions() };
         Place(row, cells);
-
-        row.ContextMenu = _actions.Menu(this, entry);
-
-        _rows.Add(row);
-        row.DetachedFromVisualTree += (_, _) => _rows.Remove(row);
 
         return row;
     }
@@ -388,9 +838,12 @@ internal sealed class ListBrowser : UserControl
     {
         Into(_header);
 
-        foreach (var row in _rows)
+        foreach (var (_, row) in Rows)
         {
-            Into(row);
+            if (row is Grid grid)
+            {
+                Into(grid);
+            }
         }
 
         return;
@@ -434,7 +887,7 @@ internal sealed class ListBrowser : UserControl
 }
 
 /// <summary>The entries as tiles, wrapping across the width.</summary>
-internal sealed class GridBrowser : UserControl
+internal sealed class GridBrowser : EntryView
 {
     /// <summary>How much room is left around a tile's icon and name.</summary>
     private const int Around = 10;
@@ -457,29 +910,36 @@ internal sealed class GridBrowser : UserControl
     /// </remarks>
     private const string Tint = "rorolala.theme.tint.deeper";
 
-    /// <summary>What an entry does when it is opened or right-clicked.</summary>
-    private readonly BrowserActions _actions;
-
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
     /// <summary>Makes the grid layout over what the browser holds.</summary>
+    /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="browser">What is being shown.</param>
-    /// <param name="actions">What an entry does when it is opened or right-clicked.</param>
+    /// <param name="actions">What an entry does when it is opened or given a menu.</param>
+    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
     /// <param name="icon">How large an icon is at the zoom this dock is at.</param>
-    public GridBrowser(Browser browser, BrowserActions actions, int icon)
+    public GridBrowser(IPluginHost host, Browser browser, BrowserActions actions, Clip clip, int icon)
+        : base(host, browser, actions, clip)
     {
-        _actions = actions;
         _icon = icon;
 
-        var tiles = new WrapPanel { Orientation = Orientation.Horizontal };
+        List.ItemsPanel = new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal });
 
-        foreach (var entry in browser.Shown)
-        {
-            tiles.Children.Add(Tile(entry));
-        }
+        // A tile is its own target, so the list item's inset is taken off: an inset here would space the
+        // tiles by a number the table chose, and a wrapped grid states its own.
+        List.Styles.Add(
+            new Style(selector => selector.OfType<ListBoxItem>())
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                    new Setter(Layoutable.MinHeightProperty, 0.0),
+                },
+            }
+        );
 
-        Content = new ScrollViewer { Content = tiles, ContextMenu = actions.Empty(this) };
+        Content = List;
     }
 
     /// <summary>One entry as a tile: its icon above its name, on one line and cut off when it is too long.</summary>
@@ -489,13 +949,52 @@ internal sealed class GridBrowser : UserControl
     /// taken off the end rather than wrapped, because a tile of two lines is a tile of another height, and a
     /// row of tiles that are not the same height is not a row.
     /// </remarks>
+    /// <param name="entry">The entry to draw.</param>
+    protected override Control Item(Entry entry) => Prepared(entry, Tile(entry));
+
+    /// <summary>
+    /// How many tiles the layout put on a line.
+    /// </summary>
+    /// <remarks>
+    /// Read from where the tiles actually landed rather than worked out from a width, because how wide a
+    /// tile is is this view's own business and the layout has already decided. The first line is on screen
+    /// whenever anything is, so the break is found by walking until one tile stands lower than the first.
+    /// </remarks>
+    protected override int Columns()
+    {
+        var count = Browser.Shown.Count;
+
+        if (count <= 1 || List.ContainerFromIndex(0) is not { } first)
+        {
+            return 1;
+        }
+
+        var top = first.Bounds.Y;
+
+        for (var at = 1; at < count; at++)
+        {
+            if (List.ContainerFromIndex(at) is not { } next)
+            {
+                return at;
+            }
+
+            if (next.Bounds.Y > top + 0.5)
+            {
+                return at;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>One entry as a tile: its icon above its name.</summary>
+    /// <param name="entry">The entry to draw.</param>
     private Control Tile(Entry entry)
     {
         var tile = new Border
         {
             Padding = new Thickness(Around),
             Margin = new Thickness(4),
-            ContextMenu = _actions.Menu(this, entry),
             Child = new StackPanel
             {
                 Spacing = 6,
@@ -518,7 +1017,6 @@ internal sealed class GridBrowser : UserControl
         // under it is the thing that is about to be opened.
         tile.PointerEntered += (_, _) => tile.Background = Hover(tile);
         tile.PointerExited += (_, _) => tile.Background = null;
-        tile.DoubleTapped += (_, _) => _actions.Activate(entry);
 
         return tile;
     }

@@ -57,6 +57,15 @@ rorolala_file_system:
   copy_path:
     en: Copy Path
     zh-CN: 复制路径
+  copy:
+    en: Copy
+    zh-CN: 复制
+  cut:
+    en: Cut
+    zh-CN: 剪切
+  paste:
+    en: Paste
+    zh-CN: 粘贴
   refresh:
     en: Refresh
     zh-CN: 刷新

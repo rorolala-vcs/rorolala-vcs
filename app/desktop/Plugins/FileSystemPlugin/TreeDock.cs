@@ -24,8 +24,9 @@ internal sealed class TreeDock : IDockView
     /// <summary>Makes the file navigation dock.</summary>
     /// <param name="host">The host, for logging what the tree cannot do.</param>
     /// <param name="browser">The one location and base, which the tree is rooted at.</param>
-    public TreeDock(IPluginHost host, Browser browser) =>
-        _view = new TreeControl(browser, Actions.For(host, browser));
+    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
+    public TreeDock(IPluginHost host, Browser browser, Clip clip) =>
+        _view = new TreeControl(browser, new BrowserActions(host, browser, clip));
 
     /// <inheritdoc />
     public Control View => _view;
@@ -214,7 +215,7 @@ internal sealed class TreeBrowser : UserControl
     {
         var entry = new Entry(path, EntryKind.Directory);
         var name = Names.Show(entry);
-        var menu = _actions.Menu(this, entry);
+        var menu = _actions.Menu(this, [entry]);
 
         // Offered by every row with steps under it, which is the same row that is given an expander, since
         // closing them all is worth offering where there is more than one to close. What is not offered is
@@ -222,7 +223,7 @@ internal sealed class TreeBrowser : UserControl
         // what a tree read a step at a time is for avoiding.
         if (collapse is not null)
         {
-            menu.Items.Add(Actions.Item("rorolala_file_system.collapse_all", collapse));
+            menu.Items.Add(BrowserActions.Item("rorolala_file_system.collapse_all", collapse));
         }
 
         // The menu is opened by the control the row is in rather than by the row, since one of the
