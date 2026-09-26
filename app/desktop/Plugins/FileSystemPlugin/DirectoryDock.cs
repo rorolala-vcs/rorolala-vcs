@@ -59,8 +59,18 @@ internal sealed class DirectoryControl : UserControl
     private const double Least = 50.0;
     private const double Most = 200.0;
 
-    /// <summary>How far one step of the slider, or one turn of the wheel, moves the zoom.</summary>
+    /// <summary>How far one step of the slider moves the zoom, which is also what it snaps to.</summary>
     private const double Step = 10.0;
+
+    /// <summary>
+    /// How far one turn of the wheel moves the zoom, which is further than one step of the slider.
+    /// </summary>
+    /// <remarks>
+    /// The wheel is the gesture a hand sweeps the whole range with, and the slider is the one it aims with, so a
+    /// notch is worth two steps rather than one: a wheel that moved by the step would be a hand turning it five
+    /// times to cross the range, where the slider it sits beside crosses in two.
+    /// </remarks>
+    private const double Wheel = Step * 2;
 
     /// <summary>Above this zoom the entries are tiles; at it or below they are rows.</summary>
     private const double GridAbove = 60.0;
@@ -462,7 +472,7 @@ internal sealed class DirectoryControl : UserControl
             return;
         }
 
-        _zoom.Value = Math.Clamp(_zoom.Value + Math.Sign(e.Delta.Y) * Step, Least, Most);
+        _zoom.Value = Math.Clamp(_zoom.Value + Math.Sign(e.Delta.Y) * Wheel, Least, Most);
         e.Handled = true;
     }
 
