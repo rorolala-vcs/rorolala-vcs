@@ -669,11 +669,11 @@ the window and the docks and knows nothing of entries.
   program is finished by taking the originals away, while a move the program answers itself has already
   moved them (§19.6).
 - **A drag of this program's own is followed by a card.** While a drag the program started is in flight, a
-  translucent card carries the picture of the entry it took hold of and follows the pointer. It is drawn by
-  the program and not by the toolkit: a drag is handed data and nothing else, so no picture of one is
-  floated for it, and on X11 the source of a drag is told nothing of the pointer while it is on — the card
-  is placed from the positions the drop side is told, and is therefore only ever where this window is. A
-  drag from another program carries no card, because what it carries is that program's to draw.
+  translucent card carries the picture of the entry it took hold of and follows the pointer, in whichever dock
+  the pointer is over. It is drawn by the program and not by the toolkit: a drag is handed data and nothing else,
+  so no picture of one is floated for it, and on X11 the source of a drag is told nothing of the pointer while
+  it is on — the card is placed from the positions the drop side is told, and is therefore only ever where this
+  window is. A drag from another program carries no card, because what it carries is that program's to draw.
 
 ### 7.8 The file agent
 

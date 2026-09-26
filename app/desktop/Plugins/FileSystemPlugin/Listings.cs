@@ -145,8 +145,22 @@ internal abstract class EntryView : UserControl
     /// <summary>What the band is drawn over, filling the view and taking no pointer of its own.</summary>
     private readonly Canvas _over = new() { IsHitTestVisible = false };
 
-    /// <summary>Where the card that follows a drag keeps the picture of what the drag carries.</summary>
+    /// <summary>What the card carries: the entry the drag took hold of.</summary>
     private readonly ContentControl _ghostFace;
+
+    /// <summary>What the card is showing, so that a picture is not read from the desktop for every move.</summary>
+    private string _ghosted = string.Empty;
+
+    /// <summary>
+    /// What the drag in flight is carrying, for the card's sake, or nothing when no drag of this program's is on.
+    /// </summary>
+    /// <remarks>
+    /// It is held by the class rather than by a view, because the card is drawn by whichever view the pointer is
+    /// over: a drag that crossed into another dock is answered by that dock's view, which knows nothing of what
+    /// it did not start — so what is being carried is kept where every view of this plugin can read it, exactly
+    /// as the answer to who finished a move is (<see cref="_answered"/>).
+    /// </remarks>
+    private static Entry? _carrying;
 
     /// <summary>
     /// The card that follows the pointer while this program is carrying entries.
@@ -155,8 +169,9 @@ internal abstract class EntryView : UserControl
     /// The toolkit floats no picture of its own — a drag is handed data and nothing else — and on X11 the source
     /// of a drag is told nothing about the pointer while it is on, because the XDND handler swallows the motion
     /// before it reaches the tree. So what says a drag is happening is this, drawn over the view at the positions
-    /// the drop side is told. It follows the pointer only while the pointer is over this window; a drag to
-    /// another program is the one that carries no picture of itself.
+    /// the drop side is told — by every view, so that a drag crossing into another dock is drawn there as well.
+    /// It follows the pointer only while the pointer is over this window; a drag to another program is the one
+    /// that carries no picture of itself.
     /// </remarks>
     private readonly Border _ghost;
 
@@ -980,19 +995,28 @@ internal abstract class EntryView : UserControl
 
         _carried = carrying;
         _answered = false;
-        _ghostFace.Content = Icons.For(dragged, GhostIcon);
+
+        // What the card shows, which the view under the pointer draws rather than the one that started the drag.
+        _carrying = dragged;
 
         try
         {
             var effect = await DragDrop.DoDragDropAsync(from, transfer, DragDropEffects.Move | DragDropEffects.Copy);
 
-            // A move another program made is a move this program has to finish: the other program copied the
-            // files it was handed, and the originals are the source's to take away. A move this program
-            // answered itself already moved them, which is what _answered records — taking them away again
-            // would delete what was just carried.
-            if (effect == DragDropEffects.Move && !_answered)
+            // A move is what changes where the entries are, whoever made it — and the listing that held them has
+            // to be read again, which the drop's own handler cannot be left to do, because the entries may have
+            // come from another dock with a location of its own.
+            if (effect == DragDropEffects.Move)
             {
-                await FileOps.Remove(_carried, Host.Log.Error);
+                // A move another program made is a move this program has to finish: the other program copied the
+                // files it was handed, and the originals are the source's to take away. A move this program
+                // answered itself already moved them, which is what _answered records — taking them away again
+                // would delete what was just carried.
+                if (!_answered)
+                {
+                    await FileOps.Remove(_carried, Host.Log.Error);
+                }
+
                 Later();
             }
         }
@@ -1002,6 +1026,7 @@ internal abstract class EntryView : UserControl
         }
 
         _carried = [];
+        _carrying = null;
         Unghost();
     }
 
@@ -1122,21 +1147,31 @@ internal abstract class EntryView : UserControl
     }
 
     /// <summary>
-    /// Puts the card under the pointer, while the drag in flight is one this program started.
+    /// Puts the card under the pointer, while a drag this program started is in flight.
     /// </summary>
     /// <remarks>
-    /// Only a drag this program started carries a card, because the card is the picture of what is carried: a drag
-    /// from another program brought its own things, and what they look like is that program's to say. It is kept
-    /// inside the view, so that a pointer at the edge does not put it out of sight.
+    /// The card is drawn by whichever view the pointer is over rather than by the one that started the drag,
+    /// because the pointer may cross into another dock and that view knows nothing of what this one is carrying
+    /// — which is why what is carried is held by the class (<see cref="_carrying"/>). A drag from another
+    /// program carries no card, because what it carries is that program's to draw. The card is kept inside the
+    /// view, so that a pointer at the edge does not put it out of sight.
     /// </remarks>
     /// <param name="at">Where the pointer is, in this view's own coordinates.</param>
     private void Following(Point at)
     {
-        if (_carried.Count == 0)
+        if (_carrying is not { } carried)
         {
             Unghost();
 
             return;
+        }
+
+        // Read once per thing carried rather than once per move: a drag is told of every pixel the pointer
+        // travels, and a picture asked of the desktop for each of them is a picture a pixel.
+        if (!string.Equals(_ghosted, carried.Path, StringComparison.Ordinal))
+        {
+            _ghostFace.Content = Icons.For(carried, GhostIcon);
+            _ghosted = carried.Path;
         }
 
         var room = new Size(
