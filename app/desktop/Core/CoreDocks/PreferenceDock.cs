@@ -173,14 +173,14 @@ internal sealed class PreferenceView : UserControl
 
         var reset = new Button { Content = _i18n.Get("setting.reset") };
 
-        // Going back is choosing the value the setting is declared to be, and it is written down like any
-        // other choice: what the panel shows and what the file holds are then the same thing, and a reader of
-        // the file alone sees what is in force rather than having to know what the declaration was.
+        // Going back is taking the value away rather than writing the default down. The two look the same
+        // today and are not the same tomorrow: a copy of the default kept in the file would keep out a default
+        // the plugin later changes, while a value that is not there at all is the declaration's to answer.
         reset.Click += (_, _) =>
         {
-            _settings.Keep(owner, setting, setting.Default);
+            _settings.Keep(owner, setting, null);
 
-            // Drawn again rather than set here, so that what is on screen is what was written for every kind
+            // Drawn again rather than set here, so that what is on screen is what is in force for every kind
             // alike — a box and a field are not set the same way, and neither should have to be known here.
             Show();
         };

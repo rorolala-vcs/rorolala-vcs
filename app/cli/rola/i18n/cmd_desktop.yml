@@ -14,6 +14,9 @@ desktop:
 
         The language the run speaks and the directory it was made in are handed over with the
         program, so the window opens on the same work in the same language.
+
+        The program is waited for: this run lasts as long as the window does, and ends with what
+        the window ended with, so a script that opens it reads the window's own answer.
     zh-CN: |
         打开与 rola 并排的桌面程序
 
@@ -26,13 +29,12 @@ desktop:
         本次运行所用的语言、以及运行所在目录会随程序一并交给它，窗口因此开在同样的工作、
         同样的语言上。
 
+        程序会被等待：本次运行持续到窗口关闭为止，并以窗口自己的退出码结束，因此打开它的
+        脚本读到的就是窗口给出的答复。
+
   cmd_desktop_description:
     en: Open the Desktop program that sits beside this one
     zh-CN: 打开与 rola 并排的桌面程序
-
-  result_launched:
-    en: Launched the Desktop program
-    zh-CN: 已启动桌面程序
 
   err_not_found:
     en: There is no Desktop program beside this one

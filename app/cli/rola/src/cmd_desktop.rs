@@ -8,13 +8,17 @@
 //! What the two would otherwise each work out for themselves is handed over with the program:
 //! the language this run speaks, and the directory it was made in. A window is then opened onto
 //! the same work, in the same language, as the run that asked for it.
+//!
+//! The program is run as a child and **waited for** rather than started and left behind: this command
+//! is a way to the window, and a way to it lasts as long as the window does. What the window ends with
+//! is what this run ends with, so a caller that waits reads the window's own answer.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use mingling::{
     Grouped,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify},
+    macros::{buffer, chain, command, help, metadata, r_eprintln, renderer, routeify},
     metadata::Description,
     res::{ResCurrentDir, ResExitCode},
 };
@@ -24,7 +28,9 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
-use crate::exit_codes::{EC_ERR_DESKTOP_LAUNCH_FAILED, EC_ERR_DESKTOP_NOT_FOUND, EC_HELP};
+use crate::exit_codes::{
+    EC_ERR_DESKTOP_ENDED, EC_ERR_DESKTOP_LAUNCH_FAILED, EC_ERR_DESKTOP_NOT_FOUND, EC_HELP,
+};
 use crate::failure::failure;
 
 /// The directory, beside this program, the Desktop program is exported into.
@@ -96,13 +102,18 @@ pub fn handle_desktop(_state: StateDesktop, language: &ResLanguage, cwd: &ResCur
         return ErrorDesktopNotFound.into();
     }
 
-    // Started rather than waited for: the program is opened for the reader to work in, and a run
-    // that waited would hold the command line until they were done with it.
+    // Run and waited for rather than started and left: the window is the whole of what this command does,
+    // so the command lasts as long as the window does. What the program ended with is what this run ends
+    // with — the two are one thing to whoever asked for a window, and a caller that waits for a program is
+    // entitled to its answer.
     match Command::new(&program)
         .args([language_arg(language), directory_arg(cwd)])
-        .spawn()
+        .status()
     {
-        Ok(_) => ResultDesktopLaunched.into(),
+        Ok(status) => ResultDesktopEnded {
+            code: status.code(),
+        }
+        .into(),
         Err(error) => ErrorDesktopFailed {
             cause: error.to_string(),
         }
@@ -132,13 +143,18 @@ fn desktop_program(here: &Path) -> PathBuf {
     dir.join(DESKTOP_DIR).join(name)
 }
 
-/// Result: the Desktop program was started.
+/// Result: the Desktop program was waited for and has ended.
 #[derive(Grouped)]
-pub struct ResultDesktopLaunched;
+pub struct ResultDesktopEnded {
+    /// The code it ended with, or nothing when a signal ended it rather than an ordinary return.
+    code: Option<i32>,
+}
 
 #[renderer(buffer)]
-pub fn render_result_desktop_launched(_: ResultDesktopLaunched) {
-    r_println!("{}", t!("desktop.result_launched").trim());
+pub fn render_result_desktop_ended(result: ResultDesktopEnded, ec: &mut ResExitCode) {
+    // What the program ended with is what this run ends with. A program a signal ended has no code of its
+    // own, and is one that did not end well, which is what this run says in its place.
+    ec.exit_code = result.code.unwrap_or(EC_ERR_DESKTOP_ENDED);
 }
 
 /// Error: there is no Desktop program beside this one.

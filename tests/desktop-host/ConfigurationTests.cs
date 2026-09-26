@@ -251,6 +251,12 @@ public sealed class ConfigurationTests
         settings.Keep(owner, settings.Of(owner)[0], "mv -v");
         Assert.True(settings.Chosen(owner, "Commands/move"));
         Assert.Equal("mv -v", config.ReadKeyAs("Commands/move", "nothing"));
+
+        // Taking the value away is the way back to the default: what is then in force is the declaration's
+        // rather than a copy of it, so a default changed later is not kept out by the copy.
+        settings.Keep(owner, settings.Of(owner)[0], null);
+        Assert.False(settings.Chosen(owner, "Commands/move"));
+        Assert.Equal("mv", config.ReadKeyAs("Commands/move", "nothing"));
     }
 
     /// <summary>Writes a file under the scratch configuration root.</summary>
