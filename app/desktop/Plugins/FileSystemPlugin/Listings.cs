@@ -169,14 +169,20 @@ internal abstract class EntryView : UserControl
         // takes the nearest, so this one is the empty space by construction.
         List.ContextMenu = actions.Empty(this);
 
-        // All three are taken on the way down, before the list reads them itself: the arrows are replaced
-        // by ones that know about a wrapped grid, and Enter and the typed letters are not the toolkit's
-        // at all. A handler that let the list act first would be correcting an action already taken.
+        // The keyboard is the list's, taken on the way down before the list reads it itself: the arrows are
+        // replaced by ones that know about a wrapped grid, and Enter and the typed letters are not the
+        // toolkit's at all. A handler that let the list act first would be correcting an action already taken.
         List.AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
-        List.AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
-        List.AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
-        List.AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
         List.AddHandler(TextInputEvent, Typed, RoutingStrategies.Tunnel);
+
+        // The pointer is taken for the whole view rather than for the list alone, so that a frame can begin in
+        // the room the view leaves around the card as much as in the room left between the rows: the list is hit
+        // nowhere in that outer room, and a press there reaching nothing would be a frame that cannot be started
+        // where the room to start one is widest. Taken on the way down like the keys, since what a press begins
+        // — a step, a drag or a frame — is settled before the list acts on it.
+        AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
 
         // The wheel is taken over for the same reason the keys above are: the toolkit's own scrolling moves
         // in whole steps, and a directory read a row at a time at a stretch is what this glide is for.
@@ -252,7 +258,11 @@ internal abstract class EntryView : UserControl
 
         var panel = new Border { Padding = PanelPadding, Child = content };
 
-        var grid = new Grid();
+        // A ground of nothing rather than none at all: the room the padding leaves around the card is nothing
+        // any control is hit in, so a press there would reach the view at all only where the view itself is hit.
+        // It takes no pointer of its own beyond that — the entries and their own rows are over it — and it is
+        // what lets a frame be started in the room around the entries (Section 7.7).
+        var grid = new Grid { Background = Brushes.Transparent };
         grid.Children.Add(panel);
 
         // The word is drawn over the empty space rather than in place of the list, so that the menu and the
@@ -383,6 +393,10 @@ internal abstract class EntryView : UserControl
 
     /// <summary>Pastes what is on the clipboard into the directory being looked at.</summary>
     public void Paste() => Actions.Paste(this, Browser.Current);
+
+    /// <summary>Removes what is chosen, asking first unless told not to.</summary>
+    /// <param name="ask">Whether to put the question to the user first.</param>
+    public void Delete(bool ask) => Actions.Remove(Offered(), ask);
 
     /// <summary>
     /// Puts the keyboard in the listing, so that the dock's own keys reach it again.

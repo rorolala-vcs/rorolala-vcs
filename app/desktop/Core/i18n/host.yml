@@ -14,6 +14,13 @@ window:
   dismiss:
     en: Dismiss
     zh-CN: 知道了
+  dialog:
+    confirm:
+      en: Confirm
+      zh-CN: 确认
+    cancel:
+      en: Cancel
+      zh-CN: 取消
 
 menu:
   file:

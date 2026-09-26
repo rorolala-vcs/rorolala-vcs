@@ -80,6 +80,18 @@ rorolala_file_system:
     en: Paste
     zh-CN: 粘贴
 
+  # Removing is the one thing that cannot be taken back, so it is the one thing the plain key asks about. The
+  # question is worded here and shown by the host, which is what keeps a plugin from building a window.
+  delete:
+    en: Delete
+    zh-CN: 删除
+  delete_one:
+    en: "Delete `%{name}`? This cannot be undone."
+    zh-CN: "确定删除 `%{name}` 吗？此操作不可撤销。"
+  delete_many:
+    en: "Delete the %{count} selected items? This cannot be undone."
+    zh-CN: "确定删除选中的 %{count} 项吗？此操作不可撤销。"
+
   # What the file operations are carried out with. The commands are the system's tools rather than this
   # program's, which is why they are settings: a system that keeps them elsewhere, or a user who prefers
   # another, says so here.

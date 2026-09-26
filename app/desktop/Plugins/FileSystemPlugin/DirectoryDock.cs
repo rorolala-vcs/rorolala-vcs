@@ -439,6 +439,11 @@ internal sealed class DirectoryControl : UserControl
 
         if (_view is { } view)
         {
+            if (Keys.Forget(e, view.Delete, _host.Log))
+            {
+                return;
+            }
+
             _ = Keys.Clipboard(e, new Clipboard(view.Copy, view.Cut, view.Paste), _host.Log);
         }
     }

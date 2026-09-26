@@ -176,6 +176,11 @@ internal sealed class TreeControl : UserControl
 
         if (_content.Content is TreeBrowser tree)
         {
+            if (Keys.Forget(e, tree.Delete, _host.Log))
+            {
+                return;
+            }
+
             _ = Keys.Clipboard(e, new Clipboard(tree.Copy, tree.Cut, tree.Paste), _host.Log);
         }
     }
@@ -248,6 +253,15 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>The tree itself, which the open steps are gathered from when it is built again.</summary>
     private readonly TreeView _tree;
 
+    /// <summary>
+    /// The directory the tree is rooted at.
+    /// </summary>
+    /// <remarks>
+    /// Kept because the root is a row of the tree like any other and yet is not a step of it: it is what the
+    /// tree stands on, so removing it is not offered and a chosen root is not what the delete key acts on.
+    /// </remarks>
+    private readonly string _root;
+
     /// <summary>How a drag is taken here: which step it would land in, and which row is lit.</summary>
     private readonly Drops _drops;
 
@@ -305,6 +319,7 @@ internal sealed class TreeBrowser : UserControl
         _host = host;
         _actions = actions;
         _clip = clip;
+        _root = root;
         _drops = new Drops(host, browser, Landing, Mark);
 
         var tree = new TreeView { ContextMenu = actions.Empty(this) };
@@ -671,6 +686,20 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
+    /// <summary>Removes the chosen step, asking first unless told not to.</summary>
+    /// <remarks>
+    /// The root is left out: it is the row the tree stands on rather than a step of it, and removing it would
+    /// leave the tree rooted at a directory that is no longer there.
+    /// </remarks>
+    /// <param name="ask">Whether to put the question to the user first.</param>
+    public void Delete(bool ask)
+    {
+        if (Chosen() is { } path && !string.Equals(path, _root, StringComparison.Ordinal))
+        {
+            _actions.Remove([new Entry(path, EntryKind.Directory)], ask);
+        }
+    }
+
     /// <summary>Fades a row whose step is cut, so that it reads as on its way out.</summary>
     /// <param name="row">The row.</param>
     /// <param name="path">The step it stands for.</param>
@@ -786,7 +815,7 @@ internal sealed class TreeBrowser : UserControl
     {
         var entry = new Entry(path, EntryKind.Directory);
         var name = Names.Show(entry);
-        var menu = _actions.Menu(this, [entry]);
+        var menu = _actions.Menu(this, [entry], deletable: !string.Equals(path, _root, StringComparison.Ordinal));
 
         // Offered by every row with steps under it, which is the same row that is given an expander, since
         // closing them all is worth offering where there is more than one to close. What is not offered is

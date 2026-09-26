@@ -29,6 +29,11 @@ internal static class Host
         var popups = new PopupService(notifications);
         var preference = new PreferenceConfiguration();
 
+        // The shell is made before the object it is put in, because a dialog is shown on the window the shell
+        // names, which is the one place both sides agree on.
+        var shell = new Shell();
+        var dialogs = new Dialogs(shell, i18n);
+
         return new HostServices
         {
             Log = log,
@@ -40,7 +45,7 @@ internal static class Host
             Rola = new RolaCapability(),
             Preference = preference,
             Settings = new SettingRegistry(preference),
-            Shell = new Shell(),
+            Shell = shell,
             Menu = new MenuRegistry(),
             ContextMenus = new ContextMenuRegistry(),
             Navigation = new NavigationRegistry(),
@@ -49,6 +54,8 @@ internal static class Host
             IconBadges = new IconBadgeRegistry(),
             // Nothing activates a window in a headless test, so nothing is ever raised on it.
             Refocus = new Refocus(),
+            // A dialog needs a window to be shown on, and a headless test has none: nothing is ever shown.
+            Dialogs = dialogs,
         };
     }
 }

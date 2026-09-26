@@ -155,3 +155,36 @@ public interface IRefocus
     /// <summary>Raised when one of the host's windows is activated again.</summary>
     event Action? Regained;
 }
+
+/// <summary>
+/// One question the host puts to the user over its windows, and what to run when it is answered.
+/// </summary>
+/// <remarks>
+/// The plugin owns both halves: what it asks is written before it is handed over, and what a "yes"
+/// does is its own business, so the host knows neither. What the host brings is the window, the look
+/// and the two answers, which is why a plugin never builds a dialog itself.
+/// </remarks>
+/// <param name="Title">What the question is called.</param>
+/// <param name="Message">What it asks.</param>
+/// <param name="Confirmed">Run when the user goes ahead; a dialog the user dismisses runs nothing.</param>
+public sealed record Dialog(string Title, string Message, Action Confirmed);
+
+/// <summary>
+/// Where a plugin asks the user something over the host's windows.
+/// </summary>
+/// <remarks>
+/// The host shows it, so that a question a plugin puts looks like the program rather than like the
+/// toolkit, and so that a plugin need not know which of the host's windows it belongs to.
+/// </remarks>
+public interface IDialogs
+{
+    /// <summary>
+    /// Shows a dialog, and runs what it carries when it is confirmed.
+    /// </summary>
+    /// <remarks>
+    /// Answered later rather than now, which is why the consequence is handed over rather than
+    /// returned: a plugin says what to do, and the host does it when the user agrees.
+    /// </remarks>
+    /// <param name="dialog">The question to put.</param>
+    void Show(Dialog dialog);
+}

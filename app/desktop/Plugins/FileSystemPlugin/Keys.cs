@@ -74,6 +74,47 @@ internal static class Keys
         return true;
     }
 
+    /// <summary>
+    /// Whether this key is a user asking for what is chosen to be removed, and takes it if it is.
+    /// </summary>
+    /// <remarks>
+    /// Taken at the top of a dock and not by the listing, for the reason the clipboard's keys are: it is
+    /// answered wherever the keyboard is inside the dock rather than only after an entry was clicked. A field
+    /// is left alone, because <c>Delete</c> in the address removes the character before it.
+    /// <para>
+    /// <c>Delete</c> asks first and <c>Shift+Delete</c> does not, which is what the two mean everywhere else:
+    /// the unshifted key is the ordinary one, and the shifted key is the one a hand has already decided with.
+    /// Every press is said out loud, for the reason the clipboard's keys are.
+    /// </para>
+    /// </remarks>
+    /// <param name="e">The key.</param>
+    /// <param name="remove">What to remove, given whether the user is to be asked first.</param>
+    /// <param name="log">Where the press is said.</param>
+    /// <returns>Whether the key was taken.</returns>
+    public static bool Forget(KeyEventArgs e, Action<bool> remove, ILog log)
+    {
+        if (e.Key != Key.Delete)
+        {
+            return false;
+        }
+
+        if (e.Source is TextBox)
+        {
+            log.Info("Delete: left to the field it was pressed in");
+
+            return false;
+        }
+
+        var ask = !e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        log.Info(ask ? "Delete: removing what is chosen, after asking" : "Shift+Delete: removing what is chosen");
+
+        e.Handled = true;
+        remove(ask);
+
+        return true;
+    }
+
     /// <summary>The element the keyboard is on in a control's window, or nothing where it is nowhere.</summary>
     /// <param name="anywhere">A control, which is how its window is reached.</param>
     /// <returns>What the keyboard is on.</returns>

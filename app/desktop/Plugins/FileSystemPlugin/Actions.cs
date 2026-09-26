@@ -117,13 +117,81 @@ internal sealed class BrowserActions
         _clip.Paste(from, into, _host.Log.Error, _browser.Touch);
     }
 
+    /// <summary>
+    /// Removes what is chosen, telling the user first unless they said not to be told.
+    /// </summary>
+    /// <remarks>
+    /// The question is the host's to show and this plugin's to word, and what will be removed is settled
+    /// before it is asked: the entries that cannot go — the way up, the computer — are left out here rather
+    /// than refused by the agent, so that the question names what is about to go and the answer cannot bring
+    /// a surprise with it.
+    /// <para>
+    /// The work is the file agent's, like every other operation, and what it removed is what leaves the
+    /// question unanswered: a dialog the user dismissed runs nothing, because a consequence handed over is
+    /// run only on a <em>yes</em> (§16).
+    /// </para>
+    /// </remarks>
+    /// <param name="entries">What is chosen.</param>
+    /// <param name="ask">Whether to put the question to the user first.</param>
+    public void Remove(IReadOnlyList<Entry> entries, bool ask)
+    {
+        var files = Offered(entries);
+
+        if (files.Count == 0)
+        {
+            _host.Log.Info("delete: nothing chosen");
+
+            return;
+        }
+
+        if (!ask)
+        {
+            Gone(files);
+
+            return;
+        }
+
+        _host.Log.Info($"delete: asking about {files.Count} of what is chosen");
+
+        _host.Dialogs.Show(
+            new Dialog(
+                RolaI18N.Get("rorolala_file_system.delete"),
+                files.Count == 1
+                    ? RolaI18N.Get("rorolala_file_system.delete_one", Path.GetFileName(files[0].Path))
+                    : RolaI18N.Get("rorolala_file_system.delete_many", files.Count),
+                () => Gone(files)
+            )
+        );
+    }
+
+    /// <summary>Has the agent remove the entries, and reads every directory again once it has.</summary>
+    /// <param name="entries">What to remove.</param>
+    private async void Gone(IReadOnlyList<Entry> entries)
+    {
+        if (!await FileOps.Remove(entries, _host.Log.Error))
+        {
+            _host.Log.Info("delete: nothing was removed");
+
+            return;
+        }
+
+        // Every location and not only this one's, for the reason a paste touches every one: the entries may
+        // have been shown by another dock, and a dock can be out of step.
+        _browser.Touch();
+    }
+
     /// <summary>Makes the menu opened on a set of entries.</summary>
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
     /// <param name="entries">What the menu is about.</param>
-    public ContextMenu Menu(Control from, IReadOnlyList<Entry> entries)
+    /// <param name="deletable">
+    /// Whether the entries may be removed. The tree nods when the row is its own root: that row is a
+    /// directory like any other, but it is also the view's root, and removing a view's own root leaves the
+    /// view standing on nothing.
+    /// </param>
+    public ContextMenu Menu(Control from, IReadOnlyList<Entry> entries, bool deletable = true)
     {
         var menu = new ContextMenu();
-        Fill(menu, from, entries);
+        Fill(menu, from, entries, deletable);
 
         return menu;
     }
@@ -139,7 +207,8 @@ internal sealed class BrowserActions
     /// <param name="menu">The menu to fill.</param>
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
     /// <param name="entries">What the menu is about.</param>
-    public void Fill(ContextMenu menu, Control from, IReadOnlyList<Entry> entries)
+    /// <param name="deletable">Whether the entries may be removed.</param>
+    public void Fill(ContextMenu menu, Control from, IReadOnlyList<Entry> entries, bool deletable = true)
     {
         menu.Items.Clear();
 
@@ -174,6 +243,14 @@ internal sealed class BrowserActions
         if (Into(entries) is { } into)
         {
             menu.Items.Add(Item("rorolala_file_system.paste", () => Paste(from, into)));
+        }
+
+        // Removing is about the things offered like a copy is, and it asks by default: the menu is opened by
+        // a hand that has not yet decided, so the entry that goes ahead is the one bound to the plain key
+        // rather than the shifted one.
+        if (deletable && files.Count > 0)
+        {
+            menu.Items.Add(Item("rorolala_file_system.delete", () => Remove(entries, ask: true)));
         }
 
         if (entries.Count == 1)

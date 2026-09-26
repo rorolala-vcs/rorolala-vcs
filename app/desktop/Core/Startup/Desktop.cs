@@ -76,6 +76,12 @@ internal sealed class Desktop
         var log = new LogService(notifications);
         var popups = new PopupService(notifications);
 
+        // Made before the object they are put in, because a dialog is shown on the window and the window is
+        // named once it exists: the shell is the one place both sides agree on, so it is made here and
+        // handed to each.
+        var shell = new Shell();
+        var dialogs = new Dialogs(shell, i18n);
+
         // The look has to be applied before anything is drawn, so the service that applies it is made
         // here, with the rest of what a run is assembled from, rather than in the window.
         var theme = new ThemeService(
@@ -92,13 +98,14 @@ internal sealed class Desktop
             Rola = new RolaCapability(),
             Preference = _state.Preference,
             Settings = new SettingRegistry(_state.Preference),
-            Shell = new Shell(),
+            Shell = shell,
             Menu = new MenuRegistry(),
             ContextMenus = new ContextMenuRegistry(),
             Navigation = new NavigationRegistry(),
             Docks = new DockManager(new DockRegistry(), i18n, log, popups),
             OpenHooks = new OpenHookRegistry(),
             Refocus = new Refocus(),
+            Dialogs = dialogs,
             IconBadges = new IconBadgeRegistry(),
         };
     }

@@ -42,4 +42,7 @@ public interface IPluginHost
 
     /// <summary>When one of the host's windows is come back to.</summary>
     IRefocus Refocus { get; }
+
+    /// <summary>Where the plugin asks the user something.</summary>
+    IDialogs Dialogs { get; }
 }

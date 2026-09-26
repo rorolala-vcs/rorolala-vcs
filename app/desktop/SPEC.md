@@ -646,7 +646,10 @@ the window and the docks and knows nothing of entries.
   clicked, in the order the listing shows. Chosen entries are filled with the primary (§10). Clicking
   the **space around the entries** drops the choice, and dragging from there draws a **frame** — a band
   in the primary — and chooses every entry it covers as it is drawn. The entries are spaced apart so that
-  there is such a space between them (§7.5). Right-clicking keeps an existing choice when the entry is
+  there is such a space between them (§7.5), and the view leaves room around the card as well, so a frame
+  can be begun in the room outside the table as much as between its rows: the press is taken over the whole
+  view rather than by the list alone, which is the only way a press the list is hit nowhere in can begin one.
+  Right-clicking keeps an existing choice when the entry is
   already in it, so a menu can be opened on a set.
 - **The keyboard.** Arrow keys step — in the table one row at a time, in the tiles one tile across and
   one row down, so the arrows mean where the eye goes rather than the next index. `Home` and `End` go
@@ -667,6 +670,15 @@ the window and the docks and knows nothing of entries.
   listing and in the tree alike, and that paste **moves** it while anything else is copied. A name already
   taken in the destination is left where it is and a free name is made beside it (`name (2)`), so a paste
   never overwrites.
+- **Removing.** `Delete` removes the chosen entries and `Shift+Delete` removes them without asking, which
+  is what the two keys mean everywhere else: the plain one is the ordinary gesture and the shifted one is
+  what a hand has already decided with. What cannot go — the way up and the computer — is left out before
+  the question is worded, so the question names what is about to go. The question itself is put by the
+  **host** through `IDialogs` (Section 16), because building a window is not a plugin's to do; the plugin
+  writes the words and says what a *yes* does, and a dialog the user dismisses runs nothing. The work is
+  the agent's like every other operation (§7.8), and every location reads its directory again afterwards.
+  The **tree**'s root is not a thing to remove but the row the view stands on, so it is neither deleted by
+  the key nor offered in its menu.
 - **Dragging to move.** Dragging chosen entries onto a directory moves them into it — and onto the
   listing's **way up**, which moves them into the directory holding the one being looked at, since that is
   the place the entry stands for. A drag can leave the program or arrive from another one: the toolkit's
@@ -700,7 +712,7 @@ the window and the docks and knows nothing of entries.
 
 ### 7.8 The file agent
 
-Every file operation the File System performs — a paste, a drop, and the removal that finishes a move out
+Every file operation the File System performs — a paste, a drop, a deletion, and the removal that finishes a move out
 of the program — is handed to a program of its own rather than done in process: `rola-desktop-fs-agent`.
 It is reached through the File System plugin and through nothing else, which is why it is laid inside that
 plugin's own directory (`plugins/FileSystemPlugin/RorolalaFSAgent/`) rather than beside the Desktop
@@ -1110,6 +1122,7 @@ public interface IPluginHost
     IOpenHookRegistry OpenHooks { get; }
     IIconBadgeRegistry IconBadges { get; }
     IRefocus Refocus { get; }
+    IDialogs Dialogs { get; }
 }
 
 public interface II18n
@@ -1142,6 +1155,15 @@ public interface IRola { /* Section 13 */ }
 public interface IRefocus
 {
     event Action? Regained;
+}
+
+/// <summary>One question the host puts to the user, and what to run when it is answered.</summary>
+public sealed record Dialog(string Title, string Message, Action Confirmed);
+
+/// <summary>Where a plugin asks the user something over the host's windows.</summary>
+public interface IDialogs
+{
+    void Show(Dialog dialog);
 }
 
 public interface ILog

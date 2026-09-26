@@ -71,6 +71,9 @@ internal sealed class HostServices
     /// <summary>When one of the host's windows is come back to.</summary>
     public required Refocus Refocus { get; init; }
 
+    /// <summary>Questions put to the user over the host's windows.</summary>
+    public required Dialogs Dialogs { get; init; }
+
     /// <summary>The host as one plugin sees it.</summary>
     /// <param name="id">The plugin's identity.</param>
     /// <param name="position">The plugin's place in the load order.</param>
@@ -149,6 +152,9 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public IRefocus Refocus => _services.Refocus;
+
+    /// <inheritdoc />
+    public IDialogs Dialogs => _services.Dialogs;
 
     /// <inheritdoc />
     void IMenuRegistry.AddTopLevel(string labelKey, int order) =>
