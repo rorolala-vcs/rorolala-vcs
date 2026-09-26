@@ -1,0 +1,34 @@
+_version: 2
+
+# What the file-system agent says in its conflict window. The keys are namespaced by the agent's
+# identity — the id with dots underscored — which is the convention that keeps two programs' keys
+# apart, and the leaf holds one form per language.
+
+rorolala_fs_agent:
+  title:
+    en: File conflict
+    zh-CN: 文件冲突
+  message:
+    en: "Writing `%{source}` to `%{target}` would overwrite something already there."
+    zh-CN: "把 `%{source}` 写入 `%{target}` 会覆盖那里已有的内容。"
+  # What is said where the thing the name is taken by is the thing being written, which is what copying an
+  # entry into the directory it already sits in is. Replacing has no meaning there, so the window does not
+  # offer it.
+  itself:
+    en: "`%{name}` is what is being written, and where it would go is where it already is: a second of it goes beside it, under a new name."
+    zh-CN: "`%{name}` 就是要写入的东西，而它要去的地方就是它自己所在之处：它的副本会落到旁边的一个新名字下。"
+  apply_remaining:
+    en: Apply to the remaining %{count}
+    zh-CN: 对剩余的 %{count} 项同样处理
+  replace:
+    en: Replace
+    zh-CN: 替换
+  skip:
+    en: Skip
+    zh-CN: 跳过
+  rename:
+    en: Rename
+    zh-CN: 重命名
+  cancel:
+    en: Cancel
+    zh-CN: 取消

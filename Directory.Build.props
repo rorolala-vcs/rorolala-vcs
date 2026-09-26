@@ -10,7 +10,11 @@
     what makes setting them here, rather than in a project, take effect.
   -->
   <PropertyGroup>
-    <CsTargetDir>$(MSBuildThisFileDirectory).cache/cs-target/$(MSBuildProjectName)</CsTargetDir>
+    <!-- The root every project's output sits under, said once so a project that has to name another
+         project's output — the integration suites naming the Desktop program — can do so without
+         repeating the layout. -->
+    <CsTargetRoot>$(MSBuildThisFileDirectory).cache/cs-target</CsTargetRoot>
+    <CsTargetDir>$(CsTargetRoot)/$(MSBuildProjectName)</CsTargetDir>
     <BaseOutputPath>$(CsTargetDir)/bin/</BaseOutputPath>
     <BaseIntermediateOutputPath>$(CsTargetDir)/obj/</BaseIntermediateOutputPath>
   </PropertyGroup>

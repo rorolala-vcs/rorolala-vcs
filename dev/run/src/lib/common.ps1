@@ -79,8 +79,18 @@ $ScriptsDir = "$BuildDir/scripts"
 # The Desktop program: the project it is built from, and where an export lays it out. It is laid out
 # in a `desktop` directory of its own beside the command line programs, which is where
 # `rola desktop` reaches for it — so an export and that command name one place.
-$DesktopProject = 'app/desktop/RorolalaDesktop.csproj'
+$DesktopProject = 'app/desktop/Core/RorolalaDesktop.csproj'
 $DesktopDir = "$BuildDir/bin/desktop"
+
+# The plugins that ship with the Desktop program. Each is a project of its own, built apart from the
+# program that discovers it, and laid out only when something is run or handed over. The name of the
+# directory holding the project is also the assembly's name, which is what says which files to take
+# from the output it was built into.
+#
+# The source tree spells the directory `Plugins` and the program spells the directory it scans
+# `plugins`; the two are deliberately not made to match. What a program looks in is its own business,
+# and the tree's spelling is the tree's.
+$DesktopPlugins = @('app/desktop/Plugins/FileSystemPlugin')
 
 # PowerShell carries on after a native command that failed, which is the opposite of what a gate
 # wants: `set -e` stops the shell scripts, and this is what stops a script here. It is called after
@@ -114,6 +124,27 @@ function Publish-Desktop {
 
     & $DotnetProgram @DotnetFlags publish $DesktopProject -c Release -o $Into
     Assert-Exit
+}
+
+# Builds each plugin that ships with the Desktop program and lays it where the program looks for it:
+# its assembly and its translations under `plugins/` beside the program. Only those are taken. The
+# contract and Avalonia the plugin was built against are the host's own copies, delegated to rather
+# than carried, so laying them down would be laying down a second of each.
+function Publish-Plugins {
+    foreach ($project in $DesktopPlugins) {
+        $name = Split-Path -Leaf $project
+        $output = "$CsTargetDir/$name/bin/Release/net8.0"
+
+        & $DotnetProgram @DotnetFlags build "$project/$name.csproj" -c Release
+        Assert-Exit
+
+        New-Item -ItemType Directory -Force -Path "$DesktopDir/plugins" | Out-Null
+        Copy-Item -Force "$output/$name.dll" "$DesktopDir/plugins/"
+
+        if (Test-Path "$output/i18n") {
+            Copy-Item -Recurse -Force "$output/i18n" "$DesktopDir/plugins/"
+        }
+    }
 }
 
 # `export` and `clean` delete a destination with `Remove-Item -Recurse`, so refuse a path that would

@@ -34,3 +34,4 @@ for program in $PROGRAMS; do
 done
 
 publish_desktop "$DESKTOP_DIR"
+publish_plugins

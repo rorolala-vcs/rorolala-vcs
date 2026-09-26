@@ -35,6 +35,7 @@ error:
 
 ```csharp
 RolaI18N.SetTranslationDirectory(Path.Combine(AppContext.BaseDirectory, "i18n"));
+RolaI18N.RegisterTranslationDirectory(pluginDirectory);
 RolaI18N.SetLocale(Program.Language ?? "en");
 
 var title = RolaI18N.Get("pack.result_packed");
@@ -42,10 +43,17 @@ var refused = RolaI18N.Get("error.vault.err_not_bound", name);
 var explained = RolaI18N.Get("explain_exit_code.result", 94, meaning);
 ```
 
-`SetTranslationDirectory` and `SetLocale` record what they are given and can be read back from
-`RolaI18N.TranslationDirectory` and `RolaI18N.Locale`. The files are read the first time a form is
-asked for, not when the directory is named, so a program may name it and its language before
-anything is drawn.
+`SetTranslationDirectory` names one directory on its own; `RegisterTranslationDirectory` adds one
+after those already named, and the directories are read in registration order. **First registration
+wins**: a key an earlier directory states is not replaced by a later one, so the host registers its
+own directory before the plugins register theirs and a plugin cannot overwrite what the host says.
+`RegisterTranslationDirectory` ignores a directory registered twice.
+
+`SetTranslationDirectory`, `RegisterTranslationDirectory` and `SetLocale` record what they are given
+and can be read back from `RolaI18N.TranslationDirectory` (the first directory),
+`RolaI18N.TranslationDirectories` (all of them, in order) and `RolaI18N.Locale`. The files are read
+the first time a form is asked for, not when a directory is named, so a program may name its
+directories and its language before anything is drawn.
 
 `Get` takes a key and up to twelve values, and has one overload for each count.
 

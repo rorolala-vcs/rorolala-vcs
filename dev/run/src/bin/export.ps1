@@ -33,3 +33,4 @@ foreach ($program in $Programs) {
 }
 
 Publish-Desktop $DesktopDir
+Publish-Plugins

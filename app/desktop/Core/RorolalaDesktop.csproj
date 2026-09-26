@@ -1,0 +1,49 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- The window is always made by the host and handed its services, so it is deliberately not
+         reachable through Avalonia's runtime XAML loader, which wants a public parameterless
+         constructor; that loader is never used for it. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The host's own types are not part of the contract, so nothing outside sees them but the
+         integration suite that drives the host directly. -->
+    <InternalsVisibleTo Include="RorolalaDesktopHost.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- What the window says is read from beside the program rather than built into it, following
+         the command line, which reads its own from the same shape of file. The glob is updated
+         rather than added to: the files are already items, and one item of one name is one item. -->
+    <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The host compiles against the same contract its plugins do, so the two agree by
+         construction rather than by being kept in step by hand. The contract sits beside the core
+         rather than inside it: it is the boundary between the host and its plugins, not a part of
+         either. -->
+    <ProjectReference Include="../Contract/RorolalaDesktop.Contract.csproj" />
+    <ProjectReference Include="../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <!-- Carried rather than used. A plugin's dependencies are what the host itself carries, since
+         nothing but a plugin's own assembly is laid beside it; the icons are one of them, so the
+         host has to have them for a plugin to be allowed to ask for them (Section 3.4). -->
+    <ProjectReference Include="../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj" />
+  </ItemGroup>
+
+</Project>

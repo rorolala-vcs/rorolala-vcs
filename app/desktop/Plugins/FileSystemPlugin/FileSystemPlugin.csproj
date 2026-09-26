@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>FileSystemPlugin</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Plugins build the UI out of Avalonia controls directly, which is the deliberate trade that
+         keeps the contract small. The load context delegates Avalonia to the host's copy, so what
+         is built here is inserted into the host's tree as the same kind of control. -->
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The contract is the only thing the host and a plugin agree on; the translations are read by
+         the same reader the host uses, so what this plugin says is said the way the host says it; and
+         the icons are the system's own, which is what a desktop expects a folder to be drawn with. -->
+    <ProjectReference Include="../../Contract/RorolalaDesktop.Contract.csproj" />
+    <ProjectReference Include="../../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <ProjectReference Include="../../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The plugin's own words, laid beside its assembly so that what it registers is found the
+         moment the host starts it. -->
+    <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

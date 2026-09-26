@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>RorolalaDesktop.Contract</RootNamespace>
+    <!-- The version a plugin was built against is this assembly's version, and a plugin's manifest
+         states it; the host compares the two. The surface is a contract, so every part of it is said
+         in a comment and the documentation file is what a plugin author reads it from. -->
+    <Version>0.1.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Plugins manipulate Avalonia controls directly, so the contract names the toolkit rather than
+         hiding it. The load context delegates this assembly and Avalonia to the host's own copies;
+         resolving either privately would give a second `Control` type that the host's tree cannot
+         hold. -->
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+  </ItemGroup>
+
+</Project>

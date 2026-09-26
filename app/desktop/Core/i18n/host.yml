@@ -1,0 +1,128 @@
+_version: 2
+
+# What the host itself says: the menu bar, the two kernel docks, and the notices it raises. The keys
+# are the same shape as the command line's, and a file here is read by the same reader.
+#
+# A key that is a leaf and a key that is a step on the way to another cannot both exist under one
+# name, so a menu's label key is a leaf of its own and the items under that menu are stated under a
+# separate branch. The menu path a plugin adds to is the label key, `menu.file` and `menu.window`.
+
+window:
+  notice:
+    en: Notice
+    zh-CN: 提示
+  dismiss:
+    en: Dismiss
+    zh-CN: 知道了
+  dialog:
+    confirm:
+      en: Confirm
+      zh-CN: 确认
+    cancel:
+      en: Cancel
+      zh-CN: 取消
+
+menu:
+  file:
+    en: File
+    zh-CN: 文件
+  window:
+    en: Window
+    zh-CN: 窗口
+
+item:
+  open_directory:
+    en: Open Directory…
+    zh-CN: 打开目录…
+
+dock:
+  plugin_manager:
+    en: Plugin Manager
+    zh-CN: 插件管理器
+  log:
+    en: Log
+    zh-CN: 日志
+  preferences:
+    en: Preferences
+    zh-CN: 偏好设置
+
+core:
+  name:
+    en: Core
+    zh-CN: 核心
+  empty_log:
+    en: Nothing has been logged yet.
+    zh-CN: 暂无日志。
+  setting:
+    theme:
+      en: Theme
+      zh-CN: 主题
+    mode:
+      en: Appearance
+      zh-CN: 明暗模式
+    system:
+      en: Follow system
+      zh-CN: 跟随系统
+    light:
+      en: Light
+      zh-CN: 亮色
+    dark:
+      en: Dark
+      zh-CN: 暗色
+    primary:
+      en: Primary colour
+      zh-CN: 主色
+    accent:
+      en: Accent colour
+      zh-CN: 强调色
+    immediate:
+      en: Takes effect at once.
+      zh-CN: 立即生效。
+
+setting:
+  none:
+    en: Nothing to set here.
+    zh-CN: 这里没有可设置的项。
+  reset:
+    en: Reset
+    zh-CN: 还原
+  default:
+    en: "Default: %{value}"
+    zh-CN: "默认：%{value}"
+  restart:
+    en: Takes effect on the next start.
+    zh-CN: 下次启动时生效。
+
+plugin_manager:
+  plugins:
+    en: Plugins
+    zh-CN: 插件
+  problems:
+    en: Problems
+    zh-CN: 问题
+  order:
+    en: Order
+    zh-CN: 顺序
+  not_loaded:
+    en: not loaded
+    zh-CN: 未加载
+  next_start:
+    en: Enabling, disabling and ordering take effect on the next start.
+    zh-CN: 启用、禁用与排序在下次启动时生效。
+
+log:
+  level:
+    en: Level
+    zh-CN: 级别
+  source:
+    en: Source
+    zh-CN: 来源
+  message:
+    en: Message
+    zh-CN: 消息
+  count:
+    en: Count
+    zh-CN: 次数
+  clear:
+    en: Clear
+    zh-CN: 清空

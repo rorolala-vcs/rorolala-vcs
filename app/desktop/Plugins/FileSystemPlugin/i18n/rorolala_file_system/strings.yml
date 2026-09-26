@@ -1,0 +1,117 @@
+_version: 2
+
+# What the File System browser says. Every key is namespaced by the plugin's identity — the id with
+# dots underscored — which is the convention that keeps two plugins' keys apart.
+
+rorolala_file_system:
+  name:
+    en: File System
+    zh-CN: 文件系统
+  directories:
+    en: Directories
+    zh-CN: 目录
+  tree:
+    en: Folder Tree
+    zh-CN: 文件导览
+
+  # What the table's columns are headed. The permissions column is not shown where the system carries
+  # no such thing, so its key is only ever asked for on a system that has one.
+  column_icon:
+    en: Icon
+    zh-CN: 图标
+  column_name:
+    en: Name
+    zh-CN: 名字
+  column_permissions:
+    en: Permissions
+    zh-CN: 权限
+  column_modified:
+    en: Modified
+    zh-CN: 修改时间
+  column_size:
+    en: Size
+    zh-CN: 大小
+
+  # What a listing says where there is nothing in the directory to read.
+  empty:
+    en: This folder is empty
+    zh-CN: 此文件夹为空
+
+  # What the toggle in a listing's corner says: whether the entries the platform hides are shown.
+  hidden:
+    en: Show hidden
+    zh-CN: 显示隐藏项
+
+  # What the toggle beside it says: whether this dock follows the location the whole File System is looking
+  # at, or is looked at on its own.
+  sync:
+    en: Sync
+    zh-CN: 同步
+
+  root:
+    en: Root
+    zh-CN: 根目录
+  set_base:
+    en: Set as Base
+    zh-CN: 设为基准
+  collapse_all:
+    en: Collapse All
+    zh-CN: 全部折叠
+  computer:
+    en: This PC
+    zh-CN: 此电脑
+
+  open:
+    en: Open
+    zh-CN: 打开
+  reveal:
+    en: Show in File Manager
+    zh-CN: 在文件管理器中显示
+  copy_path:
+    en: Copy Path
+    zh-CN: 复制路径
+  copy:
+    en: Copy
+    zh-CN: 复制
+  cut:
+    en: Cut
+    zh-CN: 剪切
+  paste:
+    en: Paste
+    zh-CN: 粘贴
+
+  # Removing is the one thing that cannot be taken back, so it is the one thing the plain key asks about. The
+  # question is worded here and shown by the host, which is what keeps a plugin from building a window.
+  delete:
+    en: Delete
+    zh-CN: 删除
+  delete_one:
+    en: "Delete `%{name}`? This cannot be undone."
+    zh-CN: "确定删除 `%{name}` 吗？此操作不可撤销。"
+  delete_many:
+    en: "Delete the %{count} selected items? This cannot be undone."
+    zh-CN: "确定删除选中的 %{count} 项吗？此操作不可撤销。"
+
+  # What the file operations are carried out with. The commands are the system's tools rather than this
+  # program's, which is why they are settings: a system that keeps them elsewhere, or a user who prefers
+  # another, says so here.
+  setting:
+    copy:
+      en: Copy command
+      zh-CN: 复制命令
+    move:
+      en: Move command
+      zh-CN: 移动命令
+    remove_dirs:
+      en: Remove directory command
+      zh-CN: 删除目录命令
+    remove_files:
+      en: Remove file command
+      zh-CN: 删除文件命令
+  refresh:
+    en: Refresh
+    zh-CN: 刷新
+
+  not_a_directory:
+    en: "`%{path}` is not a directory"
+    zh-CN: "`%{path}` 不是目录"

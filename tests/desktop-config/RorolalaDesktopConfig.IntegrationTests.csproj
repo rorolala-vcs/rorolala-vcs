@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>RorolalaDesktopConfig.IntegrationTests</AssemblyName>
+    <RootNamespace>RorolalaDesktopConfig.IntegrationTests</RootNamespace>
+    <!-- Where the program under test was built. Said here rather than worked out at run time from
+         whichever directory the test host happens to start in, and read back through the assembly
+         metadata below. -->
+    <DesktopAssembly>$(CsTargetRoot)/RorolalaDesktop/bin/$(Configuration)/$(TargetFramework)/RorolalaDesktop.dll</DesktopAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>RorolalaDesktop</_Parameter1>
+      <_Parameter2>$(DesktopAssembly)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Built, not referenced: what is tested is the program a caller runs, so it is compiled first
+         and then started as a program rather than called into. -->
+    <ProjectReference Include="../../app/desktop/Core/RorolalaDesktop.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

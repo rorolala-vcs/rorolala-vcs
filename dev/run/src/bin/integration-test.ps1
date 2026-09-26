@@ -1,19 +1,21 @@
 #Requires -Version 5.1
-# Runs the integration suites under `tests/`. Each is a program of its own — deliberately not a
-# member of the workspace — that runs the built programs and checks what they said, so what is
-# checked is the program a caller meets rather than the parts it is made of.
+# Runs the integration suites under `tests/`: the cargo ones, each a program of its own that runs the
+# built programs and checks what they said, and the .NET ones, which do the same for the Desktop
+# program through the .NET test host. What is checked in either kind is the program a caller meets
+# rather than the parts it is made of.
 #
-# A suite is a program rather than a test crate, because what it does is what a caller does: it is
-# run, and it complains — by ending non-zero — when what came back was not what it expected. That is
+# A cargo suite is a program rather than a test crate, because what it does is what a caller does: it
+# is run, and it complains — by ending non-zero — when what came back was not what it expected. That is
 # also what lets one do what a test cannot: serve a Vault, reach it, and stop it again.
 #
-# The suites are a workspace of their own, so they are run from beside it: where a suite is run from
-# is what picks its target directory out of `tests/.cargo/config.toml`, which is how running them
+# The cargo suites are a workspace of their own, so they are run from beside it: where a suite is run
+# from is what picks its target directory out of `tests/.cargo/config.toml`, which is how running them
 # leaves nothing inside the workspace they test. The programs they run are the release ones this
 # script builds, named to them rather than looked for.
 #
 # They run one at a time, so a suite that fails is named rather than lost among the output of the
-# others — and the ones after it still run, so one run reports every suite that failed.
+# others — and the ones after it still run, so one run reports every suite that failed. The .NET
+# suites are run after them, all together, for the same reason.
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/../lib/common.ps1"
@@ -38,6 +40,12 @@ try {
 } finally {
     Pop-Location
 }
+
+# The .NET suites are run from beside the solution they live in, reached the way the runner was
+# before this script entered `tests/`. The runner is called rather than `Invoke-Script`, since a
+# failure here is one more suite to name rather than a reason to stop.
+& "$PSScriptRoot/../../../run.ps1" dotnet-integration-test
+if ($LASTEXITCODE -ne 0) { $failed += '.NET' }
 
 if ($failed.Count -gt 0) {
     Write-Host "==> failed: $($failed -join ' ')"
