@@ -593,11 +593,11 @@ the window and the docks and knows nothing of entries.
   entry that was cut is drawn faded until the paste, and that paste **moves** it, while anything else
   is copied. A name already taken in the destination is left where it is and a free name is made
   beside it (`name (2)`), so a paste never overwrites.
-- **Dragging to move.** Dragging chosen entries onto a directory is to move them into it. **Not yet
-  implemented** (§19.6). When it is, it will be the plugin's own gesture rather than the toolkit's, for
-  a reason that is a fact about the platform and not a preference: Avalonia 11.3.22 has no drag source
-  on X11 (§19.6), so a drag between programs cannot begin there at all. Only a drag within the program
-  would be offered, and the platform's own drop handling left for the platforms that carry it.
+- **Dragging to move.** Dragging chosen entries onto a directory moves them into it, and a drag can
+  leave the program or arrive from another one: the toolkit's drag is used, and Avalonia 12's X11 backend
+  carries XDND. The files are offered themselves as well as their paths written out, so a file manager
+  receives files and a text field text. A move out to another program is finished by taking the originals
+  away, while a move the program answers itself has already moved them (§19.6).
 
 ## 8. Open Hook Pipeline
 
@@ -1049,16 +1049,14 @@ Agreed so far:
    count changes nobody needs warning about; a shape that changes is written by the one writer of these
    files, under the same `_version`.
 5. The persisted dock-layout file format (placement and sizes per `DockNameId` and ordinal).
-6. **Dragging between programs is unavailable on X11 in Avalonia 11.3.22.** `Avalonia.X11` registers
-   no `IPlatformDragSource`, and `DragDrop.DoDragDropAsync` returns `None` when there is none, so a
-   drag cannot begin — not to another program, and not within this one through the toolkit. The XDND
-   protocol is implemented only from Avalonia 12. Two ways out, with their costs:
-   - **Stay on 11.3.22** and hand-roll the in-program drag (§7.7), leaving external drag unavailable
-     here until the toolkit is upgraded. Cost: a bespoke gesture, and two of the three drag cases
-     asked for stay impossible on this platform.
-   - **Upgrade to Avalonia 12.** Cost: a migration of the whole look, the contract's Avalonia-facing
-     surface, the icon reader and the tests, and the plugin ABI moves with it (§4.4).
-   Undecided; §7.7 states the in-program gesture as the current position.
+6. **Dragging between programs is carried by the toolkit from Avalonia 12.** 11.3.22's X11 backend had
+   no `IPlatformDragSource` and no XDND, so a drag could not begin on X11 at all — not to another program,
+   and not within this one through the toolkit. The program was moved to Avalonia 12 for this reason, and
+   the toolkit's drag is what §7.7 offers: dragging to and from another program works on X11, and the
+   hand-rolled in-program drag is gone. What that move cost: the toolchain's SDK floor moved to .NET 10,
+   because Avalonia 12's analyzers need a newer compiler than .NET 8's; `Avalonia.Diagnostics` is gone,
+   there being no 12 of it; and the look, the contract's Avalonia-facing surface and the icon reader were
+   compiled against 12 and needed no further change.
 
 ## 20. References
 

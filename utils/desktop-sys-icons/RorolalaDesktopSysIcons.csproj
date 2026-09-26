@@ -15,7 +15,7 @@
   <ItemGroup>
     <!-- What is handed back is a control's source, so the type is Avalonia's rather than this
          library's: a caller draws it, and this library has nothing to draw with. -->
-    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia" Version="12.1.3" />
   </ItemGroup>
 
 </Project>

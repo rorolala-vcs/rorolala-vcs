@@ -15,7 +15,7 @@
     <!-- Plugins build the UI out of Avalonia controls directly, which is the deliberate trade that
          keeps the contract small. The load context delegates Avalonia to the host's copy, so what
          is built here is inserted into the host's tree as the same kind of control. -->
-    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia" Version="12.1.3" />
   </ItemGroup>
 
   <ItemGroup>

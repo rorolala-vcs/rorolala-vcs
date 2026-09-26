@@ -7,7 +7,9 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -59,7 +61,7 @@ internal abstract class EntryView : UserControl
     /// <summary>How faded an entry is while it is cut, so that it reads as on its way out.</summary>
     private const double CutOpacity = 0.45;
 
-    /// <summary>How far the pointer moves with the button down before it frames rather than clicks.</summary>
+    /// <summary>How far the pointer moves with the button down before it drags or frames rather than clicks.</summary>
     private const double Frame = 4;
 
     /// <summary>How long a run of typed letters stays one run.</summary>
@@ -100,6 +102,31 @@ internal abstract class EntryView : UserControl
     /// <summary>What the band is drawn over, filling the view and taking no pointer of its own.</summary>
     private readonly Canvas _over = new() { IsHitTestVisible = false };
 
+    /// <summary>Where a press landed and on which entry, while it may still become a drag.</summary>
+    private Point _slip;
+    private int _slippedAt = -1;
+
+    /// <summary>The choice as it stood when the pointer went down, before the toolkit collapsed it to one.</summary>
+    private IReadOnlyList<Entry> _atPress = [];
+
+    /// <summary>The press a drag would begin from, while it may still become one.</summary>
+    private PointerPressedEventArgs? _from;
+
+    /// <summary>What the drag in flight carries, for the taking away that a move out of the program owes.</summary>
+    private IReadOnlyList<Entry> _carried = [];
+
+    /// <summary>The row wearing the drop mark, so that it can be taken off again.</summary>
+    private Control? _marked;
+
+    /// <summary>
+    /// Whether this program's own drop handler answered the drag in flight.
+    /// </summary>
+    /// <remarks>
+    /// It is what tells a moved-out drag from a moved-in one: a drop answered here has already moved the files,
+    /// so the source must not take the originals away as well.
+    /// </remarks>
+    private static bool _answered;
+
     /// <summary>Sets up the shared behaviour over one list.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="browser">The location the entries belong to.</param>
@@ -135,6 +162,13 @@ internal abstract class EntryView : UserControl
 
         List.DoubleTapped += Opened;
         List.PointerCaptureLost += Lost;
+
+        // A drop from another program arrives as a routed drag event, which a control only hears where it has
+        // said it will take one.
+        DragDrop.SetAllowDrop(List, true);
+        List.AddHandler(DragDrop.DragOverEvent, DraggedOver);
+        List.AddHandler(DragDrop.DragLeaveEvent, DraggedOff);
+        List.AddHandler(DragDrop.DropEvent, Dropped);
 
         // Repainting only while on screen, like the browser itself: a dock that was closed is not a view
         // of anything to keep in step.
@@ -551,6 +585,18 @@ internal abstract class EntryView : UserControl
         {
             _lead = at;
 
+            if (e.GetCurrentPoint(List).Properties.IsLeftButtonPressed)
+            {
+                _slip = e.GetPosition(List);
+                _slippedAt = at;
+
+                // Read now rather than when the drag starts, because pressing an entry that is part of a choice
+                // collapses that choice to the one entry before a drag could be noticed — the toolkit's own
+                // behaviour, and the wrong one to carry a set by.
+                _atPress = Chosen();
+                _from = e;
+            }
+
             return;
         }
 
@@ -567,17 +613,35 @@ internal abstract class EntryView : UserControl
     }
 
     /// <summary>
-    /// Turns a press on the space around the entries into a frame, and follows a frame that is on.
+    /// Turns a press into a drag or a frame, and follows whichever is on.
     /// </summary>
     /// <remarks>
-    /// A frame needs no platform: the pointer is captured, the band is drawn from where the press was to where
-    /// the pointer is, and what it covers is chosen as it moves.
+    /// A drag is begun through the toolkit, whose X11 backend carries XDND in Avalonia 12, so that a drag can
+    /// leave the program and another program's drag can arrive (Section 19.6). A frame is this plugin's own,
+    /// because it is a selection gesture the toolkit has none of.
     /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The move.</param>
     private void Moved(object? sender, PointerEventArgs e)
     {
-        if (!_mayFrame || !e.GetCurrentPoint(List).Properties.IsLeftButtonPressed)
+        if (!e.GetCurrentPoint(List).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (_slippedAt >= 0)
+        {
+            var slid = e.GetPosition(List) - _slip;
+
+            if (Math.Abs(slid.X) >= Frame || Math.Abs(slid.Y) >= Frame)
+            {
+                Started();
+            }
+
+            return;
+        }
+
+        if (!_mayFrame)
         {
             return;
         }
@@ -694,6 +758,316 @@ internal abstract class EntryView : UserControl
     /// <param name="fallback">What to draw with where the look defines nothing under the key.</param>
     private IBrush Resource(string key, IBrush fallback) =>
         this.TryGetResource(key, null, out var found) && found is IBrush brush ? brush : fallback;
+
+    /// <summary>
+    /// Starts a drag of the choice as it stood when the pointer went down.
+    /// </summary>
+    /// <remarks>
+    /// The files are offered themselves as well as their paths written out, so that a file manager receives
+    /// them as files and a text field as text. What the platform does with the drag is its own business: this
+    /// hands over the data and waits to be told what became of it (Section 19.6).
+    /// </remarks>
+    private async void Started()
+    {
+        var from = _from;
+        var pressed = _slippedAt;
+        var chosen = _atPress;
+
+        _slippedAt = -1;
+        _from = null;
+        _atPress = [];
+
+        if (from is null ||
+            pressed < 0 ||
+            pressed >= Browser.Shown.Count ||
+            TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+        {
+            return;
+        }
+
+        var dragged = Browser.Shown[pressed];
+        IReadOnlyList<Entry> carrying = chosen.Any(item => string.Equals(item.Path, dragged.Path, StringComparison.Ordinal))
+            ? chosen
+            : [dragged];
+
+        // Places rather than things: nothing about the way up or the computer is a file to hand over.
+        carrying = [.. carrying.Where(entry => !Browser.IsUp(entry.Path) && !Browser.IsComputer(entry.Path))];
+
+        if (carrying.Count == 0)
+        {
+            return;
+        }
+
+        var transfer = new DataTransfer();
+
+        foreach (var entry in carrying)
+        {
+            var item = entry.Kind == EntryKind.Directory
+                ? (IStorageItem?)await storage.TryGetFolderFromPathAsync(entry.Path)
+                : await storage.TryGetFileFromPathAsync(entry.Path);
+
+            if (item is not null)
+            {
+                transfer.Add(DataTransferItem.CreateFile(item));
+            }
+        }
+
+        transfer.Add(DataTransferItem.CreateText(string.Join(Environment.NewLine, carrying.Select(entry => entry.Path))));
+
+        _carried = carrying;
+        _answered = false;
+
+        try
+        {
+            var effect = await DragDrop.DoDragDropAsync(from, transfer, DragDropEffects.Move | DragDropEffects.Copy);
+
+            // A move another program made is a move this program has to finish: the other program copied the
+            // files it was handed, and the originals are the source's to take away. A move this program
+            // answered itself already moved them, which is what _answered records — taking them away again
+            // would delete what was just carried.
+            if (effect == DragDropEffects.Move && !_answered)
+            {
+                foreach (var entry in _carried)
+                {
+                    Remove(entry, Host.Log.Error);
+                }
+
+                Later();
+            }
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            Host.Log.Error(error.Message);
+        }
+
+        _carried = [];
+    }
+
+    /// <summary>Says whether a drag may land here, and lights the directory it would land in.</summary>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The drag.</param>
+    private void DraggedOver(object? sender, DragEventArgs e)
+    {
+        var into = Landing(e);
+
+        if (into is null)
+        {
+            e.DragEffects = DragDropEffects.None;
+            Mark(null);
+
+            return;
+        }
+
+        e.DragEffects = Copying(e) ? DragDropEffects.Copy : DragDropEffects.Move;
+        Mark(into);
+        e.Handled = true;
+    }
+
+    /// <summary>Takes the drop mark off when a drag leaves.</summary>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The drag.</param>
+    private void DraggedOff(object? sender, DragEventArgs e) => Mark(null);
+
+    /// <summary>
+    /// Moves or copies what a drag brought into the directory it was let go over.
+    /// </summary>
+    /// <remarks>
+    /// A drag this program started is answered here too, so a drag between two of its docks never leaves it,
+    /// and the source is told by <see cref="_answered"/> not to remove the originals again.
+    /// </remarks>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The drop.</param>
+    private void Dropped(object? sender, DragEventArgs e)
+    {
+        Mark(null);
+
+        if (Landing(e) is not { } into)
+        {
+            return;
+        }
+
+        _answered = true;
+        var copy = Copying(e) || e.DragEffects == DragDropEffects.Copy;
+
+        foreach (var path in Paths(e.DataTransfer))
+        {
+            // Into the directory it is already in is a move that would only rename it, or a copy that makes a
+            // second one. Neither is what letting go inside one directory means, so neither is done.
+            if (string.Equals(ParentOf(path), into, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (copy)
+            {
+                FileOps.Copy(path, into, Host.Log.Error);
+            }
+            else
+            {
+                FileOps.Move(path, into, Host.Log.Error);
+            }
+        }
+
+        Later();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Reads the directory again, but not before this event is over.
+    /// </summary>
+    /// <remarks>
+    /// A drop is answered inside the drag's own event, and reading the directory again rebuilds the view that
+    /// is answering it — a view taken apart while it is still handling the event that took it apart. Deferring
+    /// the read is what keeps the two apart, and it costs the time it takes to get back to the loop.
+    /// </remarks>
+    private void Later() => Dispatcher.UIThread.Post(Browser.Refresh);
+
+    /// <summary>
+    /// The directory a drag would land in, or nothing where it may not land here at all.
+    /// </summary>
+    /// <remarks>
+    /// A directory entry is a place to let go into; a file, the way up and the computer are not; and the space
+    /// around the entries is the directory being looked at. A drag carrying no file is not it.
+    /// </remarks>
+    /// <param name="e">The drag.</param>
+    private string? Landing(DragEventArgs e)
+    {
+        if (!e.DataTransfer.Contains(DataFormat.File))
+        {
+            return null;
+        }
+
+        var at = e.GetPosition(this);
+
+        for (var visual = this.GetVisualAt(at) as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is ListBoxItem item && List.IndexFromContainer(item) is var index && index >= 0)
+            {
+                var entry = Browser.Shown[index];
+
+                return entry.Kind == EntryKind.Directory &&
+                    !Browser.IsUp(entry.Path) &&
+                    !Browser.IsComputer(entry.Path)
+                    ? entry.Path
+                    : null;
+            }
+        }
+
+        return Browser.IsComputer(Browser.Current) ? null : Browser.Current;
+    }
+
+    /// <summary>Whether the drag is one to copy rather than to move, which is what holding a control asks for.</summary>
+    /// <param name="e">The drag.</param>
+    private static bool Copying(DragEventArgs e) => e.KeyModifiers.HasFlag(KeyModifiers.Control);
+
+    /// <summary>The paths a drag carries, whether it brought them as files or as text.</summary>
+    /// <param name="data">What the drag carries.</param>
+    private static IReadOnlyList<string> Paths(IDataTransfer data)
+    {
+        var files = data.TryGetFiles();
+        var fromFiles = files?
+            .Select(file => file.TryGetLocalPath())
+            .Where(path => path is { Length: > 0 })
+            .Select(path => path!)
+            .ToArray() ?? [];
+
+        if (fromFiles.Length > 0)
+        {
+            return fromFiles;
+        }
+
+        var text = data.TryGetText();
+
+        return text is null
+            ? []
+            : text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(path => File.Exists(path) || System.IO.Directory.Exists(path))
+                .ToArray();
+    }
+
+    /// <summary>
+    /// Removes an entry, which is how a move out of the program is finished.
+    /// </summary>
+    /// <remarks>
+    /// A move to another program is one the other program only copies: what it was handed is now its own, and
+    /// the originals are the source's to take away. It is only ever run for a move this program did not answer
+    /// itself, so a move within the program is never taken away twice.
+    /// </remarks>
+    /// <param name="entry">What to remove.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    private static void Remove(Entry entry, Action<string> failed)
+    {
+        try
+        {
+            if (entry.Kind == EntryKind.Directory)
+            {
+                System.IO.Directory.Delete(entry.Path, true);
+            }
+            else
+            {
+                File.Delete(entry.Path);
+            }
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            failed(error.Message);
+        }
+    }
+
+    /// <summary>Paints the row for the directory a drag is over, or takes the paint off.</summary>
+    /// <param name="directory">The directory being pointed at, or nothing.</param>
+    private void Mark(string? directory)
+    {
+        Unmark();
+
+        if (directory is null)
+        {
+            return;
+        }
+
+        foreach (var (entry, row) in _rows)
+        {
+            if (!string.Equals(entry.Path, directory, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            Paint(row, Resource("ThemeAccentBrush4", new SolidColorBrush(Color.FromArgb(0x33, 0x80, 0x80, 0x80))));
+            _marked = row;
+
+            return;
+        }
+    }
+
+    /// <summary>Takes the drop mark off whatever was wearing it.</summary>
+    private void Unmark()
+    {
+        if (_marked is { } row)
+        {
+            Paint(row, null);
+            _marked = null;
+        }
+    }
+
+    /// <summary>Sets or clears a row's fill, whichever kind of row it is.</summary>
+    /// <param name="row">The row.</param>
+    /// <param name="brush">What to fill it with, or nothing to empty it.</param>
+    private static void Paint(Control row, IBrush? brush)
+    {
+        switch (row)
+        {
+            case Panel panel:
+                panel.Background = brush;
+                break;
+            case Border border:
+                border.Background = brush;
+                break;
+        }
+    }
+
+    /// <summary>The directory an entry sits in, for telling a move that would go nowhere.</summary>
+    /// <param name="path">The path to ask about.</param>
+    private static string ParentOf(string path) => Path.GetDirectoryName(path) ?? string.Empty;
 
     /// <summary>Opens the entry a double-click landed on.</summary>
     /// <param name="sender">The list.</param>

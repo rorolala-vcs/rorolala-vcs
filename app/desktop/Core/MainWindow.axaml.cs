@@ -69,10 +69,6 @@ public partial class MainWindow : Window
 
         Opened += (_, _) => ShowPopups();
         Closing += (_, _) => LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
-
-#if DEBUG
-        this.AttachDevTools();
-#endif
     }
 
     /// <summary>Builds the menu bar from what was registered.</summary>
