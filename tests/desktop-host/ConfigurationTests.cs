@@ -49,8 +49,9 @@ public sealed class ConfigurationTests
         var written = File.ReadAllText(ConfigPaths.Theme);
         Assert.Contains("\"_version\": 1", written, StringComparison.Ordinal);
         Assert.Contains("\"mode\": \"system\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"primary\": \"#00BCD4\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"accent\": \"#FF4081\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"primary\": \"#B5E61D\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"primaryText\": \"#1B2600\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"accent\": \"#5CC8FF\"", written, StringComparison.Ordinal);
     }
 
     /// <summary>A field the file does not name is a choice not made, which is not the same as the default.</summary>
@@ -142,14 +143,24 @@ public sealed class ConfigurationTests
     {
         Given(
             ConfigPaths.Theme,
-            """{"_version": 1, "mode": "dark", "primary": "#3366FF", "accent": "#FF0000"}"""
+            """{"_version": 1, "mode": "dark", "primary": "#3366FF", "primaryText": "#EEFFEE", "accent": "#FF0000"}"""
         );
 
         var theme = ConfigurationLoader.LoadTheme();
 
         Assert.Equal(ColorMode.Dark, theme.ModeOrDefault);
         Assert.Equal(Color.FromRgb(0x33, 0x66, 0xFF), theme.PrimaryOrDefault);
+        Assert.Equal(Color.FromRgb(0xEE, 0xFF, 0xEE), theme.PrimaryText);
         Assert.Equal(Color.FromRgb(0xFF, 0x00, 0x00), theme.AccentOrDefault);
+    }
+
+    /// <summary>An ink that is not named is left to the look to work out rather than defaulted here.</summary>
+    [Fact]
+    public void AnInkTheFileDoesNotNameIsLeftToBeWorkedOut()
+    {
+        Given(ConfigPaths.Theme, """{"_version": 1, "primary": "#3366FF"}""");
+
+        Assert.Null(ConfigurationLoader.LoadTheme().PrimaryText);
     }
 
     /// <summary>A missing plugins file states no plugin rather than being a mistake.</summary>

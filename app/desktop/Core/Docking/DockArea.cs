@@ -51,6 +51,16 @@ internal sealed class DockArea : UserControl
     /// <summary>The class a dock's own header carries.</summary>
     public const string TitleClass = "dock-title";
 
+    /// <summary>
+    /// The class the segmented control a region's tabs sit in carries.
+    /// </summary>
+    /// <remarks>
+    /// A tab strip is one bordered rounded container with the tab being shown filled, rather than tabs
+    /// each wearing an edge of their own: the container is a surface the look draws, so the tabs
+    /// themselves are flat and the corners clipped by their parent.
+    /// </remarks>
+    public const string TabsClass = "dock-tabs";
+
     /// <summary>The class the header of the dock a region is showing carries.</summary>
     public const string SelectedClass = "selected";
 
@@ -74,12 +84,12 @@ internal sealed class DockArea : UserControl
     /// <summary>The class the button that closes the dock a region is showing carries.</summary>
     public const string CloseClass = "dock-close";
 
-    /// <summary>The height of a region's header strip, which its tabs fill.</summary>
+    /// <summary>The height of a region's header strip, which its tabs sit in.</summary>
     /// <remarks>
-    /// Part of Section 10: a tab's edge is meant to land on the strip's own bottom edge, and the two have
-    /// to agree on where that is for the edge of the dock being shown to read as an underline.
+    /// Part of Section 10: the strip, the menu bar and a toolbar are one height, so that the window
+    /// reads as a stack of bands of the same weight.
     /// </remarks>
-    private const double StripHeight = 32;
+    private const double StripHeight = 36;
 
     /// <summary>The narrowest a column region is allowed to become.</summary>
     private const double MinColumn = 120;
@@ -240,17 +250,19 @@ internal sealed class DockArea : UserControl
 
             Close = new Button { Classes = { CloseClass }, Content = "\u2715" };
 
+            Tabs.Child = Headers;
+
             Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
 
-            Grid.SetColumn(Headers, 0);
+            Grid.SetColumn(Tabs, 0);
             Grid.SetColumn(Drag, 1);
             Grid.SetColumn(Commands, 2);
             Grid.SetColumn(Close, 3);
 
-            Bar.Children.Add(Headers);
+            Bar.Children.Add(Tabs);
             Bar.Children.Add(Drag);
             Bar.Children.Add(Commands);
             Bar.Children.Add(Close);
@@ -272,13 +284,35 @@ internal sealed class DockArea : UserControl
         /// </summary>
         /// <remarks>
         /// A border around the headers rather than a background on them, because a theme's chrome is a
-        /// surface with an edge under it, and a <see cref="StackPanel"/> has a background but no
-        /// border. Nothing is padded here: the headers bring their own margins.
+        /// surface with an edge under it, and a <see cref="StackPanel"/> has a background but no border.
+        /// The padding is the strip's own, since what is inside it is a tab strip and a button rather
+        /// than a row of things that bring their own margins.
         /// </remarks>
-        public Border Strip { get; } = new() { Classes = { HeadersClass } };
+        public Border Strip { get; } = new()
+        {
+            Classes = { HeadersClass },
+            Padding = new Thickness(8, 0),
+            MinHeight = StripHeight,
+        };
 
         /// <summary>The strip's one row: the tabs, the drag area, the commands, and the close.</summary>
         public Grid Bar { get; } = new();
+
+        /// <summary>
+        /// The segmented control the tabs sit in: one border, one radius, and the corners clipped so
+        /// that the tab being shown takes the container's own shape.
+        /// </summary>
+        /// <remarks>
+        /// It is a container rather than a rule per tab because the design draws a tab strip as one
+        /// bordered surface with the shown tab filled, and a tab that drew its own corners would show a
+        /// square inside a rounded edge.
+        /// </remarks>
+        public Border Tabs { get; } = new()
+        {
+            Classes = { TabsClass },
+            ClipToBounds = true,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
 
         /// <summary>The headers, one per dock the region was given.</summary>
         public StackPanel Headers { get; } =
@@ -286,11 +320,6 @@ internal sealed class DockArea : UserControl
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 0,
-
-                // No vertical margin: a header's own edge is meant to land on the header strip's, so
-                // that the one being shown reads as an underline along the bottom of the strip, which is
-                // the only mark of it there is (Section 10).
-                Margin = new Thickness(4, 0, 4, 0),
             };
 
         /// <summary>
@@ -574,11 +603,10 @@ internal sealed class DockArea : UserControl
 
         title.Classes.Add(TitleClass);
 
-        // The tab's own geometry, where the generic header's is for a command: a tab fills the strip it
-        // sits in, so that the edge it wears when it is the one shown lands on the strip's own bottom edge.
-        title.Padding = new Thickness(12, 0);
-        title.MinHeight = StripHeight;
-        title.VerticalAlignment = VerticalAlignment.Stretch;
+        // The tab's own geometry, where the generic header's is for a command: a tab sits inside the
+        // segmented control rather than filling the strip, because the fill is what marks the one being
+        // shown (Section 10).
+        title.Padding = new Thickness(12, 4);
 
         title.Click += (_, _) => Select(instance);
 
@@ -683,6 +711,10 @@ internal sealed class DockArea : UserControl
         foreach (var command in shown.View.HeaderCommands)
         {
             var button = Header(_i18n.Get(command.LabelKey));
+
+            // A command is chrome rather than a thing a surface is for: it draws nothing of its own
+            // until the pointer is on it, so that a strip of them does not read as a row of actions.
+            button.Classes.Add("ghost");
             button.Click += (_, _) => command.Command();
             region.Commands.Children.Add(button);
         }

@@ -16,11 +16,11 @@ namespace RorolalaFSAgent;
 /// </summary>
 /// <remarks>
 /// The Desktop's theme is a whole program's worth of rules; a dialog is a message, a box and four
-/// buttons, so only what those are drawn with is reproduced here: square corners, one-pixel edges, flat
-/// buttons with a neutral hover, and the primary spent on the one action the dialog exists for.
+/// buttons, so only what those are drawn with is reproduced here: the three grounds, one-pixel borders,
+/// 5-pixel controls, the sunken hover, and the primary filled into the one action the dialog exists for.
 /// <para>
 /// The primary is written into the base theme's own accent resources rather than applied control by
-/// control, which is what makes a checked box and a focus edge follow it without a rule each — and the
+/// control, which is what makes a checked box and a focus ring follow it without a rule each — and the
 /// ink on it is worked out from it, since the base theme writes white there and white cannot be read on
 /// a light colour.
 /// </para>
@@ -28,37 +28,49 @@ namespace RorolalaFSAgent;
 internal static class Look
 {
     /// <summary>The size every word is set at.</summary>
-    private const double BodySize = 13.0;
+    private const double BodySize = 14.0;
 
-    /// <summary>The height of a row of a control: short enough to scan, tall enough to hit.</summary>
-    private const double RowHeight = 28.0;
+    /// <summary>The height of a row of a control.</summary>
+    private const double RowHeight = 30.0;
 
-    /// <summary>How rounded anything is: not at all.</summary>
-    private static readonly CornerRadius Square = new(0);
+    /// <summary>How rounded a card is.</summary>
+    private static readonly CornerRadius Radius = new(8);
 
-    /// <summary>The one edge every surface wears.</summary>
+    /// <summary>How rounded a control is.</summary>
+    private static readonly CornerRadius Small = new(5);
+
+    /// <summary>The one edge a surface wears.</summary>
     private static readonly Thickness Edge = new(1);
 
     /// <summary>How long a colour takes to arrive.</summary>
-    private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(120);
 
     /// <summary>
-    /// The typeface the program is set in, named through the font collection so that the face
-    /// <c>WithInterFont</c> adds is the one used rather than a system font of the same name.
+    /// The typeface the program is set in: the platform's own, as the design uses, so that a dialog
+    /// looks like the program that opened it without either shipping a face.
     /// </summary>
-    private static readonly FontFamily Face = new("fonts:Inter#Inter");
+    private static readonly FontFamily Face = FontFamily.Default;
 
-    /// <summary>A hairline, for the edge of a control.</summary>
+    /// <summary>A border, and a control's surface.</summary>
     private const string Line = "rorolala.fsagent.line";
 
-    /// <summary>A band of chrome, or a surface under the pointer.</summary>
-    private const string Tint = "rorolala.fsagent.tint";
+    /// <summary>The elevated ground, which a control sits on.</summary>
+    private const string Elevated = "rorolala.fsagent.elevated";
 
-    /// <summary>The same, one step stronger, for a surface being pressed.</summary>
-    private const string DeeperTint = "rorolala.fsagent.tint.deeper";
+    /// <summary>The ground a hovered or held surface drops to.</summary>
+    private const string Sunken = "rorolala.fsagent.sunken";
 
-    /// <summary>The hard shadow the one action wears.</summary>
-    private const string Shadow = "rorolala.fsagent.shadow";
+    /// <summary>The mid neutral, for text that is not the main thing.</summary>
+    private const string Muted = "rorolala.fsagent.muted";
+
+    /// <summary>The faint neutral, for the smallest print.</summary>
+    private const string Faint = "rorolala.fsagent.faint";
+
+    /// <summary>The strong border, which a hovered control firms up to.</summary>
+    private const string Strong = "rorolala.fsagent.strong";
+
+    /// <summary>The primary, lifted, which a hovered filled action takes.</summary>
+    private const string PrimaryBright = "rorolala.fsagent.primary.bright";
 
     /// <summary>
     /// The class the one action a dialog exists for wears.
@@ -74,22 +86,23 @@ internal static class Look
     public static IReadOnlyList<IStyle> Styles(Color primary)
     {
         var ink = InkOn(primary);
-        var held = Scaled(primary, 0.80);
-        var bright = Lightened(primary, 0.18);
+        var bright = Mix(primary, Colors.White, 0.15);
 
-        return [Palette(primary, ink, held), .. Type(), .. Content(primary, ink, held, bright)];
+        return [Palette(primary, ink, bright), .. Type(), .. Content(primary, ink, bright)];
     }
 
     /// <summary>
     /// The primary, written into the base theme's own accent resources, and the neutrals this dialog
-    /// draws its edges and its hover in.
+    /// draws its grounds, borders and ink from.
     /// </summary>
     /// <remarks>
     /// The entries are given once per variant, because a lookup reads the dictionary of the variant
-    /// it is resolving for and never a default one. The neutrals are the variant's own ink held back,
-    /// which is what makes a hover read as a hover on either ground.
+    /// it is resolving for and never a default one.
     /// </remarks>
-    private static Style Palette(Color primary, Color ink, Color held)
+    /// <param name="primary">The primary.</param>
+    /// <param name="ink">What is written on the primary.</param>
+    /// <param name="bright">The primary lifted towards white.</param>
+    private static Style Palette(Color primary, Color ink, Color bright)
     {
         var style = new Style(selector => selector.OfType<Window>());
 
@@ -97,46 +110,113 @@ internal static class Look
         {
             ThemeDictionaries =
             {
-                [ThemeVariant.Light] = Accents(primary, ink, held, Colors.Black),
-                [ThemeVariant.Dark] = Accents(primary, ink, held, Colors.White),
+                [ThemeVariant.Light] = Variant(primary, ink, bright, Neutrals.Light),
+                [ThemeVariant.Dark] = Variant(primary, ink, bright, Neutrals.Dark),
             },
         };
 
         return style;
     }
 
+    /// <summary>
+    /// One variant's neutral ground, which is the design's own token set.
+    /// </summary>
+    /// <remarks>
+    /// Three grounds and a three-step ramp of ink, as the Desktop's own look has: a dialog that drew its
+    /// own greys would be a second answer to a question the program has already answered.
+    /// </remarks>
+    private readonly record struct Neutrals(
+        Color Bg,
+        Color Elevated,
+        Color Sunken,
+        Color Fg,
+        Color Muted,
+        Color Faint,
+        Color Border,
+        Color Strong,
+        Color Shadow,
+        Color ShadowSoft
+    )
+    {
+        /// <summary>The light ground.</summary>
+        public static readonly Neutrals Light = new(
+            Bg: Color.FromRgb(0xF6, 0xF8, 0xF3),
+            Elevated: Color.FromRgb(0xFF, 0xFF, 0xFF),
+            Sunken: Color.FromRgb(0xEC, 0xEF, 0xE6),
+            Fg: Color.FromRgb(0x1C, 0x21, 0x1A),
+            Muted: Color.FromRgb(0x5C, 0x66, 0x56),
+            Faint: Color.FromRgb(0x8A, 0x94, 0x84),
+            Border: Color.FromRgb(0xDD, 0xE3, 0xD5),
+            Strong: Color.FromRgb(0xC3, 0xCC, 0xB8),
+            Shadow: Color.FromArgb(0x0F, 0x14, 0x1E, 0x0A),
+            ShadowSoft: Color.FromArgb(0x0F, 0x14, 0x1E, 0x0A)
+        );
+
+        /// <summary>The dark ground.</summary>
+        public static readonly Neutrals Dark = new(
+            Bg: Color.FromRgb(0x14, 0x14, 0x14),
+            Elevated: Color.FromRgb(0x1C, 0x1C, 0x1C),
+            Sunken: Color.FromRgb(0x0F, 0x0F, 0x0F),
+            Fg: Color.FromRgb(0xE6, 0xE6, 0xE6),
+            Muted: Color.FromRgb(0x9A, 0x9A, 0x9A),
+            Faint: Color.FromRgb(0x6B, 0x6B, 0x6B),
+            Border: Color.FromRgb(0x2C, 0x2C, 0x2C),
+            Strong: Color.FromRgb(0x3C, 0x3C, 0x3C),
+            Shadow: Color.FromArgb(0x66, 0x00, 0x00, 0x00),
+            ShadowSoft: Color.FromArgb(0x59, 0x00, 0x00, 0x00)
+        );
+
+        /// <summary>The soft shadow the design raises a surface with: a hairline of contact and a wide one.</summary>
+        public BoxShadows Raised => new(
+            new BoxShadow { OffsetX = 0, OffsetY = 1, Blur = 2, Spread = 0, Color = Shadow },
+            [new BoxShadow { OffsetX = 0, OffsetY = 8, Blur = 24, Spread = 0, Color = ShadowSoft }]
+        );
+    }
+
     /// <summary>What one variant's palette is.</summary>
-    /// <param name="primary">The primary family.</param>
+    /// <param name="primary">The primary.</param>
     /// <param name="ink">What is written on the primary.</param>
-    /// <param name="held">The primary a held surface takes.</param>
-    /// <param name="ground">The variant's own ink, which the neutrals are that ink held back.</param>
-    private static ResourceDictionary Accents(Color primary, Color ink, Color held, Color ground) =>
+    /// <param name="bright">The primary lifted towards white.</param>
+    /// <param name="n">The variant's neutrals.</param>
+    private static ResourceDictionary Variant(Color primary, Color ink, Color bright, Neutrals n) =>
         new()
         {
             ["ThemeAccentColor"] = primary,
             ["ThemeAccentBrush"] = new SolidColorBrush(primary),
-            ["HighlightForegroundColor"] = ink,
-            ["HighlightForegroundBrush"] = new SolidColorBrush(ink),
-            ["HighlightColor"] = primary,
-            ["HighlightBrush"] = new SolidColorBrush(primary),
-            ["HighlightColor2"] = held,
-            ["HighlightBrush2"] = new SolidColorBrush(held),
-            [Line] = new SolidColorBrush(WithAlpha(ground, 0x33)),
-            [Tint] = new SolidColorBrush(WithAlpha(ground, 0x0F)),
-            [DeeperTint] = new SolidColorBrush(WithAlpha(ground, 0x1F)),
+            ["HighlightColor"] = WithAlpha(primary, 0x59),
+            ["HighlightBrush"] = new SolidColorBrush(WithAlpha(primary, 0x59)),
+            ["HighlightForegroundColor"] = n.Fg,
+            ["HighlightForegroundBrush"] = new SolidColorBrush(n.Fg),
 
-            // A hard shadow rather than a soft one, and the same shape the Desktop draws: light from the
-            // top left, so the shadow falls to the bottom right and finishes where it is.
-            [Shadow] = new BoxShadows(
-                new BoxShadow
-                {
-                    OffsetX = 2,
-                    OffsetY = 2,
-                    Blur = 0,
-                    Spread = 0,
-                    Color = Color.FromArgb(ground == Colors.Black ? (byte)0x40 : (byte)0x8C, 0, 0, 0),
-                }
-            ),
+            // The base theme's own names, pointed at the design's colours, so that a field, a popup and
+            // a scrollbar follow without a rule each.
+            ["ThemeBackgroundColor"] = n.Elevated,
+            ["ThemeBackgroundBrush"] = new SolidColorBrush(n.Elevated),
+            ["ThemeBorderLowColor"] = n.Border,
+            ["ThemeBorderLowBrush"] = new SolidColorBrush(n.Border),
+            ["ThemeBorderMidColor"] = n.Border,
+            ["ThemeBorderMidBrush"] = new SolidColorBrush(n.Border),
+            ["ThemeBorderHighColor"] = n.Strong,
+            ["ThemeBorderHighBrush"] = new SolidColorBrush(n.Strong),
+            ["ThemeControlMidColor"] = n.Elevated,
+            ["ThemeControlMidBrush"] = new SolidColorBrush(n.Elevated),
+            ["ThemeControlHighColor"] = n.Sunken,
+            ["ThemeControlHighBrush"] = new SolidColorBrush(n.Sunken),
+            ["ThemeControlHighlightMidColor"] = n.Sunken,
+            ["ThemeControlHighlightMidBrush"] = new SolidColorBrush(n.Sunken),
+            ["ThemeForegroundColor"] = n.Fg,
+            ["ThemeForegroundBrush"] = new SolidColorBrush(n.Fg),
+            ["ThemeForegroundLowColor"] = n.Faint,
+            ["ThemeForegroundLowBrush"] = new SolidColorBrush(n.Faint),
+
+            [Line] = new SolidColorBrush(n.Border),
+            [Elevated] = new SolidColorBrush(n.Elevated),
+            [Sunken] = new SolidColorBrush(n.Sunken),
+            [Muted] = new SolidColorBrush(n.Muted),
+            [Faint] = new SolidColorBrush(n.Faint),
+            [Strong] = new SolidColorBrush(n.Strong),
+            [PrimaryBright] = new SolidColorBrush(bright),
+            ["rorolala.fsagent.shadow"] = n.Raised,
         };
 
     /// <summary>What the whole dialog is set in.</summary>
@@ -153,83 +233,59 @@ internal static class Look
                 new Setter(TemplatedControl.FontFamilyProperty, Face),
                 new Setter(TemplatedControl.FontSizeProperty, BodySize)
             ),
+            On(
+                selector => selector.OfType<Window>(),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated)
+            ),
+            // The id of a conflicting item is a key rather than a name, so it is set in the mono face.
+            On(
+                selector => selector.OfType<TextBlock>().Class("caption"),
+                new Setter(TextBlock.FontSizeProperty, 12.5)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("faint"),
+                Brushed(TextBlock.ForegroundProperty, Faint)
+            ),
         ];
 
     /// <summary>The controls the dialog is made of: buttons and the one checkbox.</summary>
-    /// <param name="primary">The primary family.</param>
+    /// <param name="primary">The primary.</param>
     /// <param name="ink">What is written on the primary.</param>
-    /// <param name="held">The primary a held surface takes.</param>
-    /// <param name="bright">The primary a surface under the pointer lifts to.</param>
-    private static Style[] Content(Color primary, Color ink, Color held, Color bright) =>
+    /// <param name="bright">The primary lifted towards white.</param>
+    private static Style[] Content(Color primary, Color ink, Color bright) =>
         [
-            // A button is flat, the same as everywhere else: an edge and a neutral hover, and no height
-            // for pressing to change.
             On(
                 selector => selector.OfType<Button>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(12, 5)),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
                 new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
                 Brushed(TemplatedControl.BorderBrushProperty, Line),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(11, 5)),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
             On(
                 selector => selector.OfType<Button>().Class(":pointerover"),
-                Brushed(TemplatedControl.BackgroundProperty, Tint)
-            ),
-            On(
-                selector => selector.OfType<Button>().Class(":pressed"),
-                Brushed(TemplatedControl.BackgroundProperty, DeeperTint)
-            ),
-            // The base theme repaints a hovered or held button's own part, which would take the flat edge
-            // off it for as long as the pointer rested there.
-            On(
-                selector => selector.OfType<Button>().Class(":pointerover").Template().Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<Button>().Class(":pressed").Template().Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BackgroundProperty, DeeperTint),
-                Brushed(ContentPresenter.BorderBrushProperty, Line)
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.BorderBrushProperty, Strong)
             ),
 
-            // The action the dialog exists for is the one surface the primary fills and the one thing in
-            // it that is raised; the ink on it is the ink that can be read there rather than the white the
-            // base theme would write.
+            // The action the dialog exists for is the one surface the primary fills; the ink on it is
+            // the ink that can be read there rather than the white the base theme would write.
             On(
                 selector => selector.OfType<Button>().Class(PrimaryAction),
                 Fixed(TemplatedControl.BackgroundProperty, primary),
                 Fixed(TemplatedControl.ForegroundProperty, ink),
-                Fixed(TemplatedControl.BorderBrushProperty, held)
+                Fixed(TemplatedControl.BorderBrushProperty, primary),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold)
             ),
             On(
                 selector => selector.OfType<Button>().Class(PrimaryAction).Class(":pointerover"),
                 Fixed(TemplatedControl.BackgroundProperty, bright),
-                Fixed(TemplatedControl.BorderBrushProperty, held)
+                Fixed(TemplatedControl.BorderBrushProperty, bright)
             ),
-            On(
-                selector => selector.OfType<Button>().Class(PrimaryAction).Class(":pressed"),
-                Fixed(TemplatedControl.BackgroundProperty, held),
-                Fixed(TemplatedControl.BorderBrushProperty, held)
-            ),
-            On(
-                selector =>
-                    selector.OfType<Button>().Class(PrimaryAction).Template().Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BoxShadowProperty, Shadow)
-            ),
-            On(
-                selector =>
-                    selector
-                        .OfType<Button>()
-                        .Class(PrimaryAction)
-                        .Class(":pressed")
-                        .Template()
-                        .Name("PART_ContentPresenter"),
-                Fixed(ContentPresenter.BackgroundProperty, held),
-                Fixed(ContentPresenter.BorderBrushProperty, held),
-                new Setter(ContentPresenter.BoxShadowProperty, default(BoxShadows))
-            ),
+            // The base theme repaints a hovered button's own part, which would take the primary off the
+            // one action for as long as the pointer rested on it.
             On(
                 selector =>
                     selector
@@ -238,12 +294,12 @@ internal static class Look
                         .Class(":pointerover")
                         .Template()
                         .Name("PART_ContentPresenter"),
-                Fixed(ContentPresenter.BorderBrushProperty, held)
+                Fixed(ContentPresenter.BackgroundProperty, bright),
+                Fixed(ContentPresenter.BorderBrushProperty, bright)
             ),
 
             On(
                 selector => selector.OfType<CheckBox>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
                 new Setter(Layoutable.MinHeightProperty, RowHeight)
             ),
             // A checked box is filled with the primary and ticked in the ink that can be read on it,
@@ -258,8 +314,7 @@ internal static class Look
                 new Setter(Shape.FillProperty, new SolidColorBrush(ink))
             ),
 
-            // Every part that changes colour on a state fades into it, which is all the motion there
-            // is: a fade is what a flat surface can do without moving anything under the pointer.
+            // Every part that changes colour on a state fades into it.
             On(
                 selector => selector.OfType<Button>().Template().Name("PART_ContentPresenter"),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
@@ -313,21 +368,17 @@ internal static class Look
             ? Colors.Black
             : Colors.White;
 
-    /// <summary>One colour stepped towards black by a factor, for a held surface.</summary>
-    private static Color Scaled(Color colour, double factor) =>
-        Color.FromRgb(
-            (byte)Math.Round(colour.R * factor),
-            (byte)Math.Round(colour.G * factor),
-            (byte)Math.Round(colour.B * factor)
-        );
+    /// <summary>One colour mixed into another by a fraction of the way there.</summary>
+    private static Color Mix(Color colour, Color towards, double amount)
+    {
+        var other = 1 - amount;
 
-    /// <summary>One colour stepped towards white by a fraction of the way there, for a hovered surface.</summary>
-    private static Color Lightened(Color colour, double amount) =>
-        Color.FromRgb(
-            (byte)Math.Round(colour.R + ((255 - colour.R) * amount)),
-            (byte)Math.Round(colour.G + ((255 - colour.G) * amount)),
-            (byte)Math.Round(colour.B + ((255 - colour.B) * amount))
+        return Color.FromRgb(
+            (byte)Math.Round((colour.R * other) + (towards.R * amount)),
+            (byte)Math.Round((colour.G * other) + (towards.G * amount)),
+            (byte)Math.Round((colour.B * other) + (towards.B * amount))
         );
+    }
 
     /// <summary>The same colour, at another alpha.</summary>
     private static Color WithAlpha(Color colour, byte alpha) =>

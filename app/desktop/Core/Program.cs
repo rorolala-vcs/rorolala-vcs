@@ -70,7 +70,6 @@ class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
-            .WithInterFont()
             .LogToTrace();
 
     /// Records what the run handed over: each argument this program answers to, and nothing else.

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -57,7 +58,7 @@ internal sealed class TreeControl : UserControl
     private readonly BrowserActions _actions;
 
     /// <summary>The button that roots the tree at the top of the platform.</summary>
-    private readonly Button _root = new();
+    private readonly Button _root = new() { Classes = { "ghost" } };
 
     /// <summary>The tree, and nothing else, in the one cell under the bar.</summary>
     private readonly ContentControl _content = new();
@@ -81,13 +82,14 @@ internal sealed class TreeControl : UserControl
         DetachedFromVisualTree += (_, _) => _browser.Changed -= Update;
 
         _root.Content = RolaI18N.Get("rorolala_file_system.root");
+        _root.Padding = new Thickness(7, 2);
         _root.Click += (_, _) => _browser.SetBase(Browser.Root());
 
         var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Margin = new Thickness(8),
+            Margin = new Thickness(8, 8, 8, 4),
         };
         bar.Children.Add(_root);
 
@@ -96,7 +98,17 @@ internal sealed class TreeControl : UserControl
         panel.Children.Add(bar);
         panel.Children.Add(_content);
 
-        Content = panel;
+        // The sidebar ground: the tree sits on the elevated surface with one edge against the dock beside
+        // it, which is what reads as the card the entries are on rather than as a bare pane.
+        var ground = new Border
+        {
+            Child = panel,
+            BorderThickness = new Thickness(0, 0, 1, 0),
+        };
+        ground[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+        ground[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
+
+        Content = ground;
 
         Draw();
     }
@@ -160,14 +172,29 @@ internal sealed class TreeBrowser : UserControl
     /// It takes no pointer of its own: the space it sits over is still the tree's, and a word that ate the
     /// right-click there would take the tree's own menu with it.
     /// </remarks>
-    private static TextBlock Empty() =>
-        new()
+    private static Control Empty() =>
+        new StackPanel
         {
-            Text = RolaI18N.Get("rorolala_file_system.empty"),
-            Classes = { "muted" },
+            Spacing = 8,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             IsHitTestVisible = false,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "\U0001F5C2",
+                    FontSize = 34,
+                    Classes = { "faint" },
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                },
+                new TextBlock
+                {
+                    Text = RolaI18N.Get("rorolala_file_system.empty"),
+                    Classes = { "muted" },
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                },
+            },
         };
 
     /// <summary>One directory as a step of the tree, reading its children when first opened.</summary>
@@ -187,7 +214,7 @@ internal sealed class TreeBrowser : UserControl
         if (holds)
         {
             item.Items.Add(
-                new TreeViewItem { Header = new TextBlock { Text = "\u2026", Classes = { "muted" } } }
+                new TreeViewItem { Header = new TextBlock { Text = "\u2026", Classes = { "faint" } } }
             );
         }
 

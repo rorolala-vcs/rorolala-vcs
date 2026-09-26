@@ -96,6 +96,23 @@ plugin_manager:
   order:
     en: Order
     zh-CN: 顺序
+  not_loaded:
+    en: not loaded
+    zh-CN: 未加载
   next_start:
     en: Enabling, disabling and ordering take effect on the next start.
     zh-CN: 启用、禁用与排序在下次启动时生效。
+
+log:
+  level:
+    en: Level
+    zh-CN: 级别
+  source:
+    en: Source
+    zh-CN: 来源
+  message:
+    en: Message
+    zh-CN: 消息
+  count:
+    en: Count
+    zh-CN: 次数

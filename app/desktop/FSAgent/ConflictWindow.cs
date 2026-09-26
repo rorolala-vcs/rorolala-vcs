@@ -51,10 +51,18 @@ internal sealed class ConflictWindow : Window
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
+        var heading = new TextBlock
+        {
+            Text = RolaI18N.Get(Key("title")),
+            FontSize = 16,
+            FontWeight = FontWeight.SemiBold,
+        };
+
         var message = new TextBlock
         {
             Text = RolaI18N.Get(Key("message"), item.From, item.To),
             TextWrapping = TextWrapping.Wrap,
+            Classes = { "muted" },
         };
 
         var apply = new CheckBox
@@ -81,9 +89,9 @@ internal sealed class ConflictWindow : Window
 
         Content = new StackPanel
         {
-            Margin = new Thickness(16),
-            Spacing = 12,
-            Children = { message, apply, buttons },
+            Margin = new Thickness(24),
+            Spacing = 16,
+            Children = { heading, message, apply, buttons },
         };
 
         // The window closing is an answer too: a dialog nobody filled in means nothing runs.

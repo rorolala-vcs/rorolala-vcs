@@ -92,7 +92,7 @@ internal static class Icons
         {
             Width = size,
             Height = size,
-            CornerRadius = new CornerRadius(0),
+            CornerRadius = new CornerRadius(3),
             Background = new SolidColorBrush(directory ? Directory : File),
             VerticalAlignment = VerticalAlignment.Center,
         };

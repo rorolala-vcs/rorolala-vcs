@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Styling;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
@@ -66,7 +67,7 @@ internal sealed class PreferenceView : UserControl
     private readonly ListBox _owners = new();
 
     /// <summary>What the chosen owner declared.</summary>
-    private readonly StackPanel _shown = new();
+    private readonly StackPanel _shown = new() { Spacing = 24 };
 
     /// <summary>Makes the control over the settings it shows.</summary>
     /// <param name="settings">What every owner declared, and what each is worth.</param>
@@ -92,19 +93,36 @@ internal sealed class PreferenceView : UserControl
         }
 
         _owners.ItemsSource = owners;
-        _owners.Width = 184;
+        _owners.Width = 188;
         _owners.SelectedIndex = 0;
         _owners.SelectionChanged += (_, _) => Show();
+
+        // An owner row is a control within the card, so it is the small radius even though the list
+        // itself, being the card, is the large one.
+        _owners.Styles.Add(
+            new Style(selector => selector.OfType<ListBoxItem>())
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(5)),
+                },
+            }
+        );
 
         var left = new Border
         {
             BorderThickness = new Thickness(0, 0, 1, 0),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
             Child = _owners,
         };
 
         var right = new ScrollViewer
         {
-            Content = new StackPanel { Margin = new Thickness(12), Spacing = 12, Children = { _shown } },
+            Content = new StackPanel
+            {
+                Margin = new Thickness(16, 16, 24, 60),
+                Children = { _shown },
+            },
         };
 
         var panel = new DockPanel { LastChildFill = true };
@@ -187,7 +205,7 @@ internal sealed class PreferenceView : UserControl
             new TextBlock
             {
                 Text = _i18n.Get("core.setting.immediate"),
-                Classes = { "caption", "muted" },
+                Classes = { "caption", "faint" },
             }
         );
 
@@ -237,11 +255,11 @@ internal sealed class PreferenceView : UserControl
     {
         var swatch = new Border
         {
-            Width = 20,
-            Height = 20,
+            Width = 22,
+            Height = 22,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(0),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+            CornerRadius = new CornerRadius(5),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
             Background = new SolidColorBrush(current),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -300,7 +318,7 @@ internal sealed class PreferenceView : UserControl
     /// <param name="reset">What going back to the default does.</param>
     private Control Row(string label, Control editor, Action reset)
     {
-        var button = new Button { Content = _i18n.Get("setting.reset") };
+        var button = new Button { Content = _i18n.Get("setting.reset"), Classes = { "ghost" } };
         button.Click += (_, _) => reset();
 
         return SettingRow(_i18n.Get(label), editor, button);
@@ -329,24 +347,35 @@ internal sealed class PreferenceView : UserControl
     }
 
     /// <summary>A section: its heading, the rule under it, and what it holds.</summary>
-    private static Control Section(string heading, Control content) =>
-        new StackPanel
+    private static Control Section(string heading, Control content)
+    {
+        var rule = Divider();
+        rule.Margin = new Thickness(0, 0, 0, 8);
+
+        return new StackPanel
         {
-            Spacing = 8,
             Children =
             {
-                new TextBlock { Text = heading, Classes = { "section" } },
-                Divider(),
+                // The design sets a heading in capitals with `text-transform`, which Avalonia does
+                // not have, so the capitals are put on the word here instead.
+                new TextBlock
+                {
+                    Text = heading.ToUpperInvariant(),
+                    Classes = { "label" },
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                rule,
                 content,
             },
         };
+    }
 
-    /// <summary>The hairline separating a heading from what follows it, in the theme's line colour.</summary>
+    /// <summary>The hairline separating a heading from what follows it, in the theme's border colour.</summary>
     private static Border Divider() =>
         new()
         {
             BorderThickness = new Thickness(0, 0, 0, 1),
-            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.theme.line"),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
         };
 
     /// <summary>The colour six digits and a hash stand for, or nothing when the text is not one.</summary>
@@ -400,7 +429,7 @@ internal sealed class PreferenceView : UserControl
     {
         var value = _settings.Value(owner, setting) ?? string.Empty;
 
-        var reset = new Button { Content = _i18n.Get("setting.reset") };
+        var reset = new Button { Content = _i18n.Get("setting.reset"), Classes = { "ghost" } };
 
         // Going back is taking the value away rather than writing the default down. The two look the same
         // today and are not the same tomorrow: a copy of the default kept in the file would keep out a default
@@ -442,7 +471,7 @@ internal sealed class PreferenceView : UserControl
                 new TextBlock
                 {
                     Text = string.Join(" · ", notes),
-                    Classes = { "caption", "muted" },
+                    Classes = { "caption", "faint" },
                 },
             },
         };

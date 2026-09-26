@@ -1,7 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Logging;
@@ -47,12 +49,27 @@ internal sealed class LogView : UserControl
 
         // Laid over the list rather than beside it, so the empty line sits in the list's own room and
         // the two are not measured against each other.
-        var empty = new TextBlock
+        var empty = new StackPanel
         {
-            Text = RolaI18N.Get("core.empty_log"),
-            Classes = { "muted" },
+            Spacing = 8,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "\u2261",
+                    FontSize = 34,
+                    Classes = { "faint" },
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                },
+                new TextBlock
+                {
+                    Text = RolaI18N.Get("core.empty_log"),
+                    Classes = { "muted" },
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                },
+            },
         };
 
         // The log only ever gains lines, so this state changes once; the subscription has nothing to
@@ -68,7 +85,60 @@ internal sealed class LogView : UserControl
         log.Entries.CollectionChanged += (_, _) => Show();
         Show();
 
-        Content = new Grid { Children = { list, empty } };
+        var body = new Grid { Children = { list, empty } };
+        var head = Head();
+
+        DockPanel.SetDock(head, Dock.Top);
+
+        Content = new Border
+        {
+            Margin = new Thickness(16, 8, 16, 16),
+            CornerRadius = new CornerRadius(8),
+            ClipToBounds = true,
+            BorderThickness = new Thickness(1),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
+            [!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated"),
+            Child = new DockPanel { LastChildFill = true, Children = { head, body } },
+        };
+    }
+
+    /// <summary>The card's head: the four captions over the columns of the rows below.</summary>
+    private static Border Head() =>
+        new()
+        {
+            Height = 30,
+            Padding = new Thickness(8, 0),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            [!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.sunken"),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
+            Child = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("56,160,*,48"),
+                Children =
+                {
+                    Caption("log.level", 0),
+                    Caption("log.source", 1),
+                    Caption("log.message", 2),
+                    Caption("log.count", 3),
+                },
+            },
+        };
+
+    /// <summary>One column's caption, over the column it names.</summary>
+    private static TextBlock Caption(string key, int column)
+    {
+        var text = new TextBlock
+        {
+            // The design sets these in capitals with `text-transform`, which Avalonia does not have,
+            // so the capitals are put on the word here instead.
+            Text = RolaI18N.Get(key).ToUpperInvariant(),
+            Classes = { "label" },
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        Grid.SetColumn(text, column);
+
+        return text;
     }
 
     /// <summary>One line: level, source, message, and how often it was said.</summary>
@@ -77,11 +147,11 @@ internal sealed class LogView : UserControl
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("56,160,*,48") };
 
         // Every cell is monospaced, which is what keeps the four columns aligned down the list; the
-        // level and source are metadata and so read smaller, and the level is dimmed further.
-        row.Children.Add(Cell(entry, nameof(LogEntry.Level), "{0}", 0, "mono", "caption", "muted"));
-        row.Children.Add(Cell(entry, nameof(LogEntry.Source), "{0}", 1, "mono", "caption"));
+        // metadata cells read smaller and fainter than the message they are about.
+        row.Children.Add(Cell(entry, nameof(LogEntry.Level), "{0}", 0, "mono", "caption", "faint"));
+        row.Children.Add(Cell(entry, nameof(LogEntry.Source), "{0}", 1, "mono", "caption", "faint"));
         row.Children.Add(Cell(entry, nameof(LogEntry.Message), "{0}", 2, "mono"));
-        row.Children.Add(Cell(entry, nameof(LogEntry.Count), "\u00d7{0}", 3, "mono"));
+        row.Children.Add(Cell(entry, nameof(LogEntry.Count), "\u00d7{0}", 3, "mono", "caption", "faint"));
 
         return row;
     }

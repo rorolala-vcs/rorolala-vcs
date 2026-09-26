@@ -13,45 +13,41 @@ using RorolalaDesktop.Docking;
 namespace RorolalaDesktop.Theming;
 
 /// <summary>
-/// The look: two colours, flat rectangles, one-pixel edges, and one raised action.
+/// The look: three grounds, rounded surfaces, one vivid primary, and soft shadows.
 /// </summary>
 /// <remarks>
 /// It is the program's own and there is only one of it. What a run chooses is the variant it is drawn
-/// in and the two colours, and all three are read before the window is made (Section 10). Everything
-/// else here is stated rather than configured, which is what makes the program look like one thing.
+/// in and the colours, read before the window is made (Section 10). Everything else here is stated
+/// rather than configured, which is what makes the program look like one thing.
 /// <para>
-/// The design is a minimal-flat one: every surface is a rectangle, every edge is one pixel, hover is a
-/// neutral tint rather than a colour, and the two chosen colours are spent by role rather than by
-/// taste. <b>Primary</b> carries the weight — it fills what is selected, what is checked, and the one
-/// action a surface exists for — and <b>accent</b> is spent on the marks that ask for attention: the
-/// hairline a splitter shows under the pointer, the edge of a field that has focus, the zone a dragged
-/// dock is aimed at, and the flash of a press. Keeping the two apart is what stops an attention mark
-/// being mistaken for a selected thing; a look with one colour cannot say either.
+/// The design is the one the sibling project <c>gattipage</c> uses, and the tokens below are that
+/// project's own: three grounds (<c>bg</c>, <c>bg-elevated</c>, <c>bg-sunken</c>), a neutral ramp in
+/// three steps rather than by opacity (<c>fg</c>, <c>fg-muted</c>, <c>fg-faint</c>), two border
+/// weights, 8/5-pixel radii, a soft two-layer shadow, and one vivid primary filled into the things
+/// that are chosen. Surfaces are raised rather than flat, so a dock reads as a card on the ground
+/// beneath it.
 /// </para>
 /// <para>
-/// There is exactly one raised surface — the action a surface exists for, which wears the primary and
-/// the look's one hard shadow — so that what to do is never a question with two answers. Everything
-/// else is flat, and what moves is colour and opacity only: a press changes a colour and moves nothing
-/// under the pointer. Selection is the one slow thing — a row turns to the primary over a fifth of a
-/// second, so that a click reads as a change rather than as a blink — while everything else answers
-/// within a frame or two.
+/// The colours are spent by role. <b>Primary</b> fills what is chosen — a chosen row is a wash of it,
+/// a chosen tab and the one action of a dialog are filled with it — and it is written into the base
+/// theme's own accent resources, so a selected row, a checked box and a selection of text are the
+/// primary from one definition. <b>Accent</b> is the second colour, and it is spent on the marks that
+/// must not be mistaken for a selection: the band a drag draws, the zone a dragged dock is aimed at,
+/// and the hairline a splitter shows under the pointer. The design it comes from needs no such
+/// colour, which is why it is the one thing here that is not that design's own.
 /// </para>
 /// <para>
-/// The two colours are written into <em>the base theme's own</em> resources rather than applied control
-/// by control, because that theme draws a selected row, a checked box and a text selection from its
-/// accent family: the primary is named there once, and the whole program turns primary with it.
-/// </para>
-/// <para>
-/// Everything the look paints is drawn from a resource rather than baked into the setter that names it,
-/// and that is what makes the colours editable while the program runs: a resource replaced in place
-/// reaches every control that took it, where a colour written into a setter would be fixed for the life
-/// of the window (Section 10).
+/// Everything the look paints is drawn from a resource rather than baked into the setter that names
+/// it, and that is what makes the colours editable while the program runs: a resource replaced in
+/// place reaches every control that took it, where a colour written into a setter would be fixed for
+/// the life of the window.
 /// </para>
 /// <para>
 /// The shell marks the surfaces it owns with classes, which is how a rule here addresses a dock without
 /// knowing what one is: <see cref="MainWindow.MenuBarClass"/> on the menu bar,
 /// <see cref="DockArea.HeadersClass"/> on a region's header strip,
-/// <see cref="DockArea.TitleClass"/> on a dock's header — with <see cref="DockArea.SelectedClass"/> on
+/// <see cref="DockArea.TabsClass"/> on the segmented control the tabs sit in,
+/// <see cref="DockArea.TitleClass"/> on a dock's own tab — with <see cref="DockArea.SelectedClass"/> on
 /// the one being shown — <see cref="DockArea.CloseClass"/> on the button that closes it,
 /// <see cref="DockArea.SplitterClass"/> on the grab between regions, and
 /// <see cref="DockArea.DropZoneClass"/> on where a dragged dock would land.
@@ -60,65 +56,58 @@ namespace RorolalaDesktop.Theming;
 internal sealed class RorolalaTheme
 {
     /// <summary>
-    /// The look, in the two colours the user chooses.
+    /// The look, in the colours the user chooses.
     /// </summary>
     /// <remarks>
-    /// Two colours are configured and everything follows from them: the primary family the base theme
-    /// fills a selected row, a checked box and a selection of text from; the primary a button is filled
-    /// with, the darker one it drops to when pressed and the lighter one it lifts to under the pointer;
-    /// the accent the attention marks are drawn in; and the ink that can be read on a filled surface.
-    /// Nothing else is derived, because every colour derived from a colour is another colour that can
-    /// disagree with it.
+    /// Two colours are configured, and a third may be named rather than derived: the ink written on a
+    /// filled surface is worked out by contrast unless the file names one, because the design this
+    /// comes from names its own (a dark green on a lime rather than a black) and a named value is a
+    /// choice the program should keep.
     /// </remarks>
-    /// <param name="primary">The colour the brand and everything selected is drawn in.</param>
-    /// <param name="accent">The colour the marks that ask for attention are drawn in.</param>
-    public RorolalaTheme(Color primary, Color accent)
+    /// <param name="primary">The colour what is chosen is drawn in.</param>
+    /// <param name="accent">The colour the drag marks are drawn in.</param>
+    /// <param name="primaryText">What is written on the primary, or nothing to work it out.</param>
+    public RorolalaTheme(Color primary, Color accent, Color? primaryText)
     {
         _primary = primary;
         _accent = accent;
+        _primaryText = primaryText ?? InkOn(primary);
 
-        // The primary a pressed surface drops to, and the one a surface under the pointer lifts to. Held
-        // is darker, bright is closer to white, and both are worked out from the primary by a factor
-        // rather than picked by hand, so that every primary has a pair and neither can disagree with it.
-        _primaryHeld = Darkened(primary, 0.80);
-        _primaryBright = Lightened(primary, 0.18);
+        // What the design hovers a filled action with: its own colour mixed a little of the way towards
+        // white, which lifts a lime without washing it out. It is derived before the palette is written
+        // because the palette states it as a resource like every other colour.
+        _primaryBright = Mix(_primary, Colors.White, 0.15);
 
-        // What is written on the primary: black or white, whichever can be read on it. The base theme
-        // writes white there, which is right for the blue it was written for and unreadable on a light
-        // colour — and which colour the primary is belongs to the user.
-        _primaryInk = InkOn(primary);
+        // The wash a chosen row is filled with. It is stated by the design as two alphas rather than
+        // derived, because a wash has to stay a wash on both grounds and a factor would not.
+        _selectionLight = WithAlpha(primary, 0x59);
+        _selectionDark = WithAlpha(primary, 0x4D);
 
-        _light = Accents(
-            Color.FromArgb(0x40, 0x00, 0x00, 0x00),
-            Color.FromArgb(0x0F, 0x00, 0x00, 0x00),
-            Color.FromArgb(0x1F, 0x00, 0x00, 0x00),
-            Color.FromArgb(0x33, 0x00, 0x00, 0x00),
-            Color.FromArgb(0x99, 0x00, 0x00, 0x00)
+        // The ring a focused field wears. The design draws it as an outline two pixels out, which is
+        // this: a shadow with a spread and no blur, drawn outside the border box.
+        _ring = new BoxShadows(
+            new BoxShadow
+            {
+                OffsetX = 0,
+                OffsetY = 0,
+                Blur = 0,
+                Spread = 2,
+                Color = WithAlpha(primary, 0x8C),
+            }
         );
-        _dark = Accents(
-            Color.FromArgb(0x8C, 0x00, 0x00, 0x00),
-            Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF),
-            Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF),
-            Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF),
-            Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)
-        );
+
+        _light = Variant(Grounds.Light, selection: _selectionLight);
+        _dark = Variant(Grounds.Dark, selection: _selectionDark);
 
         _palette = new ResourceDictionary
         {
-            // A scrollbar is a hairline of chrome rather than a control: the base theme's eighteen
-            // pixels of it are half a window's margin at this density.
+            // A scrollbar is a hairline of chrome rather than a control.
             ["ScrollBarThickness"] = 12.0,
             ["ScrollBarThumbThickness"] = 7.0,
 
-            // The accent-only marks, which do not differ by variant and so are stated once.
-            [HairlineVertical] = Hairline(vertical: true),
-            [HairlineHorizontal] = Hairline(vertical: false),
-
-            // What a notification is marked with. Both are picked to carry on a light ground and a dark
-            // one alike, because a mark is read against whichever the program is drawn in and neither
-            // colour is the user's to choose — a severity is not a preference.
-            [SeverityError] = Fill(Color.FromRgb(0xE5, 0x48, 0x4D)),
-            [SeverityWarn] = Fill(Color.FromRgb(0xD4, 0xA0, 0x17)),
+            // The mark a warning is raised with. It is the one amber, fixed rather than chosen, and it
+            // is picked to carry on either ground: what a warning is coloured is not a preference.
+            [Warn] = Fill(Color.FromRgb(0xD4, 0xA0, 0x17)),
 
             ThemeDictionaries =
             {
@@ -133,138 +122,103 @@ internal sealed class RorolalaTheme
     }
 
     /// <summary>The size every word is set at.</summary>
-    private const double BodySize = 13.0;
+    private const double BodySize = 14.0;
 
-    /// <summary>The height of a row of a list, a tree, or a field: short enough to scan, tall enough to hit.</summary>
-    private const double RowHeight = 28.0;
+    /// <summary>The height of a row of a list, a tree, or a field.</summary>
+    private const double RowHeight = 30.0;
 
-    /// <summary>The height of a band of chrome: the menu bar, a regions's header strip, a toolbar.</summary>
-    private const double BarHeight = 32.0;
+    /// <summary>The height of a band of chrome: the menu bar, a region's header strip, a toolbar.</summary>
+    private const double BarHeight = 36.0;
 
-    /// <summary>How rounded anything is: not at all.</summary>
-    private static readonly CornerRadius Square = new(0);
+    /// <summary>How rounded a card is.</summary>
+    private static readonly CornerRadius Radius = new(8);
 
-    /// <summary>The one edge every surface wears.</summary>
+    /// <summary>How rounded a control is.</summary>
+    private static readonly CornerRadius Small = new(5);
+
+    /// <summary>How rounded a pill is: enough that nothing narrower can be.</summary>
+    private static readonly CornerRadius Pill = new(999);
+
+    /// <summary>The one edge a surface wears.</summary>
     private static readonly Thickness Edge = new(1);
 
-    /// <summary>How long a surface answers a pointer or a press with, which is a frame or two.</summary>
-    private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(100);
+    /// <summary>How long a surface answers the pointer with.</summary>
+    private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(120);
 
-    /// <summary>How long a press counts as quick: shorter than a fade, so a click reads as a flash.</summary>
-    private static readonly TimeSpan Press = TimeSpan.FromMilliseconds(60);
-
-    /// <summary>
-    /// How long a row takes to turn to the primary when it is chosen.
-    /// </summary>
-    /// <remarks>
-    /// The one slow thing in the look. A click that turns a row instantly reads as a blink; a fifth of a
-    /// second reads as the row becoming chosen, which is what it is. It is longer than the ceiling the
-    /// rest of the look keeps to, and by decision: selection is a change of state rather than feedback,
-    /// and feedback is what has to be instant (Section 17).
-    /// </remarks>
-    private static readonly TimeSpan Select = TimeSpan.FromMilliseconds(200);
-
-    /// <summary>How long a drop zone takes to light up, which is a fade rather than a step.</summary>
+    /// <summary>How long a drop zone takes to light up.</summary>
     private static readonly TimeSpan Light = TimeSpan.FromMilliseconds(120);
 
     /// <summary>
     /// The typeface the program is set in.
     /// </summary>
     /// <remarks>
-    /// Named through the font collection rather than by the family alone, and that is the whole point
-    /// of the long form: a plain <c>Inter</c> is looked for among the system's fonts, is not there,
-    /// and falls back to Noto Sans without saying so — which is what this program was set in while it
-    /// shipped a face it never used. The collection is the one <c>WithInterFont</c> adds.
+    /// The platform's own face, as the design this comes from uses: it ships no font, so two machines
+    /// showing the same two colours are the same program either way. A face the program carried would
+    /// be one more thing to ship and one more thing to disagree about.
     /// </remarks>
-    private static readonly FontFamily Face = new("fonts:Inter#Inter");
+    private static readonly FontFamily Face = FontFamily.Default;
 
     /// <summary>
-    /// The typeface a column of text is set in.
+    /// The typeface a column of data is set in.
     /// </summary>
     /// <remarks>
-    /// A face list rather than one name, because no monospace is shipped with the program and which one
-    /// a system has is the system's business: the log is a table of aligned columns, and any monospace is
-    /// better at that than the proportional face every other surface is set in.
+    /// A fallback list rather than one name, because no monospace is shipped and which one a system has
+    /// is the system's business: the log is a table of aligned columns, and any monospace is better at
+    /// that than the proportional face every other surface is set in.
     /// </remarks>
     private static readonly FontFamily Monospace = new(
-        "Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace"
+        "JetBrains Mono, Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace"
     );
 
-    /// <summary>The primary, as a fill.</summary>
-    private const string Primary = "rorolala.theme.primary";
-
-    /// <summary>The primary a pressed surface drops to.</summary>
-    private const string PrimaryHeld = "rorolala.theme.primary.held";
-
-    /// <summary>The primary a surface under the pointer lifts to.</summary>
-    private const string PrimaryBright = "rorolala.theme.primary.bright";
-
-    /// <summary>What is written on a surface filled with the primary.</summary>
-    private const string PrimaryInk = "rorolala.theme.primary.ink";
-
-    /// <summary>The colour secondary text is written in, which is the variant's ink held back.</summary>
-    private const string Muted = "rorolala.theme.muted";
+    // The look's own resources, the peers of the base theme's own names below. They are named rather
+    // than written into setters so that a colour changed at runtime reaches what took it.
+    private const string Bg = "rorolala.bg";
+    private const string Elevated = "rorolala.bg.elevated";
+    private const string Sunken = "rorolala.bg.sunken";
+    private const string Foreground = "rorolala.fg";
+    private const string Muted = "rorolala.fg.muted";
+    private const string Faint = "rorolala.fg.faint";
+    private const string BorderLine = "rorolala.border";
+    private const string Strong = "rorolala.border.strong";
+    private const string Primary = "rorolala.primary";
+    private const string PrimaryBright = "rorolala.primary.bright";
+    private const string PrimaryText = "rorolala.primary.text";
+    private const string Accent = "rorolala.accent";
+    private const string Selection = "rorolala.selection";
+    private const string Warn = "rorolala.warn";
+    private const string Shadow = "rorolala.shadow";
+    private const string Ring = "rorolala.ring";
 
     /// <summary>
     /// The class the one action a surface exists for wears.
     /// </summary>
     /// <remarks>
-    /// The look has one raised surface and this is how a control asks to be it: a dialog fills its OK, and
-    /// nothing else does. It is a class rather than a property the toolkit owns so that which button is
-    /// the action is the shell's to say and the look's to draw, the same as every other mark here.
+    /// The design does not single out one action, but a dialog has one and the shell has to be able to
+    /// say which: a class rather than a property the toolkit owns, so which button is the action is the
+    /// shell's to say and the look's to draw.
     /// </remarks>
     private const string PrimaryAction = "primary";
 
-    /// <summary>The accent, as a fill.</summary>
-    private const string Accent = "rorolala.theme.accent";
-
-    /// <summary>The accent as a wash, for the fill of a mark rather than its edge.</summary>
-    private const string AccentWash = "rorolala.theme.accent.wash";
-
-    /// <summary>The hard shadow a button casts, in this variant's own darkness.</summary>
-    private const string Shadow = "rorolala.theme.shadow";
-
-    /// <summary>The hairline a splitter shows, running down it.</summary>
-    private const string HairlineVertical = "rorolala.theme.hairline.vertical";
-
-    /// <summary>The hairline a splitter shows, running across it.</summary>
-    private const string HairlineHorizontal = "rorolala.theme.hairline.horizontal";
-
-    /// <summary>A band of chrome: a tint of the variant's own ink, drawn by this theme.</summary>
-    private const string Tint = "rorolala.theme.tint";
-
-    /// <summary>The same tint one step stronger, for the two places that have to stand out from a band.</summary>
-    private const string DeeperTint = "rorolala.theme.tint.deeper";
-
-    /// <summary>A hairline, for the rule between chrome and content and for the edge of a control.</summary>
-    private const string Line = "rorolala.theme.line";
-
-    /// <summary>The mark a failure is raised with. It is the one red the program has, and it is not chosen.</summary>
-    private const string SeverityError = "rorolala.theme.severity.error";
-
-    /// <summary>The mark a warning is raised with. It is the only amber, and it is not chosen either.</summary>
-    private const string SeverityWarn = "rorolala.theme.severity.warn";
-
-    /// <summary>The red a close is everywhere, which is the one thing in the program that is not chosen.</summary>
-    private static readonly Color Closed = Color.FromRgb(0xC4, 0x2B, 0x1C);
-
-    /// <summary>The same red, while it is held.</summary>
-    private static readonly Color ClosedDeep = Color.FromRgb(0x9E, 0x22, 0x16);
-
-    /// <summary>The colour the brand and everything selected is drawn in.</summary>
+    /// <summary>The colour what is chosen is drawn in.</summary>
     private readonly Color _primary;
 
-    /// <summary>The primary a pressed surface drops to.</summary>
-    private readonly Color _primaryHeld;
-
-    /// <summary>The primary a surface under the pointer lifts to.</summary>
+    /// <summary>The primary lifted towards white, which the design hovers a filled action with.</summary>
     private readonly Color _primaryBright;
 
-    /// <summary>What is written on a surface filled with the primary.</summary>
-    private readonly Color _primaryInk;
-
-    /// <summary>The colour the marks that ask for attention are drawn in.</summary>
+    /// <summary>The colour the drag marks are drawn in.</summary>
     private readonly Color _accent;
+
+    /// <summary>What is written on a surface filled with the primary.</summary>
+    private readonly Color _primaryText;
+
+    /// <summary>The wash a chosen row is filled with, on the light ground.</summary>
+    private readonly Color _selectionLight;
+
+    /// <summary>The wash a chosen row is filled with, on the dark ground.</summary>
+    private readonly Color _selectionDark;
+
+    /// <summary>The ring a focused field wears.</summary>
+    private readonly BoxShadows _ring;
 
     /// <summary>The whole palette, which is what a recolor replaces in place.</summary>
     private readonly ResourceDictionary _palette;
@@ -288,14 +242,103 @@ internal sealed class RorolalaTheme
     internal ResourceDictionary DarkPalette => _dark;
 
     /// <summary>
+    /// One variant's neutral ground, which is the design's own token set.
+    /// </summary>
+    /// <remarks>
+    /// Three grounds rather than one: content sits on the ground, chrome and a control sit on the
+    /// elevated one, and what is hovered, held or welled sits in the sunken one. The ramp of ink is
+    /// three steps rather than an opacity, so that text is legible by construction rather than by
+    /// arithmetic — and the two semantic pairs are the design's own, not the user's to choose, because
+    /// what a failure is coloured is not a preference.
+    /// </remarks>
+    private readonly record struct Grounds(
+        Color Bg,
+        Color Elevated,
+        Color Sunken,
+        Color Fg,
+        Color Muted,
+        Color Faint,
+        Color Border,
+        Color Strong,
+        Color Add,
+        Color AddBg,
+        Color Del,
+        Color DelBg,
+        Color Shadow,
+        Color ShadowSoft
+    )
+    {
+        /// <summary>The light ground.</summary>
+        public static readonly Grounds Light = new(
+            Bg: Color.FromRgb(0xF6, 0xF8, 0xF3),
+            Elevated: Color.FromRgb(0xFF, 0xFF, 0xFF),
+            Sunken: Color.FromRgb(0xEC, 0xEF, 0xE6),
+            Fg: Color.FromRgb(0x1C, 0x21, 0x1A),
+            Muted: Color.FromRgb(0x5C, 0x66, 0x56),
+            Faint: Color.FromRgb(0x8A, 0x94, 0x84),
+            Border: Color.FromRgb(0xDD, 0xE3, 0xD5),
+            Strong: Color.FromRgb(0xC3, 0xCC, 0xB8),
+            Add: Color.FromRgb(0x1F, 0x8A, 0x3B),
+            AddBg: Color.FromRgb(0xE2, 0xF6, 0xE6),
+            Del: Color.FromRgb(0xC0, 0x36, 0x2C),
+            DelBg: Color.FromRgb(0xFB, 0xE6, 0xE3),
+            Shadow: Color.FromArgb(0x0F, 0x14, 0x1E, 0x0A),
+            ShadowSoft: Color.FromArgb(0x0F, 0x14, 0x1E, 0x0A)
+        );
+
+        /// <summary>The dark ground.</summary>
+        public static readonly Grounds Dark = new(
+            Bg: Color.FromRgb(0x14, 0x14, 0x14),
+            Elevated: Color.FromRgb(0x1C, 0x1C, 0x1C),
+            Sunken: Color.FromRgb(0x0F, 0x0F, 0x0F),
+            Fg: Color.FromRgb(0xE6, 0xE6, 0xE6),
+            Muted: Color.FromRgb(0x9A, 0x9A, 0x9A),
+            Faint: Color.FromRgb(0x6B, 0x6B, 0x6B),
+            Border: Color.FromRgb(0x2C, 0x2C, 0x2C),
+            Strong: Color.FromRgb(0x3C, 0x3C, 0x3C),
+            Add: Color.FromRgb(0x5F, 0xD0, 0x7A),
+            AddBg: Color.FromRgb(0x16, 0x30, 0x1D),
+            Del: Color.FromRgb(0xFF, 0x7A, 0x6B),
+            DelBg: Color.FromRgb(0x3A, 0x1D, 0x1A),
+            Shadow: Color.FromArgb(0x66, 0x00, 0x00, 0x00),
+            ShadowSoft: Color.FromArgb(0x59, 0x00, 0x00, 0x00)
+        );
+
+        /// <summary>The soft shadow the design raises a surface with.</summary>
+        /// <remarks>
+        /// Two shadows rather than one, as the design writes it: a hairline of contact and a wide soft
+        /// one under it. The constructor takes the first and the rest, so the second is given as a list
+        /// of one.
+        /// </remarks>
+        public BoxShadows Raised => new(
+            new BoxShadow
+            {
+                OffsetX = 0,
+                OffsetY = 1,
+                Blur = 2,
+                Spread = 0,
+                Color = Shadow,
+            },
+            [
+                new BoxShadow
+                {
+                    OffsetX = 0,
+                    OffsetY = 8,
+                    Blur = 24,
+                    Spread = 0,
+                    Color = ShadowSoft,
+                },
+            ]
+        );
+    }
+
+    /// <summary>
     /// Writes this look's colours over an older look's palette, in place.
     /// </summary>
     /// <remarks>
     /// It replaces the entries of the dictionaries that are already attached rather than swapping the
     /// dictionaries for new ones, because a resource replaced in place is what raises the change that
-    /// reaches every control that took it (Section 10). Nothing is added to <c>Application.Styles</c>
-    /// here or ever after the window: the styles say how the program is shaped, and a shape does not
-    /// change with a colour.
+    /// reaches every control that took it.
     /// </remarks>
     /// <param name="palette">The attached palette.</param>
     /// <param name="light">The attached light-variant palette.</param>
@@ -320,692 +363,113 @@ internal sealed class RorolalaTheme
     /// <summary>
     /// What one variant's palette is.
     /// </summary>
-    /// <summary>The colour the hard shadow is drawn in, which is darkest in the dark.</summary>
-    /// <param name="tint">A band of chrome.</param>
-    /// <param name="deeper">The same, one step stronger.</param>
-    /// <param name="line">A hairline.</param>
-    /// <param name="muted">The variant's ink, held back for secondary text.</param>
-    private ResourceDictionary Accents(Color shadow, Color tint, Color deeper, Color line, Color muted) =>
+    /// <remarks>
+    /// The look's own names and <em>the base theme's</em> are both written, because the base theme
+    /// draws most of what a control does from its own resources: naming those is what turns a whole
+    /// program's selection, hover, border and ink with two colours rather than a rule per control. The
+    /// mapping is the design's: a control's surface is the elevated ground, what is hovered or held is
+    /// the sunken one, the two border weights are two of the three, and a chosen row is the primary
+    /// wash the base theme's accent family is filled with.
+    /// </remarks>
+    /// <param name="grounds">The variant's own neutrals.</param>
+    /// <param name="selection">The wash a chosen row is filled with.</param>
+    private ResourceDictionary Variant(Grounds grounds, Color selection) =>
         new()
         {
-            // The primary family, which is what the base theme fills a selected row, opens a drop-down
-            // and clicks a box with. The alphas are the base theme's own, so the washes stay washes.
+            // --- the base theme's own names, pointed at the design's colours ---------------------- //
+            ["ThemeBackgroundColor"] = grounds.Elevated,
+            ["ThemeBackgroundBrush"] = Fill(grounds.Elevated),
+            ["ThemeBorderLowColor"] = grounds.Border,
+            ["ThemeBorderLowBrush"] = Fill(grounds.Border),
+            ["ThemeBorderMidColor"] = grounds.Border,
+            ["ThemeBorderMidBrush"] = Fill(grounds.Border),
+            ["ThemeBorderHighColor"] = grounds.Strong,
+            ["ThemeBorderHighBrush"] = Fill(grounds.Strong),
+            ["ThemeControlLowColor"] = grounds.Sunken,
+            ["ThemeControlLowBrush"] = Fill(grounds.Sunken),
+            ["ThemeControlMidColor"] = grounds.Elevated,
+            ["ThemeControlMidBrush"] = Fill(grounds.Elevated),
+            ["ThemeControlMidHighColor"] = grounds.Border,
+            ["ThemeControlMidHighBrush"] = Fill(grounds.Border),
+            ["ThemeControlHighColor"] = grounds.Sunken,
+            ["ThemeControlHighBrush"] = Fill(grounds.Sunken),
+            ["ThemeControlVeryHighColor"] = grounds.Strong,
+            ["ThemeControlVeryHighBrush"] = Fill(grounds.Strong),
+            ["ThemeControlHighlightLowColor"] = grounds.Sunken,
+            ["ThemeControlHighlightLowBrush"] = Fill(grounds.Sunken),
+            // A row under the pointer is the sunken ground, not the opaque grey the base theme ships:
+            // it is the one place where a hover would otherwise be the wrong colour entirely.
+            ["ThemeControlHighlightMidColor"] = grounds.Sunken,
+            ["ThemeControlHighlightMidBrush"] = Fill(grounds.Sunken),
+            ["ThemeControlHighlightHighColor"] = grounds.Strong,
+            ["ThemeControlHighlightHighBrush"] = Fill(grounds.Strong),
+            ["ThemeForegroundColor"] = grounds.Fg,
+            ["ThemeForegroundBrush"] = Fill(grounds.Fg),
+            ["ThemeForegroundLowColor"] = grounds.Faint,
+            ["ThemeForegroundLowBrush"] = Fill(grounds.Faint),
+            ["ErrorColor"] = grounds.Del,
+            ["ErrorBrush"] = Fill(grounds.Del),
+            ["ErrorLowColor"] = WithAlpha(grounds.Del, 0x10),
+            ["ErrorLowBrush"] = Fill(WithAlpha(grounds.Del, 0x10)),
+            ["HyperlinkVisitedColor"] = grounds.Faint,
+            ["HyperlinkVisitedBrush"] = Fill(grounds.Faint),
+            ["CaptionButtonForeground"] = grounds.Fg,
+            ["CaptionButtonBackground"] = grounds.Elevated,
+            ["CaptionButtonBorderBrush"] = grounds.Border,
+
+            // A selection of text is the same wash a chosen row is: one idea, one colour.
+            ["HighlightColor"] = selection,
+            ["HighlightBrush"] = Fill(selection),
+            ["HighlightColor2"] = selection,
+            ["HighlightBrush2"] = Fill(selection),
+            ["HighlightForegroundColor"] = grounds.Fg,
+            ["HighlightForegroundBrush"] = Fill(grounds.Fg),
+
+            // The primary family. The alphas are the base theme's own shape, and the fourth is the wash
+            // the design fills a chosen row with rather than the base theme's own fifth.
             ["ThemeAccentColor"] = _primary,
             ["ThemeAccentColor2"] = WithAlpha(_primary, 0x99),
             ["ThemeAccentColor3"] = WithAlpha(_primary, 0x66),
-            ["ThemeAccentColor4"] = WithAlpha(_primary, 0x33),
+            ["ThemeAccentColor4"] = selection,
             ["ThemeAccentBrush"] = Fill(_primary),
             ["ThemeAccentBrush2"] = Fill(WithAlpha(_primary, 0x99)),
             ["ThemeAccentBrush3"] = Fill(WithAlpha(_primary, 0x66)),
-            ["ThemeAccentBrush4"] = Fill(WithAlpha(_primary, 0x33)),
+            ["ThemeAccentBrush4"] = Fill(selection),
 
-            // The highlight the base theme keeps apart from its accent family — a selection of text, a
-            // tick — which would otherwise stay blue while everything else went primary.
-            ["HighlightColor"] = _primary,
-            ["HighlightBrush"] = Fill(_primary),
-            ["HighlightColor2"] = _primaryHeld,
-            ["HighlightBrush2"] = Fill(_primaryHeld),
-
-            // What sits on the primary: the base theme writes white there, which a light primary cannot
-            // carry.
-            ["HighlightForegroundColor"] = _primaryInk,
-            ["HighlightForegroundBrush"] = Fill(_primaryInk),
-
+            // --- the look's own names ------------------------------------------------------------- //
+            [Bg] = Fill(grounds.Bg),
+            [Elevated] = Fill(grounds.Elevated),
+            [Sunken] = Fill(grounds.Sunken),
+            [Foreground] = Fill(grounds.Fg),
+            [Muted] = Fill(grounds.Muted),
+            [Faint] = Fill(grounds.Faint),
+            [BorderLine] = Fill(grounds.Border),
+            [Strong] = Fill(grounds.Strong),
             [Primary] = Fill(_primary),
-            [PrimaryHeld] = Fill(_primaryHeld),
             [PrimaryBright] = Fill(_primaryBright),
-            [PrimaryInk] = Fill(_primaryInk),
+            [PrimaryText] = Fill(_primaryText),
             [Accent] = Fill(_accent),
-            [AccentWash] = Fill(WithAlpha(_accent, 0x33)),
-            [Shadow] = new BoxShadows(
-                new BoxShadow
-                {
-                    OffsetX = Cast.OffsetX,
-                    OffsetY = Cast.OffsetY,
-                    Blur = Cast.Blur,
-                    Spread = Cast.Spread,
-                    Color = shadow,
-                }
-            ),
-            [Tint] = Fill(tint),
-            [DeeperTint] = Fill(deeper),
-            [Line] = Fill(line),
-            [Muted] = Fill(muted),
+            [Selection] = Fill(selection),
+            [Shadow] = grounds.Raised,
+            [Ring] = _ring,
+            ["rorolala.add"] = Fill(grounds.Add),
+            ["rorolala.add.bg"] = Fill(grounds.AddBg),
+            ["rorolala.del"] = Fill(grounds.Del),
+            ["rorolala.del.bg"] = Fill(grounds.DelBg),
         };
 
     /// <summary>
-    /// The shadow a button casts: two pixels to the right and two down, with no blur at all.
+    /// The accent-only marks, which do not differ by variant and so are stated once.
     /// </summary>
     /// <remarks>
-    /// A hard shadow rather than a soft one, and that is the whole of the Win10 raised button: light
-    /// comes from the top left, so the shadow falls to the bottom right and finishes where it is — no
-    /// blur, because a blur is a surface that is trying to look like it is not flat.
-    /// </remarks>
-    private static readonly BoxShadow Cast = new()
-    {
-        OffsetX = 2,
-        OffsetY = 2,
-        Blur = 0,
-        Spread = 0,
-    };
-
-    /// <summary>What the whole program is set in.</summary>
-    private static Style[] Type() =>
-        [
-            // Text is not a control, so it does not take the rule below; both are needed.
-            On(
-                selector => selector.OfType<TextBlock>(),
-                new Setter(TextBlock.FontFamilyProperty, Face),
-                new Setter(TextBlock.FontSizeProperty, BodySize)
-            ),
-            On(
-                selector => selector.OfType<TemplatedControl>(),
-                new Setter(TemplatedControl.FontFamilyProperty, Face),
-                new Setter(TemplatedControl.FontSizeProperty, BodySize)
-            ),
-        ];
-
-    /// <summary>
-    /// What a piece of text is, said as a class rather than as a number written where the text is.
-    /// </summary>
-    /// <remarks>
-    /// The look has four sizes and one colour for text that is not the main thing, and every surface that
-    /// says text says which of them it is. A size written at the call site is a size that drifts, and the
-    /// program stops looking like one program within a release or two.
-    /// <para>
-    /// They are classes on <see cref="TextBlock"/> rather than a rule per control because text is not a
-    /// control: what is being said about it belongs to the text, and travels with it wherever it is put.
-    /// </para>
-    /// </remarks>
-    private static Style[] Roles() =>
-        [
-            On(
-                selector => selector.OfType<TextBlock>().Class("caption"),
-                new Setter(TextBlock.FontSizeProperty, 11.0)
-            ),
-            On(
-                selector => selector.OfType<TextBlock>().Class("muted"),
-                Brushed(TextBlock.ForegroundProperty, Muted)
-            ),
-            On(
-                selector => selector.OfType<TextBlock>().Class("section"),
-                new Setter(TextBlock.FontWeightProperty, FontWeight.SemiBold)
-            ),
-            On(
-                selector => selector.OfType<TextBlock>().Class("title"),
-                new Setter(TextBlock.FontSizeProperty, 15.0),
-                new Setter(TextBlock.FontWeightProperty, FontWeight.SemiBold)
-            ),
-            On(
-                selector => selector.OfType<TextBlock>().Class("mono"),
-                new Setter(TextBlock.FontFamilyProperty, Monospace)
-            ),
-        ];
-
-    /// <summary>
-    /// Every control the kernel and the plugins build their content out of: geometry, spacing, and the
-    /// two colours by role.
-    /// </summary>
-    /// <remarks>
-    /// The shape is minimal-flat: a control is a rectangle the same colour as what it sits on, with a
-    /// one-pixel edge and a neutral hover, and the two chosen colours are spent on what is selected and on
-    /// the one thing a surface is for. The two colours are named as resources rather than baked, so that
-    /// changing one at runtime reaches every control that took it.
-    /// <para>
-    /// The dock's own buttons are excluded here rather than overridden later: a style that is always on
-    /// and a style that turns on with a state do not settle by the order they were written, so a rule
-    /// that must not apply is written so that it cannot.
-    /// </para>
-    /// </remarks>
-    private Style[] Content() =>
-        [
-            // A button is flat: a surface the colour of what is behind it, an edge, and a neutral hover.
-            // The look has one raised surface and this is not it, so pressing changes a colour rather than
-            // a height (Section 10).
-            On(
-                selector => Pressable(selector),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(12, 5)),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.TransitionsProperty, Fading(Press))
-            ),
-            On(
-                selector => Pressable(selector).Class(":pointerover"),
-                Brushed(TemplatedControl.BackgroundProperty, Tint)
-            ),
-            On(
-                selector => Pressable(selector).Class(":pressed"),
-                Brushed(TemplatedControl.BackgroundProperty, DeeperTint)
-            ),
-
-            // The one raised thing there is: the action a surface exists for. It is filled with the primary
-            // and wears the look's one hard shadow, so that a dialog has exactly one thing that looks like
-            // the thing to do.
-            On(
-                selector => Pressable(selector).Class(PrimaryAction),
-                Brushed(TemplatedControl.BackgroundProperty, Primary),
-                Brushed(TemplatedControl.ForegroundProperty, PrimaryInk),
-                Brushed(TemplatedControl.BorderBrushProperty, PrimaryHeld)
-            ),
-            On(
-                selector => Pressable(selector).Class(PrimaryAction).Class(":pointerover"),
-                Brushed(TemplatedControl.BackgroundProperty, PrimaryBright)
-            ),
-            On(
-                selector => Pressable(selector).Class(PrimaryAction).Class(":pressed"),
-                Brushed(TemplatedControl.BackgroundProperty, PrimaryHeld),
-                Brushed(TemplatedControl.BorderBrushProperty, PrimaryHeld)
-            ),
-
-            On(
-                selector => selector.OfType<TextBox>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line),
-                // A field is a row tall and the ink in it is one line, so the two are not the same height,
-                // and the base theme aligns the whole of a field's content by this: left as it comes, the
-                // line stands at the top of the box. Left alone across, since that same alignment sizes the
-                // field's content where it is set — narrowed to the text, the field would no longer be
-                // typed in past its end.
-                new Setter(TextBox.VerticalContentAlignmentProperty, VerticalAlignment.Center),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<ComboBox>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 2)),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<ComboBoxItem>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 3)),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square)
-            ),
-            On(
-                selector => selector.OfType<ListBox>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<ListBoxItem>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 3)),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square)
-            ),
-            On(
-                selector => selector.OfType<TreeView>(),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<TreeViewItem>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(2, 2)),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square)
-            ),
-            On(
-                selector => selector.OfType<MenuItem>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(12, 5)),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<ContextMenu>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<MenuFlyoutPresenter>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<FlyoutPresenter>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<TabItem>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(12, 6)),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square)
-            ),
-            On(
-                selector => selector.OfType<CheckBox>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<RadioButton>(),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<NumericUpDown>(),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<ButtonSpinner>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<ProgressBar>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square)
-            ),
-            On(
-                selector => selector.OfType<Slider>(),
-                new Setter(Layoutable.MinHeightProperty, RowHeight)
-            ),
-            On(
-                selector => selector.OfType<Expander>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square)
-            ),
-            On(
-                selector => selector.OfType<GroupBox>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<SplitButton>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<DropDownButton>(),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<Separator>(),
-                new Setter(Layoutable.HeightProperty, 1.0),
-                Brushed(TemplatedControl.BackgroundProperty, Line)
-            ),
-            On(
-                selector => selector.OfType<ToolTip>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, Line)
-            ),
-        ];
-
-    /// <summary>
-    /// The template parts the base theme colours itself, and the few the two colours make wrong.
-    /// </summary>
-    /// <remarks>
-    /// The base theme draws most states on a control's template rather than on the control — a selected
-    /// row's fill, a focused field's edge, the tick in a box — so a rule for the control cannot reach
-    /// them, and the part has to be named. Every rule here carries an activator as well as the part
-    /// name: Avalonia ranks an activated setter above a template binding and above a plain setter,
-    /// which is what it takes to be heard over the base theme's styling of the same place.
-    /// <para>
-    /// The fills mostly need no rule at all, since they follow the accent resources; the ones that do
-    /// are the button's fill and shadow, the box that is filled with the primary and the ink that cannot
-    /// be white on it, the field's edge, and the fades.
-    /// </para>
-    /// </remarks>
-    private Style[] Parts() =>
-        [
-            // The base theme paints a hovered or held button's own part, which would take the flat edge off
-            // the one family of control the look gives an edge to; a held button's colour is therefore said
-            // again here. The primary action is the same in the primary's held colour, and it is the only
-            // part in the program that ever carries the shadow.
-            On(
-                selector => Pressable(selector).Template().Name("PART_ContentPresenter"),
-                new Setter(ContentPresenter.TransitionsProperty, Fading(Press))
-            ),
-            On(
-                selector =>
-                    Pressable(selector).Class(":pointerover").Template().Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BorderBrushProperty, Line)
-            ),
-            On(
-                selector =>
-                    Pressable(selector).Class(":pressed").Template().Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BackgroundProperty, DeeperTint),
-                Brushed(ContentPresenter.BorderBrushProperty, Line)
-            ),
-            On(
-                selector =>
-                    Pressable(selector).Class(PrimaryAction).Template().Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BoxShadowProperty, Shadow)
-            ),
-            On(
-                selector =>
-                    Pressable(selector)
-                        .Class(PrimaryAction)
-                        .Class(":pointerover")
-                        .Template()
-                        .Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BorderBrushProperty, PrimaryHeld)
-            ),
-            On(
-                selector =>
-                    Pressable(selector)
-                        .Class(PrimaryAction)
-                        .Class(":pressed")
-                        .Template()
-                        .Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BackgroundProperty, PrimaryHeld),
-                Brushed(ContentPresenter.BorderBrushProperty, PrimaryHeld),
-                new Setter(ContentPresenter.BoxShadowProperty, default(BoxShadows))
-            ),
-
-            Ink(selector => selector.OfType<ListBoxItem>(), "PART_ContentPresenter"),
-            Ink(selector => selector.OfType<ComboBoxItem>(), "PART_ContentPresenter"),
-            Ink(selector => selector.OfType<TreeViewItem>(), "PART_HeaderPresenter"),
-
-            // A chosen row turns over a fifth of a second rather than a frame, which is the one slow
-            // thing in the look (see `Select`). It is set on the part rather than on the item, because
-            // the part is where the base theme paints the fill.
-            On(
-                selector => selector.OfType<ListBoxItem>().Template().Name("PART_ContentPresenter"),
-                new Setter(ContentPresenter.TransitionsProperty, Fading(Select))
-            ),
-            On(
-                selector => selector.OfType<ComboBoxItem>().Template().Name("PART_ContentPresenter"),
-                new Setter(ContentPresenter.TransitionsProperty, Fading(Select))
-            ),
-            On(
-                selector => selector.OfType<TreeViewItem>().Template().Name("PART_HeaderPresenter"),
-                new Setter(ContentPresenter.TransitionsProperty, Fading(Select))
-            ),
-
-            // A checked box is filled with the primary and ticked in the ink that can be read on it,
-            // where the base theme leaves the box empty and draws the tick in the accent.
-            On(
-                selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("border"),
-                Brushed(Border.BackgroundProperty, Primary),
-                Brushed(Border.BorderBrushProperty, Primary)
-            ),
-            On(
-                selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("checkMark"),
-                Brushed(Shape.FillProperty, PrimaryInk)
-            ),
-            On(
-                selector => selector.OfType<CheckBox>().Class(":indeterminate").Template().Name("border"),
-                Brushed(Border.BackgroundProperty, Primary),
-                Brushed(Border.BorderBrushProperty, Primary)
-            ),
-            On(
-                selector =>
-                    selector.OfType<CheckBox>().Class(":indeterminate").Template().Name("indeterminateMark"),
-                Brushed(Shape.FillProperty, PrimaryInk)
-            ),
-
-            // A radio is the same promise in a round shape, and takes the same fill and ink.
-            On(
-                selector => selector.OfType<RadioButton>().Class(":checked").Template().Name("border"),
-                Brushed(Shape.FillProperty, Primary),
-                Brushed(Shape.StrokeProperty, Primary)
-            ),
-            On(
-                selector => selector.OfType<RadioButton>().Class(":checked").Template().Name("checkMark"),
-                Brushed(Shape.FillProperty, PrimaryInk)
-            ),
-
-            // A field that has focus keeps its one pixel and takes it in the accent: the primary is what
-            // is chosen, and the accent is what is asking for attention, which is what a focus is. The
-            // base theme brightens the border instead, which is a change of the same weight and no help
-            // about where the keyboard is.
-            On(
-                selector => selector.OfType<TextBox>().Class(":focus").Template().Name("border"),
-                new Setter(Border.BorderThicknessProperty, Edge),
-                Brushed(Border.BorderBrushProperty, Accent)
-            ),
-
-            // The track a slider is laid in is chrome, and the thumb in it is the primary — which it
-            // follows from the accent resources, and needs no rule here.
-            On(
-                selector => selector.OfType<Slider>().Template().Name("TrackBackground"),
-                new Setter(Border.BorderThicknessProperty, new Thickness(2)),
-                Brushed(Border.BorderBrushProperty, Line)
-            ),
-
-            // Every part that changes colour on a state fades into it, which is most of the motion
-            // there is: a fade is what a flat surface can do without moving anything under the pointer.
-            On(
-                selector => selector.OfType<TemplatedControl>().Template().Name("PART_ContentPresenter"),
-                new Setter(ContentPresenter.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<TemplatedControl>().Template().Name("PART_HeaderPresenter"),
-                new Setter(ContentPresenter.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<TemplatedControl>().Template().Name("border"),
-                new Setter(Border.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<TemplatedControl>().Template().Name("checkMark"),
-                new Setter(Shape.TransitionsProperty, Fading())
-            ),
-        ];
-
-    /// <summary>
-    /// The surfaces the shell owns: the menu bar, the dock headers, and the grabs between regions.
-    /// </summary>
-    /// <remarks>
-    /// The menu bar and every region's header strip take one band of tint, so the window reads as
-    /// chrome over content whichever regions are open. A dock header is flat and square, and every one
-    /// of them keeps a one-pixel bottom edge that is drawn in nothing until the dock is the one being
-    /// shown, when it is drawn in the primary: a header that grew an edge when selected would shift the
-    /// headers beside it sideways under the very pointer that selected it.
-    /// </remarks>
-    private Style[] Chrome() =>
-        [
-            On(
-                selector => selector.OfType<Menu>().Class(MainWindow.MenuBarClass),
-                Brushed(TemplatedControl.BackgroundProperty, Tint),
-                new Setter(Layoutable.MinHeightProperty, BarHeight),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 0))
-            ),
-            On(
-                selector => selector.OfType<Border>().Class(DockArea.HeadersClass),
-                Brushed(Border.BackgroundProperty, Tint),
-                Brushed(Border.BorderBrushProperty, Line),
-                new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 1))
-            ),
-
-            // The edge is two pixels and transparent when the dock is not the one shown, so that the mark
-            // of being chosen is a weight the header always has room for: a header that grew an edge when
-            // selected would shift the headers beside it sideways under the very pointer that selected it.
-            On(
-                selector => selector.OfType<Button>().Class(DockArea.TitleClass),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 2)),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(DockArea.SelectedClass),
-                Brushed(TemplatedControl.BackgroundProperty, DeeperTint),
-                Brushed(TemplatedControl.BorderBrushProperty, Primary),
-                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold)
-            ),
-            // A held dock header keeps the primary line it earned by being the one shown, where the
-            // container rule above would otherwise have it go transparent for as long as the press.
-            On(
-                selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(":pressed"),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent)
-            ),
-            On(
-                selector =>
-                    selector
-                        .OfType<Button>()
-                        .Class(DockArea.TitleClass)
-                        .Class(DockArea.SelectedClass)
-                        .Class(":pressed"),
-                Brushed(TemplatedControl.BackgroundProperty, DeeperTint)
-            ),
-
-            // The base theme repaints a hovered button's edge itself, which would take the primary line
-            // off the header of the dock being shown for as long as the pointer rested on it.
-            On(
-                selector =>
-                    selector
-                        .OfType<Button>()
-                        .Class(DockArea.TitleClass)
-                        .Class(DockArea.SelectedClass)
-                        .Class(":pointerover")
-                        .Template()
-                        .Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BorderBrushProperty, Primary)
-            ),
-
-            // The button that closes a region's shown dock, at the far end of the strip: nothing at
-            // all until the pointer is on it, and then the red a close is everywhere.
-            On(
-                selector => selector.OfType<Button>().Class(DockArea.CloseClass),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
-                new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 0)),
-                new Setter(Layoutable.MinWidthProperty, 28.0),
-                new Setter(Layoutable.MinHeightProperty, BarHeight),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-
-            // The fill is drawn on the part rather than on the button, and carries an activator, for
-            // the reason the underline rule above does: the base theme paints a hovered button's own
-            // part, and would otherwise have the last word on exactly the state this is about.
-            On(
-                selector =>
-                    selector
-                        .OfType<Button>()
-                        .Class(DockArea.CloseClass)
-                        .Class(":pointerover")
-                        .Template()
-                        .Name("PART_ContentPresenter"),
-                Fixed(ContentPresenter.BackgroundProperty, Closed),
-                new Setter(ContentPresenter.ForegroundProperty, Brushes.White),
-                new Setter(ContentPresenter.CornerRadiusProperty, Square),
-                new Setter(ContentPresenter.TransitionsProperty, Fading())
-            ),
-            On(
-                selector =>
-                    selector
-                        .OfType<Button>()
-                        .Class(DockArea.CloseClass)
-                        .Class(":pressed")
-                        .Template()
-                        .Name("PART_ContentPresenter"),
-                Fixed(ContentPresenter.BackgroundProperty, ClosedDeep),
-                new Setter(ContentPresenter.ForegroundProperty, Brushes.White)
-            ),
-
-            // A region with nothing in it hides its splitter, so one that is visible is one that can be
-            // dragged. It draws nothing until the pointer is on it, and then a hairline through its
-            // middle: the grab has to stay wide enough to hit, and a line that wide would be a bar.
-            // That is what the fixed column and row classes are for — which way the hairline runs is
-            // the one thing a splitter's own geometry cannot say.
-            On(
-                selector => selector.OfType<GridSplitter>().Class(DockArea.SplitterClass),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-            On(
-                selector =>
-                    selector
-                        .OfType<GridSplitter>()
-                        .Class(DockArea.SplitterClass)
-                        .Class(DockArea.SplitterColumnsClass)
-                        .Class(":pointerover"),
-                Brushed(TemplatedControl.BackgroundProperty, HairlineVertical)
-            ),
-            On(
-                selector =>
-                    selector
-                        .OfType<GridSplitter>()
-                        .Class(DockArea.SplitterClass)
-                        .Class(DockArea.SplitterRowsClass)
-                        .Class(":pointerover"),
-                Brushed(TemplatedControl.BackgroundProperty, HairlineHorizontal)
-            ),
-
-            // Where a dragged dock could land. All of them are drawn while a drag is on, because they are
-            // the question — which regions are there to land in — and the one being aimed at is drawn in
-            // the accent, because it is the answer. The others are a tint of the variant's ink: white over
-            // a dark program, black over a light one, which is what the tint family is.
-            On(
-                selector => selector.OfType<Border>().Class(DockArea.DropZoneClass),
-                new Setter(Border.BorderThicknessProperty, Edge),
-                new Setter(Border.CornerRadiusProperty, Square),
-                Brushed(Border.BackgroundProperty, DeeperTint),
-                Brushed(Border.BorderBrushProperty, Line),
-                new Setter(Border.TransitionsProperty, Fading(Light))
-            ),
-            On(
-                selector =>
-                    selector
-                        .OfType<Border>()
-                        .Class(DockArea.DropZoneClass)
-                        .Class(DockArea.DropTargetClass),
-                Brushed(Border.BackgroundProperty, AccentWash),
-                Brushed(Border.BorderBrushProperty, Accent)
-            ),
-        ];
-
-    /// <summary>
-    /// The selector for a button that is a thing to press rather than part of the shell's chrome.
-    /// </summary>
-    /// <remarks>
-    /// The dock's own buttons are excluded: a header and a close are chrome, not a thing to press, and
-    /// a rule that is always on cannot be relied on to beat one that turns on with a state. Written so
-    /// that it does not match, the question does not arise.
-    /// </remarks>
-    /// <param name="selector">Where the rule starts.</param>
-    private static Selector Pressable(Selector? selector) =>
-        selector!
-            .OfType<Button>()
-            .Not(previous => previous.Class(DockArea.TitleClass))
-            .Not(previous => previous.Class(DockArea.CloseClass));
-
-    /// <summary>
-    /// What is written on a surface filled with the primary.
-    /// </summary>
-    /// <remarks>
-    /// The base theme fills a selected row with the primary and then puts white on it, which is right
-    /// for the blue it was written for and unreadable on a light primary. Black or white by contrast is
-    /// what any primary can carry.
-    /// </remarks>
-    private static Style Ink(Func<Selector?, Selector> ofType, string part) =>
-        On(
-            selector => ofType(selector).Class(":selected").Template().Name(part),
-            Brushed(ContentPresenter.ForegroundProperty, PrimaryInk)
-        );
-
-    /// <summary>
-    /// A hairline of the accent, through the middle of a splitter.
-    /// </summary>
-    /// <remarks>
-    /// A gradient with hard stops rather than a colour, because there is nothing to put a line in: a
-    /// splitter is one surface with no template part a theme may address, so the only way to draw one
-    /// pixel of line inside four pixels of grip is to paint the grip clear and the middle of it not.
+    /// A hairline through the middle of a splitter is a gradient with hard stops rather than a colour,
+    /// because there is nothing to put a line in: a splitter is one surface with no template part a
+    /// theme may address, so the only way to draw one pixel of line inside four pixels of grip is to
+    /// paint the grip clear and the middle of it not.
     /// </remarks>
     /// <param name="vertical">Whether the line runs down the splitter rather than across it.</param>
     private IBrush Hairline(bool vertical)
     {
-        // Half a pixel, as the fraction of the band's width the stop offsets are in.
         var half = 0.5 / DockArea.SplitterSize;
         var clear = Colors.Transparent;
 
@@ -1029,6 +493,563 @@ internal sealed class RorolalaTheme
         };
     }
 
+    /// <summary>What the whole program is set in.</summary>
+    private static Style[] Type() =>
+        [
+            // Text is not a control, so it does not take the rule below; both are needed.
+            On(
+                selector => selector.OfType<TextBlock>(),
+                new Setter(TextBlock.FontFamilyProperty, Face),
+                new Setter(TextBlock.FontSizeProperty, BodySize)
+            ),
+            On(
+                selector => selector.OfType<TemplatedControl>(),
+                new Setter(TemplatedControl.FontFamilyProperty, Face),
+                new Setter(TemplatedControl.FontSizeProperty, BodySize)
+            ),
+        ];
+
+    /// <summary>
+    /// What a piece of text is, said as a class rather than as a number written where the text is.
+    /// </summary>
+    /// <remarks>
+    /// The design has one size for a heading, one for a body, one for a secondary line, and one
+    /// <b>label</b>: eleven pixels, bold, letter-spaced, and set by the caller in capitals, which is
+    /// the design's loudest small thing and the reason a section or a column of a table reads as a
+    /// header rather than as more text.
+    /// <para>
+    /// They are classes on <see cref="TextBlock"/> rather than a rule per control because text is not a
+    /// control: what is being said about it belongs to the text, and travels with it wherever it is put.
+    /// </para>
+    /// </remarks>
+    private static Style[] Roles() =>
+        [
+            On(
+                selector => selector.OfType<TextBlock>().Class("title"),
+                new Setter(TextBlock.FontSizeProperty, 16.0),
+                new Setter(TextBlock.FontWeightProperty, FontWeight.SemiBold)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("label"),
+                new Setter(TextBlock.FontSizeProperty, 11.0),
+                new Setter(TextBlock.FontWeightProperty, FontWeight.Bold),
+                new Setter(TextBlock.LetterSpacingProperty, 0.9),
+                Brushed(TextBlock.ForegroundProperty, Faint)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("caption"),
+                new Setter(TextBlock.FontSizeProperty, 12.5)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("muted"),
+                Brushed(TextBlock.ForegroundProperty, Muted)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("faint"),
+                Brushed(TextBlock.ForegroundProperty, Faint)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("mono"),
+                new Setter(TextBlock.FontFamilyProperty, Monospace),
+                new Setter(TextBlock.FontSizeProperty, 12.5)
+            ),
+        ];
+
+    /// <summary>
+    /// Every control the kernel and the plugins build their content out of.
+    /// </summary>
+    /// <remarks>
+    /// A control sits on the elevated ground with one border; under the pointer it drops to the sunken
+    /// one and its border firms up, which is the whole of the interaction a control has beyond being
+    /// chosen. Everything is rounded — a card at eight, a control at five — because the design is a
+    /// raised one rather than a flat one.
+    /// </remarks>
+    private Style[] Content() =>
+        [
+            // The window is the ground the cards sit on, where the base theme would have it be the same
+            // colour as a card: the design is a stack of surfaces, and that only reads if there is a
+            // ground beneath them.
+            On(
+                selector => selector.OfType<Window>(),
+                Brushed(TemplatedControl.BackgroundProperty, Bg)
+            ),
+
+            On(
+                selector => Pressable(selector),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(11, 5)),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => Pressable(selector).Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.BorderBrushProperty, Strong)
+            ),
+
+            // The one action a surface exists for: filled with the primary, in the ink the design names
+            // for it, and set a weight heavier so that it reads as the thing to do.
+            On(
+                selector => Pressable(selector).Class(PrimaryAction),
+                Brushed(TemplatedControl.BackgroundProperty, Primary),
+                Brushed(TemplatedControl.ForegroundProperty, PrimaryText),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold)
+            ),
+            On(
+                selector => Pressable(selector).Class(PrimaryAction).Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, PrimaryBright)
+            ),
+
+            // A tool is a square hit area and a ghost is the same idea with a word in it: both draw
+            // nothing of their own until the pointer is on them. They are what the chrome is made of,
+            // where a row of raised cards would read as a row of things to do rather than to press.
+            On(
+                selector => Pressable(selector).Class("tool"),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                new Setter(ContentControl.HorizontalContentAlignmentProperty, HorizontalAlignment.Center),
+                new Setter(ContentControl.VerticalContentAlignmentProperty, VerticalAlignment.Center),
+                new Setter(Layoutable.WidthProperty, 28.0),
+                new Setter(Layoutable.HeightProperty, 28.0)
+            ),
+            On(
+                selector => Pressable(selector).Class("ghost"),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent)
+            ),
+            On(
+                selector => Pressable(selector).Class("tool").Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine)
+            ),
+            On(
+                selector => Pressable(selector).Class("ghost").Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine)
+            ),
+
+            On(
+                selector => selector.OfType<TextBox>(),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                // A field is a row tall and the ink in it is one line, so the two are not the same
+                // height, and the base theme aligns the whole of a field's content by this: left as it
+                // comes, the line stands at the top of the box. Left alone across, since that same
+                // alignment sizes the field's content where it is set.
+                new Setter(TextBox.VerticalContentAlignmentProperty, VerticalAlignment.Center),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<ComboBox>(),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 2)),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<ComboBoxItem>(),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small)
+            ),
+            On(
+                selector => selector.OfType<ListBox>(),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Radius)
+            ),
+            On(
+                selector => selector.OfType<ListBoxItem>(),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small)
+            ),
+            On(
+                selector => selector.OfType<TreeView>(),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Radius)
+            ),
+            On(
+                selector => selector.OfType<TreeViewItem>(),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(2, 1)),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small)
+            ),
+            On(
+                selector => selector.OfType<MenuItem>(),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<ContextMenu>(),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Radius),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(4))
+            ),
+            On(
+                selector => selector.OfType<MenuFlyoutPresenter>(),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Radius)
+            ),
+            On(
+                selector => selector.OfType<FlyoutPresenter>(),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Radius)
+            ),
+            On(
+                selector => selector.OfType<TabItem>(),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(12, 6))
+            ),
+            On(
+                selector => selector.OfType<CheckBox>(),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<RadioButton>(),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<NumericUpDown>(),
+                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small)
+            ),
+            On(
+                selector => selector.OfType<ButtonSpinner>(),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small)
+            ),
+            On(
+                selector => selector.OfType<ProgressBar>(),
+                new Setter(Layoutable.HeightProperty, 10.0),
+                new Setter(TemplatedControl.CornerRadiusProperty, Pill)
+            ),
+            On(
+                selector => selector.OfType<Slider>(),
+                new Setter(Layoutable.MinHeightProperty, RowHeight)
+            ),
+            On(
+                selector => selector.OfType<Expander>(),
+                new Setter(TemplatedControl.CornerRadiusProperty, Radius)
+            ),
+            On(
+                selector => selector.OfType<GroupBox>(),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Radius)
+            ),
+            On(
+                selector => selector.OfType<SplitButton>(),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine)
+            ),
+            On(
+                selector => selector.OfType<DropDownButton>(),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine)
+            ),
+            On(
+                selector => selector.OfType<Separator>(),
+                new Setter(Layoutable.HeightProperty, 1.0),
+                Brushed(TemplatedControl.BackgroundProperty, BorderLine)
+            ),
+            On(
+                selector => selector.OfType<ToolTip>(),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4))
+            ),
+        ];
+
+    /// <summary>
+    /// The template parts the base theme colours itself.
+    /// </summary>
+    /// <remarks>
+    /// The base theme draws most states on a control's template rather than on the control — a hovered
+    /// row's fill, a focused field's edge, the tick in a box — so a rule for the control cannot reach
+    /// them and the part has to be named. Every rule here carries an activator as well as the part
+    /// name: Avalonia ranks an activated setter above a template binding and above a plain setter,
+    /// which is what it takes to be heard over the base theme's styling of the same place.
+    /// </remarks>
+    private Style[] Parts() =>
+        [
+            // The base theme paints a hovered or held button's own part, and firmed up its border to a
+            // weight the design does not have; both are said again here.
+            On(
+                selector => Pressable(selector).Template().Name("PART_ContentPresenter"),
+                new Setter(ContentPresenter.TransitionsProperty, Fading())
+            ),
+            On(
+                selector =>
+                    Pressable(selector).Class(":pointerover").Template().Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BorderBrushProperty, Strong)
+            ),
+            On(
+                selector =>
+                    Pressable(selector).Class(PrimaryAction).Class(":pointerover").Template().Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BorderBrushProperty, Primary)
+            ),
+
+            // A chosen box and a chosen radio are filled with the primary and marked in the ink the
+            // design names for it.
+            On(
+                selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("border"),
+                Brushed(Border.BackgroundProperty, Primary),
+                Brushed(Border.BorderBrushProperty, Primary)
+            ),
+            On(
+                selector => selector.OfType<CheckBox>().Class(":checked").Template().Name("checkMark"),
+                Brushed(Shape.FillProperty, PrimaryText)
+            ),
+            On(
+                selector => selector.OfType<CheckBox>().Class(":indeterminate").Template().Name("border"),
+                Brushed(Border.BackgroundProperty, Primary),
+                Brushed(Border.BorderBrushProperty, Primary)
+            ),
+            On(
+                selector =>
+                    selector.OfType<CheckBox>().Class(":indeterminate").Template().Name("indeterminateMark"),
+                Brushed(Shape.FillProperty, PrimaryText)
+            ),
+            On(
+                selector => selector.OfType<RadioButton>().Class(":checked").Template().Name("border"),
+                Brushed(Shape.FillProperty, Primary),
+                Brushed(Shape.StrokeProperty, Primary)
+            ),
+            On(
+                selector => selector.OfType<RadioButton>().Class(":checked").Template().Name("checkMark"),
+                Brushed(Shape.FillProperty, PrimaryText)
+            ),
+
+            // A field that has focus keeps its one border and grows the ring the design draws: a shadow
+            // with a spread and no blur, which is an outline two pixels out from the border box. The
+            // border itself does not move, because a focus is a thing beside the field rather than a
+            // change to it.
+            On(
+                selector => selector.OfType<TextBox>().Class(":focus").Template().Name("border"),
+                new Setter(Border.BorderThicknessProperty, Edge),
+                Brushed(Border.BorderBrushProperty, BorderLine),
+                Brushed(Border.BoxShadowProperty, Ring)
+            ),
+
+            On(
+                selector => selector.OfType<Slider>().Template().Name("TrackBackground"),
+                new Setter(Border.BorderThicknessProperty, new Thickness(2)),
+                Brushed(Border.BorderBrushProperty, BorderLine)
+            ),
+
+            // A menu and a tooltip are raised surfaces, and the shadow belongs to the part that draws
+            // them rather than to the control, which has none of its own to set.
+            On(
+                selector => selector.OfType<MenuFlyoutPresenter>().Template().Name("LayoutRoot"),
+                Brushed(Border.BoxShadowProperty, Shadow)
+            ),
+            On(
+                selector => selector.OfType<FlyoutPresenter>().Template().Name("LayoutRoot"),
+                Brushed(Border.BoxShadowProperty, Shadow)
+            ),
+            On(
+                selector => selector.OfType<ToolTip>().Template().Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BoxShadowProperty, Shadow)
+            ),
+
+            // Every part that changes colour on a state fades into it.
+            On(
+                selector => selector.OfType<TemplatedControl>().Template().Name("PART_ContentPresenter"),
+                new Setter(ContentPresenter.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<TemplatedControl>().Template().Name("PART_HeaderPresenter"),
+                new Setter(ContentPresenter.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<TemplatedControl>().Template().Name("border"),
+                new Setter(Border.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<TemplatedControl>().Template().Name("checkMark"),
+                new Setter(Shape.TransitionsProperty, Fading())
+            ),
+        ];
+
+    /// <summary>
+    /// The surfaces the shell owns: the menu bar, the dock strips, and the grabs between regions.
+    /// </summary>
+    /// <remarks>
+    /// Chrome is the elevated ground with one border under it, so the window reads as a stack of cards:
+    /// the menu bar, each strip, and the content between them. A dock's tabs are a segmented control —
+    /// one bordered rounded container, the tab being shown filled with the primary — which is the
+    /// design's own answer to a tab strip and the reason there is no underline anywhere.
+    /// </remarks>
+    private Style[] Chrome() =>
+        [
+            On(
+                selector => selector.OfType<Menu>().Class(MainWindow.MenuBarClass),
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
+                new Setter(Layoutable.MinHeightProperty, BarHeight),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 0))
+            ),
+            On(
+                selector => selector.OfType<Border>().Class(DockArea.HeadersClass),
+                Brushed(Border.BackgroundProperty, Elevated),
+                Brushed(Border.BorderBrushProperty, BorderLine),
+                new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 1))
+            ),
+
+            // The container the tabs sit in: one border, one radius, and the overflow clipped so that
+            // the corners of the tab being shown are the container's.
+            On(
+                selector => selector.OfType<Border>().Class(DockArea.TabsClass),
+                new Setter(Border.BorderThicknessProperty, Edge),
+                Brushed(Border.BorderBrushProperty, BorderLine),
+                new Setter(Border.CornerRadiusProperty, Small),
+                new Setter(Border.ClipToBoundsProperty, true)
+            ),
+            On(
+                selector => selector.OfType<Button>().Class(DockArea.TitleClass),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
+                Brushed(TemplatedControl.ForegroundProperty, Muted),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.ForegroundProperty, Foreground)
+            ),
+            On(
+                selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(DockArea.SelectedClass),
+                Brushed(TemplatedControl.BackgroundProperty, Primary),
+                Brushed(TemplatedControl.ForegroundProperty, PrimaryText),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold)
+            ),
+            // A held tab keeps the fill it has, whether it is the one shown or not.
+            On(
+                selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(":pressed"),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken)
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(DockArea.TitleClass)
+                        .Class(DockArea.SelectedClass)
+                        .Class(":pressed"),
+                Brushed(TemplatedControl.BackgroundProperty, Primary)
+            ),
+
+            // The button that closes a region's shown dock: nothing until the pointer is on it, and then
+            // the design's own red wash rather than a filled red, because nothing here is filled red.
+            On(
+                selector => selector.OfType<Button>().Class(DockArea.CloseClass),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                new Setter(Layoutable.WidthProperty, 26.0),
+                new Setter(Layoutable.HeightProperty, 26.0),
+                Brushed(TemplatedControl.ForegroundProperty, Faint),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(DockArea.CloseClass)
+                        .Class(":pointerover")
+                        .Template()
+                        .Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BackgroundProperty, "rorolala.del.bg"),
+                Brushed(ContentPresenter.ForegroundProperty, "rorolala.del")
+            ),
+
+            // A splitter draws nothing until the pointer is on it, and then the accent hairline through
+            // its middle: the grab stays wide enough to hit, and a line that wide would be a bar.
+            On(
+                selector => selector.OfType<GridSplitter>().Class(DockArea.SplitterClass),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<GridSplitter>()
+                        .Class(DockArea.SplitterClass)
+                        .Class(DockArea.SplitterColumnsClass)
+                        .Class(":pointerover"),
+                new Setter(TemplatedControl.BackgroundProperty, Hairline(vertical: true))
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<GridSplitter>()
+                        .Class(DockArea.SplitterClass)
+                        .Class(DockArea.SplitterRowsClass)
+                        .Class(":pointerover"),
+                new Setter(TemplatedControl.BackgroundProperty, Hairline(vertical: false))
+            ),
+
+            // Where a dragged dock could land. All of them are up while a drag is on, because they are
+            // the question — which regions are there to land in — and the one being aimed at is drawn in
+            // the accent, because it is the answer and must not read as a selection.
+            On(
+                selector => selector.OfType<Border>().Class(DockArea.DropZoneClass),
+                new Setter(Border.BorderThicknessProperty, Edge),
+                Brushed(Border.BorderBrushProperty, Strong),
+                Brushed(Border.BackgroundProperty, Sunken),
+                new Setter(Border.CornerRadiusProperty, Radius),
+                new Setter(Border.TransitionsProperty, Fading(Light))
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Border>()
+                        .Class(DockArea.DropZoneClass)
+                        .Class(DockArea.DropTargetClass),
+                NewBrush(Border.BackgroundProperty, WithAlpha(_accent, 0x40)),
+                Brushed(Border.BorderBrushProperty, Accent)
+            ),
+        ];
+
+    /// <summary>
+    /// The selector for a button that is a thing to press rather than part of the shell's chrome.
+    /// </summary>
+    /// <remarks>
+    /// The dock's own buttons are excluded: a tab and a close are chrome, not a thing to press, and a
+    /// rule that is always on cannot be relied on to beat one that turns on with a state. Written so
+    /// that it does not match, the question does not arise.
+    /// </remarks>
+    /// <param name="selector">Where the rule starts.</param>
+    private static Selector Pressable(Selector? selector) =>
+        selector!
+            .OfType<Button>()
+            .Not(previous => previous.Class(DockArea.TitleClass))
+            .Not(previous => previous.Class(DockArea.CloseClass));
+
     /// <summary>A style over a selector, carrying the setters it was given.</summary>
     private static Style On(Func<Selector?, Selector> selector, params SetterBase[] setters)
     {
@@ -1050,22 +1071,22 @@ internal sealed class RorolalaTheme
     /// element's own variant has. Resolving it here would fix it to the variant that was in force when
     /// the theme was applied, and a system that changed variant while the program ran would leave the
     /// overlay behind — half of the window following the system and half of it not. It is also what lets
-    /// a colour changed at runtime reach every control that took it (Section 10).
+    /// a colour changed at runtime reach every control that took it.
     /// </remarks>
     private static Setter Brushed(AvaloniaProperty property, string resource) =>
         new(property, new DynamicResourceExtension(resource));
 
-    /// <summary>A setter whose value is a colour this theme computes and never the user's to choose.</summary>
-    private static Setter Fixed(AvaloniaProperty property, Color colour) =>
+    /// <summary>A setter whose value is a colour computed here rather than named as a resource.</summary>
+    private static Setter NewBrush(AvaloniaProperty property, Color colour) =>
         new(property, new SolidColorBrush(colour));
 
     /// <summary>
     /// What is written on a surface filled with a colour.
     /// </summary>
     /// <remarks>
-    /// Black or white, whichever can be read on it. It is the one thing about a chosen colour that
-    /// cannot be read off the colour by eye, which is why it is worked out rather than picked, and why
-    /// it is open to the tests as well as used here.
+    /// Black or white, whichever can be read on it. The design names its own ink for its own primary; a
+    /// primary the user chose has no such name, so it is worked out — which is why it is open to the
+    /// tests as well as used here.
     /// </remarks>
     /// <param name="accent">The colour anything accented is drawn in.</param>
     /// <returns>The ink to write on it.</returns>
@@ -1075,41 +1096,10 @@ internal sealed class RorolalaTheme
             : Colors.White;
 
     /// <summary>
-    /// One colour stepped towards black by a factor.
-    /// </summary>
-    /// <remarks>
-    /// A factor rather than a colour: the primary is the user's to choose, and a held state that was a
-    /// second chosen colour would be one every other primary did without.
-    /// </remarks>
-    private static Color Darkened(Color colour, double factor) =>
-        Color.FromRgb(
-            (byte)Math.Round(colour.R * factor),
-            (byte)Math.Round(colour.G * factor),
-            (byte)Math.Round(colour.B * factor)
-        );
-
-    /// <summary>
-    /// One colour stepped towards white by a fraction of the way there.
-    /// </summary>
-    /// <remarks>
-    /// The mirror of <see cref="Darkened"/>, and worked out for the same reason: a surface under the
-    /// pointer has to lift off the one it was, and how far is a property of the colour rather than of a
-    /// second colour chosen beside it.
-    /// </remarks>
-    private static Color Lightened(Color colour, double amount) =>
-        Color.FromRgb(
-            (byte)Math.Round(colour.R + ((255 - colour.R) * amount)),
-            (byte)Math.Round(colour.G + ((255 - colour.G) * amount)),
-            (byte)Math.Round(colour.B + ((255 - colour.B) * amount))
-        );
-
-    /// <summary>
     /// How much one colour stands out from another, as the ratio a reader's legibility is held to.
     /// </summary>
-    /// <remarks>
-    /// The one number that answers "can this be read on that" without knowing which colour either is,
-    /// which is what a chosen colour leaves to be worked out.
-    /// </remarks>
+    /// <param name="one">One colour.</param>
+    /// <param name="other">The other.</param>
     private static double Contrasts(Color one, Color other)
     {
         var (lighter, darker) = Luminance(one) > Luminance(other) ? (one, other) : (other, one);
@@ -1118,10 +1108,12 @@ internal sealed class RorolalaTheme
     }
 
     /// <summary>A colour's relative luminance, as the contrast ratio is defined over.</summary>
+    /// <param name="colour">The colour.</param>
     private static double Luminance(Color colour) =>
         (0.2126 * Channel(colour.R)) + (0.7152 * Channel(colour.G)) + (0.0722 * Channel(colour.B));
 
     /// <summary>One channel, linearised from the value a display writes.</summary>
+    /// <param name="value">The channel.</param>
     private static double Channel(byte value)
     {
         var encoded = value / 255.0;
@@ -1133,6 +1125,7 @@ internal sealed class RorolalaTheme
     private static Transitions Fading() => Fading(Fade);
 
     /// <summary>The fade a surface arrives with, over the given time.</summary>
+    /// <param name="duration">How long it takes.</param>
     private static Transitions Fading(TimeSpan duration) =>
         new()
         {
@@ -1150,9 +1143,34 @@ internal sealed class RorolalaTheme
         };
 
     /// <summary>A brush of one colour.</summary>
+    /// <param name="colour">The colour.</param>
     private static IBrush Fill(Color colour) => new SolidColorBrush(colour);
 
+    /// <summary>
+    /// One colour mixed into another by a fraction of the way there.
+    /// </summary>
+    /// <remarks>
+    /// The design writes its hover as a colour mixed with white rather than as a second colour, because
+    /// what a hover is is "this colour, lifted" and that is a property of the colour in hand.
+    /// </remarks>
+    /// <param name="colour">The colour to start from.</param>
+    /// <param name="towards">The colour to walk towards.</param>
+    /// <param name="amount">How much of the way there, from nothing to all of it.</param>
+    private static Color Mix(Color colour, Color towards, double amount)
+    {
+        // Written as two steps so that the rounding is of the whole channel rather than of each half.
+        var other = 1 - amount;
+
+        return Color.FromRgb(
+            (byte)Math.Round((colour.R * other) + (towards.R * amount)),
+            (byte)Math.Round((colour.G * other) + (towards.G * amount)),
+            (byte)Math.Round((colour.B * other) + (towards.B * amount))
+        );
+    }
+
     /// <summary>The same colour, at another alpha.</summary>
+    /// <param name="colour">The colour.</param>
+    /// <param name="alpha">The alpha.</param>
     private static Color WithAlpha(Color colour, byte alpha) =>
         Color.FromArgb(alpha, colour.R, colour.G, colour.B);
 }

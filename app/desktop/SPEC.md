@@ -312,8 +312,9 @@ written by hand still works. The program writes this file when the user changes 
 {
   "_version": 1,
   "mode": "system",
-  "primary": "#00BCD4",
-  "accent": "#FF4081"
+  "primary": "#B5E61D",
+  "primaryText": "#1B2600",
+  "accent": "#5CC8FF"
 }
 ```
 
@@ -321,23 +322,26 @@ written by hand still works. The program writes this file when the user changes 
 | --- | --- | --- | --- |
 | `_version` | integer | yes | Schema version. Fixed at `1`. |
 | `mode` | string | no | `system`, `light` or `dark`. `system` follows the desktop and goes on following it. Absent means `system`. |
-| `primary` | string | no | The colour the brand and everything selected is drawn in, as `#RRGGBB`. Absent means `#00BCD4`. |
-| `accent` | string | no | The colour the attention marks are drawn in, as `#RRGGBB`. Absent means `#FF4081`. |
+| `primary` | string | no | The colour what is chosen is drawn in, as `#RRGGBB`. Absent means `#B5E61D`. |
+| `primaryText` | string | no | What is written on a surface filled with the primary, as `#RRGGBB`. Absent means the look works it out by contrast (Section 10). |
+| `accent` | string | no | The colour the drag marks are drawn in, as `#RRGGBB`. Absent means `#5CC8FF`. |
 
 Every field is optional, and **a field that is not there is the default rather than a choice of it**
 (Section 10). That is what makes taking a choice back possible: the panel's *Reset* removes the field
 instead of writing the default down, so a default the program later changes is not kept out by a copy.
 For the same reason a field is read as absent even when it spells the default out: what is in force is
-the default either way, and only the file differs.
+the default either way, and only the file differs. `primaryText` is the one field where the absence
+means something in its own right — nothing there is "work it out", which is not the same as any one
+colour.
 
 If the file does not exist, the host writes it with the defaults spelled out, so that the colours the
 program is drawn in are there for a person to find and edit; a field removed afterwards stays removed.
 A missing file is not a validation failure; an unreadable or invalid one is.
 
-These three are the whole of what is configurable about how the program looks (Section 10), and they
-are edited from the Preference dock under the kernel's own entry as well as by editing the file. It is
-a file of its own rather than a section of `preference.json` because these are not a preference about
-the program but what the program is drawn in, and nothing else belongs beside them.
+These four are the whole of what is configurable about how the program looks (Section 10), and they are
+edited from the Preference dock under the kernel's own entry as well as by editing the file. It is a
+file of its own rather than a section of `preference.json` because these are not a preference about the
+program but what the program is drawn in, and nothing else belongs beside them.
 
 ### 5.5 Validation and failure
 
@@ -348,8 +352,8 @@ code in Section 5.6.
 - `_version` is absent or names a version the host does not support;
 - a `PluginId` key is repeated, or names no discovered plugin;
 - a declared dependency is missing, disabled, or forms a cycle;
-- `theme.json` names a `mode` that is none of `system`, `light` and `dark`, or a `primary` or
-  `accent` that is not exactly `#RRGGBB`.
+- `theme.json` names a `mode` that is none of `system`, `light` and `dark`, or a `primary`, `primaryText`
+  or `accent` that is not exactly `#RRGGBB`.
 
 The following are **not fatal**:
 
@@ -751,80 +755,74 @@ exists for plugins that react to a completed open.
 - The look is **one thing and it is not extensible**. There is no theme extension point: a plugin
   cannot supply one, and the look is not chosen by id. `RorolalaTheme` is applied as an **overlay** on
   top of the base, and it is the only overlay there is.
-- What a run chooses is three things and no more (Section 5.4): the **variant** it is drawn in and the
-  **two colours** it is drawn with. Everything else in this section is stated rather than configured,
-  which is what makes two runs of the program look like one program.
-- The two colours are spent by **role**, not by taste, and the roles are what keep them apart:
-  - **Primary carries the weight.** It is what the brand is and what everything chosen is: selected
-    rows, tree rows, drop-down rows, a checked box and a radio, the underline of the dock a region is
-    showing, the fill of the one action (below), and the thumb of a slider. It is also the colour the
-    base theme's own accent family is written with, so that a selection of text and a tick are the
-    primary from one definition rather than from a second one kept in step.
-  - **Accent asks for attention.** It is spent only on marks that ask to be looked at rather than state
-    a choice: the hairline a splitter shows under the pointer, the edge of a field that has focus, the
-    zone a dragged dock is aimed at, and the flash of a press. A look with one colour cannot tell the
-    two apart, which is the whole reason there are two.
-- The design is **minimal-flat**:
-  - **Rectangles.** Nothing is rounded; every surface has a `CornerRadius` of zero.
-  - **One-pixel edges.** Anything with an outline wears a 1 px `BorderThickness`, in the 20 % ink of
-    the variant. A focused field keeps its one pixel rather than the two the base theme draws.
-  - **Hover is neutral.** A surface under the pointer takes a tint of the variant's ink, not either
-    chosen colour. The exceptions are marks rather than surfaces: the hairline a splitter shows under
-    the pointer, and the red a close fills with.
-  - **A button is flat.** A button is the colour of what is behind it, with a one-pixel edge and a
-    neutral hover; pressing darkens it and changes nothing else. The look has exactly one raised
-    surface, and it is not a button in general.
-  - **The one raised thing is the action.** The single action a surface exists for — the OK of a
-    dialog, and nothing besides — wears the class `primary`: filled with the primary, and wearing the
-    look's one **hard shadow**, cast to the bottom right, two pixels out and two down with no blur at
-    all. There is at most one per surface, so that what to do is never a question with two answers.
-  - **Nothing moves.** A mark that appears on selection reserves its space when it is not there, and
-    no state change alters a position or a size — the raised action included, which drops its shadow
-    rather than shifting.
-  - **Close is the one red thing.** The close button at the end of a strip draws nothing until the
-    pointer is on it, and then fills with the red a close is everywhere. It is the only colour in the
-    program that is neither chosen colour nor a tint of the variant's ink.
-- The primary is **one of the two colours the user chooses** in `theme.json`, and everything derived
-  from it is derived rather than chosen: the base theme's accent family at the base theme's own alphas
-  (`#99…`, `#66…`, `#33…`), the held state darker (80 % of each channel), the hover state lighter (18 %
-  of the way to white), and the ink written on it. It is written into **the base theme's own accent
-  resources** rather than applied control by control, so that a selected row, a checked box and a
-  selection of text are all the primary from one definition.
-- The accent is **the other colour the user chooses**, spent only on the attention marks above, and
-  neither it nor the primary is derived from anything but itself.
-- The ink on a filled surface is **black or white, whichever can be read on it**, worked out by
-  contrast ratio. The base theme writes white there, which is right for the blue it was written for and
-  wrong for anything light — and which colour the primary is belongs to the user, so it cannot be
-  stated here.
-- The three tints the chrome is drawn with are **the look's own**, because the base theme has none to
-  borrow: every neutral it ships is opaque, and a band of chrome has to be a tint of whatever is behind
-  it to sit on the window and on the content alike. Each is keyed per variant, as that variant's ink.
-- **The scale is fixed, and everything is on it.** Space is `4, 8, 12, 16, 24, 32` and nothing between:
-  a row, a field and a control are **28** high, and a band of chrome — the menu bar, a region's header
-  strip, a toolbar — is **32**. A gap inside a block is 4 or 8, between blocks 12, and the padding of a
-  dock's own content is 12. A number that is not on the scale is a number that drifts.
-- **Text is a role, not a size written where the text is.** Three sizes carry every word — body at 13,
-  a **caption** at 11, and a **title** at 15 — and a **section** heading is body-sized and semibold;
-  secondary text is **muted**, which is the variant's ink held back rather than an opacity written at
-  the call site. A surface says which of them a piece of text is by putting the class on it (below), so
-  that the same word looks the same wherever it appears.
+- What a run chooses is the **variant** it is drawn in and the **colours** it is drawn with — two, and a
+  third that may be named rather than worked out (Section 5.4). Everything else in this section is stated
+  rather than configured, which is what makes two runs of the program look like one program.
+- The look is the one the sibling project **`gattipage`** uses, and the tokens are that project's own:
+  three grounds, a ramp of ink in three steps, two border weights, 8- and 5-pixel radii, a soft
+  two-layer shadow, and one vivid primary. Surfaces are **raised** rather than flat, so a dock reads as a
+  card lying on the ground beneath it.
+- The colours are spent by **role**, not by taste:
+  - **Primary carries the weight.** It fills what is chosen — a chosen row is a wash of it, and a chosen
+    tab and the one action of a surface are filled with it — and it is written into the base theme's own
+    accent resources, so that a chosen row, a checked box and a selection of text are the primary from
+    one definition.
+  - **Accent is the second colour**, spent only on the marks a drag draws: the band a frame is drawn
+    with, the zone a dragged dock is aimed at, and the hairline a splitter shows under the pointer. They
+    must never be mistaken for a selection, which is the whole reason there are two. The design this
+    comes from needs no such colour; it is the one thing here that is not that design's own.
+- The design:
+  - **Rounded.** A card is rounded 8, a control 5, and a badge or a progress bar is a pill. Nothing is
+    square but a rectangle too small to round.
+  - **Three grounds, and nothing else.** Content sits on `bg`; chrome — the menu bar, a dock's strip, a
+    toolbar — and a control sit on `bg-elevated`; what is hovered, held or welled sits in `bg-sunken`.
+    The window is `bg` itself, so the bands and cards on it read as things laid over a ground.
+  - **Two border weights.** One pixel of the border colour is every edge; under the pointer a control's
+    edge firms up to the strong one. There is no third weight, and a control casts no shadow.
+  - **A rule instead of a gap.** A table row is separated from the next by a one-pixel rule rather than
+    by space, and the rows of a listing share the card's edge, clipped to its corners.
+  - **The one action is filled.** The single action a surface exists for — the OK of a dialog, and
+    nothing besides — wears the class `primary`: filled with the primary, in the ink the file names for
+    it. There is at most one per surface, so that what to do is never a question with two answers.
+  - **A chosen row is a wash, and its text is not recoloured.** The primary at 35 % on the light ground
+    and 30 % on the dark one, with the words keeping the ink they had: a row filled solid would make a
+    table read as a grid of buttons.
+  - **A hover is the sunken ground** — not a tint and not a colour, which is what lets a hover and a
+    chosen row sit side by side without ever being confused for one another.
+  - **A tab strip is a segmented control.** One bordered rounded container with the tab being shown
+    filled with the primary. There is no underline anywhere in the program.
+  - **Nothing moves.** A mark that appears on selection reserves its space while it is not there, and no
+    state change alters a position or a size.
+- **The scale is fixed, and everything is on it.** Space is `4, 8, 12, 16, 24, 32` and nothing between: a
+  row, a field and a control are **30** high, and a band of chrome — the menu bar, a region's strip, a
+  toolbar — is **36**. A gap inside a block is 4 or 8, between blocks 24, and a panel is padded 16 across
+  and 24 down. A number that is not on the scale is a number that drifts.
+- **Text is a role, not a size written where the text is.** A **title** is 16 and semibold, body is 14, a
+  **caption** is 12.5, and a **label** is 11, bold and letter-spaced. A role carries no colour but the
+  neutral: **muted** is the middle step of the ink ramp and **faint** the last one, which is what a
+  secondary line and the smallest print take — rather than an opacity written at the call site. A surface
+  says which of them a piece of text is by putting the class on it (below), so that the same word looks
+  the same wherever it appears.
+- **A label is written in capitals**, because the design sets one that way and Avalonia has no
+  `text-transform`: the caller passes the word already in capitals. A locale without case is unaffected,
+  which is the right outcome rather than a cost.
 - **A column of data is set in a monospace** (the `mono` class), because a table is read down its
   columns: the log is the one place this appears today, and it is what makes its columns line up.
-- **A severity is not a colour the user chooses.** A failure is the one red and a warning the one amber,
-  both fixed and both chosen to carry on a light ground and a dark one. A notice is raised as one flat
-  card with a stripe per line in the colour of its level, a caption naming where it came from, and one
-  way out — rather than as a stack of dialogs, which is the one shape a notice must not have.
-- **Nothing is ever blank.** A list, a tree, a log or a panel with nothing in it says so, in one muted
-  line in the middle of where the thing would have been. An empty surface that says nothing cannot be
-  told from one that failed to load.
-- The type is **Inter**, which the program ships. The look names it through the font collection
-  (`fonts:Inter#Inter`), because a family name on its own is looked for among the system's fonts, is
-  not there, and falls back silently to the platform's face.
-- **Motion** is colour and opacity only, never position or size. Feedback — a hover, a press, a drop
-  zone lighting up, a field taking focus — finishes within 150 ms, and a press is quicker still (60 ms)
-  so that a click reads as a flash. The one longer move is **selection**, which turns a row to the
-  primary over 200 ms: a chosen row is a change of state rather than feedback, and instant there reads
-  as a blink (Section 17).
+- **A severity is not a colour the user chooses.** A failure is the design's own red and a warning its
+  own amber, both fixed and both chosen to carry on either ground. A notice is raised as one card with a
+  heading, a stripe per line in the colour of its level, and one filled way out — rather than as a stack
+  of dialogs, which is the one shape a notice must not have.
+- **Nothing is ever blank.** A list, a tree, a log or a panel with nothing in it says so: one muted line
+  and a large faint glyph, in the middle of where the thing would have been. An empty surface that says
+  nothing cannot be told from one that failed to load.
+- The type is **the platform's own**, as the design uses it. The program ships no face, so two machines
+  showing the same colours are the same program either way.
+- **The ink on the primary** is the one the file names if it names one, and black or white by contrast
+  ratio if it does not. The design names its own — a green-black rather than a plain black on a lime —
+  which is why it is a field rather than a rule.
+- **Motion** is colour and opacity only, never position or size, and everything takes **120 ms**: a hover,
+  a press, a drop zone lighting up, a field taking focus. There is no longer move; a chosen row arrives
+  with the rest of them (Section 17).
 - The overlay is applied before the window is made. That order is load-bearing rather than tidy:
   growing `Application.Styles` after elements have been styled makes the base theme's setters win on
   those elements on the re-application that follows, so an overlay added late stops applying to
@@ -836,26 +834,28 @@ exists for plugins that react to a completed open.
   | --- | --- |
   | `menu-bar` | The menu bar. |
   | `dock-headers` | A region's header strip. |
-  | `dock-title` | A dock's header. |
-  | `selected` | The header of the dock the region is showing, in addition to `dock-title`. |
+  | `dock-tabs` | The segmented control a region's tabs sit in. |
+  | `dock-title` | A dock's tab. |
+  | `selected` | The tab of the dock the region is showing, in addition to `dock-title`. |
   | `dock-close` | The button that closes the dock a region is showing. |
   | `dock-splitter` | The grab between two regions, and the grab between two of a table's columns: four pixels wide. |
   | `dock-splitter-columns` / `dock-splitter-rows` | The same grab, saying which way it resizes. |
   | `dock-drop-zone` | Where a dragged dock would land. |
   | `dock-drop-target` | The zone a dragged dock is being aimed at, in addition to `dock-drop-zone`. |
-  | `primary` | The one action a surface exists for: filled, raised, and at most one per surface. |
-  | `caption` / `title` / `section` | Text roles: 11 px, 15 px, and body-sized semibold. |
-  | `muted` | Secondary text, in the variant's ink held back. |
+  | `primary` | The one action a surface exists for: filled with the primary, and at most one per surface. |
+  | `tool` | A square 28-pixel button for the chrome: it draws nothing of its own until the pointer is on it. |
+  | `ghost` | The same, with a word in it. |
+  | `label` / `title` / `caption` | Text roles: 11-pixel capitals, 16-pixel semibold, and 12.5-pixel. |
+  | `muted` / `faint` | Secondary and faintest text: the middle and the last step of the ink ramp. |
   | `mono` | A column of data, in the monospace face. |
 
   A drop zone is drawn where the region it stands for is: that region's band of the area, as wide or as
   tall as the layout remembers for it and never less than the least a region may become. What a drag
   shows is therefore where the dock will be, and a region that is empty and taking no space still has a
-  box to aim at. Every zone is up while a drag is on, filled with a tint of the variant's ink — white
-  over a dark program, black over a light one. The one the pointer is over carries `dock-drop-target` as
-  well and is drawn in the accent: the others are the question, which regions there are to land in, and
-  that one is the answer. The dock area asks the look for nothing here — the boxes are the look's to
-  draw.
+  box to aim at. Every zone is up while a drag is on, drawn as a card on the sunken ground. The one the
+  pointer is over carries `dock-drop-target` as well and is drawn in the accent: the others are the
+  question, which regions there are to land in, and that one is the answer. The dock area asks the look
+  for nothing here — the boxes are the look's to draw.
 
   A splitter draws nothing until the pointer is on it, and then a hairline of the accent through its
   middle. The grab is four pixels wide, which is what it has to stay for a hand to find it, and a line
@@ -988,8 +988,9 @@ They are reported in the Log dock and, where the user must act, in a popup.
 {
   "_version": 1,
   "mode": "system",      // system | light | dark, or absent for the default
-  "primary": "#00BCD4",  // #RRGGBB, or absent for the default
-  "accent": "#FF4081"    // #RRGGBB, or absent for the default
+  "primary": "#B5E61D",  // #RRGGBB, or absent for the default
+  "primaryText": "#1B2600", // #RRGGBB, or absent to have the look work it out
+  "accent": "#5CC8FF"    // #RRGGBB, or absent for the default
 }
 ```
 
@@ -1154,10 +1155,9 @@ implementation convenience without raising it explicitly.
 Agreed so far:
 
 - **Motion.** What a change of state is communicated with is colour and opacity, never position or
-  size. Feedback answers within 150 ms, and a press within 60 ms; selection, which is a change of state
-  rather than feedback, turns over 200 ms. Nothing moves under the pointer — a raised button drops its
-  shadow rather than shifting — and a mark that appears on selection reserves its space while it is not
-  there (Section 10).
+  size, and it takes 120 ms — a hover, a press, a drop zone lighting up, a field taking focus. Nothing
+  moves under the pointer, and a mark that appears on selection reserves its space while it is not there
+  (Section 10).
 
 ## 18. Non-Goals
 
@@ -1169,9 +1169,10 @@ Agreed so far:
 
 ## 19. Open Items
 
-1. The look's design is settled as far as Section 10 states it — minimal-flat, colour-only motion, the
-   two colours the user's to choose, and a fixed scale and set of text roles — but it is a first pass at
-   the details (which surfaces take an edge, how dense the rows are) and is to be revised with the user.
+1. The look's design is settled as far as Section 10 states it — the `gattipage` language, colour-only
+   motion at one duration, three grounds and two chosen colours — but it is the design's own first
+   application to a docked desktop rather than a web page, and the density of a dock is the part most
+   likely to want revising with the user.
 2. The concrete feel criteria (Section 17), to be agreed with the user.
 3. The contract assembly versioning policy: increment rule and compatibility range. Nothing is done
    about it yet, and by decision: the program is experimental, the one plugin that is built with it is

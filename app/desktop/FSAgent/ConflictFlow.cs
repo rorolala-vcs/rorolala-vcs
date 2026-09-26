@@ -127,7 +127,6 @@ internal static class ConflictFlow
             AppBuilder
                 .Configure<AgentApp>()
                 .UsePlatformDetect()
-                .WithInterFont()
                 .LogToTrace()
                 .StartWithClassicDesktopLifetime([]);
         }

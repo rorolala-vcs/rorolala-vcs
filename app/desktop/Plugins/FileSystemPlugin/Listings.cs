@@ -202,20 +202,27 @@ internal abstract class EntryView : UserControl
     /// <summary>The entry the pointer or the keyboard last landed on, or nothing before either has.</summary>
     protected Entry? Lead => _lead >= 0 && _lead < Browser.Shown.Count ? Browser.Shown[_lead] : null;
 
+    /// <summary>The room the panel leaves around what it holds, which is the design's own padding.</summary>
+    protected virtual Thickness PanelPadding => new(24, 16, 24, 60);
+
     /// <summary>
-    /// Puts what the view is made of on screen, with the frame's band drawn over it.
+    /// Puts what the view is made of on screen, on the panel and with the frame's band drawn over it.
     /// </summary>
     /// <remarks>
     /// The band is drawn over the view rather than into it, so that a frame can go where a row is: drawn
-    /// among the entries it would be laid out as one of them, or clipped to the one it sat in.
+    /// among the entries it would be laid out as one of them, or clipped to the one it sat in. It is laid
+    /// over the whole view and not over the panel, because the frame is measured in this control's own
+    /// coordinates and a band offset by the panel's padding would not land where the pointer is.
     /// </remarks>
-    /// <param name="content">The list, or the list with a header over it.</param>
+    /// <param name="content">The card, or the tiles, the list at the heart of it.</param>
     protected void Present(Control content)
     {
         _over.Children.Add(_band);
 
+        var panel = new Border { Padding = PanelPadding, Child = content };
+
         var grid = new Grid();
-        grid.Children.Add(content);
+        grid.Children.Add(panel);
 
         // The word is drawn over the empty space rather than in place of the list, so that the menu and the
         // frame the space still answers keep answering.
@@ -246,14 +253,29 @@ internal abstract class EntryView : UserControl
     /// It takes no pointer of its own: the space it sits over is still the list's, and a word that ate the
     /// right-click there would take the empty-space menu and the start of a frame with it.
     /// </remarks>
-    private static TextBlock Notice() =>
-        new()
+    private static Control Notice() =>
+        new StackPanel
         {
-            Text = RolaI18N.Get("rorolala_file_system.empty"),
-            Classes = { "muted" },
+            Spacing = 8,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             IsHitTestVisible = false,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "\U0001F5C2",
+                    FontSize = 34,
+                    Classes = { "faint" },
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                },
+                new TextBlock
+                {
+                    Text = RolaI18N.Get("rorolala_file_system.empty"),
+                    Classes = { "muted" },
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                },
+            },
         };
 
     /// <summary>
@@ -1147,8 +1169,8 @@ internal abstract class EntryView : UserControl
 /// <summary>The entries as a table, one to a line.</summary>
 internal sealed class ListBrowser : EntryView
 {
-    /// <summary>How wide the column of icons is: enough for the word over it.</summary>
-    private const double IconColumn = 32;
+    /// <summary>How wide the column of icons is, which is the design's own measure.</summary>
+    private const double IconColumn = 22;
 
     /// <summary>
     /// How wide the grab between two columns is, and the marks it wears.
@@ -1171,10 +1193,10 @@ internal sealed class ListBrowser : EntryView
     private const double MinColumn = 56;
 
     /// <summary>How wide a column of values is before anybody drags it.</summary>
-    private const double PermissionsColumn = 96;
+    private const double PermissionsColumn = 110;
 
     /// <inheritdoc cref="PermissionsColumn" />
-    private const double ModifiedColumn = 144;
+    private const double ModifiedColumn = 150;
 
     /// <inheritdoc cref="PermissionsColumn" />
     private const double SizeColumn = 88;
@@ -1187,18 +1209,6 @@ internal sealed class ListBrowser : EntryView
     /// free and the one that keeps the table as wide as the dock.
     /// </remarks>
     private const int NameColumn = 1;
-
-    /// <summary>
-    /// How much room is left above and below each row, and below the last of them.
-    /// </summary>
-    /// <remarks>
-    /// The room is not only looks: a frame (§7.7) is begun where no entry is, so a table whose rows met edge
-    /// to edge would be a table a frame could never start in — every point would be on a row. It is left on
-    /// the **item** rather than inside it, for the reason the grid leaves it there (§7.5): an item's own area
-    /// is what answers the pointer, so room left inside it is room it still covers. It is left vertically
-    /// only, since room at the sides would carry the columns away from the headings standing over them.
-    /// </remarks>
-    private const int Gap = 4;
 
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
     private readonly Column[] _values = Values();
@@ -1222,17 +1232,24 @@ internal sealed class ListBrowser : EntryView
     {
         _widths = Widths();
 
-        // The header is not in the list, so the list's own inset would push every row's columns one way and
-        // leave the header's where they were — a table whose headings stand a few pixels off their data.
-        // Both are inset by their list item alone, which is what puts them on the same line. What is left is
-        // room below the last row for a frame to begin in.
-        List.Padding = new Thickness(0, 0, 0, Gap);
+        // The card is the surface and its edge: the list's own border and inset are taken off so that a second
+        // edge is not drawn inside the first, and so that the rows reach the card's own edge.
+        List.Padding = new Thickness(0);
+        List.BorderThickness = new Thickness(0);
 
-        // Room between the rows, on the item rather than inside it, and vertical only.
+        // Rows meet edge to edge on the card, and are told apart by the line under each of them rather than by
+        // room between them: the room was only ever there to make the two differ. The item keeps the design's
+        // row height, and its own inset is taken off so that the header and the rows share one edge.
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
-                Setters = { new Setter(Layoutable.MarginProperty, new Thickness(0, Gap, 0, Gap)) },
+                Setters =
+                {
+                    new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(0)),
+                    new Setter(Layoutable.MinHeightProperty, 30.0),
+                    new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
+                },
             }
         );
 
@@ -1243,7 +1260,18 @@ internal sealed class ListBrowser : EntryView
         panel.Children.Add(header);
         panel.Children.Add(List);
 
-        Present(panel);
+        // The listing is a card: one border, rounded, on the elevated ground, with the rows clipped to it.
+        var card = new Border
+        {
+            Child = panel,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            ClipToBounds = true,
+        };
+        card[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+        card[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
+
+        Present(card);
     }
 
     /// <summary>One column of values, after the icon and the name.</summary>
@@ -1318,11 +1346,9 @@ internal sealed class ListBrowser : EntryView
     /// The row of column names, with a grab between each pair of columns.
     /// </summary>
     /// <remarks>
-    /// Held in a list item, which is what gives it the same inset as a row of entries: what a row is inset
-    /// by is the theme's business, and a header inset by a number of this file's own would put every column
-    /// somewhere other than its data. It is not a row, though, so it is not focusable and the hover its
-    /// template draws for an item is taken off it: what answers the pointer in this strip is a grab, and a
-    /// strip that lit up wherever the pointer went would be saying otherwise.
+    /// The headings sit on the sunken ground against the top of the card, and the line under them is what the
+    /// rows are read against. Every cell is inset horizontally by the same twelve the rows are, so a column's
+    /// heading stands over its data.
     /// </remarks>
     private Control Header()
     {
@@ -1341,33 +1367,24 @@ internal sealed class ListBrowser : EntryView
         foreach (var column in _values)
         {
             cells.Add(Grab(left, left + 2));
-            cells.Add(Head(RolaI18N.Get(column.Header)));
+            cells.Add(Head(RolaI18N.Get(column.Header), column.Align));
 
             left += 2;
         }
 
         Place(_header, cells);
 
-        // The line under the headings is what the rows are read against: the room between rows is nothing
-        // to see, so without it the headings float a row's height above the data they name. It is bound
-        // rather than read here, because a control built in a constructor is not yet anywhere a theme reaches.
         var band = new Border
         {
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.theme.line"),
             Child = _header,
+            Padding = new Thickness(12, 7),
+            MinHeight = 30,
+            BorderThickness = new Thickness(0, 0, 0, 1),
         };
+        band[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.sunken");
+        band[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
 
-        var item = new ListBoxItem { Content = band, Focusable = false, MinHeight = 28 };
-
-        item.Styles.Add(
-            new Style(selector => selector.OfType<Border>().Name("SelectionBorder").Class(":pointerover"))
-            {
-                Setters = { new Setter(Border.BackgroundProperty, Brushes.Transparent) },
-            }
-        );
-
-        return item;
+        return band;
     }
 
     /// <summary>One entry as a row: its icon, its name, and what each column of values says.</summary>
@@ -1379,7 +1396,7 @@ internal sealed class ListBrowser : EntryView
         var icon = Icons.For(entry);
         icon.HorizontalAlignment = HorizontalAlignment.Left;
 
-        var cells = new List<Control?> { icon, Cell(name.Length > 0 ? name : entry.Path) };
+        var cells = new List<Control?> { icon, Named(entry, name.Length > 0 ? name : entry.Path) };
 
         foreach (var column in _values)
         {
@@ -1388,8 +1405,21 @@ internal sealed class ListBrowser : EntryView
             cells.Add(Cell(column.Value(facts), column.Align));
         }
 
-        var row = new Grid { ColumnDefinitions = Definitions() };
-        Place(row, cells);
+        var grid = new Grid { ColumnDefinitions = Definitions() };
+        Place(grid, cells);
+
+        // Every row but the last wears the line that tells it from the next; the card's own edge closes the
+        // table, so the last row would be drawing a line against nothing.
+        var last = Browser.Shown.Count > 0 &&
+            string.Equals(entry.Path, Browser.Shown[Browser.Shown.Count - 1].Path, StringComparison.Ordinal);
+
+        var row = new Border
+        {
+            Child = grid,
+            Padding = new Thickness(12, 0),
+            BorderThickness = last ? new Thickness(0) : new Thickness(0, 0, 0, 1),
+        };
+        row[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
 
         return row;
     }
@@ -1512,7 +1542,9 @@ internal sealed class ListBrowser : EntryView
 
         foreach (var (_, row) in Rows)
         {
-            if (row is Grid grid)
+            // A row is the card's cell border with the table's grid inside it, so the grid is what the widths
+            // are written to.
+            if (row is Border { Child: Grid grid })
             {
                 Into(grid);
             }
@@ -1544,33 +1576,52 @@ internal sealed class ListBrowser : EntryView
         }
     }
 
-    /// <summary>One heading's text: a cell read a size down and in the secondary ink.</summary>
+    /// <summary>One heading's text: the design's label, set by the caller in capitals.</summary>
     /// <param name="text">What the heading says.</param>
-    private static TextBlock Head(string text) => Cell(text, caption: true);
+    /// <param name="align">Where the text sits over its column.</param>
+    private static TextBlock Head(string text, TextAlignment align = TextAlignment.Left) =>
+        new()
+        {
+            Text = text.ToUpperInvariant(),
+            TextAlignment = align,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Classes = { "label" },
+        };
 
-    /// <summary>One cell's text: one line, cut off rather than wrapped.</summary>
+    /// <summary>One entry's name: a directory reads heavier, since choosing it opens where a file does not.</summary>
+    /// <remarks>
+    /// The way up is left light: it is not a directory of the listing but a step out of it, and the design
+    /// draws it as the one row that is a place rather than a thing.
+    /// </remarks>
+    /// <param name="entry">The entry the name belongs to.</param>
+    /// <param name="text">The name as it is written.</param>
+    private static TextBlock Named(Entry entry, string text) =>
+        new()
+        {
+            Text = text,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = entry.Kind == EntryKind.Directory && !Browser.IsUp(entry.Path)
+                ? FontWeight.SemiBold
+                : FontWeight.Normal,
+        };
+
+    /// <summary>One cell's value: one line, cut off rather than wrapped, in the faint metadata ink.</summary>
     /// <param name="text">What the cell says.</param>
     /// <param name="align">Where the text sits in it.</param>
-    /// <param name="caption">Whether the cell heads a column, which reads a size down and in the secondary ink.</param>
-    private static TextBlock Cell(string text, TextAlignment align = TextAlignment.Left, bool caption = false)
-    {
-        var cell = new TextBlock
+    private static TextBlock Cell(string text, TextAlignment align = TextAlignment.Left) =>
+        new()
         {
             Text = text,
             TextAlignment = align,
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
+            Classes = { "caption", "faint" },
         };
-
-        if (caption)
-        {
-            cell.Classes.Add("caption");
-            cell.Classes.Add("muted");
-        }
-
-        return cell;
-    }
 }
 
 /// <summary>The entries as tiles, wrapping across the width.</summary>
@@ -1589,25 +1640,7 @@ internal sealed class GridBrowser : EntryView
     /// the pointer: room left on what the item holds is room the item still covers, and a frame begun there
     /// would be a frame begun on the entry.
     /// </remarks>
-    private const int Gap = 8;
-
-    /// <summary>
-    /// What a tile is filled with while the pointer is over it, where the theme names no tint of its own.
-    /// </summary>
-    /// <remarks>
-    /// A grey rather than a shade of the accent: what a theme says a hover is is its own business, and this
-    /// is only what is drawn when there is no theme to say.
-    /// </remarks>
-    private static readonly IBrush Neutral = new SolidColorBrush(Color.Parse("#1F808080"));
-
-    /// <summary>
-    /// The theme's own hover tint.
-    /// </summary>
-    /// <remarks>
-    /// Named here rather than read off a control because a plugin has no other way to ask for the theme's
-    /// palette; a program wearing no theme answers with nothing and the tile falls back to grey.
-    /// </remarks>
-    private const string Tint = "rorolala.theme.tint.deeper";
+    private const int Gap = 12;
 
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
@@ -1631,27 +1664,35 @@ internal sealed class GridBrowser : EntryView
         // horizontal scroll is taken off here, which is what makes the panel wrap.
         ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
 
-        // Tiles state their own spacing, so the list's own inset becomes that spacing rather than the
-        // table's: it is the table that wants the inset's alignment with its header, not this. What is left is
-        // a band around the whole grid for a frame to begin in.
-        List.Padding = new Thickness(Gap);
+        // The tile's own card is the surface and its edge, and the panel's padding is the room around the
+        // grid: the list's own border and inset would draw a second edge and add room of their own.
+        List.Padding = new Thickness(0);
+        List.BorderThickness = new Thickness(0);
 
-        // A tile is its own target, so the list item's inset is taken off; and the room between tiles is
-        // left here, on the item, rather than on the tile it holds.
+        // Every tile is the card itself: the item carries the surface, so that a hovered or chosen tile is the
+        // theme's own wash rather than a colour this view sets under it. The room between tiles is left as half
+        // a gap on each, which is what makes one whole gap between any two of them.
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
                 Setters =
                 {
                     new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                    new Setter(Layoutable.MarginProperty, new Thickness(Gap)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(Gap / 2.0)),
                     new Setter(Layoutable.MinHeightProperty, 0.0),
+                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
+                    new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(8)),
+                    new Setter(TemplatedControl.BackgroundProperty, new DynamicResourceExtension("rorolala.bg.elevated")),
+                    new Setter(TemplatedControl.BorderBrushProperty, new DynamicResourceExtension("rorolala.border")),
                 },
             }
         );
 
         Present(List);
     }
+
+    /// <inheritdoc />
+    protected override Thickness PanelPadding => new(16);
 
     /// <summary>One entry as a tile: its icon above its name, on one line and cut off when it is too long.</summary>
     /// <remarks>
@@ -1702,7 +1743,8 @@ internal sealed class GridBrowser : EntryView
     /// <param name="entry">The entry to draw.</param>
     private Control Tile(Entry entry)
     {
-        var tile = new Border
+        // The card's surface is the item's; what is here is the content and the room around it.
+        return new Border
         {
             Padding = new Thickness(Around),
             Child = new StackPanel
@@ -1718,26 +1760,10 @@ internal sealed class GridBrowser : EntryView
                         TextAlignment = TextAlignment.Center,
                         TextWrapping = TextWrapping.NoWrap,
                         TextTrimming = TextTrimming.CharacterEllipsis,
+                        Classes = { "caption" },
                     },
                 },
             },
         };
-
-        // The whole tile answers the pointer rather than the picture or the word alone, so that the target
-        // under it is the thing that is about to be opened.
-        tile.PointerEntered += (_, _) => tile.Background = Hover(tile);
-        tile.PointerExited += (_, _) => tile.Background = null;
-
-        return tile;
     }
-
-    /// <summary>
-    /// What a tile is washed with while the pointer is over it.
-    /// </summary>
-    /// <remarks>
-    /// Asked of the theme while the pointer is over the tile rather than worked out when the tile is made,
-    /// because a control is built before it is anywhere a theme reaches.
-    /// </remarks>
-    private static IBrush Hover(Control tile) =>
-        tile.TryGetResource(Tint, null, out var found) && found is IBrush brush ? brush : Neutral;
 }

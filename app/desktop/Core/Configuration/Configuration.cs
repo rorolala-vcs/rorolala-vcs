@@ -49,20 +49,29 @@ internal sealed class ThemeConfiguration
     /// The primary used when the file names none.
     /// </summary>
     /// <remarks>
-    /// A cyan: the colour the brand and everything selected is drawn in, and the one the eye lands on
-    /// first. Primary carries the weight, so it is the darker, calmer of the two.
+    /// The lime of the design this look comes from, so that a run with no file is the look the design
+    /// was drawn in.
     /// </remarks>
-    public static readonly Color DefaultPrimary = Color.FromRgb(0x00, 0xBC, 0xD4);
+    public static readonly Color DefaultPrimary = Color.FromRgb(0xB5, 0xE6, 0x1D);
 
     /// <summary>
     /// The accent used when the file names none.
     /// </summary>
     /// <remarks>
-    /// A pink: the second colour, spent on the marks that ask for attention — a focus edge, a hairline
-    /// under the pointer, the zone a dragged dock is aimed at, the flash of a press. It is deliberately
-    /// unlike the primary so that an attention mark cannot be mistaken for a selected thing.
+    /// A sky blue, and the second colour of the design's own palette. It is spent only on the marks a
+    /// drag draws, never on a selection, so that a mark can always be told from a choice.
     /// </remarks>
-    public static readonly Color DefaultAccent = Color.FromRgb(0xFF, 0x40, 0x81);
+    public static readonly Color DefaultAccent = Color.FromRgb(0x5C, 0xC8, 0xFF);
+
+    /// <summary>
+    /// What is written on the primary when the file names none: a near-black green.
+    /// </summary>
+    /// <remarks>
+    /// The design names its own ink for its own primary rather than working one out, and a green-black
+    /// on a lime reads better than a black. A primary the user chooses has no such name, so the look
+    /// works one out by contrast when the file states none (Section 10).
+    /// </remarks>
+    public static readonly Color DefaultPrimaryText = Color.FromRgb(0x1B, 0x26, 0x00);
 
     /// <summary>The variant the program is drawn in, or nothing when the file names none.</summary>
     public ColorMode? Mode { get; set; }
@@ -70,7 +79,12 @@ internal sealed class ThemeConfiguration
     /// <summary>The colour the brand and everything selected is drawn in, or nothing.</summary>
     public Color? Primary { get; set; }
 
-    /// <summary>The colour the attention marks are drawn in, or nothing.</summary>
+    /// <summary>
+    /// What is written on a surface filled with the primary, or nothing to work it out by contrast.
+    /// </summary>
+    public Color? PrimaryText { get; set; }
+
+    /// <summary>The colour the drag marks are drawn in, or nothing.</summary>
     public Color? Accent { get; set; }
 
     /// <summary>The variant in force, which is the default when the file names none.</summary>

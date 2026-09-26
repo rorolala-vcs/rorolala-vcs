@@ -187,13 +187,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Shows what was raised as one flat card: a stripe and two lines per notification, and one way out.
+    /// Shows what was raised as one card: a title, a stripe per line, and one way out.
     /// </summary>
     /// <remarks>
     /// One card rather than a dialog per notification, because trouble is usually one thing met many times
     /// and a stack of identical dialogs is the one shape a notice must not have. It is drawn from the same
-    /// tokens as everything else — square, one-pixel edges, a stripe rather than an icon — so a failure
-    /// reads as part of the program rather than as something the toolkit put on top of it.
+    /// tokens as everything else — one border, one radius, a soft shadow, and a stripe rather than an icon
+    /// — so a failure reads as part of the program rather than as something the toolkit put on top of it.
     /// </remarks>
     /// <param name="pending">What was raised and not yet shown.</param>
     private async Task Notice(IReadOnlyList<Notice> pending)
@@ -205,69 +205,81 @@ public partial class MainWindow : Window
             lines.Children.Add(NoticeLine(notice));
         }
 
-        var dialog = new Window
-        {
-            Title = _services.I18n.Get("window.notice"),
-            Width = 560,
-            MaxHeight = 640,
-            SizeToContent = SizeToContent.Height,
-        };
-
         var dismiss = new Button
         {
             Content = _services.I18n.Get("window.dismiss"),
             Classes = { "primary" },
             HorizontalAlignment = HorizontalAlignment.Right,
         };
-        dismiss.Click += (_, _) => dialog.Close();
 
-        var footer = new Border { Padding = new Thickness(12), Child = dismiss };
+        var heading = new TextBlock
+        {
+            Text = _services.I18n.Get("window.notice"),
+            Classes = { "title" },
+            Margin = new Thickness(16, 16, 16, 8),
+        };
+
+        var foot = new Border
+        {
+            Padding = new Thickness(12, 12, 16, 16),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Child = dismiss,
+        };
+        foot[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
+
+        var body = new ScrollViewer { Content = lines };
 
         var panel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(footer, Dock.Bottom);
-        panel.Children.Add(footer);
-        panel.Children.Add(new ScrollViewer { Content = lines });
+        DockPanel.SetDock(heading, Dock.Top);
+        DockPanel.SetDock(foot, Dock.Bottom);
+        panel.Children.Add(heading);
+        panel.Children.Add(foot);
+        panel.Children.Add(body);
 
-        dialog.Content = panel;
+        var dialog = new Window
+        {
+            Title = _services.I18n.Get("window.notice"),
+            Width = 560,
+            MaxHeight = 640,
+            SizeToContent = SizeToContent.Height,
+            Content = panel,
+        };
+
+        // The dialog is a card of its own, so it takes the elevated ground the design puts a card on
+        // rather than the ground the window behind it is drawn on.
+        dialog[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+        dismiss.Click += (_, _) => dialog.Close();
 
         await dialog.ShowDialog(this);
     }
 
     /// <summary>One notification: a stripe in the colour of its level, and what it was and said.</summary>
     /// <remarks>
-    /// The stripe is left transparent for a level that is not trouble, so that the line still has room for
+    /// The stripe is left unstained for a level that is not trouble, so that the line still has room for
     /// it: a mark that appears only sometimes is a line that shifts under the eye when it does.
     /// </remarks>
     /// <param name="notice">What to draw.</param>
     private static Control NoticeLine(Notice notice)
     {
-        var stripe = new Border { Width = 2 };
+        var stripe = new Border { Width = 3 };
 
-        if (
-            notice.Level switch
-            {
-                LogLevel.Error => "rorolala.theme.severity.error",
-                LogLevel.Warn => "rorolala.theme.severity.warn",
-                _ => null,
-            }
-            is { } severity
-        )
+        if (Severity(notice.Level) is { } severity)
         {
             stripe[!Border.BackgroundProperty] = new DynamicResourceExtension(severity);
         }
 
         var text = new StackPanel
         {
-            Margin = new Thickness(12, 8, 12, 8),
-            Spacing = 4,
+            Margin = new Thickness(16, 8, 16, 8),
+            Spacing = 2,
             Children =
             {
-                new TextBlock { Text = notice.Source, Classes = { "caption", "muted" } },
+                new TextBlock { Text = notice.Source, Classes = { "label" } },
                 new TextBlock { Text = notice.Message, TextWrapping = TextWrapping.Wrap },
             },
         };
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("2,*") };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3,*") };
         Grid.SetColumn(stripe, 0);
         Grid.SetColumn(text, 1);
         grid.Children.Add(stripe);
@@ -278,8 +290,18 @@ public partial class MainWindow : Window
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = grid,
         };
-        line[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.theme.line");
+        line[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
 
         return line;
     }
+
+    /// <summary>What a level is marked with: the one red, the one amber, or nothing at all.</summary>
+    /// <param name="level">How serious it is.</param>
+    private static string? Severity(LogLevel level) =>
+        level switch
+        {
+            LogLevel.Error => "rorolala.del",
+            LogLevel.Warn => "rorolala.warn",
+            _ => null,
+        };
 }

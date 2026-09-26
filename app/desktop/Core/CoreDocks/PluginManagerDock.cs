@@ -69,7 +69,7 @@ internal sealed class PluginManagerView : UserControl
             )
         );
 
-        var panel = new StackPanel { Spacing = 12, Margin = new Thickness(12) };
+        var panel = new StackPanel { Spacing = 24, Margin = new Thickness(16, 16, 24, 60) };
 
         panel.Children.Add(
             Section(
@@ -81,6 +81,9 @@ internal sealed class PluginManagerView : UserControl
                         (row, _) => RowView(row, i18n),
                         true
                     ),
+                    // The rows are one section's items, so they stand 8 apart like every other
+                    // section's do rather than against one another.
+                    ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel { Spacing = 8 }),
                 }
             )
         );
@@ -90,6 +93,7 @@ internal sealed class PluginManagerView : UserControl
         if (problems.Length > 0)
         {
             var notes = new StackPanel { Spacing = 8 };
+            var state = i18n.Get("plugin_manager.not_loaded");
 
             for (var i = 0; i < problems.Length; i++)
             {
@@ -99,7 +103,7 @@ internal sealed class PluginManagerView : UserControl
                     notes.Children.Add(Divider());
                 }
 
-                notes.Children.Add(Note(problems[i].Subject, problems[i].Description));
+                notes.Children.Add(Note(problems[i].Subject, problems[i].Description, state));
             }
 
             panel.Children.Add(Section(i18n.Get("plugin_manager.problems"), notes));
@@ -110,7 +114,7 @@ internal sealed class PluginManagerView : UserControl
             {
                 Text = i18n.Get("plugin_manager.next_start"),
                 TextWrapping = TextWrapping.Wrap,
-                Classes = { "caption", "muted" },
+                Classes = { "caption", "faint" },
             }
         );
 
@@ -118,51 +122,100 @@ internal sealed class PluginManagerView : UserControl
     }
 
     /// <summary>A section: its heading, the rule under it, and what it holds.</summary>
-    private static Control Section(string heading, Control content) =>
-        new StackPanel
+    private static Control Section(string heading, Control content)
+    {
+        var rule = Divider();
+        rule.Margin = new Thickness(0, 0, 0, 8);
+
+        return new StackPanel
         {
-            Spacing = 8,
             Children =
             {
-                new TextBlock { Text = heading, Classes = { "section" } },
-                Divider(),
+                // The design sets a heading in capitals with `text-transform`, which Avalonia does
+                // not have, so the capitals are put on the word here instead.
+                new TextBlock
+                {
+                    Text = heading.ToUpperInvariant(),
+                    Classes = { "label" },
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                rule,
                 content,
             },
         };
+    }
 
-    /// <summary>The hairline separating a heading from what follows it, in the theme's line colour.</summary>
+    /// <summary>The hairline separating a heading from what follows it, in the theme's border colour.</summary>
     private static Border Divider() =>
         new()
         {
             BorderThickness = new Thickness(0, 0, 0, 1),
-            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.theme.line"),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
         };
 
-    /// <summary>One problem as two lines: what it is about, then what is wrong with it.</summary>
-    private static Control Note(string subject, string description) =>
-        new StackPanel
-        {
-            Spacing = 4,
-            Children =
+    /// <summary>One problem: what it is about and what is wrong, with the state it leaves at the right.</summary>
+    private static Control Note(string subject, string description, string state)
+    {
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+
+        row.Children.Add(
+            new StackPanel
             {
-                new TextBlock { Text = subject, TextWrapping = TextWrapping.Wrap },
-                new TextBlock
+                Spacing = 4,
+                Children =
                 {
-                    Text = description,
-                    TextWrapping = TextWrapping.Wrap,
-                    Classes = { "caption", "muted" },
+                    new TextBlock
+                    {
+                        Text = subject,
+                        TextWrapping = TextWrapping.Wrap,
+                        Classes = { "mono" },
+                    },
+                    new TextBlock
+                    {
+                        Text = description,
+                        TextWrapping = TextWrapping.Wrap,
+                        Classes = { "caption", "faint" },
+                    },
                 },
-            },
+            }
+        );
+
+        var tag = StateTag(state);
+        Grid.SetColumn(tag, 1);
+        row.Children.Add(tag);
+
+        return row;
+    }
+
+    /// <summary>The state a problem leaves a plugin in, as a small tag.</summary>
+    private static Control StateTag(string state)
+    {
+        var text = new TextBlock
+        {
+            Text = state,
+            Classes = { "caption" },
+            VerticalAlignment = VerticalAlignment.Center,
         };
+        text[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("rorolala.del");
+
+        return new Border
+        {
+            CornerRadius = new CornerRadius(5),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 2),
+            VerticalAlignment = VerticalAlignment.Top,
+            [!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.del.bg"),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.del"),
+            Child = text,
+        };
+    }
 
     /// <summary>One plugin's row: its name and identity, its switch, and its order.</summary>
     private static Control RowView(PluginRow row, I18nService i18n)
     {
         var identity = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         identity.Children.Add(new TextBlock { Text = row.Name });
-        identity.Children.Add(
-            new TextBlock { Text = row.Id, Classes = { "caption", "muted" } }
-        );
+        identity.Children.Add(new TextBlock { Text = row.Id, Classes = { "mono", "faint" } });
 
         var enabled = new CheckBox { IsChecked = row.Enabled };
         enabled.Bind(

@@ -94,6 +94,7 @@ internal static class ConfigurationLoader
             {
                 Mode = ThemeConfiguration.DefaultMode,
                 Primary = ThemeConfiguration.DefaultPrimary,
+                PrimaryText = ThemeConfiguration.DefaultPrimaryText,
                 Accent = ThemeConfiguration.DefaultAccent,
             };
 
@@ -201,6 +202,11 @@ internal static class ConfigurationLoader
         if (config.Primary is { } primary)
         {
             dto.Primary = Hex(primary);
+        }
+
+        if (config.PrimaryText is { } ink)
+        {
+            dto.PrimaryText = Hex(ink);
         }
 
         if (config.Accent is { } accent)
@@ -354,6 +360,11 @@ internal static class ConfigurationLoader
         if (root.TryGetProperty("primary", out var primary))
         {
             config.Primary = ParseColour(primary, "primary", path);
+        }
+
+        if (root.TryGetProperty("primaryText", out var ink))
+        {
+            config.PrimaryText = ParseColour(ink, "primaryText", path);
         }
 
         if (root.TryGetProperty("accent", out var accent))
@@ -611,6 +622,10 @@ internal static class ConfigurationLoader
         [JsonPropertyName("primary")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Primary { get; set; }
+
+        [JsonPropertyName("primaryText")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? PrimaryText { get; set; }
 
         [JsonPropertyName("accent")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
