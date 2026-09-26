@@ -219,12 +219,38 @@ public sealed class ConfigurationTests
         );
 
         var preference = ConfigurationLoader.LoadPreference();
-        var config = new PluginConfigView(preference, new PluginId("it.alpha"));
+        var config = new PluginConfigView(new SettingRegistry(preference), new PluginId("it.alpha"));
 
         Assert.Equal("tree", config.ReadKeyAs("view", "list"));
         Assert.Equal(4, config.ReadKeyAs("depth", 0));
         Assert.False(config.ReadKeyAs("flat", true));
         Assert.Equal("fallback", config.ReadKeyAs("nothing", "fallback"));
+    }
+
+    /// <summary>
+    /// A setting a plugin declared reads as its declared default until the user chooses another, and as the
+    /// choice once there is one — without the plugin repeating the default where it reads.
+    /// </summary>
+    [Fact]
+    public void ADeclaredSettingReadsAsItsDefaultUntilItIsChosen()
+    {
+        Given(ConfigPaths.Preference, """{"_version": 1, "language": "en"}""");
+
+        var preference = ConfigurationLoader.LoadPreference();
+        var settings = new SettingRegistry(preference);
+        var owner = new PluginId("it.alpha");
+
+        settings.Declare(owner, new PluginSetting("Commands/move", SettingKind.Text, "label", "mv"));
+
+        var config = new PluginConfigView(settings, owner);
+
+        Assert.Equal("mv", config.ReadKeyAs("Commands/move", "nothing"));
+        Assert.False(settings.Chosen(owner, "Commands/move"));
+
+        // Kept the way the value's own kind is written, and read back as that kind rather than as text.
+        settings.Keep(owner, settings.Of(owner)[0], "mv -v");
+        Assert.True(settings.Chosen(owner, "Commands/move"));
+        Assert.Equal("mv -v", config.ReadKeyAs("Commands/move", "nothing"));
     }
 
     /// <summary>Writes a file under the scratch configuration root.</summary>

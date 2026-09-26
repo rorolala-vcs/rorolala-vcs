@@ -26,6 +26,25 @@ namespace FileSystemPlugin;
 internal static class FileOps
 {
     /// <summary>
+    /// The plugin's own settings, where the commands that carry the operations out are said.
+    /// </summary>
+    /// <remarks>
+    /// Set once, during initialization, and read on every operation rather than kept: a command the user
+    /// changes takes effect on the next operation instead of on the next start, which is what a command is
+    /// — nothing about it survives the operation it carried out.
+    /// </remarks>
+    private static IPluginConfig? _config;
+
+    /// <summary>Hands the plugin's settings to the file operations.</summary>
+    /// <param name="config">The plugin's own section of the preferences.</param>
+    public static void Configure(IPluginConfig config) => _config = config;
+
+    /// <summary>A command the user may have changed, or what it is until they do.</summary>
+    /// <param name="id">The setting's identity, written as <c>Group/Key</c>.</param>
+    /// <param name="fallback">What it is until it is changed.</param>
+    private static string Command(string id, string fallback) =>
+        _config?.ReadKeyAs<string>(id) is { Length: > 0 } command ? command : fallback;
+    /// <summary>
     /// A path without the separator a directory's may carry at its end.
     /// </summary>
     /// <remarks>
@@ -49,7 +68,7 @@ internal static class FileOps
     /// <param name="failed">Where a failure is reported.</param>
     /// <returns>Whether anything was copied.</returns>
     public static Task<bool> Copy(IReadOnlyList<string> sources, string into, Action<string> failed) =>
-        Transfer("Copy", "cp -r", sources, into, failed);
+        Transfer("Copy", Command("Commands/copy", "cp -r"), sources, into, failed);
 
     /// <summary>Moves sources into a directory, through the agent.</summary>
     /// <param name="sources">What to move.</param>
@@ -57,7 +76,7 @@ internal static class FileOps
     /// <param name="failed">Where a failure is reported.</param>
     /// <returns>Whether anything was moved.</returns>
     public static Task<bool> Move(IReadOnlyList<string> sources, string into, Action<string> failed) =>
-        Transfer("Move", "mv", sources, into, failed);
+        Transfer("Move", Command("Commands/move", "mv"), sources, into, failed);
 
     /// <summary>
     /// Removes entries, through the agent.
@@ -78,12 +97,12 @@ internal static class FileOps
 
         if (directories.Length > 0)
         {
-            removed |= await Without("RemoveDirs", "rm -rf", directories, failed);
+            removed |= await Without("RemoveDirs", Command("Commands/remove_dirs", "rm -rf"), directories, failed);
         }
 
         if (files.Length > 0)
         {
-            removed |= await Without("RemoveFiles", "rm", files, failed);
+            removed |= await Without("RemoveFiles", Command("Commands/remove_files", "rm"), files, failed);
         }
 
         return removed;

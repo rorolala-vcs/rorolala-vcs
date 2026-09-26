@@ -58,6 +58,15 @@ public sealed class FileSystemPlugin : IRolaPlugin
     {
         host.I18n.RegisterDirectory(Translations());
 
+        // The commands the agent carries the file operations out with, and the reading of them. They are
+        // settings rather than constants because the tools that do the work are the system's rather than
+        // this program's, and a system keeps them where it keeps them.
+        FileOps.Configure(host.Config);
+        host.Config.Add(new PluginSetting("Commands/copy", SettingKind.Text, "rorolala_file_system.setting.copy", "cp -r", 10));
+        host.Config.Add(new PluginSetting("Commands/move", SettingKind.Text, "rorolala_file_system.setting.move", "mv", 20));
+        host.Config.Add(new PluginSetting("Commands/remove_dirs", SettingKind.Text, "rorolala_file_system.setting.remove_dirs", "rm -rf", 30));
+        host.Config.Add(new PluginSetting("Commands/remove_files", SettingKind.Text, "rorolala_file_system.setting.remove_files", "rm", 40));
+
         // One location for the whole plugin. Every dock it opens is a view onto it — the browser
         // docks differ in layout and in nothing else, and the navigation dock has one address and one
         // history to show — so there is one thing to make and both factories are handed it. The clipboard

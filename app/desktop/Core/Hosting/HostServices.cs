@@ -29,6 +29,13 @@ internal sealed class HostServices
     /// <summary>The user's preferences.</summary>
     public required PreferenceConfiguration Preference { get; init; }
 
+    /// <summary>What every owner declared as settable, and what each declaration is worth.</summary>
+    /// <remarks>
+    /// It is the host's rather than a plugin's: the kernel declares into it before any plugin is started, and
+    /// the preference panel reads all of it at once.
+    /// </remarks>
+    public required SettingRegistry Settings { get; init; }
+
     /// <summary>The window the shell's own commands act on.</summary>
     public required Shell Shell { get; init; }
 
@@ -93,7 +100,7 @@ internal sealed class PluginHost
         _id = id;
         _position = position;
         Log = services.Log.For(id.Value);
-        Config = new PluginConfigView(services.Preference, id);
+        Config = new PluginConfigView(services.Settings, id);
     }
 
     /// <inheritdoc />

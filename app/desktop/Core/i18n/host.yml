@@ -32,6 +32,25 @@ dock:
   log:
     en: Log
     zh-CN: 日志
+  preferences:
+    en: Preferences
+    zh-CN: 偏好设置
+
+core:
+  name:
+    en: Core
+    zh-CN: 核心
+
+setting:
+  none:
+    en: Nothing to set here.
+    zh-CN: 这里没有可设置的项。
+  default:
+    en: "Default: %{value}"
+    zh-CN: "默认：%{value}"
+  restart:
+    en: Takes effect on the next start.
+    zh-CN: 下次启动时生效。
 
 plugin_manager:
   plugins:

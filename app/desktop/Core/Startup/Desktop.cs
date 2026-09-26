@@ -82,6 +82,7 @@ internal sealed class Desktop
             I18n = i18n,
             Rola = new RolaCapability(),
             Preference = _state.Preference,
+            Settings = new SettingRegistry(_state.Preference),
             Shell = new Shell(),
             Menu = new MenuRegistry(),
             ContextMenus = new ContextMenuRegistry(),
@@ -123,6 +124,22 @@ internal sealed class Desktop
                 DockOpenMode.Toggle,
                 DockPlacement.Bottom,
                 _ => new LogDock(services.Log)
+            )
+        );
+
+        services.Docks.Register(
+            new DockRegistration(
+                Kernel,
+                "rorolala.core.preference",
+                "dock.preferences",
+                DockOpenMode.Toggle,
+                DockPlacement.Center,
+                _ =>
+                    new PreferenceDock(
+                        services.Settings,
+                        plugins,
+                        services.I18n
+                    )
             )
         );
 

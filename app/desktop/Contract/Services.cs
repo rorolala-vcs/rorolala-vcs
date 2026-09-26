@@ -47,24 +47,90 @@ public interface II18n
 }
 
 /// <summary>
-/// The section of <c>preference.json</c> belonging to one plugin.
+/// The section of <c>preference.json</c> belonging to one plugin, and what the plugin asks the host to
+/// show of it.
 /// </summary>
 /// <remarks>
-/// The host never interprets a plugin's keys; it hands the plugin the section and the plugin reads
-/// it. A key the plugin's section does not state, or that does not read as the requested type,
-/// reads as the fallback.
+/// The host never interprets a plugin's keys; it hands the plugin the section and the plugin reads it.
+/// A key the plugin's section does not state, or that does not read as the requested type, reads as the
+/// setting's own default and then as the fallback.
+/// <para>
+/// A plugin may also <em>declares what its keys are</em>, which is what lets the host show them: a
+/// setting has an identity of the form <c>Group/Key</c>, and everything a reader needs to render one
+/// without being told what it means.
+/// </para>
 /// </remarks>
 public interface IPluginConfig
 {
     /// <summary>
-    /// Reads one of the plugin's keys as a value of the requested type.
+    /// Reads one of the plugin's settings as a value of the requested type.
     /// </summary>
     /// <typeparam name="T">The type to read the value as.</typeparam>
-    /// <param name="key">The key, within the plugin's own section.</param>
-    /// <param name="fallback">What to answer when the key is not stated or does not read as a value.</param>
-    /// <returns>The value, or <paramref name="fallback"/>.</returns>
-    T? ReadKeyAs<T>(string key, T? fallback = default);
+    /// <param name="id">The setting's identity, written as <c>Group/Key</c>.</param>
+    /// <param name="fallback">What to answer when the setting is not stored and states no default.</param>
+    /// <returns>The value, the setting's default, or <paramref name="fallback"/>.</returns>
+    T? ReadKeyAs<T>(string id, T? fallback = default);
+
+    /// <summary>
+    /// Declares a setting, so that the host shows it and keeps what the user chooses.
+    /// </summary>
+    /// <remarks>
+    /// Called during initialization, with the rest of what a plugin registers. A setting declared
+    /// after the window is shown is not supported, the same as any other registration (§6.1).
+    /// </remarks>
+    /// <param name="setting">The setting to declare.</param>
+    void Add(PluginSetting setting);
 }
+
+/// <summary>What sort of value a setting holds.</summary>
+public enum SettingKind
+{
+    /// <summary>Free text.</summary>
+    Text,
+
+    /// <summary>Something that is on or off.</summary>
+    Bool,
+
+    /// <summary>A number.</summary>
+    Number,
+
+    /// <summary>One of the values the setting offers.</summary>
+    Choice,
+}
+
+/// <summary>One value a <see cref="SettingKind.Choice"/> setting offers.</summary>
+/// <param name="Value">The value, as it is kept.</param>
+/// <param name="LabelKey">An i18n key naming it.</param>
+public sealed record SettingOption(string Value, string LabelKey);
+
+/// <summary>
+/// One setting a plugin declares: what it is called, what it means, and what it is until it is changed.
+/// </summary>
+/// <remarks>
+/// A setting's identity is <c>Group/Key</c>. The part before the slash is the group it is shown under
+/// within its owner; the whole of it is what it is kept under in that owner's own section, so that the
+/// name a reader sees and the name the file holds are the same name.
+/// </remarks>
+/// <param name="Id">The identity, written as <c>Group/Key</c>.</param>
+/// <param name="Kind">What sort of value it holds.</param>
+/// <param name="LabelKey">An i18n key naming it.</param>
+/// <param name="Default">
+/// What it holds until the user chooses another, written the way it is kept: <c>true</c> or <c>false</c>
+/// for a boolean, a number written out for a number, and the text itself otherwise. Nothing means it
+/// holds nothing until it is set.
+/// </param>
+/// <param name="Order">Where it sits among the settings of its group.</param>
+/// <param name="RestartRequired">Whether it takes effect on the next start rather than at once.</param>
+/// <param name="Options">The values a <see cref="SettingKind.Choice"/> offers, and nothing otherwise.</param>
+public sealed record PluginSetting(
+    string Id,
+    SettingKind Kind,
+    string LabelKey,
+    string? Default = null,
+    int Order = 0,
+    bool RestartRequired = false,
+    IReadOnlyList<SettingOption>? Options = null
+);
 
 /// <summary>
 /// What Rorolala can do, injected over the C ABI.

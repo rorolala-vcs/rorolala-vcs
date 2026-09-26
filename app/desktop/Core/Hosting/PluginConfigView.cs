@@ -5,12 +5,16 @@ using RorolalaDesktop.Contract;
 namespace RorolalaDesktop.Hosting;
 
 /// <summary>
-/// One plugin's own section of <c>preference.json</c>, as that plugin sees it.
+/// One plugin's own settings, as that plugin sees them: what the file states, and what the plugin declared.
 /// </summary>
 /// <remarks>
-/// The host does not interpret any of it: a key is handed back as the type asked for, and a key that
-/// is not stated, or that does not read as that type, reads as the fallback. Booleans, integers,
-/// floating-point numbers, strings, lists and enums are read directly; enums are read by name.
+/// The host interprets nothing beyond the value's own kind. A setting the file does not state reads as the
+/// default the plugin declared for it, and one that is neither stated nor declared reads as the fallback the
+/// caller passed — so a plugin may read a key it never declared, which is what a hand-written file has.
+/// <para>
+/// Booleans, integers, floating-point numbers, strings, lists and enums are read directly; enums are read by
+/// name.
+/// </para>
 /// </remarks>
 internal sealed class PluginConfigView : IPluginConfig
 {
@@ -20,28 +24,55 @@ internal sealed class PluginConfigView : IPluginConfig
         PropertyNameCaseInsensitive = true,
     };
 
-    /// <summary>The plugin's section, or an empty one when it states none.</summary>
-    private readonly IReadOnlyDictionary<string, JsonElement> _section;
+    /// <summary>What every owner declared, and what each is worth.</summary>
+    private readonly SettingRegistry _settings;
 
-    /// <summary>Makes a view of one plugin's section.</summary>
-    /// <param name="preference">Everything the user's preferences state.</param>
-    /// <param name="id">The plugin whose section this is.</param>
-    public PluginConfigView(PreferenceConfiguration preference, PluginId id) =>
-        _section = preference.Plugin.TryGetValue(id, out var section)
-            ? section
-            : new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+    /// <summary>The plugin whose settings these are.</summary>
+    private readonly PluginId _id;
+
+    /// <summary>Makes a view of one plugin's settings.</summary>
+    /// <param name="settings">What every owner declared, and what each is worth.</param>
+    /// <param name="id">The plugin whose settings this is.</param>
+    public PluginConfigView(SettingRegistry settings, PluginId id)
+    {
+        _settings = settings;
+        _id = id;
+    }
 
     /// <inheritdoc />
-    public T? ReadKeyAs<T>(string key, T? fallback = default)
-    {
-        if (!_section.TryGetValue(key, out var element))
-        {
-            return fallback;
-        }
+    public T? ReadKeyAs<T>(string id, T? fallback = default) =>
+        _settings.InForce(_id, id) is { } element ? Read<T>(element, fallback) : fallback;
 
+    /// <inheritdoc />
+    public void Add(PluginSetting setting) => _settings.Declare(_id, setting);
+
+    /// <summary>
+    /// Reads one value as the requested type, or the fallback where it does not read as one.
+    /// </summary>
+    /// <remarks>
+    /// A value that is there but does not read as the requested type is treated as one that is not there.
+    /// The host never interprets a plugin's settings, so a mismatch between what a plugin declared and what
+    /// it asks for is the plugin's to make sense of, and the fallback is what its own default is.
+    /// </remarks>
+    /// <param name="element">What is stored, or the declared default.</param>
+    /// <param name="fallback">What to answer where it does not read as the requested type.</param>
+    private static T? Read<T>(JsonElement element, T? fallback)
+    {
         try
         {
-            return Read<T>(element);
+            var type = typeof(T);
+
+            if (type.IsEnum)
+            {
+                var name =
+                    element.ValueKind == JsonValueKind.String
+                        ? element.GetString()
+                        : element.GetRawText();
+
+                return (T)Enum.Parse(type, name!, ignoreCase: true);
+            }
+
+            return element.Deserialize<T>(Options);
         }
         catch (Exception error)
             when (error
@@ -52,28 +83,7 @@ internal sealed class PluginConfigView : IPluginConfig
                         or ArgumentException
             )
         {
-            // A key that is there but does not read as the requested type is treated as one that is
-            // not there. The host never interprets a plugin's keys, so a mismatch is the plugin's to
-            // make sense of, and the fallback is what its own default is.
             return fallback;
         }
-    }
-
-    /// <summary>Reads one value as the requested type.</summary>
-    private static T? Read<T>(JsonElement element)
-    {
-        var type = typeof(T);
-
-        if (type.IsEnum)
-        {
-            var name =
-                element.ValueKind == JsonValueKind.String
-                    ? element.GetString()
-                    : element.GetRawText();
-
-            return (T)Enum.Parse(type, name!, ignoreCase: true);
-        }
-
-        return element.Deserialize<T>(Options);
     }
 }

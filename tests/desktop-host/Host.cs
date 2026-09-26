@@ -26,6 +26,7 @@ internal static class Host
         var i18n = new I18nService();
         var log = new LogService(notifications);
         var popups = new PopupService(notifications);
+        var preference = new PreferenceConfiguration();
 
         return new HostServices
         {
@@ -33,7 +34,8 @@ internal static class Host
             Popups = popups,
             I18n = i18n,
             Rola = new RolaCapability(),
-            Preference = new PreferenceConfiguration(),
+            Preference = preference,
+            Settings = new SettingRegistry(preference),
             Shell = new Shell(),
             Menu = new MenuRegistry(),
             ContextMenus = new ContextMenuRegistry(),

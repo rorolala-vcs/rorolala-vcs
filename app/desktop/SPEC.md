@@ -286,7 +286,7 @@ writes a default file. A missing file is not a validation failure; an unreadable
   "_version": 1,
   "language": "zh-CN",
   "plugin": {
-    "rorolala.file_system": { "view": "tree" }
+    "rorolala.file_system": { "Commands/move": "mv -v" }
   }
 }
 ```
@@ -295,13 +295,16 @@ writes a default file. A missing file is not a validation failure; an unreadable
 | --- | --- | --- | --- |
 | `_version` | integer | yes | Schema version. Fixed at `1`. |
 | `language` | string | no | Fallback locale, used only when `rola desktop` passes no `-Lang:`. |
-| `plugin` | object | no | Per-plugin configuration, keyed by `PluginId`. The host does not interpret the contents. |
+| `plugin` | object | no | Per-plugin settings, keyed by `PluginId` and then by setting identity. The host interprets nothing beyond the value's own kind. |
 
 If the file does not exist, the host uses the defaults above and writes it. A missing file is not a
 validation failure; an unreadable or invalid one is.
 
-A plugin reads its own section through `IPluginConfig.ReadKeyAs<T>(key)` (Section 16). The host
-never interprets plugin keys.
+A plugin reads its own section through `IPluginConfig.ReadKeyAs<T>(id)` (Section 16), where `id` is written
+`Group/Key`: the whole of it is the key in the file, and the part before the slash is the group it is shown
+under. A plugin also **declares** what its settings are through `IPluginConfig.Add`, which is what the
+Preference dock shows (Section 7.4); a key that was never declared is still read from the file, so a section
+written by hand still works. The program writes this file when the user changes a setting.
 
 ### 5.4 theme.json
 
@@ -379,6 +382,7 @@ are:
 | 4 | Docks | `IPluginHost.Docks` |
 | 5 | Open hooks and icon badges | `IPluginHost.OpenHooks`, `IPluginHost.IconBadges` |
 | 6 | Top menu | `IPluginHost.Menu` |
+| 7 | Settings | `IPluginHost.Config` |
 
 Registration happens during `Initialize`. A plugin registered after the window is shown is not
 supported.
@@ -478,8 +482,9 @@ A dock is registered with a `DockRegistration`:
 | --- | --- | --- | --- |
 | Plugin Manager | `rorolala.core.plugin_manager` | Toggle | Kernel. Cannot be disabled. Enabled/disabled state and ordering of plugins are edited here. |
 | Log | `rorolala.core.log` | Toggle | Kernel. Unity-style output at levels Trace, Debug, Info, Warn, Error (Section 12). |
+| Preference | `rorolala.core.preference` | Toggle | Kernel. Every setting the owners declared, chosen by owner on the left and grouped as each owner grouped it on the right. Editing writes `preference.json` at once; a setting that needs a restart says so. |
 
-Both are always available from `Window`.
+All three are always available from `Window`.
 
 ### 7.5 Bundled plugin docks
 
@@ -618,7 +623,10 @@ rola-desktop-fs-agent -Command:"<program and its arguments>" -Type:"Copy|Move|Re
 
 - `-Command` is the program and its fixed arguments that carry the operation out; the parameters are
   named rather than run through a shell, so a path with a space in it survives. The command is the
-  operation's implementation, which is what lets the same agent serve copy, move and removal.
+  operation's implementation, which is what lets the same agent serve copy, move and removal. The File
+  System's own commands are its settings (`Commands/copy`, `Commands/move`, `Commands/remove_dirs`,
+  `Commands/remove_files`), so a system that keeps its tools elsewhere, or a user who prefers another,
+  says so in the Preference dock (§7.4) rather than in a build.
 - `-Pairs` is a batch, so that a question about a name is put once for a batch and its answer can stand
   for the rest; `-From`/`-To` is the single-item shorthand. An item goes over on its own where a path
   carries a batch separator, so that a path can never be read as two things.
@@ -895,7 +903,7 @@ They are reported in the Log dock and, where the user must act, in a popup.
   "_version": 1,
   "language": "zh-CN",                 // fallback only
   "plugin": {
-    "<PluginId>": { "<key>": "<value>" }
+    "<PluginId>": { "<Group>/<Key>": "<value>" }
   }
 }
 ```
@@ -960,8 +968,22 @@ public interface II18n
 
 public interface IPluginConfig
 {
-    T? ReadKeyAs<T>(string key, T? fallback = default);
+    T? ReadKeyAs<T>(string id, T? fallback = default);
+    void Add(PluginSetting setting);
 }
+
+public enum SettingKind { Text, Bool, Number, Choice }
+
+public sealed record SettingOption(string Value, string LabelKey);
+
+public sealed record PluginSetting(
+    string Id,                 // "Group/Key"
+    SettingKind Kind,
+    string LabelKey,
+    string? Default = null,
+    int Order = 0,
+    bool RestartRequired = false,
+    IReadOnlyList<SettingOption>? Options = null);
 
 public interface IRola { /* Section 13 */ }
 

@@ -66,6 +66,23 @@ rorolala_file_system:
   paste:
     en: Paste
     zh-CN: 粘贴
+
+  # What the file operations are carried out with. The commands are the system's tools rather than this
+  # program's, which is why they are settings: a system that keeps them elsewhere, or a user who prefers
+  # another, says so here.
+  setting:
+    copy:
+      en: Copy command
+      zh-CN: 复制命令
+    move:
+      en: Move command
+      zh-CN: 移动命令
+    remove_dirs:
+      en: Remove directory command
+      zh-CN: 删除目录命令
+    remove_files:
+      en: Remove file command
+      zh-CN: 删除文件命令
   refresh:
     en: Refresh
     zh-CN: 刷新
