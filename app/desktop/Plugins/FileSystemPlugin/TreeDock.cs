@@ -104,6 +104,18 @@ internal sealed class TreeControl : UserControl
         // keyboard is, rather than only where a row was clicked.
         AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
 
+        // A dock is a place the keyboard can be put, which is how the shell hands it to the tree being read: what
+        // this dock answers is answered at the top of itself, so the shell putting the keyboard here is what makes
+        // the keys work after this dock is chosen (Section 7.6).
+        Focusable = true;
+        GotFocus += (_, e) =>
+        {
+            if (ReferenceEquals(e.Source, this))
+            {
+                Seated();
+            }
+        };
+
         _root.Content = RolaI18N.Get("rorolala_file_system.root");
         _root.Padding = new Thickness(7, 2);
         _root.Click += (_, _) => _browser.SetBase(Browser.Root());
@@ -194,12 +206,22 @@ internal sealed class TreeControl : UserControl
 
         if (seating)
         {
-            // Deferred, because the tree it goes into has just been made and is not laid out yet.
-            Dispatcher.UIThread.Post(() => (_content.Content as TreeBrowser)?.Listen());
+            Seated();
         }
 
         _drawn = _browser.BaseDir;
     }
+
+    /// <summary>
+    /// Takes the keyboard into the tree, which is where this dock's keys are answered from.
+    /// </summary>
+    /// <remarks>
+    /// Deferred to the next turn of the loop, because the tree it goes into has just been made and is not laid out
+    /// yet — a keyboard asked of a control that is not arranged yet is a keyboard it forgets (Section 7.7). Not the
+    /// tree itself but the row that is chosen, when there is one: what a keyboard on the tree reaches is that row.
+    /// </remarks>
+    private void Seated() =>
+        Dispatcher.UIThread.Post(() => (_content.Content as TreeBrowser)?.Listen());
 }
 
 /// <summary>The directories under one directory, as a tree opened downward.</summary>

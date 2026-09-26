@@ -843,6 +843,11 @@ internal sealed class DockArea : UserControl
     {
         RegionFor(instance.Placement).Selected = instance;
         Show();
+
+        // Choosing a dock gives it the keyboard: the keyboard was on the tab that was clicked, and that tab belongs
+        // to this strip rather than to the dock — while a dock answers its own keys inside itself, so choosing one
+        // and then typing would otherwise say nothing at all (Section 7.6).
+        instance.View.View.Focus();
     }
 
     /// <summary>

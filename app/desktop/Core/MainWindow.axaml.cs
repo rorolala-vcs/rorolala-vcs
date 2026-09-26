@@ -139,7 +139,16 @@ public partial class MainWindow : Window
             }
 
             var dock = registration;
-            entry.Click += (_, _) => _services.Docks.Activate(dock);
+            entry.Click += (_, _) =>
+            {
+                // The dock opened is given the keyboard, for the reason choosing one is: a dock answers its own
+                // keys inside itself, and what was just asked for from this menu is what a user is about to use
+                // (Section 7.6).
+                if (_services.Docks.Activate(dock) is { } opened)
+                {
+                    opened.View.View.Focus();
+                }
+            };
 
             _docks.Add((registration, entry));
             menu.Items.Add(entry);

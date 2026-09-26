@@ -197,6 +197,19 @@ internal sealed class DirectoryControl : UserControl
         _trailing.Children.Add(_hidden);
         _trailing.Children.Add(_sync);
 
+        // A dock is a place the keyboard can be put, which is how the shell hands it to the thing being read: what
+        // this dock answers is answered at the top of itself, so the shell putting the keyboard here is what makes
+        // the keys work after this dock is chosen — the keyboard was on the tab that was clicked, and that tab
+        // belongs to the shell's strip rather than to the dock (Section 7.6).
+        Focusable = true;
+        GotFocus += (_, e) =>
+        {
+            if (ReferenceEquals(e.Source, this))
+            {
+                Seated();
+            }
+        };
+
         // The toolbar is the dock's own rather than a dock beside it: the arrows and the address act on the
         // location being read, and they belong over the entries they act on (Section 7.5). What the dock keeps
         // beside them is handed in, so that the toolbar does not have to know what a dock remembers.
