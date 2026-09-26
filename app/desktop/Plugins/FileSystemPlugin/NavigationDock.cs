@@ -81,6 +81,21 @@ internal sealed class NavigationControl : UserControl
         VerticalAlignment = VerticalAlignment.Center,
     };
 
+    /// <summary>
+    /// What the crumbs are read through, so that a path longer than the bar keeps its end on screen.
+    /// </summary>
+    /// <remarks>
+    /// A path is read from its end, which is where the browser is and where the address is opened from: the
+    /// beginning is what is worth losing when there is not room for both, and it is scrolled out rather than
+    /// cut off.
+    /// </remarks>
+    private readonly ScrollViewer _breadth = new()
+    {
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
     /// <summary>The path being typed, shown in place of the crumbs while there is one.</summary>
     private readonly TextBox _address = new() { IsVisible = false };
 
@@ -115,15 +130,16 @@ internal sealed class NavigationControl : UserControl
 
         FillAddress();
 
-        // Clicking the crumbs, or anywhere along the address, is what starts an edit: the whole band is the
-        // field's target, because a path is one thing rather than a row of words.
+        // Clicking a crumb is what starts an edit, or goes where the crumb names; nothing else about the
+        // address answers the pointer, so the path is read rather than edited by accident.
+        _breadth.Content = _crumbs;
+
         var area = new Panel
         {
             Background = Brushes.Transparent,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { _crumbs, _address, _drop },
+            Children = { _breadth, _address, _drop },
         };
-        area.PointerPressed += (_, _) => Edit();
 
         var mark = new Border
         {
@@ -160,10 +176,6 @@ internal sealed class NavigationControl : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Children = { _back, _forward, _up, _refresh },
         };
-
-        // The crumbs are clipped rather than wrapped: a path longer than the band is cut off at the end
-        // rather than pushing the tools off the bar.
-        _crumbs.ClipToBounds = true;
 
         var bar = new Grid
         {
@@ -351,19 +363,37 @@ internal sealed class NavigationControl : UserControl
     /// Writes the address out as crumbs, the last of them the place being looked at.
     /// </summary>
     /// <remarks>
-    /// The address is split on the platform's own separators but always shown with <c>/</c>, since a crumb
-    /// is a step of the path rather than the character the system happens to write it with.
+    /// The crumbs are the path walked down from the top, which is asked of the platform rather than cut out of
+    /// the address text: a path is not a string to be split, and a drive, a root and a step are not the same
+    /// shape on every system.
+    /// <para>
+    /// A crumb before the last goes to the directory it names. The last — the one being looked at, which is set
+    /// heavier so that where we are is where the eye lands — opens the address for editing instead: a click on
+    /// the place you are already in can only mean that what you want is to write somewhere else.
+    /// </para>
     /// </remarks>
     private void ShowCrumbs()
     {
         _crumbs.Children.Clear();
 
-        var parts = Address(_browser.Current).Split(
-            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-            StringSplitOptions.RemoveEmptyEntries
-        );
+        var chain = new List<string>();
 
-        for (var at = 0; at < parts.Length; at++)
+        for (var path = _browser.Current; path.Length > 0; path = Path.GetDirectoryName(path) ?? string.Empty)
+        {
+            chain.Add(path);
+        }
+
+        chain.Reverse();
+
+        // The computer is a place with no path at all, so it is one crumb and its whole name.
+        if (chain.Count == 0)
+        {
+            _crumbs.Children.Add(Crumb(Address(_browser.Current), _browser.Current, current: true));
+
+            return;
+        }
+
+        for (var at = 0; at < chain.Count; at++)
         {
             if (at > 0)
             {
@@ -377,24 +407,71 @@ internal sealed class NavigationControl : UserControl
                 );
             }
 
-            var current = at == parts.Length - 1;
-            var crumb = new TextBlock
-            {
-                Text = parts[at],
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+            var name = Path.GetFileName(chain[at]);
 
+            // A root is a directory with nothing for a name: it is shown as the step it is, which is the
+            // separator on Unix and the drive on Windows.
+            if (name.Length == 0)
+            {
+                name = chain[at].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                name = name.Length > 0 ? name : "/";
+            }
+
+            _crumbs.Children.Add(Crumb(name, chain[at], at == chain.Count - 1));
+        }
+
+        // Scrolled to its end once it has been laid out, since how much of it there is to scroll is not known
+        // until then: the last crumb is the one being looked at and the one the address is opened from.
+        Dispatcher.UIThread.Post(() =>
+            _breadth.Offset = new Vector(
+                Math.Max(0, _breadth.Extent.Width - _breadth.Viewport.Width),
+                0
+            )
+        );
+    }
+
+    /// <summary>
+    /// One step of the address: a word that goes where it names, or opens the address when it is where we are.
+    /// </summary>
+    /// <remarks>
+    /// A button rather than a line of text, because a step is a target: it is what is pressed, and it wears the
+    /// design's own quiet button — nothing of it until the pointer is on it.
+    /// </remarks>
+    /// <param name="name">What the step is called.</param>
+    /// <param name="path">The directory it names.</param>
+    /// <param name="current">Whether it is the directory being looked at.</param>
+    private Button Crumb(string name, string path, bool current)
+    {
+        var crumb = new Button
+        {
+            Content = name,
+            Classes = { "ghost" },
+            Padding = new Thickness(6, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        if (current)
+        {
+            crumb.FontWeight = FontWeight.Bold;
+        }
+        else
+        {
+            crumb[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension("rorolala.fg.muted");
+        }
+
+        crumb.Click += (_, _) =>
+        {
             if (current)
             {
-                crumb.FontWeight = FontWeight.SemiBold;
+                Edit();
             }
             else
             {
-                crumb.Classes.Add("muted");
+                _browser.Go(path);
             }
+        };
 
-            _crumbs.Children.Add(crumb);
-        }
+        return crumb;
     }
 
     /// <summary>
