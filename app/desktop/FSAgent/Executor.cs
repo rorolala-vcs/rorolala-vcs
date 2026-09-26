@@ -115,6 +115,19 @@ internal static class Executor
             return Result.Skipped(item.From);
         }
 
+        // Replacing what is being copied is removing the source: the target of an in-place copy is the very
+        // entry being copied, so a replace would take it away and leave nothing to copy. The window does not
+        // offer it for such an item, but "the same for the rest" can carry one answer onto every remaining
+        // conflict, which is why it is refused here as well.
+        if (item.OntoItself && item.Resolution == Resolution.Replace)
+        {
+            return Result.Failed(
+                item.From,
+                item.To,
+                "replacing what is being copied would remove the source"
+            );
+        }
+
         var target = item.To;
 
         try

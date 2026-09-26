@@ -41,6 +41,16 @@ internal sealed class Item
     /// <summary>Whether the target already exists and has to be answered for.</summary>
     public bool Conflict { get; set; }
 
+    /// <summary>
+    /// Whether the target is the source itself.
+    /// </summary>
+    /// <remarks>
+    /// What an in-place copy is: copying an entry into the directory it already sits in means putting a second
+    /// of it beside the first, so the name it would take is taken — by itself. Replacing is no answer to that,
+    /// since the target is the very thing being copied: a replace would take it away and leave nothing to copy.
+    /// </remarks>
+    public bool OntoItself { get; set; }
+
     /// <summary>What has been decided for the item.</summary>
     public Resolution Resolution { get; set; } = Resolution.Undecided;
 }
@@ -69,6 +79,7 @@ internal sealed class Plan
     public static Plan Build(ParsedCommand parsed)
     {
         var items = new List<Item>(parsed.Pairs.Count);
+        var copying = parsed.Operation is Operation.Copy;
 
         foreach (var pair in parsed.Pairs)
         {
@@ -87,7 +98,7 @@ internal sealed class Plan
             }
             else
             {
-                PlanTransfer(item, pair);
+                PlanTransfer(item, pair, copying);
             }
 
             items.Add(item);
@@ -97,7 +108,10 @@ internal sealed class Plan
     }
 
     /// <summary>Works out one transfer's target, or why it cannot be made.</summary>
-    private static void PlanTransfer(Item item, Pair pair)
+    /// <param name="item">The item to plan.</param>
+    /// <param name="pair">The source and the directory it goes into.</param>
+    /// <param name="copying">Whether this run copies rather than moves.</param>
+    private static void PlanTransfer(Item item, Pair pair, bool copying)
     {
         if (!Pathing.Exists(pair.From))
         {
@@ -129,6 +143,24 @@ internal sealed class Plan
 
         var target = Path.Combine(pair.To, name);
 
+        if (Pathing.Same(pair.From, target))
+        {
+            // An in-place copy wants a second of the same name beside the first, so the name it would take is
+            // taken — by itself. That is a conflict to answer rather than a transfer to refuse: the answer of
+            // putting a second one beside it is exactly what a copy in place means. A move onto itself is
+            // another matter and stays refused: there is nowhere to move it to.
+            if (!copying)
+            {
+                item.Problem = "the source and the target are the same path";
+                return;
+            }
+
+            item.To = target;
+            item.Conflict = true;
+            item.OntoItself = true;
+            return;
+        }
+
         string why;
 
         try
@@ -159,11 +191,6 @@ internal sealed class Plan
     /// <summary>The reason a transfer is illegal, or empty when it is not.</summary>
     private static string Reject(string from, string target)
     {
-        if (Pathing.Same(from, target))
-        {
-            return "the source and the target are the same path";
-        }
-
         // A directory copied or moved into its own subtree is never a copy — the destination is
         // being written from inside itself — so it is refused before anything is touched.
         if (Directory.Exists(from) && Pathing.Inside(target, from))

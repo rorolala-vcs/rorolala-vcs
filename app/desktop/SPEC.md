@@ -731,6 +731,12 @@ rola-desktop-fs-agent -Command:"<program and its arguments>" -Type:"Copy|Move|Re
   remaining N" to answer every remaining conflict the same way. Closing the window calls the whole run
   off. **A conflict that was never answered is never run**: the command would land on something already
   there, so an unanswered conflict is reported as a failure rather than resolved by a default.
+- **A copy into the directory it came from.** The name such a copy would take is taken — by the entry
+  itself — which makes it a **conflict and not a refusal**: a second of it beside it under a new name is
+  what a copy in place means. **Replace is not offered** for one, and is refused if an "apply to the
+  remaining" answer carries it there: the target is the very entry being copied, so replacing would take
+  it away and leave nothing to copy. A **move** onto itself has nothing to move it to and stays refused
+  (§7.7).
 - **The answer.** One JSON line is the last thing on standard output — nothing else is written there —
   naming what became of every item, in the order they were given: `done`, `skipped` or `failed`, how it
   was resolved (`as-is`, `replaced`, `renamed`, `skipped`, `failed`), and the reason when it failed.

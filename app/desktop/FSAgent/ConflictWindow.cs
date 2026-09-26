@@ -28,7 +28,7 @@ internal enum ConflictAction
 }
 
 /// <summary>
-/// The one window a run may show: one conflict, its four answers and the "apply to the rest" box.
+/// The one window a run may show: one conflict, the answers that one has, and the "apply to the rest" box.
 /// </summary>
 /// <remarks>
 /// The answer is handed back as a task rather than through an event, so the flow that shows the
@@ -60,7 +60,9 @@ internal sealed class ConflictWindow : Window
 
         var message = new TextBlock
         {
-            Text = RolaI18N.Get(Key("message"), item.From, item.To),
+            Text = item.OntoItself
+                ? RolaI18N.Get(Key("itself"), Path.GetFileName(item.From))
+                : RolaI18N.Get(Key("message"), item.From, item.To),
             TextWrapping = TextWrapping.Wrap,
             Classes = { "muted" },
         };
@@ -78,14 +80,19 @@ internal sealed class ConflictWindow : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
-            Children =
-            {
-                Action(Key("replace"), ConflictAction.Replace, apply, isDefault: true),
-                Action(Key("skip"), ConflictAction.Skip, apply),
-                Action(Key("rename"), ConflictAction.Rename, apply),
-                Action(Key("cancel"), ConflictAction.Cancel, apply, isCancel: true),
-            },
         };
+
+        // Replacing is no answer to an item that is being copied onto itself — the target is the source, so a
+        // replace would take it away and leave nothing to copy — so it is not offered for one, and the answer
+        // that is wanted is what stands out instead: a second of it, beside it, under a new name.
+        if (!item.OntoItself)
+        {
+            buttons.Children.Add(Action(Key("replace"), ConflictAction.Replace, apply, isDefault: true));
+        }
+
+        buttons.Children.Add(Action(Key("skip"), ConflictAction.Skip, apply));
+        buttons.Children.Add(Action(Key("rename"), ConflictAction.Rename, apply, isDefault: item.OntoItself));
+        buttons.Children.Add(Action(Key("cancel"), ConflictAction.Cancel, apply, isCancel: true));
 
         Content = new StackPanel
         {
