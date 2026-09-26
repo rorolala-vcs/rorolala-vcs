@@ -554,7 +554,9 @@ There is therefore exactly one way the location changes, and five things that as
 3. A directory **opened in a list**.
 4. A directory **opened in a grid**.
 5. **`..`**, the entry a listing puts before its entries, which goes to the directory holding the one
-   being looked at. A listing has it only when there is one further up.
+   being looked at. A listing has it only when there is one further up **and** the directory being looked
+   at is not the base (Section 7.6): the base is the place a user works in, and a listing that offered a
+   step out of it would offer a step out of the work. The other four ways still reach above the base.
 
 All five go through the same call, which refuses anything that is not a directory rather than leaving
 the browser somewhere that cannot be read. The address is the one a user can get wrong, so it is the
@@ -599,11 +601,13 @@ the window and the docks and knows nothing of entries.
   entry that was cut is drawn faded until the paste, and that paste **moves** it, while anything else
   is copied. A name already taken in the destination is left where it is and a free name is made
   beside it (`name (2)`), so a paste never overwrites.
-- **Dragging to move.** Dragging chosen entries onto a directory moves them into it, and a drag can
-  leave the program or arrive from another one: the toolkit's drag is used, and Avalonia 12's X11 backend
-  carries XDND. The files are offered themselves as well as their paths written out, so a file manager
-  receives files and a text field text. A move out to another program is finished by taking the originals
-  away, while a move the program answers itself has already moved them (§19.6).
+- **Dragging to move.** Dragging chosen entries onto a directory moves them into it — and onto the
+  listing's **way up**, which moves them into the directory holding the one being looked at, since that is
+  the place the entry stands for. A drag can leave the program or arrive from another one: the toolkit's
+  drag is used, and Avalonia 12's X11 backend carries XDND. The files are offered themselves as well as
+  their paths written out, so a file manager receives files and a text field text. A move out to another
+  program is finished by taking the originals away, while a move the program answers itself has already
+  moved them (§19.6).
 
 ### 7.8 The file agent
 

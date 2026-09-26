@@ -844,9 +844,7 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The drag.</param>
     private void DraggedOver(object? sender, DragEventArgs e)
     {
-        var into = Landing(e);
-
-        if (into is null)
+        if (Landing(e) is not { } land)
         {
             e.DragEffects = DragDropEffects.None;
             Mark(null);
@@ -855,7 +853,7 @@ internal abstract class EntryView : UserControl
         }
 
         e.DragEffects = Copying(e) ? DragDropEffects.Copy : DragDropEffects.Move;
-        Mark(into);
+        Mark(land.Row);
         e.Handled = true;
     }
 
@@ -877,10 +875,12 @@ internal abstract class EntryView : UserControl
     {
         Mark(null);
 
-        if (Landing(e) is not { } into)
+        if (Landing(e) is not { } land)
         {
             return;
         }
+
+        var into = land.Into;
 
         // Told before the work is waited for: what the platform is owed an answer to cannot wait for a question
         // the agent may have to put to a person.
@@ -923,14 +923,16 @@ internal abstract class EntryView : UserControl
     private void Later() => Dispatcher.UIThread.Post(Browser.Refresh);
 
     /// <summary>
-    /// The directory a drag would land in, or nothing where it may not land here at all.
+    /// <summary>Where a drag would land, or nothing where it may not land here at all.</summary>
     /// </summary>
     /// <remarks>
-    /// A directory entry is a place to let go into; a file, the way up and the computer are not; and the space
-    /// around the entries is the directory being looked at. A drag carrying no file is not it.
+    /// A directory entry is a place to let go into, and so is the way up — which is not a directory of its own
+    /// but the one holding the listing, so what it lands in is asked of the browser. A file and the computer
+    /// are not, and neither is a drag carrying no file. The space around the entries is the directory being
+    /// looked at.
     /// </remarks>
     /// <param name="e">The drag.</param>
-    private string? Landing(DragEventArgs e)
+    private Land? Landing(DragEventArgs e)
     {
         if (!e.DataTransfer.Contains(DataFormat.File))
         {
@@ -945,16 +947,24 @@ internal abstract class EntryView : UserControl
             {
                 var entry = Browser.Shown[index];
 
-                return entry.Kind == EntryKind.Directory &&
-                    !Browser.IsUp(entry.Path) &&
-                    !Browser.IsComputer(entry.Path)
-                    ? entry.Path
+                if (Browser.IsUp(entry.Path))
+                {
+                    return Browser.Parent is { Length: > 0 } up ? new Land(up, entry.Path) : null;
+                }
+
+                return entry.Kind == EntryKind.Directory && !Browser.IsComputer(entry.Path)
+                    ? new Land(entry.Path, entry.Path)
                     : null;
             }
         }
 
-        return Browser.IsComputer(Browser.Current) ? null : Browser.Current;
+        return Browser.IsComputer(Browser.Current) ? null : new Land(Browser.Current, string.Empty);
     }
+
+    /// <summary>Where a drag lands: the directory it goes into, and the row that stands for it.</summary>
+    /// <param name="Into">The directory the dragged entries go into.</param>
+    /// <param name="Row">The path of the row to light, or nothing where no row stands for the place.</param>
+    private readonly record struct Land(string Into, string Row);
 
     /// <summary>Whether the drag is one to copy rather than to move, which is what holding a control asks for.</summary>
     /// <param name="e">The drag.</param>

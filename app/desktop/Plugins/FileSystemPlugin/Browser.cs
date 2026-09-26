@@ -197,6 +197,11 @@ internal sealed class Browser
 
         BaseDir = _current;
 
+        // Setting the base moves it, so what the listing offers changes with it: a directory that had a step
+        // out of it a moment ago has none now, and one that had none has one. The entries are staged again for
+        // that reason rather than only the tree being redrawn.
+        _shown = Stage(_current, _entries);
+
         // Where the browser is looking did not change, but what the tree is rooted at did, so what
         // draws the tree has to be told.
         Changed?.Invoke();
@@ -262,11 +267,19 @@ internal sealed class Browser
         Changed?.Invoke();
     }
 
-    /// <summary>Puts the way up before a directory's entries, when there is somewhere further up.</summary>
+    /// <summary>
+    /// Puts the way up before a directory's entries, when there is somewhere further up.
+    /// </summary>
+    /// <remarks>
+    /// There is nowhere further up at the base as well as at the top of the platform: the base is the place
+    /// a user works in, and a listing that offered a step out of it would offer a step out of the work — which
+    /// is what the base is for preventing. Going above it is still possible by the other ways the location
+    /// changes; what the listing does not do is make one of them.
+    /// </remarks>
     /// <param name="directory">The directory the entries were read from.</param>
     /// <param name="entries">What it holds.</param>
-    private static IReadOnlyList<Entry> Stage(string directory, IReadOnlyList<Entry> entries) =>
-        ParentOf(directory) is null
+    private IReadOnlyList<Entry> Stage(string directory, IReadOnlyList<Entry> entries) =>
+        ParentOf(directory) is null || Same(directory, BaseDir)
             ? entries
             : [new Entry(UpName, EntryKind.Directory), .. entries];
 
