@@ -16,7 +16,7 @@ internal sealed class DesktopState
     /// <summary>The user's preferences.</summary>
     public required PreferenceConfiguration Preference { get; init; }
 
-    /// <summary>The two things the user chooses about how the program looks.</summary>
+    /// <summary>The three things the user chooses about how the program looks.</summary>
     public required ThemeConfiguration Theme { get; init; }
 
     /// <summary>The plugins, discovered and ordered.</summary>

@@ -160,6 +160,10 @@ internal abstract class EntryView : UserControl
         List.AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
         List.AddHandler(TextInputEvent, Typed, RoutingStrategies.Tunnel);
 
+        // The wheel is taken over for the same reason the keys above are: the toolkit's own scrolling moves
+        // in whole steps, and a directory read a row at a time at a stretch is what this glide is for.
+        _ = new SmoothScroll(List);
+
         List.DoubleTapped += Opened;
         List.PointerCaptureLost += Lost;
 

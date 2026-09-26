@@ -17,7 +17,7 @@ internal static class ConfigPaths
     /// <summary>The file name the user's preferences are kept in.</summary>
     private const string PreferenceFile = "preference.json";
 
-    /// <summary>The file name the look's two settings are kept in.</summary>
+    /// <summary>The file name the look's three settings are kept in.</summary>
     private const string ThemeFile = "theme.json";
 
     /// <summary>The file name the dock layout is kept in.</summary>
@@ -32,7 +32,7 @@ internal static class ConfigPaths
     /// <summary>Where the user's preferences are kept.</summary>
     public static string Preference => Path.Combine(Root, PreferenceFile);
 
-    /// <summary>Where the look's two settings are kept.</summary>
+    /// <summary>Where the look's three settings are kept.</summary>
     public static string Theme => Path.Combine(Root, ThemeFile);
 
     /// <summary>Where the dock layout is kept.</summary>

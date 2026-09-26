@@ -5,20 +5,24 @@ using Avalonia.Styling;
 namespace RorolalaFSAgent;
 
 /// <summary>
-/// The two look settings this program reads: the variant it is drawn in and its accent.
+/// The two look settings this program reads: the variant it is drawn in and the Desktop's primary.
 /// </summary>
 /// <remarks>
 /// Read from the file the Desktop keeps them in, so that a window opened by the agent looks like the
 /// Desktop that opened it. Only these two things are read, and a file that is missing, unreadable or
 /// says something else is not an error: a conflict still has to be answered with whatever look is
 /// available, so the defaults are used instead.
+/// <para>
+/// It is the primary rather than the accent: a dialog's one filled surface is its default action, which
+/// is a thing to press, and the Desktop fills a thing to press with the primary (Section 10).
+/// </para>
 /// </remarks>
 /// <param name="Variant">The variant to draw in.</param>
-/// <param name="Accent">The colour anything accented is drawn in.</param>
-internal sealed record ThemeChoice(ThemeVariant Variant, Color Accent)
+/// <param name="Primary">The colour the dialog's one filled surface is drawn in.</param>
+internal sealed record ThemeChoice(ThemeVariant Variant, Color Primary)
 {
-    /// <summary>The accent used when the file names none: the lemon the Desktop was drawn in.</summary>
-    private static readonly Color DefaultAccent = Color.FromRgb(0xBF, 0xFF, 0x00);
+    /// <summary>The primary used when the file names none: the Desktop's own default.</summary>
+    private static readonly Color DefaultPrimary = Color.FromRgb(0x00, 0xBC, 0xD4);
 
     /// <summary>Reads the look from the Desktop's data directory, defaulting where it cannot.</summary>
     public static ThemeChoice Load()
@@ -51,12 +55,12 @@ internal sealed record ThemeChoice(ThemeVariant Variant, Color Accent)
             }
 
             if (
-                root.TryGetProperty("accent", out var accent)
-                && accent.ValueKind == JsonValueKind.String
-                && ParseAccent(accent.GetString()!, out var colour)
+                root.TryGetProperty("primary", out var primary)
+                && primary.ValueKind == JsonValueKind.String
+                && ParsePrimary(primary.GetString()!, out var colour)
             )
             {
-                choice = choice with { Accent = colour };
+                choice = choice with { Primary = colour };
             }
 
             return choice;
@@ -70,7 +74,7 @@ internal sealed record ThemeChoice(ThemeVariant Variant, Color Accent)
     }
 
     /// <summary>The look used when the file names one, or nothing usable.</summary>
-    private static ThemeChoice Default() => new(ThemeVariant.Default, DefaultAccent);
+    private static ThemeChoice Default() => new(ThemeVariant.Default, DefaultPrimary);
 
     /// <summary>The variant a name stands for, falling back to the one already chosen.</summary>
     private static ThemeVariant Mode(string name, ThemeVariant fallback) =>
@@ -83,9 +87,9 @@ internal sealed record ThemeChoice(ThemeVariant Variant, Color Accent)
         };
 
     /// <summary>The colour <c>#RRGGBB</c> stands for.</summary>
-    private static bool ParseAccent(string text, out Color colour)
+    private static bool ParsePrimary(string text, out Color colour)
     {
-        colour = DefaultAccent;
+        colour = DefaultPrimary;
 
         if (text.Length != 7 || text[0] != '#' || !IsHex(text.AsSpan(1)))
         {

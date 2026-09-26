@@ -41,7 +41,7 @@ internal sealed class AgentApp : Application
 
             RequestedThemeVariant = Theme.Variant;
 
-            foreach (var style in Look.Styles(Theme.Accent))
+            foreach (var style in Look.Styles(Theme.Primary))
             {
                 Styles.Add(style);
             }
