@@ -68,7 +68,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // clipboard is shared the same way: a copy made in one directory dock is a copy the other can paste.
         var at = Start();
         var shared = new Shared(at);
-        var browser = new Browser(shared, at);
+        var browser = new Browser(host.Log, shared, at);
         var clip = new Clip(host.Log);
 
         // A browser with nothing watching the filesystem is told to look again when the program is come back to:

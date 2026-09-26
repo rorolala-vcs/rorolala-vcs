@@ -13,7 +13,9 @@ namespace FileSystemPlugin;
 /// <see cref="Shared"/>.
 /// <para>
 /// The rest of the state is the location's own, kept by the plugin rather than the host: what a directory
-/// holds, and where this one has been, are its to know.
+/// holds, and where this one has been, are its to know. What it reads is said in the log, because a view
+/// that did not draw a change it was told about and a view that was never told read the same from the
+/// outside.
 /// </para>
 /// </remarks>
 internal sealed class Browser : IDisposable
@@ -43,6 +45,9 @@ internal sealed class Browser : IDisposable
     /// <summary>The answers every location shares, which this one reads and restages itself for.</summary>
     private readonly Shared _shared;
 
+    /// <summary>Where a read is said, so that a view that was told can be told from one that was not.</summary>
+    private readonly ILog _log;
+
     /// <summary>Where it has been, most recent last.</summary>
     private readonly List<string> _back = [];
 
@@ -59,10 +64,12 @@ internal sealed class Browser : IDisposable
     private IReadOnlyList<Entry> _shown;
 
     /// <summary>Makes a location onto a directory.</summary>
+    /// <param name="log">Where a read of the directory is said.</param>
     /// <param name="shared">The answers every location shares.</param>
     /// <param name="directory">The directory to look at.</param>
-    public Browser(Shared shared, string directory)
+    public Browser(ILog log, Shared shared, string directory)
     {
+        _log = log;
         _shared = shared;
         _current = directory;
         _entries = Read(directory);
@@ -276,6 +283,11 @@ internal sealed class Browser : IDisposable
     {
         _entries = Read(_current);
         _shown = Stage(_current, _entries);
+
+        // Said here rather than left to the views: what a view was told and what it drew are two different
+        // answers to "did that change reach it", and a report of one that did not cannot tell them apart.
+        _log.Info($"read `{_current}` again: {_shown.Count} entries");
+
         Changed?.Invoke();
         Reread?.Invoke();
     }

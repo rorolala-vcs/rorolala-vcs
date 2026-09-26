@@ -209,6 +209,9 @@ internal abstract class EntryView : UserControl
     /// <summary>The location the entries belong to.</summary>
     protected Browser Browser { get; }
 
+    /// <summary>How many entries this view is showing, which is what a dock reports it drew.</summary>
+    public int Shown => Browser.Shown.Count;
+
     /// <summary>What the entries do when opened or given a menu.</summary>
     protected BrowserActions Actions { get; }
 

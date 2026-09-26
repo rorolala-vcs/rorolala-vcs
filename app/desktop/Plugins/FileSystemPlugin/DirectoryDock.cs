@@ -340,7 +340,7 @@ internal sealed class DirectoryControl : UserControl
 
         Watch(null);
         _own?.Dispose();
-        _own = inStep ? null : new Browser(_shared, was.Current);
+        _own = inStep ? null : new Browser(_host.Log, _shared, was.Current);
         _actions = new BrowserActions(_host, Location, _clip);
 
         _bar.Reading(Location);
@@ -492,11 +492,16 @@ internal sealed class DirectoryControl : UserControl
         var on = Keys.On(this);
         var seating = _view is { } was && Keys.Holds(on, was);
 
-        _view = _zoom.Value > GridAbove
+        EntryView drawn = _zoom.Value > GridAbove
             ? new GridBrowser(_host, Location, _actions, _clip, Icons.SizeAt(_zoom.Value))
             : new ListBrowser(_host, Location, _actions, _clip);
+        _view = drawn;
 
-        _content.Content = _view;
+        _content.Content = drawn;
+
+        // Said here rather than left to the view: whether the listing was drawn again is the other half of
+        // "did a change reach this dock", and a report of one that did not cannot tell the two halves apart.
+        _host.Log.Info($"drew the listing of `{Location.Current}`: {drawn.Shown} entries");
 
         if (seating)
         {
