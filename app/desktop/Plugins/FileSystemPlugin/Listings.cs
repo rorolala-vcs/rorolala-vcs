@@ -968,7 +968,7 @@ internal abstract class EntryView : UserControl
         var fromFiles = files?
             .Select(file => file.TryGetLocalPath())
             .Where(path => path is { Length: > 0 })
-            .Select(path => path!)
+            .Select(path => FileOps.Bare(path!))
             .ToArray() ?? [];
 
         if (fromFiles.Length > 0)
@@ -981,6 +981,7 @@ internal abstract class EntryView : UserControl
         return text is null
             ? []
             : text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(FileOps.Bare)
                 .Where(path => File.Exists(path) || System.IO.Directory.Exists(path))
                 .ToArray();
     }
@@ -1067,7 +1068,7 @@ internal abstract class EntryView : UserControl
 
     /// <summary>The directory an entry sits in, for telling a move that would go nowhere.</summary>
     /// <param name="path">The path to ask about.</param>
-    private static string ParentOf(string path) => Path.GetDirectoryName(path) ?? string.Empty;
+    private static string ParentOf(string path) => Path.GetDirectoryName(FileOps.Bare(path)) ?? string.Empty;
 
     /// <summary>Opens the entry a double-click landed on.</summary>
     /// <param name="sender">The list.</param>

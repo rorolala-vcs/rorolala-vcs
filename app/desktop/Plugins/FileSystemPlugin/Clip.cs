@@ -10,20 +10,30 @@ namespace FileSystemPlugin;
 /// What a copy or a cut has put within reach of a paste, and which of it a paste is to move.
 /// </summary>
 /// <remarks>
-/// The paths go on the <em>system</em> clipboard rather than into a list of this plugin's own, so that
-/// the browser is one program among several: a copy made here is a copy another file manager can paste,
-/// and a copy taken there is one this can paste. What the system clipboard cannot say is whether a copy
-/// is a cut, so that one thing <em>is</em> this plugin's — the set of paths that are on their way out —
-/// and it is what fades those entries until the paste that moves them.
+/// The paths go on the <em>system</em> clipboard rather than into a list of this plugin's own, so that the
+/// browser is one program among several: a copy made here is a copy another file manager can paste, and a
+/// copy taken there is one this can paste. What the system clipboard cannot say is whether a copy is a cut,
+/// so that one thing <em>is</em> this plugin's — the set of paths that are on their way out — and it is what
+/// fades those entries until the paste that moves them.
 /// <para>
-/// One of these belongs to the plugin, not to a dock: two directory docks are two views of one
-/// location, and a copy made in one is a copy the other can paste.
+/// The paths are also kept here, because a paste must work even where the system clipboard does not carry
+/// files back: a platform whose clipboard is text-only, or one that will not hand its own selection back to
+/// the program that set it, would otherwise make a copy and a paste silently do nothing. The system
+/// clipboard is read first, so that a copy taken elsewhere is the one pasted; this is the fallback that
+/// keeps a copy and a paste a pair inside the program whatever the platform does.
+/// </para>
+/// <para>
+/// One of these belongs to the plugin, not to a dock: two directory docks are two views of one location, and
+/// a copy made in one is a copy the other can paste.
 /// </para>
 /// </remarks>
 internal sealed class Clip
 {
     /// <summary>The paths a cut has offered to a paste, until that paste happens.</summary>
     private readonly HashSet<string> _moving = new(StringComparer.Ordinal);
+
+    /// <summary>The paths the last copy or cut offered, for a paste where the system clipboard gives none.</summary>
+    private readonly List<string> _held = [];
 
     /// <summary>Raised when what is cut changes, so that the views can redraw faded and unfaded entries.</summary>
     public event Action? Changed;
@@ -38,8 +48,7 @@ internal sealed class Clip
     /// <param name="failed">Where a failure is reported.</param>
     public void Copy(Control from, IReadOnlyList<Entry> entries, Action<string> failed)
     {
-        Uncut();
-        Offer(from, entries, failed);
+        Offer(from, entries, cut: false, failed);
     }
 
     /// <summary>Puts entries on the clipboard to be moved, and remembers which they are.</summary>
@@ -48,25 +57,17 @@ internal sealed class Clip
     /// <param name="failed">Where a failure is reported.</param>
     public void Cut(Control from, IReadOnlyList<Entry> entries, Action<string> failed)
     {
-        Uncut();
-
-        foreach (var entry in entries)
-        {
-            _moving.Add(entry.Path);
-        }
-
-        Changed?.Invoke();
-        Offer(from, entries, failed);
+        Offer(from, entries, cut: true, failed);
     }
 
     /// <summary>
     /// Copies or moves what is on the clipboard into a directory.
     /// </summary>
     /// <remarks>
-    /// An entry that this plugin cut is moved; everything else is copied. That is how a cut is told from
-    /// a copy across processes, where the system clipboard carries only the paths: the paths are this
-    /// plugin's to compare, and a paste of any of them ends the cut for all of them, which is what a
-    /// paste of a cut means.
+    /// An entry that this plugin cut is moved; everything else is copied. That is how a cut is told from a
+    /// copy across processes, where the system clipboard carries only the paths: the paths are this plugin's
+    /// to compare, and a paste of any of them ends the cut for all of them, which is what a paste of a cut
+    /// means.
     /// </remarks>
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
     /// <param name="into">The directory to put them in.</param>
@@ -77,20 +78,23 @@ internal sealed class Clip
         try
         {
             var clipboard = TopLevel.GetTopLevel(from)?.Clipboard;
+            var paths = clipboard is null ? [] : await Paths(clipboard);
 
-            if (clipboard is null)
+            // The system clipboard first, so that a copy taken in another program is pasted; this plugin's
+            // own record only where it gave nothing, so that a copy and a paste made here still pair up.
+            if (paths.Count == 0)
             {
-                return;
+                paths = [.. _held];
             }
 
-            var paths = await Paths(clipboard);
             var pasted = false;
 
             foreach (var path in paths)
             {
-                // A paste into the directory an entry already sits in is nothing to do, and one that
-                // was asked for anyway must not rename it out from under the user.
-                if (string.Equals(Holding(path), into, StringComparison.Ordinal))
+                // A **cut** into the directory an entry already sits in is nothing to do, and one that was
+                // asked for anyway must not rename it out from under the user. A copy there is a different
+                // thing: it means "one more of this here", which is what a free name beside it is.
+                if (IsCut(path) && string.Equals(Holding(path), into, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -107,7 +111,7 @@ internal sealed class Clip
                 pasted = true;
             }
 
-            Uncut();
+            Offered([], cut: false);
 
             if (pasted)
             {
@@ -120,29 +124,58 @@ internal sealed class Clip
         }
     }
 
-    /// <summary>Forgets what was cut, so that nothing is faded and nothing moves.</summary>
-    private void Uncut()
+    /// <summary>
+    /// Records what a copy or a cut offered, hands it to the system clipboard, and redraws the cut state.
+    /// </summary>
+    /// <remarks>
+    /// Recorded before the clipboard is written, so that a clipboard that refuses the files still leaves a
+    /// copy and a paste that pair up inside the program, and so that a cut is faded the moment it is made
+    /// rather than when the system answers.
+    /// </remarks>
+    /// <param name="from">A control in the tree the clipboard is reached through.</param>
+    /// <param name="entries">What was offered.</param>
+    /// <param name="cut">Whether they are to be moved rather than copied.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    private void Offer(Control from, IReadOnlyList<Entry> entries, bool cut, Action<string> failed)
     {
-        if (_moving.Count > 0)
+        Offered(entries, cut);
+        Hand(from, entries, failed);
+    }
+
+    /// <summary>Remembers what is on offer, and what of it is to move.</summary>
+    /// <param name="entries">What was offered.</param>
+    /// <param name="cut">Whether they are to be moved rather than copied.</param>
+    private void Offered(IReadOnlyList<Entry> entries, bool cut)
+    {
+        _held.Clear();
+        _moving.Clear();
+
+        foreach (var entry in entries)
         {
-            _moving.Clear();
-            Changed?.Invoke();
+            _held.Add(entry.Path);
+
+            if (cut)
+            {
+                _moving.Add(entry.Path);
+            }
         }
+
+        Changed?.Invoke();
     }
 
     /// <summary>
     /// Hands entries to the system clipboard as files and as their paths written out.
     /// </summary>
     /// <remarks>
-    /// Both, because the two answer different readers: a file manager takes the files, and a text field
-    /// or a script takes the text. A path that the system will not turn into a file — one that has gone
-    /// since the listing was read — is left out of the files rather than stopping the copy, since the
-    /// text still names it and the rest of the copy is still worth making.
+    /// Both, because the two answer different readers: a file manager takes the files, and a text field or a
+    /// script takes the text. A path that the system will not turn into a file — one that has gone since the
+    /// listing was read — is left out of the files rather than stopping the copy, since the text still names
+    /// it and the rest of the copy is still worth making.
     /// </remarks>
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
     /// <param name="entries">What to hand over.</param>
     /// <param name="failed">Where a failure is reported.</param>
-    private static async void Offer(Control from, IReadOnlyList<Entry> entries, Action<string> failed)
+    private static async void Hand(Control from, IReadOnlyList<Entry> entries, Action<string> failed)
     {
         try
         {
@@ -183,9 +216,9 @@ internal sealed class Clip
     /// The paths on the clipboard, whether they were left there as files or as text.
     /// </summary>
     /// <remarks>
-    /// Files first, since that is what a file manager puts there; text second, so that paths copied out
-    /// of a terminal paste as paths and not as nothing. Only text that names something is taken, so that
-    /// pasting a sentence does not make a run of empty names.
+    /// Files first, since that is what a file manager puts there; text second, so that paths copied out of a
+    /// terminal paste as paths and not as nothing. Only text that names something is taken, so that pasting a
+    /// sentence does not make a run of empty names.
     /// </remarks>
     /// <param name="clipboard">The clipboard to read.</param>
     private static async Task<IReadOnlyList<string>> Paths(IClipboard clipboard)
@@ -194,7 +227,7 @@ internal sealed class Clip
         var fromFiles = files?
             .Select(file => file.TryGetLocalPath())
             .Where(path => path is { Length: > 0 })
-            .Select(path => path!)
+            .Select(path => FileOps.Bare(path!))
             .ToArray() ?? [];
 
         if (fromFiles.Length > 0)
@@ -207,11 +240,12 @@ internal sealed class Clip
         return text is null
             ? []
             : text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(FileOps.Bare)
                 .Where(path => File.Exists(path) || Directory.Exists(path))
                 .ToArray();
     }
 
     /// <summary>The directory a pasted path sits in, or nothing where its path has no directory.</summary>
     /// <param name="path">The path to ask about.</param>
-    private static string Holding(string path) => Path.GetDirectoryName(path) ?? string.Empty;
+    private static string Holding(string path) => Path.GetDirectoryName(FileOps.Bare(path)) ?? string.Empty;
 }

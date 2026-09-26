@@ -15,12 +15,32 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal static class FileOps
 {
+    /// <summary>
+    /// A path without the separator a directory's may carry at its end.
+    /// </summary>
+    /// <remarks>
+    /// This exists because of one bug that is worth not having again: a path that came from a drag is read
+    /// from a URI, and a directory's URI ends in a separator — so the name taken from it is the empty string,
+    /// a "directory" of no name is the directory it sits in, that directory always exists, and the entry was
+    /// therefore renamed instead of arriving under its own name. Bare the path before asking anything of it.
+    /// </remarks>
+    /// <param name="path">The path to bare.</param>
+    /// <returns>The path without trailing separators, or the path itself when it is one all the way.</returns>
+    public static string Bare(string path)
+    {
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return trimmed.Length == 0 ? path : trimmed;
+    }
+
     /// <summary>Moves an entry into a directory, under a free name.</summary>
     /// <param name="source">What to move.</param>
     /// <param name="into">The directory to move it into.</param>
     /// <param name="failed">Where a failure is reported.</param>
     public static void Move(string source, string into, Action<string> failed)
     {
+        source = Bare(source);
+
         try
         {
             var target = Free(into, Path.GetFileName(source));
@@ -56,6 +76,8 @@ internal static class FileOps
     /// <param name="failed">Where a failure is reported.</param>
     public static void Copy(string source, string into, Action<string> failed)
     {
+        source = Bare(source);
+
         try
         {
             var target = Free(into, Path.GetFileName(source));
@@ -87,6 +109,7 @@ internal static class FileOps
     /// <returns>A path in the directory that nothing holds.</returns>
     private static string Free(string into, string name)
     {
+        name = Bare(name);
         var wanted = Path.Combine(into, name);
 
         if (!Held(wanted))
