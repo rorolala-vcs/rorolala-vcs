@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
@@ -68,33 +69,40 @@ internal sealed class PluginManagerView : UserControl
             )
         );
 
-        var panel = new StackPanel { Spacing = 6, Margin = new Thickness(10) };
+        var panel = new StackPanel { Spacing = 12, Margin = new Thickness(12) };
 
-        panel.Children.Add(Heading(i18n.Get("plugin_manager.plugins")));
         panel.Children.Add(
-            new ItemsControl
-            {
-                ItemsSource = rows,
-                ItemTemplate = new FuncDataTemplate<PluginRow>(
-                    (row, _) => RowView(row, i18n),
-                    true
-                ),
-            }
+            Section(
+                i18n.Get("plugin_manager.plugins"),
+                new ItemsControl
+                {
+                    ItemsSource = rows,
+                    ItemTemplate = new FuncDataTemplate<PluginRow>(
+                        (row, _) => RowView(row, i18n),
+                        true
+                    ),
+                }
+            )
         );
 
-        var notes = manager
-            .Problems.Concat(manager.OrderingNotes)
-            .Select(problem => $"{problem.Subject} \u2014 {problem.Description}")
-            .ToArray();
+        var problems = manager.Problems.Concat(manager.OrderingNotes).ToArray();
 
-        if (notes.Length > 0)
+        if (problems.Length > 0)
         {
-            panel.Children.Add(Heading(i18n.Get("plugin_manager.problems")));
+            var notes = new StackPanel { Spacing = 8 };
 
-            foreach (var note in notes)
+            for (var i = 0; i < problems.Length; i++)
             {
-                panel.Children.Add(new TextBlock { Text = note, TextWrapping = TextWrapping.Wrap });
+                // The rule sits above every note but the first, which is already under the heading's own.
+                if (i > 0)
+                {
+                    notes.Children.Add(Divider());
+                }
+
+                notes.Children.Add(Note(problems[i].Subject, problems[i].Description));
             }
+
+            panel.Children.Add(Section(i18n.Get("plugin_manager.problems"), notes));
         }
 
         panel.Children.Add(
@@ -102,24 +110,58 @@ internal sealed class PluginManagerView : UserControl
             {
                 Text = i18n.Get("plugin_manager.next_start"),
                 TextWrapping = TextWrapping.Wrap,
-                Opacity = 0.7,
+                Classes = { "caption", "muted" },
             }
         );
 
         Content = new ScrollViewer { Content = panel };
     }
 
-    /// <summary>A section heading.</summary>
-    private static TextBlock Heading(string text) =>
-        new() { Text = text, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+    /// <summary>A section: its heading, the rule under it, and what it holds.</summary>
+    private static Control Section(string heading, Control content) =>
+        new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = heading, Classes = { "section" } },
+                Divider(),
+                content,
+            },
+        };
+
+    /// <summary>The hairline separating a heading from what follows it, in the theme's line colour.</summary>
+    private static Border Divider() =>
+        new()
+        {
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.theme.line"),
+        };
+
+    /// <summary>One problem as two lines: what it is about, then what is wrong with it.</summary>
+    private static Control Note(string subject, string description) =>
+        new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = subject, TextWrapping = TextWrapping.Wrap },
+                new TextBlock
+                {
+                    Text = description,
+                    TextWrapping = TextWrapping.Wrap,
+                    Classes = { "caption", "muted" },
+                },
+            },
+        };
 
     /// <summary>One plugin's row: its name and identity, its switch, and its order.</summary>
     private static Control RowView(PluginRow row, I18nService i18n)
     {
-        var identity = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        var identity = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         identity.Children.Add(new TextBlock { Text = row.Name });
         identity.Children.Add(
-            new TextBlock { Text = row.Id, Opacity = 0.6, FontSize = 11 }
+            new TextBlock { Text = row.Id, Classes = { "caption", "muted" } }
         );
 
         var enabled = new CheckBox { IsChecked = row.Enabled };
@@ -134,7 +176,7 @@ internal sealed class PluginManagerView : UserControl
             Minimum = -9999,
             Maximum = 9999,
             Increment = 1,
-            Width = 90,
+            Width = 88,
         };
         order.Bind(
             NumericUpDown.ValueProperty,
@@ -145,7 +187,7 @@ internal sealed class PluginManagerView : UserControl
         {
             Text = i18n.Get("plugin_manager.order"),
             VerticalAlignment = VerticalAlignment.Center,
-            Opacity = 0.7,
+            Classes = { "muted" },
         };
 
         var rowView = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto") };

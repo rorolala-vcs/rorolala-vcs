@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
@@ -91,7 +92,7 @@ internal sealed class PreferenceView : UserControl
         }
 
         _owners.ItemsSource = owners;
-        _owners.Width = 180;
+        _owners.Width = 184;
         _owners.SelectedIndex = 0;
         _owners.SelectionChanged += (_, _) => Show();
 
@@ -148,7 +149,9 @@ internal sealed class PreferenceView : UserControl
         {
             if (chosen.Id != Core.Id)
             {
-                _shown.Children.Add(new TextBlock { Text = _i18n.Get("setting.none") });
+                _shown.Children.Add(
+                    new TextBlock { Text = _i18n.Get("setting.none"), Classes = { "muted" } }
+                );
             }
 
             return;
@@ -174,7 +177,7 @@ internal sealed class PreferenceView : UserControl
     private Control ThemeGroup()
     {
         var theme = _theme.Theme;
-        var rows = new StackPanel { Spacing = 10 };
+        var rows = new StackPanel { Spacing = 8 };
 
         rows.Children.Add(ModeRow(theme));
         rows.Children.Add(ColourRow("core.setting.primary", theme.PrimaryOrDefault, chosen => theme.Primary = chosen));
@@ -184,20 +187,11 @@ internal sealed class PreferenceView : UserControl
             new TextBlock
             {
                 Text = _i18n.Get("core.setting.immediate"),
-                FontSize = 11,
-                Opacity = 0.7,
+                Classes = { "caption", "muted" },
             }
         );
 
-        return new StackPanel
-        {
-            Spacing = 10,
-            Children =
-            {
-                new TextBlock { Text = _i18n.Get("core.setting.theme"), FontWeight = FontWeight.SemiBold },
-                rows,
-            },
-        };
+        return Section(_i18n.Get("core.setting.theme"), rows);
     }
 
     /// <summary>The row that chooses the variant, with its way back to the default.</summary>
@@ -246,6 +240,7 @@ internal sealed class PreferenceView : UserControl
             Width = 20,
             Height = 20,
             BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(0),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
             Background = new SolidColorBrush(current),
             VerticalAlignment = VerticalAlignment.Center,
@@ -308,20 +303,51 @@ internal sealed class PreferenceView : UserControl
         var button = new Button { Content = _i18n.Get("setting.reset") };
         button.Click += (_, _) => reset();
 
-        var rows = new StackPanel { Spacing = 4 };
-
-        rows.Children.Add(new TextBlock { Text = _i18n.Get(label) });
-        rows.Children.Add(
-            new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                Children = { editor, button },
-            }
-        );
-
-        return rows;
+        return SettingRow(_i18n.Get(label), editor, button);
     }
+
+    /// <summary>One setting as a row: its name on the left, its editor and Reset on the right.</summary>
+    private static Grid SettingRow(string label, Control editor, Control reset)
+    {
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+
+        var name = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center };
+
+        var controls = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Children = { editor, reset },
+        };
+
+        row.Children.Add(name);
+        row.Children.Add(controls);
+        Grid.SetColumn(controls, 1);
+
+        return row;
+    }
+
+    /// <summary>A section: its heading, the rule under it, and what it holds.</summary>
+    private static Control Section(string heading, Control content) =>
+        new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = heading, Classes = { "section" } },
+                Divider(),
+                content,
+            },
+        };
+
+    /// <summary>The hairline separating a heading from what follows it, in the theme's line colour.</summary>
+    private static Border Divider() =>
+        new()
+        {
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.theme.line"),
+        };
 
     /// <summary>The colour six digits and a hash stand for, or nothing when the text is not one.</summary>
     /// <param name="text">What the field holds.</param>
@@ -357,22 +383,14 @@ internal sealed class PreferenceView : UserControl
     /// <param name="settings">The settings in it.</param>
     private Control GroupBox(PluginId owner, string group, IEnumerable<PluginSetting> settings)
     {
-        var rows = new StackPanel { Spacing = 10 };
+        var rows = new StackPanel { Spacing = 8 };
 
         foreach (var setting in settings.OrderBy(setting => setting.Order))
         {
             rows.Children.Add(Row(owner, setting));
         }
 
-        return new StackPanel
-        {
-            Spacing = 10,
-            Children =
-            {
-                new TextBlock { Text = group, FontWeight = FontWeight.SemiBold },
-                rows,
-            },
-        };
+        return Section(group, rows);
     }
 
     /// <summary>One setting: what it is called, how it is chosen, and the way back to its default.</summary>
@@ -381,9 +399,6 @@ internal sealed class PreferenceView : UserControl
     private Control Row(PluginId owner, PluginSetting setting)
     {
         var value = _settings.Value(owner, setting) ?? string.Empty;
-        var rows = new StackPanel { Spacing = 4 };
-
-        rows.Children.Add(new TextBlock { Text = _i18n.Get(setting.LabelKey) });
 
         var reset = new Button { Content = _i18n.Get("setting.reset") };
 
@@ -399,14 +414,7 @@ internal sealed class PreferenceView : UserControl
             Show();
         };
 
-        rows.Children.Add(
-            new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                Children = { Editor(owner, setting, value), reset },
-            }
-        );
+        var row = SettingRow(_i18n.Get(setting.LabelKey), Editor(owner, setting, value), reset);
 
         var notes = new List<string>();
 
@@ -420,19 +428,24 @@ internal sealed class PreferenceView : UserControl
             notes.Add(_i18n.Get("setting.restart"));
         }
 
-        if (notes.Count > 0)
+        if (notes.Count == 0)
         {
-            rows.Children.Add(
+            return row;
+        }
+
+        return new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                row,
                 new TextBlock
                 {
                     Text = string.Join(" · ", notes),
-                    FontSize = 11,
-                    Opacity = 0.7,
-                }
-            );
-        }
-
-        return rows;
+                    Classes = { "caption", "muted" },
+                },
+            },
+        };
     }
 
     /// <summary>What a setting is chosen with, by its kind.</summary>

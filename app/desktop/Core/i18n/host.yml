@@ -11,6 +11,9 @@ window:
   notice:
     en: Notice
     zh-CN: 提示
+  dismiss:
+    en: Dismiss
+    zh-CN: 知道了
 
 menu:
   file:
@@ -40,6 +43,9 @@ core:
   name:
     en: Core
     zh-CN: 核心
+  empty_log:
+    en: Nothing has been logged yet.
+    zh-CN: 暂无日志。
   setting:
     theme:
       en: Theme

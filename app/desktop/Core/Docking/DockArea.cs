@@ -74,6 +74,13 @@ internal sealed class DockArea : UserControl
     /// <summary>The class the button that closes the dock a region is showing carries.</summary>
     public const string CloseClass = "dock-close";
 
+    /// <summary>The height of a region's header strip, which its tabs fill.</summary>
+    /// <remarks>
+    /// Part of Section 10: a tab's edge is meant to land on the strip's own bottom edge, and the two have
+    /// to agree on where that is for the edge of the dock being shown to read as an underline.
+    /// </remarks>
+    private const double StripHeight = 32;
+
     /// <summary>The narrowest a column region is allowed to become.</summary>
     private const double MinColumn = 120;
 
@@ -278,11 +285,12 @@ internal sealed class DockArea : UserControl
             new()
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 2,
+                Spacing = 0,
 
-                // No bottom margin: a header's own edge is meant to land on the header strip's, so
-                // that the one being shown reads as an underline along the bottom of the strip.
-                Margin = new Thickness(4, 2, 4, 0),
+                // No vertical margin: a header's own edge is meant to land on the header strip's, so
+                // that the one being shown reads as an underline along the bottom of the strip, which is
+                // the only mark of it there is (Section 10).
+                Margin = new Thickness(4, 0, 4, 0),
             };
 
         /// <summary>
@@ -307,7 +315,7 @@ internal sealed class DockArea : UserControl
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 2,
-                Margin = new Thickness(0, 2, 0, 0),
+                Margin = new Thickness(0),
             };
 
         /// <summary>The button that closes the dock being shown.</summary>
@@ -565,6 +573,13 @@ internal sealed class DockArea : UserControl
         var title = Header(instance.Title);
 
         title.Classes.Add(TitleClass);
+
+        // The tab's own geometry, where the generic header's is for a command: a tab fills the strip it
+        // sits in, so that the edge it wears when it is the one shown lands on the strip's own bottom edge.
+        title.Padding = new Thickness(12, 0);
+        title.MinHeight = StripHeight;
+        title.VerticalAlignment = VerticalAlignment.Stretch;
+
         title.Click += (_, _) => Select(instance);
 
         // Taken on the way down. A button answers for its own press, and marks it handled while

@@ -13,27 +13,28 @@ using RorolalaDesktop.Docking;
 namespace RorolalaDesktop.Theming;
 
 /// <summary>
-/// The look: two colours, flat rectangles, one-pixel edges, and a hard shadow under a button.
+/// The look: two colours, flat rectangles, one-pixel edges, and one raised action.
 /// </summary>
 /// <remarks>
 /// It is the program's own and there is only one of it. What a run chooses is the variant it is drawn
 /// in and the two colours, and all three are read before the window is made (Section 10). Everything
 /// else here is stated rather than configured, which is what makes the program look like one thing.
 /// <para>
-/// The design is a Win10 one brought forward: every surface is a rectangle, every edge is one pixel,
-/// hover is a neutral tint rather than a colour, and the two chosen colours are spent by role rather
-/// than by taste. <b>Primary</b> carries the weight — it fills what is selected, what is checked and
-/// what a button is — and <b>accent</b> is spent on the marks that ask for attention: the hairline a
-/// splitter shows under the pointer, the edge of a field that has focus, the zone a dragged dock is
-/// aimed at, and the flash of a press. Keeping the two apart is what stops an attention mark being
-/// mistaken for a selected thing; a look with one colour cannot say either.
+/// The design is a minimal-flat one: every surface is a rectangle, every edge is one pixel, hover is a
+/// neutral tint rather than a colour, and the two chosen colours are spent by role rather than by
+/// taste. <b>Primary</b> carries the weight — it fills what is selected, what is checked, and the one
+/// action a surface exists for — and <b>accent</b> is spent on the marks that ask for attention: the
+/// hairline a splitter shows under the pointer, the edge of a field that has focus, the zone a dragged
+/// dock is aimed at, and the flash of a press. Keeping the two apart is what stops an attention mark
+/// being mistaken for a selected thing; a look with one colour cannot say either.
 /// </para>
 /// <para>
-/// What moves is colour and opacity only, and a press moves nothing under the pointer: a button does
-/// not shift, it drops its shadow and darkens, which is the part of a raised button a flat surface can
-/// keep. Selection is the one slow thing — a row turns to the primary over a fifth of a second, so that
-/// a click reads as a change rather than as a blink — while everything else answers within a frame or
-/// two.
+/// There is exactly one raised surface — the action a surface exists for, which wears the primary and
+/// the look's one hard shadow — so that what to do is never a question with two answers. Everything
+/// else is flat, and what moves is colour and opacity only: a press changes a colour and moves nothing
+/// under the pointer. Selection is the one slow thing — a row turns to the primary over a fifth of a
+/// second, so that a click reads as a change rather than as a blink — while everything else answers
+/// within a frame or two.
 /// </para>
 /// <para>
 /// The two colours are written into <em>the base theme's own</em> resources rather than applied control
@@ -91,13 +92,15 @@ internal sealed class RorolalaTheme
             Color.FromArgb(0x40, 0x00, 0x00, 0x00),
             Color.FromArgb(0x0F, 0x00, 0x00, 0x00),
             Color.FromArgb(0x1F, 0x00, 0x00, 0x00),
-            Color.FromArgb(0x33, 0x00, 0x00, 0x00)
+            Color.FromArgb(0x33, 0x00, 0x00, 0x00),
+            Color.FromArgb(0x99, 0x00, 0x00, 0x00)
         );
         _dark = Accents(
             Color.FromArgb(0x8C, 0x00, 0x00, 0x00),
             Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF),
             Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF),
-            Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)
+            Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF),
+            Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)
         );
 
         _palette = new ResourceDictionary
@@ -111,6 +114,12 @@ internal sealed class RorolalaTheme
             [HairlineVertical] = Hairline(vertical: true),
             [HairlineHorizontal] = Hairline(vertical: false),
 
+            // What a notification is marked with. Both are picked to carry on a light ground and a dark
+            // one alike, because a mark is read against whichever the program is drawn in and neither
+            // colour is the user's to choose — a severity is not a preference.
+            [SeverityError] = Fill(Color.FromRgb(0xE5, 0x48, 0x4D)),
+            [SeverityWarn] = Fill(Color.FromRgb(0xD4, 0xA0, 0x17)),
+
             ThemeDictionaries =
             {
                 [ThemeVariant.Light] = _light,
@@ -120,14 +129,17 @@ internal sealed class RorolalaTheme
 
         var palette = new Style(selector => selector.OfType<Window>()) { Resources = _palette };
 
-        Styles = [palette, .. Type(), .. Content(), .. Parts(), .. Chrome()];
+        Styles = [palette, .. Type(), .. Roles(), .. Content(), .. Parts(), .. Chrome()];
     }
 
     /// <summary>The size every word is set at.</summary>
     private const double BodySize = 13.0;
 
     /// <summary>The height of a row of a list, a tree, or a field: short enough to scan, tall enough to hit.</summary>
-    private const double RowHeight = 26.0;
+    private const double RowHeight = 28.0;
+
+    /// <summary>The height of a band of chrome: the menu bar, a regions's header strip, a toolbar.</summary>
+    private const double BarHeight = 32.0;
 
     /// <summary>How rounded anything is: not at all.</summary>
     private static readonly CornerRadius Square = new(0);
@@ -166,6 +178,18 @@ internal sealed class RorolalaTheme
     /// </remarks>
     private static readonly FontFamily Face = new("fonts:Inter#Inter");
 
+    /// <summary>
+    /// The typeface a column of text is set in.
+    /// </summary>
+    /// <remarks>
+    /// A face list rather than one name, because no monospace is shipped with the program and which one
+    /// a system has is the system's business: the log is a table of aligned columns, and any monospace is
+    /// better at that than the proportional face every other surface is set in.
+    /// </remarks>
+    private static readonly FontFamily Monospace = new(
+        "Cascadia Mono, Consolas, DejaVu Sans Mono, Liberation Mono, monospace"
+    );
+
     /// <summary>The primary, as a fill.</summary>
     private const string Primary = "rorolala.theme.primary";
 
@@ -177,6 +201,19 @@ internal sealed class RorolalaTheme
 
     /// <summary>What is written on a surface filled with the primary.</summary>
     private const string PrimaryInk = "rorolala.theme.primary.ink";
+
+    /// <summary>The colour secondary text is written in, which is the variant's ink held back.</summary>
+    private const string Muted = "rorolala.theme.muted";
+
+    /// <summary>
+    /// The class the one action a surface exists for wears.
+    /// </summary>
+    /// <remarks>
+    /// The look has one raised surface and this is how a control asks to be it: a dialog fills its OK, and
+    /// nothing else does. It is a class rather than a property the toolkit owns so that which button is
+    /// the action is the shell's to say and the look's to draw, the same as every other mark here.
+    /// </remarks>
+    private const string PrimaryAction = "primary";
 
     /// <summary>The accent, as a fill.</summary>
     private const string Accent = "rorolala.theme.accent";
@@ -201,6 +238,12 @@ internal sealed class RorolalaTheme
 
     /// <summary>A hairline, for the rule between chrome and content and for the edge of a control.</summary>
     private const string Line = "rorolala.theme.line";
+
+    /// <summary>The mark a failure is raised with. It is the one red the program has, and it is not chosen.</summary>
+    private const string SeverityError = "rorolala.theme.severity.error";
+
+    /// <summary>The mark a warning is raised with. It is the only amber, and it is not chosen either.</summary>
+    private const string SeverityWarn = "rorolala.theme.severity.warn";
 
     /// <summary>The red a close is everywhere, which is the one thing in the program that is not chosen.</summary>
     private static readonly Color Closed = Color.FromRgb(0xC4, 0x2B, 0x1C);
@@ -277,11 +320,12 @@ internal sealed class RorolalaTheme
     /// <summary>
     /// What one variant's palette is.
     /// </summary>
-    /// <param name="shadow">The colour the hard shadow is drawn in, which is darkest in the dark.</param>
+    /// <summary>The colour the hard shadow is drawn in, which is darkest in the dark.</summary>
     /// <param name="tint">A band of chrome.</param>
     /// <param name="deeper">The same, one step stronger.</param>
     /// <param name="line">A hairline.</param>
-    private ResourceDictionary Accents(Color shadow, Color tint, Color deeper, Color line) =>
+    /// <param name="muted">The variant's ink, held back for secondary text.</param>
+    private ResourceDictionary Accents(Color shadow, Color tint, Color deeper, Color line, Color muted) =>
         new()
         {
             // The primary family, which is what the base theme fills a selected row, opens a drop-down
@@ -326,6 +370,7 @@ internal sealed class RorolalaTheme
             [Tint] = Fill(tint),
             [DeeperTint] = Fill(deeper),
             [Line] = Fill(line),
+            [Muted] = Fill(muted),
         };
 
     /// <summary>
@@ -361,14 +406,51 @@ internal sealed class RorolalaTheme
         ];
 
     /// <summary>
+    /// What a piece of text is, said as a class rather than as a number written where the text is.
+    /// </summary>
+    /// <remarks>
+    /// The look has four sizes and one colour for text that is not the main thing, and every surface that
+    /// says text says which of them it is. A size written at the call site is a size that drifts, and the
+    /// program stops looking like one program within a release or two.
+    /// <para>
+    /// They are classes on <see cref="TextBlock"/> rather than a rule per control because text is not a
+    /// control: what is being said about it belongs to the text, and travels with it wherever it is put.
+    /// </para>
+    /// </remarks>
+    private static Style[] Roles() =>
+        [
+            On(
+                selector => selector.OfType<TextBlock>().Class("caption"),
+                new Setter(TextBlock.FontSizeProperty, 11.0)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("muted"),
+                Brushed(TextBlock.ForegroundProperty, Muted)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("section"),
+                new Setter(TextBlock.FontWeightProperty, FontWeight.SemiBold)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("title"),
+                new Setter(TextBlock.FontSizeProperty, 15.0),
+                new Setter(TextBlock.FontWeightProperty, FontWeight.SemiBold)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("mono"),
+                new Setter(TextBlock.FontFamilyProperty, Monospace)
+            ),
+        ];
+
+    /// <summary>
     /// Every control the kernel and the plugins build their content out of: geometry, spacing, and the
     /// two colours by role.
     /// </summary>
     /// <remarks>
-    /// A filled button is the primary, because a button is the one thing a person is meant to press; a
-    /// band of chrome and a field are neutral, because they are surfaces rather than choices. The two
-    /// colours are named as resources rather than baked, so that changing one at runtime reaches every
-    /// control that took it.
+    /// The shape is minimal-flat: a control is a rectangle the same colour as what it sits on, with a
+    /// one-pixel edge and a neutral hover, and the two chosen colours are spent on what is selected and on
+    /// the one thing a surface is for. The two colours are named as resources rather than baked, so that
+    /// changing one at runtime reaches every control that took it.
     /// <para>
     /// The dock's own buttons are excluded here rather than overridden later: a style that is always on
     /// and a style that turns on with a state do not settle by the order they were written, so a rule
@@ -377,19 +459,44 @@ internal sealed class RorolalaTheme
     /// </remarks>
     private Style[] Content() =>
         [
+            // A button is flat: a surface the colour of what is behind it, an edge, and a neutral hover.
+            // The look has one raised surface and this is not it, so pressing changes a colour rather than
+            // a height (Section 10).
             On(
-                selector => Filled(selector),
+                selector => Pressable(selector),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(12, 5)),
                 new Setter(TemplatedControl.CornerRadiusProperty, Square),
                 new Setter(TemplatedControl.BorderThicknessProperty, Edge),
-                Brushed(TemplatedControl.BorderBrushProperty, PrimaryHeld),
-                Brushed(TemplatedControl.BackgroundProperty, Primary),
-                Brushed(TemplatedControl.ForegroundProperty, PrimaryInk),
+                Brushed(TemplatedControl.BorderBrushProperty, Line),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.TransitionsProperty, Fading(Press))
             ),
             On(
-                selector => Filled(selector).Class(":pointerover"),
+                selector => Pressable(selector).Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, Tint)
+            ),
+            On(
+                selector => Pressable(selector).Class(":pressed"),
+                Brushed(TemplatedControl.BackgroundProperty, DeeperTint)
+            ),
+
+            // The one raised thing there is: the action a surface exists for. It is filled with the primary
+            // and wears the look's one hard shadow, so that a dialog has exactly one thing that looks like
+            // the thing to do.
+            On(
+                selector => Pressable(selector).Class(PrimaryAction),
+                Brushed(TemplatedControl.BackgroundProperty, Primary),
+                Brushed(TemplatedControl.ForegroundProperty, PrimaryInk),
+                Brushed(TemplatedControl.BorderBrushProperty, PrimaryHeld)
+            ),
+            On(
+                selector => Pressable(selector).Class(PrimaryAction).Class(":pointerover"),
                 Brushed(TemplatedControl.BackgroundProperty, PrimaryBright)
+            ),
+            On(
+                selector => Pressable(selector).Class(PrimaryAction).Class(":pressed"),
+                Brushed(TemplatedControl.BackgroundProperty, PrimaryHeld),
+                Brushed(TemplatedControl.BorderBrushProperty, PrimaryHeld)
             ),
 
             On(
@@ -445,7 +552,7 @@ internal sealed class RorolalaTheme
             ),
             On(
                 selector => selector.OfType<MenuItem>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 5)),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(12, 5)),
                 new Setter(TemplatedControl.CornerRadiusProperty, Square),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
@@ -557,22 +664,46 @@ internal sealed class RorolalaTheme
     /// </remarks>
     private Style[] Parts() =>
         [
-            // A filled button drops its shadow and darkens when it is held, which is the raised button's
-            // one move that a flat surface can keep. The base theme paints a held button's part itself,
-            // so the part has to be told again or the primary would be a grey for as long as the press.
+            // The base theme paints a hovered or held button's own part, which would take the flat edge off
+            // the one family of control the look gives an edge to; a held button's colour is therefore said
+            // again here. The primary action is the same in the primary's held colour, and it is the only
+            // part in the program that ever carries the shadow.
             On(
-                selector => Filled(selector).Template().Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BoxShadowProperty, Shadow),
+                selector => Pressable(selector).Template().Name("PART_ContentPresenter"),
                 new Setter(ContentPresenter.TransitionsProperty, Fading(Press))
             ),
             On(
                 selector =>
-                    Filled(selector).Class(":pointerover").Template().Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BorderBrushProperty, PrimaryBright)
+                    Pressable(selector).Class(":pointerover").Template().Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BorderBrushProperty, Line)
             ),
             On(
                 selector =>
-                    Filled(selector).Class(":pressed").Template().Name("PART_ContentPresenter"),
+                    Pressable(selector).Class(":pressed").Template().Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BackgroundProperty, DeeperTint),
+                Brushed(ContentPresenter.BorderBrushProperty, Line)
+            ),
+            On(
+                selector =>
+                    Pressable(selector).Class(PrimaryAction).Template().Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BoxShadowProperty, Shadow)
+            ),
+            On(
+                selector =>
+                    Pressable(selector)
+                        .Class(PrimaryAction)
+                        .Class(":pointerover")
+                        .Template()
+                        .Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BorderBrushProperty, PrimaryHeld)
+            ),
+            On(
+                selector =>
+                    Pressable(selector)
+                        .Class(PrimaryAction)
+                        .Class(":pressed")
+                        .Template()
+                        .Name("PART_ContentPresenter"),
                 Brushed(ContentPresenter.BackgroundProperty, PrimaryHeld),
                 Brushed(ContentPresenter.BorderBrushProperty, PrimaryHeld),
                 new Setter(ContentPresenter.BoxShadowProperty, default(BoxShadows))
@@ -684,6 +815,7 @@ internal sealed class RorolalaTheme
             On(
                 selector => selector.OfType<Menu>().Class(MainWindow.MenuBarClass),
                 Brushed(TemplatedControl.BackgroundProperty, Tint),
+                new Setter(Layoutable.MinHeightProperty, BarHeight),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 0))
             ),
             On(
@@ -693,11 +825,14 @@ internal sealed class RorolalaTheme
                 new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 1))
             ),
 
+            // The edge is two pixels and transparent when the dock is not the one shown, so that the mark
+            // of being chosen is a weight the header always has room for: a header that grew an edge when
+            // selected would shift the headers beside it sideways under the very pointer that selected it.
             On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass),
                 new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 2)),
                 new Setter(TemplatedControl.CornerRadiusProperty, Square),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
@@ -744,7 +879,9 @@ internal sealed class RorolalaTheme
                 new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
                 new Setter(TemplatedControl.CornerRadiusProperty, Square),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(9, 2)),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(10, 0)),
+                new Setter(Layoutable.MinWidthProperty, 28.0),
+                new Setter(Layoutable.MinHeightProperty, BarHeight),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
 
@@ -829,7 +966,7 @@ internal sealed class RorolalaTheme
         ];
 
     /// <summary>
-    /// The selector for the buttons that are filled with the primary.
+    /// The selector for a button that is a thing to press rather than part of the shell's chrome.
     /// </summary>
     /// <remarks>
     /// The dock's own buttons are excluded: a header and a close are chrome, not a thing to press, and
@@ -837,7 +974,7 @@ internal sealed class RorolalaTheme
     /// that it does not match, the question does not arise.
     /// </remarks>
     /// <param name="selector">Where the rule starts.</param>
-    private static Selector Filled(Selector? selector) =>
+    private static Selector Pressable(Selector? selector) =>
         selector!
             .OfType<Button>()
             .Not(previous => previous.Class(DockArea.TitleClass))

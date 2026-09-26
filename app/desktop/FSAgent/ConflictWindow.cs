@@ -107,12 +107,14 @@ internal sealed class ConflictWindow : Window
             Content = RolaI18N.Get(node),
             IsDefault = isDefault,
             IsCancel = isCancel,
-            MinWidth = 84,
+            MinWidth = 88,
         };
 
+        // The action the window exists for is the one the look raises, and it is said the same way the
+        // Desktop's own look says it.
         if (isDefault)
         {
-            button.Classes.Add("default");
+            button.Classes.Add("primary");
         }
 
         button.Click += (_, _) =>

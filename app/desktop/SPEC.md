@@ -757,26 +757,29 @@ exists for plugins that react to a completed open.
 - The two colours are spent by **role**, not by taste, and the roles are what keep them apart:
   - **Primary carries the weight.** It is what the brand is and what everything chosen is: selected
     rows, tree rows, drop-down rows, a checked box and a radio, the underline of the dock a region is
-    showing, the fill of a button, and the thumb of a slider. It is also the colour the base theme's
-    own accent family is written with, so that a selection of text and a tick are the primary from one
-    definition rather than from a second one kept in step.
+    showing, the fill of the one action (below), and the thumb of a slider. It is also the colour the
+    base theme's own accent family is written with, so that a selection of text and a tick are the
+    primary from one definition rather than from a second one kept in step.
   - **Accent asks for attention.** It is spent only on marks that ask to be looked at rather than state
     a choice: the hairline a splitter shows under the pointer, the edge of a field that has focus, the
     zone a dragged dock is aimed at, and the flash of a press. A look with one colour cannot tell the
     two apart, which is the whole reason there are two.
-- The design is Win10-flat:
+- The design is **minimal-flat**:
   - **Rectangles.** Nothing is rounded; every surface has a `CornerRadius` of zero.
   - **One-pixel edges.** Anything with an outline wears a 1 px `BorderThickness`, in the 20 % ink of
     the variant. A focused field keeps its one pixel rather than the two the base theme draws.
   - **Hover is neutral.** A surface under the pointer takes a tint of the variant's ink, not either
     chosen colour. The exceptions are marks rather than surfaces: the hairline a splitter shows under
     the pointer, and the red a close fills with.
-  - **A button is filled and raised.** A button is filled with the primary and wears a **hard shadow**
-    cast to the bottom right — two pixels out and two down, with no blur at all, so that it reads as a
-    raised rectangle rather than as a surface trying not to be flat. Under the pointer it lightens;
-    held, it darkens and drops the shadow. It does not move.
+  - **A button is flat.** A button is the colour of what is behind it, with a one-pixel edge and a
+    neutral hover; pressing darkens it and changes nothing else. The look has exactly one raised
+    surface, and it is not a button in general.
+  - **The one raised thing is the action.** The single action a surface exists for — the OK of a
+    dialog, and nothing besides — wears the class `primary`: filled with the primary, and wearing the
+    look's one **hard shadow**, cast to the bottom right, two pixels out and two down with no blur at
+    all. There is at most one per surface, so that what to do is never a question with two answers.
   - **Nothing moves.** A mark that appears on selection reserves its space when it is not there, and
-    no state change alters a position or a size — the raised button included, which drops its shadow
+    no state change alters a position or a size — the raised action included, which drops its shadow
     rather than shifting.
   - **Close is the one red thing.** The close button at the end of a strip draws nothing until the
     pointer is on it, and then fills with the red a close is everywhere. It is the only colour in the
@@ -796,6 +799,24 @@ exists for plugins that react to a completed open.
 - The three tints the chrome is drawn with are **the look's own**, because the base theme has none to
   borrow: every neutral it ships is opaque, and a band of chrome has to be a tint of whatever is behind
   it to sit on the window and on the content alike. Each is keyed per variant, as that variant's ink.
+- **The scale is fixed, and everything is on it.** Space is `4, 8, 12, 16, 24, 32` and nothing between:
+  a row, a field and a control are **28** high, and a band of chrome — the menu bar, a region's header
+  strip, a toolbar — is **32**. A gap inside a block is 4 or 8, between blocks 12, and the padding of a
+  dock's own content is 12. A number that is not on the scale is a number that drifts.
+- **Text is a role, not a size written where the text is.** Three sizes carry every word — body at 13,
+  a **caption** at 11, and a **title** at 15 — and a **section** heading is body-sized and semibold;
+  secondary text is **muted**, which is the variant's ink held back rather than an opacity written at
+  the call site. A surface says which of them a piece of text is by putting the class on it (below), so
+  that the same word looks the same wherever it appears.
+- **A column of data is set in a monospace** (the `mono` class), because a table is read down its
+  columns: the log is the one place this appears today, and it is what makes its columns line up.
+- **A severity is not a colour the user chooses.** A failure is the one red and a warning the one amber,
+  both fixed and both chosen to carry on a light ground and a dark one. A notice is raised as one flat
+  card with a stripe per line in the colour of its level, a caption naming where it came from, and one
+  way out — rather than as a stack of dialogs, which is the one shape a notice must not have.
+- **Nothing is ever blank.** A list, a tree, a log or a panel with nothing in it says so, in one muted
+  line in the middle of where the thing would have been. An empty surface that says nothing cannot be
+  told from one that failed to load.
 - The type is **Inter**, which the program ships. The look names it through the font collection
   (`fonts:Inter#Inter`), because a family name on its own is looked for among the system's fonts, is
   not there, and falls back silently to the platform's face.
@@ -822,6 +843,10 @@ exists for plugins that react to a completed open.
   | `dock-splitter-columns` / `dock-splitter-rows` | The same grab, saying which way it resizes. |
   | `dock-drop-zone` | Where a dragged dock would land. |
   | `dock-drop-target` | The zone a dragged dock is being aimed at, in addition to `dock-drop-zone`. |
+  | `primary` | The one action a surface exists for: filled, raised, and at most one per surface. |
+  | `caption` / `title` / `section` | Text roles: 11 px, 15 px, and body-sized semibold. |
+  | `muted` | Secondary text, in the variant's ink held back. |
+  | `mono` | A column of data, in the monospace face. |
 
   A drop zone is drawn where the region it stands for is: that region's band of the area, as wide or as
   tall as the layout remembers for it and never less than the least a region may become. What a drag
@@ -1144,9 +1169,9 @@ Agreed so far:
 
 ## 19. Open Items
 
-1. The look's design is settled as far as Section 10 states it — Win10-flat, colour-only motion, the
-   two colours the user's to choose — but it is a first pass at the details (which surfaces take an
-   edge, how dense the rows are) and is to be revised with the user.
+1. The look's design is settled as far as Section 10 states it — minimal-flat, colour-only motion, the
+   two colours the user's to choose, and a fixed scale and set of text roles — but it is a first pass at
+   the details (which surfaces take an edge, how dense the rows are) and is to be revised with the user.
 2. The concrete feel criteria (Section 17), to be agreed with the user.
 3. The contract assembly versioning policy: increment rule and compatibility range. Nothing is done
    about it yet, and by decision: the program is experimental, the one plugin that is built with it is

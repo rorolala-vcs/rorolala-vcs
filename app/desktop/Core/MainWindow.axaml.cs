@@ -1,10 +1,12 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Logging;
 using ContractMenuItem = RorolalaDesktop.Contract.MenuItem;
 using DockOpenMode = RorolalaDesktop.Contract.DockOpenMode;
 using DockRegistration = RorolalaDesktop.Contract.DockRegistration;
@@ -181,29 +183,103 @@ public partial class MainWindow : Window
             return;
         }
 
-        _ = Notice(string.Join(Environment.NewLine, pending));
+        _ = Notice(pending);
     }
 
-    /// <summary>Shows one dialog with the given text.</summary>
-    private async Task Notice(string text)
+    /// <summary>
+    /// Shows what was raised as one flat card: a stripe and two lines per notification, and one way out.
+    /// </summary>
+    /// <remarks>
+    /// One card rather than a dialog per notification, because trouble is usually one thing met many times
+    /// and a stack of identical dialogs is the one shape a notice must not have. It is drawn from the same
+    /// tokens as everything else — square, one-pixel edges, a stripe rather than an icon — so a failure
+    /// reads as part of the program rather than as something the toolkit put on top of it.
+    /// </remarks>
+    /// <param name="pending">What was raised and not yet shown.</param>
+    private async Task Notice(IReadOnlyList<Notice> pending)
     {
+        var lines = new StackPanel();
+
+        foreach (var notice in pending)
+        {
+            lines.Children.Add(NoticeLine(notice));
+        }
+
         var dialog = new Window
         {
             Title = _services.I18n.Get("window.notice"),
             Width = 560,
-            Height = 300,
-            Content = new ScrollViewer
+            MaxHeight = 640,
+            SizeToContent = SizeToContent.Height,
+        };
+
+        var dismiss = new Button
+        {
+            Content = _services.I18n.Get("window.dismiss"),
+            Classes = { "primary" },
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        dismiss.Click += (_, _) => dialog.Close();
+
+        var footer = new Border { Padding = new Thickness(12), Child = dismiss };
+
+        var panel = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(footer, Dock.Bottom);
+        panel.Children.Add(footer);
+        panel.Children.Add(new ScrollViewer { Content = lines });
+
+        dialog.Content = panel;
+
+        await dialog.ShowDialog(this);
+    }
+
+    /// <summary>One notification: a stripe in the colour of its level, and what it was and said.</summary>
+    /// <remarks>
+    /// The stripe is left transparent for a level that is not trouble, so that the line still has room for
+    /// it: a mark that appears only sometimes is a line that shifts under the eye when it does.
+    /// </remarks>
+    /// <param name="notice">What to draw.</param>
+    private static Control NoticeLine(Notice notice)
+    {
+        var stripe = new Border { Width = 2 };
+
+        if (
+            notice.Level switch
             {
-                Content = new TextBlock
-                {
-                    Text = text,
-                    TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(14),
-                    VerticalAlignment = VerticalAlignment.Top,
-                },
+                LogLevel.Error => "rorolala.theme.severity.error",
+                LogLevel.Warn => "rorolala.theme.severity.warn",
+                _ => null,
+            }
+            is { } severity
+        )
+        {
+            stripe[!Border.BackgroundProperty] = new DynamicResourceExtension(severity);
+        }
+
+        var text = new StackPanel
+        {
+            Margin = new Thickness(12, 8, 12, 8),
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = notice.Source, Classes = { "caption", "muted" } },
+                new TextBlock { Text = notice.Message, TextWrapping = TextWrapping.Wrap },
             },
         };
 
-        await dialog.ShowDialog(this);
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("2,*") };
+        Grid.SetColumn(stripe, 0);
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(stripe);
+        grid.Children.Add(text);
+
+        var line = new Border
+        {
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = grid,
+        };
+        line[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.theme.line");
+
+        return line;
     }
 }

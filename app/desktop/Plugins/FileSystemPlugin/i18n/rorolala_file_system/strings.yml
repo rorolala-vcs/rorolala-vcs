@@ -35,6 +35,11 @@ rorolala_file_system:
     en: Size
     zh-CN: 大小
 
+  # What a listing says where there is nothing in the directory to read.
+  empty:
+    en: This folder is empty
+    zh-CN: 此文件夹为空
+
   root:
     en: Root
     zh-CN: 根目录

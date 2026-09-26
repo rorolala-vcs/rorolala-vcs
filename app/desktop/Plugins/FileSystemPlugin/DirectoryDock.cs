@@ -138,7 +138,7 @@ internal sealed class DirectoryControl : UserControl
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(4),
+            Margin = new Thickness(8),
         };
         bar.Children.Add(_zoom);
 
@@ -179,7 +179,7 @@ internal sealed class DirectoryControl : UserControl
         _zoom.Minimum = Least;
         _zoom.Maximum = Most;
         _zoom.Value = Opening;
-        _zoom.Width = 140;
+        _zoom.Width = 144;
         _zoom.TickPlacement = TickPlacement.None;
         _zoom.VerticalAlignment = VerticalAlignment.Center;
 

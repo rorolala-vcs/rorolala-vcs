@@ -86,8 +86,8 @@ internal sealed class TreeControl : UserControl
         var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 4,
-            Margin = new Thickness(4),
+            Spacing = 8,
+            Margin = new Thickness(8),
         };
         bar.Children.Add(_root);
 
@@ -145,8 +145,30 @@ internal sealed class TreeBrowser : UserControl
         var tree = new TreeView { ContextMenu = actions.Empty(this) };
         tree.Items.Add(Node(root));
 
-        Content = tree;
+        // The base is a row of the tree whether or not it holds anything under it, so a base that holds
+        // nothing still shows that one row; the word says so rather than leaving the pane reading as a
+        // tree that has not finished loading.
+        Content = HoldsAny(root)
+            ? tree
+            : new Grid { Children = { tree, Empty() } };
     }
+
+    /// <summary>
+    /// What the tree says where the base holds nothing under it.
+    /// </summary>
+    /// <remarks>
+    /// It takes no pointer of its own: the space it sits over is still the tree's, and a word that ate the
+    /// right-click there would take the tree's own menu with it.
+    /// </remarks>
+    private static TextBlock Empty() =>
+        new()
+        {
+            Text = RolaI18N.Get("rorolala_file_system.empty"),
+            Classes = { "muted" },
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+        };
 
     /// <summary>One directory as a step of the tree, reading its children when first opened.</summary>
     /// <param name="path">The directory the step stands for.</param>
@@ -164,7 +186,9 @@ internal sealed class TreeBrowser : UserControl
 
         if (holds)
         {
-            item.Items.Add(new TreeViewItem { Header = "\u2026" });
+            item.Items.Add(
+                new TreeViewItem { Header = new TextBlock { Text = "\u2026", Classes = { "muted" } } }
+            );
         }
 
         item.Header = Header(path, holds ? () => Collapse(item) : null);
@@ -235,7 +259,7 @@ internal sealed class TreeBrowser : UserControl
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 6,
+                Spacing = 8,
                 Children =
                 {
                     Icons.For(entry),

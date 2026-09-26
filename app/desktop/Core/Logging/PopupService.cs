@@ -1,5 +1,16 @@
 namespace RorolalaDesktop.Logging;
 
+/// <summary>One notification waiting to be shown: what it says, and where it came from.</summary>
+/// <remarks>
+/// The level is kept rather than flattened into the text, because what a notification is marked with is a
+/// look's business: a card stripes a failure differently from a warning, and a string that had already
+/// said so could only be read, not drawn.
+/// </remarks>
+/// <param name="Level">How serious it is.</param>
+/// <param name="Source">The plugin or kernel part that raised it.</param>
+/// <param name="Message">What to show.</param>
+internal sealed record Notice(LogLevel Level, string Source, string Message);
+
 /// <summary>
 /// Notifications the user must act on, held until there is a window to show them in.
 /// </summary>
@@ -22,7 +33,7 @@ internal sealed class PopupService
     private readonly HashSet<string> _shown = new(StringComparer.Ordinal);
 
     /// <summary>What has been raised and not yet shown.</summary>
-    private readonly List<string> _pending = [];
+    private readonly List<Notice> _pending = [];
 
     /// <summary>Guards the queue and what has been shown, since a plugin may raise from any thread.</summary>
     private readonly object _gate = new();
@@ -50,15 +61,15 @@ internal sealed class PopupService
                 return;
             }
 
-            _pending.Add($"[{source}] {message}");
+            _pending.Add(new Notice(level, source, message));
         }
     }
 
     /// <summary>
     /// Takes everything raised since the last call, leaving the queue empty.
     /// </summary>
-    /// <returns>The lines to show, in the order they were raised.</returns>
-    public IReadOnlyList<string> Take()
+    /// <returns>The notifications, in the order they were raised.</returns>
+    public IReadOnlyList<Notice> Take()
     {
         lock (_gate)
         {

@@ -68,7 +68,7 @@ internal sealed class NavigationControl : UserControl
         _up.Click += (_, _) => _browser.Up();
         _refresh.Click += (_, _) => _browser.Refresh();
 
-        _address.Width = 320;
+        _address.MinWidth = 280;
         _address.KeyDown += (_, args) =>
         {
             if (args.Key == Key.Enter)
@@ -81,8 +81,8 @@ internal sealed class NavigationControl : UserControl
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 4,
-            Margin = new Thickness(6),
+            Spacing = 8,
+            Margin = new Thickness(8),
         };
         toolbar.Children.Add(_back);
         toolbar.Children.Add(_forward);
@@ -105,12 +105,19 @@ internal sealed class NavigationControl : UserControl
     }
 
     /// <summary>The toolbar buttons: a glyph, since they are arrows and a cycle.</summary>
+    /// <remarks>
+    /// Each is a square of its own, so the four read as one block of equal targets rather than as four
+    /// words of different lengths, and the glyph is centred in it.
+    /// </remarks>
     private static Button Arrow(string glyph) =>
         new()
         {
             Content = glyph,
-            Padding = new Thickness(8, 2),
-            MinWidth = 30,
+            Width = 28,
+            Height = 28,
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
 
     /// <summary>Brings the toolbar in step with the location.</summary>

@@ -6,6 +6,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
@@ -68,7 +69,7 @@ internal abstract class EntryView : UserControl
     private static readonly TimeSpan Typing = TimeSpan.FromSeconds(1);
 
     /// <summary>How tall a row is where nothing on screen says, which is only ever a first guess.</summary>
-    private const double RowGuess = 26.0;
+    private const double RowGuess = 28.0;
 
     /// <summary>Every row on screen, so that a faded cut and a moved column reach all of them.</summary>
     private readonly List<(Entry Entry, Control Row)> _rows = [];
@@ -215,10 +216,45 @@ internal abstract class EntryView : UserControl
 
         var grid = new Grid();
         grid.Children.Add(content);
+
+        // The word is drawn over the empty space rather than in place of the list, so that the menu and the
+        // frame the space still answers keep answering.
+        if (Barren())
+        {
+            grid.Children.Add(Notice());
+        }
+
         grid.Children.Add(_over);
 
         Content = grid;
     }
+
+    /// <summary>
+    /// Whether the listing holds nothing but the way up.
+    /// </summary>
+    /// <remarks>
+    /// The way up stands before every listing that is not the base's own and is not an entry of the
+    /// directory, so a directory with nothing in it still shows one row; the word for an empty listing is
+    /// due where there is nothing but that row.
+    /// </remarks>
+    private bool Barren() => !Browser.Shown.Any(entry => !Browser.IsUp(entry.Path));
+
+    /// <summary>
+    /// What a listing with nothing in it says.
+    /// </summary>
+    /// <remarks>
+    /// It takes no pointer of its own: the space it sits over is still the list's, and a word that ate the
+    /// right-click there would take the empty-space menu and the start of a frame with it.
+    /// </remarks>
+    private static TextBlock Notice() =>
+        new()
+        {
+            Text = RolaI18N.Get("rorolala_file_system.empty"),
+            Classes = { "muted" },
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+        };
 
     /// <summary>
     /// One entry as a row or a tile, which is the one thing a view supplies.
@@ -1112,7 +1148,7 @@ internal abstract class EntryView : UserControl
 internal sealed class ListBrowser : EntryView
 {
     /// <summary>How wide the column of icons is: enough for the word over it.</summary>
-    private const double IconColumn = 30;
+    private const double IconColumn = 32;
 
     /// <summary>
     /// How wide the grab between two columns is, and the marks it wears.
@@ -1135,13 +1171,13 @@ internal sealed class ListBrowser : EntryView
     private const double MinColumn = 56;
 
     /// <summary>How wide a column of values is before anybody drags it.</summary>
-    private const double PermissionsColumn = 92;
+    private const double PermissionsColumn = 96;
 
     /// <inheritdoc cref="PermissionsColumn" />
-    private const double ModifiedColumn = 132;
+    private const double ModifiedColumn = 144;
 
     /// <inheritdoc cref="PermissionsColumn" />
-    private const double SizeColumn = 84;
+    private const double SizeColumn = 88;
 
     /// <summary>
     /// Which column the name is in.
@@ -1162,7 +1198,7 @@ internal sealed class ListBrowser : EntryView
     /// is what answers the pointer, so room left inside it is room it still covers. It is left vertically
     /// only, since room at the sides would carry the columns away from the headings standing over them.
     /// </remarks>
-    private const int Gap = 3;
+    private const int Gap = 4;
 
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
     private readonly Column[] _values = Values();
@@ -1294,8 +1330,8 @@ internal sealed class ListBrowser : EntryView
 
         var cells = new List<Control?>
         {
-            Cell(RolaI18N.Get("rorolala_file_system.column_icon")),
-            Cell(RolaI18N.Get("rorolala_file_system.column_name")),
+            Head(RolaI18N.Get("rorolala_file_system.column_icon")),
+            Head(RolaI18N.Get("rorolala_file_system.column_name")),
         };
 
         // A grab is between two columns, so the pair it takes in is its own place in the layout plus or
@@ -1305,14 +1341,24 @@ internal sealed class ListBrowser : EntryView
         foreach (var column in _values)
         {
             cells.Add(Grab(left, left + 2));
-            cells.Add(Cell(RolaI18N.Get(column.Header)));
+            cells.Add(Head(RolaI18N.Get(column.Header)));
 
             left += 2;
         }
 
         Place(_header, cells);
 
-        var item = new ListBoxItem { Content = _header, Focusable = false };
+        // The line under the headings is what the rows are read against: the room between rows is nothing
+        // to see, so without it the headings float a row's height above the data they name. It is bound
+        // rather than read here, because a control built in a constructor is not yet anywhere a theme reaches.
+        var band = new Border
+        {
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.theme.line"),
+            Child = _header,
+        };
+
+        var item = new ListBoxItem { Content = band, Focusable = false, MinHeight = 28 };
 
         item.Styles.Add(
             new Style(selector => selector.OfType<Border>().Name("SelectionBorder").Class(":pointerover"))
@@ -1498,11 +1544,17 @@ internal sealed class ListBrowser : EntryView
         }
     }
 
+    /// <summary>One heading's text: a cell read a size down and in the secondary ink.</summary>
+    /// <param name="text">What the heading says.</param>
+    private static TextBlock Head(string text) => Cell(text, caption: true);
+
     /// <summary>One cell's text: one line, cut off rather than wrapped.</summary>
     /// <param name="text">What the cell says.</param>
     /// <param name="align">Where the text sits in it.</param>
-    private static TextBlock Cell(string text, TextAlignment align = TextAlignment.Left) =>
-        new()
+    /// <param name="caption">Whether the cell heads a column, which reads a size down and in the secondary ink.</param>
+    private static TextBlock Cell(string text, TextAlignment align = TextAlignment.Left, bool caption = false)
+    {
+        var cell = new TextBlock
         {
             Text = text,
             TextAlignment = align,
@@ -1510,13 +1562,22 @@ internal sealed class ListBrowser : EntryView
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+        if (caption)
+        {
+            cell.Classes.Add("caption");
+            cell.Classes.Add("muted");
+        }
+
+        return cell;
+    }
 }
 
 /// <summary>The entries as tiles, wrapping across the width.</summary>
 internal sealed class GridBrowser : EntryView
 {
     /// <summary>How much room is left around a tile's icon and name.</summary>
-    private const int Around = 10;
+    private const int Around = 12;
 
     /// <summary>
     /// How much room is left around each tile, and so between one and the next.
@@ -1528,7 +1589,7 @@ internal sealed class GridBrowser : EntryView
     /// the pointer: room left on what the item holds is room the item still covers, and a frame begun there
     /// would be a frame begun on the entry.
     /// </remarks>
-    private const int Gap = 6;
+    private const int Gap = 8;
 
     /// <summary>
     /// What a tile is filled with while the pointer is over it, where the theme names no tint of its own.
@@ -1646,7 +1707,7 @@ internal sealed class GridBrowser : EntryView
             Padding = new Thickness(Around),
             Child = new StackPanel
             {
-                Spacing = 6,
+                Spacing = 8,
                 Children =
                 {
                     Icons.For(entry, _icon),
