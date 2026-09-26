@@ -59,6 +59,9 @@ internal abstract class EntryView : UserControl
     /// <summary>How faded an entry is while it is cut, so that it reads as on its way out.</summary>
     private const double CutOpacity = 0.45;
 
+    /// <summary>How far the pointer moves with the button down before it frames rather than clicks.</summary>
+    private const double Frame = 4;
+
     /// <summary>How long a run of typed letters stays one run.</summary>
     private static readonly TimeSpan Typing = TimeSpan.FromSeconds(1);
 
@@ -77,6 +80,25 @@ internal abstract class EntryView : UserControl
 
     /// <summary>The modifiers the last key was pressed with, which text input does not carry itself.</summary>
     private KeyModifiers _modifiers;
+
+    /// <summary>The pointer that holds the capture, while a frame is being drawn.</summary>
+    private IPointer? _pointer;
+
+    /// <summary>Where a press on the space around the entries was, while it may still become a frame.</summary>
+    private Point _framedAt;
+    private bool _mayFrame;
+
+    /// <summary>Whether a frame is being drawn, and the band it is drawn with.</summary>
+    private bool _framing;
+    private readonly Border _band = new()
+    {
+        IsVisible = false,
+        IsHitTestVisible = false,
+        BorderThickness = new Thickness(1),
+    };
+
+    /// <summary>What the band is drawn over, filling the view and taking no pointer of its own.</summary>
+    private readonly Canvas _over = new() { IsHitTestVisible = false };
 
     /// <summary>Sets up the shared behaviour over one list.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
@@ -107,9 +129,12 @@ internal abstract class EntryView : UserControl
         // at all. A handler that let the list act first would be correcting an action already taken.
         List.AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
         List.AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
+        List.AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
+        List.AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
         List.AddHandler(TextInputEvent, Typed, RoutingStrategies.Tunnel);
 
         List.DoubleTapped += Opened;
+        List.PointerCaptureLost += Lost;
 
         // Repainting only while on screen, like the browser itself: a dock that was closed is not a view
         // of anything to keep in step.
@@ -137,6 +162,25 @@ internal abstract class EntryView : UserControl
 
     /// <summary>The entry the pointer or the keyboard last landed on, or nothing before either has.</summary>
     protected Entry? Lead => _lead >= 0 && _lead < Browser.Shown.Count ? Browser.Shown[_lead] : null;
+
+    /// <summary>
+    /// Puts what the view is made of on screen, with the frame's band drawn over it.
+    /// </summary>
+    /// <remarks>
+    /// The band is drawn over the view rather than into it, so that a frame can go where a row is: drawn
+    /// among the entries it would be laid out as one of them, or clipped to the one it sat in.
+    /// </remarks>
+    /// <param name="content">The list, or the list with a header over it.</param>
+    protected void Present(Control content)
+    {
+        _over.Children.Add(_band);
+
+        var grid = new Grid();
+        grid.Children.Add(content);
+        grid.Children.Add(_over);
+
+        Content = grid;
+    }
 
     /// <summary>
     /// One entry as a row or a tile, which is the one thing a view supplies.
@@ -204,6 +248,30 @@ internal abstract class EntryView : UserControl
             : [entry];
     }
 
+    /// <summary>Copies what is chosen to the clipboard.</summary>
+    public void Copy() => Actions.Copy(this, Offered());
+
+    /// <summary>Cuts what is chosen to the clipboard, which a paste then moves.</summary>
+    public void Cut() => Actions.Cut(this, Offered());
+
+    /// <summary>Pastes what is on the clipboard into the directory being looked at.</summary>
+    public void Paste() => Actions.Paste(this, Browser.Current);
+
+    /// <summary>
+    /// What a shortcut acts on.
+    /// </summary>
+    /// <remarks>
+    /// The choice, and where nothing is chosen, where the last click landed: a shortcut is reached with the
+    /// keyboard anywhere in the dock, so it cannot assume a choice was made, and acting on the entry the
+    /// pointer last touched is what a user who has clicked one and not another means by "this".
+    /// </remarks>
+    private IReadOnlyList<Entry> Offered()
+    {
+        var chosen = Chosen();
+
+        return chosen.Count > 0 || Lead is not { } lead ? chosen : [lead];
+    }
+
     /// <summary>The chosen entries, in the order the listing shows.</summary>
     protected IReadOnlyList<Entry> Chosen()
     {
@@ -240,10 +308,10 @@ internal abstract class EntryView : UserControl
     /// Reads a key the list would otherwise read, because it means something more here.
     /// </summary>
     /// <remarks>
-    /// The clipboard is taken with <c>Ctrl</c> held, the arrows step, <c>Home</c>, <c>End</c>,
-    /// <c>PageUp</c> and <c>PageDown</c> go further, <c>Shift</c> extends from where the last step landed,
-    /// and <c>Enter</c> opens. Everything else — the toolkit's own select-all among it — is left to the
-    /// list.
+    /// The arrows step, <c>Home</c>, <c>End</c>, <c>PageUp</c> and <c>PageDown</c> go further,
+    /// <c>Shift</c> extends from where the last step landed, and <c>Enter</c> opens. Everything else — the
+    /// toolkit's own select-all among it, and the clipboard, which is the dock's and handled there — is
+    /// left to the list.
     /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The key.</param>
@@ -259,15 +327,15 @@ internal abstract class EntryView : UserControl
             switch (e.Key)
             {
                 case Key.C:
-                    Actions.Copy(this, Chosen());
+                    Copy();
                     e.Handled = true;
                     break;
                 case Key.X:
-                    Actions.Cut(this, Chosen());
+                    Cut();
                     e.Handled = true;
                     break;
                 case Key.V:
-                    Actions.Paste(this, Browser.Current);
+                    Paste();
                     e.Handled = true;
                     break;
             }
@@ -463,16 +531,169 @@ internal abstract class EntryView : UserControl
         return Math.Max(1, Columns() * lines);
     }
 
-    /// <summary>Remembers where the pointer went down, since a menu and a step begin there.</summary>
+    /// <summary>
+    /// Remembers where the pointer went down, since a menu, a step and a frame all begin there.
+    /// </summary>
+    /// <remarks>
+    /// A press on an entry is a step; a press on the space around the entries is how a choice is dropped and
+    /// maybe the start of a frame. Which of the two it is is settled here, because only the press knows whether
+    /// it landed on something.
+    /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The press.</param>
     private void Pressed(object? sender, PointerPressedEventArgs e)
     {
-        if (IndexAt(e.Source) is var at && at >= 0)
+        var at = IndexAt(e.Source);
+
+        _mayFrame = false;
+
+        if (at >= 0)
         {
             _lead = at;
+
+            return;
+        }
+
+        // The space around the entries: a click there drops the choice, and a drag there frames a new one. The
+        // choice goes at once, so that a click that never becomes a frame has done what it looked like it would.
+        if (e.GetCurrentPoint(List).Properties.IsLeftButtonPressed)
+        {
+            _lead = -1;
+            _mayFrame = true;
+            _framedAt = e.GetPosition(this);
+            List.Selection.Clear();
+            List.Focus();
         }
     }
+
+    /// <summary>
+    /// Turns a press on the space around the entries into a frame, and follows a frame that is on.
+    /// </summary>
+    /// <remarks>
+    /// A frame needs no platform: the pointer is captured, the band is drawn from where the press was to where
+    /// the pointer is, and what it covers is chosen as it moves.
+    /// </remarks>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The move.</param>
+    private void Moved(object? sender, PointerEventArgs e)
+    {
+        if (!_mayFrame || !e.GetCurrentPoint(List).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        var away = e.GetPosition(this) - _framedAt;
+
+        if (!_framing)
+        {
+            if (Math.Abs(away.X) < Frame && Math.Abs(away.Y) < Frame)
+            {
+                return;
+            }
+
+            _framing = true;
+            _pointer = e.Pointer;
+            _pointer.Capture(List);
+        }
+
+        Stretch(e);
+    }
+
+    /// <summary>
+    /// Draws the frame from where the press was to where the pointer is, and chooses what it covers.
+    /// </summary>
+    /// <remarks>
+    /// The frame is drawn in this view's own coordinates, and a row is asked where it is in the same space, so
+    /// the two meet however the list is scrolled. Only the rows the toolkit has made count: one never drawn is
+    /// one the user cannot see, and a frame is a gesture on what is on screen.
+    /// </remarks>
+    /// <param name="e">The move.</param>
+    private void Stretch(PointerEventArgs e)
+    {
+        var frame = new Rect(_framedAt, e.GetPosition(this)).Normalize();
+
+        _band.BorderBrush = Resource("ThemeAccentBrush", Brushes.DodgerBlue);
+        _band.Background = Resource("ThemeAccentBrush4", Brushes.Transparent);
+        Canvas.SetLeft(_band, frame.X);
+        Canvas.SetTop(_band, frame.Y);
+        _band.Width = frame.Width;
+        _band.Height = frame.Height;
+        _band.IsVisible = true;
+
+        var chosen = new List<int>();
+
+        for (var at = 0; at < Browser.Shown.Count; at++)
+        {
+            if (List.ContainerFromIndex(at) is not { } row ||
+                row.TranslatePoint(new Point(0, 0), this) is not { } origin)
+            {
+                continue;
+            }
+
+            if (frame.Intersects(new Rect(origin, row.Bounds.Size)))
+            {
+                chosen.Add(at);
+            }
+        }
+
+        var selection = List.Selection;
+
+        using (selection.BatchUpdate())
+        {
+            selection.Clear();
+
+            foreach (var at in chosen)
+            {
+                selection.Select(at);
+            }
+        }
+
+        _lead = chosen.Count > 0 ? chosen[^1] : -1;
+    }
+
+    /// <summary>Ends a frame, leaving what it chose chosen.</summary>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The release.</param>
+    private void Released(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_mayFrame)
+        {
+            Stop();
+        }
+    }
+
+    /// <summary>Ends a frame whose capture was taken away, which leaves what it chose chosen.</summary>
+    /// <param name="sender">The list.</param>
+    /// <param name="e">The lost capture.</param>
+    private void Lost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_mayFrame)
+        {
+            Stop();
+        }
+    }
+
+    /// <summary>Clears the frame: no capture, no band, and nothing left waiting to become one.</summary>
+    private void Stop()
+    {
+        _mayFrame = false;
+        _framing = false;
+        _band.IsVisible = false;
+        _pointer?.Capture(null);
+        _pointer = null;
+    }
+
+    /// <summary>
+    /// The wash a row is framed with, and a stand-in where the look names no tint of its own.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the theme through this view, because a plugin has no other way to read the palette (Section
+    /// 10); a program wearing no theme answers with nothing and the stand-in is used.
+    /// </remarks>
+    /// <param name="key">The resource key.</param>
+    /// <param name="fallback">What to draw with where the look defines nothing under the key.</param>
+    private IBrush Resource(string key, IBrush fallback) =>
+        this.TryGetResource(key, null, out var found) && found is IBrush brush ? brush : fallback;
 
     /// <summary>Opens the entry a double-click landed on.</summary>
     /// <param name="sender">The list.</param>
@@ -574,6 +795,11 @@ internal sealed class ListBrowser : EntryView
     {
         _widths = Widths();
 
+        // The header is not in the list, so the list's own inset would push every row's columns one way and
+        // leave the header's where they were — a table whose headings stand a few pixels off their data.
+        // Both are inset by their list item alone, which is what puts them on the same line.
+        List.Padding = new Thickness(0);
+
         var header = Header();
 
         var panel = new DockPanel { LastChildFill = true };
@@ -581,7 +807,7 @@ internal sealed class ListBrowser : EntryView
         panel.Children.Add(header);
         panel.Children.Add(List);
 
-        Content = panel;
+        Present(panel);
     }
 
     /// <summary>One column of values, after the icon and the name.</summary>
@@ -926,6 +1152,16 @@ internal sealed class GridBrowser : EntryView
 
         List.ItemsPanel = new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal });
 
+        // A wrapping grid needs a width to wrap against, and the base theme gives a list a horizontal
+        // scrollbar instead: with one, the panel is measured at an unbounded width, lays every tile on one
+        // line, and the dock scrolls sideways rather than putting the next tile on the next row. So the
+        // horizontal scroll is taken off here, which is what makes the panel wrap.
+        ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
+
+        // Tiles state their own spacing, so the list's own inset comes off as well; it is the table that
+        // wants the inset's alignment with its header, not this.
+        List.Padding = new Thickness(0);
+
         // A tile is its own target, so the list item's inset is taken off: an inset here would space the
         // tiles by a number the table chose, and a wrapped grid states its own.
         List.Styles.Add(
@@ -939,7 +1175,7 @@ internal sealed class GridBrowser : EntryView
             }
         );
 
-        Content = List;
+        Present(List);
     }
 
     /// <summary>One entry as a tile: its icon above its name, on one line and cut off when it is too long.</summary>

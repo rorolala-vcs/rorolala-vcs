@@ -577,8 +577,10 @@ the window and the docks and knows nothing of entries.
 
 - **Selection.** Clicking an entry chooses it alone; `Ctrl` adds it to, or takes it from, the choice;
   `Shift` takes everything between the entry the pointer or keyboard last landed on and the one
-  clicked, in the order the listing shows. Chosen entries are filled with the accent (§10). Right-
-  clicking keeps an existing choice when the entry is already in it, so a menu can be opened on a set.
+  clicked, in the order the listing shows. Chosen entries are filled with the accent (§10). Clicking
+  the **space around the entries** drops the choice, and dragging from there draws a **frame** — a band
+  in the accent — and chooses every entry it covers as it is drawn. Right-clicking keeps an existing
+  choice when the entry is already in it, so a menu can be opened on a set.
 - **The keyboard.** Arrow keys step — in the table one row at a time, in the tiles one tile across and
   one row down, so the arrows mean where the eye goes rather than the next index. `Home` and `End` go
   to the ends of the listing, `PageUp` and `PageDown` by a screenful. `Shift` extends from where the
