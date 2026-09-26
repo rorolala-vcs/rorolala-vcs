@@ -95,6 +95,16 @@ internal sealed class DockLayout
 /// </remarks>
 internal static class LayoutStore
 {
+    /// <summary>
+    /// How the layout is written.
+    /// </summary>
+    /// <remarks>
+    /// Indented, because a person reads this file while working something out about the docks, and one
+    /// instance rather than one per write, because the serializer caches what it works out about a type
+    /// inside the options it was handed: a fresh one each time throws that work away every time.
+    /// </remarks>
+    private static readonly JsonSerializerOptions Writing = new() { WriteIndented = true };
+
     /// <summary>Reads the layout, answering a fresh one when there is none to read.</summary>
     /// <param name="log">Where a file that would not read is reported.</param>
     /// <returns>What was read, or a fresh layout.</returns>
@@ -135,7 +145,7 @@ internal static class LayoutStore
             System.IO.Directory.CreateDirectory(ConfigPaths.Root);
             File.WriteAllText(
                 ConfigPaths.Layout,
-                JsonSerializer.Serialize(layout, new JsonSerializerOptions { WriteIndented = true })
+                JsonSerializer.Serialize(layout, Writing)
             );
         }
         catch (Exception error)

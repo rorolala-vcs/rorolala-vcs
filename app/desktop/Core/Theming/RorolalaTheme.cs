@@ -127,9 +127,6 @@ internal sealed class RorolalaTheme
     /// <summary>The height of a row of a list, a tree, or a field.</summary>
     private const double RowHeight = 30.0;
 
-    /// <summary>The height of a band of chrome: a region's header strip and a toolbar.</summary>
-    private const double BarHeight = 36.0;
-
     /// <summary>
     /// The height of the menu bar, which is a fifth shorter than the other bands.
     /// </summary>
@@ -580,7 +577,7 @@ internal sealed class RorolalaTheme
     /// chosen. Everything is rounded — a card at eight, a control at five — because the design is a
     /// raised one rather than a flat one.
     /// </remarks>
-    private Style[] Content() =>
+    private static Style[] Content() =>
         [
             // The window is the ground the cards sit on, where the base theme would have it be the same
             // colour as a card: the design is a stack of surfaces, and that only reads if there is a
@@ -812,7 +809,7 @@ internal sealed class RorolalaTheme
     /// name: Avalonia ranks an activated setter above a template binding and above a plain setter,
     /// which is what it takes to be heard over the base theme's styling of the same place.
     /// </remarks>
-    private Style[] Parts() =>
+    private static Style[] Parts() =>
         [
             // The base theme paints a hovered or held button's own part, and firmed up its border to a
             // weight the design does not have; both are said again here.

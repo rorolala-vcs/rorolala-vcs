@@ -124,7 +124,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void What_was_handed_over_is_readable_back()
+    public void WhatWasHandedOverIsReadableBack()
     {
         RolaI18N.SetTranslationDirectory(_root);
         RolaI18N.SetLocale("zh-CN");
@@ -134,7 +134,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void Every_file_under_the_directory_is_read_and_their_nodes_are_reached_by_key()
+    public void EveryFileUnderTheDirectoryIsReadAndTheirNodesAreReachedByKey()
     {
         Given("pack.yml", PackFile);
         Given("error/vault.yml", ErrorFile);
@@ -149,7 +149,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void Where_a_file_sits_says_nothing_about_the_keys_it_states()
+    public void WhereAFileSitsSaysNothingAboutTheKeysItStates()
     {
         // The keys this file states are the ones it nests, and the path it sits under states none
         // of them: filing it elsewhere changes nothing about what it says.
@@ -164,7 +164,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_form_is_spoken_in_the_language_the_program_speaks()
+    public void AFormIsSpokenInTheLanguageTheProgramSpeaks()
     {
         Given("pack.yml", PackFile);
 
@@ -176,7 +176,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_language_no_form_is_written_in_is_spoken_by_the_fallback()
+    public void ALanguageNoFormIsWrittenInIsSpokenByTheFallback()
     {
         Given("pack.yml", PackFile);
 
@@ -186,7 +186,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_node_written_in_no_language_the_program_speaks_reads_as_its_key()
+    public void ANodeWrittenInNoLanguageTheProgramSpeaksReadsAsItsKey()
     {
         Given("error/vault.yml", ErrorFile);
 
@@ -204,7 +204,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_key_no_file_states_reads_as_the_key()
+    public void AKeyNoFileStatesReadsAsTheKey()
     {
         Given("pack.yml", PackFile);
 
@@ -214,7 +214,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_form_written_as_a_block_is_read_without_the_newline_it_ends_with()
+    public void AFormWrittenAsABlockIsReadWithoutTheNewlineItEndsWith()
     {
         Given("pack.yml", PackFile);
 
@@ -226,7 +226,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void Values_go_into_the_places_by_order_and_not_by_name()
+    public void ValuesGoIntoThePlacesByOrderAndNotByName()
     {
         Given("forms.yml", FormsFile);
 
@@ -239,17 +239,17 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_place_left_without_a_value_is_left_as_it_was_written()
+    public void APlaceLeftWithoutAValueIsLeftAsItWasWritten()
     {
         Given("pack.yml", PackFile);
 
         Speaking("en");
 
-        Assert.Contains("%{reason}", RolaI18N.Get("pack.err_pack_failed"));
+        Assert.Contains("%{reason}", RolaI18N.Get("pack.err_pack_failed"), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void A_value_left_without_a_place_is_dropped()
+    public void AValueLeftWithoutAPlaceIsDropped()
     {
         Given("pack.yml", PackFile);
 
@@ -262,7 +262,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_value_is_written_the_same_in_every_language()
+    public void AValueIsWrittenTheSameInEveryLanguage()
     {
         Given("forms.yml", FormsFile);
 
@@ -284,7 +284,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_language_is_named_as_a_locale()
+    public void ALanguageIsNamedAsALocale()
     {
         Given("pack.yml", PackFile);
 
@@ -296,7 +296,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void Both_extensions_are_read_and_a_file_that_is_neither_is_left_alone()
+    public void BothExtensionsAreReadAndAFileThatIsNeitherIsLeftAlone()
     {
         Given("other.yaml", OtherExtensionFile);
         Given("notes.txt", "pack:\n  nothing:\n    en: read me not\n");
@@ -311,7 +311,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void The_version_a_file_opens_with_is_not_a_node()
+    public void TheVersionAFileOpensWithIsNotANode()
     {
         Given("pack.yml", PackFile);
 
@@ -321,7 +321,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void Naming_another_directory_reads_the_files_again()
+    public void NamingAnotherDirectoryReadsTheFilesAgain()
     {
         Given("one/pack.yml", PackFile);
         Given("two/other.yaml", OtherExtensionFile);
@@ -338,7 +338,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_directory_that_is_not_there_is_refused()
+    public void ADirectoryThatIsNotThereIsRefused()
     {
         RolaI18N.SetTranslationDirectory(Path.Combine(_root, "not-there"));
 
@@ -346,7 +346,7 @@ public sealed class RolaI18NTests : IDisposable
     }
 
     [Fact]
-    public void A_file_that_does_not_read_is_refused_and_the_file_is_named()
+    public void AFileThatDoesNotReadIsRefusedAndTheFileIsNamed()
     {
         Given("broken.yml", BrokenFile);
 
@@ -354,11 +354,11 @@ public sealed class RolaI18NTests : IDisposable
 
         var refused = Assert.Throws<FormatException>(() => RolaI18N.Get("pack.help"));
 
-        Assert.Contains("broken.yml", refused.Message);
+        Assert.Contains("broken.yml", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Nothing_is_asked_for_or_named_under_an_empty_name()
+    public void NothingIsAskedForOrNamedUnderAnEmptyName()
     {
         Given("pack.yml", PackFile);
 

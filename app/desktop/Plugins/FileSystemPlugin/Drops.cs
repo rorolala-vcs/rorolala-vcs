@@ -227,7 +227,7 @@ internal static class Drag
             return;
         }
 
-        var transfer = new DataTransfer();
+        using var transfer = new DataTransfer();
 
         foreach (var entry in carrying)
         {

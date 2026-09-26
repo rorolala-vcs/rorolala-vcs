@@ -19,4 +19,20 @@
     <BaseIntermediateOutputPath>$(CsTargetDir)/obj/</BaseIntermediateOutputPath>
   </PropertyGroup>
 
+  <!--
+    The C# side is held to the same standard as the Rust side, where every crate denies `warnings`: a
+    warning is a mistake that has not been fixed yet, so it fails the build wherever it is raised
+    rather than being read past. This is said once here rather than in each project, because it is a
+    property of the workspace and not of any one program in it — the Desktop program was the one that
+    had been left out of it.
+
+    The stricter analyzer tier — every rule rather than the recommended ones — is asked for by the
+    `dotnet-lint` gate rather than here, so that an ordinary build is held to what the compiler says
+    and the gate to the whole of what the analyzers say. See `dev/run/src/bin/dotnet-lint.sh` and the
+    root `.editorconfig`.
+  -->
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
 </Project>

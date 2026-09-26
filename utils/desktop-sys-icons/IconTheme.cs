@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Avalonia.Media.Imaging;
 
 namespace RorolalaDesktop.SysIcons;
@@ -135,6 +137,16 @@ internal static class IconTheme
     }
 
     /// <summary>One theme's picture for a name, or nothing when it has none.</summary>
+    /// <remarks>
+    /// What is read here is what the method answers with, and the caller is what keeps it: disposing it here
+    /// would hand back a disposed picture. The rule cannot see that the value leaves by the return, so it is
+    /// excused beside the method rather than for the assembly.
+    /// </remarks>
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "the picture read here is the method's answer, and the caller keeps it"
+    )]
     private static Bitmap? Picture(string theme, string name, int size)
     {
         foreach (var root in Roots)
@@ -250,9 +262,9 @@ internal static class IconTheme
                     ArgumentList =
                     {
                         "--width",
-                        size.ToString(),
+                        size.ToString(CultureInfo.InvariantCulture),
                         "--height",
-                        size.ToString(),
+                        size.ToString(CultureInfo.InvariantCulture),
                         "--output",
                         png,
                         svg,
@@ -334,7 +346,7 @@ internal static class IconTheme
                     continue;
                 }
 
-                var equals = line.IndexOf('=');
+                var equals = line.IndexOf('=', StringComparison.Ordinal);
 
                 if (!within || equals < 0)
                 {

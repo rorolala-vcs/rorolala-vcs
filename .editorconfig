@@ -1,0 +1,91 @@
+# What the C# linter makes of this tree, and why.
+#
+# The gate is `./run.sh dotnet-lint`, which asks for the strictest tier the analyzer set carries
+# (`AnalysisMode=All`) and makes every diagnostic an error. Some of what that tier carries does not
+# fit an application, and each such rule is excused here, one at a time, with the reason it is
+# excused. The tier is not lowered for them: a rule excused in writing and a rule never asked are
+# two different things, and this file says which and why — the same division the Rust side makes
+# with a targeted `#[allow(..., reason = ...)]` rather than by dropping a lint group.
+#
+# A rule excused here is excused wherever it fires, so the reason has to hold of the whole tree and
+# not of one place. Where it holds of one place only, the code says so instead, beside the code.
+
+root = true
+
+[*]
+# One line ending and one final newline everywhere, so that a diff is about what changed.
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{sh,ps1}]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.{cs,csx}]
+indent_style = space
+indent_size = 4
+
+# ConfigureAwait: this is an application, not a library. It is started onto a loop of its own, and
+# every await in it wants the same thread it was already on, so there is no context to capture and
+# none to avoid capturing; Microsoft's own guidance does not enable this rule for applications.
+dotnet_diagnostic.CA2007.severity = none
+
+# Concrete types: the abstraction is the point. A view builds a `Control` and hands it to the
+# toolkit to hold, a row is a `Control` because the toolkit's item template says so, and narrowing a
+# declared type to whatever one implementation happens to return would tie every caller to that
+# implementation for a saving nothing measures. The rule is a performance suggestion, and this
+# program's performance is not in the few virtual calls it names.
+dotnet_diagnostic.CA1859.severity = none
+
+# Catching the general exception: this program is a boundary. A file, a process or a window can fail
+# in ways it cannot name, and turning that into a message rather than a crash is what a boundary is
+# for. The catches are already filtered to leave an out-of-memory alone, which is the one thing that
+# must not be swallowed.
+dotnet_diagnostic.CA1031.severity = none
+
+# ToUpperInvariant: a preference, not a rule. What these normalize is a mode name this program
+# writes itself and reads back itself; the case it normalizes to is part of what it accepts, and
+# changing it to satisfy the rule would change what it accepts.
+dotnet_diagnostic.CA1308.severity = none
+
+# `event Action` rather than `EventHandler<T>`: the events of the contract carry nothing. A type
+# parameter invented to satisfy a framework convention is one more thing a plugin author has to read
+# for nothing.
+dotnet_diagnostic.CA1003.severity = none
+
+# An empty interface: `IRola` is deliberately empty until the C ABI's exports land (Section 13). It
+# is the shape a plugin is handed rather than a stand-in for something missing.
+dotnet_diagnostic.CA1040.severity = none
+
+# A member named for a language keyword (`ILog.Error`): the log levels are the words every log has,
+# and the contract is read by C# and by C alike. Renaming `Error` so that C# is easier would make it
+# worse for everyone else.
+dotnet_diagnostic.CA1716.severity = none
+
+# `DockPlacement.Float`: `float` is the word this program's own interface uses for a dock in a
+# window of its own. It is read as that word and not as the type.
+dotnet_diagnostic.CA1720.severity = none
+
+# A type apparently never instantiated: these are the records a JSON answer is deserialized into.
+# The analyzer cannot see the serializer that makes them, so it cannot see the use.
+dotnet_diagnostic.CA1812.severity = none
+
+# A type whose name repeats its namespace's: the Desktop's kernel types live under the program's own
+# namespace and are named the way C# names a program — `RorolalaDesktop.App`, `RorolalaDesktop.
+# MainWindow` — which is what a markup compiler and an entry point look for. The repetition is the
+# convention here rather than an accident.
+dotnet_diagnostic.CA1724.severity = none
+
+# Types that could be internal: the markup compiler and the program's entry point name these from
+# outside the assembly the code is written in, so they are public on purpose.
+dotnet_diagnostic.CA1515.severity = none
+
+# The exception constructors a framework expects: this failure carries the one message it is made
+# with and is never deserialized across an application-domain boundary, which is the reason the rule
+# exists. The constructors it asks for would be three ways to make the same failure differently.
+dotnet_diagnostic.CA1032.severity = none

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using RorolalaDesktop.Contract;
 
@@ -47,8 +48,20 @@ public sealed class FileSystemPlugin : IRolaPlugin
         );
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The one location made here is the plugin's for the whole run: every dock is made over it, and it is
+    /// handed on rather than handed over, so there is no moment at which it stops being needed and nothing to
+    /// let it go at. The rule cannot tell that from a location that leaked, so it is excused beside the method.
+    /// </remarks>
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "the whole location lives as long as the plugin does, which is why it is made once here and never let go of"
+    )]
     public void Initialize(IPluginHost host)
     {
+        ArgumentNullException.ThrowIfNull(host);
+
         host.I18n.RegisterDirectory(Translations());
 
         // The commands the agent carries the file operations out with, and the reading of them. They are

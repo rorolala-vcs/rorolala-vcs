@@ -33,9 +33,6 @@ internal static class Look
     /// <summary>The height of a row of a control.</summary>
     private const double RowHeight = 30.0;
 
-    /// <summary>How rounded a card is.</summary>
-    private static readonly CornerRadius Radius = new(8);
-
     /// <summary>How rounded a control is.</summary>
     private static readonly CornerRadius Small = new(5);
 

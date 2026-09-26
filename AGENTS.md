@@ -67,7 +67,10 @@ semantics may not.
   `./run.sh check > /tmp/log 2>&1; echo $?`. The scripts are `dev/run/src/bin/*.sh`; their `.ps1`
   twins have never been run.
 - Every crate denies `warnings`, `missing_docs`, `rust_2018_idioms`, `clippy::pedantic` and
-  `clippy::nursery`.
+  `clippy::nursery`. The C# side is held to the same standard: `./run.sh dotnet-lint` runs the
+  analyzers at their widest (`AnalysisMode=All`) with every diagnostic an error, and the root
+  `.editorconfig` names each rule that is excused and the reason it is there. What a rule excuses is
+  a rule excused on purpose, not a tier lowered.
 - stdout is the contract; errors and progress go to stderr.
 - The integration suites are programs rather than `#[test]`s, run against the real binaries through
   `ROLA_BIN_DIR`. The CLI is deliberately lightly tested.

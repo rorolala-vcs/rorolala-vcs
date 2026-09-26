@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -58,6 +59,11 @@ internal sealed class Clip
     /// name. Kept here rather than by a view because a listing and a tree both draw entries, and two answers to
     /// how faded a cut one is would be two answers to one question.
     /// </remarks>
+    [SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "a control's own `Clip` is the geometry property of that name, so a view cannot spell `Clip.Faded`; the view reads it through the clipboard instance it holds, which is why it stays on one"
+    )]
     public double Faded => 0.45;
 
     /// <summary>Puts entries on the clipboard to be copied, and takes back any earlier cut.</summary>
@@ -217,7 +223,7 @@ internal sealed class Clip
                 return;
             }
 
-            var transfer = new DataTransfer();
+            using var transfer = new DataTransfer();
 
             foreach (var entry in entries)
             {
