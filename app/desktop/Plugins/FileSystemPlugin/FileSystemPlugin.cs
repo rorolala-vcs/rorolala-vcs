@@ -59,13 +59,14 @@ public sealed class FileSystemPlugin : IRolaPlugin
         host.I18n.RegisterDirectory(Translations());
 
         // The commands the agent carries the file operations out with, and the reading of them. They are
-        // settings rather than constants because the tools that do the work are the system's rather than
-        // this program's, and a system keeps them where it keeps them.
+        // settings rather than constants because the tool that does the work is another program's, and a
+        // system may keep it elsewhere — or a user may prefer another. What they are until they are changed
+        // is this program's own operations, named in full so that the default works without a path.
         FileOps.Configure(host.Config);
-        host.Config.Add(new PluginSetting("Commands/copy", SettingKind.Text, "rorolala_file_system.setting.copy", "cp -r", 10));
-        host.Config.Add(new PluginSetting("Commands/move", SettingKind.Text, "rorolala_file_system.setting.move", "mv", 20));
-        host.Config.Add(new PluginSetting("Commands/remove_dirs", SettingKind.Text, "rorolala_file_system.setting.remove_dirs", "rm -rf", 30));
-        host.Config.Add(new PluginSetting("Commands/remove_files", SettingKind.Text, "rorolala_file_system.setting.remove_files", "rm", 40));
+        host.Config.Add(new PluginSetting(FileOps.CopySetting, SettingKind.Text, "rorolala_file_system.setting.copy", FileOps.DefaultCopy, 10));
+        host.Config.Add(new PluginSetting(FileOps.MoveSetting, SettingKind.Text, "rorolala_file_system.setting.move", FileOps.DefaultMove, 20));
+        host.Config.Add(new PluginSetting(FileOps.RemoveDirsSetting, SettingKind.Text, "rorolala_file_system.setting.remove_dirs", FileOps.DefaultRemoveDirs, 30));
+        host.Config.Add(new PluginSetting(FileOps.RemoveFilesSetting, SettingKind.Text, "rorolala_file_system.setting.remove_files", FileOps.DefaultRemoveFiles, 40));
 
         // One location for the whole plugin. Every dock it opens is a view onto it — the browser
         // docks differ in layout and in nothing else, and the navigation dock has one address and one

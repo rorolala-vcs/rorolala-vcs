@@ -193,3 +193,11 @@ pub const EC_ERR_DESKTOP_NOT_FOUND: i32 = 94;
 
 /// `exit_codes.desktop_launch_failed`
 pub const EC_ERR_DESKTOP_LAUNCH_FAILED: i32 = 95;
+
+// File operations
+
+/// `exit_codes.fs_ops_argument`
+pub const EC_ERR_FS_OPS_ARGUMENT: i32 = 96;
+
+/// `exit_codes.fs_ops_failed`
+pub const EC_ERR_FS_OPS_FAILED: i32 = 97;

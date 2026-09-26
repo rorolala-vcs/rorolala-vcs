@@ -1,0 +1,138 @@
+_version: 2
+
+# What `rola fs-ops` and the three words under it say. These are the file operations the Desktop
+# program hands its work to, so what is written here is read both by a person at a terminal and by
+# that program through its agent: the words are short because the act is, and what is *meant* by an
+# operation — whether to replace, to skip or to rename — was settled before this is reached.
+
+fs_ops:
+  help:
+    en: |
+        Move, copy or remove a path
+
+        **Usage**: `rola fs-ops mv FROM TO`, `rola fs-ops cp FROM TO`, `rola fs-ops rm PATH`
+
+        These are the file operations themselves, and nothing besides: `TO` is the path the thing is
+        to have rather than the directory it is to go in, what a name already taken there means is
+        the caller's to have settled, and no operation asks anything before it runs.
+
+        A directory is moved, copied or removed with everything under it. There are no `-r` and no
+        `-f`: whether a path is a directory is read from the path itself, and nothing is coerced.
+    zh-CN: |
+        移动、复制或删除一个路径
+
+        **用法**：`rola fs-ops mv FROM TO`、`rola fs-ops cp FROM TO`、`rola fs-ops rm PATH`
+
+        这些就是文件操作本身，别无其他：`TO` 是目标应有的路径而不是要放进哪个目录；那里已有同名时意味
+        着什么，由调用方先行确定；每个操作运行前都不再发问。
+
+        目录连同其下的一切一起被移动、复制或删除。没有 `-r` 也没有 `-f`：某条路径是不是目录，从路径
+        本身读取，不做任何强制。
+
+  cmd_fs_ops_description:
+    en: Move, copy or remove a path
+    zh-CN: 移动、复制或删除一个路径
+
+  mv_help:
+    en: |
+        Put a path at another
+
+        **Usage**: `rola fs-ops mv FROM TO`
+
+        `TO` is the path the thing is to have. Either path may name a file or a directory, and moving
+        a directory moves everything under it. A rename the filesystem refuses — across two devices,
+        most often — is done the long way instead: copied, and then removed.
+    zh-CN: |
+        把一个路径放到另一个位置
+
+        **用法**：`rola fs-ops mv FROM TO`
+
+        `TO` 是该东西应有的路径。两侧都可以是文件或目录，移动目录即移动其下的一切。文件系统拒绝的
+        改名（最常见的是跨设备）改为绕道完成：先复制，再删除。
+
+  mv_description:
+    en: Put a path at another
+    zh-CN: 把一个路径放到另一个位置
+
+  cp_help:
+    en: |
+        Put a copy of a path at another
+
+        **Usage**: `rola fs-ops cp FROM TO`
+
+        `TO` is the path the copy is to have, and `FROM` is left where it is. Either path may name a
+        file or a directory, and copying a directory copies everything under it — content and
+        structure, which is all that is claimed: permissions, ownership and times are the
+        destination's own, as the system gives them for anything newly written.
+    zh-CN: |
+        把一个路径的副本放到另一个位置
+
+        **用法**：`rola fs-ops cp FROM TO`
+
+        `TO` 是副本应有的路径，`FROM` 留在原处。两侧都可以是文件或目录；复制目录即复制其下的一切——
+        也就是内容与结构，这是它仅有的承诺：权限、属主与时间由目标处自己决定，如同系统对待任何新写出的
+        东西。
+
+  cp_description:
+    en: Put a copy of a path at another
+    zh-CN: 把一个路径的副本放到另一个位置
+
+  rm_help:
+    en: |
+        Take a path away
+
+        **Usage**: `rola fs-ops rm PATH`
+
+        One word for both kinds: whether the path is a file or a directory is read from the path
+        itself, so a caller need not keep a fact the filesystem already has. A directory is removed
+        with everything under it, and a symbolic link is unlinked rather than followed.
+
+        There is no confirmation: asking whether to remove is the caller's to do, and by the time
+        this runs the answer is yes.
+    zh-CN: |
+        移除一个路径
+
+        **用法**：`rola fs-ops rm PATH`
+
+        两种类型共用同一个词：该路径是文件还是目录，从路径本身读取，因此调用方无需再保存一个文件系统
+        早已掌握的事实。删除目录会连同其下的一切，符号链接被解除而不是被跟随。
+
+        没有确认：要不要删除由调用方去问，等运行到这里时答案已经是「要」。
+
+  rm_description:
+    en: Take a path away
+    zh-CN: 移除一个路径
+
+  result_two:
+    en: "%{verb}: %{from} -> %{to}"
+    zh-CN: "%{verb}：%{from} -> %{to}"
+
+  result_one:
+    en: "%{verb}: %{from}"
+    zh-CN: "%{verb}：%{from}"
+
+  err_argument_two:
+    en: "`%{verb}` needs both paths it works on — %{verb} FROM TO"
+    zh-CN: "`%{verb}` 需要它所作用的两条路径 —— %{verb} FROM TO"
+
+  err_argument_one:
+    en: "`%{verb}` needs the path it works on — %{verb} PATH"
+    zh-CN: "`%{verb}` 需要它所作用的路径 —— %{verb} PATH"
+
+  err_argument_help:
+    en: |
+        Please name the path to move, copy or remove, and where to put it when it is being moved or
+        copied
+    zh-CN: |
+        请给出要移动、复制或删除的路径；若是移动或复制，再给出要放到哪里
+
+  err_failed:
+    en: "`%{verb}` could not be done — %{reason}"
+    zh-CN: "`%{verb}` 无法完成 —— %{reason}"
+
+  err_failed_help:
+    en: |
+        Please check that the paths can be read and written, and that they are what they are said to
+        be, then try again
+    zh-CN: |
+        请确认这些路径可读可写，且确实是所说的那些路径，然后重试

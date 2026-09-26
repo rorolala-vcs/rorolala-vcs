@@ -212,3 +212,11 @@ exit_codes:
   desktop_launch_failed:
     en: The Desktop program would not start
     zh-CN: 桌面程序无法启动
+
+  fs_ops_argument:
+    en: A file operation was named without the paths it works on
+    zh-CN: 文件操作缺少它所作用的路径
+
+  fs_ops_failed:
+    en: The filesystem refused the operation
+    zh-CN: 文件系统拒绝了该操作

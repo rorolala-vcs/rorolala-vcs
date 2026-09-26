@@ -25,6 +25,36 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal static class FileOps
 {
+    /// <summary>The setting the copy command is kept under.</summary>
+    public const string CopySetting = "Commands/copy";
+
+    /// <summary>The setting the move command is kept under.</summary>
+    public const string MoveSetting = "Commands/move";
+
+    /// <summary>The setting the directory-removal command is kept under.</summary>
+    public const string RemoveDirsSetting = "Commands/remove_dirs";
+
+    /// <summary>The setting the file-removal command is kept under.</summary>
+    public const string RemoveFilesSetting = "Commands/remove_files";
+
+    /// <summary>What the copy command is until the user says otherwise.</summary>
+    /// <remarks>
+    /// The program is named by its bare name rather than by the path it was found at, so that what is written
+    /// down is what a reader would type: the word is the same wherever the program is installed, and it is the
+    /// path — which differs from one installation to the next — that would be the odd thing to keep. A run
+    /// reaches it through the path it was itself started with, which is the path it is on.
+    /// </remarks>
+    public const string DefaultCopy = "rola fs-ops cp";
+
+    /// <inheritdoc cref="DefaultCopy" />
+    public const string DefaultMove = "rola fs-ops mv";
+
+    /// <inheritdoc cref="DefaultCopy" />
+    public const string DefaultRemoveDirs = "rola fs-ops rm";
+
+    /// <inheritdoc cref="DefaultCopy" />
+    public const string DefaultRemoveFiles = "rola fs-ops rm";
+
     /// <summary>
     /// The plugin's own settings, where the commands that carry the operations out are said.
     /// </summary>
@@ -44,8 +74,10 @@ internal static class FileOps
     /// <param name="fallback">What it is until it is changed.</param>
     private static string Command(string id, string fallback) =>
         _config?.ReadKeyAs<string>(id) is { Length: > 0 } command ? command : fallback;
+
     /// <summary>
-    /// A path without the separator a directory's may carry at its end.
+    /// Where the file agent is: inside this plugin's own directory, which is where a plugin's own things are
+    /// laid because nothing else lays them.
     /// </summary>
     /// <remarks>
     /// This exists because of one bug that is worth not having again: a path that came from a drag is read
@@ -68,7 +100,7 @@ internal static class FileOps
     /// <param name="failed">Where a failure is reported.</param>
     /// <returns>Whether anything was copied.</returns>
     public static Task<bool> Copy(IReadOnlyList<string> sources, string into, Action<string> failed) =>
-        Transfer("Copy", Command("Commands/copy", "cp -r"), sources, into, failed);
+        Transfer("Copy", Command(CopySetting, DefaultCopy), sources, into, failed);
 
     /// <summary>Moves sources into a directory, through the agent.</summary>
     /// <param name="sources">What to move.</param>
@@ -76,7 +108,7 @@ internal static class FileOps
     /// <param name="failed">Where a failure is reported.</param>
     /// <returns>Whether anything was moved.</returns>
     public static Task<bool> Move(IReadOnlyList<string> sources, string into, Action<string> failed) =>
-        Transfer("Move", Command("Commands/move", "mv"), sources, into, failed);
+        Transfer("Move", Command(MoveSetting, DefaultMove), sources, into, failed);
 
     /// <summary>
     /// Removes entries, through the agent.
@@ -97,12 +129,12 @@ internal static class FileOps
 
         if (directories.Length > 0)
         {
-            removed |= await Without("RemoveDirs", Command("Commands/remove_dirs", "rm -rf"), directories, failed);
+            removed |= await Without("RemoveDirs", Command(RemoveDirsSetting, DefaultRemoveDirs), directories, failed);
         }
 
         if (files.Length > 0)
         {
-            removed |= await Without("RemoveFiles", Command("Commands/remove_files", "rm"), files, failed);
+            removed |= await Without("RemoveFiles", Command(RemoveFilesSetting, DefaultRemoveFiles), files, failed);
         }
 
         return removed;

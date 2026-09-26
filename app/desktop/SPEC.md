@@ -632,8 +632,10 @@ rola-desktop-fs-agent -Command:"<program and its arguments>" -Type:"Copy|Move|Re
   named rather than run through a shell, so a path with a space in it survives. The command is the
   operation's implementation, which is what lets the same agent serve copy, move and removal. The File
   System's own commands are its settings (`Commands/copy`, `Commands/move`, `Commands/remove_dirs`,
-  `Commands/remove_files`), so a system that keeps its tools elsewhere, or a user who prefers another,
-  says so in the Preference dock (§7.4) rather than in a build.
+  `Commands/remove_files`), and what they are until the user chooses otherwise is **this program's own
+  file operations** — `rola fs-ops cp|mv|rm` (§20) — named by the bare name `rola` rather than by the
+  path it was found at, so that what is kept is what a reader would type. A system that keeps its tools
+  elsewhere, or a user who prefers another, says so in the Preference dock (§7.4) rather than in a build.
 - `-Pairs` is a batch, so that a question about a name is put once for a batch and its answer can stand
   for the rest; `-From`/`-To` is the single-item shorthand. An item goes over on its own where a path
   carries a batch separator, so that a path can never be read as two things.
@@ -1130,4 +1132,5 @@ Agreed so far:
 directory (Section 9).
 - `app/cli/rola/src/cmd_desktop.rs` — how the command line starts this program and hands over the
   language and the current directory.
+- `app/cli/rola/src/cmd_fs_ops.rs` — `rola fs-ops`, the file operations the agent of §7.8 runs.
 - `AGENTS.md` — repository conventions, including the English rule for documentation.
