@@ -482,7 +482,7 @@ A dock is registered with a `DockRegistration`:
 | --- | --- | --- | --- |
 | Plugin Manager | `rorolala.core.plugin_manager` | Toggle | Kernel. Cannot be disabled. Enabled/disabled state and ordering of plugins are edited here. |
 | Log | `rorolala.core.log` | Toggle | Kernel. Unity-style output at levels Trace, Debug, Info, Warn, Error (Section 12). |
-| Preference | `rorolala.core.preference` | Toggle | Kernel. Every setting the owners declared, chosen by owner on the left and grouped as each owner grouped it on the right. Editing writes `preference.json` at once; a setting that needs a restart says so. |
+| Preference | `rorolala.core.preference` | Toggle | Kernel. Every setting the owners declared, chosen by owner on the left and grouped as each owner grouped it on the right. Editing writes `preference.json` at once; every setting has a way back to what it is declared to be, and one that needs a restart says so. |
 
 All three are always available from `Window`.
 

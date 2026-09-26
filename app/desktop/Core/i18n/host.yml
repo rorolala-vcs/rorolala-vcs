@@ -45,6 +45,9 @@ setting:
   none:
     en: Nothing to set here.
     zh-CN: 这里没有可设置的项。
+  reset:
+    en: Reset
+    zh-CN: 还原
   default:
     en: "Default: %{value}"
     zh-CN: "默认：%{value}"

@@ -161,6 +161,9 @@ internal sealed class PreferenceView : UserControl
     /// <summary>One setting: what it is called, its editor, and what it is until it is changed.</summary>
     /// <param name="owner">The owner that declared it.</param>
     /// <param name="setting">The setting.</param>
+    /// <summary>One setting: what it is called, how it is chosen, and the way back to its default.</summary>
+    /// <param name="owner">The owner that declared it.</param>
+    /// <param name="setting">The setting.</param>
     private Control Row(PluginId owner, PluginSetting setting)
     {
         var value = _settings.Value(owner, setting) ?? string.Empty;
@@ -168,50 +171,28 @@ internal sealed class PreferenceView : UserControl
 
         rows.Children.Add(new TextBlock { Text = _i18n.Get(setting.LabelKey) });
 
-        switch (setting.Kind)
+        var reset = new Button { Content = _i18n.Get("setting.reset") };
+
+        // Going back is choosing the value the setting is declared to be, and it is written down like any
+        // other choice: what the panel shows and what the file holds are then the same thing, and a reader of
+        // the file alone sees what is in force rather than having to know what the declaration was.
+        reset.Click += (_, _) =>
         {
-            case SettingKind.Bool:
-                var check = new CheckBox { IsChecked = string.Equals(value, "true", StringComparison.Ordinal) };
-                check.IsCheckedChanged += (_, _) =>
-                    _settings.Keep(owner, setting, check.IsChecked == true ? "true" : "false");
-                rows.Children.Add(check);
-                break;
+            _settings.Keep(owner, setting, setting.Default);
 
-            case SettingKind.Choice:
-                var options = (setting.Options ?? []).ToArray();
-                var choice = new ComboBox
-                {
-                    ItemsSource = options.Select(option => _i18n.Get(option.LabelKey)).ToArray(),
-                    SelectedIndex = Array.FindIndex(options, option => string.Equals(option.Value, value, StringComparison.Ordinal)),
-                    MinWidth = 240,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                };
-                choice.SelectionChanged += (_, _) =>
-                {
-                    if (choice.SelectedIndex >= 0)
-                    {
-                        _settings.Keep(owner, setting, options[choice.SelectedIndex].Value);
-                    }
-                };
-                rows.Children.Add(choice);
-                break;
+            // Drawn again rather than set here, so that what is on screen is what was written for every kind
+            // alike — a box and a field are not set the same way, and neither should have to be known here.
+            Show();
+        };
 
-            default:
-                var field = new TextBox { Text = value, MinWidth = 240, HorizontalAlignment = HorizontalAlignment.Left };
-
-                // Written when the field is left or entered rather than on every letter, because the file is
-                // written on every change and a setting is a word rather than a keystroke.
-                field.LostFocus += (_, _) => _settings.Keep(owner, setting, field.Text);
-                field.KeyDown += (_, key) =>
-                {
-                    if (key.Key == Avalonia.Input.Key.Enter)
-                    {
-                        _settings.Keep(owner, setting, field.Text);
-                    }
-                };
-                rows.Children.Add(field);
-                break;
-        }
+        rows.Children.Add(
+            new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children = { Editor(owner, setting, value), reset },
+            }
+        );
 
         var notes = new List<string>();
 
@@ -238,6 +219,58 @@ internal sealed class PreferenceView : UserControl
         }
 
         return rows;
+    }
+
+    /// <summary>What a setting is chosen with, by its kind.</summary>
+    /// <param name="owner">The owner that declared it.</param>
+    /// <param name="setting">The setting.</param>
+    /// <param name="value">What it is worth now.</param>
+    private Control Editor(PluginId owner, PluginSetting setting, string value)
+    {
+        switch (setting.Kind)
+        {
+            case SettingKind.Bool:
+                var check = new CheckBox { IsChecked = string.Equals(value, "true", StringComparison.Ordinal) };
+                check.IsCheckedChanged += (_, _) =>
+                    _settings.Keep(owner, setting, check.IsChecked == true ? "true" : "false");
+
+                return check;
+
+            case SettingKind.Choice:
+                var options = (setting.Options ?? []).ToArray();
+                var choice = new ComboBox
+                {
+                    ItemsSource = options.Select(option => _i18n.Get(option.LabelKey)).ToArray(),
+                    SelectedIndex = Array.FindIndex(options, option => string.Equals(option.Value, value, StringComparison.Ordinal)),
+                    MinWidth = 240,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                choice.SelectionChanged += (_, _) =>
+                {
+                    if (choice.SelectedIndex >= 0)
+                    {
+                        _settings.Keep(owner, setting, options[choice.SelectedIndex].Value);
+                    }
+                };
+
+                return choice;
+
+            default:
+                var field = new TextBox { Text = value, MinWidth = 240 };
+
+                // Written when the field is left or entered rather than on every letter, because the file is
+                // written on every change and a setting is a word rather than a keystroke.
+                field.LostFocus += (_, _) => _settings.Keep(owner, setting, field.Text);
+                field.KeyDown += (_, key) =>
+                {
+                    if (key.Key == Avalonia.Input.Key.Enter)
+                    {
+                        _settings.Keep(owner, setting, field.Text);
+                    }
+                };
+
+                return field;
+        }
     }
 
     /// <summary>The group a setting is shown under, which is the part of its identity before the slash.</summary>
