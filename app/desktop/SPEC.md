@@ -592,9 +592,12 @@ the window and the docks and knows nothing of entries.
 - **The keyboard.** Arrow keys step — in the table one row at a time, in the tiles one tile across and
   one row down, so the arrows mean where the eye goes rather than the next index. `Home` and `End` go
   to the ends of the listing, `PageUp` and `PageDown` by a screenful. `Shift` extends from where the
-  keyboard last landed; `Enter` opens the entry it is on. Typing letters picks the next entry whose
-  name starts with them, and a run of letters is forgotten a second after the last one. `Ctrl+A`
-  chooses every entry.
+  keyboard last landed; `Enter` opens the entry it is on. Typing picks the next entry whose name starts
+  with what is typed, and a run is forgotten a second after its last character. **Pressing the same
+  character again walks the entries that begin with it** rather than looking for a name that begins with
+  two of them, so a listing of similarly named things can be walked from the keyboard; typing quickly
+  spells a longer name instead. The search always starts after where the last move landed and wraps, and
+  the way up is never matched, being a place rather than a name. `Ctrl+A` chooses every entry.
 - **Clipboard.** `Ctrl+C` copies the chosen entries and `Ctrl+X` cuts them; `Ctrl+V` pastes into the
   directory being looked at. The paths go on the **system clipboard** — as files and as text — so a
   copy can be pasted into another program and a copy taken in another program can be pasted here. An

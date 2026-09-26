@@ -426,13 +426,19 @@ internal abstract class EntryView : UserControl
     }
 
     /// <summary>
-    /// Takes a run of typed letters as a move to the next entry that begins with them.
+    /// Takes a run of typed characters as a move to the next entry that begins with them.
     /// </summary>
     /// <remarks>
-    /// The run is forgotten a second after the last letter, so the same letter can begin a new run — which
-    /// is what makes typing one letter a second time go to the next entry rather than wait for a name that
-    /// starts with two. Searching starts after where the last move landed, so a run walks the entries that
-    /// begin with it, and only wraps when it runs off the end.
+    /// A run of one character written over and over is that character asked for again rather than a name that
+    /// begins with two of them: the search is for the one character and starts after where the last move
+    /// landed, so pressing a letter repeatedly walks the entries that begin with it. That is what makes a
+    /// directory full of similarly named things reachable from the keyboard, and it is the behaviour of the
+    /// file managers this is read like.
+    /// <para>
+    /// Any run of characters is searched for as a whole — so typing quickly spells a longer name — and the
+    /// search always starts after the last move and wraps. The run is forgotten a second after the last
+    /// character, which is how a new run begins.
+    /// </para>
     /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The text typed.</param>
@@ -451,11 +457,12 @@ internal abstract class EntryView : UserControl
         _typed = now - _typedAt > Typing ? text : _typed + text;
         _typedAt = now;
 
-        var at = Seek(_typed, _lead + 1);
+        var sought = Repeated(_typed) ? _typed[..1] : _typed;
+        var at = Seek(sought, _lead + 1);
 
         if (at < 0)
         {
-            at = Seek(_typed, 0);
+            at = Seek(sought, 0);
         }
 
         if (at < 0)
@@ -467,7 +474,17 @@ internal abstract class EntryView : UserControl
         e.Handled = true;
     }
 
+    /// <summary>Whether a run of typed characters is one character written over and over.</summary>
+    /// <param name="typed">What was typed.</param>
+    private static bool Repeated(string typed) =>
+        typed.Length > 1 && typed.All(character => character == typed[0]);
+
     /// <summary>The first entry from a place on that begins with what was typed, or nothing.</summary>
+    /// <remarks>
+    /// The way up is left out: it is not a name but a place, and it is reached by its own means rather than by
+    /// being spelled — a run that matches it would be a run that answers with something the reader did not
+    /// name.
+    /// </remarks>
     /// <param name="typed">What was typed.</param>
     /// <param name="from">Where to start looking.</param>
     private int Seek(string typed, int from)
@@ -477,8 +494,10 @@ internal abstract class EntryView : UserControl
         for (var step = 0; step < shown.Count; step++)
         {
             var at = (((from + step) % shown.Count) + shown.Count) % shown.Count;
+            var entry = shown[at];
 
-            if (Names.Show(shown[at]).StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+            if (!Browser.IsUp(entry.Path) &&
+                Names.Show(entry).StartsWith(typed, StringComparison.OrdinalIgnoreCase))
             {
                 return at;
             }
