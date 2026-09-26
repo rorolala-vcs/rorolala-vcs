@@ -45,7 +45,10 @@ internal sealed class NavigationBar : UserControl
     private readonly IPluginHost _host;
 
     /// <summary>The location, which this toolbar shows and switches.</summary>
-    private readonly Browser _browser;
+    private Browser _browser;
+
+    /// <summary>Whether the toolbar is listening to its location, which it does while it is on screen.</summary>
+    private bool _watching;
 
     /// <summary>The path being read, which is what the address is until it is clicked.</summary>
     private readonly StackPanel _crumbs = new()
@@ -160,12 +163,47 @@ internal sealed class NavigationBar : UserControl
         // address is already right the moment the dock is shown again.
         AttachedToVisualTree += (_, _) =>
         {
+            _watching = true;
             _browser.Changed += Update;
             Update();
         };
-        DetachedFromVisualTree += (_, _) => _browser.Changed -= Update;
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _watching = false;
+            _browser.Changed -= Update;
+        };
 
         Update();
+    }
+
+    /// <summary>
+    /// Shows and switches another location.
+    /// </summary>
+    /// <remarks>
+    /// A dock that is taken out of step keeps one toolbar and hands it the location it has instead of being
+    /// built again: the bar is the same bar, and handing the control it was made with over a second time would
+    /// not work while that control is still the bar's own to lay out.
+    /// </remarks>
+    /// <param name="location">The location to show and switch.</param>
+    public void Reading(Browser location)
+    {
+        if (ReferenceEquals(_browser, location))
+        {
+            return;
+        }
+
+        if (_watching)
+        {
+            _browser.Changed -= Update;
+        }
+
+        _browser = location;
+
+        if (_watching)
+        {
+            _browser.Changed += Update;
+            Update();
+        }
     }
 
     /// <summary>The toolbar buttons: a glyph, since they are arrows and a cycle.</summary>

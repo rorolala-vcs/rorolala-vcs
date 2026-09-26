@@ -3,19 +3,20 @@ using RorolalaDesktop.Contract;
 namespace FileSystemPlugin;
 
 /// <summary>
-/// Where the browser is, where it has been, and what is there.
+/// Where one is, where it has been, and what is there.
 /// </summary>
 /// <remarks>
-/// One per plugin, not one per dock: the File System has one location, and every dock it opens is a
-/// view onto it — how the entries are laid out differs from dock to dock, the directory does not. A
-/// second dock is therefore a second look at the same place rather than a place of its own, which is
-/// what lets the navigation dock have one address to show and one history to walk.
+/// The plugin has one of these and every dock is a view onto it — unless the dock has been taken out of
+/// step, in which case it is given one of its own and looks at a directory of its own (Section 7.5). How the
+/// entries are laid out differs from dock to dock, and so may the directory; what every one of them agrees
+/// on — where the tree is rooted, and whether hidden entries are shown — is not here but in
+/// <see cref="Shared"/>.
 /// <para>
-/// The state is the browser's own, kept by the plugin rather than the host: what a directory holds,
-/// and where the user has been, are the browser's to know.
+/// The rest of the state is the location's own, kept by the plugin rather than the host: what a directory
+/// holds, and where this one has been, are its to know.
 /// </para>
 /// </remarks>
-internal sealed class Browser
+internal sealed class Browser : IDisposable
 {
     /// <summary>
     /// The path that names the computer rather than a directory: where a Windows user picks a drive.
@@ -39,6 +40,9 @@ internal sealed class Browser
     /// </remarks>
     public const string UpName = "..";
 
+    /// <summary>The answers every location shares, which this one reads and restages itself for.</summary>
+    private readonly Shared _shared;
+
     /// <summary>Where it has been, most recent last.</summary>
     private readonly List<string> _back = [];
 
@@ -54,17 +58,19 @@ internal sealed class Browser
     /// <summary>What a listing shows of it, which is those entries with the way up before them.</summary>
     private IReadOnlyList<Entry> _shown;
 
-    /// <summary>Whether the entries the platform hides are shown.</summary>
-    private bool _showHidden;
-
-    /// <summary>Makes a browser onto a directory.</summary>
-    /// <param name="directory">The directory to look at, and to root the tree at.</param>
-    public Browser(string directory)
+    /// <summary>Makes a location onto a directory.</summary>
+    /// <param name="shared">The answers every location shares.</param>
+    /// <param name="directory">The directory to look at.</param>
+    public Browser(Shared shared, string directory)
     {
+        _shared = shared;
         _current = directory;
-        BaseDir = directory;
         _entries = Read(directory);
         _shown = Stage(directory, _entries);
+
+        // A listing follows the shared answers wherever it is, so this location has to be told when they
+        // change — and that is why a location given to a dock out of step is let go of rather than dropped.
+        _shared.Changed += Restage;
     }
 
     /// <summary>
@@ -107,11 +113,10 @@ internal sealed class Browser
     /// The directory the tree is rooted at, which a directory's own menu sets.
     /// </summary>
     /// <remarks>
-    /// The tree is rooted here rather than at the location so that stepping through directories does
-    /// not move the tree: what a user opens stays open, and the tree is the one view that is not
-    /// rearranged by where the browser happens to be.
+    /// The answer is the whole plugin's rather than this location's (see <see cref="Shared"/>), and it is
+    /// reached through a location because a location is what a view holds.
     /// </remarks>
-    public string BaseDir { get; private set; }
+    public string BaseDir => _shared.BaseDir;
 
     /// <summary>The directory holding the one being looked at, or nothing when there is none.</summary>
     public string? Parent => ParentOf(_current);
@@ -132,25 +137,14 @@ internal sealed class Browser
     /// Whether the entries the platform hides are shown.
     /// </summary>
     /// <remarks>
-    /// It is the browser's rather than a view's, because the listing is the browser's: two docks look at one
-    /// directory, and one of them listing what the other does not would be two answers to what is there.
-    /// What a dock keeps is whether the user asked for them, since a dock is what a toggle sits in
-    /// (Section 7.5).
+    /// One answer for the whole plugin rather than for this location (see <see cref="Shared"/>), reached
+    /// through a location because a location is what a view holds — and because the completions an address
+    /// offers keep the same entries out, a path that cannot be reached by typing it not being an address.
     /// </remarks>
     public bool ShowHidden
     {
-        get => _showHidden;
-        set
-        {
-            if (_showHidden == value)
-            {
-                return;
-            }
-
-            _showHidden = value;
-            _shown = Stage(_current, _entries);
-            Changed?.Invoke();
-        }
+        get => _shared.ShowHidden;
+        set => _shared.ShowHidden = value;
     }
 
     /// <summary>
@@ -218,21 +212,11 @@ internal sealed class Browser
             return false;
         }
 
-        if (BaseDir == _current)
-        {
-            return true;
-        }
-
-        BaseDir = _current;
-
-        // Setting the base moves it, so what the listing offers changes with it: a directory that had a step
-        // out of it a moment ago has none now, and one that had none has one. The entries are staged again for
-        // that reason rather than only the tree being redrawn.
-        _shown = Stage(_current, _entries);
-
-        // Where the browser is looking did not change, but what the tree is rooted at did, so what
-        // draws the tree has to be told.
-        Changed?.Invoke();
+        // Setting the base moves this location as well, because the two are one act to whoever asked: a user
+        // who roots the tree at a directory is working in it. A dock that has been taken out of step roots the
+        // tree for everybody and moves only itself (Section 7.5), so the base and where the whole is looking
+        // may then come apart — which is what being out of step means.
+        _shared.BaseDir = _current;
 
         return true;
     }
@@ -282,6 +266,30 @@ internal sealed class Browser
         Changed?.Invoke();
     }
 
+    /// <summary>
+    /// Reads the listing again for what the shared answers now say.
+    /// </summary>
+    /// <remarks>
+    /// The directory has not changed; what a listing makes of it has. Both shared answers are read while a
+    /// listing is staged, so one of them changing is a listing to make again — and the tree, which is rooted
+    /// at one of them, is told by the same raising rather than by a second one of its own.
+    /// </remarks>
+    private void Restage()
+    {
+        _shown = Stage(_current, _entries);
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Lets go of the shared answers.
+    /// </summary>
+    /// <remarks>
+    /// A location made for a dock that was taken out of step is thrown away when that dock goes back in, and
+    /// what it holds of the plugin's has to be let go of with it: a subscription left behind would keep an
+    /// abandoned location reading directories nobody looks at, once per toggle.
+    /// </remarks>
+    public void Dispose() => _shared.Changed -= Restage;
+
     /// <summary>Moves without touching the history, for back, forward and up.</summary>
     /// <param name="directory">The directory to look at.</param>
     private void Move(string directory)
@@ -310,9 +318,9 @@ internal sealed class Browser
     {
         // The hidden ones come out here rather than never being read, because a listing that was read
         // without them would have to be read again the moment they were asked for.
-        var shown = _showHidden ? entries : entries.Where(entry => !entry.Hidden).ToArray();
+        var shown = _shared.ShowHidden ? entries : entries.Where(entry => !entry.Hidden).ToArray();
 
-        return ParentOf(directory) is null || Same(directory, BaseDir)
+        return ParentOf(directory) is null || Same(directory, _shared.BaseDir)
             ? shown
             : [new Entry(UpName, EntryKind.Directory), .. shown];
     }

@@ -18,10 +18,11 @@ internal sealed class DirectoryDock : IDockView
 
     /// <summary>Makes a directory dock.</summary>
     /// <param name="host">The host, for logging what the directory cannot do.</param>
-    /// <param name="browser">The one location, which this dock is a view of.</param>
+    /// <param name="shared">The answers every location shares.</param>
+    /// <param name="browser">The one location, which this dock is a view of until it is taken out of step.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public DirectoryDock(IPluginHost host, Browser browser, Clip clip) =>
-        _view = new DirectoryControl(host, browser, clip);
+    public DirectoryDock(IPluginHost host, Shared shared, Browser browser, Clip clip) =>
+        _view = new DirectoryControl(host, shared, browser, clip);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -38,9 +39,9 @@ internal sealed class DirectoryDock : IDockView
 /// </summary>
 /// <remarks>
 /// Neither navigation nor the tree is here: back, forward, up, refresh and the address are a dock of
-/// their own, and so is the tree (Section 7.5). What is here is one directory, read at a size, which is
-/// the one thing about this dock that is its own — where it is looking is the same wherever else it is
-/// looked at.
+/// their own, and so is the tree (Section 7.5). What is here is one directory, read at a size, and the size
+/// is the one thing about this dock that is its own by default — the directory is every dock's, until this
+/// one is taken out of step and given a location of its own.
 /// <para>
 /// The arrangement is not a second choice beside the size: entries read too small to be tiles are read as
 /// rows of names, and entries read large enough are read as tiles, so one scale decides both and there is
@@ -69,6 +70,9 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>The dock key the choice about hidden entries is kept under.</summary>
     private const string HiddenKey = "hidden";
 
+    /// <summary>The dock key the choice about following the whole is kept under.</summary>
+    private const string SyncKey = "sync";
+
     /// <summary>
     /// The dock key the arrangement was kept under before a zoom decided it.
     /// </summary>
@@ -84,8 +88,11 @@ internal sealed class DirectoryControl : UserControl
     private const string Grid = "grid";
     private const string List = "list";
 
-    /// <summary>Where the browser is, which every dock looks at the same one of.</summary>
-    private readonly Browser _browser;
+    /// <summary>The answers every location shares, which a dock out of step goes on reading.</summary>
+    private readonly Shared _shared;
+
+    /// <summary>The one location, which this dock is a view of until it is taken out of step.</summary>
+    private readonly Browser _whole;
 
     /// <summary>The host, which the views are made over.</summary>
     private readonly IPluginHost _host;
@@ -94,7 +101,7 @@ internal sealed class DirectoryControl : UserControl
     private readonly Clip _clip;
 
     /// <summary>What the views do, so that every view of the location behaves alike.</summary>
-    private readonly BrowserActions _actions;
+    private BrowserActions _actions;
 
     /// <summary>The zoom the entries are read at, as a percentage.</summary>
     private readonly Slider _zoom = new();
@@ -102,8 +109,35 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Whether the entries the platform hides are shown.</summary>
     private readonly CheckBox _hidden = new();
 
+    /// <summary>Whether this dock follows the whole, or looks at a directory of its own.</summary>
+    private readonly CheckBox _sync = new();
+
+    /// <summary>
+    /// What the dock keeps beside the address, which is put at the far end of the toolbar.
+    /// </summary>
+    /// <remarks>
+    /// Built once and handed to every toolbar this dock makes, because the toolbar is told which location to
+    /// read rather than being made again (see <see cref="NavigationBar.Reading"/>), and a control that was
+    /// handed over once cannot be handed over twice while it is still a child of the bar it left.
+    /// </remarks>
+    private readonly StackPanel _trailing = new()
+    {
+        Orientation = Orientation.Horizontal,
+        Spacing = 12,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>The toolbar, kept so that being taken out of step hands it the other location.</summary>
+    private readonly NavigationBar _bar;
+
     /// <summary>Whichever arrangement the zoom amounts to.</summary>
     private readonly ContentControl _content = new();
+
+    /// <summary>This dock's own location, while it is out of step, and nothing while it follows the whole.</summary>
+    private Browser? _own;
+
+    /// <summary>The location being listened to, so that one left behind is stopped being listened to.</summary>
+    private Browser? _watched;
 
     /// <summary>What the dock kept, and where the next of it is kept.</summary>
     private IDockState? _state;
@@ -111,26 +145,38 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>The entries as this dock last drew them, so that a reread can be told from a step.</summary>
     private IReadOnlyList<Entry>? _drawn;
 
+    /// <summary>
+    /// What this dock is looking at now.
+    /// </summary>
+    /// <remarks>
+    /// Its own location once it has been taken out of step, and the whole's until then — which is why nothing
+    /// here reads the whole directly but this: a dock out of step that went on reading the whole would go on
+    /// following it, and not following it is what being out of step means.
+    /// </remarks>
+    private Browser Location => _own ?? _whole;
+
     /// <summary>Makes the directory's control.</summary>
     /// <param name="host">The host, for logging what the directory cannot do.</param>
-    /// <param name="browser">The one location, which this dock is a view of.</param>
+    /// <param name="shared">The answers every location shares.</param>
+    /// <param name="whole">The one location, which this dock is a view of until it is taken out of step.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public DirectoryControl(IPluginHost host, Browser browser, Clip clip)
+    public DirectoryControl(IPluginHost host, Shared shared, Browser whole, Clip clip)
     {
         _host = host;
         _clip = clip;
-        _browser = browser;
-        _actions = new BrowserActions(host, browser, clip);
+        _shared = shared;
+        _whole = whole;
+        _actions = new BrowserActions(host, whole, clip);
 
         // Listening while it is on screen rather than for as long as it exists: a dock that was
         // closed is not a view of anything, and one that was dragged to another region is taken off
         // the tree and put back, which is a departure and a return for a dock that never closed.
         AttachedToVisualTree += (_, _) =>
         {
-            _browser.Changed += Update;
+            Watch(Location);
             Draw();
         };
-        DetachedFromVisualTree += (_, _) => _browser.Changed -= Update;
+        DetachedFromVisualTree += (_, _) => Watch(null);
 
         // Tunnelled, so that the zoom is reached before whatever the pointer is over reads the wheel as a
         // scroll: a zoom that stopped working as soon as the entries were worth scrolling would be a zoom
@@ -139,11 +185,14 @@ internal sealed class DirectoryControl : UserControl
 
         FillZoom();
         FillHidden();
+        FillSync();
+        _trailing.Children.Add(_hidden);
+        _trailing.Children.Add(_sync);
 
-        // The toolbar is the dock's own rather than a dock beside it: the arrows and the address act on the one
-        // browser, and they belong over the entries they act on (Section 7.5). What the dock keeps beside them is
-        // handed in, so that the toolbar does not have to know what a dock remembers.
-        var toolbar = new NavigationBar(_host, _browser, _hidden);
+        // The toolbar is the dock's own rather than a dock beside it: the arrows and the address act on the
+        // location being read, and they belong over the entries they act on (Section 7.5). What the dock keeps
+        // beside them is handed in, so that the toolbar does not have to know what a dock remembers.
+        _bar = new NavigationBar(_host, Location, _trailing);
 
         // What is left at the foot is the zoom alone, which is the one thing about reading a directory that has
         // nothing to do with where it is.
@@ -156,9 +205,9 @@ internal sealed class DirectoryControl : UserControl
         };
 
         var panel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(toolbar, Dock.Top);
+        DockPanel.SetDock(_bar, Dock.Top);
         DockPanel.SetDock(foot, Dock.Bottom);
-        panel.Children.Add(toolbar);
+        panel.Children.Add(_bar);
         panel.Children.Add(foot);
         panel.Children.Add(_content);
 
@@ -168,7 +217,8 @@ internal sealed class DirectoryControl : UserControl
     }
 
     /// <summary>
-    /// Takes what this dock was, which is the zoom it was left at.
+    /// Takes what this dock was: the zoom it was left at, whether hidden entries were shown, and whether it
+    /// followed the whole.
     /// </summary>
     /// <remarks>
     /// Read before the dock is drawn, so that a directory that was left as tiles comes back as tiles rather
@@ -192,13 +242,22 @@ internal sealed class DirectoryControl : UserControl
             _hidden.IsChecked = hidden;
         }
 
+        // And for the same reason again: a dock left out of step comes back out of step, at a directory of its
+        // own that nothing keeps — the location is not written into the layout (Section 7.3) — rather than
+        // being drawn in step and switching under the first frame.
+        if (bool.TryParse(state.Read(SyncKey), out var inStep))
+        {
+            _sync.IsChecked = inStep;
+        }
+
         Draw();
     }
 
     /// <summary>Sets the toggle up, and what turning it does.</summary>
     /// <remarks>
-    /// The choice is the dock's to keep and the browser's to hold: the listing is the browser's, and a dock
-    /// that kept it to itself would list something the next dock did not.
+    /// The choice is the dock's to keep and the shared answers are the plugin's to hold: the listing follows
+    /// the base and the hiding wherever it is, and a dock that kept them to itself would list something the
+    /// next dock did not.
     /// </remarks>
     private void FillHidden()
     {
@@ -212,8 +271,95 @@ internal sealed class DirectoryControl : UserControl
             // Written rather than saved, as the zoom is: the dock keeps what it was and the host writes the
             // layout, which is the same division as everything else about where a dock is.
             _state?.Write(HiddenKey, shown.ToString(CultureInfo.InvariantCulture));
-            _browser.ShowHidden = shown;
+            _shared.ShowHidden = shown;
         };
+    }
+
+    /// <summary>
+    /// Sets the sync toggle up, and what turning it does.
+    /// </summary>
+    /// <remarks>
+    /// It is the one choice about where a dock is looking that is the dock's own, which is why it sits with
+    /// what the dock keeps rather than in the toolbar's tools: a direction is everybody's, and being in step
+    /// with it is this dock's answer.
+    /// </remarks>
+    private void FillSync()
+    {
+        _sync.Content = RolaI18N.Get("rorolala_file_system.sync");
+        _sync.VerticalAlignment = VerticalAlignment.Center;
+
+        // In step until it is said otherwise, which is what a dock opened fresh is: the whole is where a run
+        // starts, and a dock that opened somewhere of its own would be a second place to find on the first
+        // frame.
+        _sync.IsChecked = true;
+
+        _sync.IsCheckedChanged += (_, _) => InStep(_sync.IsChecked == true);
+    }
+
+    /// <summary>
+    /// Follows the whole again, or looks at a directory of this dock's own.
+    /// </summary>
+    /// <remarks>
+    /// Leaving starts from where the whole is looking, because that is where this dock is looking when it
+    /// leaves: a dock that appeared somewhere else entirely would be a second place to find rather than a
+    /// place this one went to.
+    /// <para>
+    /// Coming back throws that location away, which is why a location is let go of rather than dropped
+    /// (<see cref="Browser.Dispose"/>): what it holds of the plugin's outlives it.
+    /// </para>
+    /// </remarks>
+    /// <param name="inStep">Whether this dock is to follow the whole.</param>
+    private void InStep(bool inStep)
+    {
+        // Written rather than saved, as the zoom and the hiding are: the dock keeps what it was and the host
+        // writes the layout.
+        _state?.Write(SyncKey, inStep.ToString(CultureInfo.InvariantCulture));
+
+        var was = Location;
+
+        Watch(null);
+        _own?.Dispose();
+        _own = inStep ? null : new Browser(_shared, was.Current);
+        _actions = new BrowserActions(_host, Location, _clip);
+
+        _bar.Reading(Location);
+        Watch(Location);
+
+        // Only when it is another location: coming back in step while already in step is not a place to go,
+        // and drawing again would only throw the listing away for the one it already has.
+        if (!ReferenceEquals(was, Location))
+        {
+            Draw();
+        }
+    }
+
+    /// <summary>
+    /// Listens to a location, so that what it holds is drawn again when it changes, or listens to none.
+    /// </summary>
+    /// <remarks>
+    /// One at a time, and while the dock is on screen: a dock out of step is a view of its own location and not
+    /// of the whole's, so listening to both would redraw it for a change it is no longer following. What the
+    /// toolbar listens to is its own affair and moves with it (see <see cref="NavigationBar.Reading"/>).
+    /// </remarks>
+    /// <param name="location">What to listen to, or nothing to stop listening.</param>
+    private void Watch(Browser? location)
+    {
+        if (ReferenceEquals(_watched, location))
+        {
+            return;
+        }
+
+        if (_watched is not null)
+        {
+            _watched.Changed -= Update;
+        }
+
+        _watched = location;
+
+        if (_watched is not null)
+        {
+            _watched.Changed += Update;
+        }
     }
 
     /// <summary>Sets the slider up, and what moving it does.</summary>
@@ -266,14 +412,15 @@ internal sealed class DirectoryControl : UserControl
     /// </remarks>
     private void Update()
     {
-        // The toggle follows the browser as well as leading it: what is shown is one answer for every dock, so
-        // one opened after another was toggled shows what that one shows rather than its own last word on it.
-        if (_hidden.IsChecked != _browser.ShowHidden)
+        // The toggle follows the shared answer as well as leading it: what is shown is one answer for every
+        // dock, so one opened after another was toggled shows what that one shows rather than its own last word
+        // on it.
+        if (_hidden.IsChecked != _shared.ShowHidden)
         {
-            _hidden.IsChecked = _browser.ShowHidden;
+            _hidden.IsChecked = _shared.ShowHidden;
         }
 
-        if (!ReferenceEquals(_drawn, _browser.Shown))
+        if (!ReferenceEquals(_drawn, Location.Shown))
         {
             Draw();
         }
@@ -283,10 +430,10 @@ internal sealed class DirectoryControl : UserControl
     private void Draw()
     {
         _content.Content = _zoom.Value > GridAbove
-            ? new GridBrowser(_host, _browser, _actions, _clip, Icons.SizeAt(_zoom.Value))
-            : new ListBrowser(_host, _browser, _actions, _clip);
+            ? new GridBrowser(_host, Location, _actions, _clip, Icons.SizeAt(_zoom.Value))
+            : new ListBrowser(_host, Location, _actions, _clip);
 
-        _drawn = _browser.Shown;
+        _drawn = Location.Shown;
     }
 
     /// <summary>

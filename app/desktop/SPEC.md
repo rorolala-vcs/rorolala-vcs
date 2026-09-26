@@ -504,7 +504,7 @@ All three are always available from `Window`.
 
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
-| Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): a table of rows below 60%, tiles above it. At its top is the browser's own toolbar — back, forward, up, refresh, and the address — and at its foot the zoom, both part of this dock rather than docks beside it (§7.5). The table's columns are the icon, the name, the permissions, when it was last written and how large it is — and the permissions column is left out on Windows, which does not carry what those letters say. A column is made wider or narrower by the grab between it and its neighbour, which is drawn as the grab between two regions is (§10), and the name is the column that takes what is left over, so the table is as wide as the dock whatever the columns are. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): a table of rows below 60%, tiles above it. At its top is the browser's own toolbar — back, forward, up, refresh, and the address — and at its foot the zoom, both part of this dock rather than docks beside it (§7.5); the end of that toolbar carries the toggle for hidden entries and the toggle for following the whole (§7.5), which is what lets one dock look at a directory of its own. The table's columns are the icon, the name, the permissions, when it was last written and how large it is — and the permissions column is left out on Windows, which does not carry what those letters say. A column is made wider or narrower by the grab between it and its neighbour, which is drawn as the grab between two regions is (§10), and the name is the column that takes what is left over, so the table is as wide as the dock whatever the columns are. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
 | Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. Placed at the left by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
@@ -526,13 +526,22 @@ rows or as tiles, and nothing else: there is one scale, and the arrangement foll
 grid of pictures too small to look at is a grid nobody asked for. The zoom is a slider in the dock's own
 corner, and `Ctrl` and a turn of the wheel over the dock move it.
 
-Every listing carries a second thing in the same bar, at the end opposite the zoom: a toggle for the
+Every listing carries two more things in the same bar, at the end opposite the zoom: a toggle for the
 entries the platform hides — a name beginning with a dot, and on Windows also the attribute that marks
-one. Whether it is on is kept with the dock (§7.3), as the zoom is. What it decides is held by the
-**browser** rather than by the dock, because the listing is the browser's and two docks looking at one
-directory must list the same thing; a dock opened while another has it on opens with it on. While
-hidden entries are shown they are drawn **fainter** than the rest, because they are there to be found
-rather than read alongside the others.
+one — and a toggle for whether that dock follows the location the whole plugin is looking at. Whether
+each is on is kept with the dock (§7.3), as the zoom is.
+
+What the hiding decides is held by the **plugin** rather than by a dock, because the listing is what it
+changes and two docks looking at one directory must list the same thing; a dock opened while another has
+it on opens with it on. While hidden entries are shown they are drawn **fainter** than the rest, because
+they are there to be found rather than read alongside the others.
+
+**Following** is what a dock does until it is turned off, and turning it off is what lets one dock look
+somewhere of its own: it is given a location and a history of its own, starting at the directory the whole
+is looking at, and everything in that dock — the address, the entries, the menus, what a paste pastes into
+— acts on that one. Turning it back on throws that location away and the dock looks at the whole again,
+which has not moved in the meantime. What stays the whole plugin's either way is where the tree is rooted
+and whether hidden entries are shown (§7.6).
 
 A tree reads a step when it is opened, and that is why what it offers is the closing of steps and never
 their opening: opening every step at once would read every directory under the base, which is the one
@@ -562,17 +571,19 @@ Behaviour:
 - Closing a `Toggle` dock hides it; closing a `New` dock discards the instance (Section 7.2). Either
   way the region settles on another of its docks, or is empty and collapses its strip.
 
-The File System has **one location** and **one base**. Every dock it opens is a view of the location;
-the tree is rooted at the base. The browsers differ in the layout they read the entries in and in
-nothing else; the toolbar each one carries shows the one address and walks the one history. Two docks
-cannot be looking at two places, which is what makes an address mean one thing.
+The File System has **one location** and **one base**. Every dock it opens is a view of the location
+unless it has been taken out of step (§7.5), in which case it has a location and a history of its own;
+the tree is rooted at the base, which is one answer for all of them. Two docks in step cannot be looking
+at two places, which is what makes an address mean one thing; a dock out of step is not an address that
+has gone wrong, but a dock that has said it is looking elsewhere.
 
 The **base** is the directory the tree is rooted at, and it is what keeps the tree usable: a place to
 work in rather than the whole filesystem. It starts at wherever the program was run. It is set from a
 directory's own menu, wherever that directory is seen, and setting it goes there as well — the tree is
-a view of the place being worked in, and a base the browser is not in would show somewhere else. The
-tree keeps the steps a user has opened while the location moves, because it is rooted at the base
-rather than at the location.
+a view of the place being worked in, and a base the browser is not in would show somewhere else. A dock
+that is out of step roots the tree for everybody and moves only itself: the base is the whole plugin's
+where a location is not. The tree keeps the steps a user has opened while the location moves, because it
+is rooted at the base rather than at the location.
 
 There is therefore exactly one way the location changes, and five things that ask it to:
 
@@ -612,10 +623,10 @@ drives are chosen from. Windows has no path naming every drive at once, so that 
 the empty path, which no directory can be, and the views name it rather than printing it. A drive
 root's parent is the computer, which is how a drive list is left; the computer has no parent.
 
-Switching the location in one dock therefore switches it in all of them. A toolbar is part of the dock
-it sits in, so closing that dock closes its arrows and its address with it; the history they walk is
-the browser's and outlives them, which is why a dock opened afterwards still has somewhere to go back
-to.
+Switching the location in one dock therefore switches it in every dock that is in step with it. A
+toolbar is part of the dock it sits in, so closing that dock closes its arrows and its address with it;
+the history they walk is the location's and outlives them, which is why a dock opened afterwards still
+has somewhere to go back to.
 
 The zoom stays at the foot of the directory dock rather than moving up into the toolbar: how large the
 entries are read is a property of the dock reading them, and so is whether that makes them rows or

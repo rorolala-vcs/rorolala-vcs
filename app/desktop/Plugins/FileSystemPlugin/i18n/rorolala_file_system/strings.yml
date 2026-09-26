@@ -42,6 +42,12 @@ rorolala_file_system:
     en: Show hidden
     zh-CN: 显示隐藏项
 
+  # What the toggle beside it says: whether this dock follows the location the whole File System is looking
+  # at, or is looked at on its own.
+  sync:
+    en: Sync
+    zh-CN: 同步
+
   root:
     en: Root
     zh-CN: 根目录

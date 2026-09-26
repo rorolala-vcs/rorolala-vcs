@@ -11,9 +11,10 @@ namespace FileSystemPlugin;
 /// and starts it — but it ships with the program and is enabled by default, because a browser is
 /// what the shell is for (Section 7.5).
 /// <para>
-/// What it owns is deliberately more than a dock: the location every dock it opens looks at, the base
-/// the tree is rooted at, the entries there, their icons, the menus opened on them, and the navigation
-/// that switches where that is. The host is the shell around it.
+/// What it owns is deliberately more than a dock: the location every dock looks at until one is taken out of
+/// step, the answers that stay everybody's either way — where the tree is rooted, and whether hidden entries
+/// are shown — the entries at a location, their icons, the menus opened on them, and the navigation that
+/// switches where one is. The host is the shell around it.
 /// </para>
 /// </remarks>
 public sealed class FileSystemPlugin : IRolaPlugin
@@ -60,11 +61,14 @@ public sealed class FileSystemPlugin : IRolaPlugin
         host.Config.Add(new PluginSetting(FileOps.RemoveDirsSetting, SettingKind.Text, "rorolala_file_system.setting.remove_dirs", FileOps.DefaultRemoveDirs, 30));
         host.Config.Add(new PluginSetting(FileOps.RemoveFilesSetting, SettingKind.Text, "rorolala_file_system.setting.remove_files", FileOps.DefaultRemoveFiles, 40));
 
-        // One location for the whole plugin. Every dock it opens is a view onto it — the browser
-        // docks differ in layout and in nothing else, and the navigation dock has one address and one
-        // history to show — so there is one thing to make and both factories are handed it. The clipboard
-        // is shared the same way: a copy made in one directory dock is a copy the other can paste.
-        var browser = new Browser(Start());
+        // One location for the whole plugin, and one set of answers every location shares. Every dock is a
+        // view onto the location — the browser docks differ in layout and in nothing else, and the navigation
+        // dock has one address and one history to show — unless a dock has been taken out of step, in which
+        // case it is given a location of its own (Section 7.5) and only the answers stay everybody's. The
+        // clipboard is shared the same way: a copy made in one directory dock is a copy the other can paste.
+        var at = Start();
+        var shared = new Shared(at);
+        var browser = new Browser(shared, at);
         var clip = new Clip();
 
         host.Docks.Register(
@@ -74,7 +78,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.directories",
                 DockOpenMode.New,
                 DockPlacement.Center,
-                _ => new DirectoryDock(host, browser, clip)
+                _ => new DirectoryDock(host, shared, browser, clip)
             )
         );
 
