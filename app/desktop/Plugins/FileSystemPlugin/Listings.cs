@@ -62,6 +62,15 @@ internal abstract class EntryView : UserControl
     /// <summary>How faded an entry is while it is cut, so that it reads as on its way out.</summary>
     private const double CutOpacity = 0.45;
 
+    /// <summary>
+    /// How faded an entry the platform hides is drawn, while hidden entries are shown.
+    /// </summary>
+    /// <remarks>
+    /// Fainter rather than gone: what is hidden is still an entry of the directory, and it is dimmed so that
+    /// the eye passes over it rather than being left out of the listing.
+    /// </remarks>
+    private const double HiddenOpacity = 0.55;
+
     /// <summary>How far the pointer moves with the button down before it drags or frames rather than clicks.</summary>
     private const double Frame = 4;
 
@@ -412,11 +421,21 @@ internal abstract class EntryView : UserControl
         return chosen;
     }
 
-    /// <summary>How faded a row is, which is its entry being cut and nothing else.</summary>
+    /// <summary>
+    /// How faded a row is: one the platform hides reads as secondary, and one that is cut as on its way out.
+    /// </summary>
+    /// <remarks>
+    /// Both are said here rather than in two passes over the rows, because a row has one opacity and the second
+    /// pass would be the one that decided it. Cut wins, because being on its way out is what the user just did.
+    /// </remarks>
     /// <param name="row">The row to fade.</param>
     /// <param name="entry">What it stands for.</param>
     protected virtual void Apply(Control row, Entry entry) =>
-        row.Opacity = Clipboard.IsCut(entry.Path) ? CutOpacity : 1.0;
+        row.Opacity = Clipboard.IsCut(entry.Path)
+            ? CutOpacity
+            : entry.Hidden
+                ? HiddenOpacity
+                : 1.0;
 
     /// <summary>Draws the cut state again on every row that is on screen.</summary>
     private void Repaint()

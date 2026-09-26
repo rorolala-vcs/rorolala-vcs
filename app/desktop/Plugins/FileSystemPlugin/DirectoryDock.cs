@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
 
 namespace FileSystemPlugin;
 
@@ -65,6 +66,9 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>The dock key the zoom is kept under.</summary>
     private const string ZoomKey = "zoom";
 
+    /// <summary>The dock key the choice about hidden entries is kept under.</summary>
+    private const string HiddenKey = "hidden";
+
     /// <summary>
     /// The dock key the arrangement was kept under before a zoom decided it.
     /// </summary>
@@ -94,6 +98,9 @@ internal sealed class DirectoryControl : UserControl
 
     /// <summary>The zoom the entries are read at, as a percentage.</summary>
     private readonly Slider _zoom = new();
+
+    /// <summary>Whether the entries the platform hides are shown.</summary>
+    private readonly CheckBox _hidden = new();
 
     /// <summary>Whichever arrangement the zoom amounts to.</summary>
     private readonly ContentControl _content = new();
@@ -131,15 +138,18 @@ internal sealed class DirectoryControl : UserControl
         AddHandler(PointerWheelChangedEvent, Wheeled, RoutingStrategies.Tunnel);
 
         FillZoom();
+        FillHidden();
 
-        // Over the entries rather than under them: it reads as what the pane is being read at, and it is out
-        // of the way in the corner rather than across the top, where the entries begin.
-        var bar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 0, 12, 8),
-        };
+        // The toggle and the zoom are the two things about reading a directory that are the dock's own rather
+        // than the location's: the toggle at the left, because it says what the listing is, and the zoom at the
+        // right, because it says only how large it is read.
+        //
+        // Nothing is left to fill: a dock panel hands its last child whatever room is left, which would put the
+        // slider in the middle of the bar rather than against the edge it is docked to.
+        var bar = new DockPanel { Margin = new Thickness(12, 0, 12, 8), LastChildFill = false };
+        DockPanel.SetDock(_hidden, Dock.Left);
+        DockPanel.SetDock(_zoom, Dock.Right);
+        bar.Children.Add(_hidden);
         bar.Children.Add(_zoom);
 
         var panel = new DockPanel { LastChildFill = true };
@@ -170,7 +180,35 @@ internal sealed class DirectoryControl : UserControl
             _zoom.Value = zoom;
         }
 
+        // Read before the dock is drawn, for the same reason the zoom is: a dock left showing what is hidden
+        // should come back showing it rather than drawing the listing without and redoing it.
+        if (bool.TryParse(state.Read(HiddenKey), out var hidden))
+        {
+            _hidden.IsChecked = hidden;
+        }
+
         Draw();
+    }
+
+    /// <summary>Sets the toggle up, and what turning it does.</summary>
+    /// <remarks>
+    /// The choice is the dock's to keep and the browser's to hold: the listing is the browser's, and a dock
+    /// that kept it to itself would list something the next dock did not.
+    /// </remarks>
+    private void FillHidden()
+    {
+        _hidden.Content = RolaI18N.Get("rorolala_file_system.hidden");
+        _hidden.VerticalAlignment = VerticalAlignment.Center;
+
+        _hidden.IsCheckedChanged += (_, _) =>
+        {
+            var shown = _hidden.IsChecked == true;
+
+            // Written rather than saved, as the zoom is: the dock keeps what it was and the host writes the
+            // layout, which is the same division as everything else about where a dock is.
+            _state?.Write(HiddenKey, shown.ToString(CultureInfo.InvariantCulture));
+            _browser.ShowHidden = shown;
+        };
     }
 
     /// <summary>Sets the slider up, and what moving it does.</summary>
@@ -223,6 +261,13 @@ internal sealed class DirectoryControl : UserControl
     /// </remarks>
     private void Update()
     {
+        // The toggle follows the browser as well as leading it: what is shown is one answer for every dock, so
+        // one opened after another was toggled shows what that one shows rather than its own last word on it.
+        if (_hidden.IsChecked != _browser.ShowHidden)
+        {
+            _hidden.IsChecked = _browser.ShowHidden;
+        }
+
         if (!ReferenceEquals(_drawn, _browser.Shown))
         {
             Draw();

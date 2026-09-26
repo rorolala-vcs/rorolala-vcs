@@ -54,6 +54,9 @@ internal sealed class Browser
     /// <summary>What a listing shows of it, which is those entries with the way up before them.</summary>
     private IReadOnlyList<Entry> _shown;
 
+    /// <summary>Whether the entries the platform hides are shown.</summary>
+    private bool _showHidden;
+
     /// <summary>Makes a browser onto a directory.</summary>
     /// <param name="directory">The directory to look at, and to root the tree at.</param>
     public Browser(string directory)
@@ -124,6 +127,31 @@ internal sealed class Browser
 
     /// <summary>What the directory holds, directories first and then by name.</summary>
     public IReadOnlyList<Entry> Entries => _entries;
+
+    /// <summary>
+    /// Whether the entries the platform hides are shown.
+    /// </summary>
+    /// <remarks>
+    /// It is the browser's rather than a view's, because the listing is the browser's: two docks look at one
+    /// directory, and one of them listing what the other does not would be two answers to what is there.
+    /// What a dock keeps is whether the user asked for them, since a dock is what a toggle sits in
+    /// (Section 7.5).
+    /// </remarks>
+    public bool ShowHidden
+    {
+        get => _showHidden;
+        set
+        {
+            if (_showHidden == value)
+            {
+                return;
+            }
+
+            _showHidden = value;
+            _shown = Stage(_current, _entries);
+            Changed?.Invoke();
+        }
+    }
 
     /// <summary>
     /// The entries as a listing shows them: the way up, when there is somewhere to go, and then the entries.
@@ -278,10 +306,50 @@ internal sealed class Browser
     /// </remarks>
     /// <param name="directory">The directory the entries were read from.</param>
     /// <param name="entries">What it holds.</param>
-    private IReadOnlyList<Entry> Stage(string directory, IReadOnlyList<Entry> entries) =>
-        ParentOf(directory) is null || Same(directory, BaseDir)
-            ? entries
-            : [new Entry(UpName, EntryKind.Directory), .. entries];
+    private IReadOnlyList<Entry> Stage(string directory, IReadOnlyList<Entry> entries)
+    {
+        // The hidden ones come out here rather than never being read, because a listing that was read
+        // without them would have to be read again the moment they were asked for.
+        var shown = _showHidden ? entries : entries.Where(entry => !entry.Hidden).ToArray();
+
+        return ParentOf(directory) is null || Same(directory, BaseDir)
+            ? shown
+            : [new Entry(UpName, EntryKind.Directory), .. shown];
+    }
+
+    /// <summary>
+    /// Whether the platform hides an item.
+    /// </summary>
+    /// <remarks>
+    /// A name beginning with a dot is the Unix convention; Windows marks an attribute instead, but a
+    /// dot-name is read the same way there by everything that is not Explorer, so both count there. Asking
+    /// for the attribute can fail on an item this process may not touch, and an item that cannot be asked
+    /// about is shown rather than hidden: hiding something for not being inspectable is the worse mistake.
+    /// </remarks>
+    /// <param name="path">The item.</param>
+    private static bool IsHidden(string path)
+    {
+        var name = Path.GetFileName(path);
+
+        if (name.Length > 1 && name[0] == '.' && name != UpName)
+        {
+            return true;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.Hidden) != 0;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// The directory holding one, or nothing when there is nowhere further up.
@@ -363,7 +431,8 @@ internal sealed class Browser
                 entries.Add(
                     new Entry(
                         path,
-                        System.IO.Directory.Exists(path) ? EntryKind.Directory : EntryKind.File
+                        System.IO.Directory.Exists(path) ? EntryKind.Directory : EntryKind.File,
+                        IsHidden(path)
                     )
                 );
             }

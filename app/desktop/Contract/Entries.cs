@@ -5,7 +5,14 @@ namespace RorolalaDesktop.Contract;
 /// </summary>
 /// <param name="Path">Where the item is, as an absolute path.</param>
 /// <param name="Kind">Whether it is a file or a directory.</param>
-public sealed record Entry(string Path, EntryKind Kind);
+/// <param name="Hidden">
+/// Whether the platform hides it — a name beginning with a dot, or the attribute Windows marks one with.
+/// </param>
+/// <remarks>
+/// Hiddenness is what a browser knows about an item rather than something it asks the platform for where
+/// the item is drawn: the answer costs a read of the item, and a listing is read once.
+/// </remarks>
+public sealed record Entry(string Path, EntryKind Kind, bool Hidden = false);
 
 /// <summary>Whether an entry is a file or a directory.</summary>
 public enum EntryKind

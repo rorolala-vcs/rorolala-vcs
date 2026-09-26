@@ -40,6 +40,11 @@ rorolala_file_system:
     en: This folder is empty
     zh-CN: 此文件夹为空
 
+  # What the toggle in a listing's corner says: whether the entries the platform hides are shown.
+  hidden:
+    en: Show hidden
+    zh-CN: 显示隐藏项
+
   root:
     en: Root
     zh-CN: 根目录

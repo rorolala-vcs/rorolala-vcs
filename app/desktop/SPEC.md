@@ -527,6 +527,14 @@ rows or as tiles, and nothing else: there is one scale, and the arrangement foll
 grid of pictures too small to look at is a grid nobody asked for. The zoom is a slider in the dock's own
 corner, and `Ctrl` and a turn of the wheel over the dock move it.
 
+Every listing carries a second thing in the same bar, at the end opposite the zoom: a toggle for the
+entries the platform hides — a name beginning with a dot, and on Windows also the attribute that marks
+one. Whether it is on is kept with the dock (§7.3), as the zoom is. What it decides is held by the
+**browser** rather than by the dock, because the listing is the browser's and two docks looking at one
+directory must list the same thing; a dock opened while another has it on opens with it on. While
+hidden entries are shown they are drawn **fainter** than the rest, because they are there to be found
+rather than read alongside the others.
+
 A tree reads a step when it is opened, and that is why what it offers is the closing of steps and never
 their opening: opening every step at once would read every directory under the base, which is the one
 thing a tree read a step at a time is arranged to avoid. Closing them all is the cheap direction, and it
@@ -767,10 +775,10 @@ exists for plugins that react to a completed open.
     tab and the one action of a surface are filled with it — and it is written into the base theme's own
     accent resources, so that a chosen row, a checked box and a selection of text are the primary from
     one definition.
-  - **Accent is the second colour**, spent only on the marks a drag draws: the band a frame is drawn
-    with, the zone a dragged dock is aimed at, and the hairline a splitter shows under the pointer. They
-    must never be mistaken for a selection, which is the whole reason there are two. The design this
-    comes from needs no such colour; it is the one thing here that is not that design's own.
+  - **Accent is the second colour**, spent only on the marks a drag draws: the zone a dragged dock is
+    aimed at, and the hairline a splitter shows under the pointer. They must never be mistaken for a
+    selection, which is the whole reason there are two. The design this comes from needs no such colour;
+    it is the one thing here that is not that design's own.
 - The design:
   - **Rounded.** A card is rounded 8, a control 5, and a badge or a progress bar is a pill. Nothing is
     square but a rectangle too small to round.
@@ -787,6 +795,9 @@ exists for plugins that react to a completed open.
   - **A chosen row is a wash, and its text is not recoloured.** The primary at 35 % on the light ground
     and 30 % on the dark one, with the words keeping the ink they had: a row filled solid would make a
     table read as a grid of buttons.
+  - **A frame is the primary too.** The band drawn over a frame-selection is one pixel of the primary
+    around a wash of the same colour, rounded like a control. It is a thing being chosen rather than a
+    mark a drag draws, so it takes the primary and leaves the accent alone.
   - **A hover is the sunken ground** — not a tint and not a colour, which is what lets a hover and a
     chosen row sit side by side without ever being confused for one another.
   - **A tab strip is a segmented control.** One bordered rounded container with the tab being shown
