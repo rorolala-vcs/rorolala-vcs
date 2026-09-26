@@ -80,6 +80,18 @@ internal abstract class EntryView : UserControl
     /// <summary>How tall a row is where nothing on screen says, which is only ever a first guess.</summary>
     private const double RowGuess = 28.0;
 
+    /// <summary>How faded the card that follows a drag is, so that it reads as a carrying, not as a thing.</summary>
+    private const double GhostOpacity = 0.7;
+
+    /// <summary>How large the card that follows a drag is, which is also what keeps it inside the view.</summary>
+    private const double GhostSize = 48.0;
+
+    /// <summary>How far past the pointer the card is drawn, so that it never sits under it.</summary>
+    private const double GhostStep = 12.0;
+
+    /// <summary>How large the picture the card carries is.</summary>
+    private const int GhostIcon = 32;
+
     /// <summary>Every row on screen, so that a faded cut and a moved column reach all of them.</summary>
     private readonly List<(Entry Entry, Control Row)> _rows = [];
 
@@ -133,6 +145,21 @@ internal abstract class EntryView : UserControl
     /// <summary>What the band is drawn over, filling the view and taking no pointer of its own.</summary>
     private readonly Canvas _over = new() { IsHitTestVisible = false };
 
+    /// <summary>Where the card that follows a drag keeps the picture of what the drag carries.</summary>
+    private readonly ContentControl _ghostFace;
+
+    /// <summary>
+    /// The card that follows the pointer while this program is carrying entries.
+    /// </summary>
+    /// <remarks>
+    /// The toolkit floats no picture of its own — a drag is handed data and nothing else — and on X11 the source
+    /// of a drag is told nothing about the pointer while it is on, because the XDND handler swallows the motion
+    /// before it reaches the tree. So what says a drag is happening is this, drawn over the view at the positions
+    /// the drop side is told. It follows the pointer only while the pointer is over this window; a drag to
+    /// another program is the one that carries no picture of itself.
+    /// </remarks>
+    private readonly Border _ghost;
+
     /// <summary>Where a press landed and on which entry, while it may still become a drag.</summary>
     private Point _slip;
     private int _slippedAt = -1;
@@ -170,6 +197,10 @@ internal abstract class EntryView : UserControl
         Actions = actions;
         Clipboard = clip;
 
+        var (ghost, ghostFace) = Ghost();
+        _ghost = ghost;
+        _ghostFace = ghostFace;
+
         List = new ListBox
         {
             ItemsSource = browser.Shown,
@@ -201,6 +232,11 @@ internal abstract class EntryView : UserControl
         // A drop from another program arrives as a routed drag event, which a control only hears where it has
         // said it will take one.
         DragDrop.SetAllowDrop(List, true);
+
+        // Enter as well as over: the first position a drag is told of is an enter, so it is the one that draws the
+        // mark and the card first — and a drag that stopped moving the moment it arrived would be the one drawn
+        // never at all.
+        List.AddHandler(DragDrop.DragEnterEvent, DraggedOver);
         List.AddHandler(DragDrop.DragOverEvent, DraggedOver);
         List.AddHandler(DragDrop.DragLeaveEvent, DraggedOff);
         List.AddHandler(DragDrop.DropEvent, Dropped);
@@ -254,6 +290,7 @@ internal abstract class EntryView : UserControl
     protected void Present(Control content)
     {
         _over.Children.Add(_band);
+        _over.Children.Add(_ghost);
 
         var panel = new Border { Padding = PanelPadding, Child = content };
 
@@ -943,6 +980,7 @@ internal abstract class EntryView : UserControl
 
         _carried = carrying;
         _answered = false;
+        _ghostFace.Content = Icons.For(dragged, GhostIcon);
 
         try
         {
@@ -964,6 +1002,7 @@ internal abstract class EntryView : UserControl
         }
 
         _carried = [];
+        Unghost();
     }
 
     /// <summary>Says whether a drag may land here, and lights the directory it would land in.</summary>
@@ -971,6 +1010,8 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The drag.</param>
     private void DraggedOver(object? sender, DragEventArgs e)
     {
+        Following(e.GetPosition(this));
+
         if (Landing(e) is not { } land)
         {
             e.DragEffects = DragDropEffects.None;
@@ -984,10 +1025,14 @@ internal abstract class EntryView : UserControl
         e.Handled = true;
     }
 
-    /// <summary>Takes the drop mark off when a drag leaves.</summary>
+    /// <summary>Takes the drop mark off when a drag leaves, and the card with it.</summary>
     /// <param name="sender">The list.</param>
     /// <param name="e">The drag.</param>
-    private void DraggedOff(object? sender, DragEventArgs e) => Mark(null);
+    private void DraggedOff(object? sender, DragEventArgs e)
+    {
+        Mark(null);
+        Unghost();
+    }
 
     /// <summary>
     /// Moves or copies what a drag brought into the directory it was let go over.
@@ -1001,6 +1046,7 @@ internal abstract class EntryView : UserControl
     private async void Dropped(object? sender, DragEventArgs e)
     {
         Mark(null);
+        Unghost();
 
         if (Landing(e) is not { } land)
         {
@@ -1038,6 +1084,72 @@ internal abstract class EntryView : UserControl
 
         Later();
     }
+
+    /// <summary>
+    /// The card that follows a drag: a ground, an edge of the primary, and what the drag carries.
+    /// </summary>
+    /// <remarks>
+    /// Built from the look's own keys rather than written in colours, like the band a frame is drawn with, and for
+    /// the same reason: colours of its own here would be a second answer to what this program looks like. It takes
+    /// no pointer, because what lies under it is what a drop is aimed at.
+    /// </remarks>
+    /// <returns>The card, and the place the picture of what is carried is put.</returns>
+    private static (Border Card, ContentControl Face) Ghost()
+    {
+        var face = new ContentControl
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var card = new Border
+        {
+            IsVisible = false,
+            IsHitTestVisible = false,
+            Opacity = GhostOpacity,
+            Width = GhostSize,
+            Height = GhostSize,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Child = face,
+        };
+
+        card[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.primary");
+        card[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+        card[!Border.BoxShadowProperty] = new DynamicResourceExtension("rorolala.shadow");
+
+        return (card, face);
+    }
+
+    /// <summary>
+    /// Puts the card under the pointer, while the drag in flight is one this program started.
+    /// </summary>
+    /// <remarks>
+    /// Only a drag this program started carries a card, because the card is the picture of what is carried: a drag
+    /// from another program brought its own things, and what they look like is that program's to say. It is kept
+    /// inside the view, so that a pointer at the edge does not put it out of sight.
+    /// </remarks>
+    /// <param name="at">Where the pointer is, in this view's own coordinates.</param>
+    private void Following(Point at)
+    {
+        if (_carried.Count == 0)
+        {
+            Unghost();
+
+            return;
+        }
+
+        var room = new Size(
+            Math.Max(0, Bounds.Width - GhostSize),
+            Math.Max(0, Bounds.Height - GhostSize));
+
+        Canvas.SetLeft(_ghost, Math.Clamp(at.X + GhostStep, 0, room.Width));
+        Canvas.SetTop(_ghost, Math.Clamp(at.Y + GhostStep, 0, room.Height));
+        _ghost.IsVisible = true;
+    }
+
+    /// <summary>Takes the card off, which is what every end of a drag does.</summary>
+    private void Unghost() => _ghost.IsVisible = false;
 
     /// <summary>
     /// Reads the directory again, but not before this event is over.
