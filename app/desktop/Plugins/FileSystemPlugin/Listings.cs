@@ -1003,20 +1003,14 @@ internal abstract class EntryView : UserControl
         {
             var effect = await DragDrop.DoDragDropAsync(from, transfer, DragDropEffects.Move | DragDropEffects.Copy);
 
-            // A move is what changes where the entries are, whoever made it — and the listing that held them has
-            // to be read again, which the drop's own handler cannot be left to do, because the entries may have
-            // come from another dock with a location of its own.
-            if (effect == DragDropEffects.Move)
+            // A move another program made is a move this program has to finish: the other program copied the
+            // files it was handed, and the originals are the source's to take away. A move this program
+            // answered itself already moved them, which is what _answered records — taking them away again
+            // would delete what was just carried, and the reading of the directory is left to the drop that did
+            // the moving: a read taken here would be taken before that move had been made.
+            if (effect == DragDropEffects.Move && !_answered)
             {
-                // A move another program made is a move this program has to finish: the other program copied the
-                // files it was handed, and the originals are the source's to take away. A move this program
-                // answered itself already moved them, which is what _answered records — taking them away again
-                // would delete what was just carried.
-                if (!_answered)
-                {
-                    await FileOps.Remove(_carried, Host.Log.Error);
-                }
-
+                await FileOps.Remove(_carried, Host.Log.Error);
                 Later();
             }
         }
@@ -1187,14 +1181,16 @@ internal abstract class EntryView : UserControl
     private void Unghost() => _ghost.IsVisible = false;
 
     /// <summary>
-    /// Reads the directory again, but not before this event is over.
+    /// Says the files may have changed, to be read again not before this event is over.
     /// </summary>
     /// <remarks>
-    /// A drop is answered inside the drag's own event, and reading the directory again rebuilds the view that
-    /// is answering it — a view taken apart while it is still handling the event that took it apart. Deferring
-    /// the read is what keeps the two apart, and it costs the time it takes to get back to the loop.
+    /// Every location's directory and not only this one's, because the operation that has just finished may have
+    /// changed a directory this dock is not the one showing: a move is answered by the dock it was dropped on,
+    /// and the entries may have been dragged out of another dock — which, a dock being able to be out of step,
+    /// may be looking at a directory of its own. Deferring is the other half of it: reading a directory again
+    /// rebuilds the views showing it, and one of them may be the view answering the event.
     /// </remarks>
-    private void Later() => Dispatcher.UIThread.Post(Browser.Refresh);
+    private void Later() => Dispatcher.UIThread.Post(Browser.Touch);
 
     /// <summary>
     /// <summary>Where a drag would land, or nothing where it may not land here at all.</summary>

@@ -667,7 +667,10 @@ the window and the docks and knows nothing of entries.
   drag is used, and Avalonia 12's X11 backend carries XDND. The files are offered themselves as well as
   their paths written out, so a file manager receives files and a text field text. A move out to another
   program is finished by taking the originals away, while a move the program answers itself has already
-  moved them (§19.6).
+  moved them (§19.6) — and whichever of the two made it, every location reads its directory again, because
+  the entries may have come out of a directory that only another dock is looking at (§7.5), a dock being
+  able to be out of step. That read is deferred past the event that asked for it, since reading a directory
+  again rebuilds the views showing it and one of them is that very view.
 - **A drag of this program's own is followed by a card.** While a drag the program started is in flight, a
   translucent card carries the picture of the entry it took hold of and follows the pointer, in whichever dock
   the pointer is over. It is drawn by the program and not by the toolkit: a drag is handed data and nothing else,

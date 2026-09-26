@@ -1,17 +1,19 @@
 namespace FileSystemPlugin;
 
 /// <summary>
-/// The two answers about looking at files that are the whole plugin's rather than one location's.
+/// The few things about looking at files that are the whole plugin's rather than one location's.
 /// </summary>
 /// <remarks>
-/// Where the tree is rooted, and whether the entries the platform hides are shown. Neither is where anything
-/// is looking, and both are one answer for the whole File System: a base per dock would be several answers to
-/// where the tree is rooted, and a hiding per dock would let two docks list one directory differently.
+/// Where the tree is rooted, whether the entries the platform hides are shown, and the news that the files
+/// themselves may have changed. None of them is where anything is looking, and each is one answer for the
+/// whole File System: a base per dock would be several answers to where the tree is rooted, a hiding per dock
+/// would let two docks list one directory differently, and a change made through one dock is one every other
+/// dock may be looking at.
 /// <para>
 /// They live here rather than on a <see cref="Browser"/> because a dock may be taken out of step and given a
-/// location of its own (Section 7.5). The location is then that dock's alone, while these two stay
-/// everybody's — which is what a location reads when it stages a listing, and this is what tells every one of
-/// them that the answer changed.
+/// location of its own (Section 7.5). The location is then that dock's alone, while these stay everybody's —
+/// which is what a location reads when it stages a listing, and this is what tells every one of them that
+/// something they read has moved on.
 /// </para>
 /// </remarks>
 internal sealed class Shared
@@ -27,7 +29,7 @@ internal sealed class Shared
     public Shared(string baseDir) => _base = baseDir;
 
     /// <summary>
-    /// Raised when either answer changes, so that every location reads its directory again.
+    /// Raised when either answer changes, so that every location stages its listing again.
     /// </summary>
     /// <remarks>
     /// A location is what holds a listing, so a change here has to reach every location there is — including
@@ -35,6 +37,26 @@ internal sealed class Shared
     /// is.
     /// </remarks>
     public event Action? Changed;
+
+    /// <summary>
+    /// Raised when the files may have changed, so that every location reads its directory again.
+    /// </summary>
+    /// <remarks>
+    /// Every location and not the one that acted, because a change made through one dock is one another may
+    /// be looking at: a move is answered by the dock it was dropped on, and the dock the entries came out of
+    /// is showing the directory they left — which, a dock being able to be out of step, may be a directory
+    /// only that dock is looking at.
+    /// </remarks>
+    public event Action? Touched;
+
+    /// <summary>
+    /// Says that the files may have changed.
+    /// </summary>
+    /// <remarks>
+    /// Whoever calls it defers it: a read that answered the event a drop arrived in would rebuild the view
+    /// answering it.
+    /// </remarks>
+    public void Touch() => Touched?.Invoke();
 
     /// <summary>
     /// The directory the tree is rooted at, which a directory's own menu sets.

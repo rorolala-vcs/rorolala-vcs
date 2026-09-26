@@ -96,7 +96,9 @@ internal sealed class BrowserActions
             return;
         }
 
-        _clip.Paste(from, into, _host.Log.Error, _browser.Refresh);
+        // Every location reads its directory again, and not only this one's: what was pasted went into a
+        // directory another dock may be the one looking at, a dock being able to be out of step.
+        _clip.Paste(from, into, _host.Log.Error, _browser.Touch);
     }
 
     /// <summary>Makes the menu opened on a set of entries.</summary>

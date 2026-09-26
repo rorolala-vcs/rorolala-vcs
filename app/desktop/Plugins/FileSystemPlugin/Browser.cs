@@ -70,7 +70,10 @@ internal sealed class Browser : IDisposable
 
         // A listing follows the shared answers wherever it is, so this location has to be told when they
         // change — and that is why a location given to a dock out of step is let go of rather than dropped.
+        // The two things told apart: an answer changing is a listing to make again out of what was read, where
+        // the files changing is the directory to read again.
         _shared.Changed += Restage;
+        _shared.Touched += Refresh;
     }
 
     /// <summary>
@@ -281,6 +284,17 @@ internal sealed class Browser : IDisposable
     }
 
     /// <summary>
+    /// Says that the files may have changed, which every location reads its directory again for.
+    /// </summary>
+    /// <remarks>
+    /// Said through a location because a location is what a view holds, and reaching every location rather than
+    /// this one because the directory a change was made in is not always the directory the change was made
+    /// <em>from</em>: a move is answered by the dock it was dropped on, and the dock the entries were dragged
+    /// out of is showing where they were. Whoever calls this defers it.
+    /// </remarks>
+    public void Touch() => _shared.Touch();
+
+    /// <summary>
     /// Lets go of the shared answers.
     /// </summary>
     /// <remarks>
@@ -288,7 +302,11 @@ internal sealed class Browser : IDisposable
     /// what it holds of the plugin's has to be let go of with it: a subscription left behind would keep an
     /// abandoned location reading directories nobody looks at, once per toggle.
     /// </remarks>
-    public void Dispose() => _shared.Changed -= Restage;
+    public void Dispose()
+    {
+        _shared.Changed -= Restage;
+        _shared.Touched -= Refresh;
+    }
 
     /// <summary>Moves without touching the history, for back, forward and up.</summary>
     /// <param name="directory">The directory to look at.</param>
