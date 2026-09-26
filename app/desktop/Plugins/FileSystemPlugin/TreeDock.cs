@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -27,7 +29,7 @@ internal sealed class TreeDock : IDockView
     /// <param name="browser">The one location and base, which the tree is rooted at.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
     public TreeDock(IPluginHost host, Browser browser, Clip clip) =>
-        _view = new TreeControl(browser, new BrowserActions(host, browser, clip));
+        _view = new TreeControl(host, browser, new BrowserActions(host, browser, clip));
 
     /// <inheritdoc />
     public Control View => _view;
@@ -54,6 +56,9 @@ internal sealed class TreeControl : UserControl
     /// <summary>Where the browser is, and where its base is.</summary>
     private readonly Browser _browser;
 
+    /// <summary>The host, which the tree is made over.</summary>
+    private readonly IPluginHost _host;
+
     /// <summary>What the rows do, which is what every other view of the location does.</summary>
     private readonly BrowserActions _actions;
 
@@ -67,10 +72,12 @@ internal sealed class TreeControl : UserControl
     private string? _drawn;
 
     /// <summary>Makes the tree's control.</summary>
+    /// <param name="host">The host, for what a drop cannot do.</param>
     /// <param name="browser">The one location and base, which the tree is rooted at.</param>
     /// <param name="actions">What the rows do.</param>
-    public TreeControl(Browser browser, BrowserActions actions)
+    public TreeControl(IPluginHost host, Browser browser, BrowserActions actions)
     {
+        _host = host;
         _browser = browser;
         _actions = actions;
 
@@ -125,7 +132,7 @@ internal sealed class TreeControl : UserControl
     /// <summary>Builds the tree over the base.</summary>
     private void Draw()
     {
-        _content.Content = new TreeBrowser(_browser, _browser.BaseDir, _actions);
+        _content.Content = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions);
         _drawn = _browser.BaseDir;
     }
 }
@@ -145,24 +152,160 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>What the rows do, which is what every other view of the location does.</summary>
     private readonly BrowserActions _actions;
 
+    /// <summary>How a drag is taken here: which step it would land in, and which row is lit.</summary>
+    private readonly Drops _drops;
+
+    /// <summary>The card that follows a drag, drawn over the tree while the pointer is in it.</summary>
+    private readonly Ghost _ghost;
+
+    /// <summary>Every step on screen, so that the one a drag is over can be lit.</summary>
+    /// <remarks>
+    /// A step is recorded when it is made and never taken out: a tree read a step at a time keeps the ones it
+    /// has read, closed or not, so a row that was recorded is still the row the tree draws — and what is read
+    /// is bounded by what a user opened.
+    /// </remarks>
+    private readonly List<(string Path, Border Row)> _rows = [];
+
+    /// <summary>The row wearing the drop mark, so that it can be taken off again.</summary>
+    private Border? _marked;
+
     /// <summary>Makes the tree rooted at a directory.</summary>
+    /// <param name="host">The host, for what a drop cannot do.</param>
     /// <param name="browser">Where the browser is, which the tree reads and switches.</param>
     /// <param name="root">The directory the tree is rooted at.</param>
     /// <param name="actions">What a directory does when it is chosen or right-clicked.</param>
-    public TreeBrowser(Browser browser, string root, BrowserActions actions)
+    public TreeBrowser(IPluginHost host, Browser browser, string root, BrowserActions actions)
     {
         _browser = browser;
         _actions = actions;
+        _drops = new Drops(host, browser, Landing, Mark);
 
         var tree = new TreeView { ContextMenu = actions.Empty(this) };
         tree.Items.Add(Node(root));
 
+        // A drag is taken over the whole tree and not over the rows alone: the space beside and below them is
+        // not a directory, and a drag let go there is refused by saying so rather than by saying nothing.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragEnterEvent, DraggedOver);
+        AddHandler(DragDrop.DragOverEvent, DraggedOver);
+        AddHandler(DragDrop.DragLeaveEvent, DraggedOff);
+        AddHandler(DragDrop.DropEvent, Dropped);
+
+        var over = new Canvas { IsHitTestVisible = false };
+        _ghost = new Ghost(over);
+
+        var grid = new Grid();
+        grid.Children.Add(tree);
+
         // The base is a row of the tree whether or not it holds anything under it, so a base that holds
         // nothing still shows that one row; the word says so rather than leaving the pane reading as a
         // tree that has not finished loading.
-        Content = HoldsAny(root)
-            ? tree
-            : new Grid { Children = { tree, Empty() } };
+        if (!HoldsAny(root))
+        {
+            grid.Children.Add(Empty());
+        }
+
+        grid.Children.Add(over);
+
+        Content = grid;
+    }
+
+    /// <summary>Says whether a drag may land here, and lights the step it would land in.</summary>
+    /// <param name="sender">The tree.</param>
+    /// <param name="e">The drag.</param>
+    private void DraggedOver(object? sender, DragEventArgs e)
+    {
+        _ghost.Following(e.GetPosition(this));
+
+        e.DragEffects = _drops.Over(e);
+        e.Handled = e.DragEffects != DragDropEffects.None;
+    }
+
+    /// <summary>Takes the drop mark off when a drag leaves, and the card with it.</summary>
+    /// <param name="sender">The tree.</param>
+    /// <param name="e">The drag.</param>
+    private void DraggedOff(object? sender, DragEventArgs e)
+    {
+        _drops.Off();
+        _ghost.Unghost();
+    }
+
+    /// <summary>Lets a drag go into the step it was over, and takes the card off.</summary>
+    /// <param name="sender">The tree.</param>
+    /// <param name="e">The drop.</param>
+    private void Dropped(object? sender, DragEventArgs e)
+    {
+        _ghost.Unghost();
+        _drops.Dropped(e);
+    }
+
+    /// <summary>
+    /// Where a drag would land: the directory of the step it is over.
+    /// </summary>
+    /// <remarks>
+    /// The step itself and not the space around it — a tree holds the steps a user opened, and the space beside
+    /// and below them names nothing to go into, so a drag let go there is let go nowhere rather than being read
+    /// as the base. The computer is a place to choose a drive from rather than a directory, so a step standing
+    /// for it is not somewhere a drag can go either.
+    /// </remarks>
+    /// <param name="e">The drag.</param>
+    private Land? Landing(DragEventArgs e)
+    {
+        if (!e.DataTransfer.Contains(DataFormat.File))
+        {
+            return null;
+        }
+
+        var at = e.GetPosition(this);
+
+        for (var visual = this.GetVisualAt(at) as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is TreeViewItem item && item.Tag is string path)
+            {
+                return Browser.IsComputer(path) ? null : new Land(path, path);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Paints the row standing for a directory, or takes the paint off.</summary>
+    /// <param name="directory">The directory being pointed at, or nothing.</param>
+    private void Mark(string? directory)
+    {
+        Unmark();
+
+        if (directory is null)
+        {
+            return;
+        }
+
+        foreach (var (path, row) in _rows)
+        {
+            if (!string.Equals(path, directory, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Bound rather than read, so that the mark follows a colour changed while the program runs, the way
+            // the band a frame is drawn with does.
+            row[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.selection");
+            _marked = row;
+
+            return;
+        }
+    }
+
+    /// <summary>Takes the drop mark off whatever was wearing it.</summary>
+    private void Unmark()
+    {
+        if (_marked is { } row)
+        {
+            // Opaque again rather than empty, because the band the row is drawn on is what a click on the space
+            // after a name answers: a background taken away would take that click with it.
+            row.Background = Brushes.Transparent;
+            _marked = null;
+        }
     }
 
     /// <summary>
@@ -201,7 +344,7 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="path">The directory the step stands for.</param>
     private TreeViewItem Node(string path)
     {
-        var item = new TreeViewItem();
+        var item = new TreeViewItem { Tag = path };
         var read = false;
 
         // A step with nothing under it is given no child at all, and that is what leaves it without an
@@ -262,7 +405,7 @@ internal sealed class TreeBrowser : UserControl
     /// </remarks>
     /// <param name="path">The directory the row names.</param>
     /// <param name="collapse">What closes every step under the row, or nothing where it has no steps under it.</param>
-    private Control Header(string path, Action? collapse)
+    private Border Header(string path, Action? collapse)
     {
         var entry = new Entry(path, EntryKind.Directory);
         var name = Names.Show(entry);
@@ -301,6 +444,8 @@ internal sealed class TreeBrowser : UserControl
 
         row.Tapped += (_, _) => _browser.Go(path);
         row.DoubleTapped += (_, e) => e.Handled = true;
+
+        _rows.Add((path, row));
 
         return row;
     }

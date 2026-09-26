@@ -505,7 +505,7 @@ All three are always available from `Window`.
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
 | Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): a table of rows below 60%, tiles above it. At its top is the browser's own toolbar — back, forward, up, refresh, and the address — and at its foot the zoom, both part of this dock rather than docks beside it (§7.5); the end of that toolbar carries the toggle for hidden entries and the toggle for following the whole (§7.5), which is what lets one dock look at a directory of its own. The table's columns are the icon, the name, the permissions, when it was last written and how large it is — and the permissions column is left out on Windows, which does not carry what those letters say. A column is made wider or narrower by the grab between it and its neighbour, which is drawn as the grab between two regions is (§10), and the name is the column that takes what is left over, so the table is as wide as the dock whatever the columns are. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
-| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. Placed at the left by default. |
+| Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. A drag is let go in it as well as in a listing: a step is a directory a drag can land in, and the space beside and below the steps is not (Section 7.7). Placed at the left by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
@@ -671,6 +671,11 @@ the window and the docks and knows nothing of entries.
   the entries may have come out of a directory that only another dock is looking at (§7.5), a dock being
   able to be out of step. That read is deferred past the event that asked for it, since reading a directory
   again rebuilds the views showing it and one of them is that very view.
+- **A tree is a landing place too.** A drag is let go on a step, which is a directory, and the row lights as
+  the row of a listing does. The space beside and below the steps is not a directory and is refused rather
+  than read as the base, and a step standing for the computer is refused as well (§7.5). What a drag may land
+  on differs from view to view; what a drag *does* is one thing, and the card that follows the pointer is
+  drawn by whichever view is under it (§7.7).
 - **A drag of this program's own is followed by a card.** While a drag the program started is in flight, a
   translucent card carries the picture of the entry it took hold of and follows the pointer, in whichever dock
   the pointer is over. It is drawn by the program and not by the toolkit: a drag is handed data and nothing else,

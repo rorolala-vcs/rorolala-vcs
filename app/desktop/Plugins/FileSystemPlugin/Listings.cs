@@ -80,18 +80,6 @@ internal abstract class EntryView : UserControl
     /// <summary>How tall a row is where nothing on screen says, which is only ever a first guess.</summary>
     private const double RowGuess = 28.0;
 
-    /// <summary>How faded the card that follows a drag is, so that it reads as a carrying, not as a thing.</summary>
-    private const double GhostOpacity = 0.7;
-
-    /// <summary>How large the card that follows a drag is, which is also what keeps it inside the view.</summary>
-    private const double GhostSize = 48.0;
-
-    /// <summary>How far past the pointer the card is drawn, so that it never sits under it.</summary>
-    private const double GhostStep = 12.0;
-
-    /// <summary>How large the picture the card carries is.</summary>
-    private const int GhostIcon = 32;
-
     /// <summary>Every row on screen, so that a faded cut and a moved column reach all of them.</summary>
     private readonly List<(Entry Entry, Control Row)> _rows = [];
 
@@ -145,35 +133,11 @@ internal abstract class EntryView : UserControl
     /// <summary>What the band is drawn over, filling the view and taking no pointer of its own.</summary>
     private readonly Canvas _over = new() { IsHitTestVisible = false };
 
-    /// <summary>What the card carries: the entry the drag took hold of.</summary>
-    private readonly ContentControl _ghostFace;
+    /// <summary>The card that follows a drag, drawn over this view while the pointer is in it.</summary>
+    private readonly Ghost _ghost;
 
-    /// <summary>What the card is showing, so that a picture is not read from the desktop for every move.</summary>
-    private string _ghosted = string.Empty;
-
-    /// <summary>
-    /// What the drag in flight is carrying, for the card's sake, or nothing when no drag of this program's is on.
-    /// </summary>
-    /// <remarks>
-    /// It is held by the class rather than by a view, because the card is drawn by whichever view the pointer is
-    /// over: a drag that crossed into another dock is answered by that dock's view, which knows nothing of what
-    /// it did not start — so what is being carried is kept where every view of this plugin can read it, exactly
-    /// as the answer to who finished a move is (<see cref="_answered"/>).
-    /// </remarks>
-    private static Entry? _carrying;
-
-    /// <summary>
-    /// The card that follows the pointer while this program is carrying entries.
-    /// </summary>
-    /// <remarks>
-    /// The toolkit floats no picture of its own — a drag is handed data and nothing else — and on X11 the source
-    /// of a drag is told nothing about the pointer while it is on, because the XDND handler swallows the motion
-    /// before it reaches the tree. So what says a drag is happening is this, drawn over the view at the positions
-    /// the drop side is told — by every view, so that a drag crossing into another dock is drawn there as well.
-    /// It follows the pointer only while the pointer is over this window; a drag to another program is the one
-    /// that carries no picture of itself.
-    /// </remarks>
-    private readonly Border _ghost;
+    /// <summary>How a drag is taken here: where it would land, and what is lit while it is over.</summary>
+    private readonly Drops _drops;
 
     /// <summary>Where a press landed and on which entry, while it may still become a drag.</summary>
     private Point _slip;
@@ -191,15 +155,6 @@ internal abstract class EntryView : UserControl
     /// <summary>The row wearing the drop mark, so that it can be taken off again.</summary>
     private Control? _marked;
 
-    /// <summary>
-    /// Whether this program's own drop handler answered the drag in flight.
-    /// </summary>
-    /// <remarks>
-    /// It is what tells a moved-out drag from a moved-in one: a drop answered here has already moved the files,
-    /// so the source must not take the originals away as well.
-    /// </remarks>
-    private static bool _answered;
-
     /// <summary>Sets up the shared behaviour over one list.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="browser">The location the entries belong to.</param>
@@ -212,9 +167,8 @@ internal abstract class EntryView : UserControl
         Actions = actions;
         Clipboard = clip;
 
-        var (ghost, ghostFace) = Ghost();
-        _ghost = ghost;
-        _ghostFace = ghostFace;
+        _ghost = new Ghost(_over);
+        _drops = new Drops(host, browser, Landing, Mark);
 
         List = new ListBox
         {
@@ -305,7 +259,6 @@ internal abstract class EntryView : UserControl
     protected void Present(Control content)
     {
         _over.Children.Add(_band);
-        _over.Children.Add(_ghost);
 
         var panel = new Border { Padding = PanelPadding, Child = content };
 
@@ -994,10 +947,10 @@ internal abstract class EntryView : UserControl
         transfer.Add(DataTransferItem.CreateText(string.Join(Environment.NewLine, carrying.Select(entry => entry.Path))));
 
         _carried = carrying;
-        _answered = false;
+        Drops.Answered = false;
 
         // What the card shows, which the view under the pointer draws rather than the one that started the drag.
-        _carrying = dragged;
+        Ghost.Carrying = dragged;
 
         try
         {
@@ -1005,10 +958,10 @@ internal abstract class EntryView : UserControl
 
             // A move another program made is a move this program has to finish: the other program copied the
             // files it was handed, and the originals are the source's to take away. A move this program
-            // answered itself already moved them, which is what _answered records — taking them away again
+            // answered itself already moved them, which is what Drops.Answered records — taking them away again
             // would delete what was just carried, and the reading of the directory is left to the drop that did
             // the moving: a read taken here would be taken before that move had been made.
-            if (effect == DragDropEffects.Move && !_answered)
+            if (effect == DragDropEffects.Move && !Drops.Answered)
             {
                 await FileOps.Remove(_carried, Host.Log.Error);
                 Later();
@@ -1020,8 +973,8 @@ internal abstract class EntryView : UserControl
         }
 
         _carried = [];
-        _carrying = null;
-        Unghost();
+        Ghost.Carrying = null;
+        _ghost.Unghost();
     }
 
     /// <summary>Says whether a drag may land here, and lights the directory it would land in.</summary>
@@ -1029,19 +982,12 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The drag.</param>
     private void DraggedOver(object? sender, DragEventArgs e)
     {
-        Following(e.GetPosition(this));
+        // The card is put first and from the position, since it is what says where the pointer is rather than
+        // what would be done there.
+        _ghost.Following(e.GetPosition(this));
 
-        if (Landing(e) is not { } land)
-        {
-            e.DragEffects = DragDropEffects.None;
-            Mark(null);
-
-            return;
-        }
-
-        e.DragEffects = Copying(e) ? DragDropEffects.Copy : DragDropEffects.Move;
-        Mark(land.Row);
-        e.Handled = true;
+        e.DragEffects = _drops.Over(e);
+        e.Handled = e.DragEffects != DragDropEffects.None;
     }
 
     /// <summary>Takes the drop mark off when a drag leaves, and the card with it.</summary>
@@ -1049,136 +995,18 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The drag.</param>
     private void DraggedOff(object? sender, DragEventArgs e)
     {
-        Mark(null);
-        Unghost();
+        _drops.Off();
+        _ghost.Unghost();
     }
 
-    /// <summary>
-    /// Moves or copies what a drag brought into the directory it was let go over.
-    /// </summary>
-    /// <remarks>
-    /// A drag this program started is answered here too, so a drag between two of its docks never leaves it,
-    /// and the source is told by <see cref="_answered"/> not to remove the originals again.
-    /// </remarks>
+    /// <summary>Lets a drag go where it was let go, and takes the card off.</summary>
     /// <param name="sender">The list.</param>
     /// <param name="e">The drop.</param>
-    private async void Dropped(object? sender, DragEventArgs e)
+    private void Dropped(object? sender, DragEventArgs e)
     {
-        Mark(null);
-        Unghost();
-
-        if (Landing(e) is not { } land)
-        {
-            return;
-        }
-
-        var into = land.Into;
-
-        // Told before the work is waited for: what the platform is owed an answer to cannot wait for a question
-        // the agent may have to put to a person.
-        _answered = true;
-        e.Handled = true;
-
-        var copy = Copying(e) || e.DragEffects == DragDropEffects.Copy;
-
-        // Into the directory it is already in is a move that would only rename it, or a copy that makes a
-        // second one. Neither is what letting go inside one directory means, so neither is offered.
-        var paths = Paths(e.DataTransfer)
-            .Where(path => !string.Equals(ParentOf(path), into, StringComparison.Ordinal))
-            .ToArray();
-
-        if (paths.Length == 0)
-        {
-            return;
-        }
-
-        if (copy)
-        {
-            await FileOps.Copy(paths, into, Host.Log.Error);
-        }
-        else
-        {
-            await FileOps.Move(paths, into, Host.Log.Error);
-        }
-
-        Later();
+        _ghost.Unghost();
+        _drops.Dropped(e);
     }
-
-    /// <summary>
-    /// The card that follows a drag: a ground, an edge of the primary, and what the drag carries.
-    /// </summary>
-    /// <remarks>
-    /// Built from the look's own keys rather than written in colours, like the band a frame is drawn with, and for
-    /// the same reason: colours of its own here would be a second answer to what this program looks like. It takes
-    /// no pointer, because what lies under it is what a drop is aimed at.
-    /// </remarks>
-    /// <returns>The card, and the place the picture of what is carried is put.</returns>
-    private static (Border Card, ContentControl Face) Ghost()
-    {
-        var face = new ContentControl
-        {
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var card = new Border
-        {
-            IsVisible = false,
-            IsHitTestVisible = false,
-            Opacity = GhostOpacity,
-            Width = GhostSize,
-            Height = GhostSize,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Child = face,
-        };
-
-        card[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.primary");
-        card[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-        card[!Border.BoxShadowProperty] = new DynamicResourceExtension("rorolala.shadow");
-
-        return (card, face);
-    }
-
-    /// <summary>
-    /// Puts the card under the pointer, while a drag this program started is in flight.
-    /// </summary>
-    /// <remarks>
-    /// The card is drawn by whichever view the pointer is over rather than by the one that started the drag,
-    /// because the pointer may cross into another dock and that view knows nothing of what this one is carrying
-    /// — which is why what is carried is held by the class (<see cref="_carrying"/>). A drag from another
-    /// program carries no card, because what it carries is that program's to draw. The card is kept inside the
-    /// view, so that a pointer at the edge does not put it out of sight.
-    /// </remarks>
-    /// <param name="at">Where the pointer is, in this view's own coordinates.</param>
-    private void Following(Point at)
-    {
-        if (_carrying is not { } carried)
-        {
-            Unghost();
-
-            return;
-        }
-
-        // Read once per thing carried rather than once per move: a drag is told of every pixel the pointer
-        // travels, and a picture asked of the desktop for each of them is a picture a pixel.
-        if (!string.Equals(_ghosted, carried.Path, StringComparison.Ordinal))
-        {
-            _ghostFace.Content = Icons.For(carried, GhostIcon);
-            _ghosted = carried.Path;
-        }
-
-        var room = new Size(
-            Math.Max(0, Bounds.Width - GhostSize),
-            Math.Max(0, Bounds.Height - GhostSize));
-
-        Canvas.SetLeft(_ghost, Math.Clamp(at.X + GhostStep, 0, room.Width));
-        Canvas.SetTop(_ghost, Math.Clamp(at.Y + GhostStep, 0, room.Height));
-        _ghost.IsVisible = true;
-    }
-
-    /// <summary>Takes the card off, which is what every end of a drag does.</summary>
-    private void Unghost() => _ghost.IsVisible = false;
 
     /// <summary>
     /// Says the files may have changed, to be read again not before this event is over.
@@ -1231,41 +1059,6 @@ internal abstract class EntryView : UserControl
         return Browser.IsComputer(Browser.Current) ? null : new Land(Browser.Current, string.Empty);
     }
 
-    /// <summary>Where a drag lands: the directory it goes into, and the row that stands for it.</summary>
-    /// <param name="Into">The directory the dragged entries go into.</param>
-    /// <param name="Row">The path of the row to light, or nothing where no row stands for the place.</param>
-    private readonly record struct Land(string Into, string Row);
-
-    /// <summary>Whether the drag is one to copy rather than to move, which is what holding a control asks for.</summary>
-    /// <param name="e">The drag.</param>
-    private static bool Copying(DragEventArgs e) => e.KeyModifiers.HasFlag(KeyModifiers.Control);
-
-    /// <summary>The paths a drag carries, whether it brought them as files or as text.</summary>
-    /// <param name="data">What the drag carries.</param>
-    private static IReadOnlyList<string> Paths(IDataTransfer data)
-    {
-        var files = data.TryGetFiles();
-        var fromFiles = files?
-            .Select(file => file.TryGetLocalPath())
-            .Where(path => path is { Length: > 0 })
-            .Select(path => FileOps.Bare(path!))
-            .ToArray() ?? [];
-
-        if (fromFiles.Length > 0)
-        {
-            return fromFiles;
-        }
-
-        var text = data.TryGetText();
-
-        return text is null
-            ? []
-            : text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(FileOps.Bare)
-                .Where(path => File.Exists(path) || System.IO.Directory.Exists(path))
-                .ToArray();
-    }
-
     /// <summary>Paints the row for the directory a drag is over, or takes the paint off.</summary>
     /// <param name="directory">The directory being pointed at, or nothing.</param>
     private void Mark(string? directory)
@@ -1316,10 +1109,6 @@ internal abstract class EntryView : UserControl
                 break;
         }
     }
-
-    /// <summary>The directory an entry sits in, for telling a move that would go nowhere.</summary>
-    /// <param name="path">The path to ask about.</param>
-    private static string ParentOf(string path) => Path.GetDirectoryName(FileOps.Bare(path)) ?? string.Empty;
 
     /// <summary>Opens the entry a double-click landed on.</summary>
     /// <param name="sender">The list.</param>
