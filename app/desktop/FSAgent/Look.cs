@@ -139,17 +139,21 @@ internal static class Look
     )
     {
         /// <summary>The light ground.</summary>
+        /// <remarks>
+        /// Hue-free, as the Desktop's own is: an agent window sits beside the program and has to age with
+        /// it, so this ramp is that one's and not a second answer (see <c>RorolalaTheme.Grounds.Light</c>).
+        /// </remarks>
         public static readonly Neutrals Light = new(
-            Bg: Color.FromRgb(0xF6, 0xF8, 0xF3),
+            Bg: Color.FromRgb(0xF7, 0xF7, 0xF7),
             Elevated: Color.FromRgb(0xFF, 0xFF, 0xFF),
-            Sunken: Color.FromRgb(0xEC, 0xEF, 0xE6),
-            Fg: Color.FromRgb(0x1C, 0x21, 0x1A),
-            Muted: Color.FromRgb(0x5C, 0x66, 0x56),
-            Faint: Color.FromRgb(0x8A, 0x94, 0x84),
-            Border: Color.FromRgb(0xDD, 0xE3, 0xD5),
-            Strong: Color.FromRgb(0xC3, 0xCC, 0xB8),
-            Shadow: Color.FromArgb(0x0F, 0x14, 0x1E, 0x0A),
-            ShadowSoft: Color.FromArgb(0x0F, 0x14, 0x1E, 0x0A)
+            Sunken: Color.FromRgb(0xEC, 0xEC, 0xEC),
+            Fg: Color.FromRgb(0x1D, 0x1D, 0x1D),
+            Muted: Color.FromRgb(0x5D, 0x5D, 0x5D),
+            Faint: Color.FromRgb(0x8B, 0x8B, 0x8B),
+            Border: Color.FromRgb(0xDC, 0xDC, 0xDC),
+            Strong: Color.FromRgb(0xC2, 0xC2, 0xC2),
+            Shadow: Color.FromArgb(0x0F, 0x00, 0x00, 0x00),
+            ShadowSoft: Color.FromArgb(0x0F, 0x00, 0x00, 0x00)
         );
 
         /// <summary>The dark ground.</summary>

@@ -279,21 +279,27 @@ internal sealed class RorolalaTheme
     )
     {
         /// <summary>The light ground.</summary>
+        /// <remarks>
+        /// The ramp is hue-free. It began as the design's own warm sage, tuned to its lime primary; kept
+        /// that way under a primary the user chooses it reads as a green film over the whole window and
+        /// fights whatever colour is set — so it carries no hue at all, and the two configured colours are
+        /// the only colour in a window that has not drawn an added or a removed thing.
+        /// </remarks>
         public static readonly Grounds Light = new(
-            Bg: Color.FromRgb(0xF6, 0xF8, 0xF3),
+            Bg: Color.FromRgb(0xF7, 0xF7, 0xF7),
             Elevated: Color.FromRgb(0xFF, 0xFF, 0xFF),
-            Sunken: Color.FromRgb(0xEC, 0xEF, 0xE6),
-            Fg: Color.FromRgb(0x1C, 0x21, 0x1A),
-            Muted: Color.FromRgb(0x5C, 0x66, 0x56),
-            Faint: Color.FromRgb(0x8A, 0x94, 0x84),
-            Border: Color.FromRgb(0xDD, 0xE3, 0xD5),
-            Strong: Color.FromRgb(0xC3, 0xCC, 0xB8),
+            Sunken: Color.FromRgb(0xEC, 0xEC, 0xEC),
+            Fg: Color.FromRgb(0x1D, 0x1D, 0x1D),
+            Muted: Color.FromRgb(0x5D, 0x5D, 0x5D),
+            Faint: Color.FromRgb(0x8B, 0x8B, 0x8B),
+            Border: Color.FromRgb(0xDC, 0xDC, 0xDC),
+            Strong: Color.FromRgb(0xC2, 0xC2, 0xC2),
             Add: Color.FromRgb(0x1F, 0x8A, 0x3B),
             AddBg: Color.FromRgb(0xE2, 0xF6, 0xE6),
             Del: Color.FromRgb(0xC0, 0x36, 0x2C),
             DelBg: Color.FromRgb(0xFB, 0xE6, 0xE3),
-            Shadow: Color.FromArgb(0x0F, 0x14, 0x1E, 0x0A),
-            ShadowSoft: Color.FromArgb(0x0F, 0x14, 0x1E, 0x0A)
+            Shadow: Color.FromArgb(0x0F, 0x00, 0x00, 0x00),
+            ShadowSoft: Color.FromArgb(0x0F, 0x00, 0x00, 0x00)
         );
 
         /// <summary>The dark ground.</summary>

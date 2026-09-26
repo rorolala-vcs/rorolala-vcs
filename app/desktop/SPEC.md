@@ -781,10 +781,12 @@ exists for plugins that react to a completed open.
 - What a run chooses is the **variant** it is drawn in and the **colours** it is drawn with — two, and a
   third that may be named rather than worked out (Section 5.4). Everything else in this section is stated
   rather than configured, which is what makes two runs of the program look like one program.
-- The look is the one the sibling project **`gattipage`** uses, and the tokens are that project's own:
+- The look is the one the sibling project **`gattipage`** uses, and most tokens are that project's own:
   three grounds, a ramp of ink in three steps, two border weights, 8- and 5-pixel radii, a soft
   two-layer shadow, and one vivid primary. Surfaces are **raised** rather than flat, so a dock reads as a
-  card lying on the ground beneath it.
+  card lying on the ground beneath it. The neutral ramp is the one token that is not that project's: there
+  it is a warm sage tuned to a lime of the design's own choosing, and here it is **hue-free**, because a
+  ground with a hue of its own films the whole window and fights whatever colour a run is drawn in.
 - The colours are spent by **role**, not by taste:
   - **Primary carries the weight.** It fills what is chosen — a chosen row is a wash of it, and a chosen
     tab and the one action of a surface are filled with it — and it is written into the base theme's own
