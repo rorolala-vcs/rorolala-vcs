@@ -504,9 +504,8 @@ All three are always available from `Window`.
 
 | Dock | Plugin | Open mode | Content |
 | --- | --- | --- | --- |
-| Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): a table of rows below 60%, tiles above it. The table's columns are the icon, the name, the permissions, when it was last written and how large it is — and the permissions column is left out on Windows, which does not carry what those letters say. A column is made wider or narrower by the grab between it and its neighbour, which is drawn as the grab between two regions is (§10), and the name is the column that takes what is left over, so the table is as wide as the dock whatever the columns are. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
+| Directories | `rorolala.file_system` | `New` | One directory's entries at a zoom that is kept with the dock (§7.3): a table of rows below 60%, tiles above it. At its top is the browser's own toolbar — back, forward, up, refresh, and the address — and at its foot the zoom, both part of this dock rather than docks beside it (§7.5). The table's columns are the icon, the name, the permissions, when it was last written and how large it is — and the permissions column is left out on Windows, which does not carry what those letters say. A column is made wider or narrower by the grab between it and its neighbour, which is drawn as the grab between two regions is (§10), and the name is the column that takes what is left over, so the table is as wide as the dock whatever the columns are. Provides the default icon library and badge composition (Section 9). Owns the data shared with Shelf. |
 | Folder Tree | `rorolala.file_system` | `Toggle` | The directories under the base, as a tree, with a button that roots it at the top of the platform. A step is read when it is opened, and offers no expander when there is nothing under it. A step is opened and closed by that expander alone; a click on a row goes to the directory it names, wherever on the row it lands. A step with steps under it also offers to close every one of them, and nothing offers to open them all. Placed at the left by default. |
-| File System Navigation | `rorolala.file_system` | `Toggle` | Back, forward, up, refresh, and the address. The address is **read** as crumbs and becomes a **field** when it is clicked, with the whole path in it and chosen; `Return` goes there, and `Esc` or leaving the field gives the crumbs back. A path that is not a directory changes nothing rather than moving the browser, and says so. While it is typed into, the filesystem is asked what the path could be and the answers are listed under the field (§7.5). Placed at the top by default. |
 | Shelf | `rorolala.shelf` | `Toggle` | Back, forward, up; directory settings; search. Its data is owned by the File System plugin. |
 
 The File System plugin is a plugin, but it is shipped with the program and is enabled by default.
@@ -564,9 +563,9 @@ Behaviour:
   way the region settles on another of its docks, or is empty and collapses its strip.
 
 The File System has **one location** and **one base**. Every dock it opens is a view of the location;
-the tree is rooted at the base. The browser docks differ in the layout they read the entries in and in
-nothing else; the navigation dock shows the one address and walks the one history. Two docks cannot be
-looking at two places, which is what makes an address mean one thing.
+the tree is rooted at the base. The browsers differ in the layout they read the entries in and in
+nothing else; the toolbar each one carries shows the one address and walks the one history. Two docks
+cannot be looking at two places, which is what makes an address mean one thing.
 
 The **base** is the directory the tree is rooted at, and it is what keeps the tree usable: a place to
 work in rather than the whole filesystem. It starts at wherever the program was run. It is set from a
@@ -581,7 +580,9 @@ There is therefore exactly one way the location changes, and five things that as
    the location is held in full, so the address says where the browser actually went. The address is a
    field only while it is being typed into: at rest it is the path read as crumbs, so it is read rather
    than edited by accident, and a path that is not a directory is refused there rather than leaving the
-   browser somewhere that cannot be read.
+   browser somewhere that cannot be read. A crumb goes to the directory it names; the last of them, which
+   is where the browser already is, is what opens the field instead — a click on the place you are in can
+   only mean that what you want is to write somewhere else.
 2. A directory **clicked in the tree**. The tree holds nothing but directories, so choosing one can
    only mean going there, and it happens on the first click rather than the second.
 3. A directory **opened in a list**.
@@ -593,8 +594,7 @@ There is therefore exactly one way the location changes, and five things that as
 
 All five go through the same call, which refuses anything that is not a directory rather than leaving
 the browser somewhere that cannot be read. The address is the one a user can get wrong, so it is the
-one that says so. The navigation dock's arrows walk the history that switching the location leaves
-behind.
+one that says so. The arrows in a toolbar walk the history that switching the location leaves behind.
 
 **The address completes what is typed into it**, by asking the filesystem: what is in the field is split
 into the directory it is under and the beginning of a name, that directory is listed, and the entries
@@ -612,13 +612,15 @@ drives are chosen from. Windows has no path naming every drive at once, so that 
 the empty path, which no directory can be, and the views name it rather than printing it. A drive
 root's parent is the computer, which is how a drive list is left; the computer has no parent.
 
-Switching the location in one dock therefore switches it in all of them, and the navigation dock is
-shown and hidden on its own — closing a browser does not close it.
+Switching the location in one dock therefore switches it in all of them. A toolbar is part of the dock
+it sits in, so closing that dock closes its arrows and its address with it; the history they walk is
+the browser's and outlives them, which is why a dock opened afterwards still has somewhere to go back
+to.
 
-The zoom stays in the directory dock rather than moving with the navigation: how large the entries are
-read is a property of the dock reading them, and so is whether that makes them rows or tiles. The
-**tree** is the one view rooted somewhere else — at the base (§7.6) — and it is a dock of its own for
-that reason.
+The zoom stays at the foot of the directory dock rather than moving up into the toolbar: how large the
+entries are read is a property of the dock reading them, and so is whether that makes them rows or
+tiles. The **tree** is the one view rooted somewhere else — at the base (§7.6) — and it is a dock of its
+own for that reason.
 
 ### 7.7 Browser interaction
 

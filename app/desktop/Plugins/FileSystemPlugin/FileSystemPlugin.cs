@@ -29,20 +29,12 @@ public sealed class FileSystemPlugin : IRolaPlugin
     public const string DirectoryDockNameId = "rorolala.file_system.browser";
 
     /// <summary>
-    /// The stable name of the file navigation dock.
+    /// The stable name of the folder tree dock.
     /// </summary>
     /// <remarks>
     /// Written into dock layout, so it must not change once shipped.
     /// </remarks>
     public const string TreeDockNameId = "rorolala.file_system.tree";
-
-    /// <summary>
-    /// The stable name of the navigation dock.
-    /// </summary>
-    /// <remarks>
-    /// Written into dock layout, so it must not change once shipped.
-    /// </remarks>
-    public const string NavigationDockNameId = "rorolala.file_system.navigation";
 
     /// <inheritdoc />
     public PluginManifest Manifest { get; } =
@@ -94,17 +86,6 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 DockOpenMode.Toggle,
                 DockPlacement.Left,
                 _ => new TreeDock(host, browser, clip)
-            )
-        );
-
-        host.Docks.Register(
-            new DockRegistration(
-                Manifest.Id,
-                NavigationDockNameId,
-                "rorolala_file_system.navigation",
-                DockOpenMode.Toggle,
-                DockPlacement.Top,
-                _ => new NavigationDock(host, browser)
             )
         );
     }

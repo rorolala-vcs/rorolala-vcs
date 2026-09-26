@@ -140,21 +140,26 @@ internal sealed class DirectoryControl : UserControl
         FillZoom();
         FillHidden();
 
-        // The toggle and the zoom are the two things about reading a directory that are the dock's own rather
-        // than the location's: the toggle at the left, because it says what the listing is, and the zoom at the
-        // right, because it says only how large it is read.
-        //
-        // Nothing is left to fill: a dock panel hands its last child whatever room is left, which would put the
-        // slider in the middle of the bar rather than against the edge it is docked to.
-        var bar = new DockPanel { Margin = new Thickness(12, 0, 12, 8), LastChildFill = false };
-        DockPanel.SetDock(_hidden, Dock.Left);
-        DockPanel.SetDock(_zoom, Dock.Right);
-        bar.Children.Add(_hidden);
-        bar.Children.Add(_zoom);
+        // The toolbar is the dock's own rather than a dock beside it: the arrows and the address act on the one
+        // browser, and they belong over the entries they act on (Section 7.5). What the dock keeps beside them is
+        // handed in, so that the toolbar does not have to know what a dock remembers.
+        var toolbar = new NavigationBar(_host, _browser, _hidden);
+
+        // What is left at the foot is the zoom alone, which is the one thing about reading a directory that has
+        // nothing to do with where it is.
+        var foot = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(12, 0, 12, 8),
+            Children = { _zoom },
+        };
 
         var panel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(bar, Dock.Bottom);
-        panel.Children.Add(bar);
+        DockPanel.SetDock(toolbar, Dock.Top);
+        DockPanel.SetDock(foot, Dock.Bottom);
+        panel.Children.Add(toolbar);
+        panel.Children.Add(foot);
         panel.Children.Add(_content);
 
         Content = panel;

@@ -15,49 +15,23 @@ using RorolalaDesktop.I18n;
 
 namespace FileSystemPlugin;
 
-/// <summary>The File System navigation dock: the toolbar, as a dock of its own.</summary>
-/// <remarks>
-/// It is a dock rather than a part of the browser so that it can be placed where the user wants it —
-/// along the top by default — and so that a second browser does not bring a second toolbar.
-/// </remarks>
-internal sealed class NavigationDock : IDockView
-{
-    /// <summary>Makes the navigation dock.</summary>
-    /// <param name="host">The host, for logging what navigation cannot do.</param>
-    /// <param name="browser">The location, which this dock shows and switches.</param>
-    public NavigationDock(IPluginHost host, Browser browser) =>
-        View = new NavigationControl(host, browser);
-
-    /// <inheritdoc />
-    public Control View { get; }
-
-    /// <inheritdoc />
-    public IReadOnlyList<DockHeaderCommand> HeaderCommands => [];
-}
-
 /// <summary>
-/// The navigation toolbar: back, forward, up, refresh, and the address.
+/// The browser's own toolbar: the arrows, and the address.
 /// </summary>
 /// <remarks>
-/// It is a view of the location like any browser dock, and the one place the location can be typed
-/// into: the address reads what is being looked at and writes where to look, and the arrows walk the
-/// history that changing it leaves behind (Section 7.5).
+/// It is a control rather than a dock, because navigation is not a place of its own: the arrows and the
+/// address act on the one browser, and they belong at the top of the view whose entries they act on. A dock
+/// that could be put anywhere is the wrong home for them — and the dock reading them hands in whatever else
+/// it keeps, so the toolbar does not have to know what a dock remembers (Section 7.5).
 /// <para>
-/// The address is two things in one place, the way an address bar is: a line of crumbs that says where
-/// the browser is, and — once it is clicked — a field with the whole path in it, chosen, that can be
-/// typed over. Nothing is typed into until it is asked for, so the path is always read rather than
-/// edited by accident, and the field goes back to crumbs when the edit ends.
-/// </para>
-/// <para>
-/// The view switch is not here, because it is not navigation: which layout entries are read in is a
-/// property of the dock reading them, and each dock keeps its own.
+/// The address is two things in one place, the way an address bar is: a line of crumbs that says where the
+/// browser is, and — once the crumb of the place being looked at is clicked — a field with the whole path in
+/// it, chosen, that can be typed over. A crumb before the last goes to the directory it names. Nothing is
+/// typed into until it is asked for, so the path is read rather than edited by accident.
 /// </para>
 /// </remarks>
-internal sealed class NavigationControl : UserControl
+internal sealed class NavigationBar : UserControl
 {
-    /// <summary>The name the toolbar opens with, which is the program's own and not a translation.</summary>
-    private const string Brand = "Rorolala";
-
     /// <summary>
     /// How many completions are offered at once.
     /// </summary>
@@ -115,10 +89,15 @@ internal sealed class NavigationControl : UserControl
     private readonly Button _up = Arrow("\u2191");
     private readonly Button _refresh = Arrow("\u27f3");
 
-    /// <summary>Makes the navigation toolbar.</summary>
+    /// <summary>Makes the toolbar.</summary>
     /// <param name="host">The host, for logging what navigation cannot do.</param>
     /// <param name="browser">The location, which this toolbar shows and switches.</param>
-    public NavigationControl(IPluginHost host, Browser browser)
+    /// <param name="trailing">
+    /// What the dock reading the entries keeps, put at the far end of the bar. The toolbar places it rather
+    /// than owning it: what a dock remembers is the dock's, and a toolbar that knew about it would be a
+    /// toolbar that could only be used by one.
+    /// </param>
+    public NavigationBar(IPluginHost host, Browser browser, Control trailing)
     {
         _host = host;
         _browser = browser;
@@ -141,34 +120,6 @@ internal sealed class NavigationControl : UserControl
             Children = { _breadth, _address, _drop },
         };
 
-        var mark = new Border
-        {
-            Width = 16,
-            Height = 16,
-            CornerRadius = new CornerRadius(5),
-            BorderThickness = new Thickness(1),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        mark[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.primary");
-        mark[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border.strong");
-
-        var brand = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                mark,
-                new TextBlock
-                {
-                    Text = Brand,
-                    FontWeight = FontWeight.Bold,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
-            },
-        };
-
         var tools = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -177,18 +128,20 @@ internal sealed class NavigationControl : UserControl
             Children = { _back, _forward, _up, _refresh },
         };
 
+        trailing.VerticalAlignment = VerticalAlignment.Center;
+
         var bar = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
             ColumnSpacing = 12,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        Grid.SetColumn(brand, 0);
+        Grid.SetColumn(tools, 0);
         Grid.SetColumn(area, 1);
-        Grid.SetColumn(tools, 2);
-        bar.Children.Add(brand);
-        bar.Children.Add(area);
+        Grid.SetColumn(trailing, 2);
         bar.Children.Add(tools);
+        bar.Children.Add(area);
+        bar.Children.Add(trailing);
 
         var band = new Border
         {
@@ -203,7 +156,7 @@ internal sealed class NavigationControl : UserControl
 
         Content = band;
 
-        // Listening while it is on screen, like a browser dock: hidden is still attached, so the
+        // Listening while it is on screen, like the dock it sits in: hidden is still attached, so the
         // address is already right the moment the dock is shown again.
         AttachedToVisualTree += (_, _) =>
         {
@@ -275,6 +228,7 @@ internal sealed class NavigationControl : UserControl
 
         _address.Text = Address(_browser.Current);
         _crumbs.IsVisible = false;
+        _breadth.IsVisible = false;
         _address.IsVisible = true;
 
         Dispatcher.UIThread.Post(() =>
@@ -289,6 +243,7 @@ internal sealed class NavigationControl : UserControl
     {
         Close();
         _address.IsVisible = false;
+        _breadth.IsVisible = true;
         _crumbs.IsVisible = true;
     }
 
@@ -512,7 +467,7 @@ internal sealed class NavigationControl : UserControl
             found = System.IO.Directory
                 .EnumerateFileSystemEntries(directory)
                 .Where(entry => Path.GetFileName(entry).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                .Where(entry => _browser.ShowHidden || !Hidden(entry))
+                .Where(entry => _browser.ShowHidden || !Browser.IsHidden(entry))
                 .OrderBy(entry => Path.GetFileName(entry), StringComparer.OrdinalIgnoreCase)
                 .Take(Completions)
                 .Select(entry => (Path: entry, Directory: System.IO.Directory.Exists(entry)))
@@ -601,16 +556,6 @@ internal sealed class NavigationControl : UserControl
     /// <param name="typed">What is in the field.</param>
     private static bool Ends(string typed) =>
         typed[^1] == Path.DirectorySeparatorChar || typed[^1] == Path.AltDirectorySeparatorChar;
-
-    /// <summary>
-    /// Whether the platform hides an item, which is what the completions keep out with the listing.
-    /// </summary>
-    /// <remarks>
-    /// Read here rather than carried on an entry, because what is being asked about is a path from the field
-    /// rather than an entry of the listing — and the answer is the same rule either way.
-    /// </remarks>
-    /// <param name="path">The item.</param>
-    private static bool Hidden(string path) => Browser.IsHidden(path);
 
     /// <summary>The completion that is picked, or nothing while none is.</summary>
     private string? Picked() => _drop.IsOpen ? _suggestions.SelectedItem as string : null;

@@ -13,9 +13,6 @@ rorolala_file_system:
   tree:
     en: Folder Tree
     zh-CN: 文件导览
-  navigation:
-    en: Navigation
-    zh-CN: 导航
 
   # What the table's columns are headed. The permissions column is not shown where the system carries
   # no such thing, so its key is only ever asked for on a system that has one.
