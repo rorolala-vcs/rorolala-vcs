@@ -827,11 +827,7 @@ internal abstract class EntryView : UserControl
             // would delete what was just carried.
             if (effect == DragDropEffects.Move && !_answered)
             {
-                foreach (var entry in _carried)
-                {
-                    Remove(entry, Host.Log.Error);
-                }
-
+                await FileOps.Remove(_carried, Host.Log.Error);
                 Later();
             }
         }
@@ -877,7 +873,7 @@ internal abstract class EntryView : UserControl
     /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The drop.</param>
-    private void Dropped(object? sender, DragEventArgs e)
+    private async void Dropped(object? sender, DragEventArgs e)
     {
         Mark(null);
 
@@ -886,30 +882,34 @@ internal abstract class EntryView : UserControl
             return;
         }
 
+        // Told before the work is waited for: what the platform is owed an answer to cannot wait for a question
+        // the agent may have to put to a person.
         _answered = true;
+        e.Handled = true;
+
         var copy = Copying(e) || e.DragEffects == DragDropEffects.Copy;
 
-        foreach (var path in Paths(e.DataTransfer))
-        {
-            // Into the directory it is already in is a move that would only rename it, or a copy that makes a
-            // second one. Neither is what letting go inside one directory means, so neither is done.
-            if (string.Equals(ParentOf(path), into, StringComparison.Ordinal))
-            {
-                continue;
-            }
+        // Into the directory it is already in is a move that would only rename it, or a copy that makes a
+        // second one. Neither is what letting go inside one directory means, so neither is offered.
+        var paths = Paths(e.DataTransfer)
+            .Where(path => !string.Equals(ParentOf(path), into, StringComparison.Ordinal))
+            .ToArray();
 
-            if (copy)
-            {
-                FileOps.Copy(path, into, Host.Log.Error);
-            }
-            else
-            {
-                FileOps.Move(path, into, Host.Log.Error);
-            }
+        if (paths.Length == 0)
+        {
+            return;
+        }
+
+        if (copy)
+        {
+            await FileOps.Copy(paths, into, Host.Log.Error);
+        }
+        else
+        {
+            await FileOps.Move(paths, into, Host.Log.Error);
         }
 
         Later();
-        e.Handled = true;
     }
 
     /// <summary>
@@ -984,35 +984,6 @@ internal abstract class EntryView : UserControl
                 .Select(FileOps.Bare)
                 .Where(path => File.Exists(path) || System.IO.Directory.Exists(path))
                 .ToArray();
-    }
-
-    /// <summary>
-    /// Removes an entry, which is how a move out of the program is finished.
-    /// </summary>
-    /// <remarks>
-    /// A move to another program is one the other program only copies: what it was handed is now its own, and
-    /// the originals are the source's to take away. It is only ever run for a move this program did not answer
-    /// itself, so a move within the program is never taken away twice.
-    /// </remarks>
-    /// <param name="entry">What to remove.</param>
-    /// <param name="failed">Where a failure is reported.</param>
-    private static void Remove(Entry entry, Action<string> failed)
-    {
-        try
-        {
-            if (entry.Kind == EntryKind.Directory)
-            {
-                System.IO.Directory.Delete(entry.Path, true);
-            }
-            else
-            {
-                File.Delete(entry.Path);
-            }
-        }
-        catch (Exception error) when (error is not OutOfMemoryException)
-        {
-            failed(error.Message);
-        }
     }
 
     /// <summary>Paints the row for the directory a drag is over, or takes the paint off.</summary>

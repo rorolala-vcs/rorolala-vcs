@@ -50,6 +50,7 @@ document first, then to the code.
   - [7.5 Bundled plugin docks](#75-bundled-plugin-docks)
   - [7.6 Headers and the strip](#76-headers-and-the-strip)
   - [7.7 Browser interaction](#77-browser-interaction)
+  - [7.8 The file agent](#78-the-file-agent)
 - [8. Open Hook Pipeline](#8-open-hook-pipeline)
   - [8.1 Request state](#81-request-state)
   - [8.2 Stages and order](#82-stages-and-order)
@@ -598,6 +599,40 @@ the window and the docks and knows nothing of entries.
   carries XDND. The files are offered themselves as well as their paths written out, so a file manager
   receives files and a text field text. A move out to another program is finished by taking the originals
   away, while a move the program answers itself has already moved them (§19.6).
+
+### 7.8 The file agent
+
+Every file operation the File System performs — a paste, a drop, and the removal that finishes a move out
+of the program — is handed to a program of its own rather than done in process: `rola-desktop-fs-agent`.
+It is reached through the File System plugin and through nothing else, which is why it is laid inside that
+plugin's own directory (`plugins/FileSystemPlugin/RorolalaFSAgent/`) rather than beside the Desktop
+program. The host does not load it: plugin discovery reads `plugins/` itself and not what is under it, so
+a program of this kind can live there without being taken for a plugin.
+
+The plugin starts it with:
+
+```text
+rola-desktop-fs-agent -Command:"<program and its arguments>" -Type:"Copy|Move|RemoveDirs|RemoveFiles"
+                     -Lang:"<locale>" (-Pairs:"from>to;from>to" | -From:"<path>" -To:"<path>")
+```
+
+- `-Command` is the program and its fixed arguments that carry the operation out; the parameters are
+  named rather than run through a shell, so a path with a space in it survives. The command is the
+  operation's implementation, which is what lets the same agent serve copy, move and removal.
+- `-Pairs` is a batch, so that a question about a name is put once for a batch and its answer can stand
+  for the rest; `-From`/`-To` is the single-item shorthand. An item goes over on its own where a path
+  carries a batch separator, so that a path can never be read as two things.
+- **Conflicts.** Copy and Move land on `<to>/<name of from>`. Where that name is already taken, the agent
+  asks a person, in a window of its own worn in the same look as the program (§10): **Replace** (remove
+  what is there), **Skip** (run nothing for it) or **Rename** (a free name beside it), with "apply to the
+  remaining N" to answer every remaining conflict the same way. Closing the window calls the whole run
+  off. **A conflict that was never answered is never run**: the command would land on something already
+  there, so an unanswered conflict is reported as a failure rather than resolved by a default.
+- **The answer.** One JSON line is the last thing on standard output — nothing else is written there —
+  naming what became of every item, in the order they were given: `done`, `skipped` or `failed`, how it
+  was resolved (`as-is`, `replaced`, `renamed`, `skipped`, `failed`), and the reason when it failed.
+  Standard error is for a person. The exit code is `0` when a run happened and `1` when the arguments
+  were not a run at all.
 
 ## 8. Open Hook Pipeline
 

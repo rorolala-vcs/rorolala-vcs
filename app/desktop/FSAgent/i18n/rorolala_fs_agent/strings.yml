@@ -1,0 +1,28 @@
+_version: 2
+
+# What the file-system agent says in its conflict window. The keys are namespaced by the agent's
+# identity — the id with dots underscored — which is the convention that keeps two programs' keys
+# apart, and the leaf holds one form per language.
+
+rorolala_fs_agent:
+  title:
+    en: File conflict
+    zh-CN: 文件冲突
+  message:
+    en: "Writing `%{source}` to `%{target}` would overwrite something already there."
+    zh-CN: "把 `%{source}` 写入 `%{target}` 会覆盖那里已有的内容。"
+  apply_remaining:
+    en: Apply to the remaining %{count}
+    zh-CN: 对剩余的 %{count} 项同样处理
+  replace:
+    en: Replace
+    zh-CN: 替换
+  skip:
+    en: Skip
+    zh-CN: 跳过
+  rename:
+    en: Rename
+    zh-CN: 重命名
+  cancel:
+    en: Cancel
+    zh-CN: 取消

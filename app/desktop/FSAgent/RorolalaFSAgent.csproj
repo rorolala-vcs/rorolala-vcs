@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- The name is what the command line starts and what a launcher looks for, so it is stated
+         rather than left to the directory it happens to sit in. -->
+    <AssemblyName>rola-desktop-fs-agent</AssemblyName>
+    <RootNamespace>RorolalaFSAgent</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The window is built out of Avalonia controls directly, and drawn in the plainest theme
+         Avalonia ships, so that the small overlay below is what says what this program looks like. -->
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- What the conflict window says is read by the same reader the Desktop and the command line
+         read with, so this program speaks the way they do. -->
+    <ProjectReference Include="../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The words are laid beside the assembly, so that what is registered before the window is
+         made is found beside the program rather than looked for somewhere else. -->
+    <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

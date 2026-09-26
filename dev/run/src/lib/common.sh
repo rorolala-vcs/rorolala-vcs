@@ -77,6 +77,13 @@ DESKTOP_DIR="$BUILD_DIR/bin/desktop"
 # and the tree's spelling is the tree's.
 DESKTOP_PLUGINS="app/desktop/Plugins/FileSystemPlugin"
 
+# The file agent the plugins' file operations are handed to: a program of its own, laid beside the plugin
+# that starts it rather than beside the Desktop program, because it is reached through that plugin and
+# nowhere else. A plain `publish` is what it needs — it is not a plugin the host loads, so nothing
+# delegates its dependencies for it and every one of them has to be beside it.
+DESKTOP_AGENT=app/desktop/FSAgent/RorolalaFSAgent.csproj
+DESKTOP_AGENT_DIR="$DESKTOP_DIR/plugins/FileSystemPlugin/RorolalaFSAgent"
+
 # Asks the runner for another script, the way a `make` target asked for another target.
 again() {
 	"$RUN" "$@"
@@ -109,6 +116,16 @@ publish_plugins() {
 			cp -r "$output/i18n" "$DESKTOP_DIR/plugins/"
 		fi
 	done
+
+	publish_agent
+}
+
+# Publishes the file agent the plugins hand their file operations to, into the plugin's own directory
+# beside the plugin. The host's plugin discovery reads `plugins/` itself and not what is under it, so a
+# program of an agent's kind can live there without being taken for a plugin.
+publish_agent() {
+	# shellcheck disable=SC2086
+	$DOTNET publish "$DESKTOP_AGENT" -c Release -o "$DESKTOP_AGENT_DIR"
 }
 
 # `export` and `clean` delete a destination with `rm -rf`, so refuse a path that would take

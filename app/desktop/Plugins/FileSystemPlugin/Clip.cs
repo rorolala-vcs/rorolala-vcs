@@ -89,26 +89,24 @@ internal sealed class Clip
 
             var pasted = false;
 
-            foreach (var path in paths)
+            // A **cut** into the directory an entry already sits in is nothing to do, and one that was asked
+            // for anyway must not rename it out from under the user. A copy there is a different thing: it
+            // means "one more of this here", so it stays in and the agent is left to put it beside the first.
+            var moving = paths
+                .Where(path => IsCut(path) && !string.Equals(Holding(path), into, StringComparison.Ordinal))
+                .ToArray();
+            var copying = paths.Where(path => !IsCut(path)).ToArray();
+
+            // One call each, so that a question about a taken name is asked once for the batch rather than
+            // once per item.
+            if (moving.Length > 0)
             {
-                // A **cut** into the directory an entry already sits in is nothing to do, and one that was
-                // asked for anyway must not rename it out from under the user. A copy there is a different
-                // thing: it means "one more of this here", which is what a free name beside it is.
-                if (IsCut(path) && string.Equals(Holding(path), into, StringComparison.Ordinal))
-                {
-                    continue;
-                }
+                pasted |= await FileOps.Move(moving, into, failed);
+            }
 
-                if (IsCut(path))
-                {
-                    FileOps.Move(path, into, failed);
-                }
-                else
-                {
-                    FileOps.Copy(path, into, failed);
-                }
-
-                pasted = true;
+            if (copying.Length > 0)
+            {
+                pasted |= await FileOps.Copy(copying, into, failed);
             }
 
             Offered([], cut: false);

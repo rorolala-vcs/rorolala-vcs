@@ -1,16 +1,26 @@
+using System.Diagnostics;
+using System.Text.Json;
+using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
+
 namespace FileSystemPlugin;
 
 /// <summary>
-/// Moving and copying entries on disk, which is what a paste and a drop do.
+/// Every file operation the plugin performs, done by the file agent rather than here.
 /// </summary>
 /// <remarks>
-/// Everything here is best-effort and reports rather than throws: one entry that cannot be moved must
-/// not abandon the others, and a file that has gone since the listing was read is a thing to say rather
-/// than a thing to stop on.
+/// The work is not this program's: the agent is a program of its own, started with the operation, the
+/// command that carries it out, and the items, and it is the agent that settles what happens where a name
+/// is already taken — which is a question only a person can answer, and one this program has no window of
+/// its own to ask in.
 /// <para>
-/// A name already taken is never overwritten. A paste or a drop onto a directory that already holds the
-/// name makes a free one beside it — <c>name (2)</c>, and so on — which is what a user expects of a
-/// second copy and is the one behaviour that cannot lose data.
+/// What is here is therefore only the invocation and the reading of the answer: a batch goes over as
+/// <c>-Pairs</c> (or one at a time as <c>-From</c>/<c>-To</c> where a path would be broken by the pair
+/// separators), and what comes back is one JSON line naming what became of every item.
+/// </para>
+/// <para>
+/// The agent is reached through this plugin and nowhere else, which is why it lives inside the plugin's own
+/// directory beside it.
 /// </para>
 /// </remarks>
 internal static class FileOps
@@ -33,128 +43,288 @@ internal static class FileOps
         return trimmed.Length == 0 ? path : trimmed;
     }
 
-    /// <summary>Moves an entry into a directory, under a free name.</summary>
-    /// <param name="source">What to move.</param>
-    /// <param name="into">The directory to move it into.</param>
+    /// <summary>Copies sources into a directory, through the agent.</summary>
+    /// <param name="sources">What to copy.</param>
+    /// <param name="into">The directory to put them in.</param>
     /// <param name="failed">Where a failure is reported.</param>
-    public static void Move(string source, string into, Action<string> failed)
+    /// <returns>Whether anything was copied.</returns>
+    public static Task<bool> Copy(IReadOnlyList<string> sources, string into, Action<string> failed) =>
+        Transfer("Copy", "cp -r", sources, into, failed);
+
+    /// <summary>Moves sources into a directory, through the agent.</summary>
+    /// <param name="sources">What to move.</param>
+    /// <param name="into">The directory to put them in.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    /// <returns>Whether anything was moved.</returns>
+    public static Task<bool> Move(IReadOnlyList<string> sources, string into, Action<string> failed) =>
+        Transfer("Move", "mv", sources, into, failed);
+
+    /// <summary>
+    /// Removes entries, through the agent.
+    /// </summary>
+    /// <remarks>
+    /// Directories and files are one call each, because the operation names which of the two it is removing
+    /// — the command that removes a file does not remove a directory, and the two are told apart here so that
+    /// the agent need not be told twice about the same batch.
+    /// </remarks>
+    /// <param name="entries">What to remove.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    /// <returns>Whether anything was removed.</returns>
+    public static async Task<bool> Remove(IReadOnlyList<Entry> entries, Action<string> failed)
     {
-        source = Bare(source);
+        var directories = entries.Where(entry => entry.Kind == EntryKind.Directory).Select(entry => entry.Path).ToArray();
+        var files = entries.Where(entry => entry.Kind == EntryKind.File).Select(entry => entry.Path).ToArray();
+        var removed = false;
 
-        try
+        if (directories.Length > 0)
         {
-            var target = Free(into, Path.GetFileName(source));
+            removed |= await Without("RemoveDirs", "rm -rf", directories, failed);
+        }
 
-            if (Directory.Exists(source))
-            {
-                try
-                {
-                    System.IO.Directory.Move(source, target);
-                }
-                catch (IOException)
-                {
-                    // A directory move that the filesystem refuses — across two devices, most often —
-                    // is still a move to the user, so it is done the long way: copied, then removed.
-                    CopyTree(source, target);
-                    System.IO.Directory.Delete(source, true);
-                }
-            }
-            else
-            {
-                File.Move(source, target);
-            }
-        }
-        catch (Exception error) when (error is not OutOfMemoryException)
+        if (files.Length > 0)
         {
-            failed(error.Message);
+            removed |= await Without("RemoveFiles", "rm", files, failed);
         }
+
+        return removed;
     }
 
-    /// <summary>Copies an entry into a directory, under a free name.</summary>
-    /// <param name="source">What to copy.</param>
-    /// <param name="into">The directory to copy it into.</param>
+    /// <summary>
+    /// One transfer of a batch into a directory.
+    /// </summary>
+    /// <remarks>
+    /// A batch goes over as one answer, so that the agent can offer "the same for the rest" once rather than
+    /// asking per item. Paths that would be broken by the pair separators go over one at a time instead, which
+    /// costs a question per item but always names the item it means.
+    /// </remarks>
+    /// <param name="operation">The operation the agent is told.</param>
+    /// <param name="command">The program and its arguments that carry it out.</param>
+    /// <param name="sources">What is being transferred.</param>
+    /// <param name="into">The directory they go into.</param>
     /// <param name="failed">Where a failure is reported.</param>
-    public static void Copy(string source, string into, Action<string> failed)
+    private static async Task<bool> Transfer(
+        string operation,
+        string command,
+        IReadOnlyList<string> sources,
+        string into,
+        Action<string> failed
+    )
     {
-        source = Bare(source);
+        if (sources.Count == 0)
+        {
+            return false;
+        }
+
+        if (sources.Any(Breaks) || Breaks(into))
+        {
+            var lone = false;
+
+            foreach (var source in sources)
+            {
+                lone |= await Ask(operation, command, ["-From:" + source, "-To:" + into], failed);
+            }
+
+            return lone;
+        }
+
+        return await Ask(operation, command, ["-Pairs:" + string.Join(';', sources.Select(source => $"{source}>{into}"))], failed);
+    }
+
+    /// <summary>One removal of a batch.</summary>
+    /// <param name="operation">The operation the agent is told.</param>
+    /// <param name="command">The program and its arguments that carry it out.</param>
+    /// <param name="paths">What is being removed.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    private static Task<bool> Without(string operation, string command, IReadOnlyList<string> paths, Action<string> failed) =>
+        paths.Any(Breaks)
+            ? OneByOne(operation, command, paths, failed)
+            : Ask(operation, command, ["-Pairs:" + string.Join(';', paths)], failed);
+
+    /// <summary>Runs one item at a time, for the paths a batch would not carry.</summary>
+    /// <param name="operation">The operation the agent is told.</param>
+    /// <param name="command">The program and its arguments that carry it out.</param>
+    /// <param name="paths">What is being removed.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    private static async Task<bool> OneByOne(
+        string operation,
+        string command,
+        IReadOnlyList<string> paths,
+        Action<string> failed
+    )
+    {
+        var removed = false;
+
+        foreach (var path in paths)
+        {
+            removed |= await Ask(operation, command, ["-From:" + path], failed);
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Whether a path would be broken by the separators a batch is written with.
+    /// </summary>
+    /// <remarks>
+    /// The batch form packs the items into one string, so a path carrying the character that separates items
+    /// or the one that separates a source from its destination would be read as two things or as the wrong
+    /// thing. It is rare and it is not fatal: such an item goes over on its own, where nothing is split.
+    /// </remarks>
+    /// <param name="path">The path to ask about.</param>
+    private static bool Breaks(string path) =>
+        path.Contains(';', StringComparison.Ordinal) || path.Contains('>', StringComparison.Ordinal);
+
+    /// <summary>Starts the agent for one call and reads what it says became of every item.</summary>
+    /// <param name="operation">The operation the agent is told.</param>
+    /// <param name="command">The program and its arguments that carry it out.</param>
+    /// <param name="items">What is being done, as the agent's own arguments.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    /// <returns>Whether anything was done.</returns>
+    private static async Task<bool> Ask(string operation, string command, string[] items, Action<string> failed)
+    {
+        var agent = Agent();
+
+        if (!File.Exists(agent))
+        {
+            failed($"the file agent is not beside the plugin: {agent}");
+
+            return false;
+        }
+
+        var start = new ProcessStartInfo(agent)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        start.ArgumentList.Add("-Command:" + command);
+        start.ArgumentList.Add("-Type:" + operation);
+
+        if (RolaI18N.Locale is { Length: > 0 } locale)
+        {
+            start.ArgumentList.Add("-Lang:" + locale);
+        }
+
+        foreach (var item in items)
+        {
+            start.ArgumentList.Add(item);
+        }
 
         try
         {
-            var target = Free(into, Path.GetFileName(source));
+            using var process = Process.Start(start);
 
-            if (Directory.Exists(source))
+            if (process is null)
             {
-                CopyTree(source, target);
+                failed($"could not start the file agent: {agent}");
+
+                return false;
             }
-            else
+
+            // Both are read before either is waited for: a pipe that fills while nobody reads it stops the
+            // agent writing, and the agent stopped writing is the agent never exiting.
+            var said = process.StandardOutput.ReadToEndAsync();
+            var complained = process.StandardError.ReadToEndAsync();
+
+            await process.WaitForExitAsync();
+
+            var answer = await said;
+            var noise = await complained;
+
+            if (noise.Length > 0)
             {
-                File.Copy(source, target);
+                failed(noise.TrimEnd());
             }
+
+            return Read(answer, failed);
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             failed(error.Message);
+
+            return false;
         }
     }
 
     /// <summary>
-    /// A name in a directory that nothing is using, made free by numbering it.
+    /// Reads the agent's answer: the one JSON line it says became of every item.
     /// </summary>
     /// <remarks>
-    /// The whole name is kept, extension and all, and the number goes before the extension so that the
-    /// system still knows what the file is: <c>sheet (2).psd</c> rather than <c>sheet.psd (2)</c>.
+    /// The last non-empty line is the answer, so that anything the agent had to say on the way can pass
+    /// through without being mistaken for it. An item that failed is reported as it was named; an item that
+    /// was skipped is not, because skipping is an answer and not a fault.
     /// </remarks>
-    /// <param name="into">The directory the name is to be free in.</param>
-    /// <param name="name">The name wanted.</param>
-    /// <returns>A path in the directory that nothing holds.</returns>
-    private static string Free(string into, string name)
+    /// <param name="answer">What the agent wrote to standard output.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    /// <returns>Whether anything was done.</returns>
+    private static bool Read(string answer, Action<string> failed)
     {
-        name = Bare(name);
-        var wanted = Path.Combine(into, name);
+        var line = answer
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault();
 
-        if (!Held(wanted))
+        if (line is null)
         {
-            return wanted;
+            failed("the file agent answered with nothing");
+
+            return false;
         }
 
-        var stem = Path.GetFileNameWithoutExtension(name);
-        var extension = Path.GetExtension(name);
+        Report? report;
 
-        for (var number = 2; ; number++)
+        try
         {
-            var beside = Path.Combine(into, $"{stem} ({number}){extension}");
+            report = JsonSerializer.Deserialize<Report>(line, Json);
+        }
+        catch (JsonException error)
+        {
+            failed($"the file agent's answer could not be read: {error.Message}");
 
-            if (!Held(beside))
+            return false;
+        }
+
+        var done = false;
+
+        foreach (var result in report?.Results ?? [])
+        {
+            if (result.Result == "failed")
             {
-                return beside;
+                failed(result.Note ?? $"{result.From} could not be {result.How}");
+
+                continue;
             }
+
+            done |= result.Result == "done";
         }
+
+        return done;
     }
 
-    /// <summary>Whether a path is taken, by a file or by a directory.</summary>
-    /// <param name="path">The path to ask about.</param>
-    private static bool Held(string path) => File.Exists(path) || System.IO.Directory.Exists(path);
+    /// <summary>How the JSON the agent answers with is read: its names are lower case, this program's are not.</summary>
+    private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
-    /// <summary>Copies a directory and everything under it.</summary>
-    /// <param name="source">The directory to copy.</param>
-    /// <param name="target">Where to copy it to.</param>
-    private static void CopyTree(string source, string target)
+    /// <summary>What became of every item, as the agent reports it.</summary>
+    /// <param name="Results">One answer per item, in the order they were given.</param>
+    private sealed record Report(Item[] Results);
+
+    /// <summary>What became of one item.</summary>
+    /// <param name="From">The item, as it was given.</param>
+    /// <param name="To">Where it ended up, or empty when it did not move.</param>
+    /// <param name="Result">`done`, `skipped` or `failed`.</param>
+    /// <param name="How">`as-is`, `replaced`, `renamed`, `skipped` or `failed`.</param>
+    /// <param name="Note">Why it failed, when it did.</param>
+    private sealed record Item(string From, string To, string Result, string How, string? Note);
+
+    /// <summary>
+    /// Where the file agent is: inside this plugin's own directory, which is where a plugin's own things are
+    /// laid because nothing else lays them.
+    /// </summary>
+    private static string Agent()
     {
-        System.IO.Directory.CreateDirectory(target);
+        var beside = Path.GetDirectoryName(typeof(FileOps).Assembly.Location)!;
+        var name = OperatingSystem.IsWindows() ? "rola-desktop-fs-agent.exe" : "rola-desktop-fs-agent";
 
-        foreach (var path in System.IO.Directory.EnumerateFileSystemEntries(source))
-        {
-            var name = Path.GetFileName(path);
-            var under = Path.Combine(target, name);
-
-            if (System.IO.Directory.Exists(path))
-            {
-                CopyTree(path, under);
-            }
-            else
-            {
-                File.Copy(path, under);
-            }
-        }
+        return Path.Combine(beside, "FileSystemPlugin", "RorolalaFSAgent", name);
     }
 }
