@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Platform.Storage;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
@@ -58,7 +59,7 @@ internal sealed class Desktop
 
         Report(services);
 
-        ThemeService.Apply(_state.Theme);
+        services.Theme.Apply();
 
         var window = new MainWindow(services);
 
@@ -75,11 +76,19 @@ internal sealed class Desktop
         var log = new LogService(notifications);
         var popups = new PopupService(notifications);
 
+        // The look has to be applied before anything is drawn, so the service that applies it is made
+        // here, with the rest of what a run is assembled from, rather than in the window.
+        var theme = new ThemeService(
+            Application.Current ?? throw new InvalidOperationException("the host was assembled without an application"),
+            _state.Theme
+        );
+
         return new HostServices
         {
             Log = log,
             Popups = popups,
             I18n = i18n,
+            Theme = theme,
             Rola = new RolaCapability(),
             Preference = _state.Preference,
             Settings = new SettingRegistry(_state.Preference),
@@ -138,7 +147,8 @@ internal sealed class Desktop
                     new PreferenceDock(
                         services.Settings,
                         plugins,
-                        services.I18n
+                        services.I18n,
+                        services.Theme
                     )
             )
         );

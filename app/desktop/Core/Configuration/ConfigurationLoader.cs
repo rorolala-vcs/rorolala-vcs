@@ -77,6 +77,12 @@ internal static class ConfigurationLoader
     /// <summary>
     /// Reads <c>theme.json</c>, writing and answering the defaults when the file is not there.
     /// </summary>
+    /// <remarks>
+    /// A file that was not there is written with the defaults spelled out rather than left empty, so
+    /// that the colours the program is drawn in are there for a person to find and edit. A field taken
+    /// back afterwards is removed, and stays removed: what is in force is then the default, which is not
+    /// the same as the file saying it (Section 5.4).
+    /// </remarks>
     /// <exception cref="ConfigurationFailure">The file is unreadable, malformed, or unsupported.</exception>
     public static ThemeConfiguration LoadTheme()
     {
@@ -84,7 +90,13 @@ internal static class ConfigurationLoader
 
         if (!File.Exists(path))
         {
-            var defaults = new ThemeConfiguration();
+            var defaults = new ThemeConfiguration
+            {
+                Mode = ThemeConfiguration.DefaultMode,
+                Primary = ThemeConfiguration.DefaultPrimary,
+                Accent = ThemeConfiguration.DefaultAccent,
+            };
+
             WriteTheme(defaults);
             return defaults;
         }
@@ -168,16 +180,33 @@ internal static class ConfigurationLoader
         Write(ConfigPaths.Preference, dto, ExitCode.Preference);
     }
 
-    /// <summary>Writes the two things the user chooses about how the program looks.</summary>
+    /// <summary>
+    /// Writes the three things the user chooses about how the program looks.
+    /// </summary>
+    /// <remarks>
+    /// Only the fields that are set are written. A field that is not there is a choice not made, and
+    /// omitting it is what makes taking a choice back possible: writing the default down instead would
+    /// be a copy of a default the program may later change (Section 5.4).
+    /// </remarks>
     /// <param name="config">What to write.</param>
     public static void WriteTheme(ThemeConfiguration config)
     {
-        var dto = new ThemeDto
+        var dto = new ThemeDto { Version = ThemeConfiguration.SchemaVersion };
+
+        if (config.Mode is { } mode)
         {
-            Version = ThemeConfiguration.SchemaVersion,
-            Mode = Name(config.Mode),
-            Accent = Hex(config.Accent),
-        };
+            dto.Mode = Name(mode);
+        }
+
+        if (config.Primary is { } primary)
+        {
+            dto.Primary = Hex(primary);
+        }
+
+        if (config.Accent is { } accent)
+        {
+            dto.Accent = Hex(accent);
+        }
 
         Write(ConfigPaths.Theme, dto, ExitCode.Theme);
     }
@@ -322,14 +351,14 @@ internal static class ConfigurationLoader
             config.Mode = ParseMode(mode.GetString()!, path);
         }
 
+        if (root.TryGetProperty("primary", out var primary))
+        {
+            config.Primary = ParseColour(primary, "primary", path);
+        }
+
         if (root.TryGetProperty("accent", out var accent))
         {
-            if (accent.ValueKind != JsonValueKind.String)
-            {
-                throw Fail(ExitCode.Theme, path, "`accent` must be a string");
-            }
-
-            config.Accent = ParseAccent(accent.GetString()!, path);
+            config.Accent = ParseColour(accent, "accent", path);
         }
 
         return config;
@@ -356,18 +385,29 @@ internal static class ConfigurationLoader
         };
 
     /// <summary>
-    /// The colour an accent's text stands for, refusing text that is not one.
+    /// The colour a field's text stands for, refusing text that is not one.
     /// </summary>
     /// <remarks>
     /// Exactly six digits after the hash, which is what the file documents and what the writer writes:
-    /// eight would be a value carrying an alpha the accent has no use for, and three would be a second
+    /// eight would be a value carrying an alpha the colour has no use for, and three would be a second
     /// spelling of a colour already spelled here.
     /// </remarks>
-    private static Color ParseAccent(string text, string path)
+    /// <param name="element">What the field holds.</param>
+    /// <param name="field">The field's name, which is what a refusal names.</param>
+    /// <param name="path">The file, for the reason.</param>
+    /// <returns>The colour it stands for.</returns>
+    private static Color ParseColour(JsonElement element, string field, string path)
     {
+        if (element.ValueKind != JsonValueKind.String)
+        {
+            throw Fail(ExitCode.Theme, path, $"`{field}` must be a string");
+        }
+
+        var text = element.GetString()!;
+
         if (text.Length != 7 || text[0] != '#' || !IsHex(text.AsSpan(1)))
         {
-            throw Fail(ExitCode.Theme, path, $"`accent` must be #RRGGBB, not `{text}`");
+            throw Fail(ExitCode.Theme, path, $"`{field}` must be #RRGGBB, not `{text}`");
         }
 
         return Color.FromRgb(
@@ -558,16 +598,22 @@ internal static class ConfigurationLoader
             new(StringComparer.Ordinal);
     }
 
-    /// <summary>How <c>theme.json</c> is written.</summary>
+    /// <summary>How <c>theme.json</c> is written: only the fields that are set (Section 5.4).</summary>
     private sealed class ThemeDto
     {
         [JsonPropertyName("_version")]
         public int Version { get; set; }
 
         [JsonPropertyName("mode")]
-        public string Mode { get; set; } = Name(ThemeConfiguration.DefaultMode);
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Mode { get; set; }
+
+        [JsonPropertyName("primary")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Primary { get; set; }
 
         [JsonPropertyName("accent")]
-        public string Accent { get; set; } = Hex(ThemeConfiguration.DefaultAccent);
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Accent { get; set; }
     }
 }

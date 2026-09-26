@@ -40,6 +40,31 @@ core:
   name:
     en: Core
     zh-CN: 核心
+  setting:
+    theme:
+      en: Theme
+      zh-CN: 主题
+    mode:
+      en: Appearance
+      zh-CN: 明暗模式
+    system:
+      en: Follow system
+      zh-CN: 跟随系统
+    light:
+      en: Light
+      zh-CN: 亮色
+    dark:
+      en: Dark
+      zh-CN: 暗色
+    primary:
+      en: Primary colour
+      zh-CN: 主色
+    accent:
+      en: Accent colour
+      zh-CN: 强调色
+    immediate:
+      en: Takes effect at once.
+      zh-CN: 立即生效。
 
 setting:
   none:

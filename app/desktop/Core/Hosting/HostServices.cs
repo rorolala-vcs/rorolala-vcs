@@ -1,6 +1,7 @@
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Logging;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktop.Hosting;
 
@@ -22,6 +23,16 @@ internal sealed class HostServices
 
     /// <summary>The host's translations.</summary>
     public required I18nService I18n { get; init; }
+
+    /// <summary>
+    /// How the program looks, and what the preference panel changes about it.
+    /// </summary>
+    /// <remarks>
+    /// It is the host's rather than the window's because a colour is changed from the preference dock,
+    /// which is opened long after the window, and the change has to reach every control rather than the
+    /// dock it was made in.
+    /// </remarks>
+    public required ThemeService Theme { get; init; }
 
     /// <summary>What Rorolala can do.</summary>
     public required IRola Rola { get; init; }

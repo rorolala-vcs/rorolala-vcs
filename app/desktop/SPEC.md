@@ -312,21 +312,31 @@ written by hand still works. The program writes this file when the user changes 
 {
   "_version": 1,
   "mode": "system",
-  "accent": "#BFFF00"
+  "primary": "#00BCD4",
+  "accent": "#FF4081"
 }
 ```
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `_version` | integer | yes | Schema version. Fixed at `1`. |
-| `mode` | string | no | `system`, `light` or `dark`. `system` follows the desktop and goes on following it. Defaults to `system`. |
-| `accent` | string | no | The colour anything accented is drawn in, as `#RRGGBB`. Defaults to `#BFFF00`. |
+| `mode` | string | no | `system`, `light` or `dark`. `system` follows the desktop and goes on following it. Absent means `system`. |
+| `primary` | string | no | The colour the brand and everything selected is drawn in, as `#RRGGBB`. Absent means `#00BCD4`. |
+| `accent` | string | no | The colour the attention marks are drawn in, as `#RRGGBB`. Absent means `#FF4081`. |
 
-If the file does not exist, the host uses the defaults above and writes it. A missing file is not a
-validation failure; an unreadable or invalid one is.
+Every field is optional, and **a field that is not there is the default rather than a choice of it**
+(Section 10). That is what makes taking a choice back possible: the panel's *Reset* removes the field
+instead of writing the default down, so a default the program later changes is not kept out by a copy.
+For the same reason a field is read as absent even when it spells the default out: what is in force is
+the default either way, and only the file differs.
 
-These two are the whole of what is configurable about how the program looks (Section 10). It is a
-file of its own rather than a section of `preference.json` because these are not a preference about
+If the file does not exist, the host writes it with the defaults spelled out, so that the colours the
+program is drawn in are there for a person to find and edit; a field removed afterwards stays removed.
+A missing file is not a validation failure; an unreadable or invalid one is.
+
+These three are the whole of what is configurable about how the program looks (Section 10), and they
+are edited from the Preference dock under the kernel's own entry as well as by editing the file. It is
+a file of its own rather than a section of `preference.json` because these are not a preference about
 the program but what the program is drawn in, and nothing else belongs beside them.
 
 ### 5.5 Validation and failure
@@ -338,8 +348,8 @@ code in Section 5.6.
 - `_version` is absent or names a version the host does not support;
 - a `PluginId` key is repeated, or names no discovered plugin;
 - a declared dependency is missing, disabled, or forms a cycle;
-- `theme.json` names a `mode` that is none of `system`, `light` and `dark`, or an `accent` that is not
-  exactly `#RRGGBB`.
+- `theme.json` names a `mode` that is none of `system`, `light` and `dark`, or a `primary` or
+  `accent` that is not exactly `#RRGGBB`.
 
 The following are **not fatal**:
 
@@ -593,9 +603,9 @@ the window and the docks and knows nothing of entries.
 
 - **Selection.** Clicking an entry chooses it alone; `Ctrl` adds it to, or takes it from, the choice;
   `Shift` takes everything between the entry the pointer or keyboard last landed on and the one
-  clicked, in the order the listing shows. Chosen entries are filled with the accent (§10). Clicking
+  clicked, in the order the listing shows. Chosen entries are filled with the primary (§10). Clicking
   the **space around the entries** drops the choice, and dragging from there draws a **frame** — a band
-  in the accent — and chooses every entry it covers as it is drawn. The entries are spaced apart so that
+  in the primary — and chooses every entry it covers as it is drawn. The entries are spaced apart so that
   there is such a space between them (§7.5). Right-clicking keeps an existing choice when the entry is
   already in it, so a menu can be opened on a set.
 - **The keyboard.** Arrow keys step — in the table one row at a time, in the tiles one tile across and
@@ -741,41 +751,59 @@ exists for plugins that react to a completed open.
 - The look is **one thing and it is not extensible**. There is no theme extension point: a plugin
   cannot supply one, and the look is not chosen by id. `RorolalaTheme` is applied as an **overlay** on
   top of the base, and it is the only overlay there is.
-- What a run chooses is two things and no more (Section 5.4): the **variant** it is drawn in and the
-  **accent**. Everything else in this section is stated rather than configured, which is what makes two
-  runs of the program look like one program.
+- What a run chooses is three things and no more (Section 5.4): the **variant** it is drawn in and the
+  **two colours** it is drawn with. Everything else in this section is stated rather than configured,
+  which is what makes two runs of the program look like one program.
+- The two colours are spent by **role**, not by taste, and the roles are what keep them apart:
+  - **Primary carries the weight.** It is what the brand is and what everything chosen is: selected
+    rows, tree rows, drop-down rows, a checked box and a radio, the underline of the dock a region is
+    showing, the fill of a button, and the thumb of a slider. It is also the colour the base theme's
+    own accent family is written with, so that a selection of text and a tick are the primary from one
+    definition rather than from a second one kept in step.
+  - **Accent asks for attention.** It is spent only on marks that ask to be looked at rather than state
+    a choice: the hairline a splitter shows under the pointer, the edge of a field that has focus, the
+    zone a dragged dock is aimed at, and the flash of a press. A look with one colour cannot tell the
+    two apart, which is the whole reason there are two.
 - The design is Win10-flat:
   - **Rectangles.** Nothing is rounded; every surface has a `CornerRadius` of zero.
   - **One-pixel edges.** Anything with an outline wears a 1 px `BorderThickness`, in the 20 % ink of
     the variant. A focused field keeps its one pixel rather than the two the base theme draws.
-  - **Hover is neutral.** A surface under the pointer takes a tint of the variant's ink, not the
-    accent. The two exceptions are marks rather than surfaces: the hairline a splitter shows under the
-    pointer, and the red a close fills with.
-  - **The accent is spent on selection.** Selected rows, tree rows, drop-down rows and a checked box
-    are filled with it; so is the underline of the dock a region is showing, a splitter under the
-    pointer, and the zone a dragged dock is aimed at. Nothing else is accented.
+  - **Hover is neutral.** A surface under the pointer takes a tint of the variant's ink, not either
+    chosen colour. The exceptions are marks rather than surfaces: the hairline a splitter shows under
+    the pointer, and the red a close fills with.
+  - **A button is filled and raised.** A button is filled with the primary and wears a **hard shadow**
+    cast to the bottom right — two pixels out and two down, with no blur at all, so that it reads as a
+    raised rectangle rather than as a surface trying not to be flat. Under the pointer it lightens;
+    held, it darkens and drops the shadow. It does not move.
   - **Nothing moves.** A mark that appears on selection reserves its space when it is not there, and
-    no state change alters a size.
+    no state change alters a position or a size — the raised button included, which drops its shadow
+    rather than shifting.
   - **Close is the one red thing.** The close button at the end of a strip draws nothing until the
     pointer is on it, and then fills with the red a close is everywhere. It is the only colour in the
-    program that is not the accent or a tint of the variant's ink.
-- The accent is **the one colour the user chooses** in `theme.json`, lemon (`#BFFF00`) until it is
-  changed. Everything accented is derived from it and nothing else is: the base theme's accent family
-  at the base theme's own alphas (`#99…`, `#66…`, `#33…`), the held state one step down (87 % of each
-  channel, which on lemon is `#A6DE00`), and the ink written on it. It is written into **the base
-  theme's own accent resources** rather than applied control by control, so that a selected row, a
-  checked box and a selection of text are all the accent from one definition.
-- The ink on the accent is **black or white, whichever can be read on it**, worked out by contrast
-  ratio. The base theme writes white there, which is right for the blue it was written for and wrong
-  for anything light — and which colour the accent is belongs to the user, so it cannot be stated here.
+    program that is neither chosen colour nor a tint of the variant's ink.
+- The primary is **one of the two colours the user chooses** in `theme.json`, and everything derived
+  from it is derived rather than chosen: the base theme's accent family at the base theme's own alphas
+  (`#99…`, `#66…`, `#33…`), the held state darker (80 % of each channel), the hover state lighter (18 %
+  of the way to white), and the ink written on it. It is written into **the base theme's own accent
+  resources** rather than applied control by control, so that a selected row, a checked box and a
+  selection of text are all the primary from one definition.
+- The accent is **the other colour the user chooses**, spent only on the attention marks above, and
+  neither it nor the primary is derived from anything but itself.
+- The ink on a filled surface is **black or white, whichever can be read on it**, worked out by
+  contrast ratio. The base theme writes white there, which is right for the blue it was written for and
+  wrong for anything light — and which colour the primary is belongs to the user, so it cannot be
+  stated here.
 - The three tints the chrome is drawn with are **the look's own**, because the base theme has none to
   borrow: every neutral it ships is opaque, and a band of chrome has to be a tint of whatever is behind
   it to sit on the window and on the content alike. Each is keyed per variant, as that variant's ink.
 - The type is **Inter**, which the program ships. The look names it through the font collection
   (`fonts:Inter#Inter`), because a family name on its own is looked for among the system's fonts, is
   not there, and falls back silently to the platform's face.
-- **Motion** is colour and opacity only, never position or size, and never longer than 150 ms: every
-  part that changes colour on a state fades into it, and a drop zone fades in.
+- **Motion** is colour and opacity only, never position or size. Feedback — a hover, a press, a drop
+  zone lighting up, a field taking focus — finishes within 150 ms, and a press is quicker still (60 ms)
+  so that a click reads as a flash. The one longer move is **selection**, which turns a row to the
+  primary over 200 ms: a chosen row is a change of state rather than feedback, and instant there reads
+  as a blink (Section 17).
 - The overlay is applied before the window is made. That order is load-bearing rather than tidy:
   growing `Application.Styles` after elements have been styled makes the base theme's setters win on
   those elements on the re-application that follows, so an overlay added late stops applying to
@@ -814,8 +842,11 @@ exists for plugins that react to a completed open.
   hairline. The two are one thing to look at and one thing to drag, and a grab between two columns
   drawn as anything else would be a second answer to a question this section has already answered.
 
-- A change to `theme.json` takes effect on the **next start**. The look is applied once, before the
-  window is made.
+- The look is **applied once, before the window is made**: the styles are added to
+  `Application.Styles` before there is a window, and never after it. A change made in the Preference
+  dock takes effect **at once** nevertheless, because what a colour change replaces is a **resource**
+  rather than a style: every control that took the resource is told it changed, and nothing is added to
+  a list that must not grow.
 
 ## 11. Internationalization
 
@@ -931,8 +962,9 @@ They are reported in the Log dock and, where the user must act, in a popup.
 ```jsonc
 {
   "_version": 1,
-  "mode": "system",     // system | light | dark
-  "accent": "#BFFF00"   // #RRGGBB
+  "mode": "system",      // system | light | dark, or absent for the default
+  "primary": "#00BCD4",  // #RRGGBB, or absent for the default
+  "accent": "#FF4081"    // #RRGGBB, or absent for the default
 }
 ```
 
@@ -1097,8 +1129,10 @@ implementation convenience without raising it explicitly.
 Agreed so far:
 
 - **Motion.** What a change of state is communicated with is colour and opacity, never position or
-  size, and never over 150 ms. Nothing moves under the pointer, and a mark that appears on selection
-  reserves its space while it is not there (Section 10).
+  size. Feedback answers within 150 ms, and a press within 60 ms; selection, which is a change of state
+  rather than feedback, turns over 200 ms. Nothing moves under the pointer — a raised button drops its
+  shadow rather than shifting — and a mark that appears on selection reserves its space while it is not
+  there (Section 10).
 
 ## 18. Non-Goals
 
@@ -1111,8 +1145,8 @@ Agreed so far:
 ## 19. Open Items
 
 1. The look's design is settled as far as Section 10 states it — Win10-flat, colour-only motion, the
-   accent the user's to choose — but it is a first pass at the details (which surfaces take an edge,
-   how dense the rows are) and is to be revised with the user.
+   two colours the user's to choose — but it is a first pass at the details (which surfaces take an
+   edge, how dense the rows are) and is to be revised with the user.
 2. The concrete feel criteria (Section 17), to be agreed with the user.
 3. The contract assembly versioning policy: increment rule and compatibility range. Nothing is done
    about it yet, and by decision: the program is experimental, the one plugin that is built with it is

@@ -3,6 +3,7 @@ using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Logging;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -33,6 +34,9 @@ internal static class Host
             Log = log,
             Popups = popups,
             I18n = i18n,
+            // There is no application here, so the look is never applied; the service is what the
+            // preference panel reads and writes, which is all a headless test has any use for.
+            Theme = new ThemeService(null, new ThemeConfiguration()),
             Rola = new RolaCapability(),
             Preference = preference,
             Settings = new SettingRegistry(preference),

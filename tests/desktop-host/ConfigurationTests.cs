@@ -39,16 +39,49 @@ public sealed class ConfigurationTests
     {
         var theme = ConfigurationLoader.LoadTheme();
 
-        Assert.Equal(ColorMode.System, theme.Mode);
-        Assert.Equal(ThemeConfiguration.DefaultAccent, theme.Accent);
+        Assert.Equal(ThemeConfiguration.DefaultMode, theme.ModeOrDefault);
+        Assert.Equal(ThemeConfiguration.DefaultPrimary, theme.PrimaryOrDefault);
+        Assert.Equal(ThemeConfiguration.DefaultAccent, theme.AccentOrDefault);
         Assert.True(File.Exists(ConfigPaths.Theme));
 
-        // Read back as text, because what the file says is what a person edits: the accent has to be
+        // Read back as text, because what the file says is what a person edits: the colours have to be
         // the six digits the file documents rather than whatever a colour prints itself as.
         var written = File.ReadAllText(ConfigPaths.Theme);
         Assert.Contains("\"_version\": 1", written, StringComparison.Ordinal);
         Assert.Contains("\"mode\": \"system\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"accent\": \"#BFFF00\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"primary\": \"#00BCD4\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"accent\": \"#FF4081\"", written, StringComparison.Ordinal);
+    }
+
+    /// <summary>A field the file does not name is a choice not made, which is not the same as the default.</summary>
+    [Fact]
+    public void AThemeFileThatNamesNothingFallsBackToTheDefaults()
+    {
+        Given(ConfigPaths.Theme, """{"_version": 1}""");
+
+        var theme = ConfigurationLoader.LoadTheme();
+
+        Assert.Null(theme.Mode);
+        Assert.Null(theme.Primary);
+        Assert.Null(theme.Accent);
+        Assert.Equal(ThemeConfiguration.DefaultMode, theme.ModeOrDefault);
+        Assert.Equal(ThemeConfiguration.DefaultPrimary, theme.PrimaryOrDefault);
+        Assert.Equal(ThemeConfiguration.DefaultAccent, theme.AccentOrDefault);
+    }
+
+    /// <summary>A choice taken back is removed from the file rather than written down as the default.</summary>
+    [Fact]
+    public void AChoiceTakenBackIsWrittenAsItsAbsence()
+    {
+        Given(ConfigPaths.Theme, """{"_version": 1, "primary": "#3366FF"}""");
+
+        var theme = ConfigurationLoader.LoadTheme();
+        theme.Primary = null;
+        ConfigurationLoader.WriteTheme(theme);
+
+        var written = File.ReadAllText(ConfigPaths.Theme);
+        Assert.DoesNotContain("primary", written, StringComparison.Ordinal);
+        Assert.Null(ConfigurationLoader.LoadTheme().Primary);
     }
 
     /// <summary>A theme file that will not read stops the program with its own code.</summary>
@@ -91,16 +124,32 @@ public sealed class ConfigurationTests
         Assert.Contains("#RRGGBB", failure.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>The variant and accent a theme file states are the ones read back.</summary>
+    /// <summary>A primary that is not six digits is refused too, and a refusal names the field it refuses.</summary>
     [Fact]
-    public void TheModeAndAccentAThemeFileStatesAreRead()
+    public void APrimaryThatIsNotSixDigitsIsRefusedByName()
     {
-        Given(ConfigPaths.Theme, """{"_version": 1, "mode": "dark", "accent": "#3366FF"}""");
+        Given(ConfigPaths.Theme, """{"_version": 1, "primary": "#FFF"}""");
+
+        var failure = Assert.Throws<ConfigurationFailure>(ConfigurationLoader.LoadTheme);
+
+        Assert.Equal(ExitCode.Theme, failure.Code);
+        Assert.Contains("`primary`", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The variant and colours a theme file states are the ones read back.</summary>
+    [Fact]
+    public void TheModeAndColoursAThemeFileStatesAreRead()
+    {
+        Given(
+            ConfigPaths.Theme,
+            """{"_version": 1, "mode": "dark", "primary": "#3366FF", "accent": "#FF0000"}"""
+        );
 
         var theme = ConfigurationLoader.LoadTheme();
 
-        Assert.Equal(ColorMode.Dark, theme.Mode);
-        Assert.Equal(Color.FromRgb(0x33, 0x66, 0xFF), theme.Accent);
+        Assert.Equal(ColorMode.Dark, theme.ModeOrDefault);
+        Assert.Equal(Color.FromRgb(0x33, 0x66, 0xFF), theme.PrimaryOrDefault);
+        Assert.Equal(Color.FromRgb(0xFF, 0x00, 0x00), theme.AccentOrDefault);
     }
 
     /// <summary>A missing plugins file states no plugin rather than being a mistake.</summary>

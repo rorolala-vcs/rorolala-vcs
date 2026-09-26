@@ -18,17 +18,23 @@ internal enum ColorMode
 }
 
 /// <summary>
-/// <c>theme.json</c>: the two things the user chooses about how the program looks.
+/// <c>theme.json</c>: the three things the user chooses about how the program looks.
 /// </summary>
 /// <remarks>
 /// The look itself is not one of them. It is the program's own — rectangles, one-pixel edges, hover in
-/// the variant's ink and the accent spent on what is selected — and it is what makes the program look
-/// like one thing rather than like whatever it was assembled out of. What is left to choose is the
-/// variant it is drawn in and the one colour anything accented is drawn in.
+/// the variant's ink and the two colours spent on what is selected and what asks for attention — and it
+/// is what makes the program look like one thing rather than like whatever it was assembled out of. What
+/// is left to choose is the variant it is drawn in and the two colours it is drawn with (Section 10).
+/// <para>
+/// Every field is optional, and a field that is not there is the default: the file holds only what the
+/// user chose, so taking a choice back is removing it rather than writing the default down (Section 5.4).
+/// That is why the fields are nullable rather than defaulted — <c>null</c> is "the file says nothing",
+/// which is not the same as "the file chose the default".
+/// </para>
 /// <para>
 /// It is a file of its own rather than a section of <c>preference.json</c> for the same reason: these
-/// two are not a preference about the program but what the program is drawn in, and nothing else is
-/// allowed beside them.
+/// are not a preference about the program but what the program is drawn in, and nothing else is allowed
+/// beside them.
 /// </para>
 /// </remarks>
 internal sealed class ThemeConfiguration
@@ -40,19 +46,41 @@ internal sealed class ThemeConfiguration
     public const ColorMode DefaultMode = ColorMode.System;
 
     /// <summary>
+    /// The primary used when the file names none.
+    /// </summary>
+    /// <remarks>
+    /// A cyan: the colour the brand and everything selected is drawn in, and the one the eye lands on
+    /// first. Primary carries the weight, so it is the darker, calmer of the two.
+    /// </remarks>
+    public static readonly Color DefaultPrimary = Color.FromRgb(0x00, 0xBC, 0xD4);
+
+    /// <summary>
     /// The accent used when the file names none.
     /// </summary>
     /// <remarks>
-    /// The lemon the program was drawn in while the accent was a constant, so that a file nobody has
-    /// written yet is the look the program has always had.
+    /// A pink: the second colour, spent on the marks that ask for attention — a focus edge, a hairline
+    /// under the pointer, the zone a dragged dock is aimed at, the flash of a press. It is deliberately
+    /// unlike the primary so that an attention mark cannot be mistaken for a selected thing.
     /// </remarks>
-    public static readonly Color DefaultAccent = Color.FromRgb(0xBF, 0xFF, 0x00);
+    public static readonly Color DefaultAccent = Color.FromRgb(0xFF, 0x40, 0x81);
 
-    /// <summary>The variant the program is drawn in.</summary>
-    public ColorMode Mode { get; set; } = DefaultMode;
+    /// <summary>The variant the program is drawn in, or nothing when the file names none.</summary>
+    public ColorMode? Mode { get; set; }
 
-    /// <summary>The colour anything accented is drawn in.</summary>
-    public Color Accent { get; set; } = DefaultAccent;
+    /// <summary>The colour the brand and everything selected is drawn in, or nothing.</summary>
+    public Color? Primary { get; set; }
+
+    /// <summary>The colour the attention marks are drawn in, or nothing.</summary>
+    public Color? Accent { get; set; }
+
+    /// <summary>The variant in force, which is the default when the file names none.</summary>
+    public ColorMode ModeOrDefault => Mode ?? DefaultMode;
+
+    /// <summary>The primary in force, which is the default when the file names none.</summary>
+    public Color PrimaryOrDefault => Primary ?? DefaultPrimary;
+
+    /// <summary>The accent in force, which is the default when the file names none.</summary>
+    public Color AccentOrDefault => Accent ?? DefaultAccent;
 }
 
 /// <summary>The user's state for one plugin: whether it loads, and how the user ordered it.</summary>
