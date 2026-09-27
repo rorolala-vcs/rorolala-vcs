@@ -153,7 +153,7 @@ pub fn rebuild_inverse_index(index: &VCSIndex) -> Result<(), ErrorVcsIndexWrite>
 
 /// Rebuilds the inverse index of the Vault or Workspace the run is inside
 ///
-/// The counterpart of [`rebuild_inverse_index`](self::rebuild_inverse_index) for a command that
+/// The counterpart of [`rebuild_inverse_index`] for a command that
 /// works through a Workspace rather than an index it holds: the index is the one the run's own
 /// directory is inside, found the way every other command finds it.
 pub fn rebuild_inverse_index_here() -> Result<(), ErrorVcsIndexWrite> {

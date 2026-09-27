@@ -48,7 +48,7 @@ impl Action for ActionSyncIndexAll {
     /// # Errors
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
-    /// Vault to work on, and whatever the exchange fails with — see [`sync_index`].
+    /// Vault to work on, and whatever the exchange fails with — see `sync_index`.
     async fn process(
         _: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
