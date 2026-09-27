@@ -96,7 +96,7 @@ pub fn handle_storage_ls_storaged(
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultLs {
     /// The keys the store holds.
-    keys: Vec<Key>,
+    pub(crate) keys: Vec<Key>,
 }
 
 #[renderer(buffer)]

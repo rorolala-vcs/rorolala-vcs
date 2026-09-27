@@ -98,7 +98,7 @@ pub fn handle_storage_ls_manifests(
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultManifests {
     /// The keys whose content is kept as a manifest.
-    keys: Vec<Key>,
+    pub(crate) keys: Vec<Key>,
 }
 
 #[renderer(buffer)]

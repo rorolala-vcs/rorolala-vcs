@@ -183,6 +183,14 @@ pub async fn sync_storage(
         }
     }
 
+    // Both ends have carried everything they had to, and this is the point they reach once they
+    // have. It is what a run waits on: a value crosses as frames that are written and read and
+    // never acknowledged, so a Workspace that has sent everything would otherwise return while the
+    // Vault is still writing what it was sent — a manifest that reads and chunks that are not here
+    // yet, which is a content not held. Waiting for the Vault to say it got here leaves the sync
+    // only once both ends have nothing left to do.
+    reach_the_other_end(ctx).await?;
+
     Ok(())
 }
 
@@ -345,6 +353,22 @@ where
             Ok(arrived.into_inner())
         }
     }
+}
+
+/// The point both ends reach once they have carried everything they had to.
+///
+/// A value crosses as frames that are written and read and never acknowledged, so a side that has
+/// sent everything knows only that it wrote it, not that the other side took it. Both ends call
+/// this after carrying, and it is the Vault's value the Workspace waits for: the Vault sends it
+/// where the Workspace receives it, so a Workspace that returns has been told the Vault got here —
+/// and the Vault gets here only once it has written everything it was sent. What crosses is
+/// nothing; where it is exchanged is the whole of it.
+///
+/// # Errors
+///
+/// Returns whatever the exchange fails with — see [`ActionError`].
+pub(crate) async fn reach_the_other_end(ctx: &mut ActionContext<'_>) -> Result<(), ActionError> {
+    carry_value(ctx, Side::Workspace, 0_u64).await.map(drop)
 }
 
 /// What one key is made of, as the store on this side keeps it.

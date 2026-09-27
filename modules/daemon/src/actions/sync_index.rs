@@ -13,7 +13,7 @@ use rorolala_utils_location::Locate;
 use rorolala_utils_progress::Direction;
 use rorolala_vcs::{VCSIndex, VCSIndexError};
 
-use super::sync_storage::{Side, carry_blob};
+use super::sync_storage::{Side, carry_blob, reach_the_other_end};
 
 /// An Action that makes the Workspace's index and the Vault's hold the same objects.
 ///
@@ -230,6 +230,10 @@ async fn sync_index(
             everything.advance_by(1);
         }
     }
+
+    // As a store sync does: the Workspace waits for the Vault to say it got here, so a run that
+    // returns has the Vault's side of the carrying done rather than only sent.
+    reach_the_other_end(ctx).await?;
 
     Ok(())
 }

@@ -4,8 +4,14 @@
 mod handshake;
 pub use handshake::*;
 
+mod ls_remote;
+pub use ls_remote::*;
+
 mod sync_all;
 pub use sync_all::*;
+
+mod sync_hashes;
+pub use sync_hashes::*;
 
 mod sync_index;
 pub use sync_index::*;

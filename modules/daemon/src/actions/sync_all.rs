@@ -102,7 +102,7 @@ impl Action for ActionSyncAll {
 /// Which store that is follows from where this runs: an action taken from a Workspace works on the
 /// Workspace's store, and one served by a Vault works on the Vault's. A side that has neither is
 /// not a side an action can run on.
-fn local_store(ctx: &ActionContext<'_>) -> Result<RorolalaStorage, ActionError> {
+pub(crate) fn local_store(ctx: &ActionContext<'_>) -> Result<RorolalaStorage, ActionError> {
     if let Some(workspace) = ctx.current_workspace().into_inner() {
         return Ok(workspace.get_or_create_rola_storage());
     }

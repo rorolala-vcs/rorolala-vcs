@@ -12,7 +12,10 @@ storage:
             extract-file <HASH> [DIR]  Write stored content out under its hash
             ls-storaged                List every object the store holds
             ls-manifests               List every content the store keeps cut
+            ls-remote-storaged [VAULT]    List every object the other end's store holds
+            ls-remote-manifests [VAULT]   List every content the other end keeps cut
             sync-all [VAULT]           Make the stores at both ends hold the same keys
+            sync-hashes <HASH>... [VAULT] Make the stores at both ends hold the keys named
 
         None of this is version control: it is what sits under it — the store the content is
         kept in, and what two ends say to each other before either moves anything. Each
@@ -31,7 +34,10 @@ storage:
             extract-file <HASH> [DIR]  按哈希将存储的内容写出
             ls-storaged                列出仓库持有的全部对象
             ls-manifests               列出仓库中分块保存的全部内容
+            ls-remote-storaged [VAULT]    列出对端仓库持有的全部对象
+            ls-remote-manifests [VAULT]   列出对端仓库中分块保存的全部内容
             sync-all [VAULT]           让两端的仓库持有相同的 key
+            sync-hashes <HASH>... [VAULT] 让两端的仓库持有指定的哈希
 
         这些都不是版本控制，而是它底下那一层——存放内容的仓库，以及两端在搬运任何东西之前
         先交换的话语。每条子命令只做其中一件事，用于检视仓库里有什么，或手工整理它。
