@@ -1,0 +1,93 @@
+_version: 2
+
+vcs_index_ls_remote:
+  variants_help:
+    en: |
+        List the variants the index at the other end holds
+
+        **Usage**: `rola vcs-index ls-remote-variants [VAULT] [--json]`
+
+        It is `rola vcs-index ls-variants` asked of the other end: where that lists the index the run
+        is inside, this reaches the Vault and lists what *its* index holds. What is printed is the
+        variants' hashes, one per line — the numbers are not worked out, since a number costs a trace
+        of the chain and the chain is on the Vault — so a line read here is one to hand to
+        `rola vcs-index read-remote`, which reads the variant and traces its number there.
+
+        `VAULT` names the Vault to reach, as `rola vcs-index sync-all` reads it, with none naming the
+        one the Workspace reaches for by default. Nothing changes — the Vault is asked and answers.
+    zh-CN: |
+        列出对端索引持有的 variant
+
+        **用法**：`rola vcs-index ls-remote-variants [VAULT] [--json]`
+
+        即 `rola vcs-index ls-variants` 问向对端：那条命令列出本次运行所在索引持有的内容，而这条连上
+        保险库、列出**它**的索引持有的内容。打印出来的是 variant 的哈希，每行一个——不计算号，因为号
+        要对每个 variant 走一遍版本链，而链在保险库那边——因此这里读到的一行可以直接交给
+        `rola vcs-index read-remote`，由它在那边读出 variant 并求号。
+
+        `VAULT` 指向要连接的保险库，读法与 `rola vcs-index sync-all` 相同；不填则用工作区默认的那个。
+        什么都不改变——只是询问保险库并得到回答。
+
+  variants_description:
+    en: List the variants the index at the other end holds
+    zh-CN: 列出对端索引持有的 variant
+
+  versions_help:
+    en: |
+        List the versions the index at the other end holds
+
+        **Usage**: `rola vcs-index ls-remote-versions [VAULT] [--json]`
+
+        It is `rola vcs-index ls-versions` asked of the other end: where that lists the index the run
+        is inside, this reaches the Vault and lists what *its* index holds. What is printed is the
+        versions' hashes, one per line — the numbers are not worked out, since a number costs a trace
+        of the chain and the chain is on the Vault — so a line read here is one to hand to
+        `rola vcs-index read-remote`, which reads the version and traces its number there.
+
+        `VAULT` names the Vault to reach, as `rola vcs-index sync-all` reads it, with none naming the
+        one the Workspace reaches for by default. Nothing changes — the Vault is asked and answers.
+    zh-CN: |
+        列出对端索引持有的 version
+
+        **用法**：`rola vcs-index ls-remote-versions [VAULT] [--json]`
+
+        即 `rola vcs-index ls-versions` 问向对端：那条命令列出本次运行所在索引持有的内容，而这条连上
+        保险库、列出**它**的索引持有的内容。打印出来的是 version 的哈希，每行一个——不计算号，因为号
+        要对每个 version 走一遍版本链，而链在保险库那边——因此这里读到的一行可以直接交给
+        `rola vcs-index read-remote`，由它在那边读出 version 并求号。
+
+        `VAULT` 指向要连接的保险库，读法与 `rola vcs-index sync-all` 相同；不填则用工作区默认的那个。
+        什么都不改变——只是询问保险库并得到回答。
+
+  versions_description:
+    en: List the versions the index at the other end holds
+    zh-CN: 列出对端索引持有的 version
+
+  str_help:
+    en: |
+        List the hashes of the text objects the index at the other end holds
+
+        **Usage**: `rola vcs-index ls-remote-str [VAULT] [--json]`
+
+        It is `rola vcs-index ls-str` asked of the other end: where that lists the text objects the
+        index the run is inside holds, this reaches the Vault and lists what *its* index holds. What
+        is printed is those hashes, one per line, so a line read here is one to hand to
+        `rola vcs-index read-remote`, which reads the text itself.
+
+        `VAULT` names the Vault to reach, as `rola vcs-index sync-all` reads it, with none naming the
+        one the Workspace reaches for by default. Nothing changes — the Vault is asked and answers.
+    zh-CN: |
+        列出对端索引中文本对象的哈希
+
+        **用法**：`rola vcs-index ls-remote-str [VAULT] [--json]`
+
+        即 `rola vcs-index ls-str` 问向对端：那条命令列出本次运行所在索引持有的文本对象，而这条连上
+        保险库、列出**它**的索引持有的内容。打印出来的是这些哈希，每行一个，因此这里读到的一行可以直接
+        交给 `rola vcs-index read-remote`，由它读取文本本身。
+
+        `VAULT` 指向要连接的保险库，读法与 `rola vcs-index sync-all` 相同；不填则用工作区默认的那个。
+        什么都不改变——只是询问保险库并得到回答。
+
+  str_description:
+    en: List the hashes of the text objects the index at the other end holds
+    zh-CN: 列出对端索引中文本对象的哈希

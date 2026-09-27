@@ -1,5 +1,6 @@
 use rorolala_storage::Blake3Hash;
 use rorolala_utils_lazyffi::lazyffi;
+use serde::Serialize;
 
 use crate::error::TextError;
 use crate::index::{VCSIndexKind, VCSWrite};
@@ -15,7 +16,7 @@ const LONGEST: usize = 256;
 /// a body, so what is held is the text and nothing else. It is a newtype around the text, so
 /// what goes in and out is a string.
 #[lazyffi(export = RolaMessage)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Message(String);
 
 impl Message {

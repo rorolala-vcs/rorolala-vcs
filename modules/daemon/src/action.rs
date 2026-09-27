@@ -18,6 +18,11 @@ use tokio::net::TcpStream;
 // which bring them into scope; what `proc_action` needs of its own is here.
 use rorolala_auth::SecureStream;
 
+// A generated entry point names the action's own output type, and one action answers with an index
+// object rather than with a string: it is brought into scope here for the same reason the three
+// above are, since the generated code writes the type out and imports nothing of its own.
+use rorolala_vcs::VCSIndexObject;
+
 use crate::wire;
 
 /// Runs the action `A` on `input`, taken from `workspace`, as `account`, against the daemon at

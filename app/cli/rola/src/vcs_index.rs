@@ -12,20 +12,28 @@
 
 pub mod cmd_vcs_index_create_rootver;
 pub mod cmd_vcs_index_lookback;
+pub mod cmd_vcs_index_ls_remote_str;
+pub mod cmd_vcs_index_ls_remote_variants;
+pub mod cmd_vcs_index_ls_remote_versions;
 pub mod cmd_vcs_index_ls_str;
 pub mod cmd_vcs_index_ls_variants;
 pub mod cmd_vcs_index_ls_versions;
 pub mod cmd_vcs_index_my_creator_hash;
 pub mod cmd_vcs_index_print_rootver;
 pub mod cmd_vcs_index_read;
+pub mod cmd_vcs_index_read_remote;
 pub mod cmd_vcs_index_sync_all;
 pub mod cmd_vcs_index_write_creator;
 pub mod cmd_vcs_index_write_msg;
 pub mod cmd_vcs_index_write_variant;
 pub mod cmd_vcs_index_write_version;
 
+use librorolala::auth::Account;
+use librorolala::daemon::{action_list_remote_index_async, action_read_remote_index_async};
+use librorolala::protocol::ActionError;
 use librorolala::storage::Key;
-use librorolala::vcs::VCSIndex;
+use librorolala::vcs::{VCSIndex, VCSIndexObject};
+use librorolala::workspace::Workspace;
 use mingling::{
     Grouped, StructuralData,
     macros::{buffer, chain, dispatcher, help, metadata, r_eprintln, r_println, renderer},
@@ -34,6 +42,7 @@ use mingling::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{Colorize as _, err_line, help_line, trd};
+use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 use serde::Serialize;
 use std::str::FromStr as _;
@@ -351,4 +360,88 @@ pub struct ResultVcsIndexHash {
 #[renderer(buffer)]
 pub fn render_result_vcs_index_hash(result: ResultVcsIndexHash) {
     r_println!("{}", result.hash);
+}
+
+/// Result: the hashes a listing named.
+///
+/// A remote listing names hashes and nothing else — what each one holds is read with
+/// `rola vcs-index read-remote` — so the same result answers every one of them, and a hash read
+/// here is one to hand straight on. The field is the same one
+/// [`ls-str`](crate::vcs_index::cmd_vcs_index_ls_str) writes, since what is held is the same thing:
+/// a list of hashes, each as hex.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultHashes {
+    /// The hashes, as hex.
+    string_hashes: Vec<String>,
+}
+
+#[renderer(buffer)]
+pub fn render_result_vcs_index_hashes(result: ResultHashes) {
+    for hash in &result.string_hashes {
+        r_println!("{hash}");
+    }
+}
+
+/// The hashes a listing printed, one a line.
+pub fn keys_of(listing: &str) -> Vec<String> {
+    listing
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Lists what the other end's index holds, by the kind `which` names.
+///
+/// It is the requesting half of [`ActionListRemoteIndex`](librorolala::daemon::ActionListRemoteIndex):
+/// the Vault is asked and answers, and nothing but the listing moves. What comes back is named the
+/// way the local `ls-*` names it, one hash a line.
+///
+/// # Errors
+///
+/// Returns an [`ActionError`] when the exchange fails or the runtime cannot be built.
+pub fn list_remote_hashes(
+    workspace: &Workspace,
+    account: &Account,
+    target: &str,
+    which: &str,
+) -> Result<ResultHashes, ActionError> {
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| ActionError::Io(error.into()))?;
+    let listing = runtime.block_on(action_list_remote_index_async(
+        workspace,
+        account,
+        target.to_owned(),
+        which.to_owned(),
+        Progress::silent(),
+    ))?;
+
+    Ok(ResultHashes {
+        string_hashes: keys_of(&listing),
+    })
+}
+
+/// Reads one object from the other end's index.
+///
+/// It is the requesting half of [`ActionReadRemoteIndex`](librorolala::daemon::ActionReadRemoteIndex):
+/// the Vault reads the object under `hash` from its own index and answers with it. A Version comes
+/// back with the number the Vault's index traced it to, since the chain is there and not here.
+///
+/// # Errors
+///
+/// Returns an [`ActionError`] when the exchange fails or the runtime cannot be built.
+pub fn read_remote(
+    workspace: &Workspace,
+    account: &Account,
+    target: &str,
+    hash: &str,
+) -> Result<VCSIndexObject, ActionError> {
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| ActionError::Io(error.into()))?;
+
+    runtime.block_on(action_read_remote_index_async(
+        workspace,
+        account,
+        target.to_owned(),
+        hash.to_owned(),
+        Progress::silent(),
+    ))
 }

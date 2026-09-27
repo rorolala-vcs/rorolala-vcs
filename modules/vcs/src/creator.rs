@@ -1,5 +1,6 @@
 use rorolala_storage::Blake3Hash;
 use rorolala_utils_lazyffi::lazyffi;
+use serde::Serialize;
 
 use crate::error::TextError;
 use crate::index::{VCSIndexKind, VCSWrite};
@@ -14,7 +15,7 @@ const LONGEST: usize = 256;
 /// name and nothing else: there is no account behind it, and nothing here checks that a name
 /// names anyone. It is a newtype around the text, so what goes in and out is a string.
 #[lazyffi(export = RolaCreator)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Creator(String);
 
 impl Creator {

@@ -19,6 +19,7 @@ use rorolala_utils_constants::{
 };
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
+use serde::Serialize;
 
 use crate::error::{
     ParseVCSIndexObjectError, VCSIndexError, VCSIndexReadingError, VCSIndexWritingError,
@@ -117,7 +118,7 @@ impl Lockable for VCSIndex {
 ///
 /// The kinds of object an index can store.
 #[lazyffi(export = RolaVCSIndexObject)]
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub enum VCSIndexObject {
     /// A Variant object
     Variant(Variant),

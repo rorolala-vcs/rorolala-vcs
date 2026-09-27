@@ -60,6 +60,8 @@ pub fn build_action_registry() -> Vec<std::option::Option<std::boxed::Box<dyn Ac
         std::option::Option::None,
         std::option::Option::Some(std::boxed::Box::new(ActionListRemote)),
         std::option::Option::Some(std::boxed::Box::new(ActionSyncHashes)),
+        std::option::Option::Some(std::boxed::Box::new(ActionListRemoteIndex)),
+        std::option::Option::Some(std::boxed::Box::new(ActionReadRemoteIndex)),
     ]
 }
 

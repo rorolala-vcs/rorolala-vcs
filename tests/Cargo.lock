@@ -904,6 +904,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-vcs-index-remote"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-sandbox",
+ "tokio",
+]
+
+[[package]]
 name = "it-vcs-index-sync"
 version = "0.1.0"
 dependencies = [

@@ -4,8 +4,14 @@
 mod handshake;
 pub use handshake::*;
 
+mod list_remote_index;
+pub use list_remote_index::*;
+
 mod ls_remote;
 pub use ls_remote::*;
+
+mod read_remote_index;
+pub use read_remote_index::*;
 
 mod sync_all;
 pub use sync_all::*;

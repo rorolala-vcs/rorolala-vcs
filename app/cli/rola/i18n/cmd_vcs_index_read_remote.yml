@@ -1,0 +1,32 @@
+_version: 2
+
+vcs_index_read_remote:
+  help:
+    en: |
+        Read one index object from the other end
+
+        **Usage**: `rola vcs-index read-remote <HASH> [VAULT] [--json]`
+
+        It is `rola vcs-index read` asked of the other end: where that reads the index the run is
+        inside, this reaches the Vault and reads what *its* index holds. A Creator or a Message is
+        printed as its text; a Variant the way `ls-variants` prints it, and a Version the way
+        `ls-versions` prints it — its number traced on the Vault, since the chain is there and not
+        here.
+
+        `VAULT` names the Vault to reach, as `rola vcs-index sync-all` reads it, with none naming the
+        one the Workspace reaches for by default. Nothing changes — the Vault is asked and answers.
+    zh-CN: |
+        从对端读取一个索引对象
+
+        **用法**：`rola vcs-index read-remote <HASH> [VAULT] [--json]`
+
+        即 `rola vcs-index read` 问向对端：那条命令读取本次运行所在索引，而这条连上保险库、读取**它**的
+        索引持有的对象。Creator 与 Message 直接打印其文本；Variant 按 `ls-variants` 的格式打印，
+        Version 按 `ls-versions` 的格式打印——它的号在保险库那边求得，因为链在那边而不在这边。
+
+        `VAULT` 指向要连接的保险库，读法与 `rola vcs-index sync-all` 相同；不填则用工作区默认的那个。
+        什么都不改变——只是询问保险库并得到回答。
+
+  description:
+    en: Read one index object from the index at the other end
+    zh-CN: 从对端索引读取一个索引对象

@@ -95,7 +95,7 @@ impl crate::VCSIndexObject {
     ///
     /// Returns [`VCSIndexError::Malformed`] if the bytes lead with a kind this build does not
     /// know, or do not hold the fields that kind is made of.
-    pub(crate) fn decode(plain: &[u8]) -> Result<Self, VCSIndexError> {
+    pub fn decode(plain: &[u8]) -> Result<Self, VCSIndexError> {
         let (&tag, rest) = plain.split_first().ok_or(VCSIndexError::Malformed)?;
 
         match VCSIndexKind::from_id(tag).ok_or(VCSIndexError::Malformed)? {

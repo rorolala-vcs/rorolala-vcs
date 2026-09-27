@@ -105,7 +105,7 @@ impl Action for ActionSyncIndexAll {
 /// Workspace's index, and one served by a Vault works on the Vault's — each is kept beside the store
 /// of the same root, at the path the layout names. A side that has neither is not a side an action
 /// can run on.
-fn local_index(ctx: &ActionContext<'_>) -> Result<VCSIndex, ActionError> {
+pub(crate) fn local_index(ctx: &ActionContext<'_>) -> Result<VCSIndex, ActionError> {
     if let Some(workspace) = ctx.current_workspace().into_inner() {
         return Ok(VCSIndex::create(
             workspace.get_root().join(WORKSPACE_INDEX_DIR),

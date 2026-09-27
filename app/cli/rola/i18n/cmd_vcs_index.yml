@@ -14,7 +14,11 @@ vcs_index:
             ls-str            List the hashes of the text objects the index holds
             ls-variants       List the variants the index holds
             ls-versions       List the versions the index holds
+            ls-remote-str [VAULT]       List the hashes of the text objects the other end holds
+            ls-remote-variants [VAULT]  List the variants the other end holds
+            ls-remote-versions [VAULT]  List the versions the other end holds
             read <HASH>       Read one index object
+            read-remote <HASH> [VAULT]  Read one index object from the other end
             lookback <HASH>   Draw the chain one object sits at the top of
             write-creator <CREATOR>  Write a Creator into the index
             write-msg <MESSAGE>      Write a Message into the index
@@ -42,7 +46,11 @@ vcs_index:
             ls-str           列出索引中文本对象的哈希
             ls-variants      列出索引中的 variant
             ls-versions      列出索引中的 version
+            ls-remote-str [VAULT]       列出对端索引中文本对象的哈希
+            ls-remote-variants [VAULT]  列出对端索引中的 variant
+            ls-remote-versions [VAULT]  列出对端索引中的 version
             read <HASH>      读取一个索引对象
+            read-remote <HASH> [VAULT]  从对端索引读取一个索引对象
             lookback <HASH>  画出以某个索引对象为顶的版本链
             write-creator <CREATOR>  将 Creator 写入索引
             write-msg <MESSAGE>      将 Message 写入索引

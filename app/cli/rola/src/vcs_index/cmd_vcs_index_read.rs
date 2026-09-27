@@ -98,7 +98,27 @@ pub fn handle_vcs_index_read(state: StateVcsIndexRead, index: &mut LazyRes<ResVC
         }
     };
 
-    let object = match object {
+    // The number is the index's to work out, and only a Version has one: it costs a trace of the
+    // chain, so it is asked for the one object rather than for every one a listing names.
+    let number = match &object {
+        VCSIndexObject::Version(version) => runtime.block_on(index.version_num(version)).ok(),
+        _ => None,
+    };
+
+    ResultVcsIndexRead {
+        object: view_of(object, number),
+    }
+    .into()
+}
+
+/// One index object, as the command shows it, with the number a Version was traced to.
+///
+/// The number is passed in rather than read off the object because which index an object came from
+/// decides it: one read here is traced here, and one read from the other end is traced there and
+/// carried back in the Version it names. A Creator or a Message has no number, and what is passed
+/// for it is not read.
+pub fn view_of(object: VCSIndexObject, number: Option<u64>) -> ReadObject {
+    match object {
         VCSIndexObject::Creator(creator) => ReadObject::Creator {
             text: creator.read_to_string().to_owned(),
         },
@@ -111,18 +131,12 @@ pub fn handle_vcs_index_read(state: StateVcsIndexRead, index: &mut LazyRes<ResVC
             storage: Key::new(*variant.storage_hash()),
             join: variant.join().map(|join| Key::new(*join)),
         },
-        VCSIndexObject::Version(version) => {
-            let number = runtime.block_on(index.version_num(&version)).ok();
-
-            ReadObject::Version {
-                number,
-                hash: version.hash(),
-                variant: Key::new(*version.variant()),
-            }
-        }
-    };
-
-    ResultVcsIndexRead { object }.into()
+        VCSIndexObject::Version(version) => ReadObject::Version {
+            number,
+            hash: version.hash(),
+            variant: Key::new(*version.variant()),
+        },
+    }
 }
 
 /// One index object, as it was read: which kind it is, and what it holds.
@@ -170,7 +184,7 @@ pub enum ReadObject {
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultVcsIndexRead {
     /// The object, by the kind it turned out to be.
-    object: ReadObject,
+    pub object: ReadObject,
 }
 
 #[renderer(buffer)]
@@ -179,7 +193,7 @@ pub fn render_result_vcs_index_read(result: ResultVcsIndexRead) {
 }
 
 /// The object as the one line a listing prints it on.
-fn line_of(object: &ReadObject) -> String {
+pub fn line_of(object: &ReadObject) -> String {
     match object {
         ReadObject::Creator { text } | ReadObject::Message { text } => text.clone(),
         ReadObject::Variant {
