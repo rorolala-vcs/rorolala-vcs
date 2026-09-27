@@ -886,6 +886,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-vcs-index-sync"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-sandbox",
+ "tokio",
+]
+
+[[package]]
 name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1455,6 +1464,7 @@ dependencies = [
  "rorolala-utils-location",
  "rorolala-utils-progress",
  "rorolala-vault",
+ "rorolala-vcs",
  "rorolala-workspace",
  "serde",
  "serde_json",

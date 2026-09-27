@@ -7,5 +7,8 @@ pub use handshake::*;
 mod sync_all;
 pub use sync_all::*;
 
+mod sync_index;
+pub use sync_index::*;
+
 mod sync_storage;
 pub use sync_storage::*;

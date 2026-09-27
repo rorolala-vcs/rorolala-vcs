@@ -21,6 +21,7 @@ vcs_index:
             write-variant <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH> [--join <JOIN>]
                               Write a Variant into the index
             write-version <VARIANT>  Write a Version into the index
+            sync-all [VAULT]  Make the indexes at both ends hold the same keys
 
         The index is where version control begins: it keeps a Variant and a Version, a Creator and
         a Message under the hashes they are named by, and every command here speaks in those
@@ -48,6 +49,7 @@ vcs_index:
             write-variant <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH> [--join <JOIN>]
                              将 Variant 写入索引
             write-version <VARIANT>  将 Version 写入索引
+            sync-all [VAULT]  让两端的索引持有相同的对象
 
         索引是版本控制的起点：它按哈希保存 Variant 与 Version、Creator 与 Message。这里的每条命令
         都以上述哈希说话——列表打印出的是可以交给另一条命令的哈希，写入打印出的是所存对象的哈希。

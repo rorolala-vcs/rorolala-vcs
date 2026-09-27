@@ -92,3 +92,47 @@ pub fn action_sync_all(
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(action_sync_all_async(workspace, account, target, input, Progress::silent()))
 }
+
+/// Runs the [`ActionSyncIndexAll`](crate::ActionSyncIndexAll) action on the input it is handed, taken
+/// from `workspace`, as `account`, against the daemon at `target`.
+///
+/// `progress` is where the action says what it is doing while it does it; a run that is not
+/// being watched hands [`Progress::silent`], and the action runs the same way either way.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails.
+pub async fn action_sync_index_all_async(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    input: String,
+    progress: Progress,
+) -> Result<(), ActionError> {
+    proc_action::<ActionSyncIndexAll>(workspace, account, target, input, progress).await
+}
+
+/// Runs the [`ActionSyncIndexAll`](crate::ActionSyncIndexAll) action, blocking until it has.
+///
+/// This is the entry point the C ABI exports; the `async` one above is what a Rust
+/// caller should use instead. `workspace` is the copy the work is taken from, and the
+/// account is the one the caller names, so which identity an action runs as is theirs to
+/// say and not looked up behind their back, and the target is the daemon to reach, as a
+/// host and a port. Nothing is said of the action's progress here: a caller outside Rust
+/// has nowhere to read it, so the action is given no one to tell.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails, or if the runtime cannot be built.
+#[rorolala_utils_lazyffi::lazyffi(export = do_action_sync_index_all)]
+pub fn action_sync_index_all(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    input: String,
+) -> Result<(), ActionError> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(action_sync_index_all_async(workspace, account, target, input, Progress::silent()))
+}

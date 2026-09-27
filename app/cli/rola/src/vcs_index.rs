@@ -18,6 +18,7 @@ pub mod cmd_vcs_index_ls_versions;
 pub mod cmd_vcs_index_my_creator_hash;
 pub mod cmd_vcs_index_print_rootver;
 pub mod cmd_vcs_index_read;
+pub mod cmd_vcs_index_sync_all;
 pub mod cmd_vcs_index_write_creator;
 pub mod cmd_vcs_index_write_msg;
 pub mod cmd_vcs_index_write_variant;

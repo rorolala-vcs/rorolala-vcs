@@ -15,6 +15,7 @@ rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
 rorolala-utils-progress.workspace = true
 rorolala-vault.workspace = true
+rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
 
 tokio = { workspace = true, features = ["io-util"] }

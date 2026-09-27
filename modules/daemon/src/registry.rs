@@ -54,6 +54,7 @@ pub fn build_action_registry() -> Vec<std::option::Option<std::boxed::Box<dyn Ac
     vec![
         std::option::Option::Some(std::boxed::Box::new(ActionHandshake)),
         std::option::Option::Some(std::boxed::Box::new(ActionSyncAll)),
+        std::option::Option::Some(std::boxed::Box::new(ActionSyncIndexAll)),
     ]
 }
 

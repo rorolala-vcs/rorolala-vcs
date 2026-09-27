@@ -1653,6 +1653,7 @@ dependencies = [
  "rorolala-utils-location",
  "rorolala-utils-progress",
  "rorolala-vault",
+ "rorolala-vcs",
  "rorolala-workspace",
  "serde",
  "serde_json",
