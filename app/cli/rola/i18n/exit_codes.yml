@@ -125,6 +125,22 @@ exit_codes:
     en: What the command looked for is not in the version control index
     zh-CN: 命令要查找的对象不在版本控制索引中
 
+  inv_idx_no_index:
+    en: This run is nowhere a version control index is
+    zh-CN: 当前运行不处于任何版本控制索引中
+
+  inv_idx_read:
+    en: The inverse index could not be built or read
+    zh-CN: 无法建立或读取反向索引
+
+  inv_idx_argument:
+    en: An argument the command needs is missing or does not read
+    zh-CN: 缺少命令所需的参数，或参数无法解析
+
+  inv_idx_not_found:
+    en: What the command looked for is not in the version control index
+    zh-CN: 命令要查找的对象不在版本控制索引中
+
   storage_ls_storaged_no_storage:
     en: This run is nowhere a store is
     zh-CN: 当前运行不处于任何仓库中

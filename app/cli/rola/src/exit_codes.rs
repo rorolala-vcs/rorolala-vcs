@@ -114,6 +114,20 @@ pub const EC_ERR_VCS_INDEX_ARGUMENT: i32 = 77;
 /// `exit_codes.vcs_index_not_found`
 pub const EC_ERR_VCS_INDEX_NOT_FOUND: i32 = 78;
 
+// VCS inverse index
+
+/// `exit_codes.inv_idx_no_index`
+pub const EC_ERR_INV_IDX_NO_INDEX: i32 = 99;
+
+/// `exit_codes.inv_idx_read`
+pub const EC_ERR_INV_IDX_READ: i32 = 100;
+
+/// `exit_codes.inv_idx_argument`
+pub const EC_ERR_INV_IDX_ARGUMENT: i32 = 101;
+
+/// `exit_codes.inv_idx_not_found`
+pub const EC_ERR_INV_IDX_NOT_FOUND: i32 = 102;
+
 // Listing
 
 /// `exit_codes.storage_ls_storaged_no_storage`

@@ -32,6 +32,8 @@ use crate::account::ResCurrentAccount;
 use crate::exit_codes::{EC_CANCELLED, EC_HELP};
 use crate::keys::account_named;
 use crate::progress::Reporting;
+use crate::rebuild::ResRebuildInverseIndex;
+use crate::vcs_index::rebuild_inverse_index_here;
 
 #[help(buffer)]
 pub fn help_vcs_index_sync_all(_: EntryVcsIndexSyncAll, ec: &mut ResExitCode) {
@@ -108,6 +110,7 @@ pub fn handle_vcs_index_sync_all(
     current: &mut LazyRes<ResCurrentAccount>,
     confirm: &ResConfirm,
     progress: &ResProgressSetting,
+    rebuild: &ResRebuildInverseIndex,
 ) -> Next {
     // Everything below works through the Workspace, so it is asked once, here, and taken for granted
     // after: `?` is `routeify`'s, and a run that is inside no Workspace leaves through it. `held` is
@@ -151,6 +154,13 @@ pub fn handle_vcs_index_sync_all(
     ));
     reporting.finish();
     outcome?;
+
+    // The sync brought the index objects the other end had, so the records describe an index that
+    // is now short of them. A run that asked for them kept in step rebuilds them here, over the
+    // Workspace's index, which is the one that grew.
+    if **rebuild && let Err(error) = rebuild_inverse_index_here() {
+        return error.into();
+    }
 
     ResultVcsIndexSynced.into()
 }

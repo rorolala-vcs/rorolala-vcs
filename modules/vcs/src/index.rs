@@ -444,6 +444,20 @@ impl VCSIndex {
         Ok(objects)
     }
 
+    /// Every key the index holds an object under, loose or in a pack
+    ///
+    /// This is what a caller that has to know what the index holds — without reading any of it —
+    /// asks: the keys alone, which the pack index and the loose tree name without an object being
+    /// read. It is the cheap half of a listing, and what a reader compares against to see whether
+    /// something built from the index still describes it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VCSIndexReadingError`] if the keys cannot be listed.
+    pub async fn object_keys(&self) -> Result<Vec<Hash>, VCSIndexReadingError> {
+        self.list_object_keys().await.map_err(Into::into)
+    }
+
     /// Where the object stored under `key` sits, once it is loose.
     ///
     /// The digest is sharded two levels deep, the way a store's is, so no directory collects

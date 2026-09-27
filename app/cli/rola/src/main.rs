@@ -31,10 +31,12 @@ mod cmd_pack;
 mod error;
 mod exit_codes;
 mod failure;
+mod inv_idx;
 mod key;
 mod keys;
 mod lastec;
 mod progress;
+mod rebuild;
 mod storage;
 mod user;
 mod vault;
@@ -44,6 +46,7 @@ use crate::account::CurrentAccountSetup;
 use crate::address::AddressHistorySetup;
 use crate::exit_codes::{EC_HELP, EC_UNKNOWN_COMMAND};
 use crate::lastec::LastExitCodeRecordSetup;
+use crate::rebuild::RebuildSetup;
 
 /// How far a mistyped word may be from a command and still be offered as one it may have
 /// meant.
@@ -59,6 +62,7 @@ fn main() {
     let mut program = ThisProgram::new();
     program.with_setup(DefaultSetup);
     program.with_setup(RorolalaSetup);
+    program.with_setup(RebuildSetup);
     program.with_setup(AddressHistorySetup);
     program.with_setup(CurrentAccountSetup);
     program.with_setup(LastExitCodeRecordSetup);

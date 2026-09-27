@@ -18,8 +18,10 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::EC_HELP;
+use crate::rebuild::ResRebuildInverseIndex;
 use crate::vcs_index::{
-    ErrorVcsIndexArgument, ErrorVcsIndexNoIndex, ErrorVcsIndexWrite, ResultVcsIndexHash, runtime,
+    ErrorVcsIndexArgument, ErrorVcsIndexNoIndex, ErrorVcsIndexWrite, ResultVcsIndexHash,
+    rebuild_inverse_index, runtime,
 };
 
 #[help(buffer)]
@@ -71,6 +73,7 @@ pub struct StateVcsIndexWriteCreator {
 pub fn handle_vcs_index_write_creator(
     state: StateVcsIndexWriteCreator,
     index: &mut LazyRes<ResVCSIndex>,
+    rebuild: &ResRebuildInverseIndex,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
@@ -90,7 +93,12 @@ pub fn handle_vcs_index_write_creator(
     };
 
     match runtime.block_on(index.write(creator)) {
-        Ok(key) => ResultVcsIndexHash { hash: key.hex() }.into(),
+        Ok(key) => {
+            if **rebuild && let Err(error) = rebuild_inverse_index(index) {
+                return error.into();
+            }
+            ResultVcsIndexHash { hash: key.hex() }.into()
+        }
         Err(error) => ErrorVcsIndexWrite {
             cause: error.reason(),
         }

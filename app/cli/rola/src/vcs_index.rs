@@ -25,6 +25,7 @@ pub mod cmd_vcs_index_write_variant;
 pub mod cmd_vcs_index_write_version;
 
 use librorolala::storage::Key;
+use librorolala::vcs::VCSIndex;
 use mingling::{
     Grouped, StructuralData,
     macros::{buffer, chain, dispatcher, help, metadata, r_eprintln, r_println, renderer},
@@ -119,6 +120,53 @@ pub fn runtime() -> Result<tokio::runtime::Runtime, ErrorVcsIndexRead> {
     tokio::runtime::Runtime::new().map_err(|error| ErrorVcsIndexRead {
         cause: error.to_string(),
     })
+}
+
+/// Rebuilds the inverse index from the objects `index` holds
+///
+/// A write leaves the records describing an index that is one object older than the one now there,
+/// so rebuilding them is what `--rebuild` asks a write to do besides writing. It is done
+/// deliberately rather than by the index itself: the records are derived data, and a run that does
+/// not ask for them kept in step pays nothing for them.
+pub fn rebuild_inverse_index(index: &VCSIndex) -> Result<(), ErrorVcsIndexWrite> {
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| ErrorVcsIndexWrite {
+        cause: error.to_string(),
+    })?;
+    let inverse = librorolala::inverse_index::InverseIndex::at(index.clone());
+
+    runtime
+        .block_on(inverse.rebuild())
+        .map(|_report| ())
+        .map_err(|error| ErrorVcsIndexWrite {
+            cause: error.reason(),
+        })
+}
+
+/// Rebuilds the inverse index of the Vault or Workspace the run is inside
+///
+/// The counterpart of [`rebuild_inverse_index`](self::rebuild_inverse_index) for a command that
+/// works through a Workspace rather than an index it holds: the index is the one the run's own
+/// directory is inside, found the way every other command finds it.
+pub fn rebuild_inverse_index_here() -> Result<(), ErrorVcsIndexWrite> {
+    let cwd = std::env::current_dir().map_err(|error| ErrorVcsIndexWrite {
+        cause: error.to_string(),
+    })?;
+    let Some(inverse) = librorolala::inverse_index::InverseIndex::locate(&cwd) else {
+        return Err(ErrorVcsIndexWrite {
+            cause: "this run is nowhere a version control index is".to_owned(),
+        });
+    };
+
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| ErrorVcsIndexWrite {
+        cause: error.to_string(),
+    })?;
+
+    runtime
+        .block_on(inverse.rebuild())
+        .map(|_report| ())
+        .map_err(|error| ErrorVcsIndexWrite {
+            cause: error.reason(),
+        })
 }
 
 /// Error: the run is nowhere an index is.

@@ -842,6 +842,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-inverse-index"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-sandbox",
+ "tokio",
+]
+
+[[package]]
 name = "it-storage"
 version = "0.1.0"
 dependencies = [
@@ -1001,6 +1010,7 @@ dependencies = [
  "rorolala-daemon",
  "rorolala-dev-bindgen",
  "rorolala-errors",
+ "rorolala-inverse-index",
  "rorolala-protocol",
  "rorolala-storage",
  "rorolala-utils-constants",
@@ -1491,6 +1501,19 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rorolala-inverse-index"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "rorolala-errors",
+ "rorolala-storage",
+ "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "rorolala-vcs",
+ "tokio",
 ]
 
 [[package]]

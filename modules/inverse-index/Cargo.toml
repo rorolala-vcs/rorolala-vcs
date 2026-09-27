@@ -1,0 +1,13 @@
+[package]
+name = "rorolala-inverse-index"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rorolala-errors.workspace = true
+rorolala-storage.workspace = true
+rorolala-utils-lazyffi.workspace = true
+rorolala-vcs.workspace = true
+rorolala-utils-location.workspace = true
+blake3.workspace = true
+tokio = { workspace = true, features = ["io-util"] }

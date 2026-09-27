@@ -9,6 +9,7 @@ members = [
     "modules/auth",
     "modules/daemon",
     "modules/errors",
+    "modules/inverse-index",
     "modules/protocol",
     "modules/protocol-macros",
     "modules/storage",
@@ -43,6 +44,7 @@ rorolala-daemon = { path = "modules/daemon" }
 rorolala-dev-bindgen = { path = "dev/bindgen" }
 rorolala-errors = { path = "modules/errors" }
 rorolala-ffi = { path = "app/ffi" }
+rorolala-inverse-index = { path = "modules/inverse-index" }
 rorolala-protocol = { path = "modules/protocol" }
 rorolala-protocol-macros = { path = "modules/protocol-macros" }
 rorolala-storage = { path = "modules/storage" }
@@ -138,6 +140,7 @@ license.workspace = true
 rorolala-auth.workspace = true
 rorolala-daemon.workspace = true
 rorolala-errors.workspace = true
+rorolala-inverse-index.workspace = true
 rorolala-protocol.workspace = true
 rorolala-storage.workspace = true
 rorolala-utils-constants.workspace = true

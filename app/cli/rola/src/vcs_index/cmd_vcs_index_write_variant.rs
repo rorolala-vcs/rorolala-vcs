@@ -19,9 +19,10 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::EC_HELP;
+use crate::rebuild::ResRebuildInverseIndex;
 use crate::vcs_index::{
     ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNoIndex, ErrorVcsIndexWrite,
-    ResultVcsIndexHash, parse_hash, runtime,
+    ResultVcsIndexHash, parse_hash, rebuild_inverse_index, runtime,
 };
 
 /// The flags `rola vcs-index write-variant` takes.
@@ -116,6 +117,7 @@ pub struct StateVcsIndexWriteVariant {
 pub fn handle_vcs_index_write_variant(
     state: StateVcsIndexWriteVariant,
     index: &mut LazyRes<ResVCSIndex>,
+    rebuild: &ResRebuildInverseIndex,
 ) -> Next {
     let Some(base_version) = parse_hash(&state.base_version) else {
         return ErrorVcsIndexHash {
@@ -166,7 +168,12 @@ pub fn handle_vcs_index_write_variant(
         UNKNOWN_VERSION,
     );
     match runtime.block_on(index.write(variant)) {
-        Ok(key) => ResultVcsIndexHash { hash: key.hex() }.into(),
+        Ok(key) => {
+            if **rebuild && let Err(error) = rebuild_inverse_index(index) {
+                return error.into();
+            }
+            ResultVcsIndexHash { hash: key.hex() }.into()
+        }
         Err(error) => ErrorVcsIndexWrite {
             cause: error.reason(),
         }

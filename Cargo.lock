@@ -1115,6 +1115,7 @@ dependencies = [
  "rorolala-daemon",
  "rorolala-dev-bindgen",
  "rorolala-errors",
+ "rorolala-inverse-index",
  "rorolala-protocol",
  "rorolala-storage",
  "rorolala-utils-constants",
@@ -1689,6 +1690,19 @@ version = "0.1.0"
 dependencies = [
  "librorolala",
  "rorolala-utils-lazyffi",
+]
+
+[[package]]
+name = "rorolala-inverse-index"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "rorolala-errors",
+ "rorolala-storage",
+ "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "rorolala-vcs",
+ "tokio",
 ]
 
 [[package]]

@@ -12,6 +12,7 @@ rola:
             account <ACCOUNT>   Name the account the work acts as, or list them
             storage <CMD>       Read and write the content a store holds, by hand
             vcs-index <CMD>     Read and write the version control index, by hand
+            inv-idx <CMD>       Build and ask the inverse index, by hand
             pack                Lay a store's objects out in as few packs as its size limit allows
             vault <CMD>         List, bind, and reach the Vaults this Workspace knows
             explain <CMD>       Say what a number or a name means
@@ -19,6 +20,7 @@ rola:
 
         **Flags**
             -v, --vault    Act on a Vault instead of a Workspace
+            --rebuild      Rebuild the inverse index after writing
             --no-color     Draw without colour
             --no-progress  Say nothing while working
             --json         Print the result as JSON
@@ -40,6 +42,7 @@ rola:
             account <ACCOUNT>   指定当前账户，或列出可用账户
             storage <命令>      手工读写仓库持有的内容
             vcs-index <命令>    手工读写版本控制索引
+            inv-idx <命令>      手工建立并查询反向索引
             pack                将仓库中的对象整理进尽可能少的 pack
             vault <命令>        列出、绑定并连上工作区已知的保险库
             explain <CMD>       解释某个数字或名字的含义
@@ -47,6 +50,7 @@ rola:
 
         **标志**
             -v, --vault    操作保险库而不是工作区
+            --rebuild      写入后重建反向索引
             --no-color     不使用颜色
             --no-progress  工作时什么都不说
             --json         以 JSON 输出结果
