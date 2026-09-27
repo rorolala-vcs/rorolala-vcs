@@ -11,6 +11,7 @@ rust_i18n::i18n!("i18n", fallback = "en");
 use std::collections::BTreeSet;
 
 use mingling::{
+    hook::ProgramHook,
     macros::{buffer, gen_program, help, r_append, r_eprintln, renderer},
     res::ResExitCode,
     setup::{ConfirmSetup, DefaultSetup},
@@ -28,6 +29,7 @@ mod cmd_explain;
 mod cmd_fs_ops;
 mod cmd_init;
 mod cmd_pack;
+mod cmd_version;
 mod error;
 mod exit_codes;
 mod failure;
@@ -44,6 +46,7 @@ mod vcs_index;
 
 use crate::account::CurrentAccountSetup;
 use crate::address::AddressHistorySetup;
+use crate::cmd_version::VERSION_NODE;
 use crate::exit_codes::{EC_HELP, EC_UNKNOWN_COMMAND};
 use crate::lastec::LastExitCodeRecordSetup;
 use crate::rebuild::RebuildSetup;
@@ -67,7 +70,29 @@ fn main() {
     program.with_setup(CurrentAccountSetup);
     program.with_setup(LastExitCodeRecordSetup);
     program.with_setup(ConfirmSetup);
+
+    // `-V` and `--version` are not commands, but what they ask for is what a command's result is
+    // drawn by: the request is rewritten to the node the version output lives on, and dispatched
+    // like any other, so `--json` and every other output setting apply to it as they do to the
+    // rest. Only the first word is read — a command that happens to take a `-V` of its own keeps
+    // it — and `-v` is left alone: it is the short name of `--vault`.
+    program.with_hook(ProgramHook::empty().on_pre_dispatch(|info| {
+        if info
+            .arguments
+            .first()
+            .is_some_and(|word| asks_for_version(word))
+        {
+            info.arguments.clear();
+            info.arguments.push(VERSION_NODE.to_owned());
+        }
+    }));
+
     program.exec_and_exit();
+}
+
+/// Whether `word` asks for the version.
+fn asks_for_version(word: &str) -> bool {
+    matches!(word, "-V" | "--version")
 }
 
 /// Prints the help a run falls back to when no command is named.

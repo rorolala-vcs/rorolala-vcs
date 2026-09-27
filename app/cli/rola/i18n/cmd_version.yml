@@ -1,0 +1,10 @@
+_version: 2
+
+version:
+  cmd_version_description:
+    en: Print what this build is
+    zh-CN: 输出本次构建的版本信息
+
+  title:
+    en: Rorolala
+    zh-CN: Rorolala

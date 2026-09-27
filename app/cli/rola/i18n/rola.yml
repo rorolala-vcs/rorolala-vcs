@@ -25,6 +25,7 @@ rola:
             --no-progress  Say nothing while working
             --json         Print the result as JSON
             --json-pretty  Print the result as indented JSON
+            -V, --version  Print what this build is
             -h, --help     Show this help
 
         **Options**
@@ -55,6 +56,7 @@ rola:
             --no-progress  工作时什么都不说
             --json         以 JSON 输出结果
             --json-pretty  以带缩进的 JSON 输出结果
+            -V, --version  输出本次构建的版本信息
             -h, --help     显示本帮助
 
         **选项**
