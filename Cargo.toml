@@ -13,6 +13,7 @@ members = [
     "modules/protocol-macros",
     "modules/storage",
     "modules/vault",
+    "modules/vcs",
     "modules/workspace",
     "utils/cli-theme",
     "utils/configure",
@@ -56,6 +57,7 @@ rorolala-utils-location = { path = "utils/location" }
 rorolala-utils-progress = { path = "utils/progress" }
 rorolala-utils-sandbox = { path = "utils/sandbox" }
 rorolala-vault = { path = "modules/vault" }
+rorolala-vcs = { path = "modules/vcs" }
 rorolala-workspace = { path = "modules/workspace" }
 
 # CLI Framework
@@ -142,6 +144,7 @@ rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
 rorolala-vault.workspace = true
+rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
 
 [build-dependencies]

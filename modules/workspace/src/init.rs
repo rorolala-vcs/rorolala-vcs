@@ -5,7 +5,7 @@ use rorolala_storage::RorolalaStorage;
 use rorolala_utils_configure::Config;
 use rorolala_utils_lazyffi::lazyffi;
 
-use crate::{CONFIG_PATH, CreationError, DATA_DIR, STORAGE_DIR, Workspace};
+use crate::{CONFIG_PATH, CreationError, DATA_DIR, INDEX_DIR, STORAGE_DIR, Workspace};
 
 #[lazyffi]
 impl Workspace {
@@ -14,6 +14,9 @@ impl Workspace {
     /// The Workspace is its data directory: a directory is a Workspace once it holds
     /// one, and the configuration is written inside it, so the directory is made first
     /// and there is somewhere to write to.
+    ///
+    /// The directory its index is kept in is made with it too, so that a Workspace that
+    /// exists has somewhere for the index of what it holds; see [`INDEX_DIR`].
     ///
     /// The store it keeps its objects in is made with it too, so that a Workspace that exists
     /// has somewhere to keep them; see [`Workspace::get_current_rola_storage`].
@@ -26,6 +29,7 @@ impl Workspace {
     #[lazyffi(export = create_workspace)]
     pub fn create(dir: &Path) -> Result<(), CreationError> {
         fs::create_dir_all(dir.join(DATA_DIR)).map_err(|_| CreationError::DataDirCreateFailed)?;
+        fs::create_dir_all(dir.join(INDEX_DIR)).map_err(|_| CreationError::DataDirCreateFailed)?;
 
         let config = Config::<crate::config::Config>::new(dir.join(CONFIG_PATH)).map_err(
             |error| match error {
@@ -70,7 +74,7 @@ mod tests {
     use rorolala_utils_configure::Configure;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, CreationError, DATA_DIR, STORAGE_DIR, Workspace};
+    use crate::{CONFIG_PATH, CreationError, DATA_DIR, INDEX_DIR, STORAGE_DIR, Workspace};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -128,6 +132,19 @@ mod tests {
                 .as_path()
         );
         assert!(storage.config_path().is_file());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn creating_a_workspace_makes_the_directory_its_index_goes_in() {
+        let dir = scratch("index-dir");
+
+        Workspace::create(&dir).unwrap();
+
+        // The index is part of a Workspace rather than something to be set up beside it: a
+        // Workspace that exists has somewhere to write it the moment it does.
+        assert!(dir.join(INDEX_DIR).is_dir(), "{:?}", dir.join(INDEX_DIR));
 
         let _ = fs::remove_dir_all(&dir);
     }

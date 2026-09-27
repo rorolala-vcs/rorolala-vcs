@@ -20,14 +20,14 @@ pub use config::*;
 pub use error::*;
 pub use ffi::*;
 
-/// Where the Workspace keeps its data, its configuration, its keys and its store
+/// Where the Workspace keeps its data, its configuration, its keys, its store and its index
 ///
 /// These are the layout [`rorolala_utils_constants`] states, re-exported so the
 /// Workspace's own spelling of where it keeps things is still one name.
 pub use rorolala_utils_constants::{
     WORKSPACE_CONFIG_PATH as CONFIG_PATH, WORKSPACE_DATA_DIR as DATA_DIR,
-    WORKSPACE_KEYS_DIR as KEYS_DIR, WORKSPACE_LOCK_PATH as LOCK_PATH,
-    WORKSPACE_STORAGE_DIR as STORAGE_DIR,
+    WORKSPACE_INDEX_DIR as INDEX_DIR, WORKSPACE_KEYS_DIR as KEYS_DIR,
+    WORKSPACE_LOCK_PATH as LOCK_PATH, WORKSPACE_STORAGE_DIR as STORAGE_DIR,
 };
 
 /// Rorolala local workspace

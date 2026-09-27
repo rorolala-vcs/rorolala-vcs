@@ -3,62 +3,79 @@ _version: 2
 pack:
   help:
     en: |
-        Lay a store's objects out in as few packs as its size limit allows
+        Lay the objects a store and an index hold out in packs
 
-        **Usage**: `rola pack`
+        **Usage**: `rola pack [--no-index] [--no-storage]`
 
         Everything the store holds is written again: the entries of every pack are gathered up with
         the loose objects, and the whole of it is laid down as one pack — or as several, once one
         would pass the store's `max_pack_size`, which is `[storage] max_pack_size` in the store's
-        configuration and two gibibytes when that says nothing.
+        configuration and two gibibytes when that says nothing. The index the run is inside is laid
+        out the same way, as one pack.
 
         What each object is does not change: a pack holds its entries exactly as they sat loose, so
-        every read that worked before works after. A store already laid out this way is left alone, so
-        running this twice in a row changes nothing the second time.
+        every read that worked before works after. What is already laid out this way is left alone,
+        so running this twice in a row changes nothing the second time.
 
-        The store is locked for the whole of the work, so a store another run is packing is not packed
-        at the same time: the run is told, and nothing is changed.
+        Both are packed by default. `--no-index` leaves the index as it is and `--no-storage`
+        leaves the store as it is; writing both leaves nothing to pack, and is refused.
 
-        The run has to be somewhere a store can be found: inside one, or inside a Vault or Workspace
-        that keeps one.
+        Each is locked for the whole of the work, so one another run is packing is not packed at the
+        same time: the run is told, and nothing is changed.
+
+        The run has to be somewhere a store or an index can be found: inside one, or inside a Vault
+        or Workspace that keeps one.
     zh-CN: |
-        将仓库中的对象整理进尽可能少的 pack，受其大小上限约束
+        将仓库与索引中的对象整理进 pack
 
-        **用法**：`rola pack`
+        **用法**：`rola pack [--no-index] [--no-storage]`
 
         仓库持有的全部内容都会被重新写出：各 pack 的条目与松散对象一并收集，整体落成一个 pack——若某个
         pack 将超过仓库的 `max_pack_size`，则落成多个。`max_pack_size` 来自仓库配置中的
-        `[storage] max_pack_size`，未配置时为 2 GiB。
+        `[storage] max_pack_size`，未配置时为 2 GiB。当前运行所在的索引以同样方式整理成一个 pack。
 
         对象本身不受影响：pack 按它们在松散时的样子原样存放条目，所以此前能读的，之后照样能读。已经
-        是这样布局的仓库会保持原样，因此连续运行两次不会有第二次改动。
+        是这样布局的一方会保持原样，因此连续运行两次不会有第二次改动。
 
-        整个过程中仓库会被锁定，因此另一个运行正在打包时不会同时打包：本次运行会被告知，且什么都不
+        默认两者都整理。`--no-index` 保持索引原样，`--no-storage` 保持仓库原样；两者同时给出则没有
+        可整理的对象，会被拒绝。
+
+        整个过程中各自会被锁定，因此另一个运行正在打包时不会同时打包：本次运行会被告知，且什么都不
         改动。
 
-        运行必须处在能发现仓库的地方：仓库内、或保有仓库的保险库／工作区内。
+        运行必须处在能发现仓库或索引的地方：仓库／索引内、或保有它们的保险库／工作区内。
 
   cmd_pack_description:
-    en: Lay a store's objects out in as few packs as its size limit allows
-    zh-CN: 将仓库中的对象整理进尽可能少的 pack
+    en: Lay the objects a store and an index hold out in packs
+    zh-CN: 将仓库与索引中的对象整理进 pack
 
   result_packed:
-    en: Laid the store's objects out afresh
-    zh-CN: 已重新整理仓库中的对象
+    en: Laid the objects out afresh
+    zh-CN: 已重新整理对象
 
   result_nothing:
-    en: The store was already laid out that way
-    zh-CN: 仓库已是这样的布局
+    en: The objects were already laid out that way
+    zh-CN: 对象已是这样的布局
 
   err_no_storage:
-    en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    en: This run is nowhere a store or an index is
+    zh-CN: 当前运行不处于任何仓库或索引中
 
   err_no_storage_help:
     en: |
-        Please run this inside a store, or inside the Vault or Workspace that keeps one
+        Please run this inside a store or an index, or inside the Vault or Workspace that keeps one
     zh-CN: |
-        请在仓库内运行，或在保有仓库的保险库／工作区内运行
+        请在仓库或索引内运行，或在保有它们的保险库／工作区内运行
+
+  err_nothing_to_pack:
+    en: Both `--no-index` and `--no-storage` were written, so there is nothing to pack
+    zh-CN: 同时写下了 `--no-index` 与 `--no-storage`，没有可整理的对象
+
+  err_nothing_to_pack_help:
+    en: |
+        Please leave out at least one of the two, so that the store or the index is packed
+    zh-CN: |
+        请至少省略其中之一，以便整理仓库或索引
 
   err_pack_failed:
     en: "The store's objects could not be packed — %{reason}"

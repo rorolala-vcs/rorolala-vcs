@@ -877,6 +877,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-vcs-index"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-sandbox",
+ "tokio",
+]
+
+[[package]]
 name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -989,6 +998,7 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vault",
+ "rorolala-vcs",
  "rorolala-workspace",
  "serde_json",
 ]
@@ -1604,6 +1614,20 @@ dependencies = [
  "rorolala-errors",
  "rorolala-storage",
  "rorolala-utils-configure",
+ "rorolala-utils-constants",
+ "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "rorolala-vcs"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "rorolala-errors",
+ "rorolala-storage",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",

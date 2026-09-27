@@ -68,9 +68,23 @@ pub const STORAGE_CONFIG_PATH: &str = "./rolast.toml";
 #[lazyffi(export = ROLA_WORKSPACE_STORAGE_DIR)]
 pub const WORKSPACE_STORAGE_DIR: &str = "./.rola/storage/";
 
+/// Path, inside the Workspace's data directory, where its index is kept
+///
+/// The index is the version control index the Workspace reads and writes as work is
+/// recorded, kept beside the store rather than in it: what is indexed is the versions,
+/// and the store is where the content they name lives.
+#[lazyffi(export = ROLA_WORKSPACE_INDEX_DIR)]
+pub const WORKSPACE_INDEX_DIR: &str = "./.rola/index/";
+
 /// Path, inside the Vault's root, where its store is kept
 #[lazyffi(export = ROLA_VAULT_STORAGE_DIR)]
 pub const VAULT_STORAGE_DIR: &str = "./storage/";
+
+/// Path, inside the Vault's root, where its index is kept
+///
+/// As for a Workspace's: the index is kept beside the store rather than in it.
+#[lazyffi(export = ROLA_VAULT_INDEX_DIR)]
+pub const VAULT_INDEX_DIR: &str = "./index/";
 
 /// The sub-vault an address names when it names none
 ///

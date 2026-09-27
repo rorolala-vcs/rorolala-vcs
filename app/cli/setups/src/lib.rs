@@ -13,6 +13,7 @@ mod language;
 mod progress;
 mod storage;
 mod vault;
+mod vcs;
 mod workspace;
 
 pub use colorize::*;
@@ -21,6 +22,7 @@ pub use language::*;
 pub use progress::*;
 pub use storage::*;
 pub use vault::*;
+pub use vcs::*;
 pub use workspace::*;
 
 /// Shared setup for Rorolala's command-line programs.
@@ -46,5 +48,6 @@ where
         program.with_setup(VaultSetup);
         program.with_setup(WorkspaceSetup);
         program.with_setup(RorolalaStorageSetup);
+        program.with_setup(VCSSetup);
     }
 }

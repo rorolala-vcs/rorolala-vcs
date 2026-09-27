@@ -25,13 +25,13 @@ pub use ffi::*;
 pub use keys::*;
 pub use root_vault::*;
 
-/// Path to the Vault configuration file, and the directories the Vault keeps under it
+/// The Vault's configuration file, and the directories it keeps under its root
 ///
-/// All three are the layout [`rorolala_utils_constants`] states, re-exported so the Vault's
+/// These are the layout [`rorolala_utils_constants`] states, re-exported so the Vault's
 /// own spelling of where it keeps things is still one name.
 pub use rorolala_utils_constants::{
-    VAULT_CONFIG_PATH as CONFIG_PATH, VAULT_KEYS_DIR as KEYS_DIR, VAULT_STORAGE_DIR as STORAGE_DIR,
-    VAULT_VAULTS_DIR as VAULTS_DIR,
+    VAULT_CONFIG_PATH as CONFIG_PATH, VAULT_INDEX_DIR as INDEX_DIR, VAULT_KEYS_DIR as KEYS_DIR,
+    VAULT_STORAGE_DIR as STORAGE_DIR, VAULT_VAULTS_DIR as VAULTS_DIR,
 };
 
 /// Rorolala remote resource vault

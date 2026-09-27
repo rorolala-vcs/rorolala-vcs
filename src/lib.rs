@@ -36,6 +36,9 @@ pub use rorolala_workspace as workspace;
 /// Server-side vault
 pub use rorolala_vault as vault;
 
+/// Version control
+pub use rorolala_vcs as vcs;
+
 /// The local key roots the current directory sits inside, highest priority first.
 ///
 /// The Workspace comes before the Vault, since it is the copy being worked in, so a key

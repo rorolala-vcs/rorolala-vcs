@@ -90,8 +90,8 @@ exit_codes:
     zh-CN: 无法将存储的内容写出
 
   pack_no_storage:
-    en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    en: This run is nowhere a store or an index is
+    zh-CN: 当前运行不处于任何仓库或索引中
 
   pack_failed:
     en: "The store's objects could not be packed"
@@ -100,6 +100,30 @@ exit_codes:
   pack_locked:
     en: The store is locked
     zh-CN: 仓库已被锁定
+
+  pack_nothing_to_pack:
+    en: Nothing was named to pack
+    zh-CN: 没有指定要整理的对象
+
+  vcs_index_no_index:
+    en: This run is nowhere a version control index is
+    zh-CN: 当前运行不处于任何版本控制索引中
+
+  vcs_index_read:
+    en: The version control index could not be read
+    zh-CN: 无法读取版本控制索引
+
+  vcs_index_write:
+    en: The version control index could not be written
+    zh-CN: 无法写入版本控制索引
+
+  vcs_index_argument:
+    en: An argument the command needs is missing or does not read
+    zh-CN: 缺少命令所需的参数，或参数无法解析
+
+  vcs_index_not_found:
+    en: What the command looked for is not in the version control index
+    zh-CN: 命令要查找的对象不在版本控制索引中
 
   storage_ls_storaged_no_storage:
     en: This run is nowhere a store is

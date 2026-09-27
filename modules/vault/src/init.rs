@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 
 use rorolala_storage::RorolalaStorage;
 
-use crate::{CONFIG_PATH, CreationError, KEYS_DIR, STORAGE_DIR, Vault, config::MetaConfig};
+use crate::{
+    CONFIG_PATH, CreationError, INDEX_DIR, KEYS_DIR, STORAGE_DIR, Vault, config::MetaConfig,
+};
 
 #[lazyffi]
 impl Vault {
@@ -19,6 +21,9 @@ impl Vault {
     /// proves itself with has somewhere to go: a Vault is not served without one, and the tool
     /// that makes one writes into a directory that has to be there already.
     ///
+    /// The directory its index is kept in is made with it too, so that a Vault that exists
+    /// has somewhere for the index of what it holds; see [`INDEX_DIR`].
+    ///
     /// The store it keeps its objects in is made with it too, so that a Vault that exists has
     /// somewhere to keep them; see [`Vault::get_current_rola_storage`].
     ///
@@ -31,6 +36,7 @@ impl Vault {
     pub fn create(dir: &Path) -> Result<(), CreationError> {
         fs::create_dir_all(dir).map_err(|_| CreationError::DirCreateFailed)?;
         fs::create_dir_all(dir.join(KEYS_DIR)).map_err(|_| CreationError::DirCreateFailed)?;
+        fs::create_dir_all(dir.join(INDEX_DIR)).map_err(|_| CreationError::DirCreateFailed)?;
 
         let mut config = Config::<crate::config::Config>::new(dir.join(CONFIG_PATH)).map_err(
             |error| match error {
@@ -78,7 +84,7 @@ mod tests {
     use rorolala_utils_configure::Configure;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, CreationError, KEYS_DIR, STORAGE_DIR, Vault};
+    use crate::{CONFIG_PATH, CreationError, INDEX_DIR, KEYS_DIR, STORAGE_DIR, Vault};
 
     /// A parent directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -123,6 +129,20 @@ mod tests {
         // A Vault is not served without a key pair of its own, and the tool that makes one
         // writes into a directory that has to be there already: making the Vault makes it.
         assert!(dir.join(KEYS_DIR).is_dir(), "{:?}", dir.join(KEYS_DIR));
+
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn creating_a_vault_makes_the_directory_its_index_goes_in() {
+        let parent = scratch("index-dir");
+        let dir = parent.join("vault");
+
+        Vault::create(&dir).unwrap();
+
+        // The index is part of a Vault rather than something to be set up beside it: a Vault
+        // that exists has somewhere to write it the moment it does.
+        assert!(dir.join(INDEX_DIR).is_dir(), "{:?}", dir.join(INDEX_DIR));
 
         let _ = fs::remove_dir_all(&parent);
     }

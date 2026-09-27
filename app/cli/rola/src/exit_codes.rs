@@ -94,6 +94,26 @@ pub const EC_ERR_PACK_FAILED: i32 = 60;
 /// `exit_codes.pack_locked`
 pub const EC_ERR_PACK_LOCKED: i32 = 69;
 
+/// `exit_codes.pack_nothing_to_pack`
+pub const EC_ERR_PACK_NOTHING_TO_PACK: i32 = 70;
+
+// VCS index
+
+/// `exit_codes.vcs_index_no_index`
+pub const EC_ERR_VCS_INDEX_NO_INDEX: i32 = 74;
+
+/// `exit_codes.vcs_index_read`
+pub const EC_ERR_VCS_INDEX_READ: i32 = 75;
+
+/// `exit_codes.vcs_index_write`
+pub const EC_ERR_VCS_INDEX_WRITE: i32 = 76;
+
+/// `exit_codes.vcs_index_argument`
+pub const EC_ERR_VCS_INDEX_ARGUMENT: i32 = 77;
+
+/// `exit_codes.vcs_index_not_found`
+pub const EC_ERR_VCS_INDEX_NOT_FOUND: i32 = 78;
+
 // Listing
 
 /// `exit_codes.storage_ls_storaged_no_storage`

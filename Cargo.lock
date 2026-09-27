@@ -1121,6 +1121,7 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vault",
+ "rorolala-vcs",
  "rorolala-workspace",
  "serde_json",
 ]
@@ -1829,6 +1830,20 @@ dependencies = [
  "serde",
  "tokio",
  "toml 0.8.23",
+]
+
+[[package]]
+name = "rorolala-vcs"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "rorolala-errors",
+ "rorolala-storage",
+ "rorolala-utils-constants",
+ "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "serde",
+ "tokio",
 ]
 
 [[package]]

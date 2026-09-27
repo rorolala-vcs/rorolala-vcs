@@ -1,0 +1,339 @@
+_version: 2
+
+vcs_index:
+  help:
+    en: |
+        Read and write the version control index, by hand
+
+        **Usage**: `rola vcs-index <COMMAND>`
+
+        **Commands**
+            create-rootver    Put the root version into the index
+            print-rootver     Print the root version's hash
+            my-creator-hash   Print the hash of the Creator the work acts as
+            ls-str            List the hashes of the text objects the index holds
+            ls-variants       List the variants the index holds
+            ls-versions       List the versions the index holds
+            read <HASH>       Read one index object
+            lookback <HASH>   Draw the chain one object sits at the top of
+            write-creator <CREATOR>  Write a Creator into the index
+            write-msg <MESSAGE>      Write a Message into the index
+            write-variant <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH> [--join <JOIN>]
+                              Write a Variant into the index
+            write-version <VARIANT>  Write a Version into the index
+
+        The index is where version control begins: it keeps a Variant and a Version, a Creator and
+        a Message under the hashes they are named by, and every command here speaks in those
+        hashes — what a listing prints is a hash to hand to another command, and what a write
+        prints is the hash of what it stored.
+
+        Nothing here is needed to use `rola`: a Vault and a Workspace keep indexes of their own,
+        and what they hold is read and written for you.
+    zh-CN: |
+        手工读写版本控制索引
+
+        **用法**：`rola vcs-index <命令>`
+
+        **命令**
+            create-rootver   将 root version 写入索引
+            print-rootver    输出 root version 的哈希
+            my-creator-hash  输出当前账户对应的 Creator 哈希
+            ls-str           列出索引中文本对象的哈希
+            ls-variants      列出索引中的 variant
+            ls-versions      列出索引中的 version
+            read <HASH>      读取一个索引对象
+            lookback <HASH>  画出以某个索引对象为顶的版本链
+            write-creator <CREATOR>  将 Creator 写入索引
+            write-msg <MESSAGE>      将 Message 写入索引
+            write-variant <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH> [--join <JOIN>]
+                             将 Variant 写入索引
+            write-version <VARIANT>  将 Version 写入索引
+
+        索引是版本控制的起点：它按哈希保存 Variant 与 Version、Creator 与 Message。这里的每条命令
+        都以上述哈希说话——列表打印出的是可以交给另一条命令的哈希，写入打印出的是所存对象的哈希。
+
+        使用 `rola` 并不需要这些命令：保险库和工作区各自持有索引，其内容的存取都由程序代劳。
+
+  cmd_vcs_index_description:
+    en: Read and write the version control index, by hand
+    zh-CN: 手工读写版本控制索引
+
+  err_write:
+    en: "The index could not be written — %{reason}"
+    zh-CN: "无法写入索引 —— %{reason}"
+
+  err_write_help:
+    en: |
+        Please check that the index can be written, then try again
+    zh-CN: |
+        请确认索引可写，然后重试
+
+  err_argument:
+    en: "the `%{argument}` argument is missing"
+    zh-CN: "缺少 `%{argument}` 参数"
+
+  err_argument_help:
+    en: |
+        Please give the argument and try again
+    zh-CN: |
+        请补上该参数后重试
+
+  err_bad_hash:
+    en: "`%{hash}` is not a hash"
+    zh-CN: "`%{hash}` 不是哈希"
+
+  err_bad_hash_help:
+    en: |
+        Please give a hash as hex, or as `blake3:<hex>`
+    zh-CN: |
+        请给出十六进制哈希，或 `blake3:<hex>` 形式的哈希
+
+  err_not_found:
+    en: "Nothing is stored under `%{hash}`"
+    zh-CN: "`%{hash}` 下没有存储任何对象"
+
+  err_not_found_help:
+    en: |
+        Please create what is missing first, then try again
+    zh-CN: |
+        请先创建缺少的对象，然后重试
+
+vcs_index_ls_variants:
+  help:
+    en: |
+        List the variants the index holds
+
+        **Usage**: `rola vcs-index ls-variants [--json]`
+
+        One per line: the variant's hash, the base version's hash, and — in bold bright yellow — the
+        storage entry's hash and, for a merge, the joined variant's hash. The base version's number
+        is not worked out: that costs a trace of the chain per variant, so `rola vcs-index read`
+        works it out for one.
+    zh-CN: |
+        列出索引中的 variant
+
+        **用法**：`rola vcs-index ls-variants [--json]`
+
+        每行一个：variant 的哈希、其基础版本的哈希，以及——粗体亮黄——它指向的存储条目哈希，和合并时
+        并入的 variant 哈希。基础版本的号不计算：那要对每个 variant 走一遍版本链，改用
+        `rola vcs-index read` 求单个。
+
+  description:
+    en: List the variants the index holds
+    zh-CN: 列出索引中的 variant
+
+vcs_index_ls_versions:
+  help:
+    en: |
+        List the versions the index holds
+
+        **Usage**: `rola vcs-index ls-versions [--json]`
+
+        One per line: the version's number and hash, and the hash of the variant it points at. The
+        number is worked out by tracing the chain, one version at a time.
+    zh-CN: |
+        列出索引中的 version
+
+        **用法**：`rola vcs-index ls-versions [--json]`
+
+        每行一个：version 的号与哈希，以及它指向的 variant 的哈希。号通过版本链回溯求得，逐个计算。
+
+  description:
+    en: List the versions the index holds
+    zh-CN: 列出索引中的 version
+
+vcs_index_read:
+  help:
+    en: |
+        Read one index object
+
+        **Usage**: `rola vcs-index read <HASH> [--json]`
+
+        A Creator or a Message is printed as its text. A Variant is printed the way `ls-variants`
+        prints it, and a Version the way `ls-versions` prints it.
+    zh-CN: |
+        读取一个索引对象
+
+        **用法**：`rola vcs-index read <HASH> [--json]`
+
+        Creator 与 Message 直接打印其文本；Variant 按 `ls-variants` 的格式打印，Version 按
+        `ls-versions` 的格式打印。
+
+  description:
+    en: Read one index object by its hash
+    zh-CN: 按哈希读取一个索引对象
+
+vcs_index_write_creator:
+  help:
+    en: |
+        Write a Creator into the index, answering with its hash
+
+        **Usage**: `rola vcs-index write-creator <CREATOR>`
+    zh-CN: |
+        将 Creator 写入索引，并输出其哈希
+
+        **用法**：`rola vcs-index write-creator <CREATOR>`
+
+  description:
+    en: Write a Creator into the index
+    zh-CN: 将 Creator 写入索引
+
+vcs_index_write_msg:
+  help:
+    en: |
+        Write a Message into the index, answering with its hash
+
+        **Usage**: `rola vcs-index write-msg <MESSAGE>`
+    zh-CN: |
+        将 Message 写入索引，并输出其哈希
+
+        **用法**：`rola vcs-index write-msg <MESSAGE>`
+
+  description:
+    en: Write a Message into the index
+    zh-CN: 将 Message 写入索引
+
+vcs_index_write_variant:
+  help:
+    en: |
+        Write a Variant into the index, answering with its hash
+
+        **Usage**: `rola vcs-index write-variant <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH> [--join <JOIN>]`
+
+        Who made it and what was done belong to the variant — a version only fixes one — so the
+        creator and the message are named here. Nothing is checked to be there: the base version,
+        the storage entry and the two text objects are taken as the hashes they are given.
+    zh-CN: |
+        将 Variant 写入索引，并输出其哈希
+
+        **用法**：`rola vcs-index write-variant <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH> [--join <JOIN>]`
+
+        「谁做的、做了什么」属于 variant——version 只是把它固定下来——所以 creator 与 message 在这里
+        给出。不校验存在性：基础版本、存储条目与两个文本对象都按给定的哈希直接采用。
+
+  description:
+    en: Write a Variant into the index
+    zh-CN: 将 Variant 写入索引
+
+vcs_index_write_version:
+  help:
+    en: |
+        Write a Version into the index, answering with its hash
+
+        **Usage**: `rola vcs-index write-version <VARIANT>`
+
+        Nothing is checked to be there: the variant is taken as the hash it is given.
+    zh-CN: |
+        将 Version 写入索引，并输出其哈希
+
+        **用法**：`rola vcs-index write-version <VARIANT>`
+
+        不校验存在性：variant 按给定的哈希直接采用。
+
+  description:
+    en: Write a Version into the index
+    zh-CN: 将 Version 写入索引
+
+vcs_index_my_creator_hash:
+  help:
+    en: |
+        Print the hash of the Creator the work acts as
+
+        **Usage**: `rola vcs-index my-creator-hash [--json]`
+
+        Who made a change belongs to the variant, so a variant carries a Creator's hash — the
+        object the account the work acts as is recorded under. The Creator is written into the
+        index, and what is printed is the hash to hand to `write-variant` as `CREATOR_HASH`. The
+        same name is the same object, so it is created once and read back whole on every run after.
+    zh-CN: |
+        输出当前账户对应的 Creator 哈希
+
+        **用法**：`rola vcs-index my-creator-hash [--json]`
+
+        「谁做的」属于 variant，所以 variant 携带 Creator 的哈希——也就是「当前账户」这个名字所记在的对象的
+        哈希。Creator 会被写入索引，打印出的哈希即 `write-variant` 的 `CREATOR_HASH`。同名即同对象，因此
+        第一次创建之后，之后每次都是读取同一份。
+
+  description:
+    en: Print the hash of the Creator the work acts as
+    zh-CN: 输出当前账户对应的 Creator 哈希
+
+vcs_index_lookback:
+  help:
+    en: |
+        Draw the chain one index object sits at the top of
+
+        **Usage**: `rola vcs-index lookback <HASH> [--json]`
+
+        The object is taken as a Version first, and as a Variant when it is not one. A Version is
+        the top of the drawing; a Variant is the top itself, drawn over the version it is based on.
+        From there the chain is walked back to the first version — the root is not drawn — reading
+        each version once, so the numbers fall by one a step. A Version is bright magenta, a Variant
+        bright cyan, and the edges bold white. A Variant is drawn by the first seven characters of
+        its hash, so a real graph is wider than the short names would suggest.
+    zh-CN: |
+        画出以某个索引对象为顶的版本链
+
+        **用法**：`rola vcs-index lookback <HASH> [--json]`
+
+        对象先按 Version 看待，不是 Version 时按 Variant 看待。Version 是画面的顶部；Variant 则自己
+        就是顶部，画在它基于的版本之上。从那里沿链走回第一个版本——root 不画——每个版本只读一次，
+        因此号逐个递减。Version 亮洋红、Variant 亮青、边粗体白。Variant 以哈希前 7 位表示，所以真实图
+        比短名字显得更宽。
+
+  description:
+    en: Draw the version chain one object sits at the top of
+    zh-CN: 画出以某对象为顶的版本链
+
+  err_not_a_chain:
+    en: The object named is neither a version nor a variant
+    zh-CN: 所指对象既不是 version 也不是 variant
+
+  err_broken:
+    en: "The chain is broken: a link it names is not stored, or is not the kind it should be"
+    zh-CN: "版本链断了：它指向的一环没有存储，或类型不对"
+
+vcs_index_create_rootver:
+  help:
+    en: |
+        Put the root version into the index, answering with its hash
+
+        **Usage**: `rola vcs-index create-rootver [--json]`
+
+        The root version is the version before the first — `u64::MAX` as a number — and every
+        chain starts from it: a file's first variant is based on it. It is the same object in
+        every index, so this takes nothing to say and does nothing when it is already there.
+    zh-CN: |
+        将 root version 写入索引，并输出其哈希
+
+        **用法**：`rola vcs-index create-rootver [--json]`
+
+        root version 是第一个版本之前的那个版本——号是 `u64::MAX`——所有版本链都从它开始：文件的
+        第一个 variant 就基于它。它在每个索引里都是同一个对象，因此本命令无需参数，已存在时什么也不做。
+
+  description:
+    en: Put the root version into the index
+    zh-CN: 将 root version 写入索引
+
+vcs_index_print_rootver:
+  help:
+    en: |
+        Print the root version's hash
+
+        **Usage**: `rola vcs-index print-rootver [--json]`
+
+        The root version is the version before the first — `u64::MAX` as a number — and every
+        chain starts from it. Its hash is the same in every index, and it is what a first
+        `write-variant` takes for `BASE_VERSION`. An index that does not hold it is told so.
+    zh-CN: |
+        输出 root version 的哈希
+
+        **用法**：`rola vcs-index print-rootver [--json]`
+
+        root version 是第一个版本之前的那个版本——号是 `u64::MAX`——所有版本链都从它开始。它的哈希在
+        每个索引里都相同，它就是首次 `write-variant` 的 `BASE_VERSION` 该填的值。索引里没有它时，
+        会明确报错。
+
+  description:
+    en: Print the root version's hash
+    zh-CN: 输出 root version 的哈希

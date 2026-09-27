@@ -38,6 +38,7 @@ mod progress;
 mod storage;
 mod user;
 mod vault;
+mod vcs_index;
 
 use crate::account::CurrentAccountSetup;
 use crate::address::AddressHistorySetup;
