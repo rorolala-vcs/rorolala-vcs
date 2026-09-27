@@ -62,6 +62,9 @@ const MAX_EDITS: usize = 2;
 const MAX_GUESSES: usize = 3;
 
 fn main() {
+    #[cfg(windows)]
+    colored::control::set_virtual_terminal(true).unwrap();
+
     let mut program = ThisProgram::new();
     program.with_setup(DefaultSetup);
     program.with_setup(RorolalaSetup);

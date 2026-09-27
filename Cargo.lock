@@ -1570,6 +1570,7 @@ dependencies = [
 name = "rola"
 version = "0.1.0"
 dependencies = [
+ "colored",
  "dirs",
  "indicatif",
  "just_template",
@@ -1593,6 +1594,7 @@ dependencies = [
 name = "rola-daemon"
 version = "0.1.0"
 dependencies = [
+ "colored",
  "librorolala",
  "mingling",
  "rorolala-cli-setups",

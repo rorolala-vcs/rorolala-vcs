@@ -12,6 +12,7 @@ rorolala-utils-location.workspace = true
 rorolala-utils-progress.workspace = true
 rorolala-vault.workspace = true
 rorolala-workspace.workspace = true
+colored.workspace = true
 mingling.workspace = true
 rust-i18n.workspace = true
 dirs.workspace = true
