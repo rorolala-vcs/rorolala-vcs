@@ -1570,14 +1570,10 @@ internal sealed class GridBrowser : EntryView
     {
         _icon = icon;
 
-        // The tiles are centred in the room they are given rather than stacked against its left edge: the
-        // panel is only as wide as its widest line, so a directory of a few entries reads as a block in the
-        // middle of the dock instead of a block with the whole of the dock left empty to its right.
-        List.ItemsPanel = new FuncTemplate<Panel?>(() => new WrapPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Center,
-        });
+        // The tiles fill the width each line is given, so that the grid's outer inset is the room around it
+        // and stays put however wide the dock is — a line that has room to spare spends it between its tiles
+        // rather than at its ends, and one that is never broken reads from its start (see JustifiedPanel).
+        List.ItemsPanel = new FuncTemplate<Panel?>(() => new JustifiedPanel { Gap = Gap });
 
         // A wrapping grid needs a width to wrap against, and the base theme gives a list a horizontal
         // scrollbar instead: with one, the panel is measured at an unbounded width, lays every tile on one
@@ -1591,15 +1587,16 @@ internal sealed class GridBrowser : EntryView
         List.BorderThickness = new Thickness(0);
 
         // Every tile is the card itself: the item carries the surface, so that a hovered or chosen tile is the
-        // theme's own wash rather than a colour this view sets under it. The room between tiles is left as half
-        // a gap on each, which is what makes one whole gap between any two of them.
+        // theme's own wash rather than a colour this view sets under it. Only the room above and below a tile
+        // is left on the item; the room across is the panel's, which is what makes the outermost room the
+        // grid's own padding and nothing else (see JustifiedPanel).
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
                 Setters =
                 {
                     new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                    new Setter(Layoutable.MarginProperty, new Thickness(Gap / 2.0)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(0, Gap / 2.0, 0, Gap / 2.0)),
                     new Setter(Layoutable.MinHeightProperty, 0.0),
                     new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
                     new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(8)),
