@@ -1570,7 +1570,14 @@ internal sealed class GridBrowser : EntryView
     {
         _icon = icon;
 
-        List.ItemsPanel = new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal });
+        // The tiles are centred in the room they are given rather than stacked against its left edge: the
+        // panel is only as wide as its widest line, so a directory of a few entries reads as a block in the
+        // middle of the dock instead of a block with the whole of the dock left empty to its right.
+        List.ItemsPanel = new FuncTemplate<Panel?>(() => new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
 
         // A wrapping grid needs a width to wrap against, and the base theme gives a list a horizontal
         // scrollbar instead: with one, the panel is measured at an unbounded width, lays every tile on one
