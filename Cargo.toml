@@ -10,6 +10,7 @@ members = [
     "modules/daemon",
     "modules/errors",
     "modules/inverse-index",
+    "modules/layout",
     "modules/protocol",
     "modules/protocol-macros",
     "modules/storage",
@@ -45,6 +46,7 @@ rorolala-dev-bindgen = { path = "dev/bindgen" }
 rorolala-errors = { path = "modules/errors" }
 rorolala-ffi = { path = "app/ffi" }
 rorolala-inverse-index = { path = "modules/inverse-index" }
+rorolala-layout = { path = "modules/layout" }
 rorolala-protocol = { path = "modules/protocol" }
 rorolala-protocol-macros = { path = "modules/protocol-macros" }
 rorolala-storage = { path = "modules/storage" }

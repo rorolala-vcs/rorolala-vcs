@@ -1,0 +1,10 @@
+[package]
+name = "rorolala-layout"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rorolala-utils-lazyffi.workspace = true
+rorolala-utils-location.workspace = true
+rorolala-vault.workspace = true
+rorolala-workspace.workspace = true

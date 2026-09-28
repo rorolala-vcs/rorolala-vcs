@@ -1708,6 +1708,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-layout"
+version = "0.1.0"
+dependencies = [
+ "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "rorolala-vault",
+ "rorolala-workspace",
+]
+
+[[package]]
 name = "rorolala-protocol"
 version = "0.1.0"
 dependencies = [

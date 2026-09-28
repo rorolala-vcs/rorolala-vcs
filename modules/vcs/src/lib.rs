@@ -15,20 +15,18 @@ use rorolala_utils_lazyffi::lazyffi;
 pub use rorolala_storage::Key as Hash;
 
 mod creator;
-mod dag;
 mod error;
+mod graph;
 mod hex;
 mod index;
-mod layout;
 mod message;
 mod variant;
 mod version;
 
 pub use creator::*;
-pub use dag::*;
 pub use error::*;
+pub use graph::*;
 pub use index::*;
-pub use layout::*;
 pub use message::*;
 pub use variant::*;
 pub use version::*;
