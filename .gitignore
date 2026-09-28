@@ -5,6 +5,9 @@
 .cache/
 .cargo/temp
 
+# IDE (JetBrains)
+.idea/
+
 # macOS
 .DS_Store
 .AppleDouble
