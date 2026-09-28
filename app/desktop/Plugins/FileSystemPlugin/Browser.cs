@@ -101,6 +101,46 @@ internal sealed class Browser : IDisposable
     public static bool IsUp(string path) => string.Equals(path, UpName, StringComparison.Ordinal);
 
     /// <summary>
+    /// Expands a leading <c>~</c> into the user's home directory.
+    /// </summary>
+    /// <remarks>
+    /// The address is the one place a shell-like path is typed, and <c>~</c> is what a hand reaches for to
+    /// name home. Only a <c>~</c> that names a step of its own is expanded — <c>~</c> alone, or <c>~/</c> and
+    /// what follows it; anywhere else it is an ordinary name that begins with a tilde, and naming one is left
+    /// to <c>./~</c>, which is how a shell reads it too.
+    /// <para>
+    /// <c>~user</c> is not expanded: this process knows the directory of the user it runs as and no other, so
+    /// a home guessed from a name would be a path that answers for somebody else.
+    /// </para>
+    /// </remarks>
+    /// <param name="path">The typed path.</param>
+    /// <returns>The path with a leading <c>~</c> replaced by the home directory.</returns>
+    public static string Expand(string path)
+    {
+        if (path.Length == 0 || path[0] != '~')
+        {
+            return path;
+        }
+
+        if (
+            path.Length > 1
+            && path[1] != Path.DirectorySeparatorChar
+            && path[1] != Path.AltDirectorySeparatorChar
+        )
+        {
+            return path;
+        }
+
+        var rest = path.Length > 1
+            ? path[2..].TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            : string.Empty;
+
+        return rest.Length == 0
+            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), rest);
+    }
+
+    /// <summary>
     /// The entries one location holds, without going there.
     /// </summary>
     /// <remarks>
@@ -191,17 +231,25 @@ internal sealed class Browser : IDisposable
     /// Going to where it already is reads the directory again, which is what the address typed
     /// unchanged asks for.
     /// </para>
+    /// <para>
+    /// A leading <c>~</c> names the user's home directory, which is expanded before anything is asked
+    /// about the path (see <see cref="Expand"/>), so that what the address offers and what it goes to
+    /// agree wherever home is.
+    /// </para>
     /// </remarks>
     /// <param name="directory">The directory to look at.</param>
     /// <returns>Whether it went there.</returns>
     public bool Go(string directory)
     {
-        if (!IsComputer(directory) && !System.IO.Directory.Exists(directory))
+        // A leading `~` names home, which is what the address reaches for; anything else is the path it is.
+        var target = Expand(directory);
+
+        if (!IsComputer(target) && !System.IO.Directory.Exists(target))
         {
             return false;
         }
 
-        if (Same(directory, _current))
+        if (Same(target, _current))
         {
             Refresh();
 
@@ -210,7 +258,7 @@ internal sealed class Browser : IDisposable
 
         _back.Add(_current);
         _forward.Clear();
-        Move(directory);
+        Move(target);
 
         return true;
     }

@@ -592,13 +592,19 @@ internal sealed class NavigationBar : UserControl
             return null;
         }
 
-        var ends = Ends(typed);
+        // A bare `~` is home rather than a name to complete: it is a whole address that is a directory, and
+        // expanding it is what `~/` does a step later, so the two offer the same thing.
+        var ends = Ends(typed) || string.Equals(typed, "~", StringComparison.Ordinal);
         var cut = ends
             ? typed.Length
             : typed.LastIndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]) + 1;
 
         var head = typed[..cut];
         var name = ends ? string.Empty : typed[cut..];
+
+        // The address is where a `~` is typed, so it is expanded here as it is by the browser (see
+        // <see cref="Browser.Expand"/>), and a completion under home is listed from home.
+        head = Browser.Expand(head);
 
         var directory = head.Length == 0
             ? current
