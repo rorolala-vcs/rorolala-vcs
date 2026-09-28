@@ -232,7 +232,7 @@ impl ComputeBlake3 for Variant {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_variant_)]
 impl Variant {
     /// The kind of this variant
     ///

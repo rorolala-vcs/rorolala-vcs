@@ -24,7 +24,7 @@ pub fn locate_inverse_index(dir: &Path) -> Option<InverseIndex> {
     InverseIndex::locate(dir)
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_inverse_index_)]
 impl InverseIndex {
     /// Builds the records afresh from every object the index holds, and writes them.
     ///
@@ -182,7 +182,7 @@ impl InverseIndex {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_inverse_index_report_)]
 impl InverseIndexReport {
     /// How many objects the index holds.
     #[must_use]

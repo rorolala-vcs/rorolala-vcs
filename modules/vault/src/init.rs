@@ -9,7 +9,7 @@ use crate::{
     CONFIG_PATH, CreationError, INDEX_DIR, KEYS_DIR, STORAGE_DIR, Vault, config::MetaConfig,
 };
 
-#[lazyffi]
+#[lazyffi(export = rola_vault_)]
 impl Vault {
     /// Creates a Vault in the specified directory
     ///

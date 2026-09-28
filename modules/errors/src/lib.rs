@@ -226,7 +226,7 @@ impl IoError {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_io_error_)]
 impl IoError {
     /// The kind of failure this was.
     #[must_use]
@@ -291,7 +291,7 @@ impl BincodeError {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_bincode_error_)]
 impl BincodeError {
     /// What the failure said.
     #[must_use]
@@ -351,7 +351,7 @@ impl JsonError {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_json_error_)]
 impl JsonError {
     /// What the failure said.
     #[must_use]
@@ -402,7 +402,7 @@ impl AddrError {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_addr_error_)]
 impl AddrError {
     /// The target that would not read as an address.
     #[must_use]

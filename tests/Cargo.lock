@@ -842,6 +842,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-ffi-c"
+version = "0.1.0"
+dependencies = [
+ "rorolala-utils-sandbox",
+]
+
+[[package]]
 name = "it-inverse-index"
 version = "0.1.0"
 dependencies = [

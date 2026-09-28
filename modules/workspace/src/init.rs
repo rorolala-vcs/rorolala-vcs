@@ -7,7 +7,7 @@ use rorolala_utils_lazyffi::lazyffi;
 
 use crate::{CONFIG_PATH, CreationError, DATA_DIR, INDEX_DIR, STORAGE_DIR, Workspace};
 
-#[lazyffi]
+#[lazyffi(export = rola_workspace_)]
 impl Workspace {
     /// Creates a Workspace in the specified directory
     ///

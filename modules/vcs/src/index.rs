@@ -130,7 +130,7 @@ pub enum VCSIndexObject {
     Message(Message),
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_vcs_index_object_)]
 impl VCSIndexObject {
     /// The Variant this object is, or an error if it is not one
     ///
@@ -614,7 +614,7 @@ impl VCSIndex {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_vcs_index_)]
 impl VCSIndex {
     /// Writes `variant` into the index, answering with the key it is stored under.
     ///

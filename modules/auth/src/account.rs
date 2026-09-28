@@ -100,7 +100,7 @@ impl Account {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_account_)]
 impl Account {
     /// The account's name, which is the stem of its private key file.
     #[must_use]
@@ -143,7 +143,7 @@ impl Accounts {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_accounts_)]
 impl Accounts {
     /// How many accounts the search found.
     #[must_use]

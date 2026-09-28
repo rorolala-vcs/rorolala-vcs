@@ -9,8 +9,9 @@ use proc_macro::TokenStream;
 use proc_macro2::{Literal, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
 use rorolala_utils_lazyffi_core::{
-    PAYLOAD_UNIT_FIELD, VariantFields, free_name, method_name, payload_type_name, tag_type_name,
-    type_name, value_name, variant_needs_companion, variant_type_name,
+    DEFAULT_METHOD_PREFIX, PAYLOAD_UNIT_FIELD, VariantFields, free_name, method_name,
+    payload_type_name, tag_type_name, type_name, value_name, variant_needs_companion,
+    variant_type_name,
 };
 use syn::{
     Attribute, Expr, ExprLit, ExprPath, Fields, FnArg, GenericArgument, Ident, ImplItem, Item,
@@ -108,6 +109,10 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///   value-level items (`fn`, `const`), `FFI<PascalCase>` for types (`struct`,
 ///   `enum`).
 ///
+///   On an `impl` it is a **prefix** instead of a name: every method the `impl` exports
+///   begins with it, and a method's own `export` names itself whole and is left alone — so
+///   it is a way of naming a whole `impl` at once, not of naming any one method.
+///
 /// # Supported items
 ///
 /// | Item | Behaviour |
@@ -143,10 +148,11 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// # Naming
 ///
 /// Defaults come from `rorolala-utils-lazyffi-core`: `ffi_<snake_case>` for
-/// `fn`/`const`, `ffi_<snake_case(type)>_<snake_case(method)>` for methods,
+/// `fn`/`const`, `<prefix><snake_case(type)>_<snake_case(method)>` for methods,
 /// `free_<snake_case(type)>` for a type's release, and `FFI<PascalCase>` for
 /// `struct`/`enum` (with `Tag`, `Payload` and `<repr><Variant>` derivatives for the
-/// parts of a data-carrying enum). The repr numbers enum variants from zero in
+/// parts of a data-carrying enum). The method `prefix` is the `impl`'s own `export`, or
+/// `ffi_` where it has none. The repr numbers enum variants from zero in
 /// declaration order; the Rust discriminants are not mirrored, because the
 /// conversions match on the variant rather than reinterpreting the value.
 ///
@@ -1377,8 +1383,9 @@ fn expand_fn(args: &LazyFfiArgs, item: &ItemFn) -> syn::Result<TokenStream2> {
 ///
 /// Each method becomes an associated `#[unsafe(no_mangle)]` function of the same
 /// impl, so `Self` in a method signature keeps its meaning. Methods are exported
-/// whether or not they carry their own `#[lazyffi]`; a method-level
-/// `#[lazyffi(export = ...)]` only overrides the generated name.
+/// whether or not they carry their own `#[lazyffi]`; the `impl`'s own
+/// `#[lazyffi(export = ...)]` is the prefix their names start with, and a method-level
+/// `#[lazyffi(export = ...)]` names that one method whole and is left alone.
 fn expand_impl(args: &LazyFfiArgs, item: &ItemImpl) -> syn::Result<TokenStream2> {
     if let Some((path, _)) = &item.trait_ {
         return Err(syn::Error::new_spanned(
@@ -1394,13 +1401,14 @@ fn expand_impl(args: &LazyFfiArgs, item: &ItemImpl) -> syn::Result<TokenStream2>
         ));
     }
 
-    if let Some(export) = &args.export {
-        return Err(syn::Error::new_spanned(
-            export,
-            "`export` is not accepted on `impl`, since it would name every method the same; \
-             put `#[lazyffi(export = ...)]` on the method instead",
-        ));
-    }
+    // The `impl`'s own `export` is a prefix rather than a name: every method the `impl`
+    // generates starts with it, and a method that names itself is left alone. Naming every
+    // method after the `impl` would say nothing the type name does not already say, which is
+    // why the default is the same `ffi_` a value-level item gets.
+    let prefix = args
+        .export
+        .as_ref()
+        .map_or_else(|| DEFAULT_METHOD_PREFIX.to_owned(), ToString::to_string);
 
     let self_name = simple_type_name(&item.self_ty)?;
     let mut cleaned = item.clone();
@@ -1417,7 +1425,7 @@ fn expand_impl(args: &LazyFfiArgs, item: &ItemImpl) -> syn::Result<TokenStream2>
         let rust_name = &method.sig.ident;
         let ffi_name = export.unwrap_or_else(|| {
             Ident::new(
-                &method_name(&self_name.to_string(), &rust_name.to_string()),
+                &method_name(&prefix, &self_name.to_string(), &rust_name.to_string()),
                 rust_name.span(),
             )
         });

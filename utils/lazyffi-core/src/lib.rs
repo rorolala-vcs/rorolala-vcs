@@ -79,19 +79,33 @@ pub fn type_name(rust_name: &str) -> String {
     format!("FFI{}", pascal_case!(rust_name.to_string()))
 }
 
-/// Export name of a method inside an `impl`: `ffi_<snake_case(type)>_<snake_case(method)>`.
+/// The prefix a method's export name starts with when neither the `impl` nor the method
+/// says otherwise.
+///
+/// It is the `ffi_` every default value name starts with, and an `impl`-level `export`
+/// replaces it rather than adding to it — see [`method_name`].
+pub const DEFAULT_METHOD_PREFIX: &str = "ffi_";
+
+/// Export name of a method inside an `impl`: `<prefix><snake_case(type)>_<snake_case(method)>`.
 ///
 /// The type name is part of the export because `impl` blocks are flattened into
 /// free functions: without it, `impl Foo { fn new }` and `impl Bar { fn new }`
 /// would both claim the symbol `ffi_new`.
 ///
+/// `prefix` is what the `impl`'s own `export` says, or [`DEFAULT_METHOD_PREFIX`] where it
+/// says nothing. It stands in place of the default `ffi_`, so an `impl` that exports under
+/// `some_` names its methods `some_<type>_<method>`.
+///
 /// ```
-/// assert_eq!(rorolala_utils_lazyffi_core::method_name("Vault", "open"), "ffi_vault_open");
+/// use rorolala_utils_lazyffi_core::{DEFAULT_METHOD_PREFIX, method_name};
+///
+/// assert_eq!(method_name(DEFAULT_METHOD_PREFIX, "Vault", "open"), "ffi_vault_open");
+/// assert_eq!(method_name("some_", "Vault", "open"), "some_vault_open");
 /// ```
 #[must_use]
-pub fn method_name(rust_name: &str, method_name: &str) -> String {
+pub fn method_name(prefix: &str, rust_name: &str, method_name: &str) -> String {
     format!(
-        "ffi_{}_{}",
+        "{prefix}{}_{}",
         snake_case!(rust_name.to_string()),
         snake_case!(method_name.to_string())
     )

@@ -45,6 +45,22 @@ semantics may not.
 - Generated files are never edited: the header comes from the root `build.rs` scanning `src`,
   `modules` and `utils` — not `app` or `dev` — so the FFI surface lives in those three trees.
 
+## FFI tests
+
+- The C ABI is tested as C: `tests/ffi-c/` is a suite whose checks are C11 programs, compiled
+  against the generated header and linked to the built library, so what is checked is the ABI a
+  caller meets rather than the Rust under it. A test in Rust can only meet the same types again.
+- A module is a directory `tests/ffi-c/ffi-<area>/` holding a `test.c`; the suite finds every one
+  and runs it, so adding a module is adding a directory. What they share — a check, a way to end
+  on them — is `tests/ffi-c/harness.h`.
+- What a module checks is behaviour: making and locating, a lock held and given back, the
+  tag-and-payload of a fallible export and the release that goes with it. Not the values of
+  constants, which the header already spells out and a test would only pin a copy of.
+- The suite builds `rorolala-ffi` itself, because the release programs do not depend on that
+  crate: nothing else in the gate produces the library a C caller links.
+- The programs are C11 (`cc -std=c11 -Wall -Wextra -Werror`), and only Unix is spelled out — the
+  runner's `.ps1` twins have never been run.
+
 ## The user
 
 - Push back, with reasons: facts, code, cost, what it breaks. Never just "I do not like it", and
@@ -80,4 +96,5 @@ semantics may not.
   path.
 - Compile what you claim. A change to the FFI surface is checked with a real C and C++ compiler
   against the generated header (`cc -std=c17 -Wall -Wextra -Werror -fsyntax-only`); that is what
-  caught `struct X;` being nothing but a tag in C.
+  caught `struct X;` being nothing but a tag in C. `tests/ffi-c/` is the fuller check: it compiles
+  and runs C11 against the header and the library.

@@ -17,7 +17,7 @@ impl From<u64> for VersionNumber {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_version_number_)]
 impl VersionNumber {
     /// The number itself.
     #[must_use]

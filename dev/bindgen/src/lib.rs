@@ -97,9 +97,10 @@ use std::sync::Arc;
 use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet, renderer::DecorStyle};
 use quote::quote;
 use rorolala_utils_lazyffi_core::{
-    FREE_STRING, RESULT_ERR_VARIANT, RESULT_OK_VARIANT, RESULT_REPR, STRING_REPR, VariantFields,
-    c_variant_name, for_each_scalar, free_name, method_name, payload_type_name, tag_type_name,
-    type_name, value_name, variant_needs_companion, variant_type_name,
+    DEFAULT_METHOD_PREFIX, FREE_STRING, RESULT_ERR_VARIANT, RESULT_OK_VARIANT, RESULT_REPR,
+    STRING_REPR, VariantFields, c_variant_name, for_each_scalar, free_name, method_name,
+    payload_type_name, tag_type_name, type_name, value_name, variant_needs_companion,
+    variant_type_name,
 };
 use syn::{
     Attribute, Expr, ExprLit, Fields, FnArg, GenericArgument, ImplItem, Item, ItemConst, ItemEnum,
@@ -1730,17 +1731,9 @@ fn render_impl(
         return;
     }
 
-    if let Some(export) = export_override(&item.attrs) {
-        reporting.report(
-            item.self_ty.span().start().line,
-            "impl",
-            format!(
-                "`export = {export}` is not accepted on `impl`, since it would name every method \
-                 the same; put `#[lazyffi(export = ...)]` on the method instead"
-            ),
-        );
-        return;
-    }
+    // The `impl`'s own `export` is a prefix rather than a name: every method begins with it,
+    // and a method that names itself is left alone — the same rule the macro applies.
+    let prefix = export_override(&item.attrs).unwrap_or_else(|| DEFAULT_METHOD_PREFIX.to_owned());
 
     let Some(self_name) = simple_type_name(&item.self_ty) else {
         reporting.report(
@@ -1774,7 +1767,7 @@ fn render_impl(
             continue;
         };
         let rust_name = method.sig.ident.to_string();
-        let default = method_name(&self_name, &rust_name);
+        let default = method_name(&prefix, &self_name, &rust_name);
         let export = export_override(&method.attrs).unwrap_or(default);
         let label = format!("{self_name}::{rust_name}");
 

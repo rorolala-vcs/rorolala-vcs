@@ -15,7 +15,7 @@ use rorolala_utils_lazyffi::lazyffi;
 /// errors they come from are foreign, so they cannot cross the C ABI, and what a caller
 /// gets instead is what those errors said.
 #[derive(Debug)]
-#[lazyffi]
+#[lazyffi(export = RolaActionError)]
 pub enum ActionError {
     /// The action context has no channel, so nothing can be exchanged with the peer.
     NoChannel,

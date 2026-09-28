@@ -315,7 +315,7 @@ impl SinglePickable for VaultAddress {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_vault_address_)]
 impl VaultAddress {
     /// The link the caller wrote, as it was written.
     #[lazyffi(export = vault_address_read_raw)]

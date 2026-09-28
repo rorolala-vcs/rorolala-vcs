@@ -47,7 +47,7 @@ impl Member {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_member_)]
 impl Member {
     /// The member's name, which is the stem of its public key file.
     #[must_use]
@@ -90,7 +90,7 @@ impl Members {
     }
 }
 
-#[lazyffi]
+#[lazyffi(export = rola_members_)]
 impl Members {
     /// How many members the search found.
     #[must_use]
