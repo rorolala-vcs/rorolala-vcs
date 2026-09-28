@@ -10,7 +10,8 @@ use librorolala::vcs::{VCSIndexObject, VCSWrite as _};
 use mingling::{
     Grouped, LazyRes, StructuralData,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer,
+        routeify,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -18,16 +19,25 @@ use mingling::{
 };
 use rorolala_cli_setups::ResVCSIndex;
 use rorolala_errors::Failure as _;
-use rorolala_utils_cli_theme::trd;
+use rorolala_utils_cli_theme::{err_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
-use crate::exit_codes::EC_HELP;
+use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
+use crate::format::ResFormat;
 use crate::vcs_index::{
     ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, parse_hash,
     runtime, variant_tail,
 };
+
+/// How one object is drawn when no template is named.
+///
+/// The one line the command has always printed, whichever kind the object turned out to be —
+/// except that the colour is not in it: a template says nothing about a terminal. A hash is written
+/// as `blake3:<hex>` in the data, so the name in front is trimmed off where a line has no room for
+/// it, which is how the line was always written.
+pub const DEFAULT_FORMAT: &str = r#"{% if object.kind == "creator" %}{{ object.text }}{% elif object.kind == "message" %}{{ object.text }}{% elif object.kind == "variant" %}{{ object.hash | replace("blake3:", "") }} -> {{ object.base_version | replace("blake3:", "") }} (store:{{ object.storage | replace("blake3:", "") }}){% if object.join %} (join:{{ object.join | replace("blake3:", "") }}){% endif %}{% else %}{% if object.number is none %}?{% else %}{{ object.number }}{% endif %}:{{ object.hash | replace("blake3:", "") }} -> {{ object.variant | replace("blake3:", "") }}{% endif %}"#;
 
 #[help(buffer)]
 pub fn help_vcs_index_read(_: EntryVcsIndexRead, ec: &mut ResExitCode) {
@@ -51,7 +61,7 @@ pub fn desc_vcs_index_read() -> Description {
 /// [`ErrorVcsIndexHash`] when the hash does not read, and [`ErrorVcsIndexRead`] when the object
 /// could not be read.
 #[command(node = "vcs-index.read", entry = EntryVcsIndexRead)]
-pub fn vcs_index_read(args: EntryVcsIndexRead) -> Next {
+pub fn vcs_index_read(args: EntryVcsIndexRead, format: &mut ResFormat) -> Next {
     let hash = match args
         .pick_or_route(&arg![String], || {
             ErrorVcsIndexArgument {
@@ -65,6 +75,7 @@ pub fn vcs_index_read(args: EntryVcsIndexRead) -> Next {
         Err(next) => return next,
     };
 
+    format.default_template(DEFAULT_FORMAT);
     StateVcsIndexRead { hash }.into()
 }
 
@@ -76,7 +87,11 @@ pub struct StateVcsIndexRead {
 }
 
 #[chain(routeify)]
-pub fn handle_vcs_index_read(state: StateVcsIndexRead, index: &mut LazyRes<ResVCSIndex>) -> Next {
+pub fn handle_vcs_index_read(
+    state: StateVcsIndexRead,
+    index: &mut LazyRes<ResVCSIndex>,
+    format: &mut ResFormat,
+) -> Next {
     let Some(key) = parse_hash(&state.hash) else {
         return ErrorVcsIndexHash { hash: state.hash }.into();
     };
@@ -105,10 +120,13 @@ pub fn handle_vcs_index_read(state: StateVcsIndexRead, index: &mut LazyRes<ResVC
         _ => None,
     };
 
-    ResultVcsIndexRead {
-        object: view_of(object, number),
-    }
-    .into()
+    let view = view_of(object, number);
+    format.set(
+        "object",
+        vec![serde_json::to_value(&view).unwrap_or_default()],
+    );
+
+    ResultVcsIndexRead { object: view }.into()
 }
 
 /// One index object, as the command shows it, with the number a Version was traced to.
@@ -188,8 +206,25 @@ pub struct ResultVcsIndexRead {
 }
 
 #[renderer(buffer)]
-pub fn render_result_vcs_index_read(result: ResultVcsIndexRead) {
-    r_println!("{}", line_of(&result.object));
+pub fn render_result_vcs_index_read(
+    result: ResultVcsIndexRead,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        r_println!("{}", line_of(&result.object));
+    }
 }
 
 /// The object as the one line a listing prints it on.

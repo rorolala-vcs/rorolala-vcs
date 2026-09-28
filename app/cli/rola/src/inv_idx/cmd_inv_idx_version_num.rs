@@ -4,22 +4,29 @@ use librorolala::inverse_index::InverseIndex;
 use mingling::{
     Grouped, LazyRes, StructuralData,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer,
+        routeify,
     },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResVCSIndex;
-use rorolala_utils_cli_theme::trd;
+use rorolala_utils_cli_theme::{err_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
-use crate::exit_codes::EC_HELP;
+use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
+use crate::format::ResFormat;
 use crate::inv_idx::{
     ErrorInvIdxArgument, ErrorInvIdxHash, ErrorInvIdxNoIndex, parse_hash, reading_error, runtime,
 };
+
+/// How a version's number is drawn when no template is named.
+///
+/// The one field of the result, `number`.
+const DEFAULT_FORMAT: &str = "{{ number }}";
 
 #[help(buffer)]
 pub fn help_inv_idx_version_num(_: EntryInvIdxVersionNum, ec: &mut ResExitCode) {
@@ -43,7 +50,7 @@ pub fn desc_inv_idx_version_num() -> Description {
 /// the argument is missing, [`ErrorInvIdxHash`] when it does not read as a hash, and the reading
 /// failure when nothing is stored under the hash or it is not a version.
 #[command(node = "inv-idx.version-num", entry = EntryInvIdxVersionNum)]
-pub fn inv_idx_version_num(args: EntryInvIdxVersionNum) -> Next {
+pub fn inv_idx_version_num(args: EntryInvIdxVersionNum, format: &mut ResFormat) -> Next {
     let hash = match args
         .pick_or_route(&arg![String], || {
             ErrorInvIdxArgument {
@@ -57,6 +64,7 @@ pub fn inv_idx_version_num(args: EntryInvIdxVersionNum) -> Next {
         Err(next) => return next,
     };
 
+    format.default_template(DEFAULT_FORMAT);
     StateInvIdxVersionNum { hash }.into()
 }
 
@@ -71,6 +79,7 @@ pub struct StateInvIdxVersionNum {
 pub fn handle_inv_idx_version_num(
     state: StateInvIdxVersionNum,
     index: &mut LazyRes<ResVCSIndex>,
+    format: &mut ResFormat,
 ) -> Next {
     let Some(key) = parse_hash(&state.hash) else {
         return ErrorInvIdxHash { hash: state.hash }.into();
@@ -85,7 +94,10 @@ pub fn handle_inv_idx_version_num(
 
     let inverse = InverseIndex::at(index.clone());
     match runtime.block_on(inverse.version_num(key)) {
-        Ok(number) => ResultInvIdxNumber { number }.into(),
+        Ok(number) => {
+            format.set("number", vec![serde_json::json!(number)]);
+            ResultInvIdxNumber { number }.into()
+        }
         Err(error) => reading_error(error),
     }
 }
@@ -98,6 +110,23 @@ pub struct ResultInvIdxNumber {
 }
 
 #[renderer(buffer)]
-pub fn render_result_inv_idx_number(result: ResultInvIdxNumber) {
-    r_println!("{}", result.number);
+pub fn render_result_inv_idx_number(
+    result: ResultInvIdxNumber,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        r_println!("{}", result.number);
+    }
 }

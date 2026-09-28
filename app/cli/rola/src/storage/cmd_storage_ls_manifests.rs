@@ -8,7 +8,9 @@
 use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, StructuralData,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify},
+    macros::{
+        buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer, routeify,
+    },
     metadata::Description,
     res::ResExitCode,
 };
@@ -20,9 +22,18 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ERR_STORAGE_LS_MANIFESTS_FAILED, EC_ERR_STORAGE_LS_MANIFESTS_NO_STORAGE, EC_HELP,
+    EC_ERR_FORMAT, EC_ERR_STORAGE_LS_MANIFESTS_FAILED, EC_ERR_STORAGE_LS_MANIFESTS_NO_STORAGE,
+    EC_HELP,
 };
 use crate::failure::failure;
+use crate::format::ResFormat;
+
+/// How a listing of the store's manifests is drawn when no template is named.
+///
+/// One `manifest:<hex>` a line, which is what the command has always printed. A key is written as
+/// `blake3:<hex>`, the way `--json` writes it, so the name in front is trimmed off and the command's
+/// own name put on.
+pub const DEFAULT_FORMAT: &str = "manifest:{{ keys | replace(\"blake3:\", \"\") }}";
 
 #[help(buffer)]
 pub fn help_storage_ls_manifests(_: EntryStorageLsManifests, ec: &mut ResExitCode) {
@@ -54,7 +65,8 @@ pub fn desc_storage_ls_manifests() -> Description {
 /// Renders [`ErrorManifestsNoStorage`] when the run is nowhere a store is, and
 /// [`ErrorManifestsFailed`] when the store's manifests could not be listed.
 #[command(node = "storage.ls-manifests")]
-pub fn storage_ls_manifests() -> StateStorageLsManifests {
+pub fn storage_ls_manifests(format: &mut ResFormat) -> StateStorageLsManifests {
+    format.default_template(DEFAULT_FORMAT);
     StateStorageLsManifests
 }
 
@@ -68,6 +80,7 @@ pub struct StateStorageLsManifests;
 pub fn handle_storage_ls_manifests(
     _state: StateStorageLsManifests,
     storage: &mut LazyRes<ResRorolalaStorage>,
+    format: &mut ResFormat,
 ) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorManifestsNoStorage.into();
@@ -86,7 +99,13 @@ pub fn handle_storage_ls_manifests(
     };
 
     match runtime.block_on(store.list_manifest_keys()) {
-        Ok(keys) => ResultManifests { keys }.into(),
+        Ok(keys) => {
+            format.set(
+                "keys",
+                keys.iter().map(|key| serde_json::json!(key)).collect(),
+            );
+            ResultManifests { keys }.into()
+        }
         Err(error) => ErrorManifestsFailed {
             cause: error.to_string(),
         }
@@ -102,11 +121,24 @@ pub struct ResultManifests {
 }
 
 #[renderer(buffer)]
-pub fn render_result_manifests(result: ResultManifests) {
-    // A key is written as the name the content is kept under, `manifest:`, so that a listing says
-    // both what the content is and how it is kept.
-    for key in &result.keys {
-        r_println!("manifest:{}", key.hex());
+pub fn render_result_manifests(result: ResultManifests, format: &ResFormat, ec: &mut ResExitCode) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        // A key is written as the name the content is kept under, `manifest:`, so that a listing says
+        // both what the content is and how it is kept.
+        for key in &result.keys {
+            r_println!("manifest:{}", key.hex());
+        }
     }
 }
 

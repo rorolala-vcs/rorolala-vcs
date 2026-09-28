@@ -19,8 +19,10 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::EC_HELP;
+use crate::format::ResFormat;
 use crate::vcs_index::{
-    ErrorVcsIndexNoIndex, ErrorVcsIndexNotFound, ErrorVcsIndexRead, ResultVcsIndexHash, runtime,
+    DEFAULT_FORMAT_HASH, ErrorVcsIndexNoIndex, ErrorVcsIndexNotFound, ErrorVcsIndexRead,
+    ResultVcsIndexHash, runtime,
 };
 
 #[help(buffer)]
@@ -46,7 +48,8 @@ pub fn desc_vcs_index_print_rootver() -> Description {
 /// [`ErrorVcsIndexNotFound`] when the index does not hold the root version, and
 /// [`ErrorVcsIndexRead`] when the index could not be read.
 #[command(node = "vcs-index.print-rootver")]
-pub fn vcs_index_print_rootver() -> StateVcsIndexPrintRootver {
+pub fn vcs_index_print_rootver(format: &mut ResFormat) -> StateVcsIndexPrintRootver {
+    format.default_template(DEFAULT_FORMAT_HASH);
     StateVcsIndexPrintRootver
 }
 
@@ -60,6 +63,7 @@ pub struct StateVcsIndexPrintRootver;
 pub fn handle_vcs_index_print_rootver(
     _state: StateVcsIndexPrintRootver,
     index: &mut LazyRes<ResVCSIndex>,
+    format: &mut ResFormat,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
@@ -73,7 +77,10 @@ pub fn handle_vcs_index_print_rootver(
     let hash = root.hash().hex();
 
     match runtime.block_on(index.read(root.hash())) {
-        Ok(_) => ResultVcsIndexHash { hash }.into(),
+        Ok(_) => {
+            format.set("hash", vec![serde_json::json!(hash)]);
+            ResultVcsIndexHash { hash }.into()
+        }
         Err(VCSIndexReadingError::NotFound { .. }) => ErrorVcsIndexNotFound { hash }.into(),
         Err(error) => ErrorVcsIndexRead {
             cause: error.reason(),

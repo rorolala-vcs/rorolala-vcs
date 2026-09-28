@@ -15,9 +15,10 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::EC_HELP;
+use crate::format::ResFormat;
 use crate::inv_idx::{
-    ErrorInvIdxArgument, ErrorInvIdxHash, ErrorInvIdxNoIndex, ResultInvIdxHashes, parse_hash,
-    reading_error, runtime,
+    DEFAULT_FORMAT_HASHES, ErrorInvIdxArgument, ErrorInvIdxHash, ErrorInvIdxNoIndex,
+    ResultInvIdxHashes, parse_hash, reading_error, runtime,
 };
 
 #[help(buffer)]
@@ -39,7 +40,7 @@ pub fn desc_inv_idx_version_dep() -> Description {
 /// the argument is missing, [`ErrorInvIdxHash`] when it does not read as a hash, and the reading
 /// failure when the index could not be read.
 #[command(node = "inv-idx.version-dep", entry = EntryInvIdxVersionDep)]
-pub fn inv_idx_version_dep(args: EntryInvIdxVersionDep) -> Next {
+pub fn inv_idx_version_dep(args: EntryInvIdxVersionDep, format: &mut ResFormat) -> Next {
     let hash = match args
         .pick_or_route(&arg![String], || {
             ErrorInvIdxArgument {
@@ -53,6 +54,7 @@ pub fn inv_idx_version_dep(args: EntryInvIdxVersionDep) -> Next {
         Err(next) => return next,
     };
 
+    format.default_template(DEFAULT_FORMAT_HASHES);
     StateInvIdxVersionDep { hash }.into()
 }
 
@@ -67,6 +69,7 @@ pub struct StateInvIdxVersionDep {
 pub fn handle_inv_idx_version_dep(
     state: StateInvIdxVersionDep,
     index: &mut LazyRes<ResVCSIndex>,
+    format: &mut ResFormat,
 ) -> Next {
     let Some(key) = parse_hash(&state.hash) else {
         return ErrorInvIdxHash { hash: state.hash }.into();
@@ -81,10 +84,14 @@ pub fn handle_inv_idx_version_dep(
 
     let inverse = InverseIndex::at(index.clone());
     match runtime.block_on(inverse.version_dependents(key)) {
-        Ok(hashes) => ResultInvIdxHashes {
-            hashes: hashes.iter().map(Key::hex).collect(),
+        Ok(hashes) => {
+            let hashes: Vec<String> = hashes.iter().map(Key::hex).collect();
+            format.set(
+                "hashes",
+                hashes.iter().map(|hash| serde_json::json!(hash)).collect(),
+            );
+            ResultInvIdxHashes { hashes }.into()
         }
-        .into(),
         Err(error) => reading_error(error),
     }
 }

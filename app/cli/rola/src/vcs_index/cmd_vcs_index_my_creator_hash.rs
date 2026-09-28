@@ -20,7 +20,10 @@ use rust_i18n::t;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::exit_codes::EC_HELP;
-use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexWrite, ResultVcsIndexHash, runtime};
+use crate::format::ResFormat;
+use crate::vcs_index::{
+    DEFAULT_FORMAT_HASH, ErrorVcsIndexNoIndex, ErrorVcsIndexWrite, ResultVcsIndexHash, runtime,
+};
 
 #[help(buffer)]
 pub fn help_vcs_index_my_creator_hash(_: EntryVcsIndexMyCreatorHash, ec: &mut ResExitCode) {
@@ -47,7 +50,8 @@ pub fn desc_vcs_index_my_creator_hash() -> Description {
 /// [`ErrorNoAccount`](crate::account::ErrorNoAccount) when the work acts as no account,
 /// [`ErrorVcsIndexWrite`] when the name is too long or the index cannot be written to.
 #[command(node = "vcs-index.my-creator-hash")]
-pub fn vcs_index_my_creator_hash() -> StateVcsIndexMyCreatorHash {
+pub fn vcs_index_my_creator_hash(format: &mut ResFormat) -> StateVcsIndexMyCreatorHash {
+    format.default_template(DEFAULT_FORMAT_HASH);
     StateVcsIndexMyCreatorHash
 }
 
@@ -62,6 +66,7 @@ pub fn handle_vcs_index_my_creator_hash(
     _state: StateVcsIndexMyCreatorHash,
     index: &mut LazyRes<ResVCSIndex>,
     account: &mut LazyRes<ResCurrentAccount>,
+    format: &mut ResFormat,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
@@ -85,7 +90,11 @@ pub fn handle_vcs_index_my_creator_hash(
     };
 
     match runtime.block_on(index.write(creator)) {
-        Ok(key) => ResultVcsIndexHash { hash: key.hex() }.into(),
+        Ok(key) => {
+            let hash = key.hex();
+            format.set("hash", vec![serde_json::json!(hash)]);
+            ResultVcsIndexHash { hash }.into()
+        }
         Err(error) => ErrorVcsIndexWrite {
             cause: error.reason(),
         }

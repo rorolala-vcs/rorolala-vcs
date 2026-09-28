@@ -15,9 +15,10 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::exit_codes::EC_HELP;
+use crate::format::ResFormat;
 use crate::inv_idx::{
-    ErrorInvIdxArgument, ErrorInvIdxHash, ErrorInvIdxNoIndex, ResultInvIdxHashes, parse_hash,
-    reading_error, runtime,
+    DEFAULT_FORMAT_HASHES, ErrorInvIdxArgument, ErrorInvIdxHash, ErrorInvIdxNoIndex,
+    ResultInvIdxHashes, parse_hash, reading_error, runtime,
 };
 
 #[help(buffer)]
@@ -39,7 +40,7 @@ pub fn desc_inv_idx_msg_dep() -> Description {
 /// the argument is missing, [`ErrorInvIdxHash`] when it does not read as a hash, and the reading
 /// failure when the index could not be read.
 #[command(node = "inv-idx.msg-dep", entry = EntryInvIdxMsgDep)]
-pub fn inv_idx_msg_dep(args: EntryInvIdxMsgDep) -> Next {
+pub fn inv_idx_msg_dep(args: EntryInvIdxMsgDep, format: &mut ResFormat) -> Next {
     let hash = match args
         .pick_or_route(&arg![String], || {
             ErrorInvIdxArgument {
@@ -53,6 +54,7 @@ pub fn inv_idx_msg_dep(args: EntryInvIdxMsgDep) -> Next {
         Err(next) => return next,
     };
 
+    format.default_template(DEFAULT_FORMAT_HASHES);
     StateInvIdxMsgDep { hash }.into()
 }
 
@@ -64,7 +66,11 @@ pub struct StateInvIdxMsgDep {
 }
 
 #[chain(routeify)]
-pub fn handle_inv_idx_msg_dep(state: StateInvIdxMsgDep, index: &mut LazyRes<ResVCSIndex>) -> Next {
+pub fn handle_inv_idx_msg_dep(
+    state: StateInvIdxMsgDep,
+    index: &mut LazyRes<ResVCSIndex>,
+    format: &mut ResFormat,
+) -> Next {
     let Some(key) = parse_hash(&state.hash) else {
         return ErrorInvIdxHash { hash: state.hash }.into();
     };
@@ -78,10 +84,14 @@ pub fn handle_inv_idx_msg_dep(state: StateInvIdxMsgDep, index: &mut LazyRes<ResV
 
     let inverse = InverseIndex::at(index.clone());
     match runtime.block_on(inverse.message_dependents(key)) {
-        Ok(hashes) => ResultInvIdxHashes {
-            hashes: hashes.iter().map(Key::hex).collect(),
+        Ok(hashes) => {
+            let hashes: Vec<String> = hashes.iter().map(Key::hex).collect();
+            format.set(
+                "hashes",
+                hashes.iter().map(|hash| serde_json::json!(hash)).collect(),
+            );
+            ResultInvIdxHashes { hashes }.into()
         }
-        .into(),
         Err(error) => reading_error(error),
     }
 }

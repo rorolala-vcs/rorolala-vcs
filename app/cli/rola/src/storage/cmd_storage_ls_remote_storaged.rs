@@ -25,8 +25,9 @@ use rust_i18n::t;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::exit_codes::EC_HELP;
+use crate::format::ResFormat;
 use crate::keys::account_named;
-use crate::storage::cmd_storage_ls_storaged::ResultLs;
+use crate::storage::cmd_storage_ls_storaged::{DEFAULT_FORMAT, ResultLs};
 
 #[help(buffer)]
 pub fn help_storage_ls_remote_storaged(_: EntryStorageLsRemoteStoraged, ec: &mut ResExitCode) {
@@ -66,11 +67,13 @@ pub fn desc_storage_ls_remote_storaged() -> Description {
 #[command(node = "storage.ls-remote-storaged", entry = EntryStorageLsRemoteStoraged)]
 pub fn storage_ls_remote_storaged(
     args: EntryStorageLsRemoteStoraged,
+    format: &mut ResFormat,
 ) -> StateStorageLsRemoteStoraged {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
     let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
 
+    format.default_template(DEFAULT_FORMAT);
     StateStorageLsRemoteStoraged::from(named)
 }
 
@@ -87,6 +90,7 @@ pub fn handle_storage_ls_remote_storaged(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    format: &mut ResFormat,
 ) -> Next {
     workspace.get_ref().check()?;
 
@@ -112,10 +116,13 @@ pub fn handle_storage_ls_remote_storaged(
         Progress::silent(),
     ))?;
 
-    ResultLs {
-        keys: keys_of(&listing),
-    }
-    .into()
+    let keys = keys_of(&listing);
+    format.set(
+        "keys",
+        keys.iter().map(|key| serde_json::json!(key)).collect(),
+    );
+
+    ResultLs { keys }.into()
 }
 
 /// The keys a listing names, one a line.

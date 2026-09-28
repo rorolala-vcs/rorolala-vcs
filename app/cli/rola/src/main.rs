@@ -33,6 +33,7 @@ mod cmd_version;
 mod error;
 mod exit_codes;
 mod failure;
+mod format;
 mod inv_idx;
 mod key;
 mod keys;
@@ -48,6 +49,7 @@ use crate::account::CurrentAccountSetup;
 use crate::address::AddressHistorySetup;
 use crate::cmd_version::VERSION_NODE;
 use crate::exit_codes::{EC_HELP, EC_UNKNOWN_COMMAND};
+use crate::format::FormatSetup;
 use crate::lastec::LastExitCodeRecordSetup;
 use crate::rebuild::RebuildSetup;
 
@@ -73,6 +75,7 @@ fn main() {
     program.with_setup(CurrentAccountSetup);
     program.with_setup(LastExitCodeRecordSetup);
     program.with_setup(ConfirmSetup);
+    program.with_setup(FormatSetup);
 
     // `-V` and `--version` are not commands, but what they ask for is what a command's result is
     // drawn by: the request is rewritten to the node the version output lives on, and dispatched

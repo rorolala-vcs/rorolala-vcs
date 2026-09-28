@@ -22,7 +22,7 @@ use librorolala::inverse_index::InverseIndexReadingError;
 use librorolala::storage::Key;
 use mingling::{
     Grouped, StructuralData,
-    macros::{buffer, chain, dispatcher, help, metadata, r_eprintln, r_println, renderer},
+    macros::{buffer, chain, dispatcher, help, metadata, r_eprintln, r_print, r_println, renderer},
     metadata::Description,
     res::ResExitCode,
 };
@@ -33,10 +33,17 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ERR_INV_IDX_ARGUMENT, EC_ERR_INV_IDX_NO_INDEX, EC_ERR_INV_IDX_NOT_FOUND,
+    EC_ERR_FORMAT, EC_ERR_INV_IDX_ARGUMENT, EC_ERR_INV_IDX_NO_INDEX, EC_ERR_INV_IDX_NOT_FOUND,
     EC_ERR_INV_IDX_READ, EC_HELP,
 };
 use crate::failure::failure;
+use crate::format::ResFormat;
+
+/// How a listing of hashes is drawn when no template is named.
+///
+/// One hash a line, which is what the `inv-idx` listings have always printed. The hashes are the
+/// one field of the result, `hashes`.
+pub const DEFAULT_FORMAT_HASHES: &str = "{{ hashes }}";
 
 dispatcher!("inv-idx", EntryInvIdx);
 
@@ -105,9 +112,26 @@ pub struct ResultInvIdxHashes {
 }
 
 #[renderer(buffer)]
-pub fn render_result_inv_idx_hashes(result: ResultInvIdxHashes) {
-    for hash in &result.hashes {
-        r_println!("{hash}");
+pub fn render_result_inv_idx_hashes(
+    result: ResultInvIdxHashes,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        for hash in &result.hashes {
+            r_println!("{hash}");
+        }
     }
 }
 

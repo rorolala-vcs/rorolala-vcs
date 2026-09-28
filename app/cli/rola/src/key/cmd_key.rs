@@ -13,7 +13,7 @@ use librorolala::auth::{locate_accounts, locate_members};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
         r_println, renderer, suggest,
     },
     metadata::Description,
@@ -21,13 +21,20 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResVault, ResWorkspace};
-use rorolala_utils_cli_theme::trd;
+use rorolala_utils_cli_theme::{err_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
-use crate::exit_codes::EC_HELP;
+use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
+use crate::format::ResFormat;
 use crate::keys::{roots, scopes};
+
+/// How a listing of keys is drawn when no template is named.
+///
+/// One path a line, which is what the command has always printed. The paths are the one field of
+/// the result, `paths`.
+const DEFAULT_FORMAT: &str = "{{ paths }}";
 
 /// The flags `rola key` takes.
 #[derive(Pickable)]
@@ -60,10 +67,11 @@ pub fn desc_key() -> Description {
 /// Each key found is printed as a full path, one per line, on standard output, in the order
 /// it is looked up. Finding nothing is not a failure: it prints nothing and returns.
 #[command(node = "key", entry = EntryKey)]
-pub fn key(args: EntryKey) -> StateKeyList {
+pub fn key(args: EntryKey, format: &mut ResFormat) -> StateKeyList {
     // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
     let flags = args.pick(&arg![KeyFlags]).unwrap();
 
+    format.default_template(DEFAULT_FORMAT);
     StateKeyList::from(matches!(flags.pem, Flag::Active))
 }
 
@@ -82,6 +90,7 @@ pub fn handle_key_list(
     state: StateKeyList,
     vault: &mut LazyRes<ResVault>,
     workspace: &mut LazyRes<ResWorkspace>,
+    format: &mut ResFormat,
 ) -> Next {
     let StateKeyList { pem } = state;
     let roots = roots(workspace.get_ref().as_ref(), vault.get_ref().as_ref());
@@ -103,6 +112,10 @@ pub fn handle_key_list(
         // A place with no keys is not something to complain about.
         empty_result!()
     } else {
+        format.set(
+            "paths",
+            paths.iter().map(|path| serde_json::json!(path)).collect(),
+        );
         ResultKeysFound { paths }.into()
     }
 }
@@ -138,8 +151,21 @@ pub struct ResultKeysFound {
 }
 
 #[renderer(buffer)]
-pub fn render_result_keys_found(result: ResultKeysFound) {
-    for path in result.paths {
-        r_println!("{}", path.display());
+pub fn render_result_keys_found(result: ResultKeysFound, format: &ResFormat, ec: &mut ResExitCode) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        for path in result.paths {
+            r_println!("{}", path.display());
+        }
     }
 }

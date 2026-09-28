@@ -264,3 +264,7 @@ exit_codes:
   fs_ops_failed:
     en: The filesystem refused the operation
     zh-CN: 文件系统拒绝了该操作
+
+  format:
+    en: "The result could not be drawn through --format"
+    zh-CN: "无法用 --format 绘制结果"

@@ -8,7 +8,9 @@
 use librorolala::storage::{Key, StorageBackend as _};
 use mingling::{
     Grouped, LazyRes, StructuralData,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify},
+    macros::{
+        buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer, routeify,
+    },
     metadata::Description,
     res::ResExitCode,
 };
@@ -20,9 +22,17 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ERR_STORAGE_LS_STORAGED_FAILED, EC_ERR_STORAGE_LS_STORAGED_NO_STORAGE, EC_HELP,
+    EC_ERR_FORMAT, EC_ERR_STORAGE_LS_STORAGED_FAILED, EC_ERR_STORAGE_LS_STORAGED_NO_STORAGE,
+    EC_HELP,
 };
 use crate::failure::failure;
+use crate::format::ResFormat;
+
+/// How a listing of the store's objects is drawn when no template is named.
+///
+/// One key a line, which is what the command has always printed: the template is the same shape
+/// `--json` writes, so `keys` is the one field of the result.
+pub const DEFAULT_FORMAT: &str = "{{ keys }}";
 
 #[help(buffer)]
 pub fn help_storage_ls_storaged(_: EntryStorageLsStoraged, ec: &mut ResExitCode) {
@@ -52,7 +62,11 @@ pub fn desc_storage_ls_storaged() -> Description {
 /// Renders [`ErrorLsNoStorage`] when the run is nowhere a store is, and [`ErrorLsFailed`] when the
 /// store's objects could not be listed.
 #[command(node = "storage.ls-storaged")]
-pub fn storage_ls_storaged() -> StateStorageLsStoraged {
+pub fn storage_ls_storaged(format: &mut ResFormat) -> StateStorageLsStoraged {
+    // The default is named as the command is reached, so it holds even when the listing then fails
+    // and the failure is what is drawn. A run that asked for `--json` keeps it: the default is left
+    // unwritten and the framework's own output answers.
+    format.default_template(DEFAULT_FORMAT);
     StateStorageLsStoraged
 }
 
@@ -66,6 +80,7 @@ pub struct StateStorageLsStoraged;
 pub fn handle_storage_ls_storaged(
     _state: StateStorageLsStoraged,
     storage: &mut LazyRes<ResRorolalaStorage>,
+    format: &mut ResFormat,
 ) -> Next {
     let Some(store) = storage.get_ref().as_ref() else {
         return ErrorLsNoStorage.into();
@@ -84,7 +99,15 @@ pub fn handle_storage_ls_storaged(
     };
 
     match runtime.block_on(store.list_exist_keys()) {
-        Ok(keys) => ResultLs { keys }.into(),
+        Ok(keys) => {
+            // Published under the name `--json` writes the list by, so a template and a JSON
+            // reader name it the same way.
+            format.set(
+                "keys",
+                keys.iter().map(|key| serde_json::json!(key)).collect(),
+            );
+            ResultLs { keys }.into()
+        }
         Err(error) => ErrorLsFailed {
             cause: error.to_string(),
         }
@@ -100,9 +123,22 @@ pub struct ResultLs {
 }
 
 #[renderer(buffer)]
-pub fn render_result_ls(result: ResultLs) {
-    for key in &result.keys {
-        r_println!("{key}");
+pub fn render_result_ls(result: ResultLs, format: &ResFormat, ec: &mut ResExitCode) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        for key in &result.keys {
+            r_println!("{key}");
+        }
     }
 }
 

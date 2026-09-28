@@ -7,6 +7,10 @@ account:
 
         **Usage**: `rola account <ACCOUNT>`
 
+        **Commands**
+            ls                   List the accounts the work can act as
+            current              Print the account the work acts as
+
         Naming no account lists every account any scope holds, each name once and in name
         order — the same list completion offers. Naming one records it, in Rorolala's own
         file for the user (`~/.local/share/rola/user`), as the account the work acts as by
@@ -18,6 +22,10 @@ account:
         指定当前工作以哪个账户行事，或列出可用的账户
 
         **用法**：`rola account <ACCOUNT>`
+
+        **命令**
+            ls                   列出当前工作可以使用的账户
+            current              输出当前工作行事所用的账户
 
         不带账户名时，列出所有作用域中能找到的账户名，去重并按名字排序——与补全给出的列表同源。
         给出账户名时，会把它记录到 Rorolala 为用户保存的文件（`~/.local/share/rola/user`）里，
@@ -62,3 +70,43 @@ account:
         Please set `XDG_DATA_HOME`
     zh-CN: |
         记录账户需要本地数据目录，但本机未指明该目录。请设置 `XDG_DATA_HOME`
+
+account_ls:
+  help:
+    en: |
+        List the accounts the work can act as
+
+        **Usage**: `rola account ls`
+
+        Every account any scope holds, deduplicated and in name order, one per line. Each one
+        carries whether it is the account the work acts as, which `--json` and `--format` read
+        as `is_current`.
+    zh-CN: |
+        列出当前工作可以使用的账户
+
+        **用法**：`rola account ls`
+
+        列出所有作用域中能找到的账户，去重并按名字排序，每行一个。每个账户带有它是否就是
+        当前工作行事所用的那一个，`--json` 与 `--format` 中以 `is_current` 读取。
+  description:
+    en: List the accounts the work can act as
+    zh-CN: 列出当前工作可以使用的账户
+
+account_current:
+  help:
+    en: |
+        Print the account the work acts as
+
+        **Usage**: `rola account current`
+
+        The name alone, so a run can read it without a sentence around it. Nothing is printed
+        when the work acts as no account.
+    zh-CN: |
+        输出当前工作行事所用的账户
+
+        **用法**：`rola account current`
+
+        只输出名字，便于直接读取。尚未指定账户时不输出任何内容。
+  description:
+    en: Print the account the work acts as
+    zh-CN: 输出当前工作行事所用的账户

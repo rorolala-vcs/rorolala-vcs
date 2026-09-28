@@ -1,0 +1,10 @@
+_version: 2
+
+format:
+  conflict_json:
+    en: "--format is ignored here: --json and its kind come first"
+    zh-CN: "--format 在这里被忽略：--json 一类优先"
+
+  err_format:
+    en: "The result could not be drawn through --format — %{reason}"
+    zh-CN: "无法用 --format 绘制结果 —— %{reason}"

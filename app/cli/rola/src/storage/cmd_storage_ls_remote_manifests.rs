@@ -23,8 +23,9 @@ use rust_i18n::t;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::exit_codes::EC_HELP;
+use crate::format::ResFormat;
 use crate::keys::account_named;
-use crate::storage::cmd_storage_ls_manifests::ResultManifests;
+use crate::storage::cmd_storage_ls_manifests::{DEFAULT_FORMAT, ResultManifests};
 use crate::storage::cmd_storage_ls_remote_storaged::keys_of;
 
 #[help(buffer)]
@@ -56,11 +57,13 @@ pub fn desc_storage_ls_remote_manifests() -> Description {
 #[command(node = "storage.ls-remote-manifests", entry = EntryStorageLsRemoteManifests)]
 pub fn storage_ls_remote_manifests(
     args: EntryStorageLsRemoteManifests,
+    format: &mut ResFormat,
 ) -> StateStorageLsRemoteManifests {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
     let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
 
+    format.default_template(DEFAULT_FORMAT);
     StateStorageLsRemoteManifests::from(named)
 }
 
@@ -77,6 +80,7 @@ pub fn handle_storage_ls_remote_manifests(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    format: &mut ResFormat,
 ) -> Next {
     workspace.get_ref().check()?;
 
@@ -100,8 +104,11 @@ pub fn handle_storage_ls_remote_manifests(
         Progress::silent(),
     ))?;
 
-    ResultManifests {
-        keys: keys_of(&listing),
-    }
-    .into()
+    let keys = keys_of(&listing);
+    format.set(
+        "keys",
+        keys.iter().map(|key| serde_json::json!(key)).collect(),
+    );
+
+    ResultManifests { keys }.into()
 }

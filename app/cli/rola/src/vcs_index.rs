@@ -36,7 +36,7 @@ use librorolala::vcs::{VCSIndex, VCSIndexObject};
 use librorolala::workspace::Workspace;
 use mingling::{
     Grouped, StructuralData,
-    macros::{buffer, chain, dispatcher, help, metadata, r_eprintln, r_println, renderer},
+    macros::{buffer, chain, dispatcher, help, metadata, r_eprintln, r_print, r_println, renderer},
     metadata::Description,
     res::ResExitCode,
 };
@@ -49,10 +49,22 @@ use std::str::FromStr as _;
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ERR_VCS_INDEX_ARGUMENT, EC_ERR_VCS_INDEX_NO_INDEX, EC_ERR_VCS_INDEX_NOT_FOUND,
-    EC_ERR_VCS_INDEX_READ, EC_ERR_VCS_INDEX_WRITE, EC_HELP,
+    EC_ERR_FORMAT, EC_ERR_VCS_INDEX_ARGUMENT, EC_ERR_VCS_INDEX_NO_INDEX,
+    EC_ERR_VCS_INDEX_NOT_FOUND, EC_ERR_VCS_INDEX_READ, EC_ERR_VCS_INDEX_WRITE, EC_HELP,
 };
 use crate::failure::failure;
+use crate::format::ResFormat;
+
+/// How a listing of hashes is drawn when no template is named.
+///
+/// One hash a line, which is what the `ls-*` commands have always printed. The hashes are the one
+/// field of the result, `string_hashes`, the same name `--json` writes them by.
+pub const DEFAULT_FORMAT_HASHES: &str = "{{ string_hashes }}";
+
+/// How a single hash is drawn when no template is named.
+///
+/// The one line the command has always printed, and the one field of the result: `hash`.
+pub const DEFAULT_FORMAT_HASH: &str = "{{ hash }}";
 
 dispatcher!("vcs-index", EntryVcsIndex);
 
@@ -358,8 +370,25 @@ pub struct ResultVcsIndexHash {
 }
 
 #[renderer(buffer)]
-pub fn render_result_vcs_index_hash(result: ResultVcsIndexHash) {
-    r_println!("{}", result.hash);
+pub fn render_result_vcs_index_hash(
+    result: ResultVcsIndexHash,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        r_println!("{}", result.hash);
+    }
 }
 
 /// Result: the hashes a listing named.
@@ -372,13 +401,30 @@ pub fn render_result_vcs_index_hash(result: ResultVcsIndexHash) {
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultHashes {
     /// The hashes, as hex.
-    string_hashes: Vec<String>,
+    pub(crate) string_hashes: Vec<String>,
 }
 
 #[renderer(buffer)]
-pub fn render_result_vcs_index_hashes(result: ResultHashes) {
-    for hash in &result.string_hashes {
-        r_println!("{hash}");
+pub fn render_result_vcs_index_hashes(
+    result: ResultHashes,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        for hash in &result.string_hashes {
+            r_println!("{hash}");
+        }
     }
 }
 

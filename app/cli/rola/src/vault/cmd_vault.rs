@@ -10,12 +10,15 @@
 
 use mingling::{
     Grouped, LazyRes, StructuralData,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    macros::{
+        buffer, chain, command, empty_result, help, metadata, r_eprintln, r_print, r_println,
+        renderer,
+    },
     metadata::Description,
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResWorkspaceConfig;
-use rorolala_utils_cli_theme::trd;
+use rorolala_utils_cli_theme::{err_line, trd};
 use rorolala_workspace::Config as WorkspaceConfig;
 use rust_i18n::t;
 use serde::Serialize;
@@ -23,7 +26,17 @@ use serde::Serialize;
 use crate::Next;
 use crate::cmd_create::ErrorWorkspaceNotExist;
 use crate::error::ErrorConfigUnreadable;
-use crate::exit_codes::EC_HELP;
+use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
+use crate::format::ResFormat;
+
+/// How a listing of the Vaults is drawn when no template is named.
+///
+/// One name and address a line. Each Vault also carries whether it is the one reached for,
+/// `is_default`, in the data a template or `--json` reads.
+const DEFAULT_VAULT_LS_FORMAT: &str = "{{ vaults.name }}  {{ vaults.address }}";
+
+/// How the default Vault is drawn when no template is named.
+const DEFAULT_VAULT_DEFAULT_FORMAT: &str = "{{ name }}";
 
 #[help(buffer)]
 pub fn help_vault(_: EntryVault, ec: &mut ResExitCode) {
@@ -110,5 +123,185 @@ pub fn render_result_vaults(result: ResultVaults) {
                 r_println!("{vault}");
             }
         }
+    }
+}
+
+#[help(buffer)]
+pub fn help_vault_ls(_: EntryVaultLs, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("vault_ls.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryVaultLs)]
+pub fn desc_vault_ls() -> Description {
+    t!("vault_ls.description").to_string().into()
+}
+
+/// Lists the Vaults this Workspace knows, each with whether it is the one reached for
+///
+/// The same names `rola vault` lists, drawn through a template the way every query is: the default
+/// names each one and its address, and each carries `is_default` — whether it is the Vault the
+/// Workspace reaches for — so a run that reads the output as a program can tell which one is chosen
+/// without a marker a person would read.
+#[command(node = "vault.ls")]
+pub fn vault_ls(format: &mut ResFormat) -> StateVaultLs {
+    format.default_template(DEFAULT_VAULT_LS_FORMAT);
+    StateVaultLs
+}
+
+/// The state a listing of the Vaults starts in.
+#[derive(Grouped)]
+pub struct StateVaultLs;
+
+#[chain]
+pub fn handle_vault_ls(
+    _state: StateVaultLs,
+    config: &mut LazyRes<ResWorkspaceConfig>,
+    format: &mut ResFormat,
+) -> Next {
+    match config.get_ref() {
+        ResWorkspaceConfig::Read { config, .. } => {
+            let default = config.default_config().vault().map(str::to_string);
+            let mut vaults: Vec<VaultItem> = config
+                .vaults()
+                .iter()
+                .map(|(name, address)| VaultItem {
+                    name: name.clone(),
+                    address: address.clone(),
+                    is_default: default.as_deref() == Some(name.as_str()),
+                })
+                .collect();
+            vaults.sort_by(|left, right| left.name.cmp(&right.name));
+
+            format.set(
+                "vaults",
+                vaults
+                    .iter()
+                    .map(|vault| serde_json::json!(vault))
+                    .collect(),
+            );
+
+            ResultVaultLs { vaults }.into()
+        }
+        ResWorkspaceConfig::Absent => ErrorWorkspaceNotExist.into(),
+        ResWorkspaceConfig::Unread { path, reason } => {
+            ErrorConfigUnreadable::new(path.clone(), reason.clone()).into()
+        }
+    }
+}
+
+/// One Vault, as `vault ls` shows it.
+#[derive(Serialize)]
+pub struct VaultItem {
+    /// The name the Workspace knows it by.
+    name: String,
+    /// The address it answers at.
+    address: String,
+    /// Whether it is the Vault the Workspace reaches for.
+    is_default: bool,
+}
+
+/// Result: the Workspace's Vaults were listed, each with whether it is the one reached for.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultVaultLs {
+    /// Each Vault, by name and address, in name order.
+    vaults: Vec<VaultItem>,
+}
+
+#[renderer(buffer)]
+pub fn render_result_vault_ls(result: ResultVaultLs, format: &ResFormat, ec: &mut ResExitCode) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        for vault in &result.vaults {
+            r_println!("{}  {}", vault.name, vault.address);
+        }
+    }
+}
+
+#[help(buffer)]
+pub fn help_vault_default(_: EntryVaultDefault, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("vault_default.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryVaultDefault)]
+pub fn desc_vault_default() -> Description {
+    t!("vault_default.description").to_string().into()
+}
+
+/// Prints the Vault the Workspace reaches for
+///
+/// The name alone, so a run can read it without a sentence around it. Nothing is printed when no
+/// Vault has been chosen, since there is none to name.
+#[command(node = "vault.default")]
+pub fn vault_default(format: &mut ResFormat) -> StateVaultDefault {
+    format.default_template(DEFAULT_VAULT_DEFAULT_FORMAT);
+    StateVaultDefault
+}
+
+/// The state printing the default Vault starts in.
+#[derive(Grouped)]
+pub struct StateVaultDefault;
+
+#[chain]
+pub fn handle_vault_default(
+    _state: StateVaultDefault,
+    config: &mut LazyRes<ResWorkspaceConfig>,
+    format: &mut ResFormat,
+) -> Next {
+    match config.get_ref() {
+        ResWorkspaceConfig::Read { config, .. } => {
+            let Some(name) = config.default_config().vault() else {
+                return empty_result!();
+            };
+
+            let name = name.to_string();
+            format.set("name", vec![serde_json::json!(name)]);
+
+            ResultVaultDefault { name }.into()
+        }
+        ResWorkspaceConfig::Absent => ErrorWorkspaceNotExist.into(),
+        ResWorkspaceConfig::Unread { path, reason } => {
+            ErrorConfigUnreadable::new(path.clone(), reason.clone()).into()
+        }
+    }
+}
+
+/// Result: the Vault the Workspace reaches for was printed.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultVaultDefault {
+    /// The Vault the Workspace reaches for.
+    name: String,
+}
+
+#[renderer(buffer)]
+pub fn render_result_vault_default(
+    result: ResultVaultDefault,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        r_println!("{}", result.name);
     }
 }

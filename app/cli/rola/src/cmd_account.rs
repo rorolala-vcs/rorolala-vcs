@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
-        routeify, suggest,
+        arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, renderer, routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -25,10 +25,21 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::exit_codes::{EC_ERR_ACCOUNT_NO_DIR, EC_ERR_ACCOUNT_NOT_FOUND, EC_HELP};
+use crate::exit_codes::{EC_ERR_ACCOUNT_NO_DIR, EC_ERR_ACCOUNT_NOT_FOUND, EC_ERR_FORMAT, EC_HELP};
 use crate::failure::failure;
+use crate::format::ResFormat;
 use crate::keys::account_names;
 use crate::user::account_path;
+
+/// How a listing of the accounts is drawn when no template is named.
+///
+/// One name a line, which is what the command has always printed. Each account also carries
+/// whether it is the one the work acts as, `is_current`, in the data a template or `--json`
+/// reads.
+const DEFAULT_ACCOUNT_LS_FORMAT: &str = "{{ accounts.name }}";
+
+/// How the current account is drawn when no template is named.
+const DEFAULT_ACCOUNT_CURRENT_FORMAT: &str = "{{ name }}";
 
 #[help(buffer)]
 pub fn help_account(_: EntryAccount, ec: &mut ResExitCode) {
@@ -157,6 +168,169 @@ pub fn render_result_accounts(result: ResultAccounts) {
                 r_println!("{name}");
             }
         }
+    }
+}
+
+#[help(buffer)]
+pub fn help_account_ls(_: EntryAccountLs, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("account_ls.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryAccountLs)]
+pub fn desc_account_ls() -> Description {
+    t!("account_ls.description").to_string().into()
+}
+
+/// Lists the accounts the work can act as, each with whether it is the one
+///
+/// Every account any scope holds, in name order, drawn through a template the way every query is:
+/// the default names them one a line, and each carries `is_current` — whether it is the account the
+/// work acts as — so a run that reads the output as a program can tell which one is chosen without
+/// a marker a person would read.
+#[command(node = "account.ls")]
+pub fn account_ls(format: &mut ResFormat) -> StateAccountLs {
+    format.default_template(DEFAULT_ACCOUNT_LS_FORMAT);
+    StateAccountLs
+}
+
+/// The state a listing of the accounts starts in.
+#[derive(Grouped)]
+pub struct StateAccountLs;
+
+#[chain(routeify)]
+pub fn handle_account_ls(
+    _state: StateAccountLs,
+    vault: &mut LazyRes<ResVault>,
+    workspace: &mut LazyRes<ResWorkspace>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    format: &mut ResFormat,
+) -> Next {
+    let names = account_names(workspace.get_ref().as_ref(), vault.get_ref().as_ref());
+    let current = current.get_ref().name().map(str::to_string);
+
+    let accounts: Vec<AccountItem> = names
+        .into_iter()
+        .map(|name| AccountItem {
+            is_current: current.as_deref() == Some(name.as_str()),
+            name,
+        })
+        .collect();
+
+    format.set(
+        "accounts",
+        accounts
+            .iter()
+            .map(|account| serde_json::json!(account))
+            .collect(),
+    );
+
+    ResultAccountLs { accounts }.into()
+}
+
+/// One account, as `account ls` shows it.
+#[derive(Serialize)]
+pub struct AccountItem {
+    /// The account's name.
+    name: String,
+    /// Whether it is the account the work acts as.
+    is_current: bool,
+}
+
+/// Result: the accounts the work can act as were listed, each with whether it is the one.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultAccountLs {
+    /// The accounts, in name order.
+    accounts: Vec<AccountItem>,
+}
+
+#[renderer(buffer)]
+pub fn render_result_account_ls(result: ResultAccountLs, format: &ResFormat, ec: &mut ResExitCode) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        for account in &result.accounts {
+            r_println!("{}", account.name);
+        }
+    }
+}
+
+#[help(buffer)]
+pub fn help_account_current(_: EntryAccountCurrent, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("account_current.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryAccountCurrent)]
+pub fn desc_account_current() -> Description {
+    t!("account_current.description").to_string().into()
+}
+
+/// Prints the account the work acts as
+///
+/// The name alone, so a run can read it without a sentence around it. Nothing is printed when the
+/// work acts as no account, since there is none to name.
+#[command(node = "account.current")]
+pub fn account_current(format: &mut ResFormat) -> StateAccountCurrent {
+    format.default_template(DEFAULT_ACCOUNT_CURRENT_FORMAT);
+    StateAccountCurrent
+}
+
+/// The state printing the current account starts in.
+#[derive(Grouped)]
+pub struct StateAccountCurrent;
+
+#[chain(routeify)]
+pub fn handle_account_current(
+    _state: StateAccountCurrent,
+    current: &mut LazyRes<ResCurrentAccount>,
+    format: &mut ResFormat,
+) -> Next {
+    let Some(name) = current.get_ref().name() else {
+        return empty_result!();
+    };
+
+    let name = name.to_string();
+    format.set("name", vec![serde_json::json!(name)]);
+
+    ResultAccountCurrent { name }.into()
+}
+
+/// Result: the account the work acts as was printed.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultAccountCurrent {
+    /// The account the work acts as.
+    name: String,
+}
+
+#[renderer(buffer)]
+pub fn render_result_account_current(
+    result: ResultAccountCurrent,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        r_println!("{}", result.name);
     }
 }
 

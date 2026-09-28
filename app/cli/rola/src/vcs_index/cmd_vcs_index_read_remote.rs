@@ -24,8 +24,9 @@ use std::str::FromStr as _;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::exit_codes::EC_HELP;
+use crate::format::ResFormat;
 use crate::keys::account_named;
-use crate::vcs_index::cmd_vcs_index_read::{ResultVcsIndexRead, view_of};
+use crate::vcs_index::cmd_vcs_index_read::{DEFAULT_FORMAT, ResultVcsIndexRead, view_of};
 use crate::vcs_index::{
     ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNotFound, parse_hash, read_remote,
 };
@@ -58,7 +59,7 @@ pub fn desc_vcs_index_read_remote() -> Description {
 /// [`vcs-index ls-remote-variants`](crate::vcs_index::cmd_vcs_index_ls_remote_variants) — whatever
 /// the exchange reports.
 #[command(node = "vcs-index.read-remote", entry = EntryVcsIndexReadRemote)]
-pub fn vcs_index_read_remote(args: EntryVcsIndexReadRemote) -> Next {
+pub fn vcs_index_read_remote(args: EntryVcsIndexReadRemote, format: &mut ResFormat) -> Next {
     // Picking cannot fail: no positions are `None`-able but the list itself, which is empty.
     let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
     let (vault, words) = with_vault(words);
@@ -70,6 +71,7 @@ pub fn vcs_index_read_remote(args: EntryVcsIndexReadRemote) -> Next {
         .into();
     };
 
+    format.default_template(DEFAULT_FORMAT);
     StateVcsIndexReadRemote { hash, vault }.into()
 }
 
@@ -106,6 +108,7 @@ pub fn handle_vcs_index_read_remote(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    format: &mut ResFormat,
 ) -> Next {
     // The hash is checked here so that a word that is not one is refused in this run's words rather
     // than carried to the Vault; what crosses is the hash as it was given.
@@ -145,8 +148,11 @@ pub fn handle_vcs_index_read_remote(
         _ => None,
     };
 
-    ResultVcsIndexRead {
-        object: view_of(object, number),
-    }
-    .into()
+    let view = view_of(object, number);
+    format.set(
+        "object",
+        vec![serde_json::to_value(&view).unwrap_or_default()],
+    );
+
+    ResultVcsIndexRead { object: view }.into()
 }

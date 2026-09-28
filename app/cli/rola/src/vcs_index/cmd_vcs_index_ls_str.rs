@@ -7,19 +7,22 @@
 use librorolala::vcs::VCSIndexObject;
 use mingling::{
     Grouped, LazyRes, StructuralData,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify},
+    macros::{
+        buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer, routeify,
+    },
     metadata::Description,
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResVCSIndex;
 use rorolala_errors::Failure as _;
-use rorolala_utils_cli_theme::trd;
+use rorolala_utils_cli_theme::{err_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
-use crate::exit_codes::EC_HELP;
-use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead};
+use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
+use crate::format::ResFormat;
+use crate::vcs_index::{DEFAULT_FORMAT_HASHES, ErrorVcsIndexNoIndex, ErrorVcsIndexRead};
 
 #[help(buffer)]
 pub fn help_vcs_index_ls_str(_: EntryVcsIndexLsStr, ec: &mut ResExitCode) {
@@ -47,7 +50,8 @@ pub fn desc_vcs_index_ls_str() -> Description {
 /// Renders [`ErrorVcsIndexNoIndex`] when the run is nowhere an index is, and
 /// [`ErrorVcsIndexRead`] when the index could not be read.
 #[command(node = "vcs-index.ls-str")]
-pub fn vcs_index_ls_str() -> StateVcsIndexLsStr {
+pub fn vcs_index_ls_str(format: &mut ResFormat) -> StateVcsIndexLsStr {
+    format.default_template(DEFAULT_FORMAT_HASHES);
     StateVcsIndexLsStr
 }
 
@@ -61,6 +65,7 @@ pub struct StateVcsIndexLsStr;
 pub fn handle_vcs_index_ls_str(
     _state: StateVcsIndexLsStr,
     index: &mut LazyRes<ResVCSIndex>,
+    format: &mut ResFormat,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
@@ -90,6 +95,13 @@ pub fn handle_vcs_index_ls_str(
                 }
             }
 
+            format.set(
+                "string_hashes",
+                string_hashes
+                    .iter()
+                    .map(|hash| serde_json::json!(hash))
+                    .collect(),
+            );
             ResultVcsIndexLsStr { string_hashes }.into()
         }
         Err(error) => ErrorVcsIndexRead {
@@ -107,8 +119,25 @@ pub struct ResultVcsIndexLsStr {
 }
 
 #[renderer(buffer)]
-pub fn render_result_vcs_index_ls_str(result: ResultVcsIndexLsStr) {
-    for hash in &result.string_hashes {
-        r_println!("{hash}");
+pub fn render_result_vcs_index_ls_str(
+    result: ResultVcsIndexLsStr,
+    format: &ResFormat,
+    ec: &mut ResExitCode,
+) {
+    if let Some(drawn) = format.drawn() {
+        match drawn {
+            Ok(text) => r_print!("{text}"),
+            Err(error) => {
+                r_eprintln!(
+                    "{}",
+                    err_line!(t!("format.err_format", reason = error).trim())
+                );
+                ec.exit_code = EC_ERR_FORMAT;
+            }
+        }
+    } else {
+        for hash in &result.string_hashes {
+            r_println!("{hash}");
+        }
     }
 }

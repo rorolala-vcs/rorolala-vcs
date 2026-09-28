@@ -85,6 +85,9 @@ serde_yaml = "0.9.34"
 toml = "0.8.23"
 bincode2 = "2.0.1"
 
+# Templating
+minijinja = "2.24.0"
+
 # Compression
 lz4 = "1.28.1"
 zstd = "0.13.3"

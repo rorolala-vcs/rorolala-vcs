@@ -19,8 +19,9 @@ use rust_i18n::t;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::exit_codes::EC_HELP;
+use crate::format::ResFormat;
 use crate::keys::account_named;
-use crate::vcs_index::list_remote_hashes;
+use crate::vcs_index::{DEFAULT_FORMAT_HASHES, list_remote_hashes};
 
 #[help(buffer)]
 pub fn help_vcs_index_ls_remote_variants(_: EntryVcsIndexLsRemoteVariants, ec: &mut ResExitCode) {
@@ -61,11 +62,13 @@ pub fn desc_vcs_index_ls_remote_variants() -> Description {
 #[command(node = "vcs-index.ls-remote-variants", entry = EntryVcsIndexLsRemoteVariants)]
 pub fn vcs_index_ls_remote_variants(
     args: EntryVcsIndexLsRemoteVariants,
+    format: &mut ResFormat,
 ) -> StateVcsIndexLsRemoteVariants {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
     let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
 
+    format.default_template(DEFAULT_FORMAT_HASHES);
     StateVcsIndexLsRemoteVariants::from(named)
 }
 
@@ -82,6 +85,7 @@ pub fn handle_vcs_index_ls_remote_variants(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    format: &mut ResFormat,
 ) -> Next {
     workspace.get_ref().check()?;
 
@@ -96,5 +100,15 @@ pub fn handle_vcs_index_ls_remote_variants(
     let name = current.get_ref().must_bind()?;
     let account = account_named(&name, Some(held), None)?;
 
-    list_remote_hashes(held, &account, &target.to_string(), "variants")?.into()
+    let listing = list_remote_hashes(held, &account, &target.to_string(), "variants")?;
+    format.set(
+        "string_hashes",
+        listing
+            .string_hashes
+            .iter()
+            .map(|hash| serde_json::json!(hash))
+            .collect(),
+    );
+
+    listing.into()
 }

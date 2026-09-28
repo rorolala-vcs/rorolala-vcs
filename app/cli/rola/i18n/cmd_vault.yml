@@ -12,6 +12,8 @@ vault:
             unbind <NAME>        Let a name go
             set-default <NAME>   Choose the Vault the Workspace reaches for
             handshake [VAULT]    Speak the handshake action to a Vault daemon
+            ls                    List the Vaults this Workspace knows
+            default               Print the Vault the Workspace reaches for
 
         The names are the Workspace's own: the same Vault may be `origin` here and something
         else elsewhere. Each one is printed as its name and the address it answers at, in
@@ -26,6 +28,8 @@ vault:
             unbind <NAME>        解除名字的绑定
             set-default <NAME>   选择工作区默认使用的保险库
             handshake [VAULT]    向保险库守护进程发起握手
+            ls                    列出当前工作区已知的保险库
+            default               输出工作区默认使用的保险库
 
         名字属于工作区自身：同一个保险库在这里叫 `origin`，在别处可能另有其名。
         每个绑定按名字排序，依次输出名字与它对应的地址，默认使用的那个会标上 `（当前）`。
@@ -41,3 +45,43 @@ vault:
   result_current:
     en: "%{vault} (current)"
     zh-CN: "%{vault}（当前）"
+
+vault_ls:
+  help:
+    en: |
+        List the Vaults this Workspace knows
+
+        **Usage**: `rola vault ls`
+
+        The same names `rola vault` lists, one name and address a line, in name order. Each one
+        carries whether it is the Vault the Workspace reaches for, which `--json` and `--format`
+        read as `is_default`.
+    zh-CN: |
+        列出当前工作区已知的保险库
+
+        **用法**：`rola vault ls`
+
+        与 `rola vault` 同一批名字，每行一个名字及其地址，按名字排序。每个绑定带有它是否为
+        工作区默认使用的那个，`--json` 与 `--format` 中以 `is_default` 读取。
+  description:
+    en: List the Vaults this Workspace knows
+    zh-CN: 列出当前工作区已知的保险库
+
+vault_default:
+  help:
+    en: |
+        Print the Vault the Workspace reaches for
+
+        **Usage**: `rola vault default`
+
+        The name alone, so a run can read it without a sentence around it. Nothing is printed
+        when no Vault has been chosen.
+    zh-CN: |
+        输出工作区默认使用的保险库
+
+        **用法**：`rola vault default`
+
+        只输出名字，便于直接读取。尚未选择任何保险库时不输出任何内容。
+  description:
+    en: Print the Vault the Workspace reaches for
+    zh-CN: 输出工作区默认使用的保险库
