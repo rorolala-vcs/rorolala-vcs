@@ -1,0 +1,6 @@
+[package]
+name = "rorolala-dev-rsharp-bindgen"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

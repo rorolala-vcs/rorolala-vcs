@@ -77,6 +77,14 @@ DESKTOP_DIR="$BUILD_DIR/bin/desktop"
 # and the tree's spelling is the tree's.
 DESKTOP_PLUGINS="app/desktop/Plugins/FileSystemPlugin"
 
+# The C# bindings to the C ABI: a module of its own rather than part of the Desktop program, because
+# what reaches the ABI is not the desktop's concern. The file it compiles is generated on every build
+# by `rorolala-dev-rsharp-bindgen` from the header the Rust side writes, so building it needs Rust to
+# have been built first — which it is, under `export` and `check`. An export hands the assembly over
+# beside the native library it binds, since a consumer of the two takes them together.
+RSHARP_PROJECT=modules/rola-sharp/RolaSharp.csproj
+RSHARP_DLL="$CS_TARGET_DIR/RolaSharp/bin/Release/net8.0/RolaSharp.dll"
+
 # Asks the runner for another script, the way a `make` target asked for another target.
 again() {
 	"$RUN" "$@"
@@ -109,6 +117,16 @@ publish_plugins() {
 			cp -r "$output/i18n" "$DESKTOP_DIR/plugins/"
 		fi
 	done
+}
+
+# Builds the C# bindings and lays the assembly down. Built rather than published: it is a library with
+# nothing beside it — the library it binds is the export's own `lib/` — so `dotnet publish` would only
+# copy it into a directory of its own to be moved again. The build regenerates `RorolalaBinding.cs`
+# from the header on the way through, which is what makes the export's bindings the export's header.
+publish_rsharp() {
+	# shellcheck disable=SC2086
+	$DOTNET build "$RSHARP_PROJECT" -c Release
+	cp "$RSHARP_DLL" "$BUILD_DIR/lib/RolaSharp.dll"
 }
 
 # `export` and `clean` delete a destination with `rm -rf`, so refuse a path that would take

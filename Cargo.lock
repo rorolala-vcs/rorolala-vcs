@@ -1694,6 +1694,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-dev-rsharp-bindgen"
+version = "0.1.0"
+
+[[package]]
 name = "rorolala-errors"
 version = "0.1.0"
 dependencies = [

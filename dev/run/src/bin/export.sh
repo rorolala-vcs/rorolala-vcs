@@ -35,3 +35,7 @@ done
 
 publish_desktop "$DESKTOP_DIR"
 publish_plugins
+
+# The C# bindings beside the native library they bind, under `lib/` where a consumer of the C ABI
+# looks for both.
+publish_rsharp

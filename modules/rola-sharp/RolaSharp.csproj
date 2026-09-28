@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>RolaSharp</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+
+    <!--
+      `RorolalaBinding.cs` is generated, so the compile list is managed here rather than by the SDK's
+      glob: the target below writes the file and then adds it, and a glob would add it a second time on
+      every build after the first — the build that starts with the file already there.
+    -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <!--
+    The bindings are generated from the C header on every build, not checked in, so they are never
+    stale against the header. The header is the Rust side's output, which is why the Rust side has to
+    have been built first; a build of this project alone, before any Rust build, has nothing to read.
+
+    Debug and release read the header of their own profile, so one profile's bindings are never
+    compiled against the other's library — the header is kept apart by profile for the same reason.
+  -->
+  <PropertyGroup>
+    <RsharpProfile Condition="'$(Configuration)' == 'Debug'">debug</RsharpProfile>
+    <RsharpProfile Condition="'$(RsharpProfile)' == ''">release</RsharpProfile>
+    <RsharpRoot>$(MSBuildThisFileDirectory)../../</RsharpRoot>
+    <RsharpHeader>$(RsharpRoot).cache/rs-target/$(RsharpProfile)/ffi_bindings/rorolala_ffi.h</RsharpHeader>
+    <RsharpBinding>$(MSBuildThisFileDirectory)RorolalaBinding.cs</RsharpBinding>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Hand-written sources, which the more OOP layer over these bindings will be. The generated file
+      is added by the target instead, so that it is compiled exactly once.
+    -->
+    <Compile Include="**/*.cs" Exclude="RorolalaBinding.cs" />
+  </ItemGroup>
+
+  <Target Name="GenerateRorolalaBinding" BeforeTargets="BeforeBuild">
+    <Error
+      Condition="!Exists('$(RsharpHeader)')"
+      Text="the C header is not there: `$(RsharpHeader)`. Build Rust first, with `./run.sh build`." />
+    <Exec
+      Command="cargo run --quiet --manifest-path &quot;$(RsharpRoot)Cargo.toml&quot; -p rorolala-dev-rsharp-bindgen -- &quot;$(RsharpHeader)&quot; &quot;$(RsharpBinding)&quot;" />
+    <ItemGroup>
+      <Compile Include="$(RsharpBinding)" />
+    </ItemGroup>
+  </Target>
+
+</Project>
