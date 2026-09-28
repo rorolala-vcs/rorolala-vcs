@@ -1,29 +1,23 @@
 using System.Diagnostics;
-using System.Text.Json.Serialization;
 
-namespace RorolalaFSAgent;
+namespace FileSystemPlugin;
 
-/// <summary>What happened to one item, as the JSON states it.</summary>
+/// <summary>What happened to one item.</summary>
 internal sealed class Result
 {
     /// <summary>The source path the item named.</summary>
-    [JsonPropertyName("from")]
     public required string From { get; init; }
 
     /// <summary>The target the command ran against, or empty when none did.</summary>
-    [JsonPropertyName("to")]
     public required string To { get; init; }
 
     /// <summary>One of <c>done</c>, <c>skipped</c> or <c>failed</c>.</summary>
-    [JsonPropertyName("result")]
     public required string Outcome { get; init; }
 
     /// <summary>One of <c>as-is</c>, <c>replaced</c>, <c>renamed</c>, <c>skipped</c> or <c>failed</c>.</summary>
-    [JsonPropertyName("how")]
     public required string How { get; init; }
 
     /// <summary>Why an item failed, and nothing otherwise.</summary>
-    [JsonPropertyName("note")]
     public string? Note { get; init; }
 
     /// <summary>The item ran and the command exited cleanly.</summary>
@@ -71,6 +65,10 @@ internal sealed class Result
 /// <remarks>
 /// Nothing here asks a question: every decision was made before this runs, so a called-off run is
 /// one where no item runs and every item reads <c>skipped</c>.
+/// <para>
+/// The command is a program of its own — the file operations themselves are the command line's, not
+/// this program's — so this blocks while each one runs and is meant to be called off the window's thread.
+/// </para>
 /// </remarks>
 internal static class Executor
 {
@@ -214,9 +212,9 @@ internal static class Executor
     /// as two arguments if it were joined by hand. Both are avoided by handing the arguments over
     /// as they are.
     /// <para>
-    /// A child's standard output is not this program's: the contract is the one JSON line, so what
-    /// a child prints is passed on to standard error, where everything else that is not the answer
-    /// goes, and never onto standard output.
+    /// Both of the child's streams are drained while it runs, so a child that fills one pipe while this
+    /// waits on the other cannot block against itself; what it said is kept and folded into the reason
+    /// when it did not finish cleanly, so a command that fails for its own reasons says why.
     /// </para>
     /// </remarks>
     private static string? Launch(IReadOnlyList<string> program, IReadOnlyList<string> paths)
@@ -254,8 +252,6 @@ internal static class Executor
 
         using (process)
         {
-            // Both streams are drained on the thread pool, so a child filling one pipe while this
-            // waits on the other cannot block against itself.
             var output = Task.Run(() => process.StandardOutput.ReadToEnd());
             var error = Task.Run(() => process.StandardError.ReadToEnd());
 
@@ -264,22 +260,17 @@ internal static class Executor
             var standardOutput = output.GetAwaiter().GetResult();
             var standardError = error.GetAwaiter().GetResult();
 
-            if (standardOutput.Length > 0)
-            {
-                Console.Error.Write(standardOutput);
-            }
-
-            if (standardError.Length > 0)
-            {
-                Console.Error.Write(standardError);
-            }
-
             if (process.ExitCode == 0)
             {
                 return null;
             }
 
             var detail = standardError.Trim();
+
+            if (detail.Length == 0)
+            {
+                detail = standardOutput.Trim();
+            }
 
             return detail.Length > 0
                 ? $"`{program[0]}` exited with code {process.ExitCode}: {detail}"

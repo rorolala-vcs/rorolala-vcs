@@ -18,7 +18,7 @@ internal readonly record struct Land(string Into, string Row);
 /// </summary>
 /// <remarks>
 /// One answer for every view rather than one per view, because the protocol is one thing: a drag is asked
-/// whether it may land, the row it would land on is lit, and letting go hands the work to the agent. What
+/// whether it may land, the row it would land on is lit, and letting go hands the work to the file operations. What
 /// differs between a listing and a tree is only where their rows are and which of them may be landed on, and each
 /// view answers that for itself.
 /// </remarks>
@@ -107,7 +107,7 @@ internal sealed class Drops
         var into = land.Into;
 
         // Told before the work is waited for: what the platform is owed an answer to cannot wait for a question
-        // the agent may have to put to a person.
+        // the file operations may have to put to a person.
         Answered = true;
         e.Handled = true;
 

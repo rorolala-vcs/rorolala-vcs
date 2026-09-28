@@ -1,26 +1,19 @@
-using System.Diagnostics;
-using System.Text.Json;
 using RorolalaDesktop.Contract;
-using RorolalaDesktop.I18n;
 
 namespace FileSystemPlugin;
 
 /// <summary>
-/// Every file operation the plugin performs, done by the file agent rather than here.
+/// Every file operation the plugin performs: a plan over the items, a question about any conflict, and
+/// the command run over each.
 /// </summary>
 /// <remarks>
-/// The work is not this program's: the agent is a program of its own, started with the operation, the
-/// command that carries it out, and the items, and it is the agent that settles what happens where a name
-/// is already taken — which is a question only a person can answer, and one this program has no window of
-/// its own to ask in.
+/// The work is not this program's: an operation is carried out by a command of the user's own —
+/// <c>rola fs-ops</c> until they say otherwise — and what is settled here is what happens where a name
+/// is already taken, which is a question only a person can answer.
 /// <para>
-/// What is here is therefore only the invocation and the reading of the answer: a batch goes over as
-/// <c>-Pairs</c> (or one at a time as <c>-From</c>/<c>-To</c> where a path would be broken by the pair
-/// separators), and what comes back is one JSON line naming what became of every item.
-/// </para>
-/// <para>
-/// The agent is reached through this plugin and nowhere else, which is why it lives inside the plugin's own
-/// directory beside it.
+/// The command runs as a program of its own, because starting it is cheap and the work is the command
+/// line's; what was not worth a program of its own is the question, which is a window of this plugin's
+/// over the host's main window rather than a program's of its own (see <see cref="ConflictFlow"/>).
 /// </para>
 /// </remarks>
 internal static class FileOps
@@ -76,8 +69,7 @@ internal static class FileOps
         _config?.ReadKeyAs<string>(id) is { Length: > 0 } command ? command : fallback;
 
     /// <summary>
-    /// Where the file agent is: inside this plugin's own directory, which is where a plugin's own things are
-    /// laid because nothing else lays them.
+    /// Strips the trailing separators a path may carry.
     /// </summary>
     /// <remarks>
     /// This exists because of one bug that is worth not having again: a path that came from a drag is read
@@ -94,29 +86,29 @@ internal static class FileOps
         return trimmed.Length == 0 ? path : trimmed;
     }
 
-    /// <summary>Copies sources into a directory, through the agent.</summary>
+    /// <summary>Copies sources into a directory.</summary>
     /// <param name="sources">What to copy.</param>
     /// <param name="into">The directory to put them in.</param>
     /// <param name="failed">Where a failure is reported.</param>
     /// <returns>Whether anything was copied.</returns>
     public static Task<bool> Copy(IReadOnlyList<string> sources, string into, Action<string> failed) =>
-        Transfer("Copy", Command(CopySetting, DefaultCopy), sources, into, failed);
+        Transfer(Operation.Copy, Command(CopySetting, DefaultCopy), sources, into, failed);
 
-    /// <summary>Moves sources into a directory, through the agent.</summary>
+    /// <summary>Moves sources into a directory.</summary>
     /// <param name="sources">What to move.</param>
     /// <param name="into">The directory to put them in.</param>
     /// <param name="failed">Where a failure is reported.</param>
     /// <returns>Whether anything was moved.</returns>
     public static Task<bool> Move(IReadOnlyList<string> sources, string into, Action<string> failed) =>
-        Transfer("Move", Command(MoveSetting, DefaultMove), sources, into, failed);
+        Transfer(Operation.Move, Command(MoveSetting, DefaultMove), sources, into, failed);
 
     /// <summary>
-    /// Removes entries, through the agent.
+    /// Removes entries.
     /// </summary>
     /// <remarks>
     /// Directories and files are one call each, because the operation names which of the two it is removing
     /// — the command that removes a file does not remove a directory, and the two are told apart here so that
-    /// the agent need not be told twice about the same batch.
+    /// they need not be told apart again once the run is made.
     /// </remarks>
     /// <param name="entries">What to remove.</param>
     /// <param name="failed">Where a failure is reported.</param>
@@ -129,32 +121,25 @@ internal static class FileOps
 
         if (directories.Length > 0)
         {
-            removed |= await Without("RemoveDirs", Command(RemoveDirsSetting, DefaultRemoveDirs), directories, failed);
+            removed |= await Without(Operation.RemoveDirs, Command(RemoveDirsSetting, DefaultRemoveDirs), directories, failed);
         }
 
         if (files.Length > 0)
         {
-            removed |= await Without("RemoveFiles", Command(RemoveFilesSetting, DefaultRemoveFiles), files, failed);
+            removed |= await Without(Operation.RemoveFiles, Command(RemoveFilesSetting, DefaultRemoveFiles), files, failed);
         }
 
         return removed;
     }
 
-    /// <summary>
-    /// One transfer of a batch into a directory.
-    /// </summary>
-    /// <remarks>
-    /// A batch goes over as one answer, so that the agent can offer "the same for the rest" once rather than
-    /// asking per item. Paths that would be broken by the pair separators go over one at a time instead, which
-    /// costs a question per item but always names the item it means.
-    /// </remarks>
-    /// <param name="operation">The operation the agent is told.</param>
+    /// <summary>One transfer of a batch into a directory.</summary>
+    /// <param name="operation">What is being done to every item.</param>
     /// <param name="command">The program and its arguments that carry it out.</param>
     /// <param name="sources">What is being transferred.</param>
     /// <param name="into">The directory they go into.</param>
     /// <param name="failed">Where a failure is reported.</param>
     private static async Task<bool> Transfer(
-        string operation,
+        Operation operation,
         string command,
         IReadOnlyList<string> sources,
         string into,
@@ -166,129 +151,73 @@ internal static class FileOps
             return false;
         }
 
-        if (sources.Any(Breaks) || Breaks(into))
-        {
-            var lone = false;
-
-            foreach (var source in sources)
-            {
-                lone |= await Ask(operation, command, ["-From:" + source, "-To:" + into], failed);
-            }
-
-            return lone;
-        }
-
-        return await Ask(operation, command, ["-Pairs:" + string.Join(';', sources.Select(source => $"{source}>{into}"))], failed);
+        // One batch rather than one call per item, so that a question about a taken name is asked once for
+        // the whole of it — offering "the same for the rest" — instead of once per item.
+        return await Ask(operation, command, [.. sources.Select(source => new Pair(source, into))], failed);
     }
 
     /// <summary>One removal of a batch.</summary>
-    /// <param name="operation">The operation the agent is told.</param>
+    /// <param name="operation">What is being done to every item.</param>
     /// <param name="command">The program and its arguments that carry it out.</param>
     /// <param name="paths">What is being removed.</param>
     /// <param name="failed">Where a failure is reported.</param>
-    private static Task<bool> Without(string operation, string command, IReadOnlyList<string> paths, Action<string> failed) =>
-        paths.Any(Breaks)
-            ? OneByOne(operation, command, paths, failed)
-            : Ask(operation, command, ["-Pairs:" + string.Join(';', paths)], failed);
-
-    /// <summary>Runs one item at a time, for the paths a batch would not carry.</summary>
-    /// <param name="operation">The operation the agent is told.</param>
-    /// <param name="command">The program and its arguments that carry it out.</param>
-    /// <param name="paths">What is being removed.</param>
-    /// <param name="failed">Where a failure is reported.</param>
-    private static async Task<bool> OneByOne(
-        string operation,
-        string command,
-        IReadOnlyList<string> paths,
-        Action<string> failed
-    )
-    {
-        var removed = false;
-
-        foreach (var path in paths)
-        {
-            removed |= await Ask(operation, command, ["-From:" + path], failed);
-        }
-
-        return removed;
-    }
+    private static Task<bool> Without(Operation operation, string command, IReadOnlyList<string> paths, Action<string> failed) =>
+        Ask(operation, command, [.. paths.Select(path => new Pair(path, string.Empty))], failed);
 
     /// <summary>
-    /// Whether a path would be broken by the separators a batch is written with.
+    /// Plans one call, asks about any conflict, and runs the command over every item.
     /// </summary>
     /// <remarks>
-    /// The batch form packs the items into one string, so a path carrying the character that separates items
-    /// or the one that separates a source from its destination would be read as two things or as the wrong
-    /// thing. It is rare and it is not fatal: such an item goes over on its own, where nothing is split.
+    /// A command that names no program is refused before anything is planned, so that the reason names the
+    /// command rather than an item. The plan is made first, so that every conflict is answered before the
+    /// first command runs — which is what makes calling the run off leave nothing done at all.
     /// </remarks>
-    /// <param name="path">The path to ask about.</param>
-    private static bool Breaks(string path) =>
-        path.Contains(';', StringComparison.Ordinal) || path.Contains('>', StringComparison.Ordinal);
-
-    /// <summary>Starts the agent for one call and reads what it says became of every item.</summary>
-    /// <param name="operation">The operation the agent is told.</param>
+    /// <param name="operation">What is being done to every item.</param>
     /// <param name="command">The program and its arguments that carry it out.</param>
-    /// <param name="items">What is being done, as the agent's own arguments.</param>
+    /// <param name="pairs">What is being done, one source and its destination.</param>
     /// <param name="failed">Where a failure is reported.</param>
     /// <returns>Whether anything was done.</returns>
-    private static async Task<bool> Ask(string operation, string command, string[] items, Action<string> failed)
+    private static async Task<bool> Ask(Operation operation, string command, IReadOnlyList<Pair> pairs, Action<string> failed)
     {
-        var agent = Agent();
+        // The program and its fixed arguments are one whitespace-separated string; a path with a space in
+        // it cannot be named here, which is why the item paths are arguments of their own below.
+        var program = command.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-        if (!File.Exists(agent))
+        if (program.Length == 0)
         {
-            failed($"the file agent is not beside the plugin: {agent}");
+            failed($"the command `{command}` names no program");
 
             return false;
         }
 
-        var start = new ProcessStartInfo(agent)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        start.ArgumentList.Add("-Command:" + command);
-        start.ArgumentList.Add("-Type:" + operation);
-
-        if (RolaI18N.Locale is { Length: > 0 } locale)
-        {
-            start.ArgumentList.Add("-Lang:" + locale);
-        }
-
-        foreach (var item in items)
-        {
-            start.ArgumentList.Add(item);
-        }
-
         try
         {
-            using var process = Process.Start(start);
+            var plan = Plan.Build(operation, pairs);
 
-            if (process is null)
+            if (plan.HasConflicts)
             {
-                failed($"could not start the file agent: {agent}");
-
-                return false;
+                await ConflictFlow.Decide(plan);
             }
 
-            // Both are read before either is waited for: a pipe that fills while nobody reads it stops the
-            // agent writing, and the agent stopped writing is the agent never exiting.
-            var said = process.StandardOutput.ReadToEndAsync();
-            var complained = process.StandardError.ReadToEndAsync();
+            // Off the window's thread: every item starts a program and waits for it, and the window has to
+            // go on drawing while that happens.
+            var results = await Task.Run(() => Executor.Run(plan, program));
 
-            await process.WaitForExitAsync();
+            var done = false;
 
-            var answer = await said;
-            var noise = await complained;
-
-            if (noise.Length > 0)
+            foreach (var result in results)
             {
-                failed(noise.TrimEnd());
+                if (result.Outcome == "failed")
+                {
+                    failed(result.Note ?? $"{result.From} could not be {result.How}");
+
+                    continue;
+                }
+
+                done |= result.Outcome == "done";
             }
 
-            return Read(answer, failed);
+            return done;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -296,86 +225,5 @@ internal static class FileOps
 
             return false;
         }
-    }
-
-    /// <summary>
-    /// Reads the agent's answer: the one JSON line it says became of every item.
-    /// </summary>
-    /// <remarks>
-    /// The last non-empty line is the answer, so that anything the agent had to say on the way can pass
-    /// through without being mistaken for it. An item that failed is reported as it was named; an item that
-    /// was skipped is not, because skipping is an answer and not a fault.
-    /// </remarks>
-    /// <param name="answer">What the agent wrote to standard output.</param>
-    /// <param name="failed">Where a failure is reported.</param>
-    /// <returns>Whether anything was done.</returns>
-    private static bool Read(string answer, Action<string> failed)
-    {
-        var line = answer
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .LastOrDefault();
-
-        if (line is null)
-        {
-            failed("the file agent answered with nothing");
-
-            return false;
-        }
-
-        Report? report;
-
-        try
-        {
-            report = JsonSerializer.Deserialize<Report>(line, Json);
-        }
-        catch (JsonException error)
-        {
-            failed($"the file agent's answer could not be read: {error.Message}");
-
-            return false;
-        }
-
-        var done = false;
-
-        foreach (var result in report?.Results ?? [])
-        {
-            if (result.Result == "failed")
-            {
-                failed(result.Note ?? $"{result.From} could not be {result.How}");
-
-                continue;
-            }
-
-            done |= result.Result == "done";
-        }
-
-        return done;
-    }
-
-    /// <summary>How the JSON the agent answers with is read: its names are lower case, this program's are not.</summary>
-    private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
-
-    /// <summary>What became of every item, as the agent reports it.</summary>
-    /// <param name="Results">One answer per item, in the order they were given.</param>
-    private sealed record Report(Item[] Results);
-
-    /// <summary>What became of one item.</summary>
-    /// <param name="From">The item, as it was given.</param>
-    /// <param name="To">Where it ended up, or empty when it did not move.</param>
-    /// <param name="Result">`done`, `skipped` or `failed`.</param>
-    /// <param name="How">`as-is`, `replaced`, `renamed`, `skipped` or `failed`.</param>
-    /// <param name="Note">Why it failed, when it did.</param>
-    private sealed record Item(string From, string To, string Result, string How, string? Note);
-
-    /// <summary>
-    /// Where the file agent is: inside this plugin's own directory, which is where a plugin's own things are
-    /// laid because nothing else lays them.
-    /// </summary>
-    private static string Agent()
-    {
-        var beside = Path.GetDirectoryName(typeof(FileOps).Assembly.Location)!;
-        var name = OperatingSystem.IsWindows() ? "rola-desktop-fs-agent.exe" : "rola-desktop-fs-agent";
-
-        return Path.Combine(beside, "FileSystemPlugin", "RorolalaFSAgent", name);
     }
 }

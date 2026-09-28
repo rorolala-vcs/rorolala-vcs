@@ -64,7 +64,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
 
         host.I18n.RegisterDirectory(Translations());
 
-        // The commands the agent carries the file operations out with, and the reading of them. They are
+        // The commands the file operations are carried out with, and the reading of them. They are
         // settings rather than constants because the tool that does the work is another program's, and a
         // system may keep it elsewhere — or a user may prefer another. What they are until they are changed
         // is this program's own operations, named in full so that the default works without a path.

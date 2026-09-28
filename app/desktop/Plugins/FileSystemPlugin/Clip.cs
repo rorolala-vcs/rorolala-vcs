@@ -124,7 +124,7 @@ internal sealed class Clip
 
             // A **cut** into the directory an entry already sits in is nothing to do, and one that was asked
             // for anyway must not rename it out from under the user. A copy there is a different thing: it
-            // means "one more of this here", so it stays in and the agent is left to put it beside the first.
+            // means "one more of this here", so it stays in and the run is left to put it beside the first.
             var moving = paths
                 .Where(path => IsCut(path) && !string.Equals(Holding(path), into, StringComparison.Ordinal))
                 .ToArray();

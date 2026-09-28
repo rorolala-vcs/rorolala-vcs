@@ -4,7 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using RorolalaDesktop.I18n;
 
-namespace RorolalaFSAgent;
+namespace FileSystemPlugin;
 
 /// <summary>What the window was answered with.</summary>
 /// <param name="Action">The answer.</param>
@@ -31,9 +31,15 @@ internal enum ConflictAction
 /// The one window a run may show: one conflict, the answers that one has, and the "apply to the rest" box.
 /// </summary>
 /// <remarks>
+/// Shown by the plugin over the host's main window, as a child of it rather than a window of a program
+/// of its own: the question is about what the user just did in that window, and a window that stands
+/// apart from it would be asking from somewhere else. It is drawn in the host's own look, which is what
+/// taking it into the host's process means — there is no separate program to draw it like the host.
+/// <para>
 /// The answer is handed back as a task rather than through an event, so the flow that shows the
 /// window reads one conflict at a time as a straight line. Closing the window answers Cancel, which
 /// is why the answer is set once and the same window cannot answer twice.
+/// </para>
 /// </remarks>
 internal sealed class ConflictWindow : Window
 {
@@ -49,7 +55,7 @@ internal sealed class ConflictWindow : Window
         Width = 520;
         SizeToContent = SizeToContent.Height;
         CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         var heading = new TextBlock
         {
@@ -126,7 +132,7 @@ internal sealed class ConflictWindow : Window
         };
 
         // The action the window exists for is the one the look raises, and it is said the same way the
-        // Desktop's own look says it.
+        // host's own look says it.
         if (isDefault)
         {
             button.Classes.Add("primary");
@@ -144,6 +150,6 @@ internal sealed class ConflictWindow : Window
         return button;
     }
 
-    /// <summary>The key a word is stored under, namespaced by this program's identity.</summary>
-    private static string Key(string name) => $"rorolala_fs_agent.{name}";
+    /// <summary>The key a word is stored under, namespaced by the plugin that asks.</summary>
+    private static string Key(string name) => $"rorolala_file_system.conflict.{name}";
 }

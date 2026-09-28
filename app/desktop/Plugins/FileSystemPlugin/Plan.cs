@@ -1,4 +1,27 @@
-namespace RorolalaFSAgent;
+namespace FileSystemPlugin;
+
+/// <summary>What is being done to each item.</summary>
+internal enum Operation
+{
+    /// <summary>Copy a source to a destination directory.</summary>
+    Copy,
+
+    /// <summary>Move a source to a destination directory.</summary>
+    Move,
+
+    /// <summary>Remove directories.</summary>
+    RemoveDirs,
+
+    /// <summary>Remove files.</summary>
+    RemoveFiles,
+}
+
+/// <summary>One source and, for a transfer, the destination directory it goes to.</summary>
+/// <param name="From">The source path, as it was given.</param>
+/// <param name="To">
+/// The destination directory, or empty when the item names none — which is every removal.
+/// </param>
+internal readonly record struct Pair(string From, string To);
 
 /// <summary>What was decided for a conflicting item, and what happens to one that does not.</summary>
 internal enum Resolution
@@ -30,8 +53,7 @@ internal sealed class Item
     /// </summary>
     /// <remarks>
     /// Empty until the item is known to be runnable, so that a failure before a target exists is
-    /// reported without one — the same shape the JSON example has. Every removal leaves it empty,
-    /// since a removal has no target.
+    /// reported without one. Every removal leaves it empty, since a removal has no target.
     /// </remarks>
     public string To { get; set; } = string.Empty;
 
@@ -75,17 +97,18 @@ internal sealed class Plan
     /// conflict window can be answered for every conflict before the first command runs — which is
     /// what makes calling the run off leave nothing done at all.
     /// </remarks>
-    /// <param name="parsed">The run the command line named.</param>
-    public static Plan Build(ParsedCommand parsed)
+    /// <param name="operation">What is being done to every item.</param>
+    /// <param name="pairs">The items, in the order they were given.</param>
+    public static Plan Build(Operation operation, IReadOnlyList<Pair> pairs)
     {
-        var items = new List<Item>(parsed.Pairs.Count);
-        var copying = parsed.Operation is Operation.Copy;
+        var items = new List<Item>(pairs.Count);
+        var copying = operation is Operation.Copy;
 
-        foreach (var pair in parsed.Pairs)
+        foreach (var pair in pairs)
         {
             var item = new Item { From = pair.From };
 
-            if (parsed.Operation is Operation.RemoveDirs or Operation.RemoveFiles)
+            if (operation is Operation.RemoveDirs or Operation.RemoveFiles)
             {
                 if (!Pathing.Exists(pair.From))
                 {

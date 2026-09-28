@@ -123,10 +123,10 @@ internal sealed class BrowserActions
     /// <remarks>
     /// The question is the host's to show and this plugin's to word, and what will be removed is settled
     /// before it is asked: the entries that cannot go — the way up, the computer — are left out here rather
-    /// than refused by the agent, so that the question names what is about to go and the answer cannot bring
-    /// a surprise with it.
+    /// than refused when the run is made, so that the question names what is about to go and the answer cannot
+    /// bring a surprise with it.
     /// <para>
-    /// The work is the file agent's, like every other operation, and what it removed is what leaves the
+    /// The work is the file operations', like every other one, and what it removed is what leaves the
     /// question unanswered: a dialog the user dismissed runs nothing, because a consequence handed over is
     /// run only on a <em>yes</em> (§16).
     /// </para>
@@ -164,7 +164,7 @@ internal sealed class BrowserActions
         );
     }
 
-    /// <summary>Has the agent remove the entries, and reads every directory again once it has.</summary>
+    /// <summary>Has the entries removed, and reads every directory again once that is done.</summary>
     /// <param name="entries">What to remove.</param>
     private async void Gone(IReadOnlyList<Entry> entries)
     {
