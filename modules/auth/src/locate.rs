@@ -208,6 +208,24 @@ fn files_in(dir: &Path, extension: &str) -> Vec<(String, PathBuf)> {
     files
 }
 
+/// Whether `name` is a name a key may be known by.
+///
+/// A name is a file's stem — what [`Account`](crate::Account) and [`Member`](crate::Member) are
+/// named by — and it is joined onto a directory to reach the key file, so it is also what decides
+/// *where* that file is looked for. Letters, digits, `_`, `-`, `@` and `.` are the whole of the
+/// character set; `.` and `..` are refused on their own, since they name directories rather than
+/// keys. A separator, a drive letter's colon or an empty string is therefore not a name, and a name
+/// can never steer the join out of the directory it is looked for in.
+#[must_use]
+pub fn is_valid_key_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && name.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '@' | '.')
+        })
+}
+
 /// The name a path is known by, if it names a file carrying `extension`.
 fn named_file(path: &Path, extension: &str) -> Option<(String, PathBuf)> {
     let found = path.extension()?.to_str()?;
@@ -216,6 +234,12 @@ fn named_file(path: &Path, extension: &str) -> Option<(String, PathBuf)> {
     }
 
     let name = path.file_stem()?.to_str()?.to_string();
+    // A file whose name is not one is not a key either: it is left out here so nothing that could
+    // not be reached by its own name is offered as a member or an account.
+    if !is_valid_key_name(&name) {
+        return None;
+    }
+
     Some((name, path.to_path_buf()))
 }
 
@@ -226,6 +250,12 @@ fn find_key<T>(
     extension: &str,
     make: impl Fn(String, PathBuf) -> T,
 ) -> Option<T> {
+    // The name is joined onto a directory, so a name that is not one is refused before any path is
+    // built: nothing off a request can climb out of the directories a search was told to look in.
+    if !is_valid_key_name(name) {
+        return None;
+    }
+
     dirs.iter().find_map(|dir| {
         let key_path = dir.join(format!("{name}.{extension}"));
         key_path.is_file().then(|| make(name.to_string(), key_path))
@@ -453,5 +483,61 @@ mod tests {
             ..KeyLocateRule::new()
         };
         assert!(super::account_scopes(&nowhere, &roots).is_empty());
+    }
+
+    #[test]
+    fn a_name_is_letters_digits_and_a_few_signs() {
+        for good in ["alice", "Alice-2", "a_b@c.d", "0"] {
+            assert!(super::is_valid_key_name(good), "{good}");
+        }
+
+        // What no key is named by: a separator, a climb, an absolute path, a drive letter, a
+        // space, a sign outside the set, a character outside ASCII, and nothing at all.
+        for bad in [
+            "", ".", "..", "a/b", "a\\b", "/alice", "C:/alice", "a b", "a+b", "ümlaut",
+        ] {
+            assert!(!super::is_valid_key_name(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_name_that_climbs_out_of_a_scope_is_refused() {
+        let parent = scratch("climb");
+        let keys = parent.join("keys");
+        fs::create_dir_all(&keys).unwrap();
+        // A key kept beside the scope rather than in it: a name that climbed would reach it.
+        public(&parent, "alice");
+
+        assert!(
+            super::find_member("../alice", std::slice::from_ref(&keys), &local_only()).is_none()
+        );
+        assert!(
+            super::find_account("../alice", std::slice::from_ref(&keys), &local_only()).is_none()
+        );
+
+        // The same name spelled as the plain stem is what reaches a key — inside the scope.
+        public(&keys, "alice");
+        assert!(super::find_member("alice", std::slice::from_ref(&keys), &local_only()).is_some());
+    }
+
+    #[test]
+    fn a_key_whose_name_is_not_one_is_not_listed() {
+        let dir = scratch("not-a-name");
+        public(&dir, "alice");
+        private(&dir, "bob");
+        // A name of letters, digits, `_`, `-`, `@` and `.` is one; anything else is not, so a file
+        // that would be a key but for its name is skipped rather than offered.
+        public(&dir, "pl-us");
+        fs::write(dir.join("has space.pub"), "not really a key").unwrap();
+        fs::write(dir.join("bad name.pem"), "not really a key").unwrap();
+
+        let members: Vec<String> = super::members_in(&dir).iter().map(Member::name).collect();
+        let accounts: Vec<String> = super::accounts_in(&dir)
+            .iter()
+            .map(crate::Account::name)
+            .collect();
+
+        assert_eq!(members, ["alice", "pl-us"]);
+        assert_eq!(accounts, ["bob"]);
     }
 }

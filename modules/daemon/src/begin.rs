@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use rorolala_auth::{
     KeyLocateRule, SecureStream, SigningKey, env_keys_dir, find_member, global_keys_dir,
-    locate_accounts, user_keys_dir,
+    is_valid_key_name, locate_accounts, user_keys_dir,
 };
 use rorolala_protocol::{ActionContext, ActionError, Socket};
 use rorolala_utils_cli_theme::{err_line, help_line, warn_line};
@@ -308,6 +308,13 @@ where
     let Some(served) = host.serve_for(&request.sub).await else {
         return Err(SessionError::UnknownVault(request.sub));
     };
+
+    // The name is joined onto a scope's directory to reach the member's key, so what could steer
+    // that join is refused here as well as in the search: nothing off the wire ever reaches a path,
+    // and the search is never asked with a name that is not one.
+    if !is_valid_key_name(&request.account) {
+        return Err(SessionError::UnknownMember(request.account));
+    }
 
     let Some(member) = find_member(&request.account, &served.roots, &served.rule) else {
         return Err(SessionError::UnknownMember(request.account));
@@ -781,6 +788,29 @@ mod tests {
 
         let error = serving.await.unwrap().unwrap_err();
         assert!(matches!(error, SessionError::IdentityMismatch(name) if name == "client"));
+        assert!(wire::read_confirmation(&mut channel).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_workspace_that_names_a_path_is_refused() {
+        let parent = scratch("named-path");
+        let keys = parent.join("keys");
+        fs::create_dir_all(&keys).unwrap();
+        let server = signing(9);
+        // A member's key kept beside the scope rather than in it: a name that climbed would reach
+        // it, and must not.
+        publish(&parent, "client", &Ed25519SigningKey::from_bytes(&[10; 32]));
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(server_io, Arc::new(vault(keys, signing(9)))));
+
+        let mut channel = connect(client_io, &signing(10), &server.public_key()).await;
+        request(&mut channel, ActionHandshake::ID, "../client").await;
+
+        // The file beside the scope holds the very key the peer proves, so only the name keeps the
+        // request out.
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(error, SessionError::UnknownMember(name) if name == "../client"));
         assert!(wire::read_confirmation(&mut channel).await.is_err());
     }
 
