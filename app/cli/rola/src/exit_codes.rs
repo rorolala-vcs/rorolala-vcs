@@ -259,6 +259,12 @@ pub const EC_ERR_LAYOUT: i32 = 190;
 /// `exit_codes.layout_argument`
 pub const EC_ERR_LAYOUT_ARGUMENT: i32 = 191;
 
+/// `exit_codes.layout_not_cached`
+pub const EC_ERR_LAYOUT_NOT_CACHED: i32 = 192;
+
+/// `exit_codes.layout_ownership`
+pub const EC_ERR_LAYOUT_OWNERSHIP: i32 = 193;
+
 // Tracking — writing content and recording it in a Layout
 
 /// `exit_codes.track`

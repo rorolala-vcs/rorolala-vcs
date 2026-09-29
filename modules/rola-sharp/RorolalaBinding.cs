@@ -1036,6 +1036,12 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_WORKSPACE_CACHE_DIR();
 
     /// <summary>
+    /// Path, inside the Workspace's cache, where remote Layouts are kept read-only
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_WORKSPACE_READONLY_LAYOUTS_DIR();
+
+    /// <summary>
     /// The file, inside a Layout's directory, naming the upstream Vault it tracks
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1369,6 +1375,36 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult do_action_read_remote_index(nint workspace, nint account, nint target, nint input);
+
+    /// <summary>
+    /// Runs the [`ActionFetchLayout`](crate::ActionFetchLayout) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_fetch_layout(nint workspace, nint account, nint target, nint input);
+
+    /// <summary>
+    /// Runs the [`ActionRequestOwnership`](crate::ActionRequestOwnership) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_request_ownership(nint workspace, nint account, nint target, nint input);
+
+    /// <summary>
+    /// Runs the [`ActionGiveupOwnership`](crate::ActionGiveupOwnership) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_giveup_ownership(nint workspace, nint account, nint target, nint input);
 
     /// <summary>
     /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded

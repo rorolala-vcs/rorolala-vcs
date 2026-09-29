@@ -931,6 +931,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-layout-remote"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-sandbox",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "it-storage"
 version = "0.1.0"
 dependencies = [
@@ -1617,6 +1627,7 @@ dependencies = [
  "just_template",
  "rorolala-auth",
  "rorolala-errors",
+ "rorolala-layout",
  "rorolala-protocol",
  "rorolala-storage",
  "rorolala-utils-cli-theme",
@@ -1632,6 +1643,7 @@ dependencies = [
  "serde_json",
  "syn 3.0.6",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

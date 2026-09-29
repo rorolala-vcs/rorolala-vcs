@@ -1,0 +1,37 @@
+_version: 2
+
+cmd_layout_fetch:
+  help:
+    en: |
+        Bring a Vault's Layout here as a read-only copy
+
+        **Usage**: `rola layout fetch [VAULT]`
+
+        `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`,
+        and not an address, since what is fetched is kept under the Vault's name. Naming none
+        reaches for the one the Workspace reaches for by default.
+
+        The copy is written under `.rola/cache/readonly-layouts/<VAULT>/` and replaces whatever
+        was there. It is what `rola layout read-ownership` and `rola layout ls-ownership` read,
+        so a run that wants the current state of a Vault fetches before it reads. Nothing of the
+        Workspace's own Layouts is touched, and nothing moves the other way.
+    zh-CN: |
+        将某个保险库的布局取回为只读副本
+
+        **用法**：`rola layout fetch [VAULT]`
+
+        `VAULT` 指要连接的保险库：必须是工作区用 `rola vault bind` 绑定的名字，而不是地址，
+        因为取回的内容会按该保险库的名字存放。不指定时，使用工作区选定的默认保险库。
+
+        副本写入 `.rola/cache/readonly-layouts/<VAULT>/`，并替换原有的内容。
+        `rola layout read-ownership` 与 `rola layout ls-ownership` 读取的就是这份副本，
+        因此想查看保险库当前状态时，应先取回再读取。工作区自身的布局不会被改动，
+        也不会有任何内容反向传输。
+
+  description:
+    en: Bring a Vault's Layout here as a read-only copy
+    zh-CN: 将某个保险库的布局取回为只读副本
+
+  result_fetched:
+    en: "The Layout of `%{vault}` was fetched to `%{path}`"
+    zh-CN: "已取回 `%{vault}` 的布局到 `%{path}`"

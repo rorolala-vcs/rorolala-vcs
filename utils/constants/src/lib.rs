@@ -56,6 +56,15 @@ pub const WORKSPACE_EDITING_PATH: &str = "./.rola/EDITING.md";
 #[lazyffi(export = ROLA_WORKSPACE_CACHE_DIR)]
 pub const WORKSPACE_CACHE_DIR: &str = "./.rola/cache/";
 
+/// Path, inside the Workspace's cache, where remote Layouts are kept read-only
+///
+/// A Layout fetched from a Vault is not one the Workspace works in: it is a copy of what the
+/// Vault holds, read to see who holds what rather than written to. One directory per Vault,
+/// named by the name the Workspace bound it under, so the same Vault is fetched to the same
+/// place every time.
+#[lazyffi(export = ROLA_WORKSPACE_READONLY_LAYOUTS_DIR)]
+pub const WORKSPACE_READONLY_LAYOUTS_DIR: &str = "./.rola/cache/readonly-layouts/";
+
 /// The file, inside a Layout's directory, naming the upstream Vault it tracks
 ///
 /// It holds the name of a Vault the Workspace has bound, or nothing when the Layout tracks

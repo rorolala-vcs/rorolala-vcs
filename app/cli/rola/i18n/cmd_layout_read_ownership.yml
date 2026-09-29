@@ -1,0 +1,40 @@
+_version: 2
+
+cmd_layout_read_ownership:
+  help:
+    en: |
+        Read who holds an entry, from the Vault's fetched copy
+
+        **Usage**: `rola layout read-ownership [VAULT] <UUID>`
+
+        `VAULT` names the Vault whose copy is read: a name the Workspace has bound with `rola vault
+        bind`. Naming none reads the copy of the one the Workspace reaches for by default. `UUID`
+        is the `Uuid` of the entry to read.
+
+        Nothing is reached for: what is answered comes from the copy under
+        `.rola/cache/readonly-layouts/`, so it says what the Vault held when it was last fetched.
+        A run with no copy, or one whose copy does not name the entry, is told to
+        `rola layout fetch` rather than left to reach a Vault that may be elsewhere.
+    zh-CN: |
+        从取回的副本中读取某个条目的持有者
+
+        **用法**：`rola layout read-ownership [VAULT] <UUID>`
+
+        `VAULT` 指要读取其副本的保险库：必须是工作区用 `rola vault bind` 绑定的名字。不指定时，
+        读取工作区选定默认保险库的副本。`UUID` 是要读取的条目的 `Uuid`。
+
+        不会连接远端：结果来自 `.rola/cache/readonly-layouts/` 下的副本，反映的是上次取回时
+        保险库的状态。若尚未取回，或副本中没有该条目，会提示运行 `rola layout fetch`，
+        而不是去连接可能不在本地的保险库。
+
+  description:
+    en: Read who holds an entry, from the Vault's fetched copy
+    zh-CN: 从取回的副本中读取某个条目的持有者
+
+  result_owner:
+    en: "`%{uuid}` is held by `%{owner}`"
+    zh-CN: "`%{uuid}` 由 `%{owner}` 持有"
+
+  result_unowned:
+    en: "`%{uuid}` is held by nobody"
+    zh-CN: "`%{uuid}` 无人持有"

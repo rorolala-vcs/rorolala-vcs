@@ -1759,6 +1759,7 @@ dependencies = [
  "just_template",
  "rorolala-auth",
  "rorolala-errors",
+ "rorolala-layout",
  "rorolala-protocol",
  "rorolala-storage",
  "rorolala-utils-cli-theme",
@@ -1774,6 +1775,7 @@ dependencies = [
  "serde_json",
  "syn 3.0.5",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

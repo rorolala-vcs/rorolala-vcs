@@ -1,0 +1,38 @@
+_version: 2
+
+cmd_layout_req_ownership:
+  help:
+    en: |
+        Ask the Vault to name this run's account as an entry's holder
+
+        **Usage**: `rola layout req-ownership [VAULT] <UUID>`
+
+        `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`.
+        Naming none reaches for the one the Workspace reaches for by default. `UUID` is the `Uuid`
+        of the entry to take.
+
+        An entry nobody holds is named as this account's. One another account holds is left alone,
+        and the run is told who holds it. When the Vault's Layout has been fetched here, the copy
+        is changed to agree with the Vault; a run that never fetched is not refused for it.
+    zh-CN: |
+        请求保险库将某个条目的持有者记为本次运行所用的账户
+
+        **用法**：`rola layout req-ownership [VAULT] <UUID>`
+
+        `VAULT` 指要连接的保险库：必须是工作区用 `rola vault bind` 绑定的名字。不指定时，
+        使用工作区选定的默认保险库。`UUID` 是要取得的条目的 `Uuid`。
+
+        无人持有的条目会记为本账户持有。已被其他账户持有的条目保持原样，并会告知持有者是谁。
+        若曾在此取回保险库的布局，副本会同步改为与保险库一致；未曾取回也不会因此报错。
+
+  description:
+    en: Ask the Vault to name this run's account as an entry's holder
+    zh-CN: 请求保险库将某个条目的持有者记为本账户
+
+  result_owned:
+    en: "`%{uuid}` is now held by `%{owner}`"
+    zh-CN: "`%{uuid}` 现在由 `%{owner}` 持有"
+
+  result_taken:
+    en: "`%{uuid}` is now held by nobody"
+    zh-CN: "`%{uuid}` 现在无人持有"

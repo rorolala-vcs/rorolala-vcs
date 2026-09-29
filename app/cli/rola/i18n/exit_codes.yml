@@ -277,6 +277,14 @@ exit_codes:
     en: "A `rola layout` command was given arguments it cannot use"
     zh-CN: "`rola layout` 收到了无法使用的参数"
 
+  layout_not_cached:
+    en: The Vault's Layout has not been fetched, or holds no such entry
+    zh-CN: 尚未取回该保险库的布局，或该布局中没有此条目
+
+  layout_ownership:
+    en: An entry's ownership could not be taken or let go of
+    zh-CN: 无法取得或放弃某个条目的所有权
+
   track:
     en: A file could not be recorded in the Layout
     zh-CN: 无法将文件记入布局

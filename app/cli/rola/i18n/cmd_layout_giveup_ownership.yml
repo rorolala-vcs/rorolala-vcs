@@ -1,0 +1,34 @@
+_version: 2
+
+cmd_layout_giveup_ownership:
+  help:
+    en: |
+        Ask the Vault to name nobody as an entry's holder
+
+        **Usage**: `rola layout giveup-ownership [VAULT] <UUID>`
+
+        `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`.
+        Naming none reaches for the one the Workspace reaches for by default. `UUID` is the `Uuid`
+        of the entry to let go of.
+
+        An entry this account holds is named as nobody's. One another account holds is left alone,
+        and the run is told who holds it. One nobody holds is already what was asked for. When the
+        Vault's Layout has been fetched here, the copy is changed to agree with the Vault.
+    zh-CN: |
+        请求保险库把某个条目的持有者清空
+
+        **用法**：`rola layout giveup-ownership [VAULT] <UUID>`
+
+        `VAULT` 指要连接的保险库：必须是工作区用 `rola vault bind` 绑定的名字。不指定时，
+        使用工作区选定的默认保险库。`UUID` 是要放弃的条目的 `Uuid`。
+
+        本账户持有的条目会被清空持有者。已被其他账户持有的条目保持原样，并会告知持有者是谁。
+        本就无人持有的条目则已经满足要求。若曾在此取回保险库的布局，副本会同步改为与保险库一致。
+
+  description:
+    en: Ask the Vault to name nobody as an entry's holder
+    zh-CN: 请求保险库清空某个条目的持有者
+
+  result_given_up:
+    en: "`%{uuid}` is no longer held"
+    zh-CN: "`%{uuid}` 已不再被持有"

@@ -51,6 +51,47 @@ cmd_layout:
     zh-CN: |
         运行 `rola layout --help` 查看它接受什么
 
+  err_not_cached:
+    en: "The Layout of `%{vault}` has not been fetched here"
+    zh-CN: "尚未在此取回 `%{vault}` 的布局"
+
+  err_not_cached_help:
+    en: |
+        Run `rola layout fetch %{vault}` to bring it down, then try again
+    zh-CN: |
+        请运行 `rola layout fetch %{vault}` 将其取回，然后重试
+
+  err_ownership_unknown:
+    en: "The fetched Layout names no entry `%{uuid}`"
+    zh-CN: "取回的布局中没有条目 `%{uuid}`"
+
+  err_ownership_unknown_help:
+    en: |
+        The copy may be out of date: run `rola layout fetch` to get the new state
+    zh-CN: |
+        副本可能已过期：请运行 `rola layout fetch` 获取新状态
+
+  err_ownership_missing:
+    en: "The Vault holds no entry `%{uuid}`"
+    zh-CN: "保险库中没有条目 `%{uuid}`"
+
+  err_ownership_missing_help:
+    en: |
+        Please check the `Uuid`, and fetch the Layout again to see the new state
+    zh-CN: |
+        请检查 `Uuid`，并重新取回布局以查看新状态
+
+  err_ownership_held:
+    en: "`%{uuid}` is held by `%{owner}`"
+    zh-CN: "`%{uuid}` 由 `%{owner}` 持有"
+
+  err_ownership_held_help:
+    en: |
+        The holder has to let go of it before it can be taken; `rola layout read-ownership`
+        reads the holder from the fetched copy
+    zh-CN: |
+        需要持有者先放弃，才能取得它；`rola layout read-ownership` 可以从取回的副本中读取持有者
+
 cmd_layout_ls:
   help:
     en: |

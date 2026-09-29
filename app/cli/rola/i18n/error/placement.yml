@@ -58,3 +58,15 @@ error:
       zh-CN: |
         请给出已用 `rola vault bind` 绑定的保险库名字，或写成地址，例如
         `127.0.0.1:7717` 或 `rola://127.0.0.1/alpha`
+
+    err_not_bound:
+      en: "`%{name}` is not a Vault this Workspace has bound"
+      zh-CN: "`%{name}` 不是本工作区已绑定的保险库"
+
+    err_not_bound_help:
+      en: |
+        This command keeps what it fetches under the Vault's name, so it takes a name the
+        Workspace has bound with `rola vault bind`, and not an address
+      zh-CN: |
+        该命令把取回的内容按保险库的名字存放，因此需要一个已用 `rola vault bind` 绑定的名字，
+        而不是地址

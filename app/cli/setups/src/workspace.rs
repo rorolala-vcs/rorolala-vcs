@@ -1,6 +1,6 @@
 use std::{
     env::current_dir,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use librorolala::protocol::VaultAddress;
@@ -157,6 +157,42 @@ impl ResCurrentRemoteVault {
         address_of(&name, config)
     }
 
+    /// The name of the Vault to reach for: what `name` names, or the one the Workspace reaches
+    /// for.
+    ///
+    /// It is [`vault_or_default`](Self::vault_or_default) read for the name rather than the
+    /// address, which is what a caller needs when what it keeps is named after the Vault: a name
+    /// the Workspace bound, and never an address, since an address is where a Vault answers rather
+    /// than what it is called.
+    ///
+    /// # Errors
+    ///
+    /// Returns what [`vault`](Self::vault) does, and [`ErrorRemoteVault::NotBound`] when a name
+    /// was given that is not one the Workspace has bound, or one that names a path rather than a
+    /// single name and so cannot be kept under.
+    pub fn name_or_default(&self, name: impl Into<String>) -> Result<String, ErrorRemoteVault> {
+        let config = self.reach()?;
+        let name = name.into();
+
+        // Naming none chooses the Workspace's own, which is held to the same rules as a name that
+        // was given: a choice is a choice, whoever made it.
+        let name = if name.is_empty() {
+            config
+                .default_config()
+                .vault()
+                .map(str::to_owned)
+                .ok_or(ErrorRemoteVault::NotChosen)?
+        } else {
+            name
+        };
+
+        if config.vaults().get(&name).is_none() || !is_plain_name(&name) {
+            return Err(ErrorRemoteVault::NotBound { name });
+        }
+
+        Ok(name)
+    }
+
     /// Each Vault the Workspace knows, under the name it is known by.
     ///
     /// These are the names a caller can reach for, so they are also the ones worth offering:
@@ -205,6 +241,11 @@ pub enum ErrorRemoteVault {
         /// What was named.
         name: String,
     },
+    /// The name is not one the Workspace has bound, and an address is not a name.
+    NotBound {
+        /// What was named.
+        name: String,
+    },
 }
 
 impl rorolala_errors::Failure for ErrorRemoteVault {
@@ -219,6 +260,7 @@ impl rorolala_errors::Failure for ErrorRemoteVault {
             Self::Unread { .. } => "error_remote_vault_unread",
             Self::NotChosen => "error_remote_vault_not_chosen",
             Self::NotAddress { .. } => "error_remote_vault_not_address",
+            Self::NotBound { .. } => "error_remote_vault_not_bound",
         }
     }
 
@@ -242,6 +284,9 @@ impl rorolala_errors::Failure for ErrorRemoteVault {
             Self::NotAddress { name } => {
                 format!("`{name}` is not a Vault this Workspace knows, nor an address")
             }
+            Self::NotBound { name } => {
+                format!("`{name}` is not a Vault this Workspace has bound")
+            }
         }
     }
 }
@@ -261,6 +306,17 @@ fn address_of(name: &str, config: &WorkspaceConfig) -> Result<VaultAddress, Erro
     VaultAddress::parse(written).map_err(|_| ErrorRemoteVault::NotAddress {
         name: written.to_string(),
     })
+}
+
+/// Whether `name` is one path component and nothing else.
+///
+/// A Vault's name is kept under the Workspace's cache as a directory of its own, so a name that
+/// names a path — or climbs, or is a drive — would be kept outside it, and a name that is not one
+/// name is not one the Workspace could have meant as a Vault's own.
+fn is_plain_name(name: &str) -> bool {
+    let mut components = Path::new(name).components();
+
+    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
 }
 
 /// A [`ProgramSetup`] implementation used to register Workspace-related resources and behaviors
@@ -428,5 +484,27 @@ fn save_workspace_config(resource: ResWorkspaceConfig) {
     } = resource
     {
         let _ = config.write_to(&path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_plain_name;
+
+    /// A Vault's name is kept as a directory under the Workspace's cache, so anything that names
+    /// more than one component — or climbs, or is a drive — is not one.
+    ///
+    /// What is a separator is the platform's, so the spellings that are only separators somewhere
+    /// are not listed here: on Windows `C:` is a prefix and `a\b` is two names, and on Unix both
+    /// are single file names, which is what each platform's own `components` says.
+    #[test]
+    fn a_name_that_names_more_than_a_name_is_refused() {
+        for good in ["origin", "origin-2", "a.b", "..a"] {
+            assert!(is_plain_name(good), "{good}");
+        }
+
+        for bad in ["", ".", "..", "a/b", "/a", "a/../b", "C:/a"] {
+            assert!(!is_plain_name(bad), "{bad}");
+        }
     }
 }

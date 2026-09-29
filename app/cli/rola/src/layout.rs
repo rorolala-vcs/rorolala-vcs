@@ -9,11 +9,16 @@ pub mod cmd_layout;
 pub mod cmd_layout_cp;
 pub mod cmd_layout_entries;
 pub mod cmd_layout_entry;
+pub mod cmd_layout_fetch;
 pub mod cmd_layout_force_switch;
+pub mod cmd_layout_giveup_ownership;
 pub mod cmd_layout_import;
 pub mod cmd_layout_ls;
+pub mod cmd_layout_ls_ownership;
 pub mod cmd_layout_new;
 pub mod cmd_layout_path;
+pub mod cmd_layout_read_ownership;
+pub mod cmd_layout_req_ownership;
 pub mod cmd_layout_rm;
 pub mod cmd_layout_set_track;
 pub mod cmd_layout_shot;
@@ -29,14 +34,18 @@ use mingling::{
 use rorolala_cli_setups::{ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line};
+use rorolala_utils_constants::WORKSPACE_READONLY_LAYOUTS_DIR;
+use rorolala_utils_location::Locate as _;
+use rorolala_workspace::Workspace;
 use rust_i18n::t;
+use uuid::Uuid;
 
-use librorolala::layout::{Layout, LayoutError, Layouts};
+use librorolala::layout::{Layout, LayoutError, Layouts, MutableData};
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ALREADY_EXIST, EC_ERR_LAYOUT, EC_ERR_LAYOUT_ARGUMENT, EC_ERR_SHOULD_IN_WORKSPACE,
-    EC_NOT_EXIST,
+    EC_ALREADY_EXIST, EC_ERR_LAYOUT, EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_NOT_CACHED,
+    EC_ERR_LAYOUT_OWNERSHIP, EC_ERR_SHOULD_IN_WORKSPACE, EC_NOT_EXIST,
 };
 use crate::failure::failure;
 
@@ -393,4 +402,231 @@ pub fn render_result_layout_content(result: ResultLayoutContent) {
     };
 
     r_println!("{}", said.trim());
+}
+
+/// Where a Workspace keeps the read-only copy of a Vault's Layout.
+///
+/// One directory per Vault, named by the name the Workspace bound it under, so a command that
+/// reads the copy reaches the same place a [`rola layout fetch`](crate::layout::cmd_layout_fetch)
+/// wrote — see [`WORKSPACE_READONLY_LAYOUTS_DIR`].
+#[must_use]
+pub fn readonly_layout_dir(workspace: &Workspace, vault: &str) -> std::path::PathBuf {
+    workspace
+        .get_root()
+        .join(WORKSPACE_READONLY_LAYOUTS_DIR)
+        .join(vault)
+}
+
+/// The Vault and the `Uuid` an ownership command was given, from the words it was given.
+///
+/// `VAULT` comes first and may be left out, so one word is the `Uuid` and two are the Vault and
+/// then the `Uuid`. Anything else — none, or more than two — is not a way to name one entry, and
+/// a word where the `Uuid` belongs that does not read as one is not either.
+#[must_use]
+pub fn vault_and_uuid(words: &[String]) -> Option<(Option<String>, Uuid)> {
+    let (vault, uuid) = match words {
+        [uuid] => (None, uuid),
+        [vault, uuid] => (Some(vault.clone()), uuid),
+        _ => return None,
+    };
+
+    Uuid::parse_str(uuid).ok().map(|id| (vault, id))
+}
+
+/// Names the entry `id` in the fetched copy as held by `owner`, when the copy holds it.
+///
+/// Nothing is a failure here but a copy that cannot be read or written: a run may ask for
+/// ownership without ever having fetched, and one that has fetched may hold a copy that does not
+/// name the entry yet — the Vault is the truth, and the copy is brought up to date by
+/// `rola layout fetch`, not by this.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] if a copy that is there cannot be read back or written.
+pub fn set_cached_owner(
+    workspace: &Workspace,
+    vault: &str,
+    id: Uuid,
+    owner: Option<String>,
+) -> Result<(), LayoutError> {
+    let dir = readonly_layout_dir(workspace, vault);
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    let layout = Layout::open(&dir)?;
+    let Some(data) = layout.entry(id) else {
+        return Ok(());
+    };
+
+    layout.update_entry(
+        id,
+        MutableData::new(owner, data.version(), data.description().to_owned()),
+    )
+}
+
+/// Error: the Vault's Layout has not been fetched, so there is no copy to read.
+#[derive(Grouped)]
+pub struct ErrorLayoutNotCached {
+    /// The Vault whose Layout was not fetched.
+    pub vault: String,
+}
+
+impl Failure for ErrorLayoutNotCached {
+    fn name(&self) -> &'static str {
+        "error_layout_not_cached"
+    }
+
+    fn reason(&self) -> String {
+        t!("cmd_layout.err_not_cached", vault = self.vault)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorLayoutNotCached);
+
+#[renderer(buffer)]
+pub fn render_error_layout_not_cached(error: ErrorLayoutNotCached, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("cmd_layout.err_not_cached_help").trim())
+    );
+    ec.exit_code = EC_ERR_LAYOUT_NOT_CACHED;
+}
+
+/// Error: the fetched copy names no entry by that `Uuid`.
+#[derive(Grouped)]
+pub struct ErrorOwnershipUnknown {
+    /// The `Uuid` the copy names nothing by.
+    pub uuid: String,
+}
+
+impl Failure for ErrorOwnershipUnknown {
+    fn name(&self) -> &'static str {
+        "error_ownership_unknown"
+    }
+
+    fn reason(&self) -> String {
+        t!("cmd_layout.err_ownership_unknown", uuid = self.uuid)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorOwnershipUnknown);
+
+#[renderer(buffer)]
+pub fn render_error_ownership_unknown(error: ErrorOwnershipUnknown, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("cmd_layout.err_ownership_unknown_help").trim())
+    );
+    ec.exit_code = EC_ERR_LAYOUT_NOT_CACHED;
+}
+
+/// Error: the Vault holds no entry by that `Uuid`.
+#[derive(Grouped)]
+pub struct ErrorOwnershipMissing {
+    /// The `Uuid` the Vault holds nothing by.
+    pub uuid: String,
+}
+
+impl Failure for ErrorOwnershipMissing {
+    fn name(&self) -> &'static str {
+        "error_ownership_missing"
+    }
+
+    fn reason(&self) -> String {
+        t!("cmd_layout.err_ownership_missing", uuid = self.uuid)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorOwnershipMissing);
+
+#[renderer(buffer)]
+pub fn render_error_ownership_missing(error: ErrorOwnershipMissing, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("cmd_layout.err_ownership_missing_help").trim())
+    );
+    ec.exit_code = EC_ERR_LAYOUT_NOT_CACHED;
+}
+
+/// Error: another account holds the entry, so its ownership was left alone.
+#[derive(Grouped)]
+pub struct ErrorOwnershipHeld {
+    /// The `Uuid` that is held.
+    pub uuid: String,
+    /// The account that holds it.
+    pub owner: String,
+}
+
+impl Failure for ErrorOwnershipHeld {
+    fn name(&self) -> &'static str {
+        "error_ownership_held"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "cmd_layout.err_ownership_held",
+            uuid = self.uuid,
+            owner = self.owner
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorOwnershipHeld);
+
+#[renderer(buffer)]
+pub fn render_error_ownership_held(error: ErrorOwnershipHeld, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("cmd_layout.err_ownership_held_help").trim())
+    );
+    ec.exit_code = EC_ERR_LAYOUT_OWNERSHIP;
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use super::vault_and_uuid;
+
+    /// A `Uuid` on its own is the entry; a word before it is the Vault. Anything else names no
+    /// entry at all, which is what a run that can do nothing is told.
+    #[test]
+    fn an_entry_is_named_by_a_uuid_and_maybe_a_vault_before_it() {
+        let id = Uuid::from_u128(7);
+        let text = id.to_string();
+
+        assert_eq!(
+            vault_and_uuid(std::slice::from_ref(&text)),
+            Some((None, id))
+        );
+        assert_eq!(
+            vault_and_uuid(&["origin".to_owned(), text]),
+            Some((Some("origin".to_owned()), id))
+        );
+
+        assert_eq!(vault_and_uuid(&[]), None);
+        assert_eq!(vault_and_uuid(&["origin".to_owned()]), None);
+        assert_eq!(
+            vault_and_uuid(&["a".to_owned(), "b".to_owned(), "c".to_owned()]),
+            None
+        );
+        // A word where the `Uuid` belongs that is not one names no entry, whatever else it is.
+        assert_eq!(
+            vault_and_uuid(&["origin".to_owned(), "not-a-uuid".to_owned()]),
+            None
+        );
+    }
 }

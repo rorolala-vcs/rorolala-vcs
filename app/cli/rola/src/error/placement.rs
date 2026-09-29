@@ -19,7 +19,7 @@ use rust_i18n::t;
 
 use crate::exit_codes::{
     EC_ERR_CONFIG_UNREADABLE, EC_ERR_NO_REMOTE_VAULT, EC_ERR_SHOULD_IN_VAULT,
-    EC_ERR_SHOULD_IN_WORKSPACE, EC_ERR_VAULT_ARGUMENT,
+    EC_ERR_SHOULD_IN_WORKSPACE, EC_ERR_VAULT_ARGUMENT, EC_ERR_VAULT_NOT_BOUND,
 };
 use crate::failure::failure;
 
@@ -104,6 +104,17 @@ pub fn render_error_remote_vault(err: ErrorRemoteVault, ec: &mut ResExitCode) {
                 help_line!(t!("error.placement.err_not_address_help").trim())
             );
             ec.exit_code = EC_ERR_VAULT_ARGUMENT;
+        }
+        rorolala_cli_setups::ErrorRemoteVault::NotBound { name } => {
+            r_eprintln!(
+                "{}",
+                err_line!(t!("error.placement.err_not_bound", name = name).trim())
+            );
+            r_eprintln!(
+                "{}",
+                help_line!(t!("error.placement.err_not_bound_help").trim())
+            );
+            ec.exit_code = EC_ERR_VAULT_NOT_BOUND;
         }
     }
 }
