@@ -1570,9 +1570,10 @@ internal sealed class GridBrowser : EntryView
     {
         _icon = icon;
 
-        // The tiles fill the width each line is given, so that the grid's outer inset is the room around it
-        // and stays put however wide the dock is — a line that has room to spare spends it between its tiles
-        // rather than at its ends, and one that is never broken reads from its start (see JustifiedPanel).
+        // The tiles of a wrapped line fill the width it is given, so that the grid's outer inset is the room
+        // around it and stays put however wide the dock is — the room a line has to spare is spent between
+        // its tiles rather than at its ends, and the last line keeps that same room so a short one stands in
+        // the columns above. A grid that never wrapped reads from its start (see JustifiedPanel).
         List.ItemsPanel = new FuncTemplate<Panel?>(() => new JustifiedPanel { Gap = Gap });
 
         // A wrapping grid needs a width to wrap against, and the base theme gives a list a horizontal

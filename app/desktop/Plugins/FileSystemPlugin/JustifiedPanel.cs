@@ -12,9 +12,12 @@ namespace FileSystemPlugin;
 /// to hold — which a wrapping panel that leaves the room at the end does not do, its inset then depending on
 /// where the last tile of a line fell.
 /// <para>
-/// The last line keeps its room on the right instead, and so does a grid that never wraps: a line that was
-/// never broken is a line still being read from its start, and sharing its room out would spread the few
-/// tiles of a short line across the whole width.
+/// Every line that wrapped is filled to the width, so the room between its tiles is the same on all of
+/// them. The last line keeps that same room rather than its own spare, so that the tiles of a short last
+/// line stand in the same columns as the tiles above instead of being pulled together; what is left over
+/// stays at its end. A grid that never wrapped has no filled line to take the room from and keeps the
+/// least room, reading from its start — sharing its room out would spread the few tiles of a short line
+/// across the whole width.
 /// </para>
 /// </remarks>
 internal sealed class JustifiedPanel : Panel
@@ -59,17 +62,22 @@ internal sealed class JustifiedPanel : Panel
     {
         var lines = Lines(finalSize.Width);
         var y = 0.0;
+        var step = Gap;
 
         for (var index = 0; index < lines.Count; index++)
         {
             var line = lines[index];
-            var broken = index < lines.Count - 1;
 
-            // A broken line shares its spare room between its tiles; the last has nothing after it to share
-            // it with, and keeps it on the right.
-            var step = broken && line.Count > 1
-                ? Gap + ((finalSize.Width - line.Width) / (line.Count - 1))
-                : Gap;
+            // A line that wrapped is filled to the width and shares its spare room between its tiles; the
+            // last line keeps that same room, so its tiles stand in the columns above rather than being
+            // pulled together, and leaves whatever is still over at its end. A grid of one line never
+            // wrapped, so there is no filled line to take the room from and the least room is kept.
+            if (index < lines.Count - 1)
+            {
+                step = line.Count > 1
+                    ? Gap + ((finalSize.Width - line.Width) / (line.Count - 1))
+                    : Gap;
+            }
 
             var x = 0.0;
 
