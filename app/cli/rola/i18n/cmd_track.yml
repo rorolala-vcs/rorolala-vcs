@@ -1,0 +1,160 @@
+_version: 2
+
+track:
+  help:
+    en: |
+        Record files in the Layout being worked in
+
+        **Usage**: `rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]...`
+
+        Each file's content goes into the store, a version is made of it, and the Layout is made to
+        name that version. A file whose content is what the Layout already names is skipped: it is
+        not recorded, and it is not one a message has to be written for. A `FILE` that is a
+        directory is taken recursively, one entry per file under it.
+
+        A file the tree moved is recorded where it is now, and the move is confirmed along with it:
+        it needs a message like any other change. A move whose file was not edited is nothing to
+        record, though, and is left for `rola align` to confirm.
+
+        `--message` covers the whole group; `--file-message` gives one file its own words, one for
+        each file being recorded. With neither, an editor is opened to write the messages.
+    zh-CN: |
+        将文件记入当前正在使用的布局
+
+        **用法**：`rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]...`
+
+        每个文件的内容写入仓库，为其建立版本，并让布局指向该版本。内容与布局已记录一致的
+        文件会被跳过：既不记录，也不需要为它撰写提交信息。`FILE` 为目录时会递归处理，其下
+        每个文件各成一条条目。
+
+        被移动过的文件会在新位置被记录，移动随之确认；它与其它变更一样需要提交信息。若文件只是
+        被移动、内容并未改动，则没有可记录的内容，留给 `rola align` 确认。
+
+        `--message` 描述整组；`--file-message` 为单个文件单独描述，每个待记录文件一个。
+        两者都不给时会打开编辑器撰写。
+
+  description:
+    en: Record files in the Layout being worked in
+    zh-CN: 将文件记入当前正在使用的布局
+
+  editing_header:
+    en: |
+        You are recording the files below; write what each change was.
+
+        Lines starting with `#` are ignored. Every section needs a message.
+    zh-CN: |
+        你正在记录下列文件；请写出每一处更改的内容。
+
+        以 `#` 开头的行会被忽略。每一节都需要填写信息。
+
+  editing_global:
+    en: "What this whole group did:"
+    zh-CN: "这一组整体做了什么："
+
+  editing_file:
+    en: "What this file's change was"
+    zh-CN: "这个文件的更改内容"
+
+  editing_warning:
+    en: "== `%{path}` says too much: %{length} bytes, past the limit. Please shorten it."
+    zh-CN: "== `%{path}` 的描述超出上限：为 %{length} 字节，请缩短。"
+
+  editing_missing:
+    en: "== `%{path}` says nothing. Please write a message for it."
+    zh-CN: "== `%{path}` 没有任何描述，请为它填写信息。"
+
+  result_added:
+    en: "added  %{path}"
+    zh-CN: "已加入  %{path}"
+
+  result_updated:
+    en: "updated  %{path}"
+    zh-CN: "已更新  %{path}"
+
+  err_no_files:
+    en: No file was named to record
+    zh-CN: 没有指定要记录的文件
+
+  err_lost:
+    en: "%{count} path(s) the Layout names are not in the tree: %{paths}"
+    zh-CN: "有 %{count} 个布局命名、工作树缺失的路径：%{paths}"
+
+  err_lost_help:
+    en: |
+        Settle the tree first with `rola align <PATH> --delete`; `rola layout tree-diff` shows what is lost
+    zh-CN: |
+        请先用 `rola align <PATH> --delete` 处理；`rola layout tree-diff` 可查看丢失的路径
+
+  err_no_files_help:
+    en: |
+        Name one or more files; run `rola track --help` for how they are recorded
+    zh-CN: |
+        请指定一个或多个文件；记录方式见 `rola track --help`
+
+  err_not_a_file:
+    en: "`%{path}` is not a file"
+    zh-CN: "`%{path}` 不是文件"
+
+  err_outside_workspace:
+    en: "`%{path}` is not inside this Workspace"
+    zh-CN: "`%{path}` 不在本工作区之内"
+
+  err_inside_data:
+    en: "`%{path}` is part of the Workspace's own data, not its work"
+    zh-CN: "`%{path}` 属于工作区自身的数据，而非其工作内容"
+
+  err_file_help:
+    en: |
+        Name files that sit inside the Workspace and are not under `.rola`
+    zh-CN: |
+        请指定位于工作区内、且不在 `.rola` 之下的文件
+
+  err_message_mismatch:
+    en: The files and `--file-message` values do not line up one to one
+    zh-CN: 文件与 `--file-message` 未一一对应
+
+  err_message_missing:
+    en: "`%{path}` would carry no message"
+    zh-CN: "`%{path}` 没有任何提交信息"
+
+  err_message_too_long:
+    en: "The message for `%{path}` is %{length} bytes, past the limit"
+    zh-CN: "`%{path}` 的提交信息为 %{length} 字节，超出上限"
+
+  err_message_unresolved:
+    en: No message that may be kept was written
+    zh-CN: 未能写出可保留的提交信息
+
+  err_aborted:
+    en: Nothing was written, so nothing was recorded
+    zh-CN: 未撰写任何提交信息，因此未记录任何内容
+
+  err_aborted_help:
+    en: |
+        Write a message for the group, or for each file, and try again
+    zh-CN: |
+        请为整组或每个文件写入提交信息，然后重试
+
+  err_message_help:
+    en: |
+        Give one `--file-message` per file, or write the messages in the editor
+    zh-CN: |
+        请为每个文件各给一个 `--file-message`，或在编辑器中撰写提交信息
+
+  err_no_store:
+    en: This run works on no store to put the content into
+    zh-CN: 本运行没有可用于写入内容的仓库
+
+  err_no_index:
+    en: This run works on no version control index to record the version in
+    zh-CN: 本运行没有可用于记录版本的版本控制索引
+
+  err_failed:
+    en: "The file could not be recorded: %{reason}"
+    zh-CN: "无法记录该文件：%{reason}"
+
+  err_failed_help:
+    en: |
+        Check that the store, the index and the Layout are writable, then try again
+    zh-CN: |
+        请检查仓库、索引与布局是否可写，然后重试

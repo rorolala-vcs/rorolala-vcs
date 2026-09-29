@@ -83,6 +83,12 @@ pub const CODES: &[i32] = &[
     180,
     190,
     191,
+    200,
+    201,
+    210,
+    211,
+    220,
+    221,
 ];
 
 /// Whether the program states the exit code `code`.
@@ -173,6 +179,12 @@ pub fn explain_ec(code: i32) -> String {
         180 => t!("exit_codes.format").to_string(),
         190 => t!("exit_codes.layout").to_string(),
         191 => t!("exit_codes.layout_argument").to_string(),
+        200 => t!("exit_codes.track").to_string(),
+        201 => t!("exit_codes.track_argument").to_string(),
+        210 => t!("exit_codes.editor").to_string(),
+        211 => t!("exit_codes.abort").to_string(),
+        220 => t!("exit_codes.align").to_string(),
+        221 => t!("exit_codes.align_argument").to_string(),
         _ => String::new(),
     }
 }

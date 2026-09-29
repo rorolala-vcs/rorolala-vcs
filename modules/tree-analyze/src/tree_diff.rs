@@ -48,6 +48,13 @@ pub struct PathRename {
 
     /// The path the tree holds it at now.
     pub to: LayoutPath,
+
+    /// Whether the move is one the two being the same bytes makes — a strong move — rather than one
+    /// only their likeness suggests, which is a weak move and may be taken back.
+    ///
+    /// It is the whole of what a caller can tell about a move: a strong one is a fact to be
+    /// confirmed, and a weak one is a guess to be confirmed or taken back.
+    pub strong: bool,
 }
 
 /// A path the reading could not look at.
@@ -94,6 +101,11 @@ pub struct TreeDiff {
 /// `1.0` is no change at all, and anything past either end is taken as the end. It never touches a
 /// binary file, which is the same file moved only when its digest is the one it had.
 ///
+/// It writes down what it read, so a move can be told from a loss and a gain next time — and so that
+/// a file that is moved after it changed is recognised as the same file. What a change is told by is
+/// not that reading, though, but the digest the Layout was last known to agree with: a file that
+/// changed and stayed changed is reported as changed until something records it.
+///
 /// # Errors
 ///
 /// Returns [`TreeDiffError::Layout`] if the Layout cannot be read back, and [`TreeDiffError::Io`]
@@ -124,7 +136,6 @@ pub fn tree_diff(
     // wrote down is not read again; the rest are read together, since reading and hashing is where
     // the whole reading spends its time.
     let mut current: BTreeMap<LayoutPath, Entry> = BTreeMap::new();
-    let mut modified: Vec<LayoutPath> = Vec::new();
     let mut unread: Vec<(&LayoutPath, &scan::Found)> = Vec::new();
     for (path, file) in &disk {
         match previous.get(path) {
@@ -136,7 +147,7 @@ pub fn tree_diff(
     }
 
     for (path, result) in read_together(&unread) {
-        let entry = match result {
+        let read = match result {
             Ok(entry) => entry,
             Err(error) => {
                 failed.push(FailedPath::new(path.as_str().to_owned(), error.to_string()));
@@ -144,18 +155,24 @@ pub fn tree_diff(
             }
         };
 
-        // A file that was not read again holds what it held, so only one that was read can have
-        // changed; what it changed from is what the last reading wrote down.
-        if tracked.contains(path)
-            && previous
-                .get(path)
-                .is_some_and(|was| was.digest() != entry.digest())
-        {
-            modified.push(path.clone());
-        }
+        // Reading a file again does not change what the Layout was last known to agree with: a file
+        // never read before is one the Layout has not disagreed with, and one read before keeps the
+        // agreement — or the disagreement — it had.
+        let agree = previous
+            .get(path)
+            .map_or_else(|| Some(read.digest()), Entry::agreed);
 
-        current.insert(path.clone(), entry);
+        current.insert(path.clone(), read.with_agreed(agree));
     }
+
+    // What changed is what no longer holds what the Layout agrees with — not what the last reading
+    // wrote down, which the reading itself would overwrite. So a file that changed and stayed
+    // changed is reported as changed until something records it.
+    let mut modified: Vec<LayoutPath> = current
+        .iter()
+        .filter(|(path, entry)| tracked.contains(*path) && entry.agreed() != Some(entry.digest()))
+        .map(|(path, _)| path.clone())
+        .collect();
 
     let mut lost: Vec<LayoutPath> = tracked
         .iter()
@@ -192,6 +209,7 @@ pub fn tree_diff(
             renamed.push(PathRename {
                 from: from.clone(),
                 to: path.clone(),
+                strong: true,
             });
             moved_from.insert(from);
             moved_to.insert(path.clone());
@@ -207,16 +225,25 @@ pub fn tree_diff(
         .iter()
         .filter(|path| !moved_to.contains(*path))
         .collect();
-    for (from, to, score) in likeness(&sources, &destinations, &previous, &current, alike) {
+    for (from, to, _score) in likeness(&sources, &destinations, &previous, &current, alike) {
         renamed.push(PathRename {
             from: from.clone(),
             to: to.clone(),
+            // The two are not the same bytes — that is the first pass's business — so the move is
+            // one the likeness suggests rather than one the content makes.
+            strong: false,
         });
         moved_from.insert(from);
         moved_to.insert(to.clone());
+    }
 
-        if score < 1.0 {
-            modified.push(to);
+    // A move is a change as well when what the new path holds is not what the Layout agreed with at
+    // the old one — which a file that was edited before it moved is, however alike the two readings
+    // of it are.
+    for pair in &renamed {
+        let agreed = previous.get(&pair.from).and_then(Entry::agreed);
+        if agreed != current.get(&pair.to).map(Entry::digest) {
+            modified.push(pair.to.clone());
         }
     }
 
@@ -227,7 +254,8 @@ pub fn tree_diff(
 
     // What the next reading starts from: what each file holds now, and — for a path the Layout
     // still names but the tree no longer holds — what it held when it was last seen, which is all
-    // that is left of it to recognise a move by.
+    // that is left of it to recognise a move by. The digest the Layout agrees with is carried along,
+    // since it is not the reading that changes it.
     let mut next = Cache::empty();
     for (path, entry) in &current {
         next.insert(path.clone(), entry.clone());
@@ -240,8 +268,7 @@ pub fn tree_diff(
     next.write(&cache_path)?;
 
     // A path that moved is one move, not also a loss and a gain: what was paired comes out of the
-    // two lists it would otherwise sit in. The cache above is written first, since what a moved-away
-    // path held is what tells the next reading that it moved.
+    // two lists it would otherwise sit in.
     lost.retain(|path| !moved_from.contains(path));
     untagged.retain(|path| !moved_to.contains(path));
 
@@ -410,7 +437,13 @@ fn likeness(
 }
 
 /// Where the reading of `layout` keeps what it found, under the Workspace it is read from.
-fn cache_path(root: &Path, layout: &Layout) -> PathBuf {
+/// Where the analysis of `layout`, under the Workspace at `root`, is kept.
+///
+/// It is named for the Layout rather than the Workspace, since each Layout describes a tree of its
+/// own; a caller that reads the tree beside a Layout and a caller that has to write down what one
+/// file looks like reach the same file through this.
+#[must_use]
+pub fn cache_path(root: &Path, layout: &Layout) -> PathBuf {
     let name = layout
         .dir()
         .file_name()
@@ -422,6 +455,32 @@ fn cache_path(root: &Path, layout: &Layout) -> PathBuf {
         .collect::<PathBuf>()
         .join(format!("{name}-analyze"))
         .join("entries")
+}
+
+/// What the file at `disk` holds now, as a reading of it writes it down.
+///
+/// It is one file read on its own, for a caller that needs what a file looks like to the analysis
+/// without walking the tree around it — aligning a Layout asks for exactly this, to say what a path
+/// now holds when the tree and the Layout disagree about where it went.
+///
+/// # Errors
+///
+/// Returns what the file could not be read or looked at with.
+pub fn entry_of(disk: &Path) -> Result<Entry, std::io::Error> {
+    let meta = fs::metadata(disk)?;
+    let (seconds, nanos) = crate::scan::stamp(&meta);
+    let bytes = fs::read(disk)?;
+    let digest = fingerprint::digest(&bytes);
+    let binary = fingerprint::is_binary(&bytes);
+    let spans = (!binary).then(|| fingerprint::spans(&bytes, false));
+
+    Ok(Entry::new(
+        seconds,
+        nanos,
+        u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+        digest,
+        spans,
+    ))
 }
 
 #[cfg(test)]
@@ -518,7 +577,8 @@ mod tests {
             diff.renamed,
             vec![PathRename {
                 from: path("a.txt"),
-                to: path("b.txt")
+                to: path("b.txt"),
+                strong: true,
             }],
             "{diff:?}"
         );
@@ -534,6 +594,7 @@ mod tests {
         fs::write(dir.join("a.txt"), b"before\n").unwrap();
 
         let layout = workspace.layouts().get("main").unwrap().unwrap();
+        // A first reading writes down what the file holds, so the change can be told next time.
         tree_diff(&layout, &workspace, 0.5).unwrap();
 
         // Long enough that the change is a change in time as well as in content.
@@ -553,6 +614,7 @@ mod tests {
         fs::write(dir.join("a.txt"), b"one\ntwo\nthree\nfour\n").unwrap();
 
         let layout = workspace.layouts().get("main").unwrap().unwrap();
+        // A first reading writes down what the file holds, so the move can be told next time.
         tree_diff(&layout, &workspace, 0.5).unwrap();
 
         // The same prose, moved, with a line added: alike enough to be the same file.
@@ -565,7 +627,8 @@ mod tests {
             diff.renamed,
             vec![PathRename {
                 from: path("a.txt"),
-                to: path("b.txt")
+                to: path("b.txt"),
+                strong: false,
             }],
             "{diff:?}"
         );

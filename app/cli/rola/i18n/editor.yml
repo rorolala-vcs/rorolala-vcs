@@ -1,0 +1,43 @@
+_version: 2
+
+editor:
+  err_no_editor:
+    en: |
+        This run has to open an editor to write a message, and none is named
+    zh-CN: |
+        本次运行需要打开编辑器来撰写提交信息，但没有指定编辑器
+
+  err_named_none:
+    en: |
+        This run was told to open no editor, and the message still has to be written
+    zh-CN: |
+        本次运行被指定为不使用编辑器，但仍需要撰写提交信息
+
+  err_no_editor_help:
+    en: |
+        Name one with `--editor`, or set `ROLA_EDITOR` or `EDITOR`
+
+        Naming `--editor=""` is what says no editor is to be opened; leaving it out falls back to
+        the environment.
+    zh-CN: |
+        用 `--editor` 指定，或设置 `ROLA_EDITOR`、`EDITOR`
+
+        `--editor=""` 表示不使用编辑器；不指定则会回退到环境变量。
+
+  err_editor_failed:
+    en: "`%{editor}` could not be opened: %{reason}"
+    zh-CN: "无法打开编辑器 `%{editor}`：%{reason}"
+
+  err_editor_failed_help:
+    en: |
+        Check that the editor named is a program this machine has, then try again
+    zh-CN: |
+        请确认所指定的编辑器是本机存在的程序，然后重试
+
+  err_empty_program:
+    en: The editor names no program
+    zh-CN: 编辑器未指定任何程序
+
+  err_editor_status:
+    en: "the editor ended with %{status}"
+    zh-CN: "编辑器以 %{status} 结束"

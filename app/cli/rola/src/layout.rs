@@ -111,6 +111,16 @@ pub struct ErrorLayoutFailed {
     cause: String,
 }
 
+impl ErrorLayoutFailed {
+    /// The failure of a Layout that could not be worked on, saying why in `cause`.
+    #[must_use]
+    pub fn new(cause: impl Into<String>) -> Self {
+        Self {
+            cause: cause.into(),
+        }
+    }
+}
+
 impl Failure for ErrorLayoutFailed {
     fn name(&self) -> &'static str {
         "error_layout_failed"

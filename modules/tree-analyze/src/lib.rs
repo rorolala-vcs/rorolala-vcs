@@ -13,4 +13,5 @@ mod tree_diff;
 
 pub use cache::Cache;
 pub use error::*;
+pub use scan::{Found, walk};
 pub use tree_diff::*;

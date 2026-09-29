@@ -1,0 +1,64 @@
+_version: 2
+
+status:
+  help:
+    en: |
+        Show how the working tree stands beside the Layout
+
+        **Usage**: `rola status`
+
+        A line beginning with `>` is a path that moved, `-` one the Layout names and the tree does
+        not hold, `+` one the tree holds and the Layout does not name; a line with none of them is
+        content that changed where it was. A `(*)` marks a line that is also a content change.
+
+        What is lost or untagged is settled with `rola align`; what changed is recorded with
+        `rola track`.
+    zh-CN: |
+        展示工作树相对于布局的状态
+
+        **用法**：`rola status`
+
+        以 `>` 开头的行是移动的路径，`-` 是布局命名而工作树缺失的路径，`+` 是工作树有而布局
+        未命名的路径；没有什么开头的行是原地发生内容变化的路径。`(*)` 表示该行同时也有内容变化。
+
+        丢失或未命名的用 `rola align` 处理；内容变化用 `rola track` 记录。
+
+  description:
+    en: Show how the working tree stands beside the Layout
+    zh-CN: 展示工作树相对于布局的状态
+
+  clean:
+    en: Your workspace has nothing unrecorded.
+    zh-CN: 你的工作区无未提交内容。
+
+  header_structural:
+    en: "Your workspace has %{count} structural change(s) to confirm:"
+    zh-CN: "你的工作区存在 %{count} 项结构性变更，需要确认："
+
+  header_structural_matched:
+    en: "Your workspace has %{count} structural change(s), %{renamed} of them moves matched for you:"
+    zh-CN: "你的工作区存在 %{count} 项结构性变更，已自动匹配重命名 %{renamed} 项："
+
+  header_content:
+    en: "Your workspace has %{count} content change(s) to record"
+    zh-CN: "你的工作区存在 %{count} 项内容变更，需要确认"
+
+  header_content_more:
+    en: "There are also %{count} content change(s) to record:"
+    zh-CN: "另外，%{count} 项内容变更需要确认："
+
+  mark_modified:
+    en: " (*)"
+    zh-CN: " (*)"
+
+  help_align:
+    en: "You can confirm these changes with `rola align`"
+    zh-CN: "你可以使用 `rola align` 来确认这些变更"
+
+  help_align_both:
+    en: "Use `rola align` to confirm the structural changes"
+    zh-CN: "使用 `rola align` 确认结构性变更"
+
+  help_track:
+    en: "Use `rola track` to record the content changes"
+    zh-CN: "使用 `rola track` 确认内容变更"

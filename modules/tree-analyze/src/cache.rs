@@ -6,6 +6,12 @@
 //! moved is no longer there to be read. A file whose time and length are what they were is not
 //! read again; its digest is the one already written down.
 //!
+//! Two digests are kept, not one. The first is what the file holds now, which is what tells a move
+//! from a loss and a gain; the second is what it held when the Layout was last known to agree with
+//! it, which is what tells a change from a file that is simply as it was. They are the same until
+//! the file changes, and the pair is what lets a reading be told what changed without forgetting it
+//! — a file that changed and was never written down again would be a change reported once.
+//!
 //! What is written down is a cache: a file that does not read, or that was written by another
 //! build, is nothing rather than a failure, since the next reading makes it again.
 
@@ -21,7 +27,7 @@ use crate::error::TreeDiffError;
 const MAGIC: &[u8; 4] = b"RLTA";
 
 /// The version of the cache format this build writes.
-const VERSION: u8 = 1;
+const VERSION: u8 = 2;
 
 /// What one file looked like when it was last read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,12 +40,19 @@ pub struct Entry {
     size: u64,
     /// The digest of its content.
     digest: [u8; 32],
+    /// The digest it held when the Layout was last known to agree with it, or nothing when the two
+    /// are known to disagree — a move whose file was edited as well, which the reading found and
+    /// nothing has recorded yet.
+    agree: Option<[u8; 32]>,
     /// The spans its content was cut into, when it read as text.
     spans: Option<Vec<(u32, u32)>>,
 }
 
 impl Entry {
     /// What a file looked like: when it changed, how long it is, its digest, and its spans.
+    ///
+    /// A file just read is one the Layout agrees with until something says otherwise: what the
+    /// reading found is what is there, and nothing has yet been recorded that says the two differ.
     #[must_use]
     pub const fn new(
         seconds: u64,
@@ -53,6 +66,7 @@ impl Entry {
             nanos,
             size,
             digest,
+            agree: Some(digest),
             spans,
         }
     }
@@ -61,6 +75,12 @@ impl Entry {
     #[must_use]
     pub const fn digest(&self) -> [u8; 32] {
         self.digest
+    }
+
+    /// The digest the Layout was last known to agree with, or nothing when it is known to differ.
+    #[must_use]
+    pub const fn agreed(&self) -> Option<[u8; 32]> {
+        self.agree
     }
 
     /// How long the file is.
@@ -79,6 +99,46 @@ impl Entry {
     #[must_use]
     pub const fn same_stamp(&self, seconds: u64, nanos: u32, size: u64) -> bool {
         self.seconds == seconds && self.nanos == nanos && self.size == size
+    }
+
+    /// The same file, with the spans its content was cut into forgotten.
+    ///
+    /// The digest is what a file is, and the spans are only how a move of it may be guessed when
+    /// two files are not the same bytes. Forgetting them leaves a record that still says what the
+    /// file was, and no longer says what it resembled — which is how a pairing the reader has
+    /// decided against is taken back without losing what the path is remembered by.
+    #[must_use]
+    pub const fn without_spans(&self) -> Self {
+        Self {
+            seconds: self.seconds,
+            nanos: self.nanos,
+            size: self.size,
+            digest: self.digest,
+            agree: self.agree,
+            spans: None,
+        }
+    }
+
+    /// The same file, with the Layout known not to agree with what it holds.
+    ///
+    /// It is what a move that was edited as well leaves behind: the Layout still names the version
+    /// the file held before it moved, so the two disagree until the change is recorded.
+    #[must_use]
+    pub fn disagreed(&self) -> Self {
+        Self {
+            seconds: self.seconds,
+            nanos: self.nanos,
+            size: self.size,
+            digest: self.digest,
+            agree: None,
+            spans: self.spans.clone(),
+        }
+    }
+
+    /// The same file, with the digest the Layout is to be held to agree with.
+    #[must_use]
+    pub fn with_agreed(self, agree: Option<[u8; 32]>) -> Self {
+        Self { agree, ..self }
     }
 }
 
@@ -139,12 +199,21 @@ impl Cache {
         );
 
         for (path, entry) in &self.entries {
-            body.push(u8::from(entry.spans.is_some()));
+            let mut flags = u8::from(entry.spans.is_some());
+            if entry.agree.is_some() {
+                flags |= 2;
+            }
+
+            body.push(flags);
             put_str(&mut body, path.as_str());
             put_u64(&mut body, entry.seconds);
             put_u32(&mut body, entry.nanos);
             put_u64(&mut body, entry.size);
             body.extend_from_slice(&entry.digest);
+
+            if let Some(agree) = &entry.agree {
+                body.extend_from_slice(agree);
+            }
 
             if let Some(spans) = &entry.spans {
                 put_u64(&mut body, u64::try_from(spans.len()).unwrap_or(u64::MAX));
@@ -196,6 +265,14 @@ impl Cache {
             let digest: [u8; 32] = digest.try_into().ok()?;
             rest = after;
 
+            let agree = if flags & 2 != 0 {
+                let (agree, after) = rest.split_at_checked(32)?;
+                rest = after;
+                Some(<[u8; 32]>::try_from(agree).ok()?)
+            } else {
+                None
+            };
+
             let spans = if flags & 1 != 0 {
                 let (held, after) = take_u64(rest)?;
                 let held = usize::try_from(held).ok()?;
@@ -220,6 +297,7 @@ impl Cache {
                     nanos,
                     size,
                     digest,
+                    agree,
                     spans,
                 },
             );
@@ -305,11 +383,17 @@ mod tests {
             Entry::new(1, 2, 3, [7; 32], Some(vec![(9, 4), (11, 5)])),
         );
         cache.insert(path("c.bin"), Entry::new(4, 5, 6, [8; 32], None));
+        // A file the Layout is known to disagree with keeps that through a round trip too.
+        cache.insert(
+            path("d.txt"),
+            Entry::new(7, 8, 9, [9; 32], None).disagreed(),
+        );
 
         let read = Cache::decode(&cache.encode()).unwrap();
 
         assert_eq!(read.get(&path("a/b.txt")), cache.get(&path("a/b.txt")));
         assert_eq!(read.get(&path("c.bin")), cache.get(&path("c.bin")));
+        assert_eq!(read.get(&path("d.txt")), cache.get(&path("d.txt")));
     }
 
     #[test]

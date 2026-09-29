@@ -276,3 +276,27 @@ exit_codes:
   layout_argument:
     en: "A `rola layout` command was given arguments it cannot use"
     zh-CN: "`rola layout` 收到了无法使用的参数"
+
+  track:
+    en: A file could not be recorded in the Layout
+    zh-CN: 无法将文件记入布局
+
+  track_argument:
+    en: "`rola track` was given arguments it cannot use"
+    zh-CN: "`rola track` 收到了无法使用的参数"
+
+  editor:
+    en: A message could not be written
+    zh-CN: 无法撰写提交信息
+
+  abort:
+    en: The run was stopped without recording anything
+    zh-CN: 本次运行已中止，未记录任何内容
+
+  align:
+    en: The tree could not be brought back into agreement with the Layout
+    zh-CN: 无法让工作树与布局重新一致
+
+  align_argument:
+    en: "`rola align` was given arguments it cannot use"
+    zh-CN: "`rola align` 收到了无法使用的参数"

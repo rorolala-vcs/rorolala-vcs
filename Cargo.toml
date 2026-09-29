@@ -96,7 +96,7 @@ minijinja = "2.24.0"
 unicode-normalization = "0.1.25"
 
 # Identifiers
-uuid = "1.26.1"
+uuid = { version = "1.26.1", features = ["v4"] }
 
 # Compression
 lz4 = "1.28.1"
@@ -125,6 +125,10 @@ x25519-dalek = { version = "2.0.1", features = ["getrandom"] }
 # Filesystem
 dirs = "6.0.0"
 size = "0.5.0"
+
+# Unix signal handling. The default disposition of `SIGPIPE` can only be restored through the
+# C library, which Rust does not expose on its own.
+libc = "0.2.189"
 
 # Proc macro
 annotate-snippets = "0.12.16"

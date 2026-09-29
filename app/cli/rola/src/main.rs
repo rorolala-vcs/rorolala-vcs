@@ -23,13 +23,17 @@ use rust_i18n::t;
 mod account;
 mod address;
 mod cmd_account;
+mod cmd_align;
 mod cmd_create;
 mod cmd_desktop;
 mod cmd_explain;
 mod cmd_fs_ops;
 mod cmd_init;
 mod cmd_pack;
+mod cmd_status;
+mod cmd_track;
 mod cmd_version;
+mod editor;
 mod error;
 mod exit_codes;
 mod failure;
@@ -49,6 +53,7 @@ mod vcs_index;
 use crate::account::CurrentAccountSetup;
 use crate::address::AddressHistorySetup;
 use crate::cmd_version::VERSION_NODE;
+use crate::editor::EditorSetup;
 use crate::exit_codes::{EC_HELP, EC_UNKNOWN_COMMAND};
 use crate::format::FormatSetup;
 use crate::lastec::LastExitCodeRecordSetup;
@@ -65,6 +70,8 @@ const MAX_EDITS: usize = 2;
 const MAX_GUESSES: usize = 3;
 
 fn main() {
+    restore_default_sigpipe();
+
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
 
@@ -77,6 +84,7 @@ fn main() {
     program.with_setup(LastExitCodeRecordSetup);
     program.with_setup(ConfirmSetup);
     program.with_setup(FormatSetup);
+    program.with_setup(EditorSetup);
 
     // `-V` and `--version` are not commands, but what they ask for is what a command's result is
     // drawn by: the request is rewritten to the node the version output lives on, and dispatched
@@ -96,6 +104,27 @@ fn main() {
 
     program.exec_and_exit();
 }
+
+/// Asks the kernel to kill the process on `SIGPIPE`, the way a Unix filter is expected to die.
+///
+/// Rust starts every process with `SIGPIPE` ignored, so a write to a pipe whose reader has gone —
+/// `rola ... | head`, or any program that stops reading early — returns `EPIPE` instead. The
+/// output helpers then treat that as a failure and panic, printing a backtrace over the very
+/// output the reader was consuming. Dying on the signal is what every other Unix tool does, and
+/// it leaves the exit status a pipe expects instead of a panic.
+#[cfg(unix)]
+fn restore_default_sigpipe() {
+    // SAFETY: single-threaded at this point, and the call only resets `SIGPIPE` to the
+    // disposition a fresh process already carries; it installs no handler of our own.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+/// Leaves the process as it is: Windows has no `SIGPIPE`, and a broken pipe is reported to the
+/// write itself rather than delivered as a signal.
+#[cfg(not(unix))]
+fn restore_default_sigpipe() {}
 
 /// Whether `word` asks for the version.
 fn asks_for_version(word: &str) -> bool {

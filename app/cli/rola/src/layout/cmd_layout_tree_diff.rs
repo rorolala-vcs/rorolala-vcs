@@ -151,7 +151,11 @@ pub fn handle_layout_tree_diff(
         diff.renamed
             .iter()
             .map(|rename| {
-                serde_json::json!({ "from": rename.from.as_str(), "to": rename.to.as_str() })
+                serde_json::json!({
+                    "from": rename.from.as_str(),
+                    "to": rename.to.as_str(),
+                    "strong": rename.strong,
+                })
             })
             .collect(),
     );
@@ -206,6 +210,7 @@ impl ResultLayoutTreeDiff {
                 .map(|rename| RenameItem {
                     from: rename.from.as_str().to_owned(),
                     to: rename.to.as_str().to_owned(),
+                    strong: rename.strong,
                 })
                 .collect(),
             failed: diff
@@ -227,6 +232,9 @@ pub struct RenameItem {
     from: String,
     /// The path the tree holds it at.
     to: String,
+    /// Whether the move is one the two being the same bytes makes rather than one their likeness
+    /// suggests.
+    strong: bool,
 }
 
 /// One path the reading could not look at.

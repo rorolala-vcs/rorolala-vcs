@@ -1,0 +1,168 @@
+_version: 2
+
+align:
+  help:
+    en: |
+        Bring the tree and the Layout back into agreement
+
+        **Usage**: `rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore)`
+
+        `PATH` is read against the Workspace root and need not be there. Exactly one mode is given:
+
+        - `--delete` confirms that a path the Layout names but the tree does not hold is gone.
+        - `--rename` confirms a move the reading found, whichever side `PATH` is.
+        - `--break` takes a move back, leaving a loss and a gain; two identical files are a fact.
+        - `--move FILE` asserts that `PATH` moved to `FILE`, for a move the reading could not guess.
+        - `--restore-move` puts a moved file back where the Layout names it.
+        - `--restore-modify` writes the version the Layout names back over a changed file.
+        - `--restore-delete` takes a deleted file back out of the store to where the Layout names it.
+        - `--restore` does whichever of the three `PATH` needs.
+    zh-CN: |
+        让工作树与布局重新一致
+
+        **用法**：`rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore)`
+
+        `PATH` 按工作区根解析，且不必真实存在。模式必须且只能给出一个：
+
+        - `--delete` 确认某个布局命名、但工作树已不存在的路径已消失。
+        - `--rename` 确认一次读取发现的移动，`PATH` 是移动的哪一侧都可以。
+        - `--break` 撤销一次移动，使它重新变回一失一得；两份完全一致的文件属于事实，不能撤销。
+        - `--move FILE` 断言 `PATH` 移动到了 `FILE`，用于读取无法猜出的移动。
+        - `--restore-move` 把移动过的文件放回布局所命名的位置。
+        - `--restore-modify` 用布局所记录的版本覆盖已改动的文件。
+        - `--restore-delete` 从仓库取回已删除的文件，写回布局所命名的位置。
+        - `--restore` 按 `PATH` 需要，执行上面三者中的一个。
+
+  description:
+    en: Bring the tree and the Layout back into agreement
+    zh-CN: 让工作树与布局重新一致
+
+  result_deleted:
+    en: "gone  %{what}"
+    zh-CN: "已消失  %{what}"
+
+  result_moved:
+    en: "moved  %{what}"
+    zh-CN: "已移动  %{what}"
+
+  result_broke:
+    en: "broken  %{what}"
+    zh-CN: "已撤销  %{what}"
+
+  result_asserted:
+    en: "asserted  %{what}"
+    zh-CN: "已断言  %{what}"
+
+  result_restored_move:
+    en: "restored  %{what}"
+    zh-CN: "已放回  %{what}"
+
+  result_restored_modify:
+    en: "restored  %{what}"
+    zh-CN: "已还原  %{what}"
+
+  result_restored_delete:
+    en: "recovered  %{what}"
+    zh-CN: "已恢复  %{what}"
+
+  err_argument:
+    en: A path and exactly one mode are needed
+    zh-CN: 需要给出一个路径和恰好一个模式
+
+  err_argument_help:
+    en: |
+        Run `rola align --help` for the four modes
+    zh-CN: |
+        运行 `rola align --help` 查看四种模式
+
+  err_not_lost:
+    en: "`%{path}` is not a path the Layout names and the tree lacks"
+    zh-CN: "`%{path}` 不是「布局命名、工作树缺失」的路径"
+
+  err_not_lost_help:
+    en: |
+        Run `rola layout tree-diff` to see what is lost
+    zh-CN: |
+        运行 `rola layout tree-diff` 查看哪些路径已丢失
+
+  err_no_rename:
+    en: "`%{path}` is not a side of any move the reading found"
+    zh-CN: "`%{path}` 不是任何一次已发现移动的某一侧"
+
+  err_no_rename_help:
+    en: |
+        Run `rola layout tree-diff` to see the moves, or assert one with `--move`
+    zh-CN: |
+        运行 `rola layout tree-diff` 查看移动，或用 `--move` 断言一次移动
+
+  err_real_move:
+    en: "`%{from}` and `%{to}` hold the same bytes, so the move is real and cannot be taken back"
+    zh-CN: "`%{from}` 与 `%{to}` 内容完全相同，这是真实的移动，无法撤销"
+
+  err_real_move_help:
+    en: |
+        Confirm it with `--rename`, or remove the path with `--delete`
+    zh-CN: |
+        用 `--rename` 确认它，或用 `--delete` 移除该路径
+
+  err_move_missing:
+    en: "`%{path}` is not a file inside this Workspace"
+    zh-CN: "`%{path}` 不是本工作区内的文件"
+
+  err_move_tracked:
+    en: "The Layout already names `%{path}`"
+    zh-CN: "布局已经命名了 `%{path}`"
+
+  err_move_help:
+    en: |
+        `--move` names the file a lost path moved to, which must be a file the Layout does not know
+    zh-CN: |
+        `--move` 指定某个丢失路径移动到的文件，该文件必须是布局尚不认识的
+
+  err_not_modified:
+    en: "`%{path}` is not a change against a version the Layout names"
+    zh-CN: "`%{path}` 不是相对于布局所记录版本的改动"
+
+  err_not_modified_help:
+    en: |
+        A move's destination has no version of its own; put the move back first with `--restore-move`
+    zh-CN: |
+        移动的目的地没有自己的版本；请先用 `--restore-move` 把移动放回
+
+  err_restore_exists:
+    en: "Putting the file back would land on `%{path}`, which is already there"
+    zh-CN: "放回文件会落在已存在的 `%{path}` 上"
+
+  err_restore_exists_help:
+    en: |
+        Move or remove what is there first, then put the file back
+    zh-CN: |
+        请先移走或删除那里的文件，然后再放回
+
+  err_not_restorable:
+    en: "`%{path}` is not a move, a change, or a deletion the Layout names, so there is nothing to put back"
+    zh-CN: "`%{path}` 既不是移动，也不是布局命名文件上的改动或删除，没有可还原的内容"
+
+  err_not_restorable_help:
+    en: |
+        Run `rola status` to see what can be put back
+    zh-CN: |
+        运行 `rola status` 查看哪些可以还原
+
+  err_no_store:
+    en: This run works on no store to take the recorded version from
+    zh-CN: 本运行没有可取出所记录版本的仓库
+
+  err_no_index:
+    en: This run works on no version control index to read the recorded version from
+    zh-CN: 本运行没有可读取所记录版本的版本控制索引
+
+  err_failed:
+    en: "The alignment could not be made: %{reason}"
+    zh-CN: "无法完成对齐：%{reason}"
+
+  err_failed_help:
+    en: |
+        Check the Workspace, the Layout and the analysis cache, then try again
+    zh-CN: |
+        请检查工作区、布局与分析缓存，然后重试

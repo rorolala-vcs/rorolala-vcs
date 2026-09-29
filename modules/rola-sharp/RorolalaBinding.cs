@@ -1024,6 +1024,12 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_WORKSPACE_LAYOUT_PATH();
 
     /// <summary>
+    /// Path to the file a run opens in an editor to write what it is recording
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_WORKSPACE_EDITING_PATH();
+
+    /// <summary>
     /// Path, inside the Workspace's data directory, where what a Layout's analysis is kept
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

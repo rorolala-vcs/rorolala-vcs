@@ -151,7 +151,7 @@ pub fn walk(root: &Path) -> (Vec<Found>, Vec<FailedPath>) {
 }
 
 /// When a file was last changed, as whole seconds since the epoch and the part of a second after.
-fn stamp(meta: &fs::Metadata) -> (u64, u32) {
+pub fn stamp(meta: &fs::Metadata) -> (u64, u32) {
     meta.modified()
         .ok()
         .and_then(|time| time.duration_since(UNIX_EPOCH).ok())

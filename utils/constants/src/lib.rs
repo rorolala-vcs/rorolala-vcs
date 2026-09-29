@@ -39,6 +39,15 @@ pub const WORKSPACE_LAYOUTS_DIR: &str = "./.rola/layouts/";
 #[lazyffi(export = ROLA_WORKSPACE_LAYOUT_PATH)]
 pub const WORKSPACE_LAYOUT_PATH: &str = "./.rola/LAYOUT";
 
+/// Path to the file a run opens in an editor to write what it is recording
+///
+/// A message is written where it can be edited as text — the whole of what a run records, the group
+/// it applies to and what each file did — so the editor writes one file the run then reads back. It
+/// lives in the Workspace's data directory, beside the rest of what the Workspace keeps for itself,
+/// since it is not part of the work.
+#[lazyffi(export = ROLA_WORKSPACE_EDITING_PATH)]
+pub const WORKSPACE_EDITING_PATH: &str = "./.rola/EDITING.md";
+
 /// Path, inside the Workspace's data directory, where what a Layout's analysis is kept
 ///
 /// The tree a Layout describes is read back against the files a Workspace holds, and what was

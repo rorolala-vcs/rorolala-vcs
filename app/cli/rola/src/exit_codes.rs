@@ -258,3 +258,27 @@ pub const EC_ERR_LAYOUT: i32 = 190;
 
 /// `exit_codes.layout_argument`
 pub const EC_ERR_LAYOUT_ARGUMENT: i32 = 191;
+
+// Tracking — writing content and recording it in a Layout
+
+/// `exit_codes.track`
+pub const EC_ERR_TRACK: i32 = 200;
+
+/// `exit_codes.track_argument`
+pub const EC_ERR_TRACK_ARGUMENT: i32 = 201;
+
+// Editing — a message a run cannot be told in one argument
+
+/// `exit_codes.editor`
+pub const EC_ERR_EDITOR: i32 = 210;
+
+/// `exit_codes.abort`
+pub const EC_ABORT: i32 = 211;
+
+// Aligning — bringing the tree and the Layout back into agreement
+
+/// `exit_codes.align`
+pub const EC_ERR_ALIGN: i32 = 220;
+
+/// `exit_codes.align_argument`
+pub const EC_ERR_ALIGN_ARGUMENT: i32 = 221;
