@@ -25,6 +25,55 @@ pub const WORKSPACE_CONFIG_PATH: &str = "./.rola/workspace.toml";
 #[lazyffi(export = ROLA_WORKSPACE_KEYS_DIR)]
 pub const WORKSPACE_KEYS_DIR: &str = "./.rola/auth/";
 
+/// Path, inside the Workspace's data directory, where its Layouts are kept
+///
+/// One directory per Layout, each named by the Layout's own name, so a Workspace holds as
+/// many as it has names for. A Vault keeps one instead, in a directory of its own.
+#[lazyffi(export = ROLA_WORKSPACE_LAYOUTS_DIR)]
+pub const WORKSPACE_LAYOUTS_DIR: &str = "./.rola/layouts/";
+
+/// Path to the file naming the Layout a Workspace has checked out
+///
+/// It holds the name of one of the Layouts under [`WORKSPACE_LAYOUTS_DIR`], which is the Layout
+/// the Workspace works in until another is chosen.
+#[lazyffi(export = ROLA_WORKSPACE_LAYOUT_PATH)]
+pub const WORKSPACE_LAYOUT_PATH: &str = "./.rola/LAYOUT";
+
+/// Path, inside the Workspace's data directory, where what a Layout's analysis is kept
+///
+/// The tree a Layout describes is read back against the files a Workspace holds, and what was
+/// found — each file's time, size and fingerprint — is kept here so the next reading can skip
+/// what has not changed. One directory per Layout; see [`LAYOUT_TRACK_FILE`] and its kin.
+#[lazyffi(export = ROLA_WORKSPACE_CACHE_DIR)]
+pub const WORKSPACE_CACHE_DIR: &str = "./.rola/cache/";
+
+/// The file, inside a Layout's directory, naming the upstream Vault it tracks
+///
+/// It holds the name of a Vault the Workspace has bound, or nothing when the Layout tracks
+/// none. A Layout is a place to work; the Vault it tracks is where the work goes.
+#[lazyffi(export = ROLA_LAYOUT_TRACK_FILE)]
+pub const LAYOUT_TRACK_FILE: &str = "TRACK";
+
+/// Path, inside the Vault's root, where its single Layout is kept
+///
+/// A Vault holds one Layout rather than many, so it is kept directly under here rather than in
+/// a directory of its own; see [`VAULT_LAYOUT_NAME`] for what that one is called.
+#[lazyffi(export = ROLA_VAULT_LAYOUT_DIR)]
+pub const VAULT_LAYOUT_DIR: &str = "./layout/";
+
+/// The name a Workspace's Layout is given when it is made
+///
+/// A Workspace that exists has one, so that there is always somewhere to work.
+#[lazyffi(export = ROLA_DEFAULT_LAYOUT_NAME)]
+pub const DEFAULT_LAYOUT_NAME: &str = "main";
+
+/// The name a Vault's single Layout is known by
+///
+/// A Vault's Layout is one and has no name of its own on disk; this is what it is called when
+/// it has to be named, as when a Vault's Layouts are listed.
+#[lazyffi(export = ROLA_VAULT_LAYOUT_NAME)]
+pub const VAULT_LAYOUT_NAME: &str = "truth";
+
 /// Path to a directory's lock file, besides whatever names the directory
 ///
 /// A place is locked while this file is there, and unlocked while it is not — so a lock is

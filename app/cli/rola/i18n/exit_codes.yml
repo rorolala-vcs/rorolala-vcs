@@ -268,3 +268,11 @@ exit_codes:
   format:
     en: "The result could not be drawn through --format"
     zh-CN: "无法用 --format 绘制结果"
+
+  layout:
+    en: A layout could not be worked on
+    zh-CN: 无法对布局进行操作
+
+  layout_argument:
+    en: "A `rola layout` command was given arguments it cannot use"
+    zh-CN: "`rola layout` 收到了无法使用的参数"

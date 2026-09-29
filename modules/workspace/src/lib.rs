@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rorolala_layout::Layouts;
 use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
@@ -27,6 +28,7 @@ pub use ffi::*;
 pub use rorolala_utils_constants::{
     WORKSPACE_CONFIG_PATH as CONFIG_PATH, WORKSPACE_DATA_DIR as DATA_DIR,
     WORKSPACE_INDEX_DIR as INDEX_DIR, WORKSPACE_KEYS_DIR as KEYS_DIR,
+    WORKSPACE_LAYOUT_PATH as LAYOUT_PATH, WORKSPACE_LAYOUTS_DIR as LAYOUTS_DIR,
     WORKSPACE_LOCK_PATH as LOCK_PATH, WORKSPACE_STORAGE_DIR as STORAGE_DIR,
 };
 
@@ -106,6 +108,27 @@ impl Workspace {
     pub fn get_or_create_rola_storage(&self) -> RorolalaStorage {
         self.get_current_rola_storage()
             .unwrap_or_else(|| RorolalaStorage::create(self.storage_root()))
+    }
+
+    /// The Layouts this Workspace holds, and the one it has checked out.
+    ///
+    /// A Workspace keeps its Layouts under [`LAYOUTS_DIR`] inside its data directory, one
+    /// directory each, and the one it works in is named by [`LAYOUT_PATH`]. Nothing is made
+    /// here: a Workspace with no Layouts is one with nothing to list.
+    #[must_use]
+    pub fn layouts(&self) -> Layouts {
+        Layouts::open(
+            self.layouts_root(),
+            self.current_dir
+                .join(LAYOUT_PATH)
+                .components()
+                .collect::<PathBuf>(),
+        )
+    }
+
+    /// Where the Workspace's Layouts are rooted, with the layout's spelling walked back out of it.
+    fn layouts_root(&self) -> PathBuf {
+        self.current_dir.join(LAYOUTS_DIR).components().collect()
     }
 
     /// Where the Workspace's store is rooted, with the layout's spelling walked back out of it.

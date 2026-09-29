@@ -15,6 +15,7 @@ members = [
     "modules/protocol",
     "modules/protocol-macros",
     "modules/storage",
+    "modules/tree-analyze",
     "modules/vault",
     "modules/vcs",
     "modules/workspace",
@@ -52,6 +53,7 @@ rorolala-layout = { path = "modules/layout" }
 rorolala-protocol = { path = "modules/protocol" }
 rorolala-protocol-macros = { path = "modules/protocol-macros" }
 rorolala-storage = { path = "modules/storage" }
+rorolala-tree-analyze = { path = "modules/tree-analyze" }
 rorolala-utils-cli-theme = { path = "utils/cli-theme" }
 rorolala-utils-configure = { path = "utils/configure" }
 rorolala-utils-configure-macros = { path = "utils/configure-macros" }
@@ -89,6 +91,12 @@ bincode2 = "2.0.1"
 
 # Templating
 minijinja = "2.24.0"
+
+# Unicode
+unicode-normalization = "0.1.25"
+
+# Identifiers
+uuid = "1.26.1"
 
 # Compression
 lz4 = "1.28.1"
@@ -148,6 +156,8 @@ rorolala-auth.workspace = true
 rorolala-daemon.workspace = true
 rorolala-errors.workspace = true
 rorolala-inverse-index.workspace = true
+rorolala-layout.workspace = true
+rorolala-tree-analyze.workspace = true
 rorolala-protocol.workspace = true
 rorolala-storage.workspace = true
 rorolala-utils-constants.workspace = true

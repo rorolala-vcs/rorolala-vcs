@@ -1,0 +1,10 @@
+[package]
+name = "it-layout"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rorolala-layout = { path = "../../modules/layout" }
+rorolala-utils-sandbox = { path = "../../utils/sandbox" }
+uuid = "1.26.1"

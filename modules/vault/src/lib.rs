@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rorolala_layout::Layout;
 use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage};
 use rorolala_utils_constants::LOCK_FILE;
 use rorolala_utils_lazyffi::lazyffi;
@@ -31,7 +32,8 @@ pub use root_vault::*;
 /// own spelling of where it keeps things is still one name.
 pub use rorolala_utils_constants::{
     VAULT_CONFIG_PATH as CONFIG_PATH, VAULT_INDEX_DIR as INDEX_DIR, VAULT_KEYS_DIR as KEYS_DIR,
-    VAULT_STORAGE_DIR as STORAGE_DIR, VAULT_VAULTS_DIR as VAULTS_DIR,
+    VAULT_LAYOUT_DIR as LAYOUT_DIR, VAULT_STORAGE_DIR as STORAGE_DIR,
+    VAULT_VAULTS_DIR as VAULTS_DIR,
 };
 
 /// Rorolala remote resource vault
@@ -97,6 +99,23 @@ impl Vault {
     #[must_use]
     pub fn config_path(&self) -> PathBuf {
         self.current_dir.join(CONFIG_PATH)
+    }
+
+    /// The Layout this Vault keeps.
+    ///
+    /// A Vault holds one Layout rather than many, so it is kept directly under [`LAYOUT_DIR`]
+    /// rather than in a directory of its own: there is one, and nothing to tell it apart from.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`rorolala_layout::LayoutError`] if the Layout cannot be read back.
+    pub fn layout(&self) -> Result<Layout, rorolala_layout::LayoutError> {
+        Layout::open(
+            self.current_dir
+                .join(LAYOUT_DIR)
+                .components()
+                .collect::<PathBuf>(),
+        )
     }
 
     /// The store this Vault keeps, if it has one.

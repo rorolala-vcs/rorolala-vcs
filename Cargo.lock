@@ -1116,8 +1116,10 @@ dependencies = [
  "rorolala-dev-bindgen",
  "rorolala-errors",
  "rorolala-inverse-index",
+ "rorolala-layout",
  "rorolala-protocol",
  "rorolala-storage",
+ "rorolala-tree-analyze",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
@@ -1605,6 +1607,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -1732,10 +1735,16 @@ dependencies = [
 name = "rorolala-layout"
 version = "0.1.0"
 dependencies = [
+ "just_fmt 0.2.1",
+ "rorolala-errors",
+ "rorolala-storage",
+ "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
- "rorolala-vault",
- "rorolala-workspace",
+ "rorolala-vcs",
+ "tokio",
+ "unicode-normalization",
+ "uuid",
 ]
 
 [[package]]
@@ -1773,6 +1782,18 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "zstd",
+]
+
+[[package]]
+name = "rorolala-tree-analyze"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "rorolala-layout",
+ "rorolala-utils-constants",
+ "rorolala-utils-location",
+ "rorolala-workspace",
+ "uuid",
 ]
 
 [[package]]
@@ -1870,6 +1891,7 @@ version = "0.1.0"
 dependencies = [
  "just_fmt 0.2.1",
  "rorolala-errors",
+ "rorolala-layout",
  "rorolala-storage",
  "rorolala-utils-configure",
  "rorolala-utils-constants",
@@ -1899,6 +1921,7 @@ name = "rorolala-workspace"
 version = "0.1.0"
 dependencies = [
  "rorolala-errors",
+ "rorolala-layout",
  "rorolala-storage",
  "rorolala-utils-configure",
  "rorolala-utils-constants",
@@ -2399,6 +2422,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinyvec"
+version = "1.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
+
+[[package]]
 name = "tokio"
 version = "1.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2529,6 +2558,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
+name = "unicode-normalization"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fd4f6878c9cb28d874b009da9e8d183b5abc80117c40bbd187a1fde336be6e8"
+dependencies = [
+ "tinyvec",
+]
+
+[[package]]
 name = "unicode-segmentation"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2567,6 +2605,16 @@ name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
+
+[[package]]
+name = "uuid"
+version = "1.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "version_check"

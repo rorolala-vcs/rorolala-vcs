@@ -571,33 +571,37 @@ internal enum VaultCreationError : int
     /// </summary>
     VaultCreationError_DirCreateFailed = 0,
     /// <summary>
+    /// Failure when the Layout the Vault keeps cannot be made
+    /// </summary>
+    VaultCreationError_LayoutCreateFailed = 1,
+    /// <summary>
     /// Failure when reading the staging file to check if it already exists
     /// </summary>
-    VaultCreationError_ConfigLocked = 1,
+    VaultCreationError_ConfigLocked = 2,
     /// <summary>
     /// Failure when rendering the default value into the configuration format
     /// </summary>
-    VaultCreationError_ConfigRenderFailed = 2,
+    VaultCreationError_ConfigRenderFailed = 3,
     /// <summary>
     /// Failure when writing the staging file
     /// </summary>
-    VaultCreationError_ConfigStageFailed = 3,
+    VaultCreationError_ConfigStageFailed = 4,
     /// <summary>
     /// Failure when publishing (copying) the staging file to the configuration file
     /// </summary>
-    VaultCreationError_ConfigPublishFailed = 4,
+    VaultCreationError_ConfigPublishFailed = 5,
     /// <summary>
     /// Failure when the staging file cannot be rendered
     /// </summary>
-    VaultCreationError_ConfigWriteRenderFailed = 5,
+    VaultCreationError_ConfigWriteRenderFailed = 6,
     /// <summary>
     /// Failure when the staging file cannot be written
     /// </summary>
-    VaultCreationError_ConfigWriteStageFailed = 6,
+    VaultCreationError_ConfigWriteStageFailed = 7,
     /// <summary>
     /// Failure with an unknown or unclassified cause
     /// </summary>
-    VaultCreationError_UnknownError = 7,
+    VaultCreationError_UnknownError = 8,
 }
 
 /// <summary>
@@ -735,33 +739,37 @@ internal enum WorkspaceCreationError : int
     /// </summary>
     WorkspaceCreationError_DataDirCreateFailed = 0,
     /// <summary>
+    /// Failure when the Layout the Workspace starts with cannot be made
+    /// </summary>
+    WorkspaceCreationError_LayoutCreateFailed = 1,
+    /// <summary>
     /// Failure when reading the staging file to check if it already exists
     /// </summary>
-    WorkspaceCreationError_ConfigLocked = 1,
+    WorkspaceCreationError_ConfigLocked = 2,
     /// <summary>
     /// Failure when rendering the default value into the configuration format
     /// </summary>
-    WorkspaceCreationError_ConfigRenderFailed = 2,
+    WorkspaceCreationError_ConfigRenderFailed = 3,
     /// <summary>
     /// Failure when writing the staging file
     /// </summary>
-    WorkspaceCreationError_ConfigStageFailed = 3,
+    WorkspaceCreationError_ConfigStageFailed = 4,
     /// <summary>
     /// Failure when publishing (copying) the staging file to the configuration file
     /// </summary>
-    WorkspaceCreationError_ConfigPublishFailed = 4,
+    WorkspaceCreationError_ConfigPublishFailed = 5,
     /// <summary>
     /// Failure when the staging file cannot be rendered
     /// </summary>
-    WorkspaceCreationError_ConfigWriteRenderFailed = 5,
+    WorkspaceCreationError_ConfigWriteRenderFailed = 6,
     /// <summary>
     /// Failure when the staging file cannot be written
     /// </summary>
-    WorkspaceCreationError_ConfigWriteStageFailed = 6,
+    WorkspaceCreationError_ConfigWriteStageFailed = 7,
     /// <summary>
     /// Failure with an unknown or unclassified cause
     /// </summary>
-    WorkspaceCreationError_UnknownError = 7,
+    WorkspaceCreationError_UnknownError = 8,
 }
 
 /// <summary>
@@ -1002,6 +1010,48 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_WORKSPACE_KEYS_DIR();
+
+    /// <summary>
+    /// Path, inside the Workspace's data directory, where its Layouts are kept
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_WORKSPACE_LAYOUTS_DIR();
+
+    /// <summary>
+    /// Path to the file naming the Layout a Workspace has checked out
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_WORKSPACE_LAYOUT_PATH();
+
+    /// <summary>
+    /// Path, inside the Workspace's data directory, where what a Layout's analysis is kept
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_WORKSPACE_CACHE_DIR();
+
+    /// <summary>
+    /// The file, inside a Layout's directory, naming the upstream Vault it tracks
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_LAYOUT_TRACK_FILE();
+
+    /// <summary>
+    /// Path, inside the Vault's root, where its single Layout is kept
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_VAULT_LAYOUT_DIR();
+
+    /// <summary>
+    /// The name a Workspace's Layout is given when it is made
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_DEFAULT_LAYOUT_NAME();
+
+    /// <summary>
+    /// The name a Vault's single Layout is known by
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_VAULT_LAYOUT_NAME();
 
     /// <summary>
     /// Path to the Vault configuration file, inside the vault root

@@ -250,3 +250,11 @@ pub const EC_ERR_DESKTOP_ENDED: i32 = 172;
 
 /// `exit_codes.format`
 pub const EC_ERR_FORMAT: i32 = 180;
+
+// Layouts — the places a Workspace or a Vault works in
+
+/// `exit_codes.layout`
+pub const EC_ERR_LAYOUT: i32 = 190;
+
+/// `exit_codes.layout_argument`
+pub const EC_ERR_LAYOUT_ARGUMENT: i32 = 191;

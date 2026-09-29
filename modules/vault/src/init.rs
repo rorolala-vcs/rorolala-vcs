@@ -70,6 +70,12 @@ impl Vault {
         let storage: PathBuf = dir.join(STORAGE_DIR).components().collect();
         let _ = RorolalaStorage::create(storage);
 
+        // The Vault keeps one Layout, made with it so that a Vault that exists has somewhere to
+        // hold the work it is sent.
+        Self::at(dir.to_path_buf())
+            .layout()
+            .map_err(|_| CreationError::LayoutCreateFailed)?;
+
         Ok(())
     }
 }
@@ -84,7 +90,7 @@ mod tests {
     use rorolala_utils_configure::Configure;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, CreationError, INDEX_DIR, KEYS_DIR, STORAGE_DIR, Vault};
+    use crate::{CONFIG_PATH, CreationError, INDEX_DIR, KEYS_DIR, LAYOUT_DIR, STORAGE_DIR, Vault};
 
     /// A parent directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -143,6 +149,20 @@ mod tests {
         // The index is part of a Vault rather than something to be set up beside it: a Vault
         // that exists has somewhere to write it the moment it does.
         assert!(dir.join(INDEX_DIR).is_dir(), "{:?}", dir.join(INDEX_DIR));
+
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn creating_a_vault_makes_the_layout_it_keeps() {
+        let parent = scratch("layout");
+        let dir = parent.join("vault");
+
+        Vault::create(&dir).unwrap();
+
+        // A Vault that exists has somewhere to hold what is sent to it: its one Layout.
+        assert!(dir.join(LAYOUT_DIR).is_dir(), "{:?}", dir.join(LAYOUT_DIR));
+        Vault::locate(&dir).unwrap().layout().unwrap();
 
         let _ = fs::remove_dir_all(&parent);
     }

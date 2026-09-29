@@ -4,7 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+rorolala-errors.workspace = true
+rorolala-storage.workspace = true
+rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
-rorolala-vault.workspace = true
-rorolala-workspace.workspace = true
+rorolala-vcs.workspace = true
+just_fmt.workspace = true
+tokio.workspace = true
+unicode-normalization.workspace = true
+uuid.workspace = true

@@ -12,6 +12,16 @@ error:
       zh-CN: |
           请检查目标路径的写权限，然后重试
 
+    err_layout_create_failed:
+      en: Failed to create the layout the workspace starts with
+      zh-CN: 创建工作区初始布局失败
+
+    err_layout_create_failed_help:
+      en: |
+          Please check the write permission of the workspace data directory, then try again
+      zh-CN: |
+          请检查工作区数据目录的写权限，然后重试
+
     err_config_locked:
       en: Failed to read the staging file to check whether it already exists
       zh-CN: 读取暂存文件以检查其是否已存在失败

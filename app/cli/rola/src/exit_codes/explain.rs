@@ -81,6 +81,8 @@ pub const CODES: &[i32] = &[
     171,
     172,
     180,
+    190,
+    191,
 ];
 
 /// Whether the program states the exit code `code`.
@@ -169,6 +171,8 @@ pub fn explain_ec(code: i32) -> String {
         171 => t!("exit_codes.desktop_launch_failed").to_string(),
         172 => t!("exit_codes.desktop_ended").to_string(),
         180 => t!("exit_codes.format").to_string(),
+        190 => t!("exit_codes.layout").to_string(),
+        191 => t!("exit_codes.layout_argument").to_string(),
         _ => String::new(),
     }
 }

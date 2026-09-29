@@ -1,0 +1,14 @@
+[package]
+name = "rorolala-tree-analyze"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+blake3.workspace = true
+rorolala-layout.workspace = true
+rorolala-utils-constants.workspace = true
+rorolala-utils-location.workspace = true
+rorolala-workspace.workspace = true
+
+[dev-dependencies]
+uuid.workspace = true

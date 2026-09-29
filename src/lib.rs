@@ -27,6 +27,12 @@ pub use rorolala_errors as errors;
 /// The reverse dependency index over a version control index
 pub use rorolala_inverse_index as inverse_index;
 
+/// The Layouts a Workspace and a Vault share, and the file one is written down as
+pub use rorolala_layout as layout;
+
+/// Reading a Workspace's tree against the Layout it works from
+pub use rorolala_tree_analyze as tree_analyze;
+
 /// Transport and wire protocol
 pub use rorolala_protocol as protocol;
 

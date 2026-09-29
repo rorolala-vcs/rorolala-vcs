@@ -6,6 +6,8 @@ use rorolala_utils_lazyffi::lazyffi;
 pub enum CreationError {
     /// Failure when the directory the Workspace keeps its data in cannot be created
     DataDirCreateFailed,
+    /// Failure when the Layout the Workspace starts with cannot be made
+    LayoutCreateFailed,
     /// Failure when reading the staging file to check if it already exists
     ConfigLocked,
     /// Failure when rendering the default value into the configuration format
@@ -31,6 +33,7 @@ impl rorolala_errors::Failure for CreationError {
     fn name(&self) -> &'static str {
         match self {
             Self::DataDirCreateFailed => "workspace_creation_data_dir_create_failed",
+            Self::LayoutCreateFailed => "workspace_creation_layout_create_failed",
             Self::ConfigLocked => "workspace_creation_config_locked",
             Self::ConfigRenderFailed => "workspace_creation_config_render_failed",
             Self::ConfigStageFailed => "workspace_creation_config_stage_failed",
@@ -50,6 +53,7 @@ impl rorolala_errors::Failure for CreationError {
             Self::DataDirCreateFailed => {
                 "the directory the Workspace keeps its data in could not be created"
             }
+            Self::LayoutCreateFailed => "the Layout the Workspace starts with could not be made",
             Self::ConfigLocked => {
                 "the staging file could not be read to check whether it already exists"
             }

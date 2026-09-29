@@ -38,6 +38,7 @@ mod inv_idx;
 mod key;
 mod keys;
 mod lastec;
+mod layout;
 mod progress;
 mod rebuild;
 mod storage;

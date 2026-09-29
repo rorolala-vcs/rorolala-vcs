@@ -25,6 +25,16 @@ pub fn render_error_vault_creation(err: ErrorVaultCreation, ec: &mut ResExitCode
                 help_line!(t!("error.vault_creation.err_dir_create_failed_help")).trim()
             );
         }
+        rorolala_vault::CreationError::LayoutCreateFailed => {
+            r_eprintln!(
+                "{}",
+                err_line!(t!("error.vault_creation.err_layout_create_failed")).trim()
+            );
+            r_eprintln!(
+                "{}",
+                help_line!(t!("error.vault_creation.err_layout_create_failed_help")).trim()
+            );
+        }
         rorolala_vault::CreationError::ConfigLocked => {
             r_eprintln!(
                 "{}",
@@ -124,6 +134,16 @@ pub fn render_error_workspace_creation(err: ErrorWorkspaceCreation, ec: &mut Res
                     "error.workspace_creation.err_data_dir_create_failed_help"
                 ))
                 .trim()
+            );
+        }
+        rorolala_workspace::CreationError::LayoutCreateFailed => {
+            r_eprintln!(
+                "{}",
+                err_line!(t!("error.workspace_creation.err_layout_create_failed")).trim()
+            );
+            r_eprintln!(
+                "{}",
+                help_line!(t!("error.workspace_creation.err_layout_create_failed_help")).trim()
             );
         }
         rorolala_workspace::CreationError::ConfigLocked => {

@@ -6,6 +6,8 @@ use rorolala_utils_lazyffi::lazyffi;
 pub enum CreationError {
     /// Failure when the directory the Vault keeps its configuration in cannot be created
     DirCreateFailed,
+    /// Failure when the Layout the Vault keeps cannot be made
+    LayoutCreateFailed,
     /// Failure when reading the staging file to check if it already exists
     ConfigLocked,
     /// Failure when rendering the default value into the configuration format
@@ -33,6 +35,7 @@ impl rorolala_errors::Failure for CreationError {
     fn name(&self) -> &'static str {
         match self {
             Self::DirCreateFailed => "vault_creation_dir_create_failed",
+            Self::LayoutCreateFailed => "vault_creation_layout_create_failed",
             Self::ConfigLocked => "vault_creation_config_locked",
             Self::ConfigRenderFailed => "vault_creation_config_render_failed",
             Self::ConfigStageFailed => "vault_creation_config_stage_failed",
@@ -53,6 +56,7 @@ impl rorolala_errors::Failure for CreationError {
             Self::DirCreateFailed => {
                 "the directory the Vault keeps its configuration in could not be created"
             }
+            Self::LayoutCreateFailed => "the Layout the Vault keeps could not be made",
             Self::ConfigLocked => {
                 "the staging file could not be read to check whether it already exists"
             }
