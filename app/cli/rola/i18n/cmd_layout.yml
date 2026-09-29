@@ -51,6 +51,36 @@ cmd_layout:
     zh-CN: |
         运行 `rola layout --help` 查看它接受什么
 
+  err_layout_exists:
+    en: There is already something by that name
+    zh-CN: 该名字下已存在内容
+
+  err_layout_exists_help:
+    en: |
+        Please choose another name, or take what is there away first
+    zh-CN: |
+        请换一个名字，或先移除已有的内容
+
+  err_layout_missing:
+    en: There is nothing by that name
+    zh-CN: 该名字下没有任何内容
+
+  err_layout_missing_help:
+    en: |
+        Please check the name, or make it first
+    zh-CN: |
+        请检查名字，或先创建它
+
+  err_track_not_bound:
+    en: "`%{track}` is not a Vault this Workspace has bound"
+    zh-CN: "`%{track}` 不是本工作区已绑定的保险库"
+
+  err_track_not_bound_help:
+    en: |
+        Please bind it first with `rola vault bind`
+    zh-CN: |
+        请先用 `rola vault bind` 绑定它
+
   err_not_cached:
     en: "The Layout `%{layout}` of `%{vault}` has not been fetched here"
     zh-CN: "尚未在此取回 `%{vault}` 的布局 `%{layout}`"
