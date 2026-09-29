@@ -1791,6 +1791,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-dev-i18n-check"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "serde_yaml",
+ "syn 3.0.5",
+]
+
+[[package]]
 name = "rorolala-dev-rsharp-bindgen"
 version = "0.1.0"
 

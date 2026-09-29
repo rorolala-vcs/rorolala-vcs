@@ -1,0 +1,12 @@
+[package]
+name = "rorolala-dev-i18n-check"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The scanner lexes rather than parses, so a `t!` written inside another macro is still reached.
+proc-macro2.workspace = true
+# Only for reading a string literal's value back out of its token.
+syn.workspace = true
+# The translation files are the ones `rust-i18n` reads, which are YAML.
+serde_yaml.workspace = true
