@@ -11,9 +11,9 @@ cmd_layout_ls_ownership:
         bind`. Naming none reads the copy of the one the Workspace reaches for by default.
 
         Nothing is reached for: what is listed comes from the copy under
-        `.rola/cache/readonly-layouts/`, so it says what the Vault held when it was last fetched.
-        One entry a line: its `Uuid`, and the account that holds it, or that nobody does. A run
-        with no copy is told to `rola layout fetch`.
+        `.rola/cache/readonly-layouts/<VAULT>/truth/`, so it says what the Vault held when it was
+        last fetched. One entry a line: its `Uuid`, and the account that holds it, or that nobody
+        does. A run with no copy is told to `rola layout fetch`.
     zh-CN: |
         从取回的副本中列出每个条目的持有者
 
@@ -22,8 +22,8 @@ cmd_layout_ls_ownership:
         `VAULT` 指要读取其副本的保险库：必须是工作区用 `rola vault bind` 绑定的名字。不指定时，
         读取工作区选定默认保险库的副本。
 
-        不会连接远端：结果来自 `.rola/cache/readonly-layouts/` 下的副本，反映的是上次取回时
-        保险库的状态。每行一个条目：它的 `Uuid`，以及持有它的账户（或无人持有）。
+        不会连接远端：结果来自 `.rola/cache/readonly-layouts/<VAULT>/truth/` 下的副本，
+        反映的是上次取回时保险库的状态。每行一个条目：它的 `Uuid`，以及持有它的账户（或无人持有）。
         尚未取回时会提示运行 `rola layout fetch`。
 
   description:

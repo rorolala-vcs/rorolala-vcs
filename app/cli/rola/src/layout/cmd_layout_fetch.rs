@@ -16,6 +16,7 @@ use mingling::{
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
 use serde::Serialize;
 
@@ -107,7 +108,9 @@ pub fn handle_layout_fetch(
     action_fetch_layout(held, &account, target.to_string(), name.clone())?;
 
     ResultLayoutFetched {
-        path: readonly_layout_dir(held, &name).display().to_string(),
+        path: readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME)
+            .display()
+            .to_string(),
         vault: name,
     }
     .into()

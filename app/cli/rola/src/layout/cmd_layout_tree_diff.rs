@@ -19,7 +19,9 @@ use crate::Next;
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
-use crate::layout::{ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, failed};
+use crate::layout::{
+    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, cached_layout, failed, remote_spec,
+};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
@@ -95,27 +97,44 @@ pub fn handle_layout_tree_diff(
 ) -> Next {
     let StateLayoutTreeDiff { name, alike } = state;
 
-    let Some(workspace) = workspace.get_ref().as_ref() else {
+    let res = workspace.get_ref();
+    let Some(held) = res.as_ref() else {
         return ErrorShouldInWorkspace.into();
     };
 
-    let layouts = workspace.layouts();
-    let name = match name {
-        Some(name) => name,
-        None => match layouts.current() {
-            Ok(Some(name)) => name,
-            Ok(None) => return ErrorLayoutArgument.into(),
+    // The Vault and Layout a `NAME@VAULT` name holds are read out of the name before it is used as
+    // a local one, so the two branches never disagree about what was named.
+    let remote = name
+        .as_deref()
+        .and_then(remote_spec)
+        .map(|(layout, vault)| (layout.to_owned(), vault.to_owned()));
+
+    let layouts = held.layouts();
+    // A Vault's Layout is read the same way whether it is being listed or read beside the tree, so
+    // what `entries` answers for a name written `NAME@VAULT`, this answers for it too.
+    let layout = if let Some((layout, vault)) = remote {
+        match cached_layout(res, &layout, &vault) {
+            Ok(layout) => layout,
+            Err(next) => return next,
+        }
+    } else {
+        let name = match name {
+            Some(name) => name,
+            None => match layouts.current() {
+                Ok(Some(name)) => name,
+                Ok(None) => return ErrorLayoutArgument.into(),
+                Err(error) => return failed(&error),
+            },
+        };
+
+        match layouts.get(&name) {
+            Ok(Some(layout)) => layout,
+            Ok(None) => return ErrorLayoutMissing.into(),
             Err(error) => return failed(&error),
-        },
+        }
     };
 
-    let layout = match layouts.get(&name) {
-        Ok(Some(layout)) => layout,
-        Ok(None) => return ErrorLayoutMissing.into(),
-        Err(error) => return failed(&error),
-    };
-
-    let diff = match tree_diff(&layout, workspace, alike) {
+    let diff = match tree_diff(&layout, held, alike) {
         Ok(diff) => diff,
         Err(error) => {
             return ErrorLayoutFailed {

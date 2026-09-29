@@ -73,7 +73,8 @@ async fn main() {
 
     let copy = workspace
         .join(".rola/cache/readonly-layouts")
-        .join(VAULT_NAME);
+        .join(VAULT_NAME)
+        .join("truth");
     let entry = ENTRY.to_string();
     let gone = GONE.to_string();
     let mut checked = Checked::default();
@@ -98,6 +99,19 @@ async fn main() {
     ));
     checked.wants(
         "listing with no copy is refused",
+        said.code == Some(192),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // A Vault's Layout is named `NAME@VAULT`, and reading one that was never fetched is refused the
+    // same way whether it is a listing or an entry query.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "entries", "--layout", "truth@origin"],
+    ));
+    checked.wants(
+        "querying an unfetched Vault Layout is refused",
         said.code == Some(192),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
@@ -139,6 +153,41 @@ async fn main() {
         copied.entry(ENTRY).is_some()
             && copied.id_of(&LayoutPath::new("a.psd").unwrap()) == Some(ENTRY),
         "the copy did not hold the entry the Vault held",
+    );
+
+    // The copy is what a name written `NAME@VAULT` reads, so the query commands reach it too.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "entries", "--layout", "truth@origin"],
+    ));
+    checked.wants(
+        "a Vault Layout is queried through NAME@VAULT",
+        said.success() && clean(&said.stdout).contains("a.psd") && said.stdout.contains(&entry),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    // A copy is read, never worked in: a command that changes a Layout refuses one.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "path",
+            "remove",
+            "a.psd",
+            "--layout",
+            "truth@origin",
+        ],
+    ));
+    checked.wants(
+        "a fetched copy is refused by a command that writes",
+        said.code == Some(190) && clean(&said.stderr).contains("cannot be changed"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
     // An entry nobody holds reads as nobody's, from the copy.

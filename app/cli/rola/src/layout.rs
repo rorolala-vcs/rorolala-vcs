@@ -34,7 +34,7 @@ use mingling::{
 use rorolala_cli_setups::{ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line};
-use rorolala_utils_constants::WORKSPACE_READONLY_LAYOUTS_DIR;
+use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_READONLY_LAYOUTS_DIR};
 use rorolala_utils_location::Locate as _;
 use rorolala_workspace::Workspace;
 use rust_i18n::t;
@@ -156,18 +156,28 @@ pub fn render_error_layout_failed(error: ErrorLayoutFailed, ec: &mut ResExitCode
 
 /// The Layout a run works on: the one named, or the one being worked in.
 ///
-/// What is named is a Workspace's to choose; a Vault keeps one Layout and has nothing to name.
+/// What is named is a Workspace's to choose; a Vault keeps one Layout and has nothing to name. A
+/// name written `NAME@VAULT` names a Vault's Layout rather than one of the Workspace's own: the
+/// copy a [`fetch`](crate::layout::cmd_layout_fetch) brought here is read, and a run that names one
+/// outside a Workspace — or one that was never fetched — is refused rather than answered from
+/// somewhere else.
 ///
 /// # Errors
 ///
 /// Answers with the rendered failures of [`place`], with [`ErrorLayoutArgument`] when nothing is
-/// named and nothing is being worked in, or when a Vault run named one, and with
-/// [`ErrorLayoutMissing`] when the one named is not there.
+/// named and nothing is being worked in, or when a Vault run named one, with
+/// [`ErrorLayoutShouldInWorkspace`] when a Vault's Layout is named outside a Workspace, with
+/// [`ErrorLayoutNotCached`] when that Layout was never fetched, and with [`ErrorLayoutMissing`]
+/// when the one named is not there.
 pub fn chosen(
     workspace: &ResWorkspace,
     vault: &ResVault,
     named: Option<&str>,
 ) -> Result<Layout, Next> {
+    if let Some((layout, vault_name)) = named.and_then(remote_spec) {
+        return cached_layout(workspace, layout, vault_name);
+    }
+
     match place(workspace, vault)? {
         Place::Workspace(layouts) => {
             let name = match named {
@@ -193,6 +203,87 @@ pub fn chosen(
             Ok(layout)
         }
     }
+}
+
+/// The Layout a run works on, when the run is to change it.
+///
+/// It is [`chosen`] for a command that writes: a fetched copy of a Vault's Layout is read, never
+/// worked in, so naming one is refused before anything is opened — see [`ErrorLayoutReadOnly`].
+///
+/// # Errors
+///
+/// Returns what [`chosen`] does, and [`ErrorLayoutReadOnly`] when the name is a Vault's Layout.
+pub fn chosen_writable(
+    workspace: &ResWorkspace,
+    vault: &ResVault,
+    named: Option<&str>,
+) -> Result<Layout, Next> {
+    if let Some((layout, _)) = named.and_then(remote_spec) {
+        return Err(ErrorLayoutReadOnly {
+            layout: layout.to_owned(),
+        }
+        .into());
+    }
+
+    chosen(workspace, vault, named)
+}
+
+/// The Vault and the Layout a name written `NAME@VAULT` names, when it is written that way.
+///
+/// `NAME` is the Layout as the Vault knows it — `truth`, for the one a Vault keeps — and `VAULT` is
+/// the name the Workspace fetched it under, which is what the copy on disk is keyed by. A name
+/// that is not written this way, or one that names nothing on either side of the `@`, is no such
+/// name: `@` is not a character a Layout's own name can hold, so there is no local name to confuse
+/// it with.
+#[must_use]
+pub fn remote_spec(name: &str) -> Option<(&str, &str)> {
+    let (layout, vault) = name.split_once('@')?;
+
+    (!layout.is_empty() && !vault.is_empty()).then_some((layout, vault))
+}
+
+/// The fetched copy of the Vault `vault`'s Layout `layout`, opened for reading.
+///
+/// It is what a name written `layout@vault` resolves to, so it is where a query reads a Vault's
+/// own Layout from: the copy lives under the Workspace — see [`readonly_layout_dir`] — and a run
+/// that has not fetched it has no copy to read.
+///
+/// # Errors
+///
+/// Returns [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace,
+/// [`ErrorLayoutArgument`] when either name is not one a directory may be keyed by,
+/// [`ErrorLayoutNotCached`] when nothing was fetched under them, and [`ErrorLayoutFailed`] when a
+/// copy that is there cannot be read.
+pub fn cached_layout(workspace: &ResWorkspace, layout: &str, vault: &str) -> Result<Layout, Next> {
+    let Some(workspace) = workspace.as_ref() else {
+        return Err(ErrorLayoutShouldInWorkspace.into());
+    };
+
+    if !is_plain_name(layout) || !is_plain_name(vault) {
+        return Err(ErrorLayoutArgument.into());
+    }
+
+    let dir = readonly_layout_dir(workspace, vault, layout);
+    if !dir.is_dir() {
+        return Err(ErrorLayoutNotCached {
+            layout: layout.to_owned(),
+            vault: vault.to_owned(),
+        }
+        .into());
+    }
+
+    Layout::open(&dir).map_err(|error| failed(&error))
+}
+
+/// Whether `name` is one path component and nothing else.
+///
+/// A fetched copy is keyed by the names it was fetched under, so a name that names a path — or
+/// climbs, or is a drive — would read outside the cache rather than inside it.
+fn is_plain_name(name: &str) -> bool {
+    let mut components = std::path::Path::new(name).components();
+
+    matches!(components.next(), Some(std::path::Component::Normal(_)))
+        && components.next().is_none()
 }
 
 /// Error: a Layout command works on a Workspace, and this run is not inside one.
@@ -360,6 +451,10 @@ pub fn failed(error: &LayoutError) -> Next {
 #[derive(Pickable)]
 pub struct LayoutOnlyFlags {
     /// The Layout to work on; the one being worked in when none is named.
+    ///
+    /// A name written `NAME@VAULT` names the Vault's own Layout instead of one of the Workspace's:
+    /// what is read is the copy a `rola layout fetch` brought here, so a command that changes a
+    /// Layout refuses one.
     #[arg(long)]
     pub layout: Option<String>,
 }
@@ -406,15 +501,18 @@ pub fn render_result_layout_content(result: ResultLayoutContent) {
 
 /// Where a Workspace keeps the read-only copy of a Vault's Layout.
 ///
-/// One directory per Vault, named by the name the Workspace bound it under, so a command that
-/// reads the copy reaches the same place a [`rola layout fetch`](crate::layout::cmd_layout_fetch)
-/// wrote — see [`WORKSPACE_READONLY_LAYOUTS_DIR`].
+/// The cache is a directory per Vault and a directory per Layout under it, both named by what the
+/// copy was fetched under, so a command that reads one reaches the same place a
+/// [`rola layout fetch`](crate::layout::cmd_layout_fetch) wrote — see
+/// [`WORKSPACE_READONLY_LAYOUTS_DIR`]. A Vault keeps one Layout, and what it is known by is
+/// [`VAULT_LAYOUT_NAME`].
 #[must_use]
-pub fn readonly_layout_dir(workspace: &Workspace, vault: &str) -> std::path::PathBuf {
+pub fn readonly_layout_dir(workspace: &Workspace, vault: &str, layout: &str) -> std::path::PathBuf {
     workspace
         .get_root()
         .join(WORKSPACE_READONLY_LAYOUTS_DIR)
         .join(vault)
+        .join(layout)
 }
 
 /// The Vault and the `Uuid` an ownership command was given, from the words it was given.
@@ -435,10 +533,11 @@ pub fn vault_and_uuid(words: &[String]) -> Option<(Option<String>, Uuid)> {
 
 /// Names the entry `id` in the fetched copy as held by `owner`, when the copy holds it.
 ///
-/// Nothing is a failure here but a copy that cannot be read or written: a run may ask for
-/// ownership without ever having fetched, and one that has fetched may hold a copy that does not
-/// name the entry yet — the Vault is the truth, and the copy is brought up to date by
-/// `rola layout fetch`, not by this.
+/// What is changed is the Vault's own Layout — the one known as [`VAULT_LAYOUT_NAME`] — since that
+/// is the copy an ownership exchange is about. Nothing is a failure here but a copy that cannot be
+/// read or written: a run may ask for ownership without ever having fetched, and one that has
+/// fetched may hold a copy that does not name the entry yet — the Vault is the truth, and the copy
+/// is brought up to date by `rola layout fetch`, not by this.
 ///
 /// # Errors
 ///
@@ -449,7 +548,7 @@ pub fn set_cached_owner(
     id: Uuid,
     owner: Option<String>,
 ) -> Result<(), LayoutError> {
-    let dir = readonly_layout_dir(workspace, vault);
+    let dir = readonly_layout_dir(workspace, vault, VAULT_LAYOUT_NAME);
     if !dir.is_dir() {
         return Ok(());
     }
@@ -468,6 +567,8 @@ pub fn set_cached_owner(
 /// Error: the Vault's Layout has not been fetched, so there is no copy to read.
 #[derive(Grouped)]
 pub struct ErrorLayoutNotCached {
+    /// The Layout that was not fetched.
+    pub layout: String,
     /// The Vault whose Layout was not fetched.
     pub vault: String,
 }
@@ -478,9 +579,13 @@ impl Failure for ErrorLayoutNotCached {
     }
 
     fn reason(&self) -> String {
-        t!("cmd_layout.err_not_cached", vault = self.vault)
-            .trim()
-            .to_string()
+        t!(
+            "cmd_layout.err_not_cached",
+            layout = self.layout,
+            vault = self.vault
+        )
+        .trim()
+        .to_string()
     }
 }
 
@@ -496,13 +601,43 @@ pub fn render_error_layout_not_cached(error: ErrorLayoutNotCached, ec: &mut ResE
     ec.exit_code = EC_ERR_LAYOUT_NOT_CACHED;
 }
 
+/// Error: a fetched copy of a Vault's Layout is named for a command that changes a Layout.
+///
+/// A copy is a reading of what the Vault held when it was fetched, not a place to work: changing it
+/// would change what a query answers with, and nothing of it would reach the Vault.
+#[derive(Grouped)]
+pub struct ErrorLayoutReadOnly {
+    /// The Layout that is a copy.
+    pub layout: String,
+}
+
+impl Failure for ErrorLayoutReadOnly {
+    fn name(&self) -> &'static str {
+        "error_layout_read_only"
+    }
+
+    fn reason(&self) -> String {
+        t!("cmd_layout.err_read_only", layout = self.layout)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorLayoutReadOnly);
+
+#[renderer(buffer)]
+pub fn render_error_layout_read_only(error: ErrorLayoutReadOnly, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("cmd_layout.err_read_only_help").trim()));
+    ec.exit_code = EC_ERR_LAYOUT;
+}
+
 /// Error: the fetched copy names no entry by that `Uuid`.
 #[derive(Grouped)]
 pub struct ErrorOwnershipUnknown {
     /// The `Uuid` the copy names nothing by.
     pub uuid: String,
 }
-
 impl Failure for ErrorOwnershipUnknown {
     fn name(&self) -> &'static str {
         "error_ownership_unknown"
@@ -599,7 +734,20 @@ pub fn render_error_ownership_held(error: ErrorOwnershipHeld, ec: &mut ResExitCo
 mod tests {
     use uuid::Uuid;
 
-    use super::vault_and_uuid;
+    use super::{remote_spec, vault_and_uuid};
+
+    /// A name written `NAME@VAULT` names a Vault's Layout; one that is not written that way is a
+    /// name of the Workspace's own, and `@` is what tells them apart.
+    #[test]
+    fn a_vault_layout_is_named_by_an_at_sign() {
+        assert_eq!(remote_spec("truth@origin"), Some(("truth", "origin")));
+        // The first `@` is the one that separates: a name after it may hold one of its own.
+        assert_eq!(remote_spec("truth@my@vault"), Some(("truth", "my@vault")));
+        // A name that holds no `@` is local, and one that names nothing on a side names nothing.
+        assert_eq!(remote_spec("main"), None);
+        assert_eq!(remote_spec("@origin"), None);
+        assert_eq!(remote_spec("truth@"), None);
+    }
 
     /// A `Uuid` on its own is the entry; a word before it is the Vault. Anything else names no
     /// entry at all, which is what a run that can do nothing is told.

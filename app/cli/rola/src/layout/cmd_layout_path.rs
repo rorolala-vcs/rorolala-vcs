@@ -21,7 +21,7 @@ use uuid::Uuid;
 use crate::Next;
 use crate::exit_codes::EC_HELP;
 use crate::layout::{
-    ErrorLayoutArgument, LayoutDid, LayoutOnlyFlags, ResultLayoutContent, chosen, failed,
+    ErrorLayoutArgument, LayoutDid, LayoutOnlyFlags, ResultLayoutContent, chosen_writable, failed,
 };
 
 /// The `LayoutPath` `text` names, or the argument failure.
@@ -104,7 +104,7 @@ pub fn handle_layout_path_create(
         Ok(id) => id,
         Err(next) => return next,
     };
-    let layout = match chosen(workspace.get_ref(), vault.get_ref(), layout.as_deref()) {
+    let layout = match chosen_writable(workspace.get_ref(), vault.get_ref(), layout.as_deref()) {
         Ok(layout) => layout,
         Err(next) => return next,
     };
@@ -179,7 +179,7 @@ pub fn handle_layout_path_remove(
         Ok(path) => path,
         Err(next) => return next,
     };
-    let layout = match chosen(workspace.get_ref(), vault.get_ref(), layout.as_deref()) {
+    let layout = match chosen_writable(workspace.get_ref(), vault.get_ref(), layout.as_deref()) {
         Ok(layout) => layout,
         Err(next) => return next,
     };
@@ -259,7 +259,7 @@ pub fn handle_layout_path_move(
         Ok(path) => path,
         Err(next) => return next,
     };
-    let layout = match chosen(workspace.get_ref(), vault.get_ref(), layout.as_deref()) {
+    let layout = match chosen_writable(workspace.get_ref(), vault.get_ref(), layout.as_deref()) {
         Ok(layout) => layout,
         Err(next) => return next,
     };

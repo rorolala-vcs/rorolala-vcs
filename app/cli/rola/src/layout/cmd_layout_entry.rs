@@ -25,7 +25,7 @@ use uuid::Uuid;
 use crate::Next;
 use crate::exit_codes::EC_HELP;
 use crate::layout::{
-    ErrorLayoutArgument, LayoutDid, LayoutOnlyFlags, ResultLayoutContent, chosen, failed,
+    ErrorLayoutArgument, LayoutDid, LayoutOnlyFlags, ResultLayoutContent, chosen_writable, failed,
 };
 
 /// The flags `rola layout entry create` and `update` take.
@@ -224,7 +224,7 @@ pub fn handle_layout_entry(
         Err(next) => return next,
     };
 
-    let layout = match chosen(workspace.get_ref(), vault.get_ref(), named.as_deref()) {
+    let layout = match chosen_writable(workspace.get_ref(), vault.get_ref(), named.as_deref()) {
         Ok(layout) => layout,
         Err(next) => return next,
     };

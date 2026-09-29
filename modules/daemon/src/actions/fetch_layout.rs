@@ -14,7 +14,7 @@ use std::path::{Component, Path};
 
 use rorolala_layout::Layout;
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
-use rorolala_utils_constants::WORKSPACE_READONLY_LAYOUTS_DIR;
+use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_READONLY_LAYOUTS_DIR};
 use rorolala_utils_location::Locate as _;
 
 use super::layout_remote::local_layout;
@@ -26,7 +26,8 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// The name the Workspace keeps the fetched Layout under — the name it bound the Vault by. It
 /// belongs to the Workspace and is read there; the Vault is handed it and has no use for it, since
-/// which Vault is reached is the address's to say.
+/// which Vault is reached is the address's to say. The Vault keeps one Layout, so what lands under
+/// that name is the one known as [`VAULT_LAYOUT_NAME`].
 ///
 /// # Output
 ///
@@ -142,7 +143,8 @@ fn write_cache(
     let dir = workspace
         .get_root()
         .join(WORKSPACE_READONLY_LAYOUTS_DIR)
-        .join(name);
+        .join(name)
+        .join(VAULT_LAYOUT_NAME);
 
     match fs::remove_dir_all(&dir) {
         Ok(()) => {}

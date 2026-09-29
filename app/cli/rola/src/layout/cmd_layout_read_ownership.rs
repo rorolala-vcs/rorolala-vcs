@@ -16,6 +16,7 @@ use mingling::{
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
 use serde::Serialize;
 use uuid::Uuid;
@@ -94,10 +95,14 @@ pub fn handle_layout_read_ownership(
     let name = remote
         .get_ref()
         .name_or_default(state.vault.unwrap_or_default())?;
-    let dir = readonly_layout_dir(held, &name);
+    let dir = readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME);
 
     if !dir.is_dir() {
-        return ErrorLayoutNotCached { vault: name }.into();
+        return ErrorLayoutNotCached {
+            layout: VAULT_LAYOUT_NAME.to_owned(),
+            vault: name,
+        }
+        .into();
     }
 
     // Opening a copy makes one if it is not there, so what is not a directory is asked about

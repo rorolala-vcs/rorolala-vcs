@@ -52,14 +52,25 @@ cmd_layout:
         运行 `rola layout --help` 查看它接受什么
 
   err_not_cached:
-    en: "The Layout of `%{vault}` has not been fetched here"
-    zh-CN: "尚未在此取回 `%{vault}` 的布局"
+    en: "The Layout `%{layout}` of `%{vault}` has not been fetched here"
+    zh-CN: "尚未在此取回 `%{vault}` 的布局 `%{layout}`"
 
   err_not_cached_help:
     en: |
         Run `rola layout fetch %{vault}` to bring it down, then try again
     zh-CN: |
         请运行 `rola layout fetch %{vault}` 将其取回，然后重试
+
+  err_read_only:
+    en: "The Layout `%{layout}` is a fetched copy of a Vault's Layout, and cannot be changed"
+    zh-CN: "布局 `%{layout}` 是保险库布局的取回副本，无法修改"
+
+  err_read_only_help:
+    en: |
+        A name written `NAME@VAULT` reads the copy a `rola layout fetch` brought here; work on a
+        Layout of the Workspace's own instead
+    zh-CN: |
+        写成 `NAME@VAULT` 的名字读取的是 `rola layout fetch` 取回的副本；请改为操作工作区自身的布局
 
   err_ownership_unknown:
     en: "The fetched Layout names no entry `%{uuid}`"
@@ -511,10 +522,22 @@ cmd_layout_entries:
 
         One entry a line: its path, the `Uuid` it is known by, and the version it is at. What it is
         held by and what it says are in the data a template or `--json` reads.
+
+        `--layout` names a Layout of the Workspace's own, or a Vault's when it is written
+        `NAME@VAULT` — as in `rola layout entries --layout truth@origin`. A Vault's Layout is read
+        from the copy `rola layout fetch` brought here, so one that was never fetched has nothing to
+        read.
     zh-CN: |
         列出布局中各条目所持有的内容
 
         **用法**：`rola layout entries [--layout <NAME>]`
+
+        每行一个条目：它的路径、标识它的 `Uuid`、以及它所在的版本。持有者与描述在模板或 `--json`
+        所读取的数据中。
+
+        `--layout` 指定工作区自身的布局；写成 `NAME@VAULT`（例如
+        `rola layout entries --layout truth@origin`）时则指定保险库的布局。保险库的布局读取的是
+        `rola layout fetch` 取回的副本，因此未曾取回时没有内容可读。
 
         每行一个条目：它的路径、标识它的 `Uuid`、以及它所在的版本。持有者与描述在模板或 `--json`
         所读取的数据中。
