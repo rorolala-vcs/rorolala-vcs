@@ -8,6 +8,15 @@
     <LangVersion>latest</LangVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- The program as a file: the icon a file list draws and a pinned program keeps. The same
+         picture is embedded again below as the one the windows are drawn with, and the two are not
+         the same thing — one is a program to a file manager, the other a program to a window. -->
+    <ApplicationIcon>../../../res/icons/yizi.ico</ApplicationIcon>
+    <!-- The window icon is put on the windows this host makes, in `AppIcon`, rather than left to the
+         default Avalonia would take from `ApplicationIcon`: that default embeds the file a second
+         time under a name of its own and dresses every window, including the ones plugins make,
+         which is a choice this host makes explicitly instead. -->
+    <AvaloniaIncludeApplicationIconAsWindowIcon>false</AvaloniaIncludeApplicationIconAsWindowIcon>
     <!-- The window is always made by the host and handed its services, so it is deliberately not
          reachable through Avalonia's runtime XAML loader, which wants a public parameterless
          constructor; that loader is never used for it. -->
@@ -31,6 +40,15 @@
          the command line, which reads its own from the same shape of file. The glob is updated
          rather than added to: the files are already items, and one item of one name is one item. -->
     <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The picture the windows are drawn with, embedded rather than read from beside the program,
+         unlike the words above: what a program looks like is part of what it is, and an icon read
+         from beside it is one that a copy moved by hand can lose. `Link` is the path it answers to
+         inside the assembly, which `AppIcon` names; the file itself is linked rather than copied
+         into this tree, so `res/icons` stays the one place an icon lives. -->
+    <AvaloniaResource Include="../../../res/icons/yizi.ico" Link="res/icons/yizi.ico" />
   </ItemGroup>
 
   <ItemGroup>

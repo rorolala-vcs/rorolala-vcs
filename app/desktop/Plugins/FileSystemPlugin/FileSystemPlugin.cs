@@ -79,7 +79,9 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // is the system's own tools, chosen for the platform this is running on, and the preset above the
         // four is the way to fill all of them at once — or the way a dependent plugin, Rorolala's own
         // among them, offers a set of its own (see FileOperationPresets).
-        FileOps.Configure(host.Config);
+        // The host's own picture goes in with them: the one window this plugin shows — the question a
+        // conflict puts — is drawn as the program rather than as something of its own.
+        FileOps.Configure(host.Config, host.ProgramIcon);
         FileOperationPresets.BuiltIn();
         host.Config.Add(
             new PluginSetting(

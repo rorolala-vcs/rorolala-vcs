@@ -19,7 +19,8 @@ internal static class ConflictFlow
     /// Shows a window for each conflict and records the answer, stopping when it is called off.
     /// </summary>
     /// <param name="plan">The plan to decide for.</param>
-    public static async Task Decide(Plan plan)
+    /// <param name="icon">The picture the program is known by, for the window each question is put in.</param>
+    public static async Task Decide(Plan plan, WindowIcon? icon)
     {
         // On the loop's own thread, because a window is made and shown there; the callers answer a
         // paste or a drop, which may be a worker's.
@@ -38,7 +39,7 @@ internal static class ConflictFlow
                     continue;
                 }
 
-                var window = new ConflictWindow(item, conflicts.Count - index - 1);
+                var window = new ConflictWindow(item, conflicts.Count - index - 1, icon);
 
                 if (owner is not null)
                 {

@@ -89,6 +89,20 @@ serde_yaml = "0.9.34"
 toml = "0.8.23"
 bincode2 = "2.0.1"
 
+# Pictures. The descriptions under `res/icons` are read while the workspace builds, so what making a
+# picture of one amounts to — reading one format, sampling it down, writing another — is a build
+# concern rather than something a program carries at run time. Only the formats such a description
+# may name are enabled, so the decoders for every other one are not compiled at all.
+image = { version = "0.25.10", default-features = false, features = [
+    "png",
+    "ico",
+] }
+
+# Windows resources. A program's own icon is a resource linked into the executable rather than
+# something the program draws, so the resource script beside the icon is compiled and linked in by a
+# build script. A build dependency of the programs that carry one, and of nothing else.
+embed-resource = "3.0.9"
+
 # Templating
 minijinja = "2.24.0"
 
@@ -172,5 +186,7 @@ rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
 
 [build-dependencies]
+image.workspace = true
 rorolala-dev-bindgen.workspace = true
 serde_json.workspace = true
+toml.workspace = true

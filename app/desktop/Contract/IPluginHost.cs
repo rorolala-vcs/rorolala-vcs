@@ -1,3 +1,5 @@
+using Avalonia.Controls;
+
 namespace RorolalaDesktop.Contract;
 
 /// <summary>
@@ -45,4 +47,15 @@ public interface IPluginHost
 
     /// <summary>Where the plugin asks the user something.</summary>
     IDialogs Dialogs { get; }
+
+    /// <summary>
+    /// The picture the program is known by, for the windows the plugin shows of its own.
+    /// </summary>
+    /// <remarks>
+    /// The host makes it once and hands the same one to every plugin, so a window a plugin shows is
+    /// drawn as the program rather than as something beside it, and the picture is decoded once
+    /// however many windows are drawn with it. It is nothing when the platform would not take it,
+    /// which is a window without an icon rather than a reason not to open one.
+    /// </remarks>
+    WindowIcon? ProgramIcon { get; }
 }

@@ -76,11 +76,16 @@ internal sealed class Desktop
         var log = new LogService(notifications);
         var popups = new PopupService(notifications);
 
+        // Made here and not by a window, because the windows it is for are not all the host's: a plugin
+        // reaches it through the contract, so the one picture is decoded once and every window — the
+        // host's, a dock floated into one of its own, a question — is drawn with the same one.
+        var icon = AppIcon.Load(log);
+
         // Made before the object they are put in, because a dialog is shown on the window and the window is
         // named once it exists: the shell is the one place both sides agree on, so it is made here and
         // handed to each.
         var shell = new Shell();
-        var dialogs = new Dialogs(shell, i18n);
+        var dialogs = new Dialogs(shell, i18n, icon);
 
         // The look has to be applied before anything is drawn, so the service that applies it is made
         // here, with the rest of what a run is assembled from, rather than in the window.
@@ -94,6 +99,7 @@ internal sealed class Desktop
             Log = log,
             Popups = popups,
             I18n = i18n,
+            ProgramIcon = icon,
             Theme = theme,
             Rola = new RolaCapability(),
             Preference = _state.Preference,

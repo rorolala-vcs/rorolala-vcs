@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
@@ -29,16 +30,22 @@ internal static class Host
         var popups = new PopupService(notifications);
         var preference = new PreferenceConfiguration();
 
+        // A window is drawn with a picture the platform makes, and a headless test has no platform and
+        // no window: nothing here is drawn with one, so there is nothing to hand on — to a dialog or
+        // to the services a plugin is given.
+        WindowIcon? icon = null;
+
         // The shell is made before the object it is put in, because a dialog is shown on the window the shell
         // names, which is the one place both sides agree on.
         var shell = new Shell();
-        var dialogs = new Dialogs(shell, i18n);
+        var dialogs = new Dialogs(shell, i18n, icon);
 
         return new HostServices
         {
             Log = log,
             Popups = popups,
             I18n = i18n,
+            ProgramIcon = icon,
             // There is no application here, so the look is never applied; the service is what the
             // preference panel reads and writes, which is all a headless test has any use for.
             Theme = new ThemeService(null, new ThemeConfiguration()),

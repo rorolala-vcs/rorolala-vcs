@@ -179,15 +179,20 @@ internal sealed class DockArea : UserControl
     /// <summary>What the host tells the plugins when one of its windows is come back to.</summary>
     private readonly Refocus _refocus;
 
+    /// <summary>The picture the program is known by, or nothing when the platform has none.</summary>
+    private readonly WindowIcon? _icon;
+
     /// <summary>Makes the area over the manager it shows.</summary>
     /// <param name="manager">The docks and where they are.</param>
     /// <param name="i18n">The host's translations.</param>
     /// <param name="refocus">What a window being come back to is said through.</param>
-    public DockArea(DockManager manager, I18nService i18n, Refocus refocus)
+    /// <param name="icon">The picture the program is known by, for a dock floated into its own window.</param>
+    public DockArea(DockManager manager, I18nService i18n, Refocus refocus, WindowIcon? icon)
     {
         _manager = manager;
         _i18n = i18n;
         _refocus = refocus;
+        _icon = icon;
 
         Build();
 
@@ -816,6 +821,7 @@ internal sealed class DockArea : UserControl
         var window = new Window
         {
             Title = instance.Title,
+            Icon = _icon,
             Width = FloatSize.Width,
             Height = FloatSize.Height,
             Content = instance.View.View,

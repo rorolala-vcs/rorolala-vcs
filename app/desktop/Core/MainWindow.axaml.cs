@@ -49,6 +49,10 @@ public partial class MainWindow : Window
 
         _services = services;
 
+        // The host's own picture, and the one every other window of the program is drawn with; the
+        // dialogs this window shows take it from the same place rather than making one of their own.
+        Icon = services.ProgramIcon;
+
         // The window is named where every other word is, so changing what it is called is a change
         // to a translation rather than to this file. A window built with no translations to read —
         // which is what the designer builds — keeps the name the markup gives it.
@@ -58,7 +62,12 @@ public partial class MainWindow : Window
         }
 
         BuildMenu();
-        DockAreaHost.Content = new DockArea(_services.Docks, _services.I18n, _services.Refocus);
+        DockAreaHost.Content = new DockArea(
+            _services.Docks,
+            _services.I18n,
+            _services.Refocus,
+            _services.ProgramIcon
+        );
 
         // Marked here rather than in the markup, so that the name a theme matches on is written once
         // and read by both.
@@ -252,6 +261,7 @@ public partial class MainWindow : Window
         var dialog = new Window
         {
             Title = _services.I18n.Get("window.notice"),
+            Icon = _services.ProgramIcon,
             Width = 560,
             MaxHeight = 640,
             SizeToContent = SizeToContent.Height,

@@ -1,0 +1,3 @@
+target-size = "256x"
+scaling = "nearest"
+target-format = "ico"

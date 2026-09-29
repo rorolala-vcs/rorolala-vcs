@@ -31,3 +31,8 @@ libc.workspace = true
 
 [build-dependencies]
 just_template.workspace = true
+
+# The program's own icon, linked into the Windows executable and nowhere else: the resource compiler
+# is the platform's, so the build script reaches for this only where there is one.
+[target.'cfg(windows)'.build-dependencies]
+embed-resource.workspace = true

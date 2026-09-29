@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
@@ -86,9 +87,25 @@ internal static class FileOps
     /// </remarks>
     private static IPluginConfig? _config;
 
-    /// <summary>Hands the plugin's settings to the file operations.</summary>
+    /// <summary>
+    /// The picture the program is known by, for the window a conflict is asked in.
+    /// </summary>
+    /// <remarks>
+    /// Set once, during initialization, with the settings, and read on every operation: it is the
+    /// host's one icon, handed over through the contract rather than read here, so a question this
+    /// plugin puts is drawn as the program rather than as something beside it, and one picture serves
+    /// however many questions are asked.
+    /// </remarks>
+    private static WindowIcon? _icon;
+
+    /// <summary>Hands the plugin's settings and the program's picture to the file operations.</summary>
     /// <param name="config">The plugin's own section of the preferences.</param>
-    public static void Configure(IPluginConfig config) => _config = config;
+    /// <param name="icon">The picture the program is known by, for the conflict window.</param>
+    public static void Configure(IPluginConfig config, WindowIcon? icon)
+    {
+        _config = config;
+        _icon = icon;
+    }
 
     /// <summary>A command the user may have changed, or what it is until they do.</summary>
     /// <param name="id">The setting's identity, written as <c>Group/Key</c>.</param>
@@ -225,7 +242,7 @@ internal static class FileOps
 
             if (plan.HasConflicts)
             {
-                await ConflictFlow.Decide(plan);
+                await ConflictFlow.Decide(plan, _icon);
             }
 
             // Off the window's thread: every item starts a program and waits for it, and the window has to

@@ -29,13 +29,18 @@ internal sealed class Dialogs : IDialogs
     /// <summary>Where the two answers are written in the language the program speaks.</summary>
     private readonly I18nService _i18n;
 
+    /// <summary>The picture the program is known by, or nothing when the platform has none.</summary>
+    private readonly WindowIcon? _icon;
+
     /// <summary>Makes the dialogs over the window they are shown on and the words they use.</summary>
     /// <param name="shell">The window a question is shown on.</param>
     /// <param name="i18n">Where the two answers are written.</param>
-    public Dialogs(Shell shell, I18nService i18n)
+    /// <param name="icon">The picture the program is known by, for the window a question is put in.</param>
+    public Dialogs(Shell shell, I18nService i18n, WindowIcon? icon)
     {
         _shell = shell;
         _i18n = i18n;
+        _icon = icon;
     }
 
     /// <inheritdoc />
@@ -108,6 +113,7 @@ internal sealed class Dialogs : IDialogs
         var window = new Window
         {
             Title = dialog.Title,
+            Icon = _icon,
             Width = 480,
             SizeToContent = SizeToContent.Height,
             CanResize = false,

@@ -2,6 +2,9 @@ using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Logging;
 using RorolalaDesktop.Theming;
+// The one Avalonia type named here is aliased rather than taken wholesale: `Avalonia.Controls`
+// carries a `MenuItem` of its own, and the menu items this file registers are the contract's.
+using WindowIcon = Avalonia.Controls.WindowIcon;
 
 namespace RorolalaDesktop.Hosting;
 
@@ -23,6 +26,16 @@ internal sealed class HostServices
 
     /// <summary>The host's translations.</summary>
     public required I18nService I18n { get; init; }
+
+    /// <summary>
+    /// The picture the program is known by, made once and handed to every window.
+    /// </summary>
+    /// <remarks>
+    /// It is the host's rather than a window's because a plugin's own windows are drawn with it too,
+    /// and it is handed over rather than read by each: one file is decoded once, however many windows
+    /// come to be drawn with the result.
+    /// </remarks>
+    public required WindowIcon? ProgramIcon { get; init; }
 
     /// <summary>
     /// How the program looks, and what the preference panel changes about it.
@@ -155,6 +168,9 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public IDialogs Dialogs => _services.Dialogs;
+
+    /// <inheritdoc />
+    public WindowIcon? ProgramIcon => _services.ProgramIcon;
 
     /// <inheritdoc />
     void IMenuRegistry.AddTopLevel(string labelKey, int order) =>

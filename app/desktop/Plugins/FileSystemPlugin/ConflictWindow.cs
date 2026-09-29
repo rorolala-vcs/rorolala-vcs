@@ -49,8 +49,12 @@ internal sealed class ConflictWindow : Window
     /// <summary>Builds the window for one conflict.</summary>
     /// <param name="item">The conflicting item.</param>
     /// <param name="remaining">How many conflicts would still have to be asked about after this one.</param>
-    public ConflictWindow(Item item, int remaining)
+    /// <param name="icon">The picture the program is known by, or nothing when the platform has none.</param>
+    public ConflictWindow(Item item, int remaining, WindowIcon? icon)
     {
+        // The program's own picture rather than one of this plugin's: the question is the program's, put
+        // over the window the user is working in, so it is drawn as the program.
+        Icon = icon;
         Title = RolaI18N.Get(Key("title"));
         Width = 520;
         SizeToContent = SizeToContent.Height;

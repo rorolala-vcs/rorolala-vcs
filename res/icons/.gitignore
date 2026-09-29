@@ -1,0 +1,5 @@
+# Made from the descriptions beside them by the workspace build script — the root `build.rs` — which
+# reads every `*.toml` here and writes what it asks for under its own name. Built rather than kept:
+# what an editor holds is the picture, and a format nothing edits is a file that would have to be
+# made again by hand every time the picture changed.
+*.ico
