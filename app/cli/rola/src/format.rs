@@ -5,6 +5,12 @@
 //! or the command's own default — which is why a query command is drawn through a template whether
 //! the user asked for one or not: a command always has a way to be read.
 //!
+//! How it is drawn turns on how many lists the command published. One list is the common case —
+//! `entries`, `accounts`, one array `--json` writes — and is drawn a row at a time, the template to
+//! a value, so `{{ entries.path }}` is a line per entry. A reading whose parts are lists of their
+//! own — `layout tree-diff` has five — has no single row, so every key is bound at once and the
+//! template is drawn once: a reader writes `{{ lost | join('\n') }}` for the lines of one of them.
+//!
 //! [`ResFormat::default_template`] is what a command calls as it is reached to name its default,
 //! and [`ResFormat::set`] what it calls once it has the result. `--json` comes first: a run that
 //! asked for a structural renderer leaves the template unset, so what the framework serializes is
@@ -38,8 +44,9 @@ pub struct ResFormat {
     /// `--json` and its kind come first: a command leaves its default template unwritten when this
     /// is set, so what the framework serializes is what is printed.
     structured: bool,
-    /// The data the template is drawn from: the key it is reached by, and one value per line.
-    data: Option<(String, Vec<serde_json::Value>)>,
+    /// The data the template is drawn from: each list a command published, by the key `--json`
+    /// names it by, and one value to a row.
+    data: Vec<(String, Vec<serde_json::Value>)>,
 }
 
 impl ResFormat {
@@ -49,7 +56,7 @@ impl ResFormat {
         Self {
             template,
             structured,
-            data: None,
+            data: Vec::new(),
         }
     }
 
@@ -66,7 +73,7 @@ impl ResFormat {
     /// only its output.
     #[must_use]
     pub fn published(&self) -> bool {
-        self.data.is_some()
+        !self.data.is_empty()
     }
 
     /// The result drawn through the template, when the run is to be drawn through one and a
@@ -93,24 +100,36 @@ impl ResFormat {
         self.template = Some(template.as_ref().to_owned());
     }
 
-    /// Publishes what a command found, under `key`, one `values` entry to a line.
+    /// Publishes what a command found, under `key`.
+    ///
+    /// Publishing a key again adds to what it already holds, so a command that finds more of one
+    /// list as it goes says so by publishing more; a key published once is the whole of it.
     pub fn set(&mut self, key: impl Into<String>, values: Vec<serde_json::Value>) {
-        self.data = Some((key.into(), values));
+        let key = key.into();
+
+        if let Some((_, held)) = self.data.iter_mut().find(|(name, _)| *name == key) {
+            held.extend(values);
+        } else {
+            self.data.push((key, values));
+        }
     }
 
     /// Draws the published data through the template.
     ///
-    /// Each value is drawn on its own, with the key naming it in the context: a template says
+    /// One list is drawn a row at a time, with the key naming it in the context: a template says
     /// `{{ key }}` for a list whose values are scalars, and `{{ key.field }}` for one whose values
-    /// are objects. What a value is drawn as, and what fields it has, are the same as what `--json`
-    /// writes for it, so a template and a JSON reader name the same things the same way.
+    /// are objects. Several lists are bound at once and the template is drawn once, every key an
+    /// array: a reader names a whole list, as `{{ key | length }}` or `{{ key | join('\n') }}`.
+    /// Either way, what a value is drawn as, and what fields it has, are the same as what `--json`
+    /// writes for it, so a template and a JSON reader name the same things the same way. A drawing
+    /// that does not end in a newline is given one, so what is read is a line of its own.
     ///
     /// # Errors
     ///
     /// Returns why a template would not be read or drawn, or why a name in it is not one the data
     /// has.
     pub fn render(&self) -> Result<String, minijinja::Error> {
-        let (Some(template), Some((key, values))) = (&self.template, &self.data) else {
+        let Some(template) = &self.template else {
             return Ok(String::new());
         };
 
@@ -118,13 +137,31 @@ impl ResFormat {
         environment.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
         let template = environment.template_from_str(template)?;
 
-        let mut drawn = String::new();
-        for value in values {
-            drawn.push_str(&template.render(serde_json::json!({ key.as_str(): value }))?);
-            drawn.push('\n');
-        }
+        match self.data.as_slice() {
+            [] => Ok(String::new()),
+            [(key, values)] => {
+                let mut drawn = String::new();
+                for value in values {
+                    drawn.push_str(&template.render(serde_json::json!({ key.as_str(): value }))?);
+                    drawn.push('\n');
+                }
+                Ok(drawn)
+            }
+            lists => {
+                let bound = serde_json::Value::Object(
+                    lists
+                        .iter()
+                        .map(|(key, values)| (key.clone(), serde_json::json!(values)))
+                        .collect(),
+                );
 
-        Ok(drawn)
+                let mut drawn = template.render(bound)?;
+                if !drawn.is_empty() && !drawn.ends_with('\n') {
+                    drawn.push('\n');
+                }
+                Ok(drawn)
+            }
+        }
     }
 }
 
@@ -150,5 +187,53 @@ where
 
         let template = if structured { None } else { asked };
         program.with_resource(ResFormat::new(template, structured));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ResFormat;
+    use serde_json::json;
+
+    /// A format drawn through `template` as a run that named it would be.
+    fn format(template: &str) -> ResFormat {
+        ResFormat::new(Some(template.to_owned()), false)
+    }
+
+    #[test]
+    fn one_list_is_drawn_a_row_at_a_time() {
+        let mut format = format("{{ entries.path }}");
+        format.set(
+            "entries",
+            vec![json!({ "path": "a" }), json!({ "path": "b" })],
+        );
+
+        assert_eq!(format.render().expect("drawn"), "a\nb\n");
+    }
+
+    #[test]
+    fn several_lists_are_bound_at_once() {
+        let mut format = format("{{ lost | join('\\n') }}|{{ untagged | length }}");
+        format.set("lost", vec![json!("a"), json!("b")]);
+        format.set("untagged", vec![json!("c")]);
+
+        assert_eq!(format.render().expect("drawn"), "a\nb|1\n");
+    }
+
+    #[test]
+    fn publishing_a_key_again_adds_to_it() {
+        let mut format = format("{{ x }}");
+        format.set("x", vec![json!("a")]);
+        format.set("x", vec![json!("b")]);
+
+        assert_eq!(format.render().expect("drawn"), "a\nb\n");
+    }
+
+    #[test]
+    fn a_name_the_data_does_not_have_is_refused() {
+        let mut format = format("{{ nope }}");
+        format.set("x", vec![json!("a")]);
+
+        assert!(format.render().is_err());
     }
 }
