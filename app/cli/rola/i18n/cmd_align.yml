@@ -5,9 +5,11 @@ align:
     en: |
         Bring the tree and the Layout back into agreement
 
-        **Usage**: `rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore)`
+        **Usage**: `rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore) [--completely]`
 
-        `PATH` is read against the Workspace root and need not be there. Exactly one mode is given:
+        `PATH` is read where the run was made, as a shell would read it. `.` is the directory the run
+        is in and everything under it, and a name that lands on a directory selects everything under
+        it. Exactly one mode is given:
 
         - `--delete` confirms that a path the Layout names but the tree does not hold is gone.
         - `--rename` confirms a move the reading found, whichever side `PATH` is.
@@ -17,12 +19,17 @@ align:
         - `--restore-modify` writes the version the Layout names back over a changed file.
         - `--restore-delete` takes a deleted file back out of the store to where the Layout names it.
         - `--restore` does whichever of the three `PATH` needs.
+
+        Every mode but `--restore` acts on one path. Given a directory or `.`, `--restore` puts every
+        path under it back by what it needs; a path the tree holds and no Layout names is left alone.
+        `--completely` puts a move back as well as where it was, and means something only for a move
+        being put back — `--restore` or `--restore-move`.
     zh-CN: |
         让工作树与布局重新一致
 
-        **用法**：`rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore)`
+        **用法**：`rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore) [--completely]`
 
-        `PATH` 按工作区根解析，且不必真实存在。模式必须且只能给出一个：
+        `PATH` 按运行所在目录解析，与 shell 一致。`.` 就是运行所在目录及其下全部；落在目录上的名字会选中其下全部。模式必须且只能给出一个：
 
         - `--delete` 确认某个布局命名、但工作树已不存在的路径已消失。
         - `--rename` 确认一次读取发现的移动，`PATH` 是移动的哪一侧都可以。
@@ -32,6 +39,8 @@ align:
         - `--restore-modify` 用布局所记录的版本覆盖已改动的文件。
         - `--restore-delete` 从仓库取回已删除的文件，写回布局所命名的位置。
         - `--restore` 按 `PATH` 需要，执行上面三者中的一个。
+
+        除 `--restore` 外都只作用于一个路径。给 `--restore` 一个目录或 `.` 时，它会按需要把其下每个路径都还原；工作树有、但没有布局命名的路径保持不动。`--completely` 在还原位置的同时还原内容，只对还原移动（`--restore` 或 `--restore-move`）有意义。
 
   description:
     en: Bring the tree and the Layout back into agreement
@@ -57,6 +66,10 @@ align:
     en: "restored  %{what}"
     zh-CN: "已放回  %{what}"
 
+  result_restored_completely:
+    en: "restored fully  %{what}"
+    zh-CN: "已完整还原  %{what}"
+
   result_restored_modify:
     en: "restored  %{what}"
     zh-CN: "已还原  %{what}"
@@ -71,9 +84,19 @@ align:
 
   err_argument_help:
     en: |
-        Run `rola align --help` for the four modes
+        Run `rola align --help` for the modes
     zh-CN: |
-        运行 `rola align --help` 查看四种模式
+        运行 `rola align --help` 查看各个模式
+
+  err_completely:
+    en: "`--completely` only means something for a move being put back"
+    zh-CN: "`--completely` 只对还原移动有意义"
+
+  err_completely_help:
+    en: |
+        Use it with `--restore` or `--restore-move`
+    zh-CN: |
+        请与 `--restore` 或 `--restore-move` 一起使用
 
   err_not_lost:
     en: "`%{path}` is not a path the Layout names and the tree lacks"

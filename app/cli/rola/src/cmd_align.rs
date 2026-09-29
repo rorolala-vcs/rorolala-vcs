@@ -12,7 +12,7 @@
 #![allow(clippy::too_many_lines)]
 
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::storage::{Key, StorageBackend as _};
@@ -69,6 +69,10 @@ struct AlignFlags {
     /// Put a path back to what the Layout names, whichever of the three it needs.
     #[arg(long = "restore")]
     restore: Flag,
+    /// Put a move's file back where the Layout names it and as the Layout names it, undoing the
+    /// content as well as the place.
+    #[arg(long)]
+    completely: Flag,
 }
 
 /// What is to be done with the named path.
@@ -102,10 +106,12 @@ pub fn desc_align() -> Description {
     t!("align.description").to_string().into()
 }
 
-/// Brings the tree and the Layout back into agreement about one path
+/// Brings the tree and the Layout back into agreement about a path
 ///
-/// `PATH` is read against the Workspace root, and need not be there — a path the Layout names and
-/// the tree does not is exactly what `--delete` acts on.
+/// `PATH` is read where the run was made, as a shell would read it: `.` is the directory the run is
+/// in and everything under it, and a name that lands on a directory selects everything under it.
+/// A single path need not be there — a path the Layout names and the tree does not is exactly what
+/// `--delete` acts on.
 ///
 /// Exactly one of the modes is given. `--delete` confirms that a lost path is gone. `--rename`
 /// confirms a move the reading found, whether `PATH` is where it was or where it went. `--break`
@@ -119,9 +125,17 @@ pub fn desc_align() -> Description {
 /// three the path needs. A move that was edited as well is put back first, so it is left changed at
 /// its old path for `--restore-modify` to settle.
 ///
+/// A name that lands on a directory — `.` always does — and `--restore` are what act on many paths
+/// at once: every path under it is put back by what it needs, one line each, and nothing under it
+/// is a failure. A move is settled first, so content is only put back once the file is where the
+/// Layout names it; a path the tree holds and no Layout names is left where it lies. Other modes
+/// act on one path only. `--completely` says to put a move back as well as where it was, and means
+/// something only for a move being put back.
+///
 /// # Errors
 ///
 /// Renders [`ErrorAlignArgument`] when no path or not exactly one mode was given,
+/// [`ErrorAlignCompletely`] when `--completely` was given for something it cannot mean,
 /// [`ErrorAlignNotLost`] or [`ErrorAlignNoRename`] when the path is not what the mode acts on,
 /// [`ErrorAlignNotModified`] or [`ErrorAlignNotRestorable`] when there is nothing to put back,
 /// [`ErrorAlignRestoreExists`] when putting a file back would land on one already there,
@@ -141,6 +155,8 @@ pub fn align(args: EntryAlign) -> Next {
     let Some(path) = path else {
         return ErrorAlignArgument.into();
     };
+
+    let completely = matches!(flags.completely, Flag::Active);
 
     let mut modes = Vec::new();
     if matches!(flags.delete, Flag::Active) {
@@ -172,10 +188,19 @@ pub fn align(args: EntryAlign) -> Next {
         return ErrorAlignArgument.into();
     }
 
+    // UNWRAP: the list was just checked to hold exactly one mode.
+    let mode = modes.pop().unwrap();
+
+    // A move is the one thing with both a place and content of its own to put back, so it is the
+    // one thing `--completely` can mean.
+    if completely && !matches!(mode, Mode::Restore | Mode::RestoreMove) {
+        return ErrorAlignCompletely.into();
+    }
+
     StateAlign {
         path,
-        // UNWRAP: the list was just checked to hold exactly one mode.
-        mode: modes.pop().unwrap(),
+        mode,
+        completely,
     }
     .into()
 }
@@ -187,6 +212,8 @@ pub struct StateAlign {
     path: String,
     /// What is to be done with it.
     mode: Mode,
+    /// Whether a move is to be put back as well as returned to where it was.
+    completely: bool,
 }
 
 #[chain]
@@ -197,10 +224,14 @@ pub fn handle_align(
     storage: &mut LazyRes<ResRorolalaStorage>,
     index: &mut LazyRes<ResVCSIndex>,
 ) -> Next {
-    let StateAlign { path, mode } = state;
+    let StateAlign {
+        path,
+        mode,
+        completely,
+    } = state;
 
     let root = match workspace.get_ref().as_ref() {
-        Some(workspace_held) => workspace_held.get_root().to_path_buf(),
+        Some(workspace_held) => normalize(workspace_held.get_root()),
         None => return ErrorLayoutShouldInWorkspace.into(),
     };
 
@@ -209,8 +240,9 @@ pub fn handle_align(
         Err(next) => return next,
     };
 
-    let Ok(path) = LayoutPath::new(&path) else {
-        return ErrorAlignArgument.into();
+    let selected = match select(&root, &path) {
+        Ok(selected) => selected,
+        Err(next) => return next,
     };
 
     let diff = {
@@ -229,36 +261,160 @@ pub fn handle_align(
         }
     };
 
-    match mode {
-        Mode::Delete => delete(&layout, &diff, &path),
-        Mode::Rename => rename(&layout, &diff, &path, &root),
-        Mode::Break => take_back(&layout, &diff, &path, &root),
-        Mode::Move(target) => assert_move(&layout, &diff, &path, &root, &target),
-        Mode::RestoreMove => restore_move(&diff, &path, &root),
-        Mode::RestoreModify => restore_modify(
+    match (mode, selected) {
+        (Mode::Delete, Selector::One(path)) => delete(&layout, &diff, &path),
+        (Mode::Rename, Selector::One(path)) => rename(&layout, &diff, &path, &root),
+        (Mode::Break, Selector::One(path)) => take_back(&layout, &diff, &path, &root),
+        (Mode::Move(target), Selector::One(path)) => {
+            assert_move(&layout, &diff, &path, &root, &target)
+        }
+        (Mode::RestoreMove, Selector::One(path)) => single(restore_move(
             &layout,
             &diff,
             &path,
             &root,
             storage.get_ref(),
             index.get_ref(),
-        ),
-        Mode::RestoreDelete => restore_delete(
+            completely,
+        )),
+        (Mode::RestoreModify, Selector::One(path)) => single(restore_modify(
             &layout,
             &diff,
             &path,
             &root,
             storage.get_ref(),
             index.get_ref(),
-        ),
-        Mode::Restore => restore_whichever(
+        )),
+        (Mode::RestoreDelete, Selector::One(path)) => single(restore_delete(
             &layout,
             &diff,
             &path,
             &root,
             storage.get_ref(),
             index.get_ref(),
+        )),
+        (Mode::Restore, Selector::One(path)) => single(restore_whichever(
+            &layout,
+            &diff,
+            &path,
+            &root,
+            storage.get_ref(),
+            index.get_ref(),
+            completely,
+        )),
+        (Mode::Restore, Selector::Under(prefix)) => restore_all(
+            &layout,
+            &diff,
+            &prefix,
+            &root,
+            storage.get_ref(),
+            index.get_ref(),
+            completely,
         ),
+        // A directory or `.` names many files, and only putting them back acts on many at once.
+        (_, Selector::Under(_)) => ErrorAlignArgument.into(),
+    }
+}
+
+/// What a mode acts on: the one path named, or every path under a directory the run was made in.
+enum Selector {
+    /// One path, named by what was written.
+    One(LayoutPath),
+    /// Every path under the directory whose prefix this is, `""` naming the whole tree.
+    Under(String),
+}
+
+/// Reads what was written into what the run is to act on.
+///
+/// What is written is a path where the run was made, as a shell would read it: `.` is the directory
+/// the run is in and everything under it, and `..` climbs from there. A name that lands on a
+/// directory — `.` always does — selects everything under it; anything else is the one path named.
+///
+/// # Errors
+///
+/// Answers with [`ErrorAlignArgument`] when the path reaches out of the Workspace, or names nothing
+/// a Layout could.
+fn select(root: &Path, given: &str) -> Result<Selector, Next> {
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(error) => {
+            return Err(ErrorAlignFailed {
+                cause: error.to_string(),
+            }
+            .into());
+        }
+    };
+
+    let absolute = normalize(&resolve(&cwd, given));
+
+    let Ok(relative) = absolute.strip_prefix(root) else {
+        return Err(ErrorAlignArgument.into());
+    };
+
+    if absolute.is_dir() {
+        return Ok(Selector::Under(prefix(relative)));
+    }
+
+    LayoutPath::from_relative(relative)
+        .map(Selector::One)
+        .map_err(|_| ErrorAlignArgument.into())
+}
+
+/// Whether `path` is `prefix`'s directory or under it, with `""` naming the whole tree.
+fn under(prefix: &str, path: &LayoutPath) -> bool {
+    if prefix.is_empty() {
+        return true;
+    }
+
+    path.as_str()
+        .strip_prefix(prefix)
+        .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// The prefix the paths under `relative` share, or `""` for the Workspace root itself, which is the
+/// one directory with no name of its own.
+fn prefix(relative: &Path) -> String {
+    LayoutPath::from_relative(relative)
+        .map_or_else(|_| String::new(), |path| path.as_str().to_owned())
+}
+
+/// The path `given` names, made absolute against the directory the run was made in.
+///
+/// It mirrors `rola track`'s reading of a name, since a name is written the same way wherever it is
+/// written, and the two commands act on the same paths.
+fn resolve(cwd: &Path, given: &str) -> PathBuf {
+    if Path::new(given).is_absolute() {
+        PathBuf::from(given)
+    } else {
+        cwd.join(given)
+    }
+}
+
+/// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
+///
+/// Working it out here, before the disk is asked anything, is what lets `.` name the directory the
+/// run was made in rather than a path with no components in it.
+fn normalize(path: &Path) -> PathBuf {
+    let mut components: Vec<Component<'_>> = Vec::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
+                components.pop();
+            }
+            other => components.push(other),
+        }
+    }
+
+    components.into_iter().collect()
+}
+
+/// Answers one path put back as the only item of a result.
+fn single(outcome: Result<(AlignDid, String), Next>) -> Next {
+    match outcome {
+        Ok((did, what)) => ResultAlign::one(did, what).into(),
+        Err(next) => next,
     }
 }
 
@@ -282,11 +438,7 @@ fn delete(layout: &Layout, diff: &TreeDiff, path: &LayoutPath) -> Next {
         return failed(&error);
     }
 
-    ResultAlign {
-        did: AlignDid::Deleted,
-        what: path.as_str().to_owned(),
-    }
-    .into()
+    ResultAlign::one(AlignDid::Deleted, path.as_str().to_owned()).into()
 }
 
 /// Confirms a move the reading found.
@@ -311,10 +463,10 @@ fn rename(layout: &Layout, diff: &TreeDiff, path: &LayoutPath, root: &Path) -> N
         return next;
     }
 
-    ResultAlign {
-        did: AlignDid::Moved,
-        what: format!("{} -> {}", pair.from.as_str(), pair.to.as_str()),
-    }
+    ResultAlign::one(
+        AlignDid::Moved,
+        format!("{} -> {}", pair.from.as_str(), pair.to.as_str()),
+    )
     .into()
 }
 
@@ -387,10 +539,10 @@ fn take_back(layout: &Layout, diff: &TreeDiff, path: &LayoutPath, root: &Path) -
         .into();
     }
 
-    ResultAlign {
-        did: AlignDid::Broke,
-        what: format!("{} / {}", pair.from.as_str(), pair.to.as_str()),
-    }
+    ResultAlign::one(
+        AlignDid::Broke,
+        format!("{} / {}", pair.from.as_str(), pair.to.as_str()),
+    )
     .into()
 }
 
@@ -458,25 +610,34 @@ fn assert_move(
         .into();
     }
 
-    ResultAlign {
-        did: AlignDid::Asserted,
-        what: format!("{} -> {}", path.as_str(), target.as_str()),
-    }
+    ResultAlign::one(
+        AlignDid::Asserted,
+        format!("{} -> {}", path.as_str(), target.as_str()),
+    )
     .into()
 }
 
 /// Puts a moved file back where the Layout names it.
 ///
 /// The Layout still names the path the file was at, since the move was never confirmed, so putting
-/// the file back there undoes the move on disk. What the file holds is not touched: one that was
+/// the file back there undoes the move on disk. What the file holds is not touched — one that was
 /// edited as well as moved is left changed at its old path, which is then `--restore-modify`'s to
-/// settle.
-fn restore_move(diff: &TreeDiff, path: &LayoutPath, root: &Path) -> Next {
+/// settle — unless `completely`, which puts the version the Layout names back over it too, so the
+/// move is undone in content as well as in place.
+fn restore_move(
+    layout: &Layout,
+    diff: &TreeDiff,
+    path: &LayoutPath,
+    root: &Path,
+    storage: &ResRorolalaStorage,
+    index: &ResVCSIndex,
+    completely: bool,
+) -> Result<(AlignDid, String), Next> {
     let Some(pair) = rename_of(diff, path) else {
-        return ErrorAlignNoRename {
+        return Err(ErrorAlignNoRename {
             path: path.as_str().to_owned(),
         }
-        .into();
+        .into());
     };
 
     let from_disk = root.join(pair.from.to_path_buf());
@@ -485,33 +646,36 @@ fn restore_move(diff: &TreeDiff, path: &LayoutPath, root: &Path) -> Next {
     // What the Layout names is where the file goes; a file already there is one the restore would
     // have to take away, and a restore does not take anything away.
     if from_disk.exists() {
-        return ErrorAlignRestoreExists {
+        return Err(ErrorAlignRestoreExists {
             path: pair.from.as_str().to_owned(),
         }
-        .into();
+        .into());
     }
 
     if let Some(parent) = from_disk.parent()
         && let Err(error) = fs::create_dir_all(parent)
     {
-        return ErrorAlignFailed {
+        return Err(ErrorAlignFailed {
             cause: error.to_string(),
         }
-        .into();
+        .into());
     }
 
     if let Err(error) = fs::rename(&to_disk, &from_disk) {
-        return ErrorAlignFailed {
+        return Err(ErrorAlignFailed {
             cause: error.to_string(),
         }
-        .into();
+        .into());
     }
 
-    ResultAlign {
-        did: AlignDid::RestoredMove,
-        what: format!("{} <- {}", pair.from.as_str(), pair.to.as_str()),
+    let what = format!("{} <- {}", pair.from.as_str(), pair.to.as_str());
+
+    if completely {
+        put_version(layout, &pair.from, root, storage, index)?;
+        return Ok((AlignDid::RestoredCompletely, what));
     }
-    .into()
+
+    Ok((AlignDid::RestoredMove, what))
 }
 
 /// Puts a changed file back to the version the Layout names, writing over what it holds.
@@ -522,43 +686,18 @@ fn restore_modify(
     root: &Path,
     storage: &ResRorolalaStorage,
     index: &ResVCSIndex,
-) -> Next {
+) -> Result<(AlignDid, String), Next> {
     // A path the Layout does not name has no version to go back to: a move's destination is one of
     // these, which is why a move is put back first and only then has its content settled.
-    let not_modified = || ErrorAlignNotModified {
-        path: path.as_str().to_owned(),
-    };
-
-    if !diff.modified.contains(path) {
-        return not_modified().into();
-    }
-
-    let Some(id) = layout.id_of(path) else {
-        return not_modified().into();
-    };
-    let Some(data) = layout.entry(id) else {
-        return not_modified().into();
-    };
-
-    match write_recorded(
-        storage,
-        index,
-        data.version(),
-        &root.join(path.to_path_buf()),
-    ) {
-        Ok(()) => {
-            if let Err(next) = remember_restored(layout, root, path) {
-                return next;
-            }
-
-            ResultAlign {
-                did: AlignDid::RestoredModify,
-                what: path.as_str().to_owned(),
-            }
-            .into()
+    if !diff.modified.contains(path) || layout.id_of(path).is_none() {
+        return Err(ErrorAlignNotModified {
+            path: path.as_str().to_owned(),
         }
-        Err(next) => next,
+        .into());
     }
+
+    put_version(layout, path, root, storage, index)?;
+    Ok((AlignDid::RestoredModify, path.as_str().to_owned()))
 }
 
 /// Puts a deleted file back, taking the version the Layout names out of the store.
@@ -569,46 +708,25 @@ fn restore_delete(
     root: &Path,
     storage: &ResRorolalaStorage,
     index: &ResVCSIndex,
-) -> Next {
-    let not_lost = || ErrorAlignNotLost {
-        path: path.as_str().to_owned(),
-    };
-
-    if !diff.lost.contains(path) {
-        return not_lost().into();
+) -> Result<(AlignDid, String), Next> {
+    if !diff.lost.contains(path) || layout.id_of(path).is_none() {
+        return Err(ErrorAlignNotLost {
+            path: path.as_str().to_owned(),
+        }
+        .into());
     }
-
-    let Some(id) = layout.id_of(path) else {
-        return not_lost().into();
-    };
-    let Some(data) = layout.entry(id) else {
-        return not_lost().into();
-    };
 
     // A lost path is one the tree does not hold, so putting it back has nothing to land on: a file
     // already there is something to be told about rather than written over.
-    let disk = root.join(path.to_path_buf());
-    if disk.exists() {
-        return ErrorAlignRestoreExists {
+    if root.join(path.to_path_buf()).exists() {
+        return Err(ErrorAlignRestoreExists {
             path: path.as_str().to_owned(),
         }
-        .into();
+        .into());
     }
 
-    match write_recorded(storage, index, data.version(), &disk) {
-        Ok(()) => {
-            if let Err(next) = remember_restored(layout, root, path) {
-                return next;
-            }
-
-            ResultAlign {
-                did: AlignDid::RestoredDelete,
-                what: path.as_str().to_owned(),
-            }
-            .into()
-        }
-        Err(next) => next,
-    }
+    put_version(layout, path, root, storage, index)?;
+    Ok((AlignDid::RestoredDelete, path.as_str().to_owned()))
 }
 
 /// Writes the version stored under `version` out to `disk`, making the way to it.
@@ -665,6 +783,40 @@ fn remember_restored(layout: &Layout, root: &Path, path: &LayoutPath) -> Result<
         .map_err(|error| align_failed(error.to_string()))
 }
 
+/// Writes the version the Layout names for `path` over what is there, and remembers that it does.
+///
+/// A file's content is put back by naming what the Layout holds for it and letting the store hand
+/// that version out at the path — whether the file is one that changed or one that is gone, since
+/// both want the same thing written — and remembering it is what stops the path being reported as
+/// changed once it agrees again.
+fn put_version(
+    layout: &Layout,
+    path: &LayoutPath,
+    root: &Path,
+    storage: &ResRorolalaStorage,
+    index: &ResVCSIndex,
+) -> Result<(), Next> {
+    let not_restorable = || ErrorAlignNotRestorable {
+        path: path.as_str().to_owned(),
+    };
+
+    let Some(id) = layout.id_of(path) else {
+        return Err(not_restorable().into());
+    };
+    let Some(data) = layout.entry(id) else {
+        return Err(not_restorable().into());
+    };
+
+    write_recorded(
+        storage,
+        index,
+        data.version(),
+        &root.join(path.to_path_buf()),
+    )?;
+
+    remember_restored(layout, root, path)
+}
+
 /// The failure an alignment that could not be made is answered with.
 fn align_failed(cause: impl Into<String>) -> Next {
     ErrorAlignFailed {
@@ -681,9 +833,10 @@ fn restore_whichever(
     root: &Path,
     storage: &ResRorolalaStorage,
     index: &ResVCSIndex,
-) -> Next {
+    completely: bool,
+) -> Result<(AlignDid, String), Next> {
     if rename_of(diff, path).is_some() {
-        return restore_move(diff, path, root);
+        return restore_move(layout, diff, path, root, storage, index, completely);
     }
 
     if diff.lost.contains(path) && layout.id_of(path).is_some() {
@@ -694,10 +847,63 @@ fn restore_whichever(
         return restore_modify(layout, diff, path, root, storage, index);
     }
 
-    ErrorAlignNotRestorable {
+    Err(ErrorAlignNotRestorable {
         path: path.as_str().to_owned(),
     }
-    .into()
+    .into())
+}
+
+/// Puts every path under a directory back to what the Layout names, each by what it needs.
+///
+/// A move is settled first: its destination is not a path the Layout names, so content can only be
+/// put back once the file is where the Layout names it. What is left — a path the tree no longer
+/// holds, and one that changed where it is — is put back after. A path the tree holds and no Layout
+/// names (`untagged`) is left where it lies, since there is nothing it is to be put back to.
+fn restore_all(
+    layout: &Layout,
+    diff: &TreeDiff,
+    prefix: &str,
+    root: &Path,
+    storage: &ResRorolalaStorage,
+    index: &ResVCSIndex,
+    completely: bool,
+) -> Next {
+    let mut items = Vec::new();
+
+    for pair in &diff.renamed {
+        if !(under(prefix, &pair.from) || under(prefix, &pair.to)) {
+            continue;
+        }
+
+        match restore_move(layout, diff, &pair.from, root, storage, index, completely) {
+            Ok((did, what)) => items.push(AlignItem { did, what }),
+            Err(next) => return next,
+        }
+    }
+
+    for path in &diff.lost {
+        if !under(prefix, path) || layout.id_of(path).is_none() {
+            continue;
+        }
+
+        match restore_delete(layout, diff, path, root, storage, index) {
+            Ok((did, what)) => items.push(AlignItem { did, what }),
+            Err(next) => return next,
+        }
+    }
+
+    for path in &diff.modified {
+        if !under(prefix, path) || layout.id_of(path).is_none() {
+            continue;
+        }
+
+        match restore_modify(layout, diff, path, root, storage, index) {
+            Ok((did, what)) => items.push(AlignItem { did, what }),
+            Err(next) => return next,
+        }
+    }
+
+    ResultAlign { items }.into()
 }
 
 /// The stored hash the version `hash` names, as the Layout records it.
@@ -741,34 +947,56 @@ enum AlignDid {
     Asserted,
     /// A moved file was put back where the Layout names it.
     RestoredMove,
+    /// A moved file was put back where and as the Layout names it.
+    RestoredCompletely,
     /// A changed file was put back to the version the Layout names.
     RestoredModify,
     /// A deleted file was put back, taken out of the store.
     RestoredDelete,
 }
 
-/// Result: the tree and the Layout were brought back into agreement about one path.
-#[derive(Grouped)]
-pub struct ResultAlign {
-    /// What was done.
+/// One path, as `align` reports it.
+struct AlignItem {
+    /// What was done with it.
     did: AlignDid,
     /// What it was done to.
     what: String,
 }
 
+/// Result: the tree and the Layout were brought back into agreement about paths.
+#[derive(Grouped)]
+pub struct ResultAlign {
+    /// What was done, in the order it was done.
+    items: Vec<AlignItem>,
+}
+
+impl ResultAlign {
+    /// The result of one path brought back into agreement.
+    fn one(did: AlignDid, what: String) -> Self {
+        Self {
+            items: vec![AlignItem { did, what }],
+        }
+    }
+}
+
 #[renderer(buffer)]
 pub fn render_result_align(result: ResultAlign) {
-    let said = match result.did {
-        AlignDid::Deleted => t!("align.result_deleted", what = result.what),
-        AlignDid::Moved => t!("align.result_moved", what = result.what),
-        AlignDid::Broke => t!("align.result_broke", what = result.what),
-        AlignDid::Asserted => t!("align.result_asserted", what = result.what),
-        AlignDid::RestoredMove => t!("align.result_restored_move", what = result.what),
-        AlignDid::RestoredModify => t!("align.result_restored_modify", what = result.what),
-        AlignDid::RestoredDelete => t!("align.result_restored_delete", what = result.what),
-    };
+    for item in &result.items {
+        let said = match item.did {
+            AlignDid::Deleted => t!("align.result_deleted", what = item.what),
+            AlignDid::Moved => t!("align.result_moved", what = item.what),
+            AlignDid::Broke => t!("align.result_broke", what = item.what),
+            AlignDid::Asserted => t!("align.result_asserted", what = item.what),
+            AlignDid::RestoredMove => t!("align.result_restored_move", what = item.what),
+            AlignDid::RestoredCompletely => {
+                t!("align.result_restored_completely", what = item.what)
+            }
+            AlignDid::RestoredModify => t!("align.result_restored_modify", what = item.what),
+            AlignDid::RestoredDelete => t!("align.result_restored_delete", what = item.what),
+        };
 
-    r_println!("{}", said.trim());
+        r_println!("{}", said.trim());
+    }
 }
 
 /// Error: `rola align` was given no path, or not exactly one mode.
@@ -791,6 +1019,29 @@ failure!(ErrorAlignArgument);
 pub fn render_error_align_argument(_: ErrorAlignArgument, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(t!("align.err_argument").trim()));
     r_eprintln!("{}", help_line!(t!("align.err_argument_help").trim()));
+    ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
+}
+
+/// Error: `--completely` was given for something it cannot mean.
+#[derive(Grouped)]
+pub struct ErrorAlignCompletely;
+
+impl Failure for ErrorAlignCompletely {
+    fn name(&self) -> &'static str {
+        "error_align_completely"
+    }
+
+    fn reason(&self) -> String {
+        t!("align.err_completely").trim().to_string()
+    }
+}
+
+failure!(ErrorAlignCompletely);
+
+#[renderer(buffer)]
+pub fn render_error_align_completely(_: ErrorAlignCompletely, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("align.err_completely").trim()));
+    r_eprintln!("{}", help_line!(t!("align.err_completely_help").trim()));
     ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
 }
 
