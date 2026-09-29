@@ -57,6 +57,25 @@ PROGRAMS="rola rola-daemon"
 # and the tests of those translations.
 SOLUTION=RorolalaSharp.sln
 
+# The NuGet configuration a restore is tried with first: the one with no sources. See the file.
+NUGET_OFFLINE=dev/run/nuget.offline.config
+
+# Restores what `ARGS` names, answering from what is already cached before the feed is asked.
+#
+# A restore that reaches a feed which cannot be reached waits rather than failing, so a machine that
+# is offline with everything cached hangs in the middle of the gate. The sources are taken away
+# first, which resolves from the global packages folder without a word; only a restore that cannot
+# be satisfied that way goes to the feed, which is the one time waiting for it is worth it.
+restore() {
+	# shellcheck disable=SC2086
+	if $DOTNET restore "$@" --configfile "$NUGET_OFFLINE" >/dev/null 2>&1; then
+		return 0
+	fi
+
+	# shellcheck disable=SC2086
+	$DOTNET restore "$@"
+}
+
 # Where an export puts the completion scripts: one directory per program, so what a shell's setup
 # sources is named once per program rather than once per program and shell.
 SCRIPTS_DIR="$BUILD_DIR/scripts"
@@ -94,8 +113,9 @@ again() {
 # a program with everything beside it that running it needs, which is what an export holds; a plain
 # build leaves a program whose dependencies are still only in the build tree.
 publish_desktop() {
+	restore "$DESKTOP_PROJECT"
 	# shellcheck disable=SC2086
-	$DOTNET publish "$DESKTOP_PROJECT" -c Release -o "$1"
+	$DOTNET publish "$DESKTOP_PROJECT" -c Release --no-restore -o "$1"
 }
 
 # Builds each plugin that ships with the Desktop program and lays it where the program looks for it:
@@ -107,8 +127,9 @@ publish_plugins() {
 		name=$(basename "$project")
 		output="$CS_TARGET_DIR/$name/bin/Release/net8.0"
 
+		restore "$project/$name.csproj"
 		# shellcheck disable=SC2086
-		$DOTNET build "$project/$name.csproj" -c Release
+		$DOTNET build "$project/$name.csproj" -c Release --no-restore
 
 		mkdir -p "$DESKTOP_DIR/plugins"
 		cp "$output/$name.dll" "$DESKTOP_DIR/plugins/"
@@ -124,8 +145,9 @@ publish_plugins() {
 # copy it into a directory of its own to be moved again. The build regenerates `RorolalaBinding.cs`
 # from the header on the way through, which is what makes the export's bindings the export's header.
 publish_rsharp() {
+	restore "$RSHARP_PROJECT"
 	# shellcheck disable=SC2086
-	$DOTNET build "$RSHARP_PROJECT" -c Release
+	$DOTNET build "$RSHARP_PROJECT" -c Release --no-restore
 	cp "$RSHARP_DLL" "$BUILD_DIR/lib/RolaSharp.dll"
 }
 

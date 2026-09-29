@@ -11,6 +11,10 @@
 #
 # They run one at a time, so a suite that fails is named rather than lost among the output of the
 # others — and the ones after it still run, so one run reports every suite that failed.
+#
+# Each suite is restored before it is run, and run with `--no-restore`: a test that restores on its
+# own asks the feed once per project it reaches, and on a machine that cannot reach the feed each of
+# those is a wait rather than a failure.
 set -eu
 
 . "$(dirname "$0")/../lib/common.sh"
@@ -18,8 +22,9 @@ set -eu
 failed=
 for suite in tests/*/*.IntegrationTests.csproj; do
 	echo "==> $suite"
+	restore "$suite"
 	# shellcheck disable=SC2086
-	if ! $DOTNET test "$suite" -c Release; then
+	if ! $DOTNET test "$suite" -c Release --no-restore; then
 		failed="$failed $suite"
 	fi
 done

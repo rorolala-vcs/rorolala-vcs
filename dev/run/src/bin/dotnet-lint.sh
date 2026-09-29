@@ -18,12 +18,18 @@
 #   * `-t:Rebuild` (a full rebuild) rather than a plain build. The analyzers are the point of this
 #     gate, and a project MSBuild calls up to date is one nothing analyzes — which a change to
 #     `.editorconfig` or `Directory.Build.props` does not by itself undo.
+#
+# The restore is made first and on its own, and `-restore` is left off the rebuild that follows, so
+# the rebuild does not ask the feed again: on a machine that cannot reach it that is not a slow
+# rebuild but a hung one.
 set -eu
 
 . "$(dirname "$0")/../lib/common.sh"
 
+restore "$SOLUTION"
+
 # shellcheck disable=SC2086
-$DOTNET msbuild "$SOLUTION" -restore -t:Rebuild -warnAsError -nologo -v:m -tl:off \
+$DOTNET msbuild "$SOLUTION" -t:Rebuild -warnAsError -nologo -v:m -tl:off \
 	-p:Configuration=Release \
 	-p:AnalysisMode=All \
 	-p:AnalysisLevel=latest-all \
