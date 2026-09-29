@@ -96,12 +96,34 @@ public enum SettingKind
 
     /// <summary>One of the values the setting offers.</summary>
     Choice,
+
+    /// <summary>
+    /// A named bundle of other settings, chosen as a whole and shown from them.
+    /// </summary>
+    /// <remarks>
+    /// A preset is not a value kept in its own right: it lists the settings it stands for, and the one
+    /// the settings currently agree with is the one shown. Choosing a preset writes the settings it
+    /// names; exactly one option names none, and is shown when no other does — the way back to setting
+    /// each one by hand (see <see cref="SettingOption.Writes"/>).
+    /// </remarks>
+    Preset,
 }
 
-/// <summary>One value a <see cref="SettingKind.Choice"/> setting offers.</summary>
+/// <summary>One value a <see cref="SettingKind.Choice"/> or <see cref="SettingKind.Preset"/> offers.</summary>
 /// <param name="Value">The value, as it is kept.</param>
 /// <param name="LabelKey">An i18n key naming it.</param>
-public sealed record SettingOption(string Value, string LabelKey);
+/// <param name="Writes">
+/// What choosing this option writes elsewhere, as setting identity to value, and nothing for a plain
+/// choice. A preset's option names the settings it stands for; choosing it writes each of them, and it
+/// is shown when every one of them is currently worth what it names. The one option of a preset that
+/// names nothing is the fallback — what is shown when the settings agree with no other option — and
+/// choosing it writes nothing, so that it is the way to adjust each setting by hand.
+/// </param>
+public sealed record SettingOption(
+    string Value,
+    string LabelKey,
+    IReadOnlyDictionary<string, string>? Writes = null
+);
 
 /// <summary>
 /// One setting a plugin declares: what it is called, what it means, and what it is until it is changed.
@@ -121,7 +143,11 @@ public sealed record SettingOption(string Value, string LabelKey);
 /// </param>
 /// <param name="Order">Where it sits among the settings of its group.</param>
 /// <param name="RestartRequired">Whether it takes effect on the next start rather than at once.</param>
-/// <param name="Options">The values a <see cref="SettingKind.Choice"/> offers, and nothing otherwise.</param>
+/// <param name="Options">
+/// The values a <see cref="SettingKind.Choice"/> or <see cref="SettingKind.Preset"/> offers, and
+/// nothing otherwise. A preset must offer exactly one option that names no <see cref="SettingOption.Writes"/>
+/// (its fallback), and it must be the last.
+/// </param>
 public sealed record PluginSetting(
     string Id,
     SettingKind Kind,

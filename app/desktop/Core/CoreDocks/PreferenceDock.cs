@@ -511,6 +511,29 @@ internal sealed class PreferenceView : UserControl
 
                 return choice;
 
+            case SettingKind.Preset:
+                // A preset has no value of its own: what is shown is the option the settings it stands for
+                // already agree with — `value` is that option — and choosing one writes them, after which
+                // the whole owner is drawn again so the settings it wrote show what it wrote.
+                var presets = (setting.Options ?? []).ToArray();
+                var preset = new ComboBox
+                {
+                    ItemsSource = presets.Select(option => _i18n.Get(option.LabelKey)).ToArray(),
+                    SelectedIndex = Array.FindIndex(presets, option => string.Equals(option.Value, value, StringComparison.Ordinal)),
+                    MinWidth = 240,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                preset.SelectionChanged += (_, _) =>
+                {
+                    if (preset.SelectedIndex >= 0)
+                    {
+                        _settings.Choose(owner, setting, presets[preset.SelectedIndex]);
+                        Show();
+                    }
+                };
+
+                return preset;
+
             default:
                 var field = new TextBox { Text = value, MinWidth = 240 };
 

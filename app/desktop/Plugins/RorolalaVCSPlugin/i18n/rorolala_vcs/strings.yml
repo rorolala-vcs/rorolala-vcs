@@ -1,0 +1,17 @@
+_version: 2
+
+# What the Rorolala plugin says. It carries no dock of its own: what it adds is one preset to the File
+# System plugin's settings, so its words are the plugin's name and that preset's name. Every key is
+# namespaced by the plugin's identity — the id with dots underscored.
+
+rorolala_vcs:
+  name:
+    en: Rorolala VCS
+    zh-CN: Rorolala 版本管理
+
+  # What the preset is called where the File System plugin's settings offer it: Rorolala's own file
+  # operations, the commands of `rola fs-ops`.
+  setting:
+    preset:
+      en: Rorolala file operations
+      zh-CN: Rorolala 文件操作

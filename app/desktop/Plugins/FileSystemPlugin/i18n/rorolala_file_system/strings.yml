@@ -94,8 +94,24 @@ rorolala_file_system:
 
   # What the file operations are carried out with. The commands are the system's tools rather than this
   # program's, which is why they are settings: a system that keeps them elsewhere, or a user who prefers
-  # another, says so here.
+  # another, says so here. The four are filled together by choosing a preset, or each by hand.
   setting:
+    operations:
+      en: File operations
+      zh-CN: 文件操作
+    # What the presets above the four commands are called. Windows and Unix are this plugin's own; a
+    # dependent plugin adds its own beside them, and Custom is always last — the way to set each command
+    # by hand, shown whenever the four match none of the presets.
+    preset:
+      windows:
+        en: Windows file operations
+        zh-CN: Windows 文件操作
+      unix:
+        en: Unix & Linux file operations
+        zh-CN: Unix & Linux 文件操作
+      custom:
+        en: Custom
+        zh-CN: 自定义
     copy:
       en: Copy command
       zh-CN: 复制命令

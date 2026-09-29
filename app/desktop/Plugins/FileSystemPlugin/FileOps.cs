@@ -7,9 +7,10 @@ namespace FileSystemPlugin;
 /// the command run over each.
 /// </summary>
 /// <remarks>
-/// The work is not this program's: an operation is carried out by a command of the user's own —
-/// <c>rola fs-ops</c> until they say otherwise — and what is settled here is what happens where a name
-/// is already taken, which is a question only a person can answer.
+/// The work is not this program's: an operation is carried out by a command of the user's own — the
+/// system's own tools until they say otherwise, or Rorolala's once that plugin is in — and what is
+/// settled here is what happens where a name is already taken, which is a question only a person can
+/// answer. The command is a template naming where the two paths go as <c>{{from}}</c> and <c>{{to}}</c>.
 /// <para>
 /// The command runs as a program of its own, because starting it is cheap and the work is the command
 /// line's; what was not worth a program of its own is the question, which is a window of this plugin's
@@ -30,23 +31,50 @@ internal static class FileOps
     /// <summary>The setting the file-removal command is kept under.</summary>
     public const string RemoveFilesSetting = "Commands/remove_files";
 
-    /// <summary>What the copy command is until the user says otherwise.</summary>
+    /// <summary>The setting the preset is chosen under.</summary>
+    public const string PresetSetting = "Commands/preset";
+
+    /// <summary>The commands a Windows system carries the operations out with.</summary>
     /// <remarks>
-    /// The program is named by its bare name rather than by the path it was found at, so that what is written
-    /// down is what a reader would type: the word is the same wherever the program is installed, and it is the
-    /// path — which differs from one installation to the next — that would be the odd thing to keep. A run
-    /// reaches it through the path it was itself started with, which is the path it is on.
+    /// Every one of them is a word the command interpreter owns rather than a program of its own — there
+    /// is no <c>copy.exe</c> — so each is reached through <c>cmd /c</c>. Note that <c>copy</c> handles a
+    /// file and not a directory, so a default that transfers a directory is the user's to change; the
+    /// presets are a starting point, not a guarantee.
     /// </remarks>
-    public const string DefaultCopy = "rola fs-ops cp";
+    internal static readonly FileOperationCommands Windows = new(
+        "cmd /c copy /y {{from}} {{to}}",
+        "cmd /c move /y {{from}} {{to}}",
+        "cmd /c rmdir /s /q {{from}}",
+        "cmd /c del /f /q {{from}}"
+    );
+
+    /// <summary>The commands a Unix system carries the operations out with.</summary>
+    /// <remarks>
+    /// Named by their bare names rather than by the paths they were found at, so that what is written
+    /// down is what a reader would type: the word is the same wherever the program is installed, and it is
+    /// the path — which differs from one installation to the next — that would be the odd thing to keep.
+    /// </remarks>
+    internal static readonly FileOperationCommands Unix = new(
+        "cp -r {{from}} {{to}}",
+        "mv {{from}} {{to}}",
+        "rm -r {{from}}",
+        "rm {{from}}"
+    );
+
+    /// <summary>The commands of the system the program is running on.</summary>
+    private static FileOperationCommands Native => OperatingSystem.IsWindows() ? Windows : Unix;
+
+    /// <summary>What the copy command is until the user says otherwise.</summary>
+    public static string DefaultCopy => Native.Copy;
 
     /// <inheritdoc cref="DefaultCopy" />
-    public const string DefaultMove = "rola fs-ops mv";
+    public static string DefaultMove => Native.Move;
 
     /// <inheritdoc cref="DefaultCopy" />
-    public const string DefaultRemoveDirs = "rola fs-ops rm";
+    public static string DefaultRemoveDirs => Native.RemoveDirs;
 
     /// <inheritdoc cref="DefaultCopy" />
-    public const string DefaultRemoveFiles = "rola fs-ops rm";
+    public static string DefaultRemoveFiles => Native.RemoveFiles;
 
     /// <summary>
     /// The plugin's own settings, where the commands that carry the operations out are said.
@@ -134,7 +162,7 @@ internal static class FileOps
 
     /// <summary>One transfer of a batch into a directory.</summary>
     /// <param name="operation">What is being done to every item.</param>
-    /// <param name="command">The program and its arguments that carry it out.</param>
+    /// <param name="command">The command template that carries it out.</param>
     /// <param name="sources">What is being transferred.</param>
     /// <param name="into">The directory they go into.</param>
     /// <param name="failed">Where a failure is reported.</param>
@@ -158,7 +186,7 @@ internal static class FileOps
 
     /// <summary>One removal of a batch.</summary>
     /// <param name="operation">What is being done to every item.</param>
-    /// <param name="command">The program and its arguments that carry it out.</param>
+    /// <param name="command">The command template that carries it out.</param>
     /// <param name="paths">What is being removed.</param>
     /// <param name="failed">Where a failure is reported.</param>
     private static Task<bool> Without(Operation operation, string command, IReadOnlyList<string> paths, Action<string> failed) =>
@@ -168,24 +196,25 @@ internal static class FileOps
     /// Plans one call, asks about any conflict, and runs the command over every item.
     /// </summary>
     /// <remarks>
-    /// A command that names no program is refused before anything is planned, so that the reason names the
-    /// command rather than an item. The plan is made first, so that every conflict is answered before the
-    /// first command runs — which is what makes calling the run off leave nothing done at all.
+    /// A command the operation cannot be run with — one that names no program, or no path, or a target a
+    /// removal has none of — is refused before anything is planned, so that the reason names the command
+    /// rather than an item. The plan is made first, so that every conflict is answered before the first
+    /// command runs — which is what makes calling the run off leave nothing done at all.
     /// </remarks>
     /// <param name="operation">What is being done to every item.</param>
-    /// <param name="command">The program and its arguments that carry it out.</param>
+    /// <param name="command">The command template that carries it out.</param>
     /// <param name="pairs">What is being done, one source and its destination.</param>
     /// <param name="failed">Where a failure is reported.</param>
     /// <returns>Whether anything was done.</returns>
     private static async Task<bool> Ask(Operation operation, string command, IReadOnlyList<Pair> pairs, Action<string> failed)
     {
-        // The program and its fixed arguments are one whitespace-separated string; a path with a space in
-        // it cannot be named here, which is why the item paths are arguments of their own below.
-        var program = command.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-
-        if (program.Length == 0)
+        // The command is a template: it names where the two paths go as `{{from}}` and `{{to}}`, and the
+        // runner expands it per item. What can be told about it before anything is planned — that it names
+        // a program and the paths its operation needs — is told here, so the reason names the command
+        // rather than an item.
+        if (Executor.Validate(operation, command) is { } problem)
         {
-            failed($"the command `{command}` names no program");
+            failed(problem);
 
             return false;
         }
@@ -201,7 +230,7 @@ internal static class FileOps
 
             // Off the window's thread: every item starts a program and waits for it, and the window has to
             // go on drawing while that happens.
-            var results = await Task.Run(() => Executor.Run(plan, program));
+            var results = await Task.Run(() => Executor.Run(plan, command));
 
             var done = false;
 

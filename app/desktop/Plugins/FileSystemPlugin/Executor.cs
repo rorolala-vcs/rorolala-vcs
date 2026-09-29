@@ -72,23 +72,64 @@ internal sealed class Result
 /// </remarks>
 internal static class Executor
 {
+    /// <summary>The word a command template puts a source path at.</summary>
+    public const string From = "{{from}}";
+
+    /// <summary>The word a command template puts a target path at.</summary>
+    public const string To = "{{to}}";
+
+    /// <summary>
+    /// Why a command template cannot be run at all, or nothing when it can.
+    /// </summary>
+    /// <remarks>
+    /// Checked once for the whole call rather than per item, because the reason names the command rather
+    /// than an item. A placeholder is never the program, so a template that opens with one names no
+    /// program; a transfer must name both paths, and a removal names only a source — a target it named
+    /// would have nothing to put there.
+    /// </remarks>
+    /// <param name="operation">What is being done to every item.</param>
+    /// <param name="template">The command template, with the placeholders in it.</param>
+    /// <returns>The reason it cannot run, or nothing when it can.</returns>
+    public static string? Validate(Operation operation, string template)
+    {
+        var tokens = Tokens(template);
+
+        if (tokens.Length == 0 || IsPlaceholder(tokens[0]))
+        {
+            return $"the command `{template}` names no program";
+        }
+
+        if (tokens.Contains(From) is false)
+        {
+            return $"the command `{template}` must name {From}, or it is given nothing to work on";
+        }
+
+        if (operation is Operation.RemoveDirs or Operation.RemoveFiles)
+        {
+            return tokens.Contains(To) ? $"the command `{template}` names {To}, but a removal has no target" : null;
+        }
+
+        return tokens.Contains(To) ? null : $"the command `{template}` must name both {From} and {To}";
+    }
+
     /// <summary>Runs every item and returns one result for each, in order.</summary>
     /// <param name="plan">The items and their decisions.</param>
-    /// <param name="program">The program to start, then its fixed arguments.</param>
-    public static IReadOnlyList<Result> Run(Plan plan, IReadOnlyList<string> program)
+    /// <param name="template">The command template, with the placeholders in it.</param>
+    public static IReadOnlyList<Result> Run(Plan plan, string template)
     {
+        var tokens = Tokens(template);
         var results = new List<Result>(plan.Items.Count);
 
         foreach (var item in plan.Items)
         {
-            results.Add(Run(plan, program, item));
+            results.Add(Run(plan, tokens, item));
         }
 
         return results;
     }
 
     /// <summary>Runs one item and returns what happened to it.</summary>
-    private static Result Run(Plan plan, IReadOnlyList<string> program, Item item)
+    private static Result Run(Plan plan, IReadOnlyList<string> tokens, Item item)
     {
         if (plan.Cancelled)
         {
@@ -149,15 +190,49 @@ internal static class Executor
             );
         }
 
-        // A transfer runs over the source and its target; a removal runs over the source alone,
-        // which is why its target is empty.
-        var paths = target.Length == 0 ? new[] { item.From } : new[] { item.From, target };
-        var failure = Launch(program, paths);
+        // A transfer runs over the source and its target; a removal runs over the source alone, which is
+        // why its target is empty — and why a removal template that named the target was refused before.
+        var failure = Launch(Arguments(tokens, item.From, target));
 
         return failure is null
             ? Result.Done(item.From, target, How(item.Resolution))
             : Result.Failed(item.From, target, failure);
     }
+
+    /// <summary>The template's tokens with the placeholders replaced by the item's paths.</summary>
+    /// <remarks>
+    /// A placeholder is a token of its own, never part of one, so a path with a space in it stays one
+    /// argument exactly as it would be handed over were it appended. An item with no target — every
+    /// removal — never reaches a <c>{{to}}</c>, which its template was refused for naming.
+    /// </remarks>
+    /// <param name="tokens">The template, split into tokens.</param>
+    /// <param name="from">The item's source path.</param>
+    /// <param name="to">The item's target path, or empty when it has none.</param>
+    private static List<string> Arguments(IReadOnlyList<string> tokens, string from, string to)
+    {
+        var arguments = new List<string>(tokens.Count);
+
+        foreach (var token in tokens)
+        {
+            arguments.Add(
+                token switch
+                {
+                    From => from,
+                    To => to,
+                    _ => token,
+                }
+            );
+        }
+
+        return arguments;
+    }
+
+    /// <summary>A template split into tokens on whitespace, empty ones dropped.</summary>
+    private static string[] Tokens(string template) =>
+        template.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>Whether a token is one of the placeholders rather than a word to keep.</summary>
+    private static bool IsPlaceholder(string token) => token is From or To;
 
     /// <summary>Removes what is already at a target, so the command can take its place.</summary>
     private static void Replace(string target)
@@ -204,38 +279,34 @@ internal static class Executor
         };
 
     /// <summary>
-    /// Starts the command over the paths and waits for it, returning its failure or nothing.
+    /// Starts the command with the arguments already expanded and waits for it, returning its failure
+    /// or nothing.
     /// </summary>
     /// <remarks>
-    /// The program is started directly, never through a shell, and every path is one argument of
-    /// its own: a shell would read a path as a command, and a path with a space in it would be read
-    /// as two arguments if it were joined by hand. Both are avoided by handing the arguments over
-    /// as they are.
+    /// Every argument is handed over as it is, so a path with a space in it is one argument: joining the
+    /// line by hand and letting the platform split it again is how such a path becomes two. The first
+    /// argument is the program, and what a template names after it — including a shell, as the Windows
+    /// commands do with <c>cmd /c</c> — is up to the user who wrote the template.
     /// <para>
     /// Both of the child's streams are drained while it runs, so a child that fills one pipe while this
     /// waits on the other cannot block against itself; what it said is kept and folded into the reason
     /// when it did not finish cleanly, so a command that fails for its own reasons says why.
     /// </para>
     /// </remarks>
-    private static string? Launch(IReadOnlyList<string> program, IReadOnlyList<string> paths)
+    private static string? Launch(IReadOnlyList<string> arguments)
     {
         var start = new ProcessStartInfo
         {
-            FileName = program[0],
+            FileName = arguments[0],
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
 
-        for (var index = 1; index < program.Count; index++)
+        for (var index = 1; index < arguments.Count; index++)
         {
-            start.ArgumentList.Add(program[index]);
-        }
-
-        foreach (var path in paths)
-        {
-            start.ArgumentList.Add(path);
+            start.ArgumentList.Add(arguments[index]);
         }
 
         Process process;
@@ -247,7 +318,7 @@ internal static class Executor
         }
         catch (Exception error)
         {
-            return $"`{program[0]}` could not be started: {error.Message}";
+            return $"`{arguments[0]}` could not be started: {error.Message}";
         }
 
         using (process)
@@ -273,8 +344,8 @@ internal static class Executor
             }
 
             return detail.Length > 0
-                ? $"`{program[0]}` exited with code {process.ExitCode}: {detail}"
-                : $"`{program[0]}` exited with code {process.ExitCode}";
+                ? $"`{arguments[0]}` exited with code {process.ExitCode}: {detail}"
+                : $"`{arguments[0]}` exited with code {process.ExitCode}";
         }
     }
 }

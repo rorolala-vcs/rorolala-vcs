@@ -84,7 +84,37 @@ internal sealed class SettingRegistry
     /// <param name="setting">The setting.</param>
     /// <returns>The chosen value, the declared default, or nothing.</returns>
     public string? Value(PluginId owner, PluginSetting setting) =>
-        Stored(owner, setting.Id) is { } stored ? Show(setting.Kind, stored) : setting.Default;
+        setting.Kind == SettingKind.Preset
+            ? Preset(owner, setting)
+            : Stored(owner, setting.Id) is { } stored
+                ? Show(setting.Kind, stored)
+                : setting.Default;
+
+    /// <summary>
+    /// Chooses one option of a preset: writes every setting the option names, or, for the fallback,
+    /// nothing.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is kept for the preset itself — it stands for other settings and has no value of its own
+    /// — so choosing writes them and the choice is then read back from what they are worth.
+    /// </remarks>
+    /// <param name="owner">The owner of the setting.</param>
+    /// <param name="setting">The preset.</param>
+    /// <param name="option">The option that was chosen.</param>
+    public void Choose(PluginId owner, PluginSetting setting, SettingOption option)
+    {
+        if (option.Writes is not { Count: > 0 } writes)
+        {
+            return;
+        }
+
+        foreach (var (id, text) in writes)
+        {
+            Write(owner, id, text);
+        }
+
+        ConfigurationLoader.WritePreference(_preference);
+    }
 
     /// <summary>
     /// Keeps what the user chose, or takes the setting back to its default when nothing is given.
@@ -98,6 +128,22 @@ internal sealed class SettingRegistry
     /// <param name="text">What the panel holds, or nothing to leave the setting at its default.</param>
     public void Keep(PluginId owner, PluginSetting setting, string? text)
     {
+        // A preset keeps nothing of its own: taking it back to its default is taking away every setting
+        // it stands for, so that each reads as its declaration's default again.
+        if (setting.Kind == SettingKind.Preset)
+        {
+            var written = Section(owner);
+
+            foreach (var id in Written(setting))
+            {
+                written.Remove(id);
+            }
+
+            ConfigurationLoader.WritePreference(_preference);
+
+            return;
+        }
+
         var section = Section(owner);
 
         if (string.IsNullOrEmpty(text))
@@ -133,6 +179,70 @@ internal sealed class SettingRegistry
             ? Element(setting.Kind, text)
             : null;
     }
+
+    /// <summary>The value a preset is shown as: the option the settings agree with, or the fallback.</summary>
+    /// <remarks>
+    /// Only the option whose every written setting is currently worth what it names counts as agreed;
+    /// when none does, the one option naming nothing is shown, which is the state a hand-adjusted set of
+    /// settings is in.
+    /// </remarks>
+    /// <param name="owner">The owner of the setting.</param>
+    /// <param name="setting">The preset.</param>
+    /// <returns>The value of the option to show, or nothing when the preset offers none.</returns>
+    private string? Preset(PluginId owner, PluginSetting setting)
+    {
+        var options = setting.Options ?? [];
+
+        foreach (var option in options)
+        {
+            if (
+                option.Writes is { Count: > 0 } writes
+                && writes.All(pair => string.Equals(Effective(owner, pair.Key), pair.Value, StringComparison.Ordinal))
+            )
+            {
+                return option.Value;
+            }
+        }
+
+        return options.FirstOrDefault(option => option.Writes is null)?.Value;
+    }
+
+    /// <summary>The value in force for an identity: what was chosen, or the declaration's default.</summary>
+    /// <param name="owner">The owner of the setting.</param>
+    /// <param name="id">The setting's identity.</param>
+    private string? Effective(PluginId owner, string id) =>
+        Stored(owner, id) is { } stored
+            ? Show(Declared(owner, id)?.Kind ?? SettingKind.Text, stored)
+            : Declared(owner, id)?.Default;
+
+    /// <summary>Writes one setting by identity, the way choosing a preset option does.</summary>
+    /// <param name="owner">The owner of the setting.</param>
+    /// <param name="id">The setting's identity.</param>
+    /// <param name="text">What to write, or nothing to leave the setting at its default.</param>
+    private void Write(PluginId owner, string id, string text)
+    {
+        var section = Section(owner);
+
+        if (string.IsNullOrEmpty(text))
+        {
+            section.Remove(id);
+            return;
+        }
+
+        var kind = Declared(owner, id)?.Kind ?? SettingKind.Text;
+
+        if (Element(kind, text) is { } element)
+        {
+            section[id] = element;
+        }
+    }
+
+    /// <summary>Every identity a preset's options name, however it is chosen.</summary>
+    /// <param name="setting">The preset.</param>
+    private static IEnumerable<string> Written(PluginSetting setting) =>
+        (setting.Options ?? [])
+            .SelectMany(option => option.Writes?.Keys ?? [])
+            .Distinct(StringComparer.Ordinal);
 
     /// <summary>What one owner declared under an identity, or nothing.</summary>
     /// <param name="owner">The owner to ask about.</param>

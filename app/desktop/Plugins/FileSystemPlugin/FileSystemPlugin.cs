@@ -21,6 +21,15 @@ namespace FileSystemPlugin;
 public sealed class FileSystemPlugin : IRolaPlugin
 {
     /// <summary>
+    /// This plugin's identity, which a plugin depending on it names in its manifest.
+    /// </summary>
+    /// <remarks>
+    /// It is public so that a dependent plugin — Rorolala's own among them — need not spell the string
+    /// again: a dependency that disagreed with this would be one the host could not satisfy.
+    /// </remarks>
+    public const string Identity = "rorolala.file_system";
+
+    /// <summary>
     /// The stable name of the directory dock.
     /// </summary>
     /// <remarks>
@@ -41,7 +50,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
     /// <inheritdoc />
     public PluginManifest Manifest { get; } =
         new(
-            new PluginId("rorolala.file_system"),
+            new PluginId(Identity),
             "rorolala_file_system.name",
             typeof(IRolaPlugin).Assembly.GetName().Version ?? new Version(0, 0),
             []
@@ -67,8 +76,22 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // The commands the file operations are carried out with, and the reading of them. They are
         // settings rather than constants because the tool that does the work is another program's, and a
         // system may keep it elsewhere — or a user may prefer another. What they are until they are changed
-        // is this program's own operations, named in full so that the default works without a path.
+        // is the system's own tools, chosen for the platform this is running on, and the preset above the
+        // four is the way to fill all of them at once — or the way a dependent plugin, Rorolala's own
+        // among them, offers a set of its own (see FileOperationPresets).
         FileOps.Configure(host.Config);
+        FileOperationPresets.BuiltIn();
+        host.Config.Add(
+            new PluginSetting(
+                FileOps.PresetSetting,
+                SettingKind.Preset,
+                "rorolala_file_system.setting.operations",
+                null,
+                5,
+                false,
+                FileOperationPresets.Options
+            )
+        );
         host.Config.Add(new PluginSetting(FileOps.CopySetting, SettingKind.Text, "rorolala_file_system.setting.copy", FileOps.DefaultCopy, 10));
         host.Config.Add(new PluginSetting(FileOps.MoveSetting, SettingKind.Text, "rorolala_file_system.setting.move", FileOps.DefaultMove, 20));
         host.Config.Add(new PluginSetting(FileOps.RemoveDirsSetting, SettingKind.Text, "rorolala_file_system.setting.remove_dirs", FileOps.DefaultRemoveDirs, 30));

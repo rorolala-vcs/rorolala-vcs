@@ -319,6 +319,60 @@ public sealed class ConfigurationTests
         Assert.Equal("mv", config.ReadKeyAs("Commands/move", "nothing"));
     }
 
+    /// <summary>
+    /// A preset keeps no value of its own: it is shown as the option the settings it stands for agree with,
+    /// choosing one writes them, a setting that no longer agrees makes the whole fall back, and taking the
+    /// preset back to its default clears every setting it stands for.
+    /// </summary>
+    [Fact]
+    public void APresetIsShownFromTheSettingsItStandsForAndWritesThemWhenChosen()
+    {
+        Given(ConfigPaths.Preference, """{"_version": 1, "language": "en"}""");
+
+        var preference = ConfigurationLoader.LoadPreference();
+        var settings = new SettingRegistry(preference);
+        var owner = new PluginId("it.alpha");
+
+        var copy = new PluginSetting("Commands/copy", SettingKind.Text, "copy", "cp");
+        var move = new PluginSetting("Commands/move", SettingKind.Text, "move", "mv");
+        settings.Declare(owner, copy);
+        settings.Declare(owner, move);
+
+        var posix = new SettingOption("posix", "label", Writes(("Commands/copy", "cp"), ("Commands/move", "mv")));
+        var custom = new SettingOption("custom", "label");
+        var preset = new PluginSetting("Commands/preset", SettingKind.Preset, "label", null, 0, false, [posix, custom]);
+        settings.Declare(owner, preset);
+
+        // The declared defaults are what the `posix` option names, so that is what is shown before anything
+        // is chosen — nothing is kept for the preset itself.
+        Assert.Equal("posix", settings.Value(owner, preset));
+        Assert.False(settings.Chosen(owner, preset.Id));
+
+        // One setting changed by hand is a whole that agrees with no option, so the fallback is shown.
+        settings.Keep(owner, copy, "cp -r");
+        Assert.Equal("custom", settings.Value(owner, preset));
+
+        // Choosing an option writes every setting it names, which then agree with it again.
+        settings.Choose(owner, preset, posix);
+        Assert.Equal("cp", settings.Value(owner, copy));
+        Assert.Equal("mv", settings.Value(owner, move));
+        Assert.Equal("posix", settings.Value(owner, preset));
+
+        // Choosing the fallback writes nothing, and taking the preset back clears what it stands for.
+        settings.Choose(owner, preset, custom);
+        Assert.Equal("cp", settings.Value(owner, copy));
+        settings.Keep(owner, preset, null);
+        Assert.False(settings.Chosen(owner, copy.Id));
+        Assert.False(settings.Chosen(owner, move.Id));
+        Assert.Equal("posix", settings.Value(owner, preset));
+    }
+
+    /// <summary>A preset option's writes, built from pairs.</summary>
+    /// <param name="pairs">Setting identity to the value it is written as.</param>
+    private static IReadOnlyDictionary<string, string> Writes(
+        params (string Id, string Value)[] pairs
+    ) => pairs.ToDictionary(pair => pair.Id, pair => pair.Value, StringComparer.Ordinal);
+
     /// <summary>Writes a file under the scratch configuration root.</summary>
     /// <param name="path">Where the file goes.</param>
     /// <param name="content">What it says.</param>

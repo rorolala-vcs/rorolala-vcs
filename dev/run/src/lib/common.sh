@@ -94,7 +94,7 @@ DESKTOP_DIR="$BUILD_DIR/bin/desktop"
 # The source tree spells the directory `Plugins` and the program spells the directory it scans
 # `plugins`; the two are deliberately not made to match. What a program looks in is its own business,
 # and the tree's spelling is the tree's.
-DESKTOP_PLUGINS="app/desktop/Plugins/FileSystemPlugin"
+DESKTOP_PLUGINS="app/desktop/Plugins/FileSystemPlugin app/desktop/Plugins/RorolalaVCSPlugin"
 
 # The C# bindings to the C ABI: a module of its own rather than part of the Desktop program, because
 # what reaches the ABI is not the desktop's concern. The file it compiles is generated on every build

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>RorolalaVCSPlugin</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The contract is the only thing the host and a plugin agree on; the translations are read by the
+         same reader the host uses, so what this plugin says is said the way the host says it. -->
+    <ProjectReference Include="../../Contract/RorolalaDesktop.Contract.csproj" />
+    <ProjectReference Include="../../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <!-- The File System plugin, whose extension point this one reaches into: the reference is what a
+         dependent plugin is, and the manifest names the same plugin in its dependencies so that the host
+         starts this one after it. Only this plugin's own assembly is laid beside the program; the
+         File System plugin's is already there, and the load context hands this one that copy rather than
+         a second. -->
+    <ProjectReference Include="../FileSystemPlugin/FileSystemPlugin.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The plugin's own words, laid beside its assembly so that what it registers is found the moment
+         the host starts it. -->
+    <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
