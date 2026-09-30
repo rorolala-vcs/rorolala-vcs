@@ -5,7 +5,7 @@ track:
     en: |
         Record files in the Layout being worked in
 
-        **Usage**: `rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]...`
+        **Usage**: `rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--force]`
 
         Each file's content goes into the store, a version is made of it, and the Layout is made to
         name that version. A file whose content is what the Layout already names is skipped: it is
@@ -21,7 +21,7 @@ track:
     zh-CN: |
         将文件记入当前正在使用的布局
 
-        **用法**：`rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]...`
+        **用法**：`rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--force]`
 
         每个文件的内容写入仓库，为其建立版本，并让布局指向该版本。内容与布局已记录一致的
         文件会被跳过：既不记录，也不需要为它撰写提交信息。`FILE` 为目录时会递归处理，其下
@@ -84,6 +84,17 @@ track:
         Settle the tree first with `rola align <PATH> --delete`; `rola layout tree-diff` shows what is lost
     zh-CN: |
         请先用 `rola align <PATH> --delete` 处理；`rola layout tree-diff` 可查看丢失的路径
+
+  err_unowned:
+    en: "%{count} file(s) named are not yours to record: %{paths}"
+    zh-CN: "点名的 %{count} 个文件并不属于你，无法记录：%{paths}"
+
+  err_unowned_help:
+    en: |
+        Record them anyway with `rola track --force`, or ask the holder to give ownership up with
+        `rola layout giveup-ownership`
+    zh-CN: |
+        确需记录请用 `rola track --force`；或请持有者用 `rola layout giveup-ownership` 让出所有权
 
   err_no_files_help:
     en: |

@@ -297,6 +297,10 @@ exit_codes:
     en: "`rola track` was given arguments it cannot use"
     zh-CN: "`rola track` 收到了无法使用的参数"
 
+  track_ownership:
+    en: A file the Vault says another account holds was not recorded
+    zh-CN: 保险库显示属于其他账户的文件没有被记录
+
   editor:
     en: A message could not be written
     zh-CN: 无法撰写提交信息

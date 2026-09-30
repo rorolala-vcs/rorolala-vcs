@@ -276,6 +276,9 @@ pub const EC_ERR_TRACK: i32 = 200;
 /// `exit_codes.track_argument`
 pub const EC_ERR_TRACK_ARGUMENT: i32 = 201;
 
+/// `exit_codes.track_ownership`
+pub const EC_ERR_TRACK_OWNERSHIP: i32 = 202;
+
 // Editing — a message a run cannot be told in one argument
 
 /// `exit_codes.editor`

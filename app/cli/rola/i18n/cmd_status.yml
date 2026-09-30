@@ -11,8 +11,10 @@ status:
         not hold, `+` one the tree holds and the Layout does not name; a line with none of them is
         content that changed where it was. A `(*)` marks a line that is also a content change.
 
-        What is lost or untagged is settled with `rola align`; what changed is recorded with
-        `rola track`.
+        A change to a file the Vault's fetched copy says another account holds is not among the
+        content changes: it is said first, on its own, since recording it would make a version this
+        side cannot push. What is lost or untagged is settled with `rola align`; what changed is
+        recorded with `rola track`, and a file that is not yours only with `rola track --force`.
     zh-CN: |
         展示工作树相对于布局的状态
 
@@ -21,7 +23,9 @@ status:
         以 `>` 开头的行是移动的路径，`-` 是布局命名而工作树缺失的路径，`+` 是工作树有而布局
         未命名的路径；没有什么开头的行是原地发生内容变化的路径。`(*)` 表示该行同时也有内容变化。
 
-        丢失或未命名的用 `rola align` 处理；内容变化用 `rola track` 记录。
+        保险库取回的副本显示属于其他账户的文件，其改动不算在内容变更里：它会单独出现在最前面，
+        因为把它记录下来会产生一个这一侧推不上去的版本。丢失或未命名的用 `rola align` 处理；
+        内容变化用 `rola track` 记录，而不属于你的文件只有 `rola track --force` 才能记录。
 
   description:
     en: Show how the working tree stands beside the Layout
@@ -30,6 +34,18 @@ status:
   clean:
     en: Your workspace has nothing unrecorded.
     zh-CN: 你的工作区无未提交内容。
+
+  header_unowned:
+    en: "Note: your workspace has %{count} content change(s) that are not yours to make!"
+    zh-CN: "注意，你的工作区存在 %{count} 项错误的内容变更！"
+
+  body_unowned:
+    en: "These files are not yours: changing them on cannot avoid a conflict:"
+    zh-CN: "这些文件你并未拥有他们的所有权，如果继续修改，会无法避免地产生冲突："
+
+  help_unowned:
+    en: "If you really mean it, record them with `rola track --force`"
+    zh-CN: "确需记录请使用 `rola track --force`"
 
   header_structural:
     en: "Your workspace has %{count} structural change(s) to confirm:"

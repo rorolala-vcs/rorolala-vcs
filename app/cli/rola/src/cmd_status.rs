@@ -25,8 +25,10 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::account::ResCurrentAccount;
 use crate::exit_codes::EC_HELP;
 use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen};
+use crate::ownership;
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
@@ -71,22 +73,33 @@ pub fn handle_status(
     _state: StateStatus,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
+    account: &mut LazyRes<ResCurrentAccount>,
 ) -> Next {
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
         Err(next) => return next,
     };
 
-    let diff = {
-        let Some(workspace) = workspace.get_ref().as_ref() else {
-            return ErrorLayoutShouldInWorkspace.into();
-        };
-
-        match tree_diff(&layout, workspace, DEFAULT_ALIKE) {
-            Ok(diff) => diff,
-            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-        }
+    let Some(held) = workspace.get_ref().as_ref() else {
+        return ErrorLayoutShouldInWorkspace.into();
     };
+
+    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
+        Ok(diff) => diff,
+        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+    };
+
+    // What is not this account's to change is read before anything is said, and kept out of the
+    // content changes: a run that read them as its own work would be reading past the one thing it
+    // is not to do.
+    let me = account.get_ref().must_bind().ok();
+    let tracked = ownership::tracked_vault(held, &layout);
+    let unowned = match ownership::unowned(held, &layout, tracked.as_deref(), me.as_deref(), &diff)
+    {
+        Ok(unowned) => unowned,
+        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+    };
+    let not_mine: BTreeSet<&str> = unowned.iter().map(String::as_str).collect();
 
     let moved: BTreeSet<&str> = diff
         .renamed
@@ -108,6 +121,7 @@ pub fn handle_status(
         modified: diff
             .modified
             .iter()
+            .filter(|path| !not_mine.contains(path.as_str()))
             .map(|path| path.as_str().to_owned())
             .collect(),
         renamed: diff
@@ -120,6 +134,7 @@ pub fn handle_status(
                 strong: rename.strong,
             })
             .collect(),
+        unowned,
     }
     .into()
 }
@@ -142,7 +157,9 @@ pub struct RenameItem {
 ///
 /// The reading is the same one `rola layout tree-diff` gives, so what a `--json` run reads here is
 /// what a reader of that command would: every path the two disagree about, with `modified` holding
-/// the ones that changed where they were as well as the destinations of moves.
+/// the ones that changed where they were as well as the destinations of moves — except the ones the
+/// fetched copy says are not this account's, which are held apart in `unowned` rather than counted
+/// among the run's own work.
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultStatus {
     /// Paths the Layout names that the tree does not hold.
@@ -153,6 +170,8 @@ pub struct ResultStatus {
     modified: Vec<String>,
     /// Paths that moved.
     renamed: Vec<RenameItem>,
+    /// Paths the fetched copy of the Vault's Layout says another account holds.
+    unowned: Vec<String>,
 }
 
 #[renderer(buffer)]
@@ -173,10 +192,33 @@ pub fn render_result_status(result: ResultStatus) {
         .map(String::as_str)
         .collect();
 
-    if structural == 0 && changed.is_empty() {
+    if structural == 0 && changed.is_empty() && result.unowned.is_empty() {
         r_println!("{}", trd!(t!("status.clean")).trim());
     } else {
+        let mark = t!("status.mark_modified");
+        let unowned = !result.unowned.is_empty();
+
+        // What must not be recorded is said first: a run that reads the rest as its work has read past
+        // the one thing it is not to do.
+        if unowned {
+            r_println!(
+                "{}",
+                trd!(t!("status.header_unowned", count = result.unowned.len())).trim()
+            );
+            r_println!("{}", trd!(t!("status.body_unowned")).trim());
+            r_println!("");
+
+            for path in &result.unowned {
+                r_println!("{}", trd!(format!("  {path} {mark}")));
+            }
+        }
+
         if structural > 0 {
+            // A blank line separates the blocks; the first block has none before it.
+            if unowned {
+                r_println!("");
+            }
+
             let header = if changed.is_empty() || result.renamed.is_empty() {
                 trd!(t!("status.header_structural", count = structural))
             } else {
@@ -209,8 +251,8 @@ pub fn render_result_status(result: ResultStatus) {
         }
 
         if !changed.is_empty() {
-            // A blank line separates the two blocks; the first block has none before it.
-            if structural > 0 {
+            // A blank line separates the blocks; the first block has none before it.
+            if unowned || structural > 0 {
                 r_println!("");
             }
 
@@ -222,7 +264,6 @@ pub fn render_result_status(result: ResultStatus) {
             r_println!("{}", header.trim());
             r_println!("");
 
-            let mark = t!("status.mark_modified");
             for path in &changed {
                 r_println!("{}", trd!(format!("  {path} {mark}")));
             }
@@ -230,6 +271,9 @@ pub fn render_result_status(result: ResultStatus) {
 
         r_println!("");
 
+        if !result.unowned.is_empty() {
+            r_println!("{}", help_line!(t!("status.help_unowned").trim()));
+        }
         if structural > 0 {
             let said = if changed.is_empty() {
                 t!("status.help_align")

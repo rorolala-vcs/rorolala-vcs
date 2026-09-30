@@ -39,9 +39,12 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::editor::{ResEditor, open};
-use crate::exit_codes::{EC_ABORT, EC_ERR_TRACK, EC_ERR_TRACK_ARGUMENT, EC_HELP};
+use crate::exit_codes::{
+    EC_ABORT, EC_ERR_TRACK, EC_ERR_TRACK_ARGUMENT, EC_ERR_TRACK_OWNERSHIP, EC_HELP,
+};
 use crate::failure::failure;
 use crate::layout::{ErrorLayoutShouldInWorkspace, chosen, failed};
+use crate::ownership;
 
 /// The longest a message may be, in bytes.
 ///
@@ -73,6 +76,9 @@ struct TrackFlags {
     /// Record what is already known, and never open an editor.
     #[arg(long)]
     no_editor: Flag,
+    /// Record a file the fetched copy of the Vault's Layout says another account holds.
+    #[arg(long)]
+    force: Flag,
 }
 
 #[help(buffer)]
@@ -104,11 +110,16 @@ pub fn desc_track() -> Description {
 /// a run asks for is a version. A move whose file was not edited is nothing to record, though, so
 /// it is left alone — `rola align` is what confirms it.
 ///
+/// A file the fetched copy of the Vault's Layout says another account holds is refused: the version
+/// made here would be one this side cannot push, so recording it makes the conflict rather than
+/// avoiding it. `--force` records it anyway, for a run that knows this and means it.
+///
 /// # Errors
 ///
 /// Renders [`ErrorTrackNoFiles`] when no file is named, [`ErrorTrackFile`] when a path is not a file
 /// or is not inside the Workspace, [`ErrorTrackMessage`] when the messages do not line up or are too
-/// long, [`ErrorNoEditor`](crate::editor::ErrorNoEditor) when an editor is needed and none is named,
+/// long, [`ErrorTrackUnowned`] when a file named is one another account holds,
+/// [`ErrorNoEditor`](crate::editor::ErrorNoEditor) when an editor is needed and none is named,
 /// [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and [`ErrorTrackFailed`]
 /// when the store, the index or the Layout refuses.
 #[command(node = "track", entry = EntryTrack)]
@@ -137,6 +148,7 @@ pub fn track(args: EntryTrack) -> Next {
             .filter(|message| !message.starts_with("--file-message"))
             .collect(),
         no_editor: matches!(flags.no_editor, Flag::Active),
+        force: matches!(flags.force, Flag::Active),
     }
     .into()
 }
@@ -152,6 +164,8 @@ pub struct StateTrack {
     file_messages: Vec<String>,
     /// Whether an editor is never to be opened.
     no_editor: bool,
+    /// Whether a file another account holds is recorded anyway.
+    force: bool,
 }
 
 #[chain]
@@ -169,30 +183,26 @@ pub fn handle_track(
         message,
         file_messages,
         no_editor,
+        force,
     } = state;
-
-    let root = match workspace.get_ref().as_ref() {
-        Some(workspace_held) => workspace_held.get_root().to_path_buf(),
-        None => return ErrorLayoutShouldInWorkspace.into(),
-    };
 
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
         Err(next) => return next,
     };
 
+    let Some(held) = workspace.get_ref().as_ref() else {
+        return ErrorLayoutShouldInWorkspace.into();
+    };
+
+    let root = held.get_root().to_path_buf();
+
     // Recording works on a tree that is settled: a path the Layout names and the tree does not hold
     // is something to settle first, with `rola align`, rather than something to record around. A
     // move is not one of these — naming a path where it is now is how a move is confirmed.
-    let diff = {
-        let Some(workspace_held) = workspace.get_ref().as_ref() else {
-            return ErrorLayoutShouldInWorkspace.into();
-        };
-
-        match tree_diff(&layout, workspace_held, DEFAULT_ALIKE) {
-            Ok(diff) => diff,
-            Err(error) => return fail(error.to_string()),
-        }
+    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
+        Ok(diff) => diff,
+        Err(error) => return fail(error.to_string()),
     };
 
     if !diff.lost.is_empty() {
@@ -228,6 +238,34 @@ pub fn handle_track(
         Ok(prepared) => prepared,
         Err(next) => return next,
     };
+
+    // A file the Vault's fetched copy says another account holds is not one to record: the version
+    // made here is one this side cannot push, so recording it makes the conflict rather than
+    // avoiding it. Only what the tree says changed is asked about — a file that did not change
+    // records nothing — and a Vault that tracks nothing, a copy that is not there, and a file the
+    // copy does not name are all answered with nothing to refuse.
+    if !force {
+        let tracked = ownership::tracked_vault(held, &layout);
+        let unowned = match ownership::unowned(
+            held,
+            &layout,
+            tracked.as_deref(),
+            Some(&creator_name),
+            &diff,
+        ) {
+            Ok(unowned) => unowned,
+            Err(error) => return fail(error.to_string()),
+        };
+        let named: BTreeSet<&str> = prepared.iter().map(|file| file.path.as_str()).collect();
+        let blocked: Vec<String> = unowned
+            .into_iter()
+            .filter(|path| named.contains(path.as_str()))
+            .collect();
+
+        if !blocked.is_empty() {
+            return ErrorTrackUnowned { paths: blocked }.into();
+        }
+    }
 
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -1022,6 +1060,38 @@ pub fn render_error_track_lost(error: ErrorTrackLost, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("track.err_lost_help").trim()));
     ec.exit_code = EC_ERR_TRACK;
+}
+
+/// Error: the files named are ones the Vault's fetched copy says another account holds.
+#[derive(Grouped)]
+pub struct ErrorTrackUnowned {
+    /// The paths that are not this account's to record.
+    paths: Vec<String>,
+}
+
+impl Failure for ErrorTrackUnowned {
+    fn name(&self) -> &'static str {
+        "error_track_unowned"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "track.err_unowned",
+            count = self.paths.len(),
+            paths = self.paths.join(", ")
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorTrackUnowned);
+
+#[renderer(buffer)]
+pub fn render_error_track_unowned(error: ErrorTrackUnowned, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("track.err_unowned_help").trim()));
+    ec.exit_code = EC_ERR_TRACK_OWNERSHIP;
 }
 
 /// Error: a file named cannot be recorded.

@@ -871,6 +871,65 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
+    // A file the fetched copy says another account holds is not this account's to change: what the
+    // tree did to it is said first, and recording it is refused unless the run means it.
+    Layout::open(root.join(LAYOUT_DIR))
+        .expect("the Vault's Layout")
+        .update_entry(
+            id,
+            MutableData::new(Some(BOB.to_owned()), second, String::new()),
+        )
+        .expect("another holder");
+    run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "fetch", VAULT_NAME],
+    ))
+    .expect_success();
+
+    fs::write(&model, b"third").expect("a change of my own");
+
+    let said = run(&mut client(&workspace, &data, &["status"]));
+    checked.wants(
+        "a change to a file another account holds is said first",
+        said.success()
+            && clean(&said.stdout).contains("not yours to make")
+            && clean(&said.stdout).contains("models/hero.psd"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            clean(&said.stdout)
+        ),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["track", "models/hero.psd", "--message", "mine now"],
+    ));
+    checked.wants(
+        "recording a file another account holds is refused",
+        said.code == Some(202),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "track",
+            "models/hero.psd",
+            "--message",
+            "mine now",
+            "--force",
+        ],
+    ));
+    checked.wants(
+        "a run that means it records the file anyway",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
     serving.stop();
     checked.report();
 }
