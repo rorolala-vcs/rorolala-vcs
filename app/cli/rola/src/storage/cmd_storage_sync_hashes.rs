@@ -20,7 +20,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_progress::Progress;
@@ -28,6 +28,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH, EC_HELP};
 use crate::failure::failure;
 use crate::keys::account_named;
@@ -68,7 +69,12 @@ pub fn desc_storage_sync_hashes() -> Description {
 /// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "storage.sync-hashes", entry = EntryStorageSyncHashes)]
-pub fn storage_sync_hashes(args: EntryStorageSyncHashes) -> Next {
+pub fn storage_sync_hashes(args: EntryStorageSyncHashes, offline: &ResOffline) -> Next {
+    // Moving keys between the two stores is speaking to the Vault, which an offline run may not do.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     // Picking cannot fail: no positions are `None`-able but the list itself, which is empty.
     let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
     let (vault, hashes) = with_vault(words);

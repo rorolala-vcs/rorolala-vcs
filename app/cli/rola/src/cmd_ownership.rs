@@ -36,7 +36,7 @@ use mingling::{
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResForce, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResForce, ResOffline, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
@@ -47,6 +47,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_OWNERSHIP, EC_HELP};
 use crate::failure::failure;
 use crate::keys::account_named;
@@ -123,7 +124,13 @@ pub fn desc_hold() -> Description {
 /// [`ErrorOwnershipVersion`], [`ErrorOwnershipChanged`] or [`ErrorOwnershipTaken`] — for the first
 /// one, or [`ErrorOwnershipRefused`] when several were refused at once.
 #[command(node = "hold", entry = EntryHold)]
-pub fn hold(args: EntryHold, force: &ResForce) -> Next {
+pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
+    // What a claim writes is the Vault's own Layout, and the fetch before it is not the point of
+    // the command but a step of it: there is no offline claim to make.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     let picked = args
         .pick(&arg![OwnershipFlags])
         .pick_or_route(&arg![Vec<String>], || {
@@ -229,7 +236,13 @@ pub fn desc_giveup() -> Description {
 /// [`ErrorOwnershipVersion`], [`ErrorOwnershipChanged`] or [`ErrorOwnershipNotHeld`] — for the
 /// first one, or [`ErrorOwnershipRefused`] when several were refused at once.
 #[command(node = "giveup", entry = EntryGiveup)]
-pub fn giveup(args: EntryGiveup, force: &ResForce) -> Next {
+pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next {
+    // What letting go writes is the Vault's own Layout, and the fetch before it is not the point
+    // of the command but a step of it: there is no offline release to make.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     let picked = args
         .pick(&arg![OwnershipFlags])
         .pick_or_route(&arg![Vec<String>], || {

@@ -39,8 +39,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResForce, ResProgressSetting, ResRorolalaStorage, ResVCSIndex,
-    ResWorkspace,
+    ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting, ResRorolalaStorage,
+    ResVCSIndex, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -54,6 +54,7 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
+use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_SYNC, EC_ERR_SYNC_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::keys::account_named;
@@ -123,7 +124,13 @@ pub fn desc_sync() -> Description {
 /// changed here is behind the Vault, [`ErrorSyncFailed`] when the exchange could not be made, and
 /// the exchange's own failures otherwise.
 #[command(node = "sync", entry = EntrySync)]
-pub fn sync(args: EntrySync, force: &ResForce) -> Next {
+pub fn sync(args: EntrySync, force: &ResForce, offline: &ResOffline) -> Next {
+    // A sync is the exchange with the Vault, whole: there is no local half of it an offline run
+    // could be left with.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     let flags = args.pick(&arg![SyncFlags]).unwrap();
 
     let up = matches!(flags.up_only, Flag::Active);

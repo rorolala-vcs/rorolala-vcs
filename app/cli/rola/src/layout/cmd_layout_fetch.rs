@@ -14,7 +14,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
@@ -22,6 +22,7 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::readonly_layout_dir;
@@ -85,7 +86,13 @@ pub fn handle_layout_fetch(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    offline: &ResOffline,
 ) -> Next {
+    // This command is the fetch, so an offline run has nothing to do and nowhere to look.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     // The copy is kept beside the Workspace and named after the Vault, so the two are needed
     // before anything is spoken: `check` is `routeify`'s, and a run outside a Workspace leaves
     // through it.

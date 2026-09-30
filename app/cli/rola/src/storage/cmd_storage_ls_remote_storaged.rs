@@ -17,13 +17,14 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
 use crate::keys::account_named;
@@ -91,7 +92,14 @@ pub fn handle_storage_ls_remote_storaged(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     format: &mut ResFormat,
+    offline: &ResOffline,
 ) -> Next {
+    // The other end's store is the whole of what is asked for here, and an offline run may not ask
+    // it.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     workspace.get_ref().check()?;
 
     // UNWRAP: `check` above is exactly what a run without a Workspace fails with, and this run did

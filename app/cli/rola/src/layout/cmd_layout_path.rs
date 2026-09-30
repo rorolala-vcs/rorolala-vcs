@@ -14,7 +14,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
@@ -22,6 +22,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
@@ -261,6 +262,7 @@ pub fn handle_layout_path_move(
     vault: &mut LazyRes<ResVault>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    offline: &ResOffline,
 ) -> Next {
     let StateLayoutPathMove { from, to, layout } = state;
 
@@ -292,6 +294,13 @@ pub fn handle_layout_path_move(
 
         let account_name = current.get_ref().must_bind()?;
         let account = account_named(&account_name, Some(held), None)?;
+
+        // A move in the Vault's own Layout is the only part of this command that leaves the
+        // machine, and only a Layout named `NAME@VAULT` reaches it: an offline run may not make
+        // that move, and the local moves are none of its business.
+        if **offline {
+            return ErrorOffline.into();
+        }
 
         let answer = action_move_remote_path(
             held,

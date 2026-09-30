@@ -318,3 +318,11 @@ pub const EC_ERR_RETRACK: i32 = 250;
 
 /// `exit_codes.retrack_argument`
 pub const EC_ERR_RETRACK_ARGUMENT: i32 = 251;
+
+// Offline — a run that may not reach the Vault
+
+// The decade this block would have had is past the byte an exit status is: 260 is read as 4 by
+// everything that reads a status, so the block takes the next number there is instead.
+
+/// `exit_codes.offline`
+pub const EC_ERR_OFFLINE: i32 = 252;

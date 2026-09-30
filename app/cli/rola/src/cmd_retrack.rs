@@ -15,6 +15,9 @@
 // step of that is a refusal of its own to say; keeping them in one function is what lets the order
 // they are read in be read off the function rather than assembled from helpers.
 #![allow(clippy::too_many_lines)]
+// The handler's parameters are the resources the framework injects, so how many of them there are
+// is what the command needs of the run rather than a signature this program shaped.
+#![allow(clippy::too_many_arguments)]
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -36,7 +39,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+    ResCurrentRemoteVault, ResOffline, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -157,6 +160,7 @@ pub fn handle_retrack(
     index: &mut LazyRes<ResVCSIndex>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    offline: &ResOffline,
 ) -> Next {
     let StateRetrack {
         file,
@@ -213,7 +217,9 @@ pub fn handle_retrack(
     // The one level that leaves the local index for what the Vault's own Layout says. It is read
     // before the rest only for this level, since reading it may mean reaching for a Vault.
     let upstream = match &level {
-        Until::Vault(alias) => Some(upstream_version(held, remote, current, alias, &path, id)?),
+        Until::Vault(alias) => Some(upstream_version(
+            held, remote, current, alias, &path, id, **offline,
+        )?),
         _ => None,
     };
 
@@ -364,9 +370,10 @@ fn resolve_target(
 /// The version the Vault `alias` names records for the entry `id`.
 ///
 /// What is read is the copy of the Vault's own Layout the Workspace keeps, and one that was never
-/// fetched is fetched first — the only step of a retrack that may leave the machine. Which Vault
-/// `alias` names is the Workspace's to say, and no check is made that the Layout being worked in
-/// tracks that Vault: the Vault named is the upstream, whichever it is.
+/// fetched is fetched first — the only step of a retrack that may leave the machine, and one an
+/// offline run does not take: it reads a copy that is here or fails when it opens one that is not.
+/// Which Vault `alias` names is the Workspace's to say, and no check is made that the Layout being
+/// worked in tracks that Vault: the Vault named is the upstream, whichever it is.
 fn upstream_version(
     held: &Workspace,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
@@ -374,6 +381,7 @@ fn upstream_version(
     alias: &str,
     path: &LayoutPath,
     id: Uuid,
+    offline: bool,
 ) -> Result<Blake3Hash, Next> {
     let name = remote
         .get_ref()
@@ -383,8 +391,9 @@ fn upstream_version(
     let dir = readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME);
 
     // A copy that is here is read as it is, however old: reaching for the Vault is what a run that
-    // has not fetched is for, not something every run pays for.
-    if !dir.is_dir() {
+    // has not fetched is for, not something every run pays for — and an offline run does not reach
+    // for it at all, so a copy that is not here fails at the open below.
+    if !dir.is_dir() && !offline {
         let target = remote
             .get_ref()
             .vault_or_default(name.clone())

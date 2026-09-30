@@ -16,13 +16,14 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 
@@ -89,7 +90,14 @@ pub fn handle_vault_handshake(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    offline: &ResOffline,
 ) -> Next {
+    // Speaking the handshake is reaching the Vault and nothing else, so an offline run has no way
+    // to do any part of it.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     // Everything below works through the Workspace, so it is asked once, here, and taken for
     // granted after: `?` is `routeify`'s, and a run that is inside no Workspace leaves through
     // it. `held` is the copy the exchange is spoken from, and the same one the action is

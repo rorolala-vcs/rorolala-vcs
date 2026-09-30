@@ -23,12 +23,13 @@ use mingling::{
     picker::EntryPicker,
     res::{ResConfirm, ResExitCode},
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResProgressSetting, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResWorkspace};
 use rorolala_utils_cli_theme::{help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_CANCELLED, EC_HELP};
 use crate::keys::account_named;
 use crate::progress::Reporting;
@@ -115,7 +116,14 @@ pub fn handle_storage_sync_all(
     current: &mut LazyRes<ResCurrentAccount>,
     confirm: &ResConfirm,
     progress: &ResProgressSetting,
+    offline: &ResOffline,
 ) -> Next {
+    // The two stores are made to agree by speaking to the Vault, which is the whole of this
+    // command and the one thing an offline run may not do.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     // Everything below works through the Workspace, so it is asked once, here, and taken for granted
     // after: `?` is `routeify`'s, and a run that is inside no Workspace leaves through it. `held` is
     // the copy the exchange is spoken from, and the same one the action is handed.

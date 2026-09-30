@@ -16,13 +16,14 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 use std::str::FromStr as _;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
 use crate::keys::account_named;
@@ -59,7 +60,16 @@ pub fn desc_vcs_index_read_remote() -> Description {
 /// [`vcs-index ls-remote-variants`](crate::vcs_index::cmd_vcs_index_ls_remote_variants) — whatever
 /// the exchange reports.
 #[command(node = "vcs-index.read-remote", entry = EntryVcsIndexReadRemote)]
-pub fn vcs_index_read_remote(args: EntryVcsIndexReadRemote, format: &mut ResFormat) -> Next {
+pub fn vcs_index_read_remote(
+    args: EntryVcsIndexReadRemote,
+    format: &mut ResFormat,
+    offline: &ResOffline,
+) -> Next {
+    // The object read is the other end's, so an offline run has none of it to read.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     // Picking cannot fail: no positions are `None`-able but the list itself, which is empty.
     let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
     let (vault, words) = with_vault(words);

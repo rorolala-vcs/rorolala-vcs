@@ -340,3 +340,7 @@ exit_codes:
   retrack_argument:
     en: "`rola retrack` was given arguments it cannot use"
     zh-CN: "`rola retrack` 收到了无法使用的参数"
+
+  offline:
+    en: The run was asked to reach no Vault, and what it asked for needs one
+    zh-CN: 本次运行被要求不连接保险库，而它请求的操作需要保险库

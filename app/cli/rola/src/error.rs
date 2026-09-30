@@ -9,6 +9,9 @@ pub use account::*;
 mod creation;
 pub use creation::*;
 
+mod offline;
+pub use offline::*;
+
 mod placement;
 pub use placement::*;
 

@@ -8,7 +8,10 @@
 // `#[chain]` copies the attributes of the function it is given onto the struct it generates,
 // so a lint allowed on the handler below is reported as defined twice. The allow lives here,
 // where it covers the one signature that needs it.
-#![allow(clippy::trivially_copy_pass_by_ref)]
+//
+// The handler's parameters are the resources the framework injects, so how many of them there are
+// is what the command needs of the run rather than a signature this program shaped.
+#![allow(clippy::trivially_copy_pass_by_ref, clippy::too_many_arguments)]
 
 use librorolala::daemon::action_sync_index_all_async;
 use librorolala::protocol::ActionError;
@@ -23,12 +26,13 @@ use mingling::{
     picker::EntryPicker,
     res::{ResConfirm, ResExitCode},
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResProgressSetting, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResWorkspace};
 use rorolala_utils_cli_theme::{help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_CANCELLED, EC_HELP};
 use crate::keys::account_named;
 use crate::progress::Reporting;
@@ -111,7 +115,14 @@ pub fn handle_vcs_index_sync_all(
     confirm: &ResConfirm,
     progress: &ResProgressSetting,
     rebuild: &ResRebuildInverseIndex,
+    offline: &ResOffline,
 ) -> Next {
+    // The two indexes are made to agree by speaking to the Vault, which is the whole of this
+    // command and the one thing an offline run may not do.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     // Everything below works through the Workspace, so it is asked once, here, and taken for granted
     // after: `?` is `routeify`'s, and a run that is inside no Workspace leaves through it. `held` is
     // the copy the exchange is spoken from, and the same one the action is handed.

@@ -9,7 +9,10 @@
 // `#[chain]` copies the attributes of the function it is given onto the struct it generates,
 // so a lint allowed on the handler below is reported as defined twice. The allow lives here,
 // where it covers the one signature that needs it.
-#![allow(clippy::trivially_copy_pass_by_ref)]
+//
+// The handler's parameters are the resources the framework injects, so how many of them there are
+// is what the command needs of the run rather than a signature this program shaped.
+#![allow(clippy::trivially_copy_pass_by_ref, clippy::too_many_arguments)]
 
 use std::path::Path;
 use std::str::FromStr as _;
@@ -18,6 +21,7 @@ use librorolala::daemon::{
     action_fetch_layout, action_sync_all_async, action_sync_index_all_async,
 };
 use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::protocol::ActionError;
 use librorolala::storage::{RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::VCSIndex;
 use mingling::{
@@ -30,7 +34,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResWorkspace,
+    ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResRorolalaStorage, ResVCSIndex,
+    ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -135,6 +140,7 @@ pub fn handle_checkin(
     index: &mut LazyRes<ResVCSIndex>,
     storage: &mut LazyRes<ResRorolalaStorage>,
     progress: &ResProgressSetting,
+    offline: &ResOffline,
 ) -> Next {
     let StateCheckin { refs, locals } = state;
 
@@ -170,8 +176,12 @@ pub fn handle_checkin(
     let account = account_named(&account_name, Some(held), None)?;
 
     // What the Vault holds now is what the references are read against, so its copy is brought up
-    // to date first — the same fetch `rola layout fetch` makes.
-    action_fetch_layout(held, &account, target.to_string(), vault_name.clone())?;
+    // to date first — the same fetch `rola layout fetch` makes. Offline, the copy that is here is
+    // the one read; a run with none is told so by the check below rather than by a fetch it may
+    // not make.
+    if !**offline {
+        action_fetch_layout(held, &account, target.to_string(), vault_name.clone())?;
+    }
 
     let dir = readonly_layout_dir(held, &vault_name, VAULT_LAYOUT_NAME);
     if !dir.is_dir() {
@@ -210,28 +220,14 @@ pub fn handle_checkin(
     // Vault: the index and the store are moved before anything is put at a path.
     let reporting = Reporting::start(*progress);
 
-    if let Err(error) = runtime.block_on(action_sync_index_all_async(
+    if let Err(error) = pull(
         held,
         &account,
-        target.to_string(),
-        String::new(),
-        reporting.progress(),
-    )) {
-        reporting.finish();
-
-        return ErrorCheckinFailed {
-            cause: error.to_string(),
-        }
-        .into();
-    }
-
-    if let Err(error) = runtime.block_on(action_sync_all_async(
-        held,
-        &account,
-        target.to_string(),
-        String::new(),
-        reporting.progress(),
-    )) {
+        &target.to_string(),
+        &runtime,
+        &reporting,
+        **offline,
+    ) {
         reporting.finish();
 
         return ErrorCheckinFailed {
@@ -259,6 +255,42 @@ pub fn handle_checkin(
         failed,
     }
     .into()
+}
+
+/// Moves the index and the store to what the Vault holds, which is what makes the versions that
+/// follow readable.
+///
+/// An offline run moves nothing: what the index and the store already hold is what those versions
+/// are read from, and one that is not here fails where it is read rather than being fetched.
+fn pull(
+    held: &librorolala::workspace::Workspace,
+    account: &librorolala::auth::Account,
+    target: &str,
+    runtime: &tokio::runtime::Runtime,
+    reporting: &Reporting,
+    offline: bool,
+) -> Result<(), ActionError> {
+    if offline {
+        return Ok(());
+    }
+
+    runtime.block_on(action_sync_index_all_async(
+        held,
+        account,
+        target.to_owned(),
+        String::new(),
+        reporting.progress(),
+    ))?;
+
+    runtime.block_on(action_sync_all_async(
+        held,
+        account,
+        target.to_owned(),
+        String::new(),
+        reporting.progress(),
+    ))?;
+
+    Ok(())
 }
 
 /// What stopped a reference from being read.

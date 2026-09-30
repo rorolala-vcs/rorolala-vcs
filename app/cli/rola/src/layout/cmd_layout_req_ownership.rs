@@ -15,7 +15,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 use serde::Serialize;
@@ -23,6 +23,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
@@ -70,7 +71,13 @@ pub fn desc_layout_req_ownership() -> Description {
 /// [`ErrorAccountUnknown`]: crate::keys::ErrorAccountUnknown
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "layout.req-ownership", entry = EntryLayoutReqOwnership)]
-pub fn layout_req_ownership(args: EntryLayoutReqOwnership) -> Next {
+pub fn layout_req_ownership(args: EntryLayoutReqOwnership, offline: &ResOffline) -> Next {
+    // What is taken is written in the Vault's own Layout, so an offline run has no part of this to
+    // do.
+    if **offline {
+        return ErrorOffline.into();
+    }
+
     let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
 
     let Some((vault, ids)) = vault_and_uuids(&words) else {
