@@ -870,12 +870,62 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
+    let said = run(&mut client(&workspace, &data, &["entries", "--remote"]));
+    checked.wants(
+        "a Layout that tracks no Vault has no remote to list",
+        said.code == Some(190),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
     run(&mut client(
         &workspace,
         &data,
         &["layout", "force-switch", "main"],
     ))
     .expect_success();
+
+    // `rola entries` is the listing in the one shape a pipe wants: the paths alone, and nothing
+    // else. `--remote` is the same for the Vault's own Layout, as the copy fetched here has it.
+    let said = run(&mut client(&workspace, &data, &["entries"]));
+    let same = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "entries", "--format", "{{ entries.path }}"],
+    ));
+    checked.wants(
+        "`rola entries` is the Layout being worked in, by path alone",
+        said.success() && said.stdout == same.stdout && !said.stdout.trim().is_empty(),
+        &format!(
+            "it ended with {:?}, said {:?}, and `layout entries` said {:?}",
+            said.code,
+            said.stdout.trim(),
+            same.stdout.trim()
+        ),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["entries", "--remote"]));
+    let same = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "entries",
+            "--layout",
+            "truth@origin",
+            "--format",
+            "{{ entries.path }}",
+        ],
+    ));
+    checked.wants(
+        "`rola entries --remote` is the Vault's own Layout, by path alone",
+        said.success() && said.stdout == same.stdout && said.stdout.contains("@/"),
+        &format!(
+            "it ended with {:?}, said {:?}, and `layout entries` said {:?}",
+            said.code,
+            said.stdout.trim(),
+            same.stdout.trim()
+        ),
+    );
 
     // Nothing is left to send, so a plain run moves only content, and two directions at once is
     // nobody's.

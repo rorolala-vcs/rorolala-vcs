@@ -104,6 +104,18 @@ pub struct StateLayoutEntries {
     id: Option<Uuid>,
 }
 
+impl StateLayoutEntries {
+    /// The state that lists every entry of the Layout `layout` names.
+    ///
+    /// Naming none reads the one being worked in, which is what the state a run starts in means
+    /// anyway; it is public so that a command which lists in another shape — `rola entries` — says
+    /// which Layout is read without keeping a second reading of its own.
+    #[must_use]
+    pub fn every(layout: Option<String>) -> Self {
+        Self { layout, id: None }
+    }
+}
+
 #[chain]
 pub fn handle_layout_entries(
     state: StateLayoutEntries,

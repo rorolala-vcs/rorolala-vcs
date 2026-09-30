@@ -28,6 +28,7 @@ mod cmd_align;
 mod cmd_checkin;
 mod cmd_create;
 mod cmd_desktop;
+mod cmd_entries;
 mod cmd_explain;
 mod cmd_fs_ops;
 mod cmd_init;

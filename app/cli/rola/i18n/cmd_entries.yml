@@ -1,0 +1,42 @@
+_version: 2
+
+entries:
+  help:
+    en: |
+        List the paths a Layout names, one a line
+
+        **Usage**: `rola entries [--remote]`
+
+        The Layout being worked in is what is read. `--remote` reads the Vault's own Layout
+        instead — the one that Layout tracks — as the copy `rola layout fetch` left in the
+        Workspace; nothing is fetched for it, so a run that has not fetched is told there is no
+        copy rather than quietly reaching for one.
+
+        A path a line, and nothing else: what comes out is what a `tree`, or anything else that
+        reads one path a line, is given. What each entry is held by, at what version, and whether
+        the Vault has deprecated it are `rola layout entries`'s to say.
+    zh-CN: |
+        列出一个布局命名的路径，一行一个
+
+        **用法**：`rola entries [--remote]`
+
+        默认读当前使用的布局。`--remote` 改读保险库自己的布局 —— 也就是该布局追踪的那个 ——
+        取自 `rola layout fetch` 留在工作区里的副本；它不会替你取回，没有取回过就会被告知没有
+        副本，而不是悄悄去取。
+
+        一行一个路径，没有别的，因此输出正适合管道给 `tree`，或任何按行读路径的工具。每个条目
+        被谁持有、在什么版本、保险库是否已废弃它，由 `rola layout entries` 负责。
+
+  description:
+    en: List the paths a Layout names
+    zh-CN: 列出一个布局命名的路径
+
+  err_no_track:
+    en: The Layout being worked in tracks no Vault
+    zh-CN: 当前使用的布局没有追踪任何保险库
+
+  err_no_track_help:
+    en: |
+        Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then try again
+    zh-CN: |
+        请用 `rola layout set-track <LAYOUT> <VAULT>` 指定一个，然后重试
