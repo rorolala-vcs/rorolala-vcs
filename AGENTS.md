@@ -61,6 +61,52 @@ semantics may not.
 - The programs are C11 (`cc -std=c11 -Wall -Wextra -Werror`), and only Unix is spelled out — the
   runner's `.ps1` twins have never been run.
 
+## Subcommands
+
+A command is a file, a node and a shape. What it carries before it is done:
+
+- **Layering.** One file under the module of its area, declared by
+  `#[command(node = "...", entry = Entry...)]`. The `#[command]` function parses arguments and
+  pre-validates what can be refused on the spot — mutually exclusive modes, missing or unpaired
+  positions — and returns `Next` for those. Everything else goes into a `StateXxx` value and a
+  `#[chain]` handler: the entry turns arguments into state, the handler does the work.
+  `#[chain(routeify)]` is what lets a handler use `?` on a failure the framework knows.
+- **Global flags are consumed, not declared.** `--vault`, `--force` and `--offline` are picked out
+  of the whole argument list and removed before any command runs. A command declares none of them:
+  it asks for `&ResUsingVault`/`&ResForce`/`&ResOffline` and reads them. A command-level declaration
+  is dead code, since the global pick eats the token first.
+- **Network.** A command whose work is the exchange with the Vault is refused when `--offline` is
+  set, with `ErrorOffline` (252), rather than reaching. A command that only fetches the Vault's
+  Layout or content on the way to local work goes on without it. Content is brought on demand
+  through `crate::fetch::Sources` — never by a bulk store sync — and only the explicit
+  `storage ...` commands move whole stores. Check for what is missing immediately before the read
+  that wants it, so nothing is fetched ahead of its use.
+- **Exit codes.** Every way of failing a caller may branch on gets a constant in
+  `src/exit_codes.rs`, with its `exit_codes.<key>` doc comment above it and that key stated in
+  `i18n/exit_codes.yml` in both languages. Where the gate runs, an exit status is one byte: no
+  constant above 255. Blocks are ten apart, one per subject, and the room is nearly spent.
+  `src/exit_codes/explain.rs` is generated from the constants — never edited, always committed with
+  them.
+- **Help.** `#[help(buffer)]` renders `t!("<area>.help")`, and the usage line names every flag the
+  command takes, the global ones it honours included.
+- **Description.** `#[metadata(Entry...)]` and `desc_xxx() -> Description` exist, and the text is
+  translated: it is what the command is listed and searched by.
+- **Completion.** Every command registers `#[completion(Entry...)]` with
+  `complete_xxx(ctx: ShellContext, ...) -> Suggest`, answering what only the run can know — bound
+  Vault names, accounts, the address history, paths — and `suggest!()` where nothing is known.
+- **i18n.** Every key a call site names is stated in `i18n/` in `en` and `zh-CN`, checked by
+  `./run.sh i18n`. stdout is the contract, so results are drawn through `t!` while progress and
+  errors go to stderr.
+- **Errors.** A failure is a `Grouped` type implementing `Failure` (`name`, `reason`), registered
+  with `failure!(Type)` and rendered by a `#[renderer(buffer)]` function that sets its exit code. The
+  command's `# Errors` doc names every failure it can render.
+- **Lints.** A handler's parameters are the resources the framework injects, so their number follows
+  the command rather than a signature this project shaped; past seven it wants
+  `clippy::too_many_arguments` excused with a reason, at module level, because `#[chain]` copies the
+  function's attributes onto the struct it generates.
+- **Tests.** A pure helper gets a `#[cfg(test)]` module in its own file; the commands themselves are
+  checked by the integration suites under `tests/`, which run the built programs.
+
 ## The user
 
 - Push back, with reasons: facts, code, cost, what it breaks. Never just "I do not like it", and
