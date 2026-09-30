@@ -27,7 +27,7 @@ use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutFailed, ErrorOwnershipHeld, ErrorOwnershipMissing,
-    set_cached_owner, vault_and_uuid,
+    set_cached_owner, vault_and_uuids,
 };
 
 #[help(buffer)]
@@ -47,11 +47,13 @@ pub fn desc_layout_req_ownership() -> Description {
 ///
 /// `VAULT` names the Vault to reach, as [`rola layout fetch`](crate::layout::cmd_layout_fetch)
 /// reads it: a name the Workspace has bound. Naming none reaches for the one the Workspace reaches
-/// for by default. `UUID` is the `Uuid` of the entry to take.
+/// for by default. Each `UUID` is the `Uuid` of an entry to take, and they are taken in the order
+/// they are named.
 ///
 /// An entry nobody holds is named as this account's. One another account holds is left alone, and
-/// the run is told who holds it. The copy fetched here, when there is one, is changed to agree
-/// with the Vault; a run that never fetched is not refused for it.
+/// the run is told who holds it — where that happens nothing after it is taken, so a run that names
+/// several stops at the first one it cannot have. The copy fetched here, when there is one, is
+/// changed to agree with the Vault; a run that never fetched is not refused for it.
 ///
 /// # Errors
 ///
@@ -71,20 +73,20 @@ pub fn desc_layout_req_ownership() -> Description {
 pub fn layout_req_ownership(args: EntryLayoutReqOwnership) -> Next {
     let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
 
-    let Some((vault, id)) = vault_and_uuid(&words) else {
+    let Some((vault, ids)) = vault_and_uuids(&words) else {
         return ErrorLayoutArgument.into();
     };
 
-    StateLayoutReqOwnership { vault, id }.into()
+    StateLayoutReqOwnership { vault, ids }.into()
 }
 
-/// The state of asking for an entry.
+/// The state of asking for entries.
 #[derive(Grouped)]
 pub struct StateLayoutReqOwnership {
     /// The Vault to reach, or nothing when the Workspace's own choice is reached for.
     vault: Option<String>,
-    /// The entry to take.
-    id: Uuid,
+    /// The entries to take, in the order they were named.
+    ids: Vec<Uuid>,
 }
 
 #[chain(routeify)]
@@ -108,59 +110,73 @@ pub fn handle_layout_req_ownership(
     let account_name = current.get_ref().must_bind()?;
     let account = account_named(&account_name, Some(held), None)?;
 
-    let uuid = state.id.to_string();
+    let mut entries = Vec::with_capacity(state.ids.len());
 
-    // What crosses back is the outcome as text, since an action's output is what the C ABI hands
-    // back; what a run was told is read here, where the words it is said in are.
-    let outcome = action_request_ownership(held, &account, target.to_string(), uuid.clone())?;
-    let outcome: Ownership = match serde_json::from_str(&outcome) {
-        Ok(outcome) => outcome,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
+    for id in state.ids {
+        let uuid = id.to_string();
 
-    match outcome {
-        Ownership::Owner(owner) => {
-            // What the Vault agreed to is written into the copy as well, so reading it next does
-            // not show an owner the Vault no longer has. A copy that cannot be written is the
-            // one failure here: the change itself is already made.
-            if let Err(error) = set_cached_owner(held, &name, state.id, owner.clone()) {
-                return ErrorLayoutFailed::new(error.to_string()).into();
+        // What crosses back is the outcome as text, since an action's output is what the C ABI hands
+        // back; what a run was told is read here, where the words it is said in are.
+        let outcome = action_request_ownership(held, &account, target.to_string(), uuid.clone())?;
+        let outcome: Ownership = match serde_json::from_str(&outcome) {
+            Ok(outcome) => outcome,
+            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+        };
+
+        match outcome {
+            Ownership::Owner(owner) => {
+                // What the Vault agreed to is written into the copy as well, so reading it next does
+                // not show an owner the Vault no longer has. A copy that cannot be written is the
+                // one failure here: the change itself is already made.
+                if let Err(error) = set_cached_owner(held, &name, id, owner.clone()) {
+                    return ErrorLayoutFailed::new(error.to_string()).into();
+                }
+
+                entries.push(OwnedItem { uuid, owner });
             }
-
-            ResultLayoutOwned { uuid, owner }.into()
+            Ownership::Missing => return ErrorOwnershipMissing { uuid }.into(),
+            Ownership::HeldBy(owner) => return ErrorOwnershipHeld { uuid, owner }.into(),
         }
-        Ownership::Missing => ErrorOwnershipMissing { uuid }.into(),
-        Ownership::HeldBy(owner) => ErrorOwnershipHeld { uuid, owner }.into(),
     }
+
+    ResultLayoutOwned { entries }.into()
 }
 
-/// Result: an entry's holder was named.
-#[derive(StructuralData, Serialize, Grouped)]
-pub struct ResultLayoutOwned {
-    /// The entry that was taken.
+/// One entry that was taken.
+#[derive(Serialize)]
+pub struct OwnedItem {
+    /// The `Uuid` that was taken.
     uuid: String,
     /// The account that now holds it.
     owner: Option<String>,
 }
 
+/// Result: the entries a run asked for were named to its account.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultLayoutOwned {
+    /// Each entry that was taken, in the order the `Uuid`s were named.
+    entries: Vec<OwnedItem>,
+}
+
 #[renderer(buffer)]
 pub fn render_result_layout_owned(result: ResultLayoutOwned) {
-    let uuid = result.uuid;
-    let said = result.owner.map_or_else(
-        || {
-            t!(
-                "cmd_layout_req_ownership.result_taken",
-                uuid = uuid.as_str()
-            )
-        },
-        |owner| {
-            t!(
-                "cmd_layout_req_ownership.result_owned",
-                uuid = uuid.as_str(),
-                owner = owner
-            )
-        },
-    );
+    for entry in &result.entries {
+        let said = entry.owner.as_ref().map_or_else(
+            || {
+                t!(
+                    "cmd_layout_req_ownership.result_taken",
+                    uuid = entry.uuid.as_str()
+                )
+            },
+            |owner| {
+                t!(
+                    "cmd_layout_req_ownership.result_owned",
+                    uuid = entry.uuid.as_str(),
+                    owner = owner
+                )
+            },
+        );
 
-    r_println!("{}", said.trim());
+        r_println!("{}", said.trim());
+    }
 }

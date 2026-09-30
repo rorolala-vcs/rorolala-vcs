@@ -531,6 +531,29 @@ pub fn vault_and_uuid(words: &[String]) -> Option<(Option<String>, Uuid)> {
     Uuid::parse_str(uuid).ok().map(|id| (vault, id))
 }
 
+/// The Vault and the `Uuid`s an ownership command was given, from the words it was given.
+///
+/// `VAULT` comes first and may be left out. Nothing is both a Vault name and a `Uuid`, so the first
+/// word is read as the Vault exactly when it does not read as a `Uuid`; every word after it has to,
+/// and so does the first when there is no Vault. A run that names no `Uuid` at all names nothing.
+#[must_use]
+pub fn vault_and_uuids(words: &[String]) -> Option<(Option<String>, Vec<Uuid>)> {
+    let (vault, uuids) = match words.split_first() {
+        Some((first, rest)) if Uuid::parse_str(first).is_err() => (Some(first.clone()), rest),
+        _ => (None, words),
+    };
+
+    if uuids.is_empty() {
+        return None;
+    }
+
+    uuids
+        .iter()
+        .map(|uuid| Uuid::parse_str(uuid).ok())
+        .collect::<Option<Vec<Uuid>>>()
+        .map(|ids| (vault, ids))
+}
+
 /// Names the entry `id` in the fetched copy as held by `owner`, when the copy holds it.
 ///
 /// What is changed is the Vault's own Layout — the one known as [`VAULT_LAYOUT_NAME`] — since that

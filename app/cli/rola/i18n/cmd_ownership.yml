@@ -3,13 +3,19 @@ _version: 2
 hold:
   help:
     en: |
-        Claim an entry for your account
+        Claim entries for your account
 
-        **Usage**: `rola hold <PATH> [--force]`
+        **Usage**: `rola hold <PATH>... [--force] [--allow-partial]`
 
-        `PATH` is where the file sits in the Layout being worked in; ownership is about the `Uuid`
-        that Layout names the path by, in the Vault the Layout tracks. That Vault's Layout is
-        fetched first, since every gate below is read against what it holds now:
+        Each `PATH` is where a file sits in the Layout being worked in; ownership is about the
+        `Uuid` that Layout names the path by, in the Vault the Layout tracks. A `PATH` that is a
+        directory is taken recursively — every file under it — and `.` is the directory the run was
+        made in, so `rola hold .` claims everything in the work that is not already claimed. Files a
+        directory brings in which the Layout does not name have no `Uuid` to be about, and are
+        passed over.
+
+        That Vault's Layout is fetched first, since every gate below is read against what it holds
+        now, and every gate is read for every entry before any ownership moves:
 
         - the entry must be one the Vault already holds: one it never took is nothing to claim;
         - what is here must be the version the Vault names, and nothing in it may be unrecorded —
@@ -17,36 +23,49 @@ hold:
         - the entry must be held by nobody: claiming what another account holds is not a claim, and
           `--force` does not move this.
 
-        What the Vault agrees to is written into the fetched copy as well, so a reading afterwards
-        shows the new holder.
+        A batch that cannot be done whole is not half done: the run says what was refused and
+        changes nothing. `--allow-partial` claims what does pass instead, says what did not, and
+        ends unhappily either way.
     zh-CN: |
-        为当前账户占有一个条目
+        为当前账户占有条目
 
-        **用法**：`rola hold <PATH> [--force]`
+        **用法**：`rola hold <PATH>... [--force] [--allow-partial]`
 
-        `PATH` 是文件在当前布局中的位置；所有权针对的是布局用它命名的那个 `Uuid`，位于布局追踪的
-        保险库中。会先取回该保险库的布局，下面每一道门禁都以它当前的内容为准：
+        每个 `PATH` 是文件在当前布局中的位置；所有权针对的是布局用它命名的那个 `Uuid`，位于布局
+        追踪的保险库中。`PATH` 是目录时会递归取目录下的每个文件，`.` 就是运行所在目录，因此
+        `rola hold .` 会占有工作区中尚未被占有的一切。目录带进来、而布局没有命名的文件没有
+        `Uuid` 可谈，会被跳过。
+
+        会先取回该保险库的布局，下面每一道门禁都以它当前的内容为准；并且在任何所有权变更之前，
+        会对每个条目把门禁全部读完：
 
         - 该条目必须是保险库已经持有的：它从未收下的东西无从占有；
         - 本地必须是保险库所指的版本，且没有未记录的改动 —— 这条可以用 `--force` 越过；
         - 该条目必须无人持有：占有别人持有的东西不算占有，这条 `--force` 也不能越过。
 
-        保险库确认的结果也会写回取回的副本，因此之后读取就能看到新的持有者。
+        整批做不成就不做半批：本次运行会说明哪些被拒，且什么都不改。`--allow-partial` 则改为
+        把通过的那些占有，把没通过的说明出来，两者都以非零退出。
 
   description:
-    en: Claim an entry for your account
-    zh-CN: 为当前账户占有一个条目
+    en: Claim entries for your account
+    zh-CN: 为当前账户占有条目
 
 giveup:
   help:
     en: |
-        Let go of an entry your account holds
+        Let go of entries your account holds
 
-        **Usage**: `rola giveup <PATH> [--force]`
+        **Usage**: `rola giveup <PATH>... [--force] [--allow-partial]`
 
-        `PATH` is where the file sits in the Layout being worked in; ownership is about the `Uuid`
-        that Layout names the path by, in the Vault the Layout tracks. That Vault's Layout is
-        fetched first, since every gate below is read against what it holds now:
+        Each `PATH` is where a file sits in the Layout being worked in; ownership is about the
+        `Uuid` that Layout names the path by, in the Vault the Layout tracks. A `PATH` that is a
+        directory is taken recursively — every file under it — and `.` is the directory the run was
+        made in, so `rola giveup .` lets go of everything in the work this account holds. Files a
+        directory brings in which the Layout does not name have no `Uuid` to be about, and are
+        passed over.
+
+        That Vault's Layout is fetched first, since every gate below is read against what it holds
+        now, and every gate is read for every entry before any ownership moves:
 
         - the entry must be one the Vault already holds: one it never took is nothing to let go of;
         - what is here must be the version the Vault names, and nothing in it may be unrecorded —
@@ -54,26 +73,33 @@ giveup:
         - the entry must be held by this account: another account's is not yours to let go of, and
           one nobody holds is nothing to let go of at all. `--force` does not move this.
 
-        What the Vault agrees to is written into the fetched copy as well, so a reading afterwards
-        shows the entry as held by nobody.
+        A batch that cannot be done whole is not half done: the run says what was refused and
+        changes nothing. `--allow-partial` lets go of what does pass instead, says what did not, and
+        ends unhappily either way.
     zh-CN: |
-        放弃当前账户持有的某个条目
+        放弃当前账户持有的条目
 
-        **用法**：`rola giveup <PATH> [--force]`
+        **用法**：`rola giveup <PATH>... [--force] [--allow-partial]`
 
-        `PATH` 是文件在当前布局中的位置；所有权针对的是布局用它命名的那个 `Uuid`，位于布局追踪的
-        保险库中。会先取回该保险库的布局，下面每一道门禁都以它当前的内容为准：
+        每个 `PATH` 是文件在当前布局中的位置；所有权针对的是布局用它命名的那个 `Uuid`，位于布局
+        追踪的保险库中。`PATH` 是目录时会递归取目录下的每个文件，`.` 就是运行所在目录，因此
+        `rola giveup .` 会放弃当前账户在工作区中持有的一切。目录带进来、而布局没有命名的文件没有
+        `Uuid` 可谈，会被跳过。
+
+        会先取回该保险库的布局，下面每一道门禁都以它当前的内容为准；并且在任何所有权变更之前，
+        会对每个条目把门禁全部读完：
 
         - 该条目必须是保险库已经持有的：它从未收下的东西无从放弃；
         - 本地必须是保险库所指的版本，且没有未记录的改动 —— 这条可以用 `--force` 越过；
         - 该条目必须由当前账户持有：别人的不是你能放弃的，无人持有的也无从放弃。这条 `--force`
           也不能越过。
 
-        保险库确认的结果也会写回取回的副本，因此之后读取就能看到该条目无人持有。
+        整批做不成就不做半批：本次运行会说明哪些被拒，且什么都不改。`--allow-partial` 则改为
+        放弃通过的那些，把没通过的说明出来，两者都以非零退出。
 
   description:
-    en: Let go of an entry your account holds
-    zh-CN: 放弃当前账户持有的某个条目
+    en: Let go of entries your account holds
+    zh-CN: 放弃当前账户持有的条目
 
 ownership:
   err_argument:
@@ -82,9 +108,20 @@ ownership:
 
   err_argument_help:
     en: |
-        Name the one path the file sits at in the Layout being worked in
+        Name one or more files or directories in the Layout being worked in
     zh-CN: |
-        请指定文件在当前布局中的一个路径
+        请指定当前布局中的一个或多个文件或目录
+
+  err_name:
+    en: "`%{name}` is not a file or a directory inside the Workspace, or the tree could not be read"
+    zh-CN: "`%{name}` 不是工作区内的文件或目录，或工作树无法读取"
+
+  err_name_help:
+    en: |
+        Names are read against where the run was made, so `.` is the directory it is in — and, at
+        the Workspace root, the whole of the work
+    zh-CN: |
+        名称相对于运行所在目录解读，因此 `.` 就是该目录本身；在工作区根目录即为整个工作区
 
   err_no_track:
     en: The Layout being worked in tracks no Vault
@@ -161,6 +198,17 @@ ownership:
     zh-CN: |
         运行 `rola layout ls-ownership` 查看上游的持有情况，然后重试
 
+  err_refused:
+    en: "`rola %{command}` refused %{count} of the entries named, so none were changed"
+    zh-CN: "`rola %{command}` 拒绝了点名条目中的 %{count} 个，因此一个都没有改动"
+
+  err_refused_help:
+    en: |
+        Settle what is above, or use `--force` past the version and `--allow-partial` to do what
+        does pass
+    zh-CN: |
+        请先处理上面列出的问题，或用 `--force` 越过版本、用 `--allow-partial` 只做通过的那些
+
   err_failed:
     en: "The ownership could not be moved: %{cause}"
     zh-CN: "无法变更所有权：%{cause}"
@@ -170,6 +218,38 @@ ownership:
         Please check the Vault is reachable and the account is bound, then try again
     zh-CN: |
         请检查保险库是否可达、账户是否已绑定，然后重试
+
+  why_path:
+    en: the Layout names nothing there
+    zh-CN: 布局没有在那里命名任何条目
+
+  why_upstream:
+    en: the Vault's Layout names nothing for it
+    zh-CN: 保险库的布局没有为它记录任何条目
+
+  why_version:
+    en: not at the version the Vault names
+    zh-CN: 不在保险库所指的版本上
+
+  why_changed:
+    en: changed since the Layout last agreed with it
+    zh-CN: 自上次记录以来已被改动
+
+  why_taken:
+    en: "held by %{owner}"
+    zh-CN: "由 %{owner} 持有"
+
+  why_not_yours:
+    en: "held by %{owner}, not yours to let go of"
+    zh-CN: "由 %{owner} 持有，不是你能放弃的"
+
+  why_nobody:
+    en: held by nobody, nothing to let go of
+    zh-CN: 无人持有，没有可以放弃的东西
+
+  skipped:
+    en: "%{count} file(s) a directory brought in are not named by the Layout, and were passed over"
+    zh-CN: "目录带进来的 %{count} 个文件未被布局命名，已跳过"
 
   result_held:
     en: "`%{path}` is now held by you"

@@ -1037,6 +1037,151 @@ async fn main() {
         ),
     );
 
+    // Several at once is judged whole before any of it is done, and `.` is the directory the run
+    // was made in — so running it inside one names that directory's files and not the whole work.
+    let first = Uuid::from_u128(0xba);
+    let second = Uuid::from_u128(0xbb);
+    let batch = workspace.join("batch");
+    fs::create_dir_all(&batch).expect("the batch directory");
+    let version = format!("blake3:{}", "09".repeat(32));
+
+    for (uuid, name, owner) in [(first, "a.psd", None), (second, "b.psd", Some(BOB))] {
+        Layout::open(root.join(LAYOUT_DIR))
+            .expect("the Vault's Layout")
+            .create_entry(
+                uuid,
+                MutableData::new(owner.map(str::to_owned), [9; 32], String::new()),
+            )
+            .expect("a Vault entry");
+        run(&mut client(
+            &workspace,
+            &data,
+            &[
+                "layout",
+                "entry",
+                "create",
+                &uuid.to_string(),
+                &version,
+                "--owner",
+                ALICE,
+            ],
+        ))
+        .expect_success();
+        run(&mut client(
+            &workspace,
+            &data,
+            &["layout", "path", "create", &format!("batch/{name}"), &uuid.to_string()],
+        ))
+        .expect_success();
+        fs::write(batch.join(name), b"x").expect("the file");
+    }
+
+    let said = run(&mut client(&batch, &data, &["hold", "."]));
+    checked.wants(
+        "a batch with one refusal is refused whole",
+        said.code == Some(193)
+            && vault_owner_of(&root, first).is_none()
+            && vault_owner_of(&root, second).as_deref() == Some(BOB),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}/{:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, first),
+            vault_owner_of(&root, second)
+        ),
+    );
+
+    let said = run(&mut client(
+        &batch,
+        &data,
+        &["hold", ".", "--allow-partial"],
+    ));
+    checked.wants(
+        "a partial claim takes what passes and says what does not",
+        said.code == Some(193) && vault_owner_of(&root, first).as_deref() == Some(ALICE),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, first)
+        ),
+    );
+
+    let said = run(&mut client(
+        &batch,
+        &data,
+        &["giveup", ".", "--allow-partial"],
+    ));
+    checked.wants(
+        "a partial release lets go of what passes and says what does not",
+        said.code == Some(193) && vault_owner_of(&root, first).is_none(),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, first)
+        ),
+    );
+
+    // The Vault's own doors take several `Uuid`s too, and stop at the first they cannot have.
+    Layout::open(root.join(LAYOUT_DIR))
+        .expect("the Vault's Layout")
+        .update_entry(
+            second,
+            MutableData::new(None, [9; 32], String::new()),
+        )
+        .expect("nobody holds it");
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "req-ownership",
+            VAULT_NAME,
+            &first.to_string(),
+            &second.to_string(),
+        ],
+    ));
+    checked.wants(
+        "the Vault's own door takes several at once",
+        said.success()
+            && vault_owner_of(&root, first).as_deref() == Some(ALICE)
+            && vault_owner_of(&root, second).as_deref() == Some(ALICE),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}/{:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, first),
+            vault_owner_of(&root, second)
+        ),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "giveup-ownership",
+            VAULT_NAME,
+            &first.to_string(),
+            &second.to_string(),
+        ],
+    ));
+    checked.wants(
+        "the Vault's own door lets go of several at once",
+        said.success()
+            && vault_owner_of(&root, first).is_none()
+            && vault_owner_of(&root, second).is_none(),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}/{:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, first),
+            vault_owner_of(&root, second)
+        ),
+    );
+
     serving.stop();
     checked.report();
 }

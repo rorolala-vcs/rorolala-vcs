@@ -26,7 +26,7 @@ use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutFailed, ErrorOwnershipHeld, ErrorOwnershipMissing,
-    set_cached_owner, vault_and_uuid,
+    set_cached_owner, vault_and_uuids,
 };
 
 #[help(buffer)]
@@ -45,13 +45,14 @@ pub fn desc_layout_giveup_ownership() -> Description {
 /// Asks the Vault to name nobody as an entry's holder
 ///
 /// `VAULT` names the Vault to reach, as [`rola layout req-ownership`](crate::layout::cmd_layout_req_ownership)
-/// reads it. Naming none reaches for the one the Workspace reaches for by default. `UUID` is the
-/// `Uuid` of the entry to let go of.
+/// reads it. Naming none reaches for the one the Workspace reaches for by default. Each `UUID` is
+/// the `Uuid` of an entry to let go of, and they are let go of in the order they are named.
 ///
 /// An entry this account holds is named as nobody's. One another account holds is left alone, and
-/// the run is told who holds it. One nobody holds is already what was asked for. The copy fetched
-/// here, when there is one, is changed to agree with the Vault; a run that never fetched is not
-/// refused for it.
+/// the run is told who holds it — where that happens nothing after it is let go of, so a run that
+/// names several stops at the first one it cannot let go of. One nobody holds is already what was
+/// asked for. The copy fetched here, when there is one, is changed to agree with the Vault; a run
+/// that never fetched is not refused for it.
 ///
 /// # Errors
 ///
@@ -71,20 +72,20 @@ pub fn desc_layout_giveup_ownership() -> Description {
 pub fn layout_giveup_ownership(args: EntryLayoutGiveupOwnership) -> Next {
     let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
 
-    let Some((vault, id)) = vault_and_uuid(&words) else {
+    let Some((vault, ids)) = vault_and_uuids(&words) else {
         return ErrorLayoutArgument.into();
     };
 
-    StateLayoutGiveupOwnership { vault, id }.into()
+    StateLayoutGiveupOwnership { vault, ids }.into()
 }
 
-/// The state of letting go of an entry.
+/// The state of letting go of entries.
 #[derive(Grouped)]
 pub struct StateLayoutGiveupOwnership {
     /// The Vault to reach, or nothing when the Workspace's own choice is reached for.
     vault: Option<String>,
-    /// The entry to let go of.
-    id: Uuid,
+    /// The entries to let go of, in the order they were named.
+    ids: Vec<Uuid>,
 }
 
 #[chain(routeify)]
@@ -108,47 +109,55 @@ pub fn handle_layout_giveup_ownership(
     let account_name = current.get_ref().must_bind()?;
     let account = account_named(&account_name, Some(held), None)?;
 
-    let uuid = state.id.to_string();
+    let mut entries = Vec::with_capacity(state.ids.len());
 
-    // What crosses back is the outcome as text, since an action's output is what the C ABI hands
-    // back; what a run was told is read here, where the words it is said in are.
-    let outcome = action_giveup_ownership(held, &account, target.to_string(), uuid.clone())?;
-    let outcome: Ownership = match serde_json::from_str(&outcome) {
-        Ok(outcome) => outcome,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
+    for id in state.ids {
+        let uuid = id.to_string();
 
-    match outcome {
-        Ownership::Owner(_) => {
-            // What the Vault agreed to is written into the copy as well, so reading it next does
-            // not show an owner the Vault no longer has. A copy that cannot be written is the
-            // one failure here: the change itself is already made.
-            if let Err(error) = set_cached_owner(held, &name, state.id, None) {
-                return ErrorLayoutFailed::new(error.to_string()).into();
+        // What crosses back is the outcome as text, since an action's output is what the C ABI hands
+        // back; what a run was told is read here, where the words it is said in are.
+        let outcome = action_giveup_ownership(held, &account, target.to_string(), uuid.clone())?;
+        let outcome: Ownership = match serde_json::from_str(&outcome) {
+            Ok(outcome) => outcome,
+            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+        };
+
+        match outcome {
+            Ownership::Owner(_) => {
+                // What the Vault agreed to is written into the copy as well, so reading it next does
+                // not show an owner the Vault no longer has. A copy that cannot be written is the
+                // one failure here: the change itself is already made.
+                if let Err(error) = set_cached_owner(held, &name, id, None) {
+                    return ErrorLayoutFailed::new(error.to_string()).into();
+                }
+
+                entries.push(uuid);
             }
-
-            ResultLayoutGivenUp { uuid }.into()
+            Ownership::Missing => return ErrorOwnershipMissing { uuid }.into(),
+            Ownership::HeldBy(owner) => return ErrorOwnershipHeld { uuid, owner }.into(),
         }
-        Ownership::Missing => ErrorOwnershipMissing { uuid }.into(),
-        Ownership::HeldBy(owner) => ErrorOwnershipHeld { uuid, owner }.into(),
     }
+
+    ResultLayoutGivenUp { entries }.into()
 }
 
-/// Result: an entry was let go of.
+/// Result: the entries a run asked to let go of were named as nobody's.
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultLayoutGivenUp {
-    /// The entry that was let go of.
-    uuid: String,
+    /// Each entry that was let go of, in the order the `Uuid`s were named.
+    entries: Vec<String>,
 }
 
 #[renderer(buffer)]
 pub fn render_result_layout_given_up(result: ResultLayoutGivenUp) {
-    r_println!(
-        "{}",
-        t!(
-            "cmd_layout_giveup_ownership.result_given_up",
-            uuid = result.uuid
-        )
-        .trim()
-    );
+    for uuid in &result.entries {
+        r_println!(
+            "{}",
+            t!(
+                "cmd_layout_giveup_ownership.result_given_up",
+                uuid = uuid.as_str()
+            )
+            .trim()
+        );
+    }
 }
