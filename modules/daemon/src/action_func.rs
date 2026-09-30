@@ -444,3 +444,135 @@ pub fn action_giveup_ownership(
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(action_giveup_ownership_async(workspace, account, target, input, Progress::silent()))
 }
+
+/// Runs the [`ActionMoveRemotePath`](crate::ActionMoveRemotePath) action on the input it is handed, taken
+/// from `workspace`, as `account`, against the daemon at `target`.
+///
+/// `progress` is where the action says what it is doing while it does it; a run that is not
+/// being watched hands [`Progress::silent`], and the action runs the same way either way.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails.
+pub async fn action_move_remote_path_async(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    from: String, to: String,
+    progress: Progress,
+) -> Result<String, ActionError> {
+    proc_action::<ActionMoveRemotePath>(workspace, account, target, (from, to), progress).await
+}
+
+/// Runs the [`ActionMoveRemotePath`](crate::ActionMoveRemotePath) action, blocking until it has.
+///
+/// This is the entry point the C ABI exports; the `async` one above is what a Rust
+/// caller should use instead. `workspace` is the copy the work is taken from, and the
+/// account is the one the caller names, so which identity an action runs as is theirs to
+/// say and not looked up behind their back, and the target is the daemon to reach, as a
+/// host and a port. Nothing is said of the action's progress here: a caller outside Rust
+/// has nowhere to read it, so the action is given no one to tell.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails, or if the runtime cannot be built.
+#[rorolala_utils_lazyffi::lazyffi(export = do_action_move_remote_path)]
+pub fn action_move_remote_path(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    from: String, to: String,
+) -> Result<String, ActionError> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(action_move_remote_path_async(workspace, account, target, from, to, Progress::silent()))
+}
+
+/// Runs the [`ActionCreateRemoteEntry`](crate::ActionCreateRemoteEntry) action on the input it is handed, taken
+/// from `workspace`, as `account`, against the daemon at `target`.
+///
+/// `progress` is where the action says what it is doing while it does it; a run that is not
+/// being watched hands [`Progress::silent`], and the action runs the same way either way.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails.
+pub async fn action_create_remote_entry_async(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    path: String, uuid: String, version: String,
+    progress: Progress,
+) -> Result<String, ActionError> {
+    proc_action::<ActionCreateRemoteEntry>(workspace, account, target, (path, uuid, version), progress).await
+}
+
+/// Runs the [`ActionCreateRemoteEntry`](crate::ActionCreateRemoteEntry) action, blocking until it has.
+///
+/// This is the entry point the C ABI exports; the `async` one above is what a Rust
+/// caller should use instead. `workspace` is the copy the work is taken from, and the
+/// account is the one the caller names, so which identity an action runs as is theirs to
+/// say and not looked up behind their back, and the target is the daemon to reach, as a
+/// host and a port. Nothing is said of the action's progress here: a caller outside Rust
+/// has nowhere to read it, so the action is given no one to tell.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails, or if the runtime cannot be built.
+#[rorolala_utils_lazyffi::lazyffi(export = do_action_create_remote_entry)]
+pub fn action_create_remote_entry(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    path: String, uuid: String, version: String,
+) -> Result<String, ActionError> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(action_create_remote_entry_async(workspace, account, target, path, uuid, version, Progress::silent()))
+}
+
+/// Runs the [`ActionSetRemoteVersion`](crate::ActionSetRemoteVersion) action on the input it is handed, taken
+/// from `workspace`, as `account`, against the daemon at `target`.
+///
+/// `progress` is where the action says what it is doing while it does it; a run that is not
+/// being watched hands [`Progress::silent`], and the action runs the same way either way.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails.
+pub async fn action_set_remote_version_async(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    uuid: String, version: String,
+    progress: Progress,
+) -> Result<String, ActionError> {
+    proc_action::<ActionSetRemoteVersion>(workspace, account, target, (uuid, version), progress).await
+}
+
+/// Runs the [`ActionSetRemoteVersion`](crate::ActionSetRemoteVersion) action, blocking until it has.
+///
+/// This is the entry point the C ABI exports; the `async` one above is what a Rust
+/// caller should use instead. `workspace` is the copy the work is taken from, and the
+/// account is the one the caller names, so which identity an action runs as is theirs to
+/// say and not looked up behind their back, and the target is the daemon to reach, as a
+/// host and a port. Nothing is said of the action's progress here: a caller outside Rust
+/// has nowhere to read it, so the action is given no one to tell.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails, or if the runtime cannot be built.
+#[rorolala_utils_lazyffi::lazyffi(export = do_action_set_remote_version)]
+pub fn action_set_remote_version(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    uuid: String, version: String,
+) -> Result<String, ActionError> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(action_set_remote_version_async(workspace, account, target, uuid, version, Progress::silent()))
+}

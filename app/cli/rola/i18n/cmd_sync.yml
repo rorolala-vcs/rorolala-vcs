@@ -1,0 +1,150 @@
+_version: 2
+
+sync:
+  help:
+    en: |
+        Bring the Layout being worked in together with the Vault it tracks
+
+        **Usage**: `rola sync [--up-only | --down-only | --both] [--force] [--dry-run]
+        [--no-index] [--no-storage] [--no-layout]`
+
+        The Vault is the one the Layout's `TRACK` names, which the Workspace has bound with
+        `rola vault bind`. What the Vault holds now is fetched first, and the plan says what is to
+        move:
+
+        - a `Uuid` only this Layout holds goes up under the Vault's `#/new/`;
+        - a version the Vault is behind on goes up when this account holds it;
+        - one this Layout is behind on comes down;
+        - one whose chain moved apart needs `--force`;
+        - a `Uuid` only the Vault holds is named rather than brought, since `checkin` is what
+          brings one.
+
+        `--up-only` and `--down-only` keep the plan to one direction; neither, or `--both`, is
+        both. `--dry-run` prints the plan and changes nothing.
+
+        What the plan names then has its content moved: the index and the store, unless
+        `--no-index` or `--no-storage` leaves one behind. `--no-layout` leaves the Layout itself
+        behind, so only data and index move.
+
+        A file changed here that the Vault is ahead on is refused before anything is written, so a
+        pull never overwrites what the run does not know about.
+    zh-CN: |
+        让当前使用的布局与它所追踪的保险库同步
+
+        **用法**：`rola sync [--up-only | --down-only | --both] [--force] [--dry-run]
+        [--no-index] [--no-storage] [--no-layout]`
+
+        保险库由布局的 `TRACK` 指定，并且必须已被工作区用 `rola vault bind` 绑定。先取回保险库
+        当前的内容，再由计划说明要移动什么：
+
+        - 只有本地布局持有的 `Uuid` 会以 `#/new/` 下的名字上传；
+        - 保险库落后的版本，在本账户持有时会上传；
+        - 本地落后的版本会下拉；
+        - 版本链已经分叉的需要 `--force`；
+        - 只有保险库持有的 `Uuid` 只列出、不下拉，因为进入本地布局要用 `checkin`。
+
+        `--up-only` 与 `--down-only` 把计划限制在单一方向；都不给或给 `--both` 时双向。
+        `--dry-run` 只打印计划，不做任何改动。
+
+        计划中列出的条目随后会移动其内容：索引与存储，除非用 `--no-index` 或 `--no-storage`
+        跳过其中一个。`--no-layout` 则连布局本身也跳过，只移动数据与索引。
+
+        本地已改动、而保险库更前的文件会在写入任何内容之前被拒绝，因此下拉不会覆盖本次运行
+        所不了解的改动。
+
+  description:
+    en: Bring the Layout being worked in together with the Vault it tracks
+    zh-CN: 让当前布局与它所追踪的保险库同步
+
+  err_no_track:
+    en: The Layout being worked in tracks no Vault
+    zh-CN: 当前使用的布局没有追踪任何保险库
+
+  err_no_track_help:
+    en: |
+        Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then try again
+    zh-CN: |
+        请用 `rola layout set-track <LAYOUT> <VAULT>` 指定一个，然后重试
+
+  err_blocked:
+    en: A file changed here is behind the Vault, so bringing the Vault's version down would
+        overwrite it
+    zh-CN: 有文件在本地被改动且落后于保险库，下拉保险库的版本会覆盖它
+
+  err_blocked_help:
+    en: |
+        Please record the change with `rola track`, or set it aside, then try again; merging is
+        not here yet
+    zh-CN: |
+        请用 `rola track` 记录该改动，或将其放到一边，然后重试；合并语义尚未实现
+
+  err_failed:
+    en: "The sync could not go on: %{cause}"
+    zh-CN: "同步无法继续：%{cause}"
+
+  err_failed_help:
+    en: |
+        Please check the Vault is reachable and the account is bound, then try again
+    zh-CN: |
+        请检查保险库是否可达、账户是否已绑定，然后重试
+
+  err_argument:
+    en: "`rola sync` was given arguments it cannot use"
+    zh-CN: "`rola sync` 收到了无法使用的参数"
+
+  err_argument_help:
+    en: |
+        Name at most one of `--up-only`, `--down-only`, and `--both`
+    zh-CN: |
+        `--up-only`、`--down-only`、`--both` 最多只能给一个
+
+  write_written:
+    en: written
+    zh-CN: 已写入
+
+  write_exists:
+    en: the Vault already holds an entry by that uuid
+    zh-CN: 保险库已有该 uuid 的条目
+
+  write_taken:
+    en: the path already names something
+    zh-CN: 该路径已被占用
+
+  write_missing:
+    en: the Vault holds no entry by that uuid
+    zh-CN: 保险库没有该 uuid 的条目
+
+  write_refused:
+    en: held by another account
+    zh-CN: 由其他账户持有
+
+  write_force:
+    en: the versions moved apart; `--force` is needed
+    zh-CN: 版本链已分叉，需要 `--force`
+
+  write_malformed:
+    en: the name does not read
+    zh-CN: 名称无法解读
+
+  write_no_content:
+    en: the content this version names is not here
+    zh-CN: 本地没有该版本所指向的内容
+
+  result_summary:
+    en: "%{planned} to move, %{up_to_date} already at the Vault's version"
+    zh-CN: "待移动 %{planned} 项，已有 %{up_to_date} 项与保险库同为当前版本"
+
+  done_summary:
+    en: "%{applied} written, %{received} brought down, %{up_to_date} already there, %{failed} not done"
+    zh-CN: "已写入 %{applied} 项，已下拉 %{received} 项，本已同步 %{up_to_date} 项，未完成 %{failed} 项"
+
+  warn_blocked:
+    en: A file changed here is behind the Vault, so nothing would be brought down
+    zh-CN: 有文件在本地被改动且落后于保险库，因此不会下拉任何内容
+
+  warn_blocked_help:
+    en: |
+        Please record the change with `rola track`, or set it aside, then try again; merging is
+        not here yet
+    zh-CN: |
+        请用 `rola track` 记录该改动，或将其放到一边，然后重试；合并语义尚未实现

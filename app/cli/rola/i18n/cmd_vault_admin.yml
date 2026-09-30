@@ -1,0 +1,83 @@
+_version: 2
+
+vault_admin:
+  help:
+    en: |
+        Name the administrators of this Vault
+
+        **Usage**: `rola vault admin [add <NAME> | rm <NAME>]`
+
+        An administrator may move any file in the Vault's Layout, where a member who is not one
+        may move only what it holds. Naming no subcommand lists the administrators.
+
+        The list is the Vault's own, kept under `[auth] admins` in its `vault.toml`, so these
+        commands work on the Vault the run is inside. The first administrator is written by hand:
+        a Vault with none has nobody who may name one.
+    zh-CN: |
+        指定该保险库的管理员
+
+        **用法**：`rola vault admin [add <NAME> | rm <NAME>]`
+
+        管理员可以移动保险库布局中的任何文件，而非管理员的成员只能移动自己持有的文件。
+        不指定子命令时列出管理员。
+
+        该名单属于保险库本身，保存在其 `vault.toml` 的 `[auth] admins` 下，因此这些命令作用于
+        当前所在的保险库。第一个管理员需要手动写入：没有任何管理员的保险库无人可以指定管理员。
+
+  description:
+    en: Name the administrators of this Vault
+    zh-CN: 指定该保险库的管理员
+
+  add_help:
+    en: |
+        Name a member an administrator of this Vault
+
+        **Usage**: `rola vault admin add <NAME>`
+
+        Naming one who is already named is not an error, only the same naming made again.
+    zh-CN: |
+        指定某个成员为该保险库的管理员
+
+        **用法**：`rola vault admin add <NAME>`
+
+        重复指定同一个成员不是错误，只是把同一件事再做一次。
+
+  add_description:
+    en: Name a member an administrator of this Vault
+    zh-CN: 指定某个成员为该保险库的管理员
+
+  rm_help:
+    en: |
+        Stop a member being an administrator of this Vault
+
+        **Usage**: `rola vault admin rm <NAME>`
+
+        The last administrator cannot be removed: a Vault left with none has no way back but the
+        same hand edit that made the first one.
+    zh-CN: |
+        取消某个成员作为该保险库管理员
+
+        **用法**：`rola vault admin rm <NAME>`
+
+        最后一个管理员无法被移除：没有任何管理员的保险库，除了像当初写出第一个那样手动编辑，
+        没有别的办法。
+
+  rm_description:
+    en: Stop a member being an administrator of this Vault
+    zh-CN: 取消某个成员作为该保险库管理员
+
+  result_none:
+    en: This Vault names no administrator
+    zh-CN: 该保险库没有指定任何管理员
+
+  result_named:
+    en: "`%{name}` is now an administrator of this Vault"
+    zh-CN: "`%{name}` 现在是该保险库的管理员"
+
+  result_already:
+    en: "`%{name}` was already an administrator of this Vault"
+    zh-CN: "`%{name}` 本来就是该保险库的管理员"
+
+  result_removed:
+    en: "`%{name}` is no longer an administrator of this Vault"
+    zh-CN: "`%{name}` 不再是该保险库的管理员"

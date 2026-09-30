@@ -40,7 +40,7 @@ use rorolala_workspace::Workspace;
 use rust_i18n::t;
 use uuid::Uuid;
 
-use librorolala::layout::{Layout, LayoutError, Layouts, MutableData};
+use librorolala::layout::{Layout, LayoutError, LayoutPath, Layouts, MutableData};
 
 use crate::Next;
 use crate::exit_codes::{
@@ -564,6 +564,102 @@ pub fn set_cached_owner(
     )
 }
 
+/// Moves the path `from` to `to` in the fetched copy, when the copy is there and names `from`.
+///
+/// It follows a move the Vault accepted, so that a copy read afterwards says what the Vault says —
+/// the same reason [`set_cached_owner`] follows an ownership change. A copy that is not there, or
+/// one that does not name the path, is left as it is: the Vault is the truth, and the copy is
+/// brought up to date by `rola layout fetch`.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] if a copy that is there cannot be read back or written.
+pub fn set_cached_path(
+    workspace: &Workspace,
+    vault: &str,
+    layout: &str,
+    from: &LayoutPath,
+    to: &LayoutPath,
+) -> Result<(), LayoutError> {
+    let dir = readonly_layout_dir(workspace, vault, layout);
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    let copy = Layout::open(&dir)?;
+    if copy.id_of(from).is_none() {
+        return Ok(());
+    }
+
+    copy.move_path(from, to)
+}
+
+/// Adds the entry `id` to the fetched copy, at `path` and `version`, held by `owner`.
+///
+/// It is what a run that has just made an entry in the Vault writes down here, so that a reading
+/// command sees it without a `rola layout fetch` of its own. A copy that is not there, or one that
+/// already holds the `Uuid` or names the path, is left as it is: the Vault is the truth, and a
+/// fetch is what settles a copy that has drifted, not this.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] if a copy that is there cannot be read back or written.
+pub fn add_cached_entry(
+    workspace: &Workspace,
+    vault: &str,
+    id: Uuid,
+    path: &LayoutPath,
+    version: [u8; 32],
+    owner: Option<String>,
+) -> Result<(), LayoutError> {
+    let dir = readonly_layout_dir(workspace, vault, VAULT_LAYOUT_NAME);
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    let copy = Layout::open(&dir)?;
+    if copy.entry(id).is_some() || copy.id_of(path).is_some() {
+        return Ok(());
+    }
+
+    copy.create_path(path, id)?;
+    copy.create_entry(id, MutableData::new(owner, version, String::new()))
+}
+
+/// Moves the entry `id` of the fetched copy to `version`, leaving its path and holder alone.
+///
+/// It is what a run that has just set a version in the Vault writes down here, for the same reason
+/// [`add_cached_entry`] does.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] if a copy that is there cannot be read back or written.
+pub fn set_cached_version(
+    workspace: &Workspace,
+    vault: &str,
+    id: Uuid,
+    version: [u8; 32],
+) -> Result<(), LayoutError> {
+    let dir = readonly_layout_dir(workspace, vault, VAULT_LAYOUT_NAME);
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    let copy = Layout::open(&dir)?;
+    let Some(data) = copy.entry(id) else {
+        return Ok(());
+    };
+
+    copy.update_entry(
+        id,
+        MutableData::new(
+            data.owner().map(str::to_owned),
+            version,
+            data.description().to_owned(),
+        ),
+    )
+}
+
 /// Error: the Vault's Layout has not been fetched, so there is no copy to read.
 #[derive(Grouped)]
 pub struct ErrorLayoutNotCached {
@@ -630,6 +726,58 @@ pub fn render_error_layout_read_only(error: ErrorLayoutReadOnly, ec: &mut ResExi
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("cmd_layout.err_read_only_help").trim()));
     ec.exit_code = EC_ERR_LAYOUT;
+}
+
+/// Error: a path is already the name of another entry of the Vault's Layout.
+#[derive(Grouped)]
+pub struct ErrorLayoutPathTaken;
+
+impl Failure for ErrorLayoutPathTaken {
+    fn name(&self) -> &'static str {
+        "error_layout_path_taken"
+    }
+
+    fn reason(&self) -> String {
+        t!("cmd_layout.err_path_taken").trim().to_string()
+    }
+}
+
+failure!(ErrorLayoutPathTaken);
+
+#[renderer(buffer)]
+pub fn render_error_layout_path_taken(error: ErrorLayoutPathTaken, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("cmd_layout.err_path_taken_help").trim())
+    );
+    ec.exit_code = EC_ALREADY_EXIST;
+}
+
+/// Error: the Vault's Layout holds the entry, but not for this account to move.
+#[derive(Grouped)]
+pub struct ErrorLayoutMoveRefused;
+
+impl Failure for ErrorLayoutMoveRefused {
+    fn name(&self) -> &'static str {
+        "error_layout_move_refused"
+    }
+
+    fn reason(&self) -> String {
+        t!("cmd_layout.err_move_refused").trim().to_string()
+    }
+}
+
+failure!(ErrorLayoutMoveRefused);
+
+#[renderer(buffer)]
+pub fn render_error_layout_move_refused(error: ErrorLayoutMoveRefused, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("cmd_layout.err_move_refused_help").trim())
+    );
+    ec.exit_code = EC_ERR_LAYOUT_OWNERSHIP;
 }
 
 /// Error: the fetched copy names no entry by that `Uuid`.

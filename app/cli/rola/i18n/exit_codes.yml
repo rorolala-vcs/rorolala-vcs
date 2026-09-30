@@ -169,6 +169,10 @@ exit_codes:
     en: "The name a `rola vault unbind` was given is not bound"
     zh-CN: "`rola vault unbind` 得到的名字并未绑定"
 
+  vault_not_admin:
+    en: The account is not an administrator of the Vault
+    zh-CN: 该账户不是保险库的管理员
+
   account_not_found:
     en: The name given is not an account the work can act as
     zh-CN: 所给名字不是可作为身份使用的账户
@@ -308,3 +312,19 @@ exit_codes:
   align_argument:
     en: "`rola align` was given arguments it cannot use"
     zh-CN: "`rola align` 收到了无法使用的参数"
+
+  sync:
+    en: A Layout could not be synced with the Vault it tracks
+    zh-CN: 无法让布局与它所追踪的保险库同步
+
+  sync_argument:
+    en: "`rola sync` was given arguments it cannot use"
+    zh-CN: "`rola sync` 收到了无法使用的参数"
+
+  checkin:
+    en: A `Uuid` the Vault holds could not be brought into the Layout
+    zh-CN: 无法把保险库持有的 `Uuid` 带入布局
+
+  checkin_argument:
+    en: "`rola checkin` was given arguments it cannot use"
+    zh-CN: "`rola checkin` 收到了无法使用的参数"

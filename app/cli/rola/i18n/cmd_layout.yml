@@ -102,6 +102,26 @@ cmd_layout:
     zh-CN: |
         写成 `NAME@VAULT` 的名字读取的是 `rola layout fetch` 取回的副本；请改为操作工作区自身的布局
 
+  err_path_taken:
+    en: That path already names an entry of the Vault's Layout
+    zh-CN: 该路径已经指向保险库布局中的一个条目
+
+  err_path_taken_help:
+    en: |
+        Please choose another path, or move what is there first
+    zh-CN: |
+        请换一个路径，或先移动那里的内容
+
+  err_move_refused:
+    en: Only the entry's holder, or an administrator of the Vault, may move it
+    zh-CN: 只有该条目的持有者或保险库管理员才能移动它
+
+  err_move_refused_help:
+    en: |
+        Claim it first with `rola layout req-ownership`, or ask an administrator of the Vault
+    zh-CN: |
+        请先用 `rola layout req-ownership` 取得它，或请保险库管理员代劳
+
   err_ownership_unknown:
     en: "The fetched Layout names no entry `%{uuid}`"
     zh-CN: "取回的布局中没有条目 `%{uuid}`"
@@ -548,29 +568,34 @@ cmd_layout_entries:
     en: |
         List what a Layout's entries hold
 
-        **Usage**: `rola layout entries [--layout <NAME>]`
+        **Usage**: `rola layout entries [--layout <NAME>] [--uuid <UUID>]`
 
         One entry a line: its path, the `Uuid` it is known by, and the version it is at. What it is
-        held by and what it says are in the data a template or `--json` reads.
+        held by, what it says, and whether the Vault has deprecated it are in the data a template or
+        `--json` reads — `entries[].deprecated`, which is true for a file the Vault moved under
+        `#/removed/`.
 
         `--layout` names a Layout of the Workspace's own, or a Vault's when it is written
         `NAME@VAULT` — as in `rola layout entries --layout truth@origin`. A Vault's Layout is read
         from the copy `rola layout fetch` brought here, so one that was never fetched has nothing to
         read.
+
+        `--uuid` lists one entry alone, which is how a file is asked after; one the Layout does not
+        name leaves the listing empty.
     zh-CN: |
         列出布局中各条目所持有的内容
 
-        **用法**：`rola layout entries [--layout <NAME>]`
+        **用法**：`rola layout entries [--layout <NAME>] [--uuid <UUID>]`
 
-        每行一个条目：它的路径、标识它的 `Uuid`、以及它所在的版本。持有者与描述在模板或 `--json`
-        所读取的数据中。
+        每行一个条目：它的路径、标识它的 `Uuid`、以及它所在的版本。持有者、描述以及保险库是否已将
+        其废弃，在模板或 `--json` 所读取的数据中 —— `entries[].deprecated`，当保险库把该文件移到
+        `#/removed/` 下时为真。
 
         `--layout` 指定工作区自身的布局；写成 `NAME@VAULT`（例如
         `rola layout entries --layout truth@origin`）时则指定保险库的布局。保险库的布局读取的是
         `rola layout fetch` 取回的副本，因此未曾取回时没有内容可读。
 
-        每行一个条目：它的路径、标识它的 `Uuid`、以及它所在的版本。持有者与描述在模板或 `--json`
-        所读取的数据中。
+        `--uuid` 只列出指定的一条，用来查询某个文件；布局中不存在该条目时列出为空。
 
   description:
     en: List what a Layout's entries hold

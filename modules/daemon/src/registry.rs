@@ -65,6 +65,9 @@ pub fn build_action_registry() -> Vec<std::option::Option<std::boxed::Box<dyn Ac
         std::option::Option::Some(std::boxed::Box::new(ActionFetchLayout)),
         std::option::Option::Some(std::boxed::Box::new(ActionRequestOwnership)),
         std::option::Option::Some(std::boxed::Box::new(ActionGiveupOwnership)),
+        std::option::Option::Some(std::boxed::Box::new(ActionMoveRemotePath)),
+        std::option::Option::Some(std::boxed::Box::new(ActionCreateRemoteEntry)),
+        std::option::Option::Some(std::boxed::Box::new(ActionSetRemoteVersion)),
     ]
 }
 

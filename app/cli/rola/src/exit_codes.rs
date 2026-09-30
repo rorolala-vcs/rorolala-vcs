@@ -98,6 +98,9 @@ pub const EC_ERR_VAULT_ARGUMENT: i32 = 70;
 /// `exit_codes.vault_not_bound`
 pub const EC_ERR_VAULT_NOT_BOUND: i32 = 71;
 
+/// `exit_codes.vault_not_admin`
+pub const EC_ERR_VAULT_NOT_ADMIN: i32 = 72;
+
 // Storage — writing, reading back, and listing what a store holds
 
 /// `exit_codes.storage_write_file_argument`
@@ -288,3 +291,19 @@ pub const EC_ERR_ALIGN: i32 = 220;
 
 /// `exit_codes.align_argument`
 pub const EC_ERR_ALIGN_ARGUMENT: i32 = 221;
+
+// Syncing — moving a Layout's work to and from the Vault it tracks
+
+/// `exit_codes.sync`
+pub const EC_ERR_SYNC: i32 = 230;
+
+/// `exit_codes.sync_argument`
+pub const EC_ERR_SYNC_ARGUMENT: i32 = 231;
+
+// Checking in — bringing what the Vault holds into the Layout being worked in
+
+/// `exit_codes.checkin`
+pub const EC_ERR_CHECKIN: i32 = 240;
+
+/// `exit_codes.checkin_argument`
+pub const EC_ERR_CHECKIN_ARGUMENT: i32 = 241;

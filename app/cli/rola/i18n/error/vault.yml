@@ -17,3 +17,39 @@ error:
     err_not_bound_help:
       en: Run `rola vault` to see the names that are bound
       zh-CN: 运行 `rola vault` 查看已绑定的名字
+
+    err_admin_missing:
+      en: This Vault names no administrator, so nobody may name one
+      zh-CN: 该保险库没有指定任何管理员，因此无人可以指定管理员
+
+    err_admin_missing_help:
+      en: |
+        Please name the first one by hand, under `[auth] admins` in the Vault's `vault.toml`
+      zh-CN: |
+        请手动在保险库的 `vault.toml` 中 `[auth] admins` 下写出第一个管理员
+
+    err_not_admin:
+      en: "`%{name}` is not an administrator of this Vault"
+      zh-CN: "`%{name}` 不是该保险库的管理员"
+
+    err_not_admin_help:
+      en: Only an administrator of the Vault may name or unname administrators
+      zh-CN: 只有该保险库的管理员才能指定或取消管理员
+
+    err_admin_unknown:
+      en: "`%{name}` is not an administrator of this Vault"
+      zh-CN: "`%{name}` 不是该保险库的管理员"
+
+    err_admin_unknown_help:
+      en: Run `rola vault admin` to see who is
+      zh-CN: 运行 `rola vault admin` 查看谁是管理员
+
+    err_last_admin:
+      en: The last administrator of the Vault cannot be removed
+      zh-CN: 无法移除该保险库的最后一个管理员
+
+    err_last_admin_help:
+      en: |
+        Please name another administrator first, or edit `[auth] admins` in `vault.toml` by hand
+      zh-CN: |
+        请先指定另一位管理员，或手动编辑 `vault.toml` 中的 `[auth] admins`

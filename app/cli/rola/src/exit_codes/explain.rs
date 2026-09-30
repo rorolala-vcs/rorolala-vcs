@@ -36,6 +36,7 @@ pub const CODES: &[i32] = &[
     62,
     70,
     71,
+    72,
     80,
     81,
     82,
@@ -91,6 +92,10 @@ pub const CODES: &[i32] = &[
     211,
     220,
     221,
+    230,
+    231,
+    240,
+    241,
 ];
 
 /// Whether the program states the exit code `code`.
@@ -134,6 +139,7 @@ pub fn explain_ec(code: i32) -> String {
         62 => t!("exit_codes.account_not_bound").to_string(),
         70 => t!("exit_codes.vault_argument").to_string(),
         71 => t!("exit_codes.vault_not_bound").to_string(),
+        72 => t!("exit_codes.vault_not_admin").to_string(),
         80 => t!("exit_codes.storage_write_file_argument").to_string(),
         81 => t!("exit_codes.storage_write_file_no_storage").to_string(),
         82 => t!("exit_codes.storage_write_file_not_a_file").to_string(),
@@ -189,6 +195,10 @@ pub fn explain_ec(code: i32) -> String {
         211 => t!("exit_codes.abort").to_string(),
         220 => t!("exit_codes.align").to_string(),
         221 => t!("exit_codes.align_argument").to_string(),
+        230 => t!("exit_codes.sync").to_string(),
+        231 => t!("exit_codes.sync_argument").to_string(),
+        240 => t!("exit_codes.checkin").to_string(),
+        241 => t!("exit_codes.checkin_argument").to_string(),
         _ => String::new(),
     }
 }

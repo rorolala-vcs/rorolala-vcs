@@ -28,16 +28,20 @@ const NEW_VAULT_DESCRIPTION: &str = "New Rola Vault";
 #[serde(default)]
 pub struct Config {
     /// Configuration for the Vault daemon.
-    daemon_config: DaemonConfig,
+    #[serde(rename = "daemon_config")]
+    daemon: DaemonConfig,
     /// What the Vault says about itself.
-    vault_config: MetaConfig,
+    #[serde(rename = "vault_config")]
+    vault: MetaConfig,
+    /// Who may act as an administrator of the Vault.
+    auth: AuthConfig,
 }
 
 impl Config {
     /// The configuration for the Vault daemon.
     #[must_use]
     pub const fn daemon_config(&self) -> &DaemonConfig {
-        &self.daemon_config
+        &self.daemon
     }
 
     /// The configuration for the Vault daemon, to be changed.
@@ -45,13 +49,13 @@ impl Config {
     /// A change made through here reaches the file the configuration came from, the way a
     /// change to any other part of it does.
     pub const fn daemon_config_mut(&mut self) -> &mut DaemonConfig {
-        &mut self.daemon_config
+        &mut self.daemon
     }
 
     /// What this Vault says about itself.
     #[must_use]
     pub const fn vault_config(&self) -> &MetaConfig {
-        &self.vault_config
+        &self.vault
     }
 
     /// What this Vault says about itself, to be changed.
@@ -59,7 +63,75 @@ impl Config {
     /// A change made through here reaches the file the configuration came from, the way a
     /// change to any other part of it does.
     pub const fn vault_config_mut(&mut self) -> &mut MetaConfig {
-        &mut self.vault_config
+        &mut self.vault
+    }
+
+    /// Who may act as an administrator of this Vault.
+    #[must_use]
+    pub const fn auth_config(&self) -> &AuthConfig {
+        &self.auth
+    }
+
+    /// Who may act as an administrator of this Vault, to be changed.
+    ///
+    /// A change made through here reaches the file the configuration came from, the way a
+    /// change to any other part of it does.
+    pub const fn auth_config_mut(&mut self) -> &mut AuthConfig {
+        &mut self.auth
+    }
+}
+
+/// Who may act as an administrator of a Vault.
+///
+/// It is written under `[auth]` in the Vault's configuration. A member named here may move any
+/// file in the Vault's Layout — putting a new file where it belongs, or marking one deprecated —
+/// where a member not named here may move only what it holds.
+///
+/// The first administrator is not named by a command: a Vault with no administrator has nobody
+/// who may name one, so the file is edited by hand once, and the commands work from there. That
+/// is also why the last administrator cannot be removed by a command — a Vault with none has no
+/// way back but the same hand edit.
+#[derive(Debug, Default, Clone, Configure, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AuthConfig {
+    /// The members who may act as administrators, as they were named.
+    admins: Vec<String>,
+}
+
+impl AuthConfig {
+    /// The members who may act as administrators.
+    #[must_use]
+    pub fn admins(&self) -> &[String] {
+        &self.admins
+    }
+
+    /// Whether `name` may act as an administrator.
+    #[must_use]
+    pub fn is_admin(&self, name: &str) -> bool {
+        self.admins.iter().any(|admin| admin == name)
+    }
+
+    /// Names `name` as an administrator, answering whether it was named anew.
+    ///
+    /// Naming one who is already named is not an error, only the same naming made again, so it
+    /// answers `false` rather than adding a second.
+    pub fn add_admin(&mut self, name: impl Into<String>) -> bool {
+        let name = name.into();
+        if self.is_admin(&name) {
+            return false;
+        }
+
+        self.admins.push(name);
+
+        true
+    }
+
+    /// Stops `name` being an administrator, answering whether it was one.
+    pub fn remove_admin(&mut self, name: &str) -> bool {
+        let before = self.admins.len();
+        self.admins.retain(|admin| admin != name);
+
+        before != self.admins.len()
     }
 }
 
@@ -540,5 +612,48 @@ mod tests {
 
         assert_eq!(made.name(), "My Vault");
         assert_eq!(made.description(), "New Rola Vault");
+    }
+
+    #[test]
+    fn a_vault_that_names_no_administrator_has_none() {
+        // A file written before administrators existed, or emptied by hand, still reads.
+        let read: Config = toml::from_str("").unwrap();
+
+        assert!(read.auth_config().admins().is_empty());
+        assert!(!read.auth_config().is_admin("alice"));
+
+        // The same holds a table that is present but says nothing.
+        let read: Config = toml::from_str("[auth]\n").unwrap();
+
+        assert!(read.auth_config().admins().is_empty());
+    }
+
+    #[test]
+    fn the_administrators_a_vault_names_are_read_and_written() {
+        let read: Config = toml::from_str("[auth]\nadmins = [\"alice\", \"bob\"]\n").unwrap();
+
+        assert_eq!(read.auth_config().admins(), ["alice", "bob"]);
+        assert!(read.auth_config().is_admin("alice"));
+        assert!(!read.auth_config().is_admin("carol"));
+
+        // Administrators are named and unnamed one at a time, and naming one twice names one.
+        let mut config = Config::default();
+        assert!(config.auth_config_mut().add_admin("alice"));
+        assert!(!config.auth_config_mut().add_admin("alice"));
+        assert!(config.auth_config_mut().add_admin("bob"));
+
+        let written = toml::to_string(&config).unwrap();
+        assert!(written.contains("[auth]"), "{written}");
+        assert!(
+            written.contains("admins = [\"alice\", \"bob\"]"),
+            "{written}"
+        );
+
+        let read_back: Config = toml::from_str(&written).unwrap();
+        assert_eq!(read_back.auth_config().admins(), ["alice", "bob"]);
+
+        assert!(config.auth_config_mut().remove_admin("alice"));
+        assert!(!config.auth_config_mut().remove_admin("alice"));
+        assert_eq!(config.auth_config().admins(), ["bob"]);
     }
 }

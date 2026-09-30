@@ -5,23 +5,29 @@
 //! Layout itself checks — binding a path to an entry that holds nothing is allowed — since this is
 //! the layer for writing content by hand.
 
+use librorolala::daemon::{PathMove, action_move_remote_path};
 use librorolala::layout::LayoutPath;
 use mingling::{
     Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln},
+    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
 use uuid::Uuid;
 
 use crate::Next;
+use crate::account::ResCurrentAccount;
 use crate::exit_codes::EC_HELP;
+use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutArgument, LayoutDid, LayoutOnlyFlags, ResultLayoutContent, chosen_writable, failed,
+    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutMoveRefused,
+    ErrorLayoutPathTaken, LayoutDid, LayoutOnlyFlags, ResultLayoutContent, chosen_writable, failed,
+    remote_spec, set_cached_path,
 };
 
 /// The `LayoutPath` `text` names, or the argument failure.
@@ -208,6 +214,11 @@ pub fn desc_layout_path_move() -> Description {
 
 /// Moves the entry at one path to another
 ///
+/// `--layout truth@VAULT` moves the path in the Vault's own Layout rather than one of the
+/// Workspace's: locating a file is moving it out of `#/new/` to where it belongs, and deprecating
+/// one is moving it under `#/removed/`. Only the entry's holder, or an administrator of the Vault,
+/// may move it.
+///
 /// # Errors
 ///
 /// Renders [`ErrorLayoutArgument`] when an argument is missing or does not read, and the
@@ -243,11 +254,13 @@ pub struct StateLayoutPathMove {
     layout: Option<String>,
 }
 
-#[chain]
+#[chain(routeify)]
 pub fn handle_layout_path_move(
     state: StateLayoutPathMove,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
 ) -> Next {
     let StateLayoutPathMove { from, to, layout } = state;
 
@@ -259,6 +272,60 @@ pub fn handle_layout_path_move(
         Ok(path) => path,
         Err(next) => return next,
     };
+
+    // A Vault keeps one Layout, so a name written `NAME@VAULT` names that one only when `NAME` is
+    // the name it is known by; it is moved by asking the Vault rather than by opening anything
+    // here, since the copy kept here is read and never written.
+    if let Some((named, vault_name)) = layout.as_deref().and_then(remote_spec) {
+        if named != VAULT_LAYOUT_NAME {
+            return ErrorLayoutArgument.into();
+        }
+
+        workspace.get_ref().check()?;
+
+        // UNWRAP: `check` above is exactly what a run without a Workspace fails with, and this run
+        // did not fail, so there is a Workspace here to hand on.
+        let held = workspace.get_ref().as_ref().unwrap();
+
+        let name = remote.get_ref().name_or_default(vault_name)?;
+        let target = remote.get_ref().vault_or_default(name.clone())?;
+
+        let account_name = current.get_ref().must_bind()?;
+        let account = account_named(&account_name, Some(held), None)?;
+
+        let answer = action_move_remote_path(
+            held,
+            &account,
+            target.to_string(),
+            from.as_str().to_owned(),
+            to.as_str().to_owned(),
+        )?;
+        let outcome: PathMove = match serde_json::from_str(&answer) {
+            Ok(outcome) => outcome,
+            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+        };
+
+        return match outcome {
+            PathMove::Moved => {
+                // What the Vault agreed to is written into the copy as well, so reading it next
+                // does not show a path the Vault no longer has.
+                if let Err(error) = set_cached_path(held, &name, named, &from, &to) {
+                    return ErrorLayoutFailed::new(error.to_string()).into();
+                }
+
+                ResultLayoutContent {
+                    did: LayoutDid::Moved,
+                    what: format!("{} -> {}", from.as_str(), to.as_str()),
+                }
+                .into()
+            }
+            PathMove::Missing => ErrorLayoutMissing.into(),
+            PathMove::Taken => ErrorLayoutPathTaken.into(),
+            PathMove::Refused => ErrorLayoutMoveRefused.into(),
+            PathMove::Malformed => ErrorLayoutArgument.into(),
+        };
+    }
+
     let layout = match chosen_writable(workspace.get_ref(), vault.get_ref(), layout.as_deref()) {
         Ok(layout) => layout,
         Err(next) => return next,

@@ -1407,6 +1407,36 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult do_action_giveup_ownership(nint workspace, nint account, nint target, nint input);
 
     /// <summary>
+    /// Runs the [`ActionMoveRemotePath`](crate::ActionMoveRemotePath) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_move_remote_path(nint workspace, nint account, nint target, nint from, nint to);
+
+    /// <summary>
+    /// Runs the [`ActionCreateRemoteEntry`](crate::ActionCreateRemoteEntry) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_create_remote_entry(nint workspace, nint account, nint target, nint path, nint uuid, nint version);
+
+    /// <summary>
+    /// Runs the [`ActionSetRemoteVersion`](crate::ActionSetRemoteVersion) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_set_remote_version(nint workspace, nint account, nint target, nint uuid, nint version);
+
+    /// <summary>
     /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
     ///
     /// `daemon_begin_async` is not supported for use on the FFI side; only the

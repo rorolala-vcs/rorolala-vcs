@@ -1,0 +1,105 @@
+_version: 2
+
+checkin:
+  help:
+    en: |
+        Bring what the Vault holds but this Layout does not into it
+
+        **Usage**: `rola checkin <REF>... --to-local <PATH>...`
+
+        Each `REF` is a path in the Vault's Layout or a `Uuid`, and `--to-local` says where that
+        one is to be named here. The two lists are paired by position and have to be the same
+        length.
+
+        What a reference names has to be something this Layout does not already hold, and where it
+        is to land has to be somewhere nothing is: a name this Layout already gives, or a file
+        already at the path, is refused rather than written over.
+
+        The version the Vault holds is what comes with it — its content is taken out of the store
+        and put at the path — and what the Layout then says is that version and the holder the
+        Vault names.
+    zh-CN: |
+        把保险库持有、而当前布局没有的内容带入当前布局
+
+        **用法**：`rola checkin <REF>... --to-local <PATH>...`
+
+        每个 `REF` 是保险库布局中的路径或一个 `Uuid`，`--to-local` 说明这一条在本地要落到哪个
+        路径。两个列表按位置一一配对，长度必须相同。
+
+        引用所指的内容必须是当前布局尚未持有的；落点也必须是空的：当前布局已经给出的名字，或
+        路径上已存在的文件，都会被拒绝而不是覆盖。
+
+        随之而来的是保险库持有的那个版本——其内容会从存储中取出并写到该路径——之后本地布局
+        记录的就是这个版本以及保险库给出的持有者。
+
+  description:
+    en: Bring what the Vault holds but this Layout does not into it
+    zh-CN: 把保险库持有而当前布局没有的内容带入当前布局
+
+  err_no_track:
+    en: The Layout being worked in tracks no Vault
+    zh-CN: 当前使用的布局没有追踪任何保险库
+
+  err_no_track_help:
+    en: |
+        Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then try again
+    zh-CN: |
+        请用 `rola layout set-track <LAYOUT> <VAULT>` 指定一个，然后重试
+
+  err_argument:
+    en: "`rola checkin` was given references and paths that do not line up"
+    zh-CN: "`rola checkin` 收到的引用与路径没有一一对应"
+
+  err_argument_help:
+    en: |
+        Name one path with `--to-local` for each reference, and no more
+    zh-CN: |
+        请为每个引用用一个 `--to-local` 指定路径，不要多也不要少
+
+  err_unknown:
+    en: "The Vault's Layout names nothing by `%{reference}`"
+    zh-CN: "保险库的布局中没有名为 `%{reference}` 的内容"
+
+  err_unknown_help:
+    en: |
+        Run `rola sync --dry-run` to see what the Vault holds that is not here yet
+    zh-CN: |
+        运行 `rola sync --dry-run` 查看保险库还持有哪些本地没有的内容
+
+  err_taken:
+    en: "Something is already at `%{path}` here"
+    zh-CN: "`%{path}` 在本地已经有内容了"
+
+  err_taken_help:
+    en: |
+        Please name somewhere nothing is, or move what is there first
+    zh-CN: |
+        请换一个空路径，或先移动那里的内容
+
+  err_known:
+    en: "This Layout already holds `%{uuid}`"
+    zh-CN: "当前布局已经持有 `%{uuid}`"
+
+  err_known_help:
+    en: |
+        What is already here is brought up to date with `rola sync`, not checked in again
+    zh-CN: |
+        已经在本地的内容用 `rola sync` 更新，而不是再次签入
+
+  err_failed:
+    en: "The checkin could not go on: %{cause}"
+    zh-CN: "签入无法继续：%{cause}"
+
+  err_failed_help:
+    en: |
+        Please check the Vault is reachable and the account is bound, then try again
+    zh-CN: |
+        请检查保险库是否可达、账户是否已绑定，然后重试
+
+  no_content:
+    en: the content this version names is not here
+    zh-CN: 本地没有该版本所指向的内容
+
+  result_summary:
+    en: "%{checked} checked in, %{failed} not done"
+    zh-CN: "已签入 %{checked} 项，未完成 %{failed} 项"
