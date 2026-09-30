@@ -65,6 +65,7 @@ use crate::exit_codes::{EC_HELP, EC_UNKNOWN_COMMAND};
 use crate::format::FormatSetup;
 use crate::lastec::LastExitCodeRecordSetup;
 use crate::rebuild::RebuildSetup;
+use crate::vcs_index::cmd_vcs_index_lookback::LookbackSetup;
 
 /// How far a mistyped word may be from a command and still be offered as one it may have
 /// meant.
@@ -91,6 +92,7 @@ fn main() {
     program.with_setup(LastExitCodeRecordSetup);
     program.with_setup(ConfirmSetup);
     program.with_setup(FormatSetup);
+    program.with_setup(LookbackSetup);
     program.with_setup(EditorSetup);
 
     // `-V` and `--version` are not commands, but what they ask for is what a command's result is

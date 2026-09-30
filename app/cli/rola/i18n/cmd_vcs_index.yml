@@ -273,23 +273,41 @@ vcs_index_lookback:
     en: |
         Draw the chain one index object sits at the top of
 
-        **Usage**: `rola vcs-index lookback <HASH> [--json]`
+        **Usage**: `rola vcs-index lookback <HASH> [--compact] [--no-creator] [--no-message]
+        [--max-message-length <N>] [--json]`
 
         The object is taken as a Version first, and as a Variant when it is not one. A Version is
-        the top of the drawing; a Variant is the top itself, drawn over the version it is based on.
-        From there the chain is walked back to the first version — the root is not drawn — reading
-        each version once, so the numbers fall by one a step. A Version is bright magenta, a Variant
-        bright cyan, and the edges bold white. A Variant is drawn by the first seven characters of
-        its hash, so a real graph is wider than the short names would suggest.
+        the top of the drawing; a Variant is drawn over the version it is based on, under a version
+        whose number nothing here knows, drawn `?`. From there the chain is walked back to the first
+        version — the root is not drawn — reading each version once, so the numbers fall by one a
+        step. A Version is bright magenta, a Variant bright cyan, and the edges bold white. A Variant
+        is drawn by the first seven characters of its hash, so a real graph is wider than the short
+        names would suggest.
+
+        Each version is drawn with who made it and what it says, both read from the variant it points
+        at, since a version is what a message belongs to and it points at one variant. `--no-creator`
+        and `--no-message` leave one of the two out, `--max-message-length` (64 by default) cuts a
+        message short with `...`, and `--compact` draws the versions alone, without the variants
+        between them. None of them changes what `--json` prints.
     zh-CN: |
         画出以某个索引对象为顶的版本链
 
-        **用法**：`rola vcs-index lookback <HASH> [--json]`
+        **用法**：`rola vcs-index lookback <HASH> [--compact] [--no-creator] [--no-message]
+        [--max-message-length <N>] [--json]`
 
-        对象先按 Version 看待，不是 Version 时按 Variant 看待。Version 是画面的顶部；Variant 则自己
-        就是顶部，画在它基于的版本之上。从那里沿链走回第一个版本——root 不画——每个版本只读一次，
-        因此号逐个递减。Version 亮洋红、Variant 亮青、边粗体白。Variant 以哈希前 7 位表示，所以真实图
-        比短名字显得更宽。
+        对象先按 Version 看待，不是 Version 时按 Variant 看待。Version 是画面的顶部；Variant 则画在它
+        基于的版本之上，头顶是一个这里无从知道编号的版本，画作 `?`。从那里沿链走回第一个版本——root
+        不画——每个版本只读一次，因此号逐个递减。Version 亮洋红、Variant 亮青、边粗体白。Variant 以
+        哈希前 7 位表示，所以真实图比短名字显得更宽。
+
+        每个版本会带上是谁做的、说了什么，两者都读自该版本指向的那个 variant —— 一个版本只指向一个
+        variant，所以消息记在版本上。`--no-creator`、`--no-message` 各自省掉其一，`--max-message-length`
+        （默认 64）把过长的消息截断并以 `...` 结尾，`--compact` 只画版本、不画它们之间的 variant。
+        这些都不影响 `--json` 的内容。
+
+  being_edited:
+    en: being edited
+    zh-CN: 编辑中的版本
 
   description:
     en: Draw the version chain one object sits at the top of

@@ -1272,6 +1272,75 @@ async fn main() {
         ),
     );
 
+    // A lookback says what each version was — who made it and what it says, read from the variant
+    // the version points at — and `rola status` draws the same for whatever it is given.
+    let version = Layout::open(workspace.join(".rola/layouts/main"))
+        .expect("the Layout being worked in")
+        .entry(id)
+        .expect("the entry")
+        .version();
+    let version: String = version.iter().map(|byte| format!("{byte:02x}")).collect();
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["vcs-index", "lookback", &version],
+    ));
+    checked.wants(
+        "a lookback says who made each version and what it says",
+        said.success() && said.stdout.contains("alice: mine now"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["vcs-index", "lookback", &version, "--compact"],
+    ));
+    checked.wants(
+        "a compact lookback draws the versions alone",
+        said.success() && !said.stdout.contains('\\') && said.stdout.contains('V'),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    checked.wants(
+        "status with a path looks back from what the path names",
+        said.success() && said.stdout.contains("mine now"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    fs::write(&model, b"fourth").expect("a change nobody recorded");
+    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    checked.wants(
+        "a file with unrecorded changes is drawn being edited",
+        said.success() && said.stdout.contains("??"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["status", "not-a-thing"]));
+    checked.wants(
+        "a target that names nothing is refused",
+        said.code == Some(191),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
     serving.stop();
     checked.report();
 }

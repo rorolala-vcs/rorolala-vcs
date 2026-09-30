@@ -7,39 +7,47 @@
 //! look of the drawing — which is a terminal's business — out of the shape of the graph.
 //!
 //! The root version is not part of a chain: the chain stops at the first version, so every level is
-//! zero or more. The top may be a version or, when a single variant is looked back from, that variant
-//! itself: a variant is drawn through the version it is based on, so looking back from one shows the
-//! same chain with the variant's own row at the top and the version above it left off — see
-//! [`Chain::variant_top`].
+//! zero or more. The top may be a version with a number, or — when a single variant is looked back
+//! from — the version that variant produced, whose number is drawn `?`: what a variant is drawn
+//! between is the version it produced and the one it is based on, so looking back from a variant
+//! shows the same chain with an unnamed version at the top — see [`Chain::unknown`].
+
+/// What the top of a chain is, as it is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Top {
+    /// The highest version's number, drawn `V{n}`.
+    Numbered,
+    /// A version whose number is unknown, drawn `?`.
+    ///
+    /// It is the top a Variant is looked back from: the variant is the one the highest version was
+    /// produced by, but which version that is takes a search of the whole index to find, and a
+    /// drawing does not know it.
+    Unknown,
+    /// A version being edited, drawn `??`.
+    ///
+    /// It is the top a file with changes that were never recorded is looked back from: the version
+    /// the work is on its way to is not one the index has, and neither is the variant that would
+    /// produce it, so both are drawn as placeholders over the version being edited.
+    Editing,
+}
 
 /// A chain of versions, top to bottom.
 pub struct Chain {
     /// The number of the highest version drawn.
     top: u64,
-    /// Whether the top row is a variant rather than a version's number.
-    variant_top: bool,
+    /// What the highest version is, as it is drawn.
+    top_kind: Top,
     /// Every variant drawn, spine and merged alike.
     nodes: Vec<Node>,
 }
 
 impl Chain {
-    /// A chain whose highest version is numbered `top`, over `nodes`.
+    /// A chain whose highest version is at `top`, over `nodes`.
     #[must_use]
-    pub const fn new(top: u64, nodes: Vec<Node>) -> Self {
+    pub const fn new(top: u64, top_kind: Top, nodes: Vec<Node>) -> Self {
         Self {
             top,
-            variant_top: false,
-            nodes,
-        }
-    }
-
-    /// A chain that starts at a variant: `top` is the number of the version the variant is based
-    /// on, and that variant is the top row rather than the version above it.
-    #[must_use]
-    pub const fn variant_top(top: u64, nodes: Vec<Node>) -> Self {
-        Self {
-            top,
-            variant_top: true,
+            top_kind,
             nodes,
         }
     }
@@ -50,10 +58,10 @@ impl Chain {
         self.top
     }
 
-    /// Whether the top row is a variant rather than a version's number.
+    /// What the highest version is, as it is drawn.
     #[must_use]
-    pub const fn has_variant_top(&self) -> bool {
-        self.variant_top
+    pub const fn top_kind(&self) -> Top {
+        self.top_kind
     }
 
     /// Every variant drawn.
@@ -147,35 +155,95 @@ pub enum Cell {
     Glyph(Role, char),
 }
 
-/// A drawing: rows of cells, the topmost first.
-pub type Drawing = Vec<Vec<Cell>>;
+/// A drawing: what [`draw`] lays out.
+///
+/// What a caller is given is the grid and, beside it, where each version's number ended up: a
+/// version's row is where a reader says what that version was, and a caller that wants to write
+/// beside the number would otherwise have to read the number back out of the glyphs.
+pub struct Drawing {
+    /// The rows, the topmost first.
+    rows: Vec<Vec<Cell>>,
+    /// The row each version's number is drawn on, the highest first.
+    versions: Vec<VersionRow>,
+}
+
+impl Drawing {
+    /// The rows, the topmost first.
+    #[must_use]
+    pub fn rows(&self) -> &[Vec<Cell>] {
+        &self.rows
+    }
+
+    /// The row each version's number is drawn on, the highest first.
+    #[must_use]
+    pub fn versions(&self) -> &[VersionRow] {
+        &self.versions
+    }
+}
+
+/// Where one version's number is drawn.
+pub struct VersionRow {
+    /// The number of the version, which is the level it is drawn at.
+    level: u64,
+    /// The row its number is on.
+    row: usize,
+}
+
+impl VersionRow {
+    /// The number of the version.
+    #[must_use]
+    pub const fn level(&self) -> u64 {
+        self.level
+    }
+
+    /// The row its number is on.
+    #[must_use]
+    pub const fn row(&self) -> usize {
+        self.row
+    }
+}
 
 /// Draws `chain`.
 ///
-/// The top is either a version's number or, for a chain that starts at a variant, that variant's
-/// row itself. Under it the chain descends level by level to the first version, numbered zero; the
-/// root, which the first version's variant is based on, is left out. Each level holds its spine
-/// variant where the version above drops to it, and the variants merged into the chain to its
-/// right, each reached by a bus that runs down from the variant that merged it in.
+/// The top is a version's number — the highest one, or `?` when that number is unknown. Under it
+/// the chain descends level by level to the first version, numbered zero; the root, which the first
+/// version's variant is based on, is left out. Each level holds its spine variant where the version
+/// above drops to it, and the variants merged into the chain to its right, each reached by a bus
+/// that runs down from the variant that merged it in.
 #[must_use]
 pub fn draw(chain: &Chain) -> Drawing {
     let top = chain.top();
     let Ok(levels) = usize::try_from(top) else {
-        return Vec::new();
+        return Drawing {
+            rows: Vec::new(),
+            versions: Vec::new(),
+        };
     };
-    let variant_top = chain.has_variant_top();
 
-    let rows = Rows::of(top, variant_top);
-    let node_col = columns(chain, top, variant_top);
+    let rows = Rows::of(top);
+    let node_col = columns(chain, top);
     let mut grid = Grid::new(rows.height);
 
-    paint_versions(&mut grid, levels, &rows);
+    paint_versions(&mut grid, levels, &rows, chain);
     paint_labels(&mut grid, chain.nodes(), &rows, &node_col);
     paint_spine(&mut grid, levels, &rows);
     paint_feet(&mut grid, chain, levels, &rows, &node_col);
     paint_joins(&mut grid, chain, &rows, &node_col);
 
-    grid.cells
+    let versions = (0..=levels)
+        .rev()
+        .filter_map(|level| {
+            let level = u64::try_from(level).unwrap_or(0);
+            let row = Rows::at(&rows.version, level)?;
+
+            Some(VersionRow { level, row })
+        })
+        .collect();
+
+    Drawing {
+        rows: grid.cells,
+        versions,
+    }
 }
 
 /// The rows each level owns.
@@ -195,10 +263,10 @@ struct Rows {
 impl Rows {
     /// Lays the levels out.
     ///
-    /// A version at the top is drawn first, then for each level under it the edge down, the
-    /// variants, the edge on, and the version itself. A variant at the top is drawn in place of
-    /// that first version: its own row, the edge it stands on, then the version below it.
-    fn of(top: u64, variant_top: bool) -> Self {
+    /// The highest version is drawn first, then for each level under it the edge down, the
+    /// variants, the edge on, and the version below. A version whose own row is a placeholder —
+    /// looked back from a variant, or being edited — has its row where its number would be.
+    fn of(top: u64) -> Self {
         let Ok(levels) = usize::try_from(top) else {
             return Self {
                 version: Vec::new(),
@@ -217,35 +285,18 @@ impl Rows {
             height: 0,
         };
 
-        if variant_top {
-            rows.variant[levels] = Some(0);
-            rows.down[levels] = Some(1);
-            rows.version[levels] = Some(2);
+        rows.version[levels] = Some(0);
 
-            for step in 1..=levels {
-                let level = levels - step;
-                let base = 3 + 4 * (step - 1);
-                rows.up[level] = Some(base);
-                rows.variant[level] = Some(base + 1);
-                rows.down[level] = Some(base + 2);
-                rows.version[level] = Some(base + 3);
-            }
-
-            rows.height = 3 + 4 * levels;
-        } else {
-            rows.version[levels] = Some(0);
-
-            for step in 0..levels {
-                let level = levels - 1 - step;
-                let base = 1 + 4 * step;
-                rows.up[level] = Some(base);
-                rows.variant[level] = Some(base + 1);
-                rows.down[level] = Some(base + 2);
-                rows.version[level] = Some(base + 3);
-            }
-
-            rows.height = 1 + 4 * levels;
+        for step in 0..levels {
+            let level = levels - 1 - step;
+            let base = 1 + 4 * step;
+            rows.up[level] = Some(base);
+            rows.variant[level] = Some(base + 1);
+            rows.down[level] = Some(base + 2);
+            rows.version[level] = Some(base + 3);
         }
+
+        rows.height = 1 + 4 * levels;
 
         rows
     }
@@ -260,11 +311,11 @@ impl Rows {
 ///
 /// The spine sits one step past the indent. The merged variants of a level are laid out to its
 /// right, one step apart, the one merged in latest furthest out.
-fn columns(chain: &Chain, top: u64, variant_top: bool) -> Vec<usize> {
+fn columns(chain: &Chain, top: u64) -> Vec<usize> {
     let nodes = chain.nodes();
     let mut node_col = vec![0; nodes.len()];
 
-    for level in levels_of(top, variant_top) {
+    for level in levels_of(top) {
         for (index, node) in nodes.iter().enumerate() {
             if node.level() == level && node.is_spine() {
                 node_col[index] = SPINE;
@@ -280,12 +331,29 @@ fn columns(chain: &Chain, top: u64, variant_top: bool) -> Vec<usize> {
 }
 
 /// The version numbers, down the left.
-fn paint_versions(grid: &mut Grid, levels: usize, rows: &Rows) {
+///
+/// The highest version's row is a number when it has one, and a placeholder when it does not: `?`
+/// for a version nothing names, `??` for one being edited.
+fn paint_versions(grid: &mut Grid, levels: usize, rows: &Rows, chain: &Chain) {
+    let top = chain.top();
+
     for level in 0..=levels {
-        let Some(row) = Rows::at(&rows.version, u64::try_from(level).unwrap_or(0)) else {
+        let level = u64::try_from(level).unwrap_or(0);
+        let Some(row) = Rows::at(&rows.version, level) else {
             continue;
         };
-        grid.text(row, 0, Role::Version, &format!("V{level}"));
+
+        let number = if level == top {
+            match chain.top_kind() {
+                Top::Numbered => format!("V{level}"),
+                Top::Unknown => "?".to_owned(),
+                Top::Editing => "??".to_owned(),
+            }
+        } else {
+            format!("V{level}")
+        };
+
+        grid.text(row, 0, Role::Version, &number);
     }
 }
 
@@ -418,20 +486,14 @@ fn paint_joins(grid: &mut Grid, chain: &Chain, rows: &Rows, node_col: &[usize]) 
 
 /// The levels a drawing of `top` has, highest first.
 ///
-/// A version at the top has one level under it for each version down to the first, so levels
-/// `top - 1 ..= 0`. A variant at the top is a level of its own, so levels `top ..= 0`.
-fn levels_of(top: u64, variant_top: bool) -> Vec<u64> {
-    let highest = if variant_top {
-        top
-    } else {
-        top.saturating_sub(1)
-    };
-    // A version at the top of a one-version chain has no level at all.
-    if !variant_top && top == 0 {
+/// The highest version has one level under it for each version down to the first, so levels
+/// `top - 1 ..= 0`; a chain of one version has no level at all.
+fn levels_of(top: u64) -> Vec<u64> {
+    if top == 0 {
         return Vec::new();
     }
 
-    (0..=highest).rev().collect()
+    (0..top).rev().collect()
 }
 
 /// The merged variants of `level`, left to right as the chain gives them.
@@ -448,7 +510,7 @@ fn merged(chain: &Chain, level: u64) -> Vec<usize> {
 /// A grid a drawing is laid out on.
 struct Grid {
     /// The rows of cells.
-    cells: Drawing,
+    cells: Vec<Vec<Cell>>,
 }
 
 impl Grid {

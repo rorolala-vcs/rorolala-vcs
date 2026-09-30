@@ -223,6 +223,14 @@ pub struct ErrorVcsIndexRead {
     cause: String,
 }
 
+impl ErrorVcsIndexRead {
+    /// The failure of an index that would not read, for `cause`.
+    #[must_use]
+    pub fn new(cause: String) -> Self {
+        Self { cause }
+    }
+}
+
 impl Failure for ErrorVcsIndexRead {
     fn name(&self) -> &'static str {
         "error_vcs_index_read"

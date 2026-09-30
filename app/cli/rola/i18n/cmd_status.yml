@@ -3,29 +3,46 @@ _version: 2
 status:
   help:
     en: |
-        Show how the working tree stands beside the Layout
+        Show how the working tree stands beside the Layout, or look back from one thing in it
 
-        **Usage**: `rola status`
+        **Usage**: `rola status [<TARGET>] [--compact] [--no-creator] [--no-message]
+        [--max-message-length <N>] [--json]`
 
-        A line beginning with `>` is a path that moved, `-` one the Layout names and the tree does
-        not hold, `+` one the tree holds and the Layout does not name; a line with none of them is
-        content that changed where it was. A `(*)` marks a line that is also a content change.
+        With nothing named, a line beginning with `>` is a path that moved, `-` one the Layout names
+        and the tree does not hold, `+` one the tree holds and the Layout does not name; a line with
+        none of them is content that changed where it was. A `(*)` marks a line that is also a
+        content change.
 
         A change to a file the Vault's fetched copy says another account holds is not among the
         content changes: it is said first, on its own, since recording it would make a version this
         side cannot push. What is lost or untagged is settled with `rola align`; what changed is
         recorded with `rola track`, and a file that is not yours only with `rola track --force`.
+
+        With a `<TARGET>` named, the chain that thing sits at the top of is drawn instead, the same
+        drawing `rola vcs-index lookback` makes and with the same flags to shape it. What a target
+        may be is read in this order, and the first that names something is what is drawn: a path in
+        the Layout being worked in, a path in the Vault's own Layout as the copy here has it, a
+        `Uuid`, then the hash of an index object. A file whose changes were never recorded is drawn
+        with an extra version over it, `??` being edited, since the work is on its way to a version
+        the index does not have yet; a target that names nothing at all is refused.
     zh-CN: |
-        展示工作树相对于布局的状态
+        展示工作树相对于布局的状态，或从其中某样东西往回看
 
-        **用法**：`rola status`
+        **用法**：`rola status [<TARGET>] [--compact] [--no-creator] [--no-message]
+        [--max-message-length <N>] [--json]`
 
-        以 `>` 开头的行是移动的路径，`-` 是布局命名而工作树缺失的路径，`+` 是工作树有而布局
-        未命名的路径；没有什么开头的行是原地发生内容变化的路径。`(*)` 表示该行同时也有内容变化。
+        不指定目标时：以 `>` 开头的行是移动的路径，`-` 是布局命名而工作树缺失的路径，`+` 是工作树有
+        而布局未命名的路径；没有什么开头的行是原地发生内容变化的路径。`(*)` 表示该行同时也有内容变化。
 
         保险库取回的副本显示属于其他账户的文件，其改动不算在内容变更里：它会单独出现在最前面，
         因为把它记录下来会产生一个这一侧推不上去的版本。丢失或未命名的用 `rola align` 处理；
         内容变化用 `rola track` 记录，而不属于你的文件只有 `rola track --force` 才能记录。
+
+        指定 `<TARGET>` 时，改为画出以它为目标的那条版本链 —— 与 `rola vcs-index lookback` 同一幅图，
+        同样的那几个 flag 也一并可用。目标的解读顺序如下，先认出什么就画什么：当前布局中的路径、
+        保险库自己的布局（取回副本所见）中的路径、`Uuid`、索引对象的哈希。文件若有未记录的改动，
+        会在它之上多画一个版本 `?? 编辑中的版本`，因为工作正走向一个索引里还没有的版本；完全认不出
+        任何东西的目标会被拒绝。
 
   description:
     en: Show how the working tree stands beside the Layout
@@ -34,6 +51,24 @@ status:
   clean:
     en: Your workspace has nothing unrecorded.
     zh-CN: 你的工作区无未提交内容。
+
+  err_target:
+    en: "`%{target}` is nothing a chain can be looked back from: %{cause}"
+    zh-CN: "`%{target}` 不是可以往回看的东西：%{cause}"
+
+  err_target_help:
+    en: |
+        Name a path in the Layout, a `Uuid`, or the hash of a Version or a Variant
+    zh-CN: |
+        请给出布局中的路径、`Uuid`，或 Version / Variant 的哈希
+
+  err_target_names_nothing:
+    en: it names no path, no `Uuid` and no hash
+    zh-CN: 它既不是路径，也不是 `Uuid`，也不是哈希
+
+  err_target_no_version:
+    en: nothing was ever recorded for it
+    zh-CN: 它从未被记录过任何版本
 
   header_unowned:
     en: "Note: your workspace has %{count} content change(s) that are not yours to make!"

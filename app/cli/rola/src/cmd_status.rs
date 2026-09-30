@@ -12,23 +12,37 @@
 
 use std::collections::BTreeSet;
 
+use std::str::FromStr as _;
+
+use librorolala::layout::{Layout, LayoutPath};
+use librorolala::storage::{Blake3Hash, Key};
 use librorolala::tree_analyze::tree_diff;
+use librorolala::workspace::Workspace;
 use mingling::{
     Grouped, LazyRes, StructuralData,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    macros::{
+        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+    },
     metadata::Description,
+    picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResVault, ResWorkspace};
-use rorolala_utils_cli_theme::{help_line, trd};
+use rorolala_cli_setups::{ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_errors::Failure;
+use rorolala_utils_cli_theme::{err_line, help_line, trd};
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::exit_codes::EC_HELP;
-use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen};
+use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
+use crate::failure::failure;
+use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_dir};
 use crate::ownership;
+use crate::vcs_index::cmd_vcs_index_lookback::{LookbackFlags, ResLookback, from_object};
+use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, parse_hash, runtime};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
@@ -60,20 +74,35 @@ pub fn desc_status() -> Description {
 /// or not-there failures when there is no Layout to read, and [`ErrorLayoutFailed`] when the tree
 /// or the Layout could not be read.
 #[command(node = "status", entry = EntryStatus)]
-pub fn status() -> StateStatus {
-    StateStatus
+pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
+    let picked = args
+        .pick(&arg![LookbackFlags])
+        .pick(&arg![Option<String>])
+        .to_result();
+    let (flags, target) = match picked {
+        Ok(picked) => picked,
+        Err(next) => return next,
+    };
+
+    lookback.asked(&flags);
+
+    StateStatus { target }.into()
 }
 
-/// The state a reading of the tree starts in: it names nothing.
+/// The state a reading of the tree starts in.
 #[derive(Grouped)]
-pub struct StateStatus;
+pub struct StateStatus {
+    /// What to look back from, when the run named something rather than asking how the work stands.
+    target: Option<String>,
+}
 
-#[chain]
+#[chain(routeify)]
 pub fn handle_status(
-    _state: StateStatus,
+    state: StateStatus,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
     account: &mut LazyRes<ResCurrentAccount>,
+    index: &mut LazyRes<ResVCSIndex>,
 ) -> Next {
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
@@ -83,6 +112,10 @@ pub fn handle_status(
     let Some(held) = workspace.get_ref().as_ref() else {
         return ErrorLayoutShouldInWorkspace.into();
     };
+
+    if let Some(target) = state.target {
+        return lookback_of(&target, &layout, held, index);
+    }
 
     let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
         Ok(diff) => diff,
@@ -139,6 +172,158 @@ pub fn handle_status(
     .into()
 }
 
+/// One thing a target named: the index object to look back from, and whether the work on it has
+/// changes that were never recorded.
+struct Found {
+    /// The hash of the object the chain is drawn from.
+    key: Key,
+    /// Whether the file the version belongs to has changes that were never recorded.
+    editing: bool,
+}
+
+/// Draws the chain what `target` names sits at the top of.
+///
+/// What a target may name is read in the order a run is likely to have meant: a path in the Layout
+/// being worked in, a path in the Vault's own Layout as the copy here has it, a `Uuid`, then the
+/// hash of an index object. The first that names something is what is drawn — so a name that is a
+/// path of this work is the work's, even when some object of the index happens to hash to it — and
+/// a target that names nothing at all is refused rather than guessed at.
+#[routeify]
+fn lookback_of(
+    target: &str,
+    layout: &Layout,
+    held: &Workspace,
+    index: &mut LazyRes<ResVCSIndex>,
+) -> Next {
+    let Some(index) = index.get_ref().as_ref() else {
+        return ErrorVcsIndexNoIndex.into();
+    };
+    let runtime = match runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => return error.into(),
+    };
+
+    let remote = tracked_layout(held);
+    let found = match found(target, layout, remote.as_ref(), held) {
+        Ok(found) => found,
+        Err(cause) => {
+            return ErrorStatusTarget {
+                target: target.to_owned(),
+                cause,
+            }
+            .into();
+        }
+    };
+
+    let mut result = match from_object(index, &runtime, found.key) {
+        Ok(result) => result,
+        Err(cause) => return ErrorVcsIndexRead::new(cause).into(),
+    };
+    if found.editing {
+        result.editing();
+    }
+
+    result.into()
+}
+
+/// The copy of the Vault's own Layout the Layout being worked in tracks, when there is one here.
+///
+/// A target that names a path of the Vault's is read from it. A Layout that tracks no Vault, or one
+/// nobody has fetched, has no copy: what the run named is then read as something else, or refused.
+fn tracked_layout(held: &Workspace) -> Option<Layout> {
+    let layouts = held.layouts();
+    let name = layouts.current().ok().flatten()?;
+    let track = layouts.track(&name).ok().flatten()?;
+    let dir = readonly_layout_dir(held, &track, VAULT_LAYOUT_NAME);
+
+    Layout::open(&dir).ok()
+}
+
+/// Reads what `target` names, in the order a run is likely to have meant it.
+fn found(
+    target: &str,
+    layout: &Layout,
+    remote: Option<&Layout>,
+    held: &Workspace,
+) -> Result<Found, String> {
+    let path = LayoutPath::new(target).ok();
+
+    if let Some(path) = &path
+        && let Some(id) = layout.id_of(path)
+    {
+        return Ok(Found {
+            key: Key::new(version_of(layout, id)?),
+            editing: editing(held, layout, path)?,
+        });
+    }
+
+    if let Some(remote) = remote
+        && let Some(path) = &path
+        && let Some(id) = remote.id_of(path)
+    {
+        return Ok(Found {
+            key: Key::new(version_of(remote, id)?),
+            editing: false,
+        });
+    }
+
+    if let Ok(id) = Uuid::from_str(target) {
+        if let Some(path) = layout.path_of(id) {
+            return Ok(Found {
+                key: Key::new(version_of(layout, id)?),
+                editing: editing(held, layout, &path)?,
+            });
+        }
+
+        if let Some(remote) = remote
+            && remote.entry(id).is_some()
+        {
+            return Ok(Found {
+                key: Key::new(version_of(remote, id)?),
+                editing: false,
+            });
+        }
+    }
+
+    // A `Uuid` and a path are read by shape, so what is left is a hash: which kind of object it is
+    // is what reading it settles, and one that is no chain is refused where it is read.
+    if let Some(key) = parse_hash(target) {
+        return Ok(Found {
+            key,
+            editing: false,
+        });
+    }
+
+    Err(t!("status.err_target_names_nothing").trim().to_owned())
+}
+
+/// The version the Layout names the entry `id` at.
+///
+/// A `Uuid` the Layout names but was never given a version for is one no chain hangs from: what was
+/// recorded is what a lookback reads, and there is nothing recorded.
+fn version_of(layout: &Layout, id: Uuid) -> Result<Blake3Hash, String> {
+    let Some(data) = layout.entry(id) else {
+        return Err(t!("status.err_target_no_version").trim().to_owned());
+    };
+    let version = data.version();
+
+    if version == [0; 32] {
+        return Err(t!("status.err_target_no_version").trim().to_owned());
+    }
+
+    Ok(version)
+}
+
+/// Whether the file at `path` has changes the Layout does not name yet.
+///
+/// A move whose file was edited is already among the modified: the tree reading counts a move's
+/// destination there as well, since what changed is the content at the path the file is at now.
+fn editing(held: &Workspace, layout: &Layout, path: &LayoutPath) -> Result<bool, String> {
+    let diff = tree_diff(layout, held, DEFAULT_ALIKE).map_err(|error| error.to_string())?;
+
+    Ok(diff.modified.contains(path))
+}
+
 /// One path that moved, as `status` shows it.
 #[derive(Serialize)]
 pub struct RenameItem {
@@ -151,6 +336,40 @@ pub struct RenameItem {
     /// Whether the move is one the two being the same bytes makes rather than one their likeness
     /// suggests.
     strong: bool,
+}
+
+/// Error: what the run named is nothing a chain can be looked back from.
+#[derive(Grouped)]
+pub struct ErrorStatusTarget {
+    /// What the run named.
+    pub target: String,
+    /// Why nothing was read from it.
+    pub cause: String,
+}
+
+impl Failure for ErrorStatusTarget {
+    fn name(&self) -> &'static str {
+        "error_status_target"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "status.err_target",
+            target = self.target,
+            cause = self.cause
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStatusTarget);
+
+#[renderer(buffer)]
+pub fn render_error_status_target(error: ErrorStatusTarget, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("status.err_target_help").trim()));
+    ec.exit_code = EC_ERR_LAYOUT_ARGUMENT;
 }
 
 /// Result: how the tree stood beside the Layout.
