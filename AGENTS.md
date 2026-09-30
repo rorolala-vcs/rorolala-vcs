@@ -70,6 +70,9 @@ semantics may not.
 
 ## The work
 
+- Iterate aggressively: this project is young, so large breaking changes and wholly incompatible
+  replacements are wanted rather than merely tolerated. Choose the right shape over the compatible
+  one, and keep nothing alive only because it is already there.
 - Go as far as you can: read the code, run it, compile it. No "maybe", no "probably". Say in detail
   what you did not do, why, and what is needed next.
 - An unclear request is asked about again and again, with choices and their costs, until the plan is
