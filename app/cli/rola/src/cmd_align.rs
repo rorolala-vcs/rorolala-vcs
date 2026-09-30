@@ -9,7 +9,13 @@
 //! works on a tree that is settled; this is what settles it. A move, on the other hand, `track`
 //! confirms on its own — naming a path that moved records it where it is now.
 
-#![allow(clippy::too_many_lines)]
+// `#[chain]` copies the attributes of the function it is given onto the struct it generates, so a
+// lint allowed on the handler below is reported as defined twice. The allow lives here, where it
+// covers the one signature that needs it.
+//
+// The handler's parameters are the resources the framework injects, so how many of them there are is
+// what the command needs of the run rather than a signature this program shaped.
+#![allow(clippy::too_many_lines, clippy::too_many_arguments)]
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -25,16 +31,37 @@ use mingling::{
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{
+    ResCurrentRemoteVault, ResOffline, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::account::ResCurrentAccount;
 use crate::exit_codes::{EC_ERR_ALIGN, EC_ERR_ALIGN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
+use crate::fetch::{self, Sources};
+use crate::keys::account_named;
 use crate::layout::{ErrorLayoutShouldInWorkspace, chosen, failed};
+
+/// Where content a restore writes comes from: the store it is read out of, the index that names it,
+/// and the Vaults it may be asked of when the store does not hold it.
+///
+/// The three travel together because a restore never wants one without the others, and passing them
+/// as one value is what keeps the signatures below about the paths they act on.
+#[derive(Clone, Copy)]
+struct Content<'a, 'b> {
+    /// The store the content is read out of.
+    storage: &'a ResRorolalaStorage,
+    /// The index that says which version names which object.
+    index: &'a ResVCSIndex,
+    /// Where an object the store does not hold may be brought from, when the run has anywhere to
+    /// ask at all.
+    sources: Option<&'a Sources<'b>>,
+}
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 ///
@@ -223,6 +250,9 @@ pub fn handle_align(
     vault: &mut LazyRes<ResVault>,
     storage: &mut LazyRes<ResRorolalaStorage>,
     index: &mut LazyRes<ResVCSIndex>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    offline: &ResOffline,
 ) -> Next {
     let StateAlign {
         path,
@@ -230,14 +260,43 @@ pub fn handle_align(
         completely,
     } = state;
 
-    let root = match workspace.get_ref().as_ref() {
-        Some(workspace_held) => normalize(workspace_held.get_root()),
-        None => return ErrorLayoutShouldInWorkspace.into(),
-    };
-
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
         Err(next) => return next,
+    };
+
+    // Read after the Layout, since asking the Workspace for its own Layout is a borrow of it: what
+    // is held from here on is the Workspace itself, and the resource is not asked again.
+    let Some(held) = workspace.get_ref().as_ref() else {
+        return ErrorLayoutShouldInWorkspace.into();
+    };
+    let root = normalize(held.get_root());
+
+    // Content a restore writes comes out of the store, and the store may not hold it: what is
+    // missing is asked of the Vaults the Workspace has bound. A run that cannot say which account it
+    // acts as has none to ask, and then restores only what is here.
+    let account = current
+        .get_ref()
+        .must_bind()
+        .ok()
+        .and_then(|name| account_named(&name, Some(held), None).ok());
+    let sources = match &account {
+        Some(account) => {
+            let tracked = crate::ownership::tracked_vault(held, &layout);
+            let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
+            let sources = match Sources::new(held, account, remote.get_ref(), primary, **offline) {
+                Ok(sources) => sources,
+                Err(cause) => return align_failed(cause),
+            };
+
+            Some(sources)
+        }
+        None => None,
+    };
+    let content = Content {
+        storage: storage.get_ref(),
+        index: index.get_ref(),
+        sources: sources.as_ref(),
     };
 
     let selected = match select(&root, &path) {
@@ -245,23 +304,17 @@ pub fn handle_align(
         Err(next) => return next,
     };
 
-    let diff = {
-        let Some(workspace_held) = workspace.get_ref().as_ref() else {
-            return ErrorLayoutShouldInWorkspace.into();
-        };
-
-        match tree_diff(&layout, workspace_held, DEFAULT_ALIKE) {
-            Ok(diff) => diff,
-            Err(error) => {
-                return ErrorAlignFailed {
-                    cause: error.to_string(),
-                }
-                .into();
+    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
+        Ok(diff) => diff,
+        Err(error) => {
+            return ErrorAlignFailed {
+                cause: error.to_string(),
             }
+            .into();
         }
     };
 
-    match (mode, selected) {
+    let next = match (mode, selected) {
         (Mode::Delete, Selector::One(path)) => delete(&layout, &diff, &path),
         (Mode::Rename, Selector::One(path)) => rename(&layout, &diff, &path, &root),
         (Mode::Break, Selector::One(path)) => take_back(&layout, &diff, &path, &root),
@@ -269,51 +322,29 @@ pub fn handle_align(
             assert_move(&layout, &diff, &path, &root, &target)
         }
         (Mode::RestoreMove, Selector::One(path)) => single(restore_move(
-            &layout,
-            &diff,
-            &path,
-            &root,
-            storage.get_ref(),
-            index.get_ref(),
-            completely,
+            &layout, &diff, &path, &root, content, completely,
         )),
-        (Mode::RestoreModify, Selector::One(path)) => single(restore_modify(
-            &layout,
-            &diff,
-            &path,
-            &root,
-            storage.get_ref(),
-            index.get_ref(),
-        )),
-        (Mode::RestoreDelete, Selector::One(path)) => single(restore_delete(
-            &layout,
-            &diff,
-            &path,
-            &root,
-            storage.get_ref(),
-            index.get_ref(),
-        )),
+        (Mode::RestoreModify, Selector::One(path)) => {
+            single(restore_modify(&layout, &diff, &path, &root, content))
+        }
+        (Mode::RestoreDelete, Selector::One(path)) => {
+            single(restore_delete(&layout, &diff, &path, &root, content))
+        }
         (Mode::Restore, Selector::One(path)) => single(restore_whichever(
-            &layout,
-            &diff,
-            &path,
-            &root,
-            storage.get_ref(),
-            index.get_ref(),
-            completely,
+            &layout, &diff, &path, &root, content, completely,
         )),
-        (Mode::Restore, Selector::Under(prefix)) => restore_all(
-            &layout,
-            &diff,
-            &prefix,
-            &root,
-            storage.get_ref(),
-            index.get_ref(),
-            completely,
-        ),
+        (Mode::Restore, Selector::Under(prefix)) => {
+            restore_all(&layout, &diff, &prefix, &root, content, completely)
+        }
         // A directory or `.` names many files, and only putting them back acts on many at once.
         (_, Selector::Under(_)) => ErrorAlignArgument.into(),
+    };
+
+    if let Some(sources) = &sources {
+        sources.report();
     }
+
+    next
 }
 
 /// What a mode acts on: the one path named, or every path under a directory the run was made in.
@@ -629,8 +660,7 @@ fn restore_move(
     diff: &TreeDiff,
     path: &LayoutPath,
     root: &Path,
-    storage: &ResRorolalaStorage,
-    index: &ResVCSIndex,
+    content: Content<'_, '_>,
     completely: bool,
 ) -> Result<(AlignDid, String), Next> {
     let Some(pair) = rename_of(diff, path) else {
@@ -671,7 +701,7 @@ fn restore_move(
     let what = format!("{} <- {}", pair.from.as_str(), pair.to.as_str());
 
     if completely {
-        put_version(layout, &pair.from, root, storage, index)?;
+        put_version(layout, &pair.from, root, content)?;
         return Ok((AlignDid::RestoredCompletely, what));
     }
 
@@ -684,8 +714,7 @@ fn restore_modify(
     diff: &TreeDiff,
     path: &LayoutPath,
     root: &Path,
-    storage: &ResRorolalaStorage,
-    index: &ResVCSIndex,
+    content: Content<'_, '_>,
 ) -> Result<(AlignDid, String), Next> {
     // A path the Layout does not name has no version to go back to: a move's destination is one of
     // these, which is why a move is put back first and only then has its content settled.
@@ -696,7 +725,7 @@ fn restore_modify(
         .into());
     }
 
-    put_version(layout, path, root, storage, index)?;
+    put_version(layout, path, root, content)?;
     Ok((AlignDid::RestoredModify, path.as_str().to_owned()))
 }
 
@@ -706,8 +735,7 @@ fn restore_delete(
     diff: &TreeDiff,
     path: &LayoutPath,
     root: &Path,
-    storage: &ResRorolalaStorage,
-    index: &ResVCSIndex,
+    content: Content<'_, '_>,
 ) -> Result<(AlignDid, String), Next> {
     if !diff.lost.contains(path) || layout.id_of(path).is_none() {
         return Err(ErrorAlignNotLost {
@@ -725,7 +753,7 @@ fn restore_delete(
         .into());
     }
 
-    put_version(layout, path, root, storage, index)?;
+    put_version(layout, path, root, content)?;
     Ok((AlignDid::RestoredDelete, path.as_str().to_owned()))
 }
 
@@ -733,17 +761,13 @@ fn restore_delete(
 ///
 /// It is what putting a file back is made of, whether the file is one that changed or one that is
 /// gone: the Layout names a version, the store holds the content it was made of, and the two are put
-/// back together at the path.
-fn write_recorded(
-    storage: &ResRorolalaStorage,
-    index: &ResVCSIndex,
-    version: [u8; 32],
-    disk: &Path,
-) -> Result<(), Next> {
-    let Some(store) = storage.as_ref() else {
+/// back together at the path. Content the store does not hold is brought from a Vault first, when
+/// the run has one to ask.
+fn write_recorded(content: Content<'_, '_>, version: [u8; 32], disk: &Path) -> Result<(), Next> {
+    let Some(store) = content.storage.as_ref() else {
         return Err(align_failed(t!("align.err_no_store").trim()));
     };
-    let Some(vcs) = index.as_ref() else {
+    let Some(vcs) = content.index.as_ref() else {
         return Err(align_failed(t!("align.err_no_index").trim()));
     };
 
@@ -755,6 +779,10 @@ fn write_recorded(
         && let Err(error) = fs::create_dir_all(parent)
     {
         return Err(align_failed(error.to_string()));
+    }
+
+    if let Some(sources) = content.sources {
+        sources.bring(store, &[Key::new(recorded)]);
     }
 
     runtime
@@ -793,8 +821,7 @@ fn put_version(
     layout: &Layout,
     path: &LayoutPath,
     root: &Path,
-    storage: &ResRorolalaStorage,
-    index: &ResVCSIndex,
+    content: Content<'_, '_>,
 ) -> Result<(), Next> {
     let not_restorable = || ErrorAlignNotRestorable {
         path: path.as_str().to_owned(),
@@ -807,12 +834,7 @@ fn put_version(
         return Err(not_restorable().into());
     };
 
-    write_recorded(
-        storage,
-        index,
-        data.version(),
-        &root.join(path.to_path_buf()),
-    )?;
+    write_recorded(content, data.version(), &root.join(path.to_path_buf()))?;
 
     remember_restored(layout, root, path)
 }
@@ -831,20 +853,19 @@ fn restore_whichever(
     diff: &TreeDiff,
     path: &LayoutPath,
     root: &Path,
-    storage: &ResRorolalaStorage,
-    index: &ResVCSIndex,
+    content: Content<'_, '_>,
     completely: bool,
 ) -> Result<(AlignDid, String), Next> {
     if rename_of(diff, path).is_some() {
-        return restore_move(layout, diff, path, root, storage, index, completely);
+        return restore_move(layout, diff, path, root, content, completely);
     }
 
     if diff.lost.contains(path) && layout.id_of(path).is_some() {
-        return restore_delete(layout, diff, path, root, storage, index);
+        return restore_delete(layout, diff, path, root, content);
     }
 
     if diff.modified.contains(path) && layout.id_of(path).is_some() {
-        return restore_modify(layout, diff, path, root, storage, index);
+        return restore_modify(layout, diff, path, root, content);
     }
 
     Err(ErrorAlignNotRestorable {
@@ -864,8 +885,7 @@ fn restore_all(
     diff: &TreeDiff,
     prefix: &str,
     root: &Path,
-    storage: &ResRorolalaStorage,
-    index: &ResVCSIndex,
+    content: Content<'_, '_>,
     completely: bool,
 ) -> Next {
     let mut items = Vec::new();
@@ -875,7 +895,7 @@ fn restore_all(
             continue;
         }
 
-        match restore_move(layout, diff, &pair.from, root, storage, index, completely) {
+        match restore_move(layout, diff, &pair.from, root, content, completely) {
             Ok((did, what)) => items.push(AlignItem { did, what }),
             Err(next) => return next,
         }
@@ -886,7 +906,7 @@ fn restore_all(
             continue;
         }
 
-        match restore_delete(layout, diff, path, root, storage, index) {
+        match restore_delete(layout, diff, path, root, content) {
             Ok((did, what)) => items.push(AlignItem { did, what }),
             Err(next) => return next,
         }
@@ -897,7 +917,7 @@ fn restore_all(
             continue;
         }
 
-        match restore_modify(layout, diff, path, root, storage, index) {
+        match restore_modify(layout, diff, path, root, content) {
             Ok((did, what)) => items.push(AlignItem { did, what }),
             Err(next) => return next,
         }

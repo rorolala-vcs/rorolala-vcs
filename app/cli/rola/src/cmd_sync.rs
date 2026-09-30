@@ -24,7 +24,7 @@ use std::str::FromStr as _;
 
 use librorolala::daemon::{
     EntryWrite, action_create_remote_entry, action_fetch_layout, action_set_remote_version,
-    action_sync_all_async, action_sync_index_all_async,
+    action_sync_index_all_async,
 };
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
@@ -57,6 +57,7 @@ use crate::checkout::remember;
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_SYNC, EC_ERR_SYNC_ARGUMENT, EC_HELP};
 use crate::failure::failure;
+use crate::fetch;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNotCached,
@@ -247,6 +248,7 @@ pub fn handle_sync(
         layout: &layout,
         index,
         store: storage.get_ref().as_ref(),
+        remote: remote.get_ref(),
         runtime: &runtime,
     };
 
@@ -414,6 +416,8 @@ struct Carry<'a> {
     index: &'a VCSIndex,
     /// The store content is written from, when the run has one.
     store: Option<&'a RorolalaStorage>,
+    /// The Vaults the run may reach, for content that is not here.
+    remote: &'a ResCurrentRemoteVault,
     /// The runtime the asynchronous exchanges are waited on.
     runtime: &'a tokio::runtime::Runtime,
 }
@@ -455,26 +459,40 @@ fn carry_with(
         });
     }
 
-    if !state.skip.storage
-        && let Err(error) = carry.runtime.block_on(action_sync_all_async(
-            carry.workspace,
-            carry.account,
-            carry.target.to_string(),
-            String::new(),
-            progress.clone(),
-        ))
-    {
-        return Err(ErrorSyncFailed {
-            cause: error.to_string(),
-        });
-    }
-
+    // The content is asked for one object at a time, by what the plan names: an object a run needs
+    // is fetched, and one it does not is never reached for. `--no-storage` is the run that wants the
+    // Layout and the index moved and the store left alone.
     let entries: Vec<&Entry> = plan.map_or_else(Vec::new, |plan| {
         plan.entries
             .iter()
             .filter(|entry| !matches!(entry.kind, Kind::UpToDate | Kind::RemoteOnly))
             .collect()
     });
+
+    let sources = if state.skip.storage {
+        None
+    } else {
+        let primary = fetch::primary(carry.remote, Some(vault_name));
+        // Offline is not passed through: `rola sync` is refused before it gets here, since the
+        // exchange with the Vault is the whole of what it does.
+        let sources =
+            fetch::Sources::new(carry.workspace, carry.account, carry.remote, primary, false)
+                .map_err(|cause| ErrorSyncFailed { cause })?;
+
+        Some(sources)
+    };
+
+    if let Some(sources) = &sources {
+        let (receive, send) = content_of(&entries, state, carry);
+
+        if let Some(store) = carry.store {
+            sources.bring(store, &receive);
+        }
+
+        sources
+            .send(&send)
+            .map_err(|cause| ErrorSyncFailed { cause })?;
+    }
 
     let up_total = count(&entries, false);
     let down_total = count(&entries, true);
@@ -521,7 +539,62 @@ fn carry_with(
         moves.advance_by(1);
     }
 
+    if let Some(sources) = &sources {
+        sources.report();
+    }
+
     Ok((applied, received, failed))
+}
+
+/// The content a plan needs moved: the objects a pull writes here, and the objects a push puts in
+/// the Vault's store.
+///
+/// A version is only a meaning once what it stored is in the store that names it, so each entry
+/// names one object on the side it is about — a pull the Vault's version, a push this side's. An
+/// entry that is neither — a refusal, a block, or a `Diverged` a run is not forcing — names nothing
+/// to move, and its content is never asked for.
+fn content_of(entries: &[&Entry], state: StateSync, carry: &Carry<'_>) -> (Vec<Key>, Vec<Key>) {
+    let mut receive = Vec::new();
+    let mut send = Vec::new();
+
+    for entry in entries {
+        let pull = entry.kind == Kind::Receive;
+        let push = match entry.kind {
+            Kind::Create | Kind::Send => true,
+            Kind::Diverged => state.forced,
+            _ => false,
+        };
+
+        if !pull && !push {
+            continue;
+        }
+
+        let named = if pull {
+            entry.remote_version.as_deref()
+        } else {
+            entry.local_version.as_deref()
+        };
+        let Some(version) = named.and_then(|text| Key::from_str(text).ok()) else {
+            continue;
+        };
+        let Ok(stored) = carry
+            .runtime
+            .block_on(sync::store_of(carry.index, version.digest()))
+        else {
+            continue;
+        };
+        let Some(stored) = stored else {
+            continue;
+        };
+
+        if pull {
+            receive.push(stored);
+        } else {
+            send.push(stored);
+        }
+    }
+
+    (receive, send)
 }
 
 /// How many of `entries` move down, or up when `down` is false.

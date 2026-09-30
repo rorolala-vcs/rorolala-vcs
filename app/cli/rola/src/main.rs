@@ -43,6 +43,7 @@ mod editor;
 mod error;
 mod exit_codes;
 mod failure;
+mod fetch;
 mod format;
 mod inv_idx;
 mod key;

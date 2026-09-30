@@ -17,12 +17,10 @@
 use std::path::Path;
 use std::str::FromStr as _;
 
-use librorolala::daemon::{
-    action_fetch_layout, action_sync_all_async, action_sync_index_all_async,
-};
+use librorolala::daemon::{action_fetch_layout, action_sync_index_all_async};
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::protocol::ActionError;
-use librorolala::storage::{RorolalaStorage, StorageBackend as _};
+use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::VCSIndex;
 use mingling::{
     Grouped, LazyRes, StructuralData,
@@ -50,6 +48,7 @@ use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
 use crate::exit_codes::{EC_ERR_CHECKIN, EC_ERR_CHECKIN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
+use crate::fetch::{self, Sources};
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNotCached, failed,
@@ -175,6 +174,14 @@ pub fn handle_checkin(
     let account_name = current.get_ref().must_bind()?;
     let account = account_named(&account_name, Some(held), None)?;
 
+    // The content a checkin brings is asked of whichever Vault holds it, and the one the Layout
+    // tracks is asked first. What is read from that Vault is its Layout — a copy is still what the
+    // references are read against — while the objects themselves may come from any Vault that has
+    // them, since a key is the hash of what it names.
+    let primary = fetch::primary(remote.get_ref(), Some(vault_name.as_str()));
+    let sources = Sources::new(held, &account, remote.get_ref(), primary, **offline)
+        .map_err(|cause| ErrorCheckinFailed { cause })?;
+
     // What the Vault holds now is what the references are read against, so its copy is brought up
     // to date first — the same fetch `rola layout fetch` makes. Offline, the copy that is here is
     // the one read; a run with none is told so by the check below rather than by a fetch it may
@@ -216,8 +223,8 @@ pub fn handle_checkin(
         Err(error) => return error.into(),
     };
 
-    // A version is only a meaning once what it stored is here, and the content comes from the
-    // Vault: the index and the store are moved before anything is put at a path.
+    // The index is what names the objects a checkin reads, and it is the light half: it is moved
+    // whole, while the content is asked for by what `bring_in` finds it needs.
     let reporting = Reporting::start(*progress);
 
     if let Err(error) = pull(
@@ -246,7 +253,10 @@ pub fn handle_checkin(
         store,
         &runtime,
         wanted,
+        &sources,
     );
+
+    sources.report();
 
     ResultCheckedIn {
         layout: name,
@@ -257,11 +267,13 @@ pub fn handle_checkin(
     .into()
 }
 
-/// Moves the index and the store to what the Vault holds, which is what makes the versions that
-/// follow readable.
+/// Moves the index to what the Vault holds, which is what names the objects a checkin reads.
 ///
-/// An offline run moves nothing: what the index and the store already hold is what those versions
-/// are read from, and one that is not here fails where it is read rather than being fetched.
+/// Only the index: it is light, and it is what tells a version from its content. The content itself
+/// is asked for one object at a time, by what [`bring_in`] finds it needs — see [`Sources`].
+///
+/// An offline run moves nothing: what the index already holds is what the versions are read from,
+/// and one that is not here fails where it is read rather than being fetched.
 fn pull(
     held: &librorolala::workspace::Workspace,
     account: &librorolala::auth::Account,
@@ -275,14 +287,6 @@ fn pull(
     }
 
     runtime.block_on(action_sync_index_all_async(
-        held,
-        account,
-        target.to_owned(),
-        String::new(),
-        reporting.progress(),
-    ))?;
-
-    runtime.block_on(action_sync_all_async(
         held,
         account,
         target.to_owned(),
@@ -361,19 +365,30 @@ fn bring_in(
     store: Option<&RorolalaStorage>,
     runtime: &tokio::runtime::Runtime,
     wanted: Vec<Wanted>,
+    sources: &Sources<'_>,
 ) -> (Vec<CheckinItem>, Vec<String>) {
     let mut entries = Vec::new();
     let mut failed = Vec::new();
 
-    for Wanted { id, data, path } in wanted {
-        let stored = match runtime.block_on(sync::store_of(index, &data.version())) {
-            Ok(stored) => stored,
-            Err(cause) => {
-                failed.push(format!("{id}: {cause}"));
+    // Every version's content is named before anything is written, so what is missing is asked of
+    // the Vaults in one go rather than one file at a time.
+    let mut resolved = Vec::new();
+    for wanted in wanted {
+        match runtime.block_on(sync::store_of(index, &wanted.data.version())) {
+            Ok(stored) => resolved.push((wanted, stored)),
+            Err(cause) => failed.push(format!("{}: {cause}", wanted.id)),
+        }
+    }
 
-                continue;
-            }
-        };
+    if let Some(store) = store {
+        let keys: Vec<Key> = resolved.iter().filter_map(|(_, stored)| *stored).collect();
+
+        sources.bring(store, &keys);
+    }
+
+    for (wanted, stored) in resolved {
+        let Wanted { id, data, path } = wanted;
+
         let (Some(stored), Some(store)) = (stored, store) else {
             failed.push(format!("{id}: {}", t!("checkin.no_content").trim()));
 

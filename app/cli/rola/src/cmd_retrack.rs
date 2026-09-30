@@ -54,6 +54,7 @@ use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
 use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_HELP};
 use crate::failure::failure;
+use crate::fetch::{self, Sources};
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutShouldInWorkspace, chosen, failed as layout_failed, readonly_layout_dir, remote_spec,
@@ -243,8 +244,34 @@ pub fn handle_retrack(
         }
     }
 
+    // Content is read only when the run writes it back, so a Vault is reached for only then: a
+    // retrack that moves a pointer reads nothing it does not already have.
+    let account = if restore_content {
+        let bound = current.get_ref().must_bind()?;
+        Some(account_named(&bound, Some(held), None)?)
+    } else {
+        None
+    };
+    let sources = match &account {
+        Some(account) => {
+            let tracked = crate::ownership::tracked_vault(held, &layout);
+            let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
+            let sources = Sources::new(held, account, remote.get_ref(), primary, **offline)
+                .map_err(failed)?;
+
+            Some(sources)
+        }
+        None => None,
+    };
+
     if restore_content {
-        restore(storage, vcs, &runtime, &layout, &root, &path, target)?;
+        // UNWRAP: a run that restores content is one whose account was bound just above, which is
+        // the very thing that makes `sources` here.
+        let sources = sources.as_ref().unwrap();
+
+        restore(
+            storage, vcs, &runtime, &layout, &root, &path, target, sources,
+        )?;
     } else if moved {
         // What the file is to agree with now, which is the content the version moved to holds. One
         // the index does not hold is nothing to read, and the agreement is then taken back.
@@ -253,6 +280,10 @@ pub fn handle_retrack(
             .and_then(|version| stored_hash(vcs, &runtime, &version).ok());
 
         disagree(&layout, &root, &path, agreed)?;
+    }
+
+    if let Some(sources) = &sources {
+        sources.report();
     }
 
     ResultRetrack {
@@ -429,6 +460,9 @@ fn upstream_version(
 }
 
 /// Writes the version's content back over the file, and remembers that the two agree.
+///
+/// The content is what the Layout names, and the store may not hold it: what is not here is brought
+/// from a Vault first, which is the one step of a retrack that may leave the machine.
 fn restore(
     storage: &mut LazyRes<ResRorolalaStorage>,
     vcs: &VCSIndex,
@@ -437,6 +471,7 @@ fn restore(
     root: &Path,
     path: &LayoutPath,
     version: Blake3Hash,
+    sources: &Sources<'_>,
 ) -> Result<(), Next> {
     let Some(store) = storage.get_ref().as_ref() else {
         return Err(failed(t!("retrack.err_no_store").trim().to_owned()));
@@ -451,6 +486,8 @@ fn restore(
     {
         return Err(failed(error.to_string()));
     }
+
+    sources.bring(store, &[Key::new(recorded)]);
 
     if let Err(error) = runtime.block_on(store.extract_file(&Key::new(recorded), &disk)) {
         return Err(failed(error.to_string()));
