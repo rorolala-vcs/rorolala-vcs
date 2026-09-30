@@ -36,7 +36,7 @@ use mingling::{
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResForce, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
@@ -79,9 +79,6 @@ const fn own_name(kind: Own) -> &'static str {
 /// The flags `rola hold` and `rola giveup` take.
 #[derive(Pickable)]
 struct OwnershipFlags {
-    /// Move the ownership even when what is here is not the version the Vault names.
-    #[arg(long)]
-    force: Flag,
     /// Move what can be moved when not everything named can be.
     #[arg(long)]
     allow_partial: Flag,
@@ -126,7 +123,7 @@ pub fn desc_hold() -> Description {
 /// [`ErrorOwnershipVersion`], [`ErrorOwnershipChanged`] or [`ErrorOwnershipTaken`] — for the first
 /// one, or [`ErrorOwnershipRefused`] when several were refused at once.
 #[command(node = "hold", entry = EntryHold)]
-pub fn hold(args: EntryHold) -> Next {
+pub fn hold(args: EntryHold, force: &ResForce) -> Next {
     let picked = args
         .pick(&arg![OwnershipFlags])
         .pick_or_route(&arg![Vec<String>], || {
@@ -152,7 +149,7 @@ pub fn hold(args: EntryHold) -> Next {
 
     StateHold {
         paths,
-        force: matches!(flags.force, Flag::Active),
+        force: **force,
         allow_partial: matches!(flags.allow_partial, Flag::Active),
     }
     .into()
@@ -232,7 +229,7 @@ pub fn desc_giveup() -> Description {
 /// [`ErrorOwnershipVersion`], [`ErrorOwnershipChanged`] or [`ErrorOwnershipNotHeld`] — for the
 /// first one, or [`ErrorOwnershipRefused`] when several were refused at once.
 #[command(node = "giveup", entry = EntryGiveup)]
-pub fn giveup(args: EntryGiveup) -> Next {
+pub fn giveup(args: EntryGiveup, force: &ResForce) -> Next {
     let picked = args
         .pick(&arg![OwnershipFlags])
         .pick_or_route(&arg![Vec<String>], || {
@@ -258,7 +255,7 @@ pub fn giveup(args: EntryGiveup) -> Next {
 
     StateGiveup {
         paths,
-        force: matches!(flags.force, Flag::Active),
+        force: **force,
         allow_partial: matches!(flags.allow_partial, Flag::Active),
     }
     .into()

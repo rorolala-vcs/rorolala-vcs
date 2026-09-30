@@ -8,6 +8,7 @@
 use mingling::{ProgramCollect, setup::ProgramSetup};
 
 mod colorize;
+mod force_flag;
 mod global_flag;
 mod language;
 mod progress;
@@ -17,6 +18,7 @@ mod vcs;
 mod workspace;
 
 pub use colorize::*;
+pub use force_flag::*;
 pub use global_flag::*;
 pub use language::*;
 pub use progress::*;
@@ -45,6 +47,7 @@ where
         program.with_setup(ColorizeSetup);
         program.with_setup(ProgressSetup);
         program.with_setup(GlobalFlagSetup);
+        program.with_setup(ForceFlagSetup);
         program.with_setup(VaultSetup);
         program.with_setup(WorkspaceSetup);
         program.with_setup(RorolalaStorageSetup);

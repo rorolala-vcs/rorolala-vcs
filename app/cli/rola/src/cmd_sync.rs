@@ -39,7 +39,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResWorkspace,
+    ResCurrentRemoteVault, ResForce, ResProgressSetting, ResRorolalaStorage, ResVCSIndex,
+    ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -76,9 +77,6 @@ struct SyncFlags {
     /// Both directions; the one taken when neither is named.
     #[arg(long)]
     both: Flag,
-    /// Change history rather than refuse when the versions have moved apart.
-    #[arg(long)]
-    force: Flag,
     /// Show the plan and change nothing.
     #[arg(long)]
     dry_run: Flag,
@@ -125,7 +123,7 @@ pub fn desc_sync() -> Description {
 /// changed here is behind the Vault, [`ErrorSyncFailed`] when the exchange could not be made, and
 /// the exchange's own failures otherwise.
 #[command(node = "sync", entry = EntrySync)]
-pub fn sync(args: EntrySync) -> Next {
+pub fn sync(args: EntrySync, force: &ResForce) -> Next {
     let flags = args.pick(&arg![SyncFlags]).unwrap();
 
     let up = matches!(flags.up_only, Flag::Active);
@@ -147,7 +145,7 @@ pub fn sync(args: EntrySync) -> Next {
 
     StateSync {
         direction,
-        forced: matches!(flags.force, Flag::Active),
+        forced: **force,
         dry_run: matches!(flags.dry_run, Flag::Active),
         skip: Skip {
             index: matches!(flags.no_index, Flag::Active),

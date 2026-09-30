@@ -28,7 +28,7 @@ use mingling::{
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResForce, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::WORKSPACE_EDITING_PATH;
@@ -76,9 +76,6 @@ struct TrackFlags {
     /// Record what is already known, and never open an editor.
     #[arg(long)]
     no_editor: Flag,
-    /// Record a file the fetched copy of the Vault's Layout says another account holds.
-    #[arg(long)]
-    force: Flag,
 }
 
 #[help(buffer)]
@@ -123,7 +120,7 @@ pub fn desc_track() -> Description {
 /// [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and [`ErrorTrackFailed`]
 /// when the store, the index or the Layout refuses.
 #[command(node = "track", entry = EntryTrack)]
-pub fn track(args: EntryTrack) -> Next {
+pub fn track(args: EntryTrack, force: &ResForce) -> Next {
     let picked = args
         .pick(&arg![TrackFlags])
         .pick_or_route(&arg![Vec<String>], || ErrorTrackNoFiles.into())
@@ -148,7 +145,7 @@ pub fn track(args: EntryTrack) -> Next {
             .filter(|message| !message.starts_with("--file-message"))
             .collect(),
         no_editor: matches!(flags.no_editor, Flag::Active),
-        force: matches!(flags.force, Flag::Active),
+        force: **force,
     }
     .into()
 }
