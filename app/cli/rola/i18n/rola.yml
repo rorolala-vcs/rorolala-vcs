@@ -20,6 +20,7 @@ rola:
             align <PATH>        Bring the tree and the Layout back into agreement
             pack                Lay the objects a store and an index hold out in packs
             track <FILES>       Record files in the Layout being worked in
+            retrack <FILE>      Move a file's recorded version back
 
         **Help**
             explain <COMMAND>   Explain what a number or a name the program left behind means
@@ -69,6 +70,7 @@ rola:
             align <PATH>        让工作树与布局重新一致
             pack                将仓库与索引中的对象整理进 pack
             track <FILES>       将文件记入当前正在使用的布局
+            retrack <FILE>      回退文件已记录的版本
 
         **帮助**
             explain <COMMAND>   解释程序留下的某个数字或名字的含义

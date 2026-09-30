@@ -34,6 +34,7 @@ mod cmd_fs_ops;
 mod cmd_init;
 mod cmd_ownership;
 mod cmd_pack;
+mod cmd_retrack;
 mod cmd_status;
 mod cmd_sync;
 mod cmd_track;

@@ -1,0 +1,190 @@
+_version: 2
+
+retrack:
+  help:
+    en: |
+        Move a file's recorded version back, in the Layout being worked in
+
+        **Usage**: `rola retrack <FILE> [--until <LEVEL>] [--restore-content] [--allow-jump]`
+
+        Only the entry's version pointer moves: its `Uuid`, its path and its description stay as
+        they are, and nothing is removed from the index. `FILE` is one local path in this
+        Workspace — a `Uuid`, a hash and a remote name are refused — and it has to be a path the
+        Layout records.
+
+        `--until` is where the pointer goes, and is one version back when it is not given:
+        `-1` one version back, `~N` N versions back, `N` the version numbered N, a hash a version
+        on the way back from where the entry is now, and a Vault's name the version that Vault's
+        own Layout records for the file. A hash that is not on the way back is refused unless
+        `--allow-jump` is given; `~N` and `N` past either end of the chain are always refused.
+
+        Without `--restore-content` the file on disk is left alone, so it is then newer than the
+        version the Layout names and `rola status` reports it as changed. With it, the version's
+        content is written back over the file.
+    zh-CN: |
+        回退某个文件在布局中记录的版本
+
+        **用法**：`rola retrack <FILE> [--until <LEVEL>] [--restore-content] [--allow-jump]`
+
+        只移动条目的版本指针：其 `Uuid`、路径与说明保持原样，索引中的对象一个不删。`FILE` 是本
+        工作区内的一个本地路径 —— `Uuid`、哈希与远程名称都会被拒绝 —— 且必须是布局记录过的路径。
+
+        `--until` 指定指针所到之处，不给时回退一个版本：
+        `-1` 回退一个版本，`~N` 回退 N 个版本，`N` 第 N 号版本，哈希表示从当前版本往回能走到的某个
+        版本，保险库名表示该保险库自己的布局为该文件记录的版本。不在回退路径上的哈希会被拒绝，除非
+        给出 `--allow-jump`；`~N` 与 `N` 超出版本链两端时会一律拒绝。
+
+        不加 `--restore-content` 时磁盘上的文件保持原样，于是它比布局所指的版本更新，`rola status`
+        会如实报告为有改动。加上时会把该版本的内容写回文件。
+
+  description:
+    en: Move a file's recorded version back
+    zh-CN: 回退文件已记录的版本
+
+  result_retracked:
+    en: "retracked  %{path} -> %{version}"
+    zh-CN: "已回退  %{path} -> %{version}"
+
+  result_retracked_restored:
+    en: "retracked  %{path} -> %{version} (content restored)"
+    zh-CN: "已回退  %{path} -> %{version}（内容已还原）"
+
+  result_unchanged:
+    en: "%{path} is already at %{version}"
+    zh-CN: "%{path} 已处于 %{version}"
+
+  result_unchanged_restored:
+    en: "%{path} is already at %{version} (content restored)"
+    zh-CN: "%{path} 已处于 %{version}（内容已还原）"
+
+  err_no_file:
+    en: No file was named to retrack
+    zh-CN: 没有指定要回退版本的文件
+
+  err_no_file_help:
+    en: |
+        Name the one file whose version pointer is to move; run `rola retrack --help` for how
+    zh-CN: |
+        请指定要移动版本指针的那一个文件；用法见 `rola retrack --help`
+
+  err_many_files:
+    en: "retrack moves one file, and %{count} were named"
+    zh-CN: "retrack 一次只移动一个文件，却指定了 %{count} 个"
+
+  err_many_files_help:
+    en: |
+        Name exactly one file; run the command once for each file whose pointer is to move
+    zh-CN: |
+        请只指定一个文件；每个要移动指针的文件各运行一次
+
+  err_not_local:
+    en: "`%{path}` is not a local path; retrack takes a file in this tree"
+    zh-CN: "`%{path}` 不是本地路径；retrack 只接受本工作树中的文件"
+
+  err_not_local_help:
+    en: |
+        A `Uuid`, a hash and a remote name are read by other commands, not this one
+    zh-CN: |
+        `Uuid`、哈希与远程名称由其它命令读取，而不是本命令
+
+  err_outside_workspace:
+    en: "`%{path}` is not inside this Workspace"
+    zh-CN: "`%{path}` 不在本工作区之内"
+
+  err_inside_data:
+    en: "`%{path}` is part of the Workspace's own data, not its work"
+    zh-CN: "`%{path}` 属于工作区自身的数据，而非其工作内容"
+
+  err_inside_data_help:
+    en: |
+        Name files that sit inside the Workspace and are not under `.rola`
+    zh-CN: |
+        请指定位于工作区内、且不在 `.rola` 之下的文件
+
+  err_not_recorded:
+    en: "The Layout names nothing at `%{path}`"
+    zh-CN: "布局没有在 `%{path}` 记录任何条目"
+
+  err_not_recorded_help:
+    en: |
+        Only a path the Layout records has a version pointer to move; `rola entries` lists them
+    zh-CN: |
+        只有布局记录过的路径才有版本指针可移动；`rola entries` 可列出它们
+
+  err_nothing:
+    en: "`%{path}` was never recorded, so there is no version to go back to"
+    zh-CN: "`%{path}` 从未被记录过，没有可回退的版本"
+
+  err_nothing_help:
+    en: |
+        Record it first with `rola track`
+    zh-CN: |
+        请先用 `rola track` 记录它
+
+  err_not_a_level:
+    en: "`%{until}` is not a version to go back to"
+    zh-CN: "`%{until}` 不是可以回退到的版本"
+
+  err_not_a_level_help:
+    en: |
+        `--until` takes `-1`, `~N`, a version number `N`, a version's hash, or a Vault's name
+    zh-CN: |
+        `--until` 接受 `-1`、`~N`、版本号 `N`、版本的哈希，或保险库名
+
+  err_out_of_chain:
+    en: "`%{until}` is past an end of the chain `%{path}` is at"
+    zh-CN: "`%{until}` 超出了 `%{path}` 所在版本链的范围"
+
+  err_out_of_chain_help:
+    en: |
+        `rola status <PATH>` draws the chain and the number each version carries
+    zh-CN: |
+        用 `rola status <PATH>` 可以画出该版本链与各版本的编号
+
+  err_not_a_version:
+    en: "`%{until}` is not a version in this index"
+    zh-CN: "`%{until}` 不是本索引中的版本"
+
+  err_not_a_version_help:
+    en: |
+        Name the hash of a Version; `rola status <PATH>` prints the ones a file was at
+    zh-CN: |
+        请给出 Version 的哈希；`rola status <PATH>` 会打印该文件经历过的版本
+
+  err_not_ancestor:
+    en: "`%{until}` is not a version on the way back from where `%{path}` is"
+    zh-CN: "从 `%{path}` 当前版本往回走不到 `%{until}`"
+
+  err_not_ancestor_help:
+    en: |
+        Add `--allow-jump` to move the pointer to it anyway
+    zh-CN: |
+        确需移动指针到该版本，请加上 `--allow-jump`
+
+  err_upstream:
+    en: "The Vault `%{vault}` records no version for `%{path}`"
+    zh-CN: "保险库 `%{vault}` 没有为 `%{path}` 记录任何版本"
+
+  err_upstream_help:
+    en: |
+        Fetch its Layout with `rola layout fetch` and check that it names the file
+    zh-CN: |
+        请用 `rola layout fetch` 取回其布局，并确认其中记录了该文件
+
+  err_no_store:
+    en: This run works on no store to take the content from
+    zh-CN: 本运行没有可用于取出内容的仓库
+
+  err_no_index:
+    en: This run works on no version control index to read the version from
+    zh-CN: 本运行没有可用于读取版本的版本控制索引
+
+  err_failed:
+    en: "The version pointer could not be moved: %{reason}"
+    zh-CN: "无法移动版本指针：%{reason}"
+
+  err_failed_help:
+    en: |
+        Check that the store, the index and the Layout are writable, then try again
+    zh-CN: |
+        请检查仓库、索引与布局是否可写，然后重试

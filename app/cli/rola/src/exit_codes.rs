@@ -310,3 +310,11 @@ pub const EC_ERR_CHECKIN: i32 = 240;
 
 /// `exit_codes.checkin_argument`
 pub const EC_ERR_CHECKIN_ARGUMENT: i32 = 241;
+
+// Retracking — moving a file's version pointer back
+
+/// `exit_codes.retrack`
+pub const EC_ERR_RETRACK: i32 = 250;
+
+/// `exit_codes.retrack_argument`
+pub const EC_ERR_RETRACK_ARGUMENT: i32 = 251;

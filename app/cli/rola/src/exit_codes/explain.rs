@@ -97,6 +97,8 @@ pub const CODES: &[i32] = &[
     231,
     240,
     241,
+    250,
+    251,
 ];
 
 /// Whether the program states the exit code `code`.
@@ -201,6 +203,8 @@ pub fn explain_ec(code: i32) -> String {
         231 => t!("exit_codes.sync_argument").to_string(),
         240 => t!("exit_codes.checkin").to_string(),
         241 => t!("exit_codes.checkin_argument").to_string(),
+        250 => t!("exit_codes.retrack").to_string(),
+        251 => t!("exit_codes.retrack_argument").to_string(),
         _ => String::new(),
     }
 }

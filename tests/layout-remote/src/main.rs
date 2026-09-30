@@ -614,7 +614,13 @@ async fn main() {
     run(&mut client(
         &workspace,
         &data,
-        &["layout", "path", "create", "art/hero.psd", &fresh.to_string()],
+        &[
+            "layout",
+            "path",
+            "create",
+            "art/hero.psd",
+            &fresh.to_string(),
+        ],
     ))
     .expect_success();
 
@@ -622,8 +628,7 @@ async fn main() {
     checked.wants(
         "a file only this Layout holds goes up under @/new/",
         said.success()
-            && vault_path_of(&root, fresh)
-                == Some("@/new/art/hero.psd@0000000".to_owned()),
+            && vault_path_of(&root, fresh) == Some("@/new/art/hero.psd@0000000".to_owned()),
         &format!(
             "it ended with {:?}, said {:?}, and the Vault names {:?}",
             said.code,
@@ -683,7 +688,8 @@ async fn main() {
     ))
     .expect_success();
 
-    let held = Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
+    let held =
+        Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
     let (id, first) = held
         .entries()
         .into_iter()
@@ -704,14 +710,21 @@ async fn main() {
     ))
     .expect_success();
 
-    let held = Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
+    let held =
+        Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
     let second = held.entry(id).expect("the entry").version();
+
+    // The two versions the retrack checks below go back to. They are kept under names of their own
+    // because `first` and `second` are `Uuid`s by the time those checks are reached.
+    let first_version = first;
+    let second_version = second;
 
     run(&mut client(&workspace, &data, &["sync", "--up-only"])).expect_success();
 
     // Put this side back at the first version, with the tree matching it, so the Vault is ahead:
     // nothing here has been changed, and what the Vault holds is what a pull should bring.
-    let held = Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
+    let held =
+        Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
     held.update_entry(
         id,
         MutableData::new(Some(ALICE.to_owned()), first, String::new()),
@@ -735,7 +748,9 @@ async fn main() {
     ));
     checked.wants(
         "a version the Vault is ahead on comes down into the tree",
-        said.success() && said.stdout.contains("\"received\":1") && fs::read(&model).unwrap() == b"second",
+        said.success()
+            && said.stdout.contains("\"received\":1")
+            && fs::read(&model).unwrap() == b"second",
         &format!(
             "it ended with {:?}, said {:?}, and the tree holds {:?}",
             said.code,
@@ -1115,7 +1130,11 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    let said = run(&mut client(&workspace, &data, &["hold", held_path, "--force"]));
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["hold", held_path, "--force"],
+    ));
     checked.wants(
         "a claim that means it moves past the version",
         said.success() && vault_owner_of(&root, ENTRY).as_deref() == Some(ALICE),
@@ -1160,7 +1179,13 @@ async fn main() {
         run(&mut client(
             &workspace,
             &data,
-            &["layout", "path", "create", &format!("batch/{name}"), &uuid.to_string()],
+            &[
+                "layout",
+                "path",
+                "create",
+                &format!("batch/{name}"),
+                &uuid.to_string(),
+            ],
         ))
         .expect_success();
         fs::write(batch.join(name), b"x").expect("the file");
@@ -1216,10 +1241,7 @@ async fn main() {
     // The Vault's own doors take several `Uuid`s too, and stop at the first they cannot have.
     Layout::open(root.join(LAYOUT_DIR))
         .expect("the Vault's Layout")
-        .update_entry(
-            second,
-            MutableData::new(None, [9; 32], String::new()),
-        )
+        .update_entry(second, MutableData::new(None, [9; 32], String::new()))
         .expect("nobody holds it");
 
     let said = run(&mut client(
@@ -1311,7 +1333,11 @@ async fn main() {
         ),
     );
 
-    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/hero.psd"],
+    ));
     checked.wants(
         "status with a path looks back from what the path names",
         said.success() && said.stdout.contains("mine now"),
@@ -1323,7 +1349,11 @@ async fn main() {
     );
 
     fs::write(&model, b"fourth").expect("a change nobody recorded");
-    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/hero.psd"],
+    ));
     checked.wants(
         "a file with unrecorded changes is drawn being edited",
         said.success() && said.stdout.contains("??"),
@@ -1338,6 +1368,181 @@ async fn main() {
     checked.wants(
         "a target that names nothing is refused",
         said.code == Some(191),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // `retrack` moves the entry's version pointer and nothing else. `--until -1` and `--until=-1`
+    // are the same level written two ways, and the file on disk is left alone either way, so the
+    // reading goes on saying the work is ahead of what the Layout names.
+    //
+    // The file is first put back to what the Layout was last known to agree with, so that what the
+    // checks below see is the pointer moving and not the file: a file whose bytes never changed is
+    // still one the Layout has moved under, and the reading has to be told so rather than left
+    // calling the two agreed.
+    fs::write(&model, b"third").expect("what the Layout agreed with");
+    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    checked.wants(
+        "a file holding what the Layout names is not being edited",
+        said.success() && !said.stdout.contains("??"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let ahead = local_version_of(&workspace, id);
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until", "-1"],
+    ));
+    checked.wants(
+        "a retrack moves the pointer one version back",
+        said.success() && local_version_of(&workspace, id) == second_version,
+        &format!(
+            "it ended with {:?}, said {:?}, and the Layout names {:?}",
+            said.code,
+            said.stdout.trim(),
+            local_version_of(&workspace, id)
+        ),
+    );
+    checked.wants(
+        "a retrack without --restore-content leaves the file alone",
+        fs::read(&model).unwrap() == b"third",
+        &format!("the tree holds {:?}", fs::read(&model)),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    checked.wants(
+        "a pointer moved off the file is drawn as a change never recorded",
+        said.success() && said.stdout.contains("??"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until=-1"],
+    ));
+    checked.wants(
+        "`--until=-1` is the same level as `--until -1`",
+        said.success() && local_version_of(&workspace, id) == first_version,
+        &format!(
+            "it ended with {:?}, said {:?}, and the Layout names {:?}",
+            said.code,
+            said.stdout.trim(),
+            local_version_of(&workspace, id)
+        ),
+    );
+
+    // A step count and a version number past an end of the chain are refused rather than clamped.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until", "~5"],
+    ));
+    checked.wants(
+        "a step count past the first version is refused",
+        said.code == Some(250),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until", "99"],
+    ));
+    checked.wants(
+        "a version number past the newest is refused",
+        said.code == Some(250),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // A hash the entry cannot walk back to is refused unless the run says it means to jump, and
+    // the refusal is where the way to jump is said.
+    let ahead_hex: String = ahead.iter().map(|byte| format!("{byte:02x}")).collect();
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until", &ahead_hex],
+    ));
+    checked.wants(
+        "a hash off the way back is refused, and `--allow-jump` is offered",
+        said.code == Some(250) && clean(&said.stderr).contains("--allow-jump"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "retrack",
+            "models/hero.psd",
+            "--until",
+            &ahead_hex,
+            "--allow-jump",
+        ],
+    ));
+    checked.wants(
+        "a run that means to jump moves the pointer to the version",
+        said.success() && local_version_of(&workspace, id) == ahead,
+        &format!(
+            "it ended with {:?}, said {:?}, and the Layout names {:?}",
+            said.code,
+            said.stdout.trim(),
+            local_version_of(&workspace, id)
+        ),
+    );
+
+    // The Vault's own Layout is the upstream: naming it takes its version for the file without any
+    // check that the entry can walk there, and the copy fetched here is what answers.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "retrack",
+            "models/hero.psd",
+            "--until",
+            VAULT_NAME,
+            "--restore-content",
+        ],
+    ));
+    checked.wants(
+        "a Vault's name takes the version the Vault records, content and all",
+        said.success()
+            && local_version_of(&workspace, id) == second_version
+            && fs::read(&model).unwrap() == b"second",
+        &format!(
+            "it ended with {:?}, said {:?}, the Layout names {:?}, and the tree holds {:?}",
+            said.code,
+            said.stdout.trim(),
+            local_version_of(&workspace, id),
+            fs::read(&model)
+        ),
+    );
+
+    // Only a local path is taken: a `Uuid` names an entry to other commands, not to this one.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", &id.to_string()],
+    ));
+    checked.wants(
+        "a `Uuid` is not a file a retrack takes",
+        said.code == Some(251) && clean(&said.stderr).contains("not a local path"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["retrack", "no/such.psd"]));
+    checked.wants(
+        "a path the Layout does not name has no version pointer to move",
+        said.code == Some(251),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
@@ -1409,6 +1614,18 @@ fn vault_path_of(root: &Path, id: Uuid) -> Option<String> {
         .expect("the Vault's Layout")
         .path_of(id)
         .map(|path| path.as_str().to_owned())
+}
+
+/// The version the Layout being worked in names for `id`, read afresh.
+///
+/// As for the Vault's Layout: a retrack writes the Layout, so what it did is read back rather than
+/// taken from what this process read before.
+fn local_version_of(workspace: &Path, id: Uuid) -> [u8; 32] {
+    Layout::open(workspace.join(".rola/layouts/main"))
+        .expect("the Layout being worked in")
+        .entry(id)
+        .expect("the entry")
+        .version()
 }
 
 /// The address a Vault serving on `port` is reached at.

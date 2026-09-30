@@ -332,3 +332,11 @@ exit_codes:
   checkin_argument:
     en: "`rola checkin` was given arguments it cannot use"
     zh-CN: "`rola checkin` 收到了无法使用的参数"
+
+  retrack:
+    en: A file's version pointer could not be moved back
+    zh-CN: 无法回退文件的版本指针
+
+  retrack_argument:
+    en: "`rola retrack` was given arguments it cannot use"
+    zh-CN: "`rola retrack` 收到了无法使用的参数"
