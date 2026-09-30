@@ -1,0 +1,180 @@
+_version: 2
+
+hold:
+  help:
+    en: |
+        Claim an entry for your account
+
+        **Usage**: `rola hold <PATH> [--force]`
+
+        `PATH` is where the file sits in the Layout being worked in; ownership is about the `Uuid`
+        that Layout names the path by, in the Vault the Layout tracks. That Vault's Layout is
+        fetched first, since every gate below is read against what it holds now:
+
+        - the entry must be one the Vault already holds: one it never took is nothing to claim;
+        - what is here must be the version the Vault names, and nothing in it may be unrecorded —
+          `--force` moves past this;
+        - the entry must be held by nobody: claiming what another account holds is not a claim, and
+          `--force` does not move this.
+
+        What the Vault agrees to is written into the fetched copy as well, so a reading afterwards
+        shows the new holder.
+    zh-CN: |
+        为当前账户占有一个条目
+
+        **用法**：`rola hold <PATH> [--force]`
+
+        `PATH` 是文件在当前布局中的位置；所有权针对的是布局用它命名的那个 `Uuid`，位于布局追踪的
+        保险库中。会先取回该保险库的布局，下面每一道门禁都以它当前的内容为准：
+
+        - 该条目必须是保险库已经持有的：它从未收下的东西无从占有；
+        - 本地必须是保险库所指的版本，且没有未记录的改动 —— 这条可以用 `--force` 越过；
+        - 该条目必须无人持有：占有别人持有的东西不算占有，这条 `--force` 也不能越过。
+
+        保险库确认的结果也会写回取回的副本，因此之后读取就能看到新的持有者。
+
+  description:
+    en: Claim an entry for your account
+    zh-CN: 为当前账户占有一个条目
+
+giveup:
+  help:
+    en: |
+        Let go of an entry your account holds
+
+        **Usage**: `rola giveup <PATH> [--force]`
+
+        `PATH` is where the file sits in the Layout being worked in; ownership is about the `Uuid`
+        that Layout names the path by, in the Vault the Layout tracks. That Vault's Layout is
+        fetched first, since every gate below is read against what it holds now:
+
+        - the entry must be one the Vault already holds: one it never took is nothing to let go of;
+        - what is here must be the version the Vault names, and nothing in it may be unrecorded —
+          `--force` moves past this;
+        - the entry must be held by this account: another account's is not yours to let go of, and
+          one nobody holds is nothing to let go of at all. `--force` does not move this.
+
+        What the Vault agrees to is written into the fetched copy as well, so a reading afterwards
+        shows the entry as held by nobody.
+    zh-CN: |
+        放弃当前账户持有的某个条目
+
+        **用法**：`rola giveup <PATH> [--force]`
+
+        `PATH` 是文件在当前布局中的位置；所有权针对的是布局用它命名的那个 `Uuid`，位于布局追踪的
+        保险库中。会先取回该保险库的布局，下面每一道门禁都以它当前的内容为准：
+
+        - 该条目必须是保险库已经持有的：它从未收下的东西无从放弃；
+        - 本地必须是保险库所指的版本，且没有未记录的改动 —— 这条可以用 `--force` 越过；
+        - 该条目必须由当前账户持有：别人的不是你能放弃的，无人持有的也无从放弃。这条 `--force`
+          也不能越过。
+
+        保险库确认的结果也会写回取回的副本，因此之后读取就能看到该条目无人持有。
+
+  description:
+    en: Let go of an entry your account holds
+    zh-CN: 放弃当前账户持有的某个条目
+
+ownership:
+  err_argument:
+    en: "`rola %{command}` was given arguments it cannot use"
+    zh-CN: "`rola %{command}` 收到了无法使用的参数"
+
+  err_argument_help:
+    en: |
+        Name the one path the file sits at in the Layout being worked in
+    zh-CN: |
+        请指定文件在当前布局中的一个路径
+
+  err_no_track:
+    en: The Layout being worked in tracks no Vault
+    zh-CN: 当前使用的布局没有追踪任何保险库
+
+  err_no_track_help:
+    en: |
+        Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then try again
+    zh-CN: |
+        请用 `rola layout set-track <LAYOUT> <VAULT>` 指定一个，然后重试
+
+  err_path:
+    en: "The Layout being worked in names nothing at `%{path}`"
+    zh-CN: "当前布局没有在 `%{path}` 命名任何条目"
+
+  err_path_help:
+    en: |
+        Run `rola status` to see where the work stands, or name a path the Layout names
+    zh-CN: |
+        运行 `rola status` 查看工作状态，或改用一个布局已命名的路径
+
+  err_upstream:
+    en: "The Vault's Layout names nothing for `%{path}`"
+    zh-CN: "保险库的布局没有为 `%{path}` 记录任何条目"
+
+  err_upstream_help:
+    en: |
+        Send it up first with `rola sync --up-only`, then try again
+    zh-CN: |
+        请先用 `rola sync --up-only` 上传，然后重试
+
+  err_version:
+    en: "`%{path}` is not at the version the Vault names"
+    zh-CN: "`%{path}` 不在保险库所指的版本上"
+
+  err_version_help:
+    en: |
+        Bring it up to date with `rola sync --down-only`, or use `--force` to go on anyway
+    zh-CN: |
+        请用 `rola sync --down-only` 更新，或用 `--force` 强行继续
+
+  err_changed:
+    en: "`%{path}` has changes the Layout does not name yet"
+    zh-CN: "`%{path}` 有尚未记录的改动"
+
+  err_changed_help:
+    en: |
+        Record them with `rola track` first, or use `--force` to go on anyway
+    zh-CN: |
+        请先用 `rola track` 记录，或用 `--force` 强行继续
+
+  err_held:
+    en: "`%{path}` is held by `%{owner}`"
+    zh-CN: "`%{path}` 由 `%{owner}` 持有"
+
+  err_held_help:
+    en: |
+        Only a held entry's holder may let it go, so ask them to give it up with
+        `rola layout giveup-ownership`
+    zh-CN: |
+        只有在持有者本人放弃之后才能占有，请其用 `rola layout giveup-ownership` 让出
+
+  err_not_yours:
+    en: "`%{path}` is held by `%{owner}`, which is not yours to let go of"
+    zh-CN: "`%{path}` 由 `%{owner}` 持有，不是你能放弃的"
+
+  err_nobody:
+    en: "`%{path}` is held by nobody, so there is nothing to let go of"
+    zh-CN: "`%{path}` 无人持有，没有可以放弃的东西"
+
+  err_not_held_help:
+    en: |
+        Run `rola layout ls-ownership` to see who holds what upstream, then try again
+    zh-CN: |
+        运行 `rola layout ls-ownership` 查看上游的持有情况，然后重试
+
+  err_failed:
+    en: "The ownership could not be moved: %{cause}"
+    zh-CN: "无法变更所有权：%{cause}"
+
+  err_failed_help:
+    en: |
+        Please check the Vault is reachable and the account is bound, then try again
+    zh-CN: |
+        请检查保险库是否可达、账户是否已绑定，然后重试
+
+  result_held:
+    en: "`%{path}` is now held by you"
+    zh-CN: "`%{path}` 现在由你持有"
+
+  result_given:
+    en: "`%{path}` is no longer held"
+    zh-CN: "`%{path}` 已不再被持有"

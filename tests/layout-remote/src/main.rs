@@ -930,6 +930,113 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
+    // `hold` and `giveup` are the same ownership the two `layout` commands move, with the gates
+    // that make either safe: the Vault is fetched first, what is here has to be what the Vault
+    // names and settled, and who holds it has to be who the command expects.
+    Layout::open(root.join(LAYOUT_DIR))
+        .expect("the Vault's Layout")
+        .update_entry(ENTRY, MutableData::new(None, [7; 32], "a file".to_owned()))
+        .expect("nobody holds it");
+    run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "fetch", VAULT_NAME],
+    ))
+    .expect_success();
+
+    let held_path = "held.psd";
+    let held_version = format!("blake3:{}", "07".repeat(32));
+    run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "entry",
+            "create",
+            &entry,
+            &held_version,
+            "--owner",
+            ALICE,
+        ],
+    ))
+    .expect_success();
+    run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "path", "create", held_path, &entry],
+    ))
+    .expect_success();
+    fs::write(workspace.join(held_path), b"held").expect("the held file");
+
+    let said = run(&mut client(&workspace, &data, &["hold", held_path]));
+    checked.wants(
+        "a file nobody holds is claimed",
+        said.success() && vault_owner_of(&root, ENTRY).as_deref() == Some(ALICE),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, ENTRY)
+        ),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["hold", held_path]));
+    checked.wants(
+        "claiming what is already held is refused",
+        said.code == Some(193),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["giveup", held_path]));
+    checked.wants(
+        "a file this account holds is let go of",
+        said.success() && vault_owner_of(&root, ENTRY).is_none(),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, ENTRY)
+        ),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["giveup", held_path]));
+    checked.wants(
+        "letting go of what nobody holds is refused",
+        said.code == Some(193),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // What is here has to be the version the Vault names, and `--force` is what moves past it.
+    Layout::open(root.join(LAYOUT_DIR))
+        .expect("the Vault's Layout")
+        .update_entry(ENTRY, MutableData::new(None, [8; 32], "a file".to_owned()))
+        .expect("another version");
+    run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "fetch", VAULT_NAME],
+    ))
+    .expect_success();
+
+    let said = run(&mut client(&workspace, &data, &["hold", held_path]));
+    checked.wants(
+        "claiming a version the Vault has moved past is refused",
+        said.code == Some(193),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(&workspace, &data, &["hold", held_path, "--force"]));
+    checked.wants(
+        "a claim that means it moves past the version",
+        said.success() && vault_owner_of(&root, ENTRY).as_deref() == Some(ALICE),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, ENTRY)
+        ),
+    );
+
     serving.stop();
     checked.report();
 }
