@@ -25,10 +25,10 @@ use crate::layout::{ErrorLayoutArgument, chosen};
 
 /// The prefix a remote path carries when the file has been deprecated.
 ///
-/// It is the same marker the Vault-side move works by: a file moved under `#/removed/` reads as
+/// It is the same marker the Vault-side move works by: a file moved under `@/removed/` reads as
 /// deprecated, and everything else reads as live. A local Layout names its own files and never
 /// carries the marker, so what is read locally is never deprecated.
-const REMOVED_PREFIX: &str = "#/removed/";
+const REMOVED_PREFIX: &str = "@/removed/";
 
 /// How a listing of the entries is drawn when no template is named.
 ///
@@ -67,7 +67,7 @@ pub fn desc_layout_entries() -> Description {
 /// Every entry is listed — one that is at no path is listed with an empty one — with the `Uuid` it
 /// is known by, the version it is at, the account that holds it, and what it says about itself.
 /// `--uuid` lists one of them alone, which is how a file is asked after: `deprecated` says whether
-/// the Vault has moved it under `#/removed/`.
+/// the Vault has moved it under `@/removed/`.
 ///
 /// # Errors
 ///
@@ -176,7 +176,7 @@ pub struct EntryItem {
     owner: String,
     /// What it says about itself.
     description: String,
-    /// Whether the Vault has deprecated it, by moving it under `#/removed/`.
+    /// Whether the Vault has deprecated it, by moving it under `@/removed/`.
     deprecated: bool,
 }
 

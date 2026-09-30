@@ -6,7 +6,7 @@
 //! nothing, which is what the run that wants to know before it is changed asks for.
 //!
 //! What goes up is the plan's creations and versions: a `Uuid` only this Layout holds is made an
-//! entry of the Vault's Layout under `#/new/`, and a version the Vault is behind on is set. What
+//! entry of the Vault's Layout under `@/new/`, and a version the Vault is behind on is set. What
 //! comes down is a version the Vault is ahead on: what it stored is written into the tree, and the
 //! version into the Layout. Content is moved around the Layout either way — the index and the
 //! store, unless `--no-index` or `--no-storage` says otherwise — and `--no-layout` leaves the
@@ -108,7 +108,7 @@ pub fn desc_sync() -> Description {
 ///
 /// The Vault is the one the Layout's `TRACK` names, which the Workspace has
 /// [bound](crate::vault::cmd_vault_bind). What the Vault holds now is fetched first, and the plan
-/// says what is to move: a `Uuid` only this Layout holds goes up under the Vault's `#/new/`, a
+/// says what is to move: a `Uuid` only this Layout holds goes up under the Vault's `@/new/`, a
 /// version the Vault is behind on goes up when this account holds it, one this Layout is behind on
 /// comes down, and a `Uuid` only the Vault holds is named rather than brought — `checkin` is what
 /// brings one.

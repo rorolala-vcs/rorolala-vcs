@@ -1,7 +1,7 @@
 //! `move-remote-path`: moving a path in the Vault's Layout.
 //!
 //! Locating a file and deprecating one are both a move of its path in the Vault's Layout: it is
-//! moved out of `#/new/` to where it belongs, or under `#/removed/` so it reads as deprecated.
+//! moved out of `@/new/` to where it belongs, or under `@/removed/` so it reads as deprecated.
 //! Either is the holder's to do, or an administrator's, and what the Vault answers says which of
 //! those happened — so the Workspace can change the copy it keeps to agree with it.
 

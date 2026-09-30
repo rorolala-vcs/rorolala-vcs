@@ -215,8 +215,8 @@ pub fn desc_layout_path_move() -> Description {
 /// Moves the entry at one path to another
 ///
 /// `--layout truth@VAULT` moves the path in the Vault's own Layout rather than one of the
-/// Workspace's: locating a file is moving it out of `#/new/` to where it belongs, and deprecating
-/// one is moving it under `#/removed/`. Only the entry's holder, or an administrator of the Vault,
+/// Workspace's: locating a file is moving it out of `@/new/` to where it belongs, and deprecating
+/// one is moving it under `@/removed/`. Only the entry's holder, or an administrator of the Vault,
 /// may move it.
 ///
 /// # Errors

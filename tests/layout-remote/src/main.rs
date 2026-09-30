@@ -397,14 +397,14 @@ async fn main() {
             "path",
             "move",
             "a.psd",
-            "#/removed/a.psd",
+            "@/removed/a.psd",
             "--layout",
             "truth@origin",
         ],
     ));
     checked.wants(
         "a holder moves a path in the Vault's Layout",
-        said.success() && vault_path(&root).as_deref() == Some("#/removed/a.psd"),
+        said.success() && vault_path(&root).as_deref() == Some("@/removed/a.psd"),
         &format!(
             "it ended with {:?} and said {:?}",
             said.code,
@@ -415,7 +415,7 @@ async fn main() {
         "the copy follows the path the Vault moved",
         Layout::open(&copy)
             .expect("the fetched copy")
-            .id_of(&LayoutPath::new("#/removed/a.psd").unwrap())
+            .id_of(&LayoutPath::new("@/removed/a.psd").unwrap())
             == Some(ENTRY),
         "the copy did not follow the move",
     );
@@ -453,7 +453,7 @@ async fn main() {
             "layout",
             "path",
             "move",
-            "#/removed/a.psd",
+            "@/removed/a.psd",
             "a.psd",
             "--layout",
             "truth@origin",
@@ -465,7 +465,7 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    // A move that cannot be made says which way, and `#` is reserved for the two markers.
+    // A move that cannot be made says which way, and `@` is reserved for the two markers.
     run(&mut client(&workspace, &data, &["account", ALICE])).expect_success();
 
     let said = run(&mut client(
@@ -494,8 +494,8 @@ async fn main() {
             "layout",
             "path",
             "move",
-            "#/removed/a.psd",
-            "#/archive/a.psd",
+            "@/removed/a.psd",
+            "@/archive/a.psd",
             "--layout",
             "truth@origin",
         ],
@@ -513,8 +513,8 @@ async fn main() {
             "layout",
             "path",
             "move",
-            "#/removed/a.psd",
-            "#/removed/a.psd",
+            "@/removed/a.psd",
+            "@/removed/a.psd",
             "--layout",
             "truth@origin",
         ],
@@ -523,6 +523,46 @@ async fn main() {
         "moving a path onto itself is already taken",
         said.code == Some(10),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // An entry the Vault still names the old way is migrated by moving it under `@/`: `#` is not a
+    // marker any more, so such a path reads as an ordinary located one, and this move is what
+    // changes that. What it is at afterwards is what a `@/new/...` entry is at all along.
+    let aged = Uuid::from_u128(0xa1);
+    let old = "#/new/aged.psd@a1b2c3d";
+    let vault = Layout::open(root.join(LAYOUT_DIR)).expect("the Vault's Layout");
+    vault
+        .create_entry(
+            aged,
+            MutableData::new(Some(ALICE.to_owned()), [1; 32], String::new()),
+        )
+        .expect("an entry");
+    vault
+        .create_path(&LayoutPath::new(old).unwrap(), aged)
+        .expect("an old-style path");
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "path",
+            "move",
+            old,
+            "@/new/aged.psd@a1b2c3d",
+            "--layout",
+            "truth@origin",
+        ],
+    ));
+    checked.wants(
+        "an entry the Vault names the old way is moved under @/",
+        said.success() && vault_path_of(&root, aged).as_deref() == Some("@/new/aged.psd@a1b2c3d"),
+        &format!(
+            "it ended with {:?}, said {:?}, and it is at {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_path_of(&root, aged)
+        ),
     );
 
     // A sync is about the Layout being worked in and the Vault it tracks: name the Vault, then a
@@ -553,7 +593,7 @@ async fn main() {
         ),
     );
 
-    // A file tracked here and not in the Vault goes up under `#/new/`, named by its path and the
+    // A file tracked here and not in the Vault goes up under `@/new/`, named by its path and the
     // short form of its `Uuid`.
     let fresh: Uuid = Uuid::from_u128(0xaa);
     let version = "33".repeat(32);
@@ -580,10 +620,10 @@ async fn main() {
 
     let said = run(&mut client(&workspace, &data, &["sync", "--up-only"]));
     checked.wants(
-        "a file only this Layout holds goes up under #/new/",
+        "a file only this Layout holds goes up under @/new/",
         said.success()
             && vault_path_of(&root, fresh)
-                == Some("#/new/art/hero.psd@0000000".to_owned()),
+                == Some("@/new/art/hero.psd@0000000".to_owned()),
         &format!(
             "it ended with {:?}, said {:?}, and the Vault names {:?}",
             said.code,
@@ -615,7 +655,7 @@ async fn main() {
     ));
     checked.wants(
         "the fetched copy follows what went up",
-        said.success() && said.stdout.contains("#/new/art/hero.psd@0000000"),
+        said.success() && said.stdout.contains("@/new/art/hero.psd@0000000"),
         &format!(
             "it ended with {:?} and said {:?}",
             said.code,
@@ -718,7 +758,7 @@ async fn main() {
     // the Layout that already holds it, that is refused; in a Workspace that never did, it is how
     // the file arrives at all — content and all.
     let plain = id.simple().to_string();
-    let remote_path = format!("#/new/models/hero.psd@{}", &plain[..7]);
+    let remote_path = format!("@/new/models/hero.psd@{}", &plain[..7]);
 
     let said = run(&mut client(
         &workspace,

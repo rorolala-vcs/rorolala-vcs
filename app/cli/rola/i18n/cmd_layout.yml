@@ -573,7 +573,7 @@ cmd_layout_entries:
         One entry a line: its path, the `Uuid` it is known by, and the version it is at. What it is
         held by, what it says, and whether the Vault has deprecated it are in the data a template or
         `--json` reads — `entries[].deprecated`, which is true for a file the Vault moved under
-        `#/removed/`.
+        `@/removed/`.
 
         `--layout` names a Layout of the Workspace's own, or a Vault's when it is written
         `NAME@VAULT` — as in `rola layout entries --layout truth@origin`. A Vault's Layout is read
@@ -589,7 +589,7 @@ cmd_layout_entries:
 
         每行一个条目：它的路径、标识它的 `Uuid`、以及它所在的版本。持有者、描述以及保险库是否已将
         其废弃，在模板或 `--json` 所读取的数据中 —— `entries[].deprecated`，当保险库把该文件移到
-        `#/removed/` 下时为真。
+        `@/removed/` 下时为真。
 
         `--layout` 指定工作区自身的布局；写成 `NAME@VAULT`（例如
         `rola layout entries --layout truth@origin`）时则指定保险库的布局。保险库的布局读取的是

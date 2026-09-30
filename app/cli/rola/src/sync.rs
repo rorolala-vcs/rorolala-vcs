@@ -22,7 +22,7 @@ use serde::Serialize;
 const ALIKE: f32 = 0.6;
 
 /// The marker a remote path carries when the Vault has deprecated the file.
-const REMOVED_PREFIX: &str = "#/removed/";
+const REMOVED_PREFIX: &str = "@/removed/";
 
 /// The short form of a `Uuid` that a new file's remote name carries.
 ///
@@ -50,7 +50,7 @@ pub enum Direction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
-    /// Only this Layout names it, so it goes up to the Vault's `#/new/`.
+    /// Only this Layout names it, so it goes up to the Vault's `@/new/`.
     Create,
     /// The Vault is behind and this account holds it, so the newer version goes up.
     Send,
@@ -85,7 +85,7 @@ pub struct Entry {
     pub remote_version: Option<String>,
     /// The account the Vault names as its holder.
     pub owner: Option<String>,
-    /// Whether the Vault has moved it under `#/removed/`.
+    /// Whether the Vault has moved it under `@/removed/`.
     pub deprecated: bool,
     /// Whether the file this Layout names has been changed in the tree.
     pub modified: bool,
@@ -178,7 +178,7 @@ async fn local_entries(
                 let uuid = id.to_string();
                 let planned_path = local_path
                     .as_ref()
-                    .map(|path| format!("#/new/{}@{}", path.as_str(), short_name(&uuid)));
+                    .map(|path| format!("@/new/{}@{}", path.as_str(), short_name(&uuid)));
 
                 entries.push(Entry {
                     uuid,

@@ -12,7 +12,7 @@ sync:
         `rola vault bind`. What the Vault holds now is fetched first, and the plan says what is to
         move:
 
-        - a `Uuid` only this Layout holds goes up under the Vault's `#/new/`;
+        - a `Uuid` only this Layout holds goes up under the Vault's `@/new/`;
         - a version the Vault is behind on goes up when this account holds it;
         - one this Layout is behind on comes down;
         - one whose chain moved apart needs `--force`;
@@ -37,7 +37,7 @@ sync:
         保险库由布局的 `TRACK` 指定，并且必须已被工作区用 `rola vault bind` 绑定。先取回保险库
         当前的内容，再由计划说明要移动什么：
 
-        - 只有本地布局持有的 `Uuid` 会以 `#/new/` 下的名字上传；
+        - 只有本地布局持有的 `Uuid` 会以 `@/new/` 下的名字上传；
         - 保险库落后的版本，在本账户持有时会上传；
         - 本地落后的版本会下拉；
         - 版本链已经分叉的需要 `--force`；

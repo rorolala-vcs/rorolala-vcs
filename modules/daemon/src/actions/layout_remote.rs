@@ -21,7 +21,8 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// A file is not put where it belongs when it is first submitted: it lands under `new` until
 /// someone locates it, and moving it under `removed` is how it is deprecated. Both are states
-/// rather than places, so `#` is reserved for them and a located path does not start with one.
+/// rather than places, so `@` is reserved for them and a located path does not start with one —
+/// and `@` rather than `#`, which a shell reads as the start of a comment.
 const MARKERS: &[&str] = &["new", "removed"];
 
 /// What became of a request to take or let go of an entry.
@@ -234,13 +235,13 @@ pub(crate) fn move_remote(
 
 /// Whether `path` is one a remote Layout may name.
 ///
-/// A path whose first component is `#` is a marker path: it says what state the file is in rather
-/// than where it belongs, so only the markers this design names may follow the `#`, and something
+/// A path whose first component is `@` is a marker path: it says what state the file is in rather
+/// than where it belongs, so only the markers this design names may follow the `@`, and something
 /// has to be under them. A path that starts anywhere else is a located path, and is left alone.
 fn is_remote_path(path: &LayoutPath) -> bool {
     let mut components = path.as_str().split('/');
 
-    if components.next() != Some("#") {
+    if components.next() != Some("@") {
         return true;
     }
 
@@ -278,7 +279,7 @@ pub(crate) fn codec_failed(error: impl std::fmt::Display) -> ActionError {
 }
 
 /// The prefix a `Uuid` only one side holds is put under when it goes up.
-const NEW_PREFIX: &str = "#/new/";
+const NEW_PREFIX: &str = "@/new/";
 
 /// What became of a request to write an entry of the Vault's Layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -358,7 +359,7 @@ where
     }
 }
 
-/// Creates an entry of the Vault's Layout under `#/new/`, held by the account that asks.
+/// Creates an entry of the Vault's Layout under `@/new/`, held by the account that asks.
 ///
 /// The path keeps the name the file was submitted under and carries the short form of its `Uuid`,
 /// so two files submitted under one name are still two paths.
@@ -566,7 +567,7 @@ mod tests {
     fn a_path_is_moved_by_its_holder_or_an_administrator() {
         let (layout, id) = at(
             "move-holder",
-            "#/new/临时文件/模型.fbx@a1b2c3",
+            "@/new/临时文件/模型.fbx@a1b2c3",
             Some("alice"),
         );
 
@@ -574,7 +575,7 @@ mod tests {
         assert_eq!(
             move_remote(
                 &layout,
-                "#/new/临时文件/模型.fbx@a1b2c3",
+                "@/new/临时文件/模型.fbx@a1b2c3",
                 "Models/model.fbx",
                 "bob",
                 false
@@ -583,7 +584,7 @@ mod tests {
             PathMove::Refused
         );
         assert_eq!(
-            layout.id_of(&LayoutPath::new("#/new/临时文件/模型.fbx@a1b2c3").unwrap()),
+            layout.id_of(&LayoutPath::new("@/new/临时文件/模型.fbx@a1b2c3").unwrap()),
             Some(id)
         );
 
@@ -591,7 +592,7 @@ mod tests {
         assert_eq!(
             move_remote(
                 &layout,
-                "#/new/临时文件/模型.fbx@a1b2c3",
+                "@/new/临时文件/模型.fbx@a1b2c3",
                 "Models/model.fbx",
                 "alice",
                 false
@@ -605,17 +606,17 @@ mod tests {
         );
         assert!(
             layout
-                .id_of(&LayoutPath::new("#/new/临时文件/模型.fbx@a1b2c3").unwrap())
+                .id_of(&LayoutPath::new("@/new/临时文件/模型.fbx@a1b2c3").unwrap())
                 .is_none()
         );
 
         // An administrator may move what it does not hold.
-        let (other, other_id) = at("move-admin", "#/new/a.psd@d4e5f6", Some("bob"));
+        let (other, other_id) = at("move-admin", "@/new/a.psd@d4e5f6", Some("bob"));
         assert_eq!(
             move_remote(
                 &other,
-                "#/new/a.psd@d4e5f6",
-                "#/removed/a.psd",
+                "@/new/a.psd@d4e5f6",
+                "@/removed/a.psd",
                 "carol",
                 true
             )
@@ -623,14 +624,14 @@ mod tests {
             PathMove::Moved
         );
         assert_eq!(
-            other.id_of(&LayoutPath::new("#/removed/a.psd").unwrap()),
+            other.id_of(&LayoutPath::new("@/removed/a.psd").unwrap()),
             Some(other_id)
         );
     }
 
     #[test]
     fn a_move_that_cannot_be_made_says_which_way() {
-        let (layout, _) = at("move-missing", "#/new/a.psd@d4e5f6", Some("alice"));
+        let (layout, _) = at("move-missing", "@/new/a.psd@d4e5f6", Some("alice"));
 
         // Nothing is at the path that was to move.
         assert_eq!(
@@ -642,8 +643,8 @@ mod tests {
         assert_eq!(
             move_remote(
                 &layout,
-                "#/new/a.psd@d4e5f6",
-                "#/new/a.psd@d4e5f6",
+                "@/new/a.psd@d4e5f6",
+                "@/new/a.psd@d4e5f6",
                 "alice",
                 false
             )
@@ -651,11 +652,11 @@ mod tests {
             PathMove::Taken
         );
 
-        // `#` is reserved for the two markers this design names, and a marker names a state
+        // `@` is reserved for the two markers this design names, and a marker names a state
         // rather than a place, so something has to be under it.
-        for refused in ["#/archive/a.psd", "#/new", "#/removed"] {
+        for refused in ["@/archive/a.psd", "@/new", "@/removed"] {
             assert_eq!(
-                move_remote(&layout, "#/new/a.psd@d4e5f6", refused, "alice", true).unwrap(),
+                move_remote(&layout, "@/new/a.psd@d4e5f6", refused, "alice", true).unwrap(),
                 PathMove::Malformed,
                 "{refused}"
             );
@@ -671,7 +672,7 @@ mod tests {
         assert_eq!(
             create_remote(
                 &layout,
-                "#/new/art/hero.psd@abc1234",
+                "@/new/art/hero.psd@abc1234",
                 &id.to_string(),
                 &version,
                 "alice"
@@ -681,7 +682,7 @@ mod tests {
         );
         assert_eq!(layout.entry(id).unwrap().owner(), Some("alice"));
         assert_eq!(
-            layout.id_of(&LayoutPath::new("#/new/art/hero.psd@abc1234").unwrap()),
+            layout.id_of(&LayoutPath::new("@/new/art/hero.psd@abc1234").unwrap()),
             Some(id)
         );
 
@@ -689,7 +690,7 @@ mod tests {
         assert_eq!(
             create_remote(
                 &layout,
-                "#/new/other.psd@abc1234",
+                "@/new/other.psd@abc1234",
                 &id.to_string(),
                 &version,
                 "alice"
@@ -700,7 +701,7 @@ mod tests {
         assert_eq!(
             create_remote(
                 &layout,
-                "#/new/art/hero.psd@abc1234",
+                "@/new/art/hero.psd@abc1234",
                 &uuid::Uuid::from_u128(4).to_string(),
                 &version,
                 "alice"
@@ -709,7 +710,7 @@ mod tests {
             EntryWrite::Taken
         );
 
-        // A path outside `#/new/` is not a name a new entry is made under.
+        // A path outside `@/new/` is not a name a new entry is made under.
         assert_eq!(
             create_remote(
                 &layout,
@@ -725,7 +726,7 @@ mod tests {
 
     #[test]
     fn a_version_is_set_by_the_holder_and_left_by_others() {
-        let (layout, id) = at("set", "#/new/a.psd@d4e5f6", Some("alice"));
+        let (layout, id) = at("set", "@/new/a.psd@d4e5f6", Some("alice"));
         let version = "22".repeat(32);
 
         assert_eq!(
@@ -745,7 +746,7 @@ mod tests {
         // make one it does not hold.
         assert_eq!(layout.entry(id).unwrap().owner(), Some("alice"));
         assert_eq!(
-            layout.id_of(&LayoutPath::new("#/new/a.psd@d4e5f6").unwrap()),
+            layout.id_of(&LayoutPath::new("@/new/a.psd@d4e5f6").unwrap()),
             Some(id)
         );
         assert_eq!(
