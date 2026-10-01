@@ -80,8 +80,10 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // four is the way to fill all of them at once — or the way a dependent plugin, Rorolala's own
         // among them, offers a set of its own (see FileOperationPresets).
         // The host's own picture goes in with them: the one window this plugin shows — the question a
-        // conflict puts — is drawn as the program rather than as something of its own.
-        FileOps.Configure(host.Config, host.ProgramIcon);
+        // conflict puts — is drawn as the program rather than as something of its own. So does the
+        // host's windows for the same reason: what a command said when it refused is put over the
+        // window the run was started from rather than left in a log.
+        FileOps.Configure(host.Config, host.ProgramIcon, host.Dialogs);
         FileOperationPresets.BuiltIn();
         host.Config.Add(
             new PluginSetting(

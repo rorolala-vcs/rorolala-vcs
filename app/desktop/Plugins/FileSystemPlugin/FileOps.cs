@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
 
 namespace FileSystemPlugin;
 
@@ -98,13 +99,26 @@ internal static class FileOps
     /// </remarks>
     private static WindowIcon? _icon;
 
-    /// <summary>Hands the plugin's settings and the program's picture to the file operations.</summary>
+    /// <summary>
+    /// Where what a command said about itself is put to the user.
+    /// </summary>
+    /// <remarks>
+    /// Set once, during initialization, with the settings. A command is another program's, so its
+    /// error stream is the only place it says why it refused; a run that folded that into a log line
+    /// would leave the reason where nobody looks, so what it said is put over the window the run was
+    /// started from.
+    /// </remarks>
+    private static IDialogs? _dialogs;
+
+    /// <summary>Hands the plugin's settings, the program's picture, and where a command is answered for.</summary>
     /// <param name="config">The plugin's own section of the preferences.</param>
     /// <param name="icon">The picture the program is known by, for the conflict window.</param>
-    public static void Configure(IPluginConfig config, WindowIcon? icon)
+    /// <param name="dialogs">Where a command that did not finish cleanly is answered for.</param>
+    public static void Configure(IPluginConfig config, WindowIcon? icon, IDialogs dialogs)
     {
         _config = config;
         _icon = icon;
+        _dialogs = dialogs;
     }
 
     /// <summary>A command the user may have changed, or what it is until they do.</summary>
@@ -250,11 +264,17 @@ internal static class FileOps
             var results = await Task.Run(() => Executor.Run(plan, command));
 
             var done = false;
+            var refusals = new List<CommandFailure>();
 
             foreach (var result in results)
             {
                 if (result.Outcome == "failed")
                 {
+                    if (result.Failure is { } failure)
+                    {
+                        refusals.Add(failure);
+                    }
+
                     failed(result.Note ?? $"{result.From} could not be {result.How}");
 
                     continue;
@@ -262,6 +282,11 @@ internal static class FileOps
 
                 done |= result.Outcome == "done";
             }
+
+            // What a command said about itself goes where the run was started from: its error stream is
+            // the only place it says why, and a run that only logged it would be one the user cannot
+            // answer.
+            CommandFailed(refusals);
 
             return done;
         }
@@ -271,5 +296,27 @@ internal static class FileOps
 
             return false;
         }
+    }
+
+    /// <summary>
+    /// Says, over the window the run was started from, what the commands that did not finish cleanly
+    /// said.
+    /// </summary>
+    /// <remarks>
+    /// The programs are the user's own, so their error streams are not this plugin's to phrase; what
+    /// the plugin brings is a heading that says what they are and one window for all of them, since a
+    /// batch that failed for one reason should not put up one window per item.
+    /// </remarks>
+    /// <param name="refusals">What the commands that did not finish cleanly said.</param>
+    private static void CommandFailed(IReadOnlyList<CommandFailure> refusals)
+    {
+        if (refusals.Count == 0 || _dialogs is null)
+        {
+            return;
+        }
+
+        var said = string.Join("\n\n", refusals.Select(refusal => refusal.Note));
+
+        _dialogs.Show(new Dialog(RolaI18N.Get("rorolala_file_system.command_failed"), said, () => { }));
     }
 }

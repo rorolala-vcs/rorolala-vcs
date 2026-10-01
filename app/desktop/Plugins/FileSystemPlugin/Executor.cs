@@ -2,6 +2,26 @@ using System.Diagnostics;
 
 namespace FileSystemPlugin;
 
+/// <summary>A command that did not finish cleanly, and what it said.</summary>
+/// <remarks>
+/// The command is another program's, so what went wrong is its to say: what is kept here is the
+/// program, the status it left and its own error stream — not a sentence about them — so that a
+/// caller can say why in its own words and in the reader's language.
+/// </remarks>
+/// <param name="Program">The program that was started.</param>
+/// <param name="ExitCode">What it exited with, or nothing when it never started.</param>
+/// <param name="Detail">What it said on its error stream, or why it could not be started.</param>
+internal sealed record CommandFailure(string Program, int? ExitCode, string Detail)
+{
+    /// <summary>The reason, as one line.</summary>
+    public string Note =>
+        ExitCode is { } code
+            ? Detail.Length > 0
+                ? $"`{Program}` exited with code {code}: {Detail}"
+                : $"`{Program}` exited with code {code}"
+            : $"`{Program}` could not be started: {Detail}";
+}
+
 /// <summary>What happened to one item.</summary>
 internal sealed class Result
 {
@@ -19,6 +39,11 @@ internal sealed class Result
 
     /// <summary>Why an item failed, and nothing otherwise.</summary>
     public string? Note { get; init; }
+
+    /// <summary>
+    /// The command that failed, when one did and it said why.
+    /// </summary>
+    public CommandFailure? Failure { get; init; }
 
     /// <summary>The item ran and the command exited cleanly.</summary>
     /// <param name="from">The source path.</param>
@@ -48,7 +73,8 @@ internal sealed class Result
     /// <param name="from">The source path.</param>
     /// <param name="to">The target, when one was resolved.</param>
     /// <param name="note">The reason.</param>
-    public static Result Failed(string from, string to, string note) =>
+    /// <param name="failure">The command that failed, when one ran and said why.</param>
+    public static Result Failed(string from, string to, string note, CommandFailure? failure = null) =>
         new()
         {
             From = from,
@@ -56,6 +82,7 @@ internal sealed class Result
             Outcome = "failed",
             How = "failed",
             Note = note,
+            Failure = failure,
         };
 }
 
@@ -196,7 +223,7 @@ internal static class Executor
 
         return failure is null
             ? Result.Done(item.From, target, How(item.Resolution))
-            : Result.Failed(item.From, target, failure);
+            : Result.Failed(item.From, target, failure.Note, failure);
     }
 
     /// <summary>The template's tokens with the placeholders replaced by the item's paths.</summary>
@@ -279,8 +306,8 @@ internal static class Executor
         };
 
     /// <summary>
-    /// Starts the command with the arguments already expanded and waits for it, returning its failure
-    /// or nothing.
+    /// Starts the command with the arguments already expanded and waits for it, returning what it
+    /// failed with or nothing.
     /// </summary>
     /// <remarks>
     /// Every argument is handed over as it is, so a path with a space in it is one argument: joining the
@@ -289,11 +316,11 @@ internal static class Executor
     /// commands do with <c>cmd /c</c> — is up to the user who wrote the template.
     /// <para>
     /// Both of the child's streams are drained while it runs, so a child that fills one pipe while this
-    /// waits on the other cannot block against itself; what it said is kept and folded into the reason
-    /// when it did not finish cleanly, so a command that fails for its own reasons says why.
+    /// waits on the other cannot block against itself; what it said is kept — the status and its own
+    /// error stream, apart — so a caller can say why, in its own words and where it wants them said.
     /// </para>
     /// </remarks>
-    private static string? Launch(IReadOnlyList<string> arguments)
+    private static CommandFailure? Launch(IReadOnlyList<string> arguments)
     {
         var start = new ProcessStartInfo
         {
@@ -318,7 +345,7 @@ internal static class Executor
         }
         catch (Exception error)
         {
-            return $"`{arguments[0]}` could not be started: {error.Message}";
+            return new CommandFailure(arguments[0], null, error.Message);
         }
 
         using (process)
@@ -343,9 +370,7 @@ internal static class Executor
                 detail = standardOutput.Trim();
             }
 
-            return detail.Length > 0
-                ? $"`{arguments[0]}` exited with code {process.ExitCode}: {detail}"
-                : $"`{arguments[0]}` exited with code {process.ExitCode}";
+            return new CommandFailure(arguments[0], process.ExitCode, detail);
         }
     }
 }

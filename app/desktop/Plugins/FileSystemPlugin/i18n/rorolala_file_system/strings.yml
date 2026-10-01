@@ -92,6 +92,12 @@ rorolala_file_system:
     en: "Delete the %{count} selected items? This cannot be undone."
     zh-CN: "确定删除选中的 %{count} 项吗？此操作不可撤销。"
 
+  # What a file operation says when the command it ran did not finish cleanly. The command's own error
+  # stream goes under this heading, unphrased: the program is the user's, and its words are its own.
+  command_failed:
+    en: The command did not finish
+    zh-CN: 命令未能完成
+
   # What the file operations are carried out with. The commands are the system's tools rather than this
   # program's, which is why they are settings: a system that keeps them elsewhere, or a user who prefers
   # another, says so here. The four are filled together by choosing a preset, or each by hand.

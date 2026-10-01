@@ -17,8 +17,10 @@
 //! same words answer `rola fs-ops -h`.
 
 use std::io;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
+use librorolala::layout::{Layout, LayoutPath};
+use librorolala::workspace::{Workspace, locate_workspace};
 use mingling::{
     Grouped,
     macros::{buffer, chain, dispatcher, help, metadata, r_eprintln, r_println, renderer},
@@ -27,7 +29,10 @@ use mingling::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
+use uuid::Uuid;
 
 use crate::Next;
 use crate::exit_codes::{EC_ERR_FS_OPS_ARGUMENT, EC_ERR_FS_OPS_FAILED, EC_HELP};
@@ -232,12 +237,213 @@ fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// The Layout a run in a Workspace works in, when it is in one.
+///
+/// It is the Workspace's own Layout and never a Vault's: a filesystem operation is about the tree, so a
+/// run on a Vault — or one whose paths are in no Workspace — has nothing here to keep in step and is
+/// left to the filesystem alone.
+pub fn working(held: &Workspace) -> Option<Layout> {
+    let layouts = held.layouts();
+    let name = layouts.current().ok().flatten()?;
+
+    layouts.get(&name).ok().flatten()
+}
+
+/// The Workspace `disk` sits in, when it sits in one.
+///
+/// It is looked for from the path itself and never from where the run was made: a filesystem operation
+/// names the paths it works on, and those are what say which tree — if any — it is about. A run made
+/// outside every Workspace, or inside another one, still keeps in step the tree its paths are in.
+pub fn workspace_of(cwd: &Path, disk: &Path) -> Option<Workspace> {
+    locate_workspace(&normalize(&resolve(cwd, disk)))
+}
+
+/// The Layout paths `disk` is or holds, in the Layout's own order.
+///
+/// `disk` is read where the run was made, the way `rola track` reads a name; what a Layout names is
+/// relative to the Workspace root, so one becomes the other here. Nothing is named for a path outside
+/// the root — no Layout names it — and a directory names every path under it, itself included, the
+/// Workspace root naming the whole of the work.
+pub fn touched(layout: &Layout, held: &Workspace, cwd: &Path, disk: &Path) -> Vec<LayoutPath> {
+    let root = normalize(held.get_root());
+    let absolute = normalize(&resolve(cwd, disk));
+
+    let Ok(relative) = absolute.strip_prefix(&root) else {
+        return Vec::new();
+    };
+
+    if absolute.is_dir() {
+        let prefix = prefix(relative);
+
+        return layout
+            .paths()
+            .into_iter()
+            .map(|(path, _)| path)
+            .filter(|path| under(&prefix, path))
+            .collect();
+    }
+
+    LayoutPath::from_relative(relative)
+        .ok()
+        .into_iter()
+        .collect()
+}
+
+/// Where `disk` sits in the Layout, or nothing when it sits outside the Workspace.
+pub fn inside(held: &Workspace, cwd: &Path, disk: &Path) -> Option<String> {
+    let root = normalize(held.get_root());
+    let absolute = normalize(&resolve(cwd, disk));
+
+    absolute.strip_prefix(&root).ok().map(prefix)
+}
+
+/// The `Uuid` each of `paths` names, for the paths that name one.
+pub fn named(layout: &Layout, paths: &[LayoutPath]) -> Vec<(LayoutPath, Uuid)> {
+    paths
+        .iter()
+        .filter_map(|path| layout.id_of(path).map(|id| (path.clone(), id)))
+        .collect()
+}
+
+/// The path `moving` has after a move from `from` to `to`, both as Layout paths.
+///
+/// A move of a directory moves everything under it the same way: what sits below the source keeps its
+/// place below the destination.
+pub fn moved(from: &str, to: &str, moving: &LayoutPath) -> LayoutPath {
+    let rest = moving
+        .as_str()
+        .strip_prefix(from)
+        .map_or("", |rest| rest.trim_start_matches('/'));
+
+    let text = if rest.is_empty() {
+        to.to_owned()
+    } else if to.is_empty() {
+        rest.to_owned()
+    } else {
+        format!("{to}/{rest}")
+    };
+
+    // Joining two names a `LayoutPath` already accepted makes one it accepts, so the fallback is a
+    // name that could not be read rather than a refusal the caller would have to carry.
+    LayoutPath::new(&text).unwrap_or_else(|_| moving.clone())
+}
+
+/// The account that holds `id` upstream, when that is not the one this run acts as.
+///
+/// Ownership is the Vault's, and what answers is the fetched copy — the same reading `rola track`
+/// makes before it records. A Layout that tracks no Vault, a copy nobody fetched, and a run with no
+/// account bound are each "no one is in the way" rather than a reason to refuse.
+pub fn held_elsewhere(
+    held: &Workspace,
+    layout: &Layout,
+    id: Uuid,
+    me: Option<&str>,
+) -> Option<String> {
+    let me = me?;
+    let vault = crate::ownership::tracked_vault(held, layout)?;
+    let dir = crate::layout::readonly_layout_dir(held, &vault, VAULT_LAYOUT_NAME);
+    let copy = Layout::open(&dir).ok()?;
+    let owner = copy.entry(id)?.owner()?.to_owned();
+
+    (owner != me).then_some(owner)
+}
+
+/// The path `given` names, made absolute against the directory the run was made in.
+fn resolve(cwd: &Path, given: &Path) -> PathBuf {
+    if given.is_absolute() {
+        given.to_path_buf()
+    } else {
+        cwd.join(given)
+    }
+}
+
+/// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
+fn normalize(path: &Path) -> PathBuf {
+    let mut components: Vec<Component<'_>> = Vec::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
+                components.pop();
+            }
+            other => components.push(other),
+        }
+    }
+
+    components.into_iter().collect()
+}
+
+/// The prefix the paths under `relative` share, or `""` for the Workspace root itself.
+fn prefix(relative: &Path) -> String {
+    LayoutPath::from_relative(relative)
+        .map_or_else(|_| String::new(), |path| path.as_str().to_owned())
+}
+
+/// Whether `path` is `prefix`'s path or under it, with `""` naming the whole tree.
+fn under(prefix: &str, path: &LayoutPath) -> bool {
+    if prefix.is_empty() {
+        return true;
+    }
+
+    path.as_str() == prefix
+        || path
+            .as_str()
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// Error: a filesystem operation was stopped by what the Layout names.
+#[derive(Grouped)]
+pub struct ErrorFsOpsBlocked {
+    /// The path the operation was about.
+    path: String,
+    /// Why it was stopped.
+    kind: FsOpsBlock,
+}
+
+/// The ways the Layout stops a filesystem operation.
+pub enum FsOpsBlock {
+    /// Another account holds the entry upstream.
+    Held(String),
+    /// The destination already names something in this Layout.
+    Named,
+}
+
+impl Failure for ErrorFsOpsBlocked {
+    fn name(&self) -> &'static str {
+        "error_fs_ops_blocked"
+    }
+
+    fn reason(&self) -> String {
+        let said = match &self.kind {
+            FsOpsBlock::Held(owner) => {
+                t!("fs_ops.err_blocked_held", path = self.path, owner = owner)
+            }
+            FsOpsBlock::Named => t!("fs_ops.err_blocked_named", path = self.path),
+        };
+
+        said.trim().to_string()
+    }
+}
+
+failure!(ErrorFsOpsBlocked);
+
+#[renderer(buffer)]
+pub fn render_error_fs_ops_blocked(error: ErrorFsOpsBlocked, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("fs_ops.err_blocked_help").trim()));
+    ec.exit_code = EC_ERR_FS_OPS_FAILED;
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use super::{copy_to, move_to, remove_at};
+    use librorolala::layout::LayoutPath;
+
+    use super::{copy_to, move_to, moved, remove_at, under};
 
     /// A directory of this test's own, emptied first, under the temporary directory.
     fn scratch(name: &str) -> PathBuf {
@@ -246,6 +452,31 @@ mod tests {
         fs::create_dir_all(&dir).expect("a scratch directory");
 
         dir
+    }
+
+    /// A path a Layout would name.
+    fn path(text: &str) -> LayoutPath {
+        LayoutPath::new(text).expect("a path a Layout could name")
+    }
+
+    #[test]
+    fn a_move_takes_everything_under_it_to_the_same_place() {
+        assert_eq!(moved("d", "e", &path("d/x.txt")).as_str(), "e/x.txt");
+        assert_eq!(moved("d", "e", &path("d")).as_str(), "e");
+        assert_eq!(
+            moved("d/sub", "e", &path("d/sub/y.txt")).as_str(),
+            "e/y.txt"
+        );
+        assert_eq!(moved("d", "", &path("d/x.txt")).as_str(), "x.txt");
+    }
+
+    #[test]
+    fn what_a_path_is_or_holds_is_named_by_the_prefix_it_shares() {
+        assert!(under("", &path("a/b.txt")));
+        assert!(under("d", &path("d")));
+        assert!(under("d", &path("d/x.txt")));
+        assert!(!under("d", &path("dx.txt")));
+        assert!(!under("d", &path("e/x.txt")));
     }
 
     #[test]
