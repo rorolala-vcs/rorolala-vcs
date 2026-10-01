@@ -3,105 +3,79 @@ _version: 2
 rola:
   help:
     en: |
-        **Usage**: `rola <COMMAND> <ARGS>`
-
-        **Commands**
+        **Usage**: rola [-v | --vault] [--rebuild] [--no-color] [--no-progress]
+                    [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
+                    [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
+                    [-V | --version] [-h | --help] <COMMAND> <ARGS>
 
         **Initialization**
-            init                Create a Workspace or Vault in the current directory
-            create <PATH>       Create a Workspace at PATH, or a Vault with --vault
+            init                    Create a Workspace or Vault in the current directory
+            create <PATH>           Create a Workspace at PATH, or a Vault with --vault
 
         **Identity**
-            account <ACCOUNT>   Name the account the work acts as, or list the accounts there are
-            key [--pem]         List the keys Rorolala can reach, or generate one
+            account <ACCOUNT>       Name the account the work acts as, or list the accounts there are
+            key [--pem]             List the keys Rorolala can reach, or generate one
 
         **Everyday**
-            status              Show how the working tree stands beside the Layout
-            align <PATH>        Bring the tree and the Layout back into agreement
-            pack                Lay the objects a store and an index hold out in packs
-            track <FILES>       Record files in the Layout being worked in
-            retrack <FILE>      Move a file's recorded version back
+            status                  Show how the working tree stands beside the Layout
+            align <PATH>            Bring the tree and the Layout back into agreement
+            fetch [VAULT]           Bring a Vault's Layout here as a read-only copy
+            checkin <REF>... [TO]   Bring what the Vault holds but this Layout does not into it
+            track <FILES>           Record files in the Layout being worked in
+            retrack <FILE>          Move a file's recorded version back
+            sync                    Bring this Layout and the Vault it tracks into agreement
+            pack                    Lay the objects a store and an index hold out in packs
 
         **Help**
-            explain <COMMAND>   Explain what a number or a name the program left behind means
+            explain <COMMAND>       Explain what a number or a name the program left behind means
 
         **Low-level**
-            storage <CMD>       Read and write the content a store holds, by hand
-            vcs-index <CMD>     Read and write the version control index, by hand
-            inv-idx <CMD>       Build and ask the inverse index, by hand
-            layout <CMD>        Work with the Layouts a run keeps
+            storage <CMD>           Read and write the content a store holds, by hand
+            vcs-index <CMD>         Read and write the version control index, by hand
+            inv-idx <CMD>           Build and ask the inverse index, by hand
+            layout <CMD>            Work with the Layouts a run keeps
 
         **Other**
-            vault <CMD>         List the Vaults this Workspace knows
-            desktop             Open the Desktop program that sits beside this one
-            fs-ops <CMD>        Move, copy or remove a path
-
-        **Flags**
-            -v, --vault    Act on a Vault instead of a Workspace
-            --rebuild      Rebuild the inverse index after writing
-            --no-color     Draw without colour
-            --no-progress  Say nothing while working
-            --json         Print the result as JSON
-            --json-pretty  Print the result as indented JSON
-            --format <TEMPLATE>  Draw the result through a template
-            -V, --version  Print what this build is
-            -h, --help     Show this help
-
-        **Options**
-            --workspace-dir <PATH>  Work in this Workspace
-            --vault-dir <PATH>      Work in this Vault
-            --theme-choice <NAME>   Draw in this theme
-            --lang, -l <LOCALE>     Speak this language
+            vault <CMD>             List the Vaults this Workspace knows
+            desktop                 Open the Desktop program that sits beside this one
+            fs-ops <CMD>            Move, copy or remove a path
     zh-CN: |
-        **用法**：`rola <命令> <参数>`
-
-        **命令**
+        **用法**：rola [-v | --vault] [--rebuild] [--no-color] [--no-progress]
+                   [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
+                   [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
+                   [-V | --version] [-h | --help] <命令> <参数>
 
         **初始化**
-            init                在当前目录创建工作区或保险库
-            create <PATH>       在 PATH 创建工作区；加 --vault 则创建保险库
+            init                    在当前目录创建工作区或保险库
+            create <PATH>           在 PATH 创建工作区；加 --vault 则创建保险库
 
         **身份**
-            account <ACCOUNT>   指定当前账户，或列出可用账户
-            key [--pem]         列出 Rorolala 能找到的密钥，或生成一对
+            account <ACCOUNT>       指定当前账户，或列出可用账户
+            key [--pem]             列出 Rorolala 能找到的密钥，或生成一对
 
         **日常使用**
-            status              展示工作树相对于布局的状态
-            align <PATH>        让工作树与布局重新一致
-            pack                将仓库与索引中的对象整理进 pack
-            track <FILES>       将文件记入当前正在使用的布局
-            retrack <FILE>      回退文件已记录的版本
+            status                  展示工作树相对于布局的状态
+            align <PATH>            让工作树与布局重新一致
+            fetch [VAULT]           将某个保险库的布局取回为只读副本
+            checkin <REF>... [TO]   把保险库持有、而当前布局没有的内容带入当前布局
+            track <FILES>           将文件记入当前正在使用的布局
+            retrack <FILE>          回退文件已记录的版本
+            sync                    让当前布局与它追踪的保险库重新一致
+            pack                    将仓库与索引中的对象整理进 pack
 
         **帮助**
-            explain <COMMAND>   解释程序留下的某个数字或名字的含义
+            explain <COMMAND>       解释程序留下的某个数字或名字的含义
 
         **底层操作**
-            storage <CMD>       手工读写仓库持有的内容
-            vcs-index <CMD>     手工读写版本控制索引
-            inv-idx <CMD>       手工建立并查询反向索引
-            layout <CMD>        操作本运行所持有的布局
+            storage <CMD>           手工读写仓库持有的内容
+            vcs-index <CMD>         手工读写版本控制索引
+            inv-idx <CMD>           手工建立并查询反向索引
+            layout <CMD>            操作本运行所持有的布局
 
         **其他**
-            vault <CMD>         列出当前工作区已知的保险库
-            desktop             打开与 rola 并排的桌面程序
-            fs-ops <CMD>        移动、复制或删除一个路径
-
-        **标志**
-            -v, --vault    操作保险库而不是工作区
-            --rebuild      写入后重建反向索引
-            --no-color     不使用颜色
-            --no-progress  工作时什么都不说
-            --json         以 JSON 输出结果
-            --json-pretty  以带缩进的 JSON 输出结果
-            --format <TEMPLATE>  用模板绘制结果
-            -V, --version  输出本次构建的版本信息
-            -h, --help     显示本帮助
-
-        **选项**
-            --workspace-dir <PATH>  使用这个目录作为工作区
-            --vault-dir <PATH>      使用这个目录作为保险库
-            --theme-choice <NAME>   使用该主题绘制
-            --lang, -l <LOCALE>     使用该语言
+            vault <CMD>             列出当前工作区已知的保险库
+            desktop                 打开与 rola 并排的桌面程序
+            fs-ops <CMD>            移动、复制或删除一个路径
 
   err_unknown_command:
     en: Unknown command `%{command}`
