@@ -1685,6 +1685,74 @@ async fn main() {
         ),
     );
 
+    // A claim is not stopped by work written over the version the Vault names: the version matching
+    // is what says nobody else has moved it, so a run that writes before it locks still claims
+    // safely. Letting go is another matter, and still asks for a tree that agrees.
+    let gated = workspace.join("models/gated.psd");
+    fs::write(&gated, b"one").expect("the file to claim");
+    run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "track",
+            "models/gated.psd",
+            "--message",
+            "the file to claim",
+        ],
+    ))
+    .expect_success();
+
+    let gated_id = {
+        let held = Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout");
+        held.entries()
+            .into_iter()
+            .find(|(id, _)| {
+                held.path_of(*id)
+                    .is_some_and(|path| path.as_str() == "models/gated.psd")
+            })
+            .map(|(id, _)| id)
+            .expect("the gated entry")
+    };
+    let gated_version = local_version_of(&workspace, gated_id);
+
+    // The Vault records the same version and holds the entry as nobody's, which is what a claim is
+    // for; the copy is fetched so the gates are read against it.
+    Layout::open(root.join(LAYOUT_DIR))
+        .expect("the Vault's Layout")
+        .create_entry(gated_id, MutableData::new(None, gated_version, String::new()))
+        .expect("the entry, held by nobody");
+    run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "fetch", VAULT_NAME],
+    ))
+    .expect_success();
+
+    fs::write(&gated, b"two").expect("work written before the claim");
+
+    let said = run(&mut client(&workspace, &data, &["hold", "models/gated.psd"]));
+    checked.wants(
+        "a claim over work written past the version is allowed",
+        said.success() && vault_owner_of(&root, gated_id).as_deref() == Some(ALICE),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, gated_id)
+        ),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["giveup", "models/gated.psd"],
+    ));
+    checked.wants(
+        "letting go still asks for a tree that agrees",
+        said.code == Some(193),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
     serving.stop();
     checked.report();
 }

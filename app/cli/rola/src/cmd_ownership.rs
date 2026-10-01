@@ -13,8 +13,10 @@
 //! the gates are read for all of them before any ownership moves: a batch that cannot be done whole
 //! is not half done, unless `--allow-partial` says the doable part is worth doing anyway.
 //!
-//! The gates themselves are the same for both, save for who is expected to hold the entry — and
-//! `--force` moves past the version, never past the holder.
+//! The gates are the same for both, save for who is expected to hold the entry and for what a tree
+//! with unrecorded work means: a claim may be made over work written before it was locked, while
+//! letting go insists the tree agrees with the version being handed over. `--force` moves past the
+//! version, never past the holder.
 
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
@@ -134,8 +136,9 @@ fn complete_ownership(ctx: &ShellContext) -> Suggest {
 /// and every gate is read for every entry before any ownership moves:
 ///
 /// - the entry must be one the Vault already holds: one it never took is nothing to claim;
-/// - what is here must be the version the Vault names, and nothing in it may be unrecorded —
-///   `--force` moves past this;
+/// - what is here must be the version the Vault names — `--force` moves past this. What the tree
+///   holds on top of it need not be recorded: a version that matches is one nobody else has moved,
+///   so work written before it was claimed still claims safely;
 /// - the entry must be held by nobody: claiming what another account holds is not a claim, and
 ///   `--force` does not move this.
 ///
@@ -596,7 +599,9 @@ fn plan(
         let settled = if force {
             Ok(())
         } else {
-            diff.map_or(Ok(()), |diff| settled(path, layout, id, &upstream, diff))
+            diff.map_or(Ok(()), |diff| {
+                settled(kind, path, layout, id, &upstream, diff)
+            })
         };
 
         match settled.and_then(|()| free(kind, path, &upstream, me)) {
@@ -611,8 +616,14 @@ fn plan(
     (wanted, failed, skipped)
 }
 
-/// Reads the version and the tree: what is here has to be what the Vault names, and settled.
+/// Reads the version and the tree: what is here has to be what the Vault names.
+///
+/// A claim stops there, since a version that matches is one nobody else has moved however much has
+/// been written on top of it: work written before it was claimed is still claimed safely. Letting go
+/// asks for the tree as well, since what is being handed over is then this side's version rather
+/// than one with unreckoned work over it.
 fn settled(
+    kind: Own,
     path: &LayoutPath,
     layout: &Layout,
     id: Uuid,
@@ -621,6 +632,10 @@ fn settled(
 ) -> Result<(), Refusal> {
     if layout.entry(id).map(|data| data.version()) != Some(upstream.version()) {
         return Err(Refusal::Version(path.as_str().to_owned()));
+    }
+
+    if kind == Own::Hold {
+        return Ok(());
     }
 
     if diff.modified.contains(path) {

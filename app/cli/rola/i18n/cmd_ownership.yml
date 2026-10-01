@@ -22,8 +22,9 @@ hold:
         now, and every gate is read for every entry before any ownership moves:
 
         - the entry must be one the Vault already holds: one it never took is nothing to claim;
-        - what is here must be the version the Vault names, and nothing in it may be unrecorded —
-          `--force` moves past this;
+        - what is here must be the version the Vault names — `--force` moves past this. What the
+          tree holds on top of it need not be recorded: a version that matches is one nobody else has
+          moved, so work written before it was claimed still claims safely;
         - the entry must be held by nobody: claiming what another account holds is not a claim, and
           `--force` does not move this.
 
@@ -44,7 +45,8 @@ hold:
         会对每个条目把门禁全部读完：
 
         - 该条目必须是保险库已经持有的：它从未收下的东西无从占有；
-        - 本地必须是保险库所指的版本，且没有未记录的改动 —— 这条可以用 `--force` 越过；
+        - 本地必须是保险库所指的版本 —— 这条可以用 `--force` 越过。工作树上多出来的改动不必已经
+          记录：版本一致就说明没有别人动过它，因此先写后锁也仍然占得安全；
         - 该条目必须无人持有：占有别人持有的东西不算占有，这条 `--force` 也不能越过。
 
         整批做不成就不做半批：本次运行会说明哪些被拒，且什么都不改。`--allow-partial` 则改为
