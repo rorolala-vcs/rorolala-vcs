@@ -216,6 +216,8 @@ struct Found {
     key: Key,
     /// Whether the file the version belongs to has changes that were never recorded.
     editing: bool,
+    /// The entry the target named, when it named one rather than an object by hash.
+    id: Option<Uuid>,
 }
 
 /// Draws the chain what `target` names sits at the top of.
@@ -242,7 +244,12 @@ fn lookback_of(
     };
 
     let remote = tracked_layout(held);
-    let found = match found(target, layout, remote.as_ref(), held) {
+    let found = match found(
+        target,
+        layout,
+        remote.as_ref().map(|(_, layout)| layout),
+        held,
+    ) {
         Ok(found) => found,
         Err(cause) => {
             return ErrorStatusTarget {
@@ -253,7 +260,21 @@ fn lookback_of(
         }
     };
 
-    let mut result = match from_object(index, &runtime, found.key) {
+    // Where the Vault's own Layout stands for this entry: the version it records, when it records
+    // one. What the chain is read for is where the Vault is, so a target naming an entry the Vault
+    // knows about is answered with the mark that says so.
+    let origin = found.id.and_then(|id| {
+        if let Some((vault, remote)) = remote.as_ref()
+            && let Some(version) = remote.entry(id).map(|data| data.version())
+            && version != [0; 32]
+        {
+            return Some((vault.as_str(), version));
+        }
+
+        None
+    });
+
+    let mut result = match from_object(index, &runtime, found.key, origin) {
         Ok(result) => result,
         Err(cause) => return ErrorVcsIndexRead::new(cause).into(),
     };
@@ -264,17 +285,18 @@ fn lookback_of(
     result.into()
 }
 
-/// The copy of the Vault's own Layout the Layout being worked in tracks, when there is one here.
+/// The copy of the Vault's own Layout the Layout being worked in tracks, when there is one here,
+/// under the name the Vault is bound by.
 ///
 /// A target that names a path of the Vault's is read from it. A Layout that tracks no Vault, or one
 /// nobody has fetched, has no copy: what the run named is then read as something else, or refused.
-fn tracked_layout(held: &Workspace) -> Option<Layout> {
+fn tracked_layout(held: &Workspace) -> Option<(String, Layout)> {
     let layouts = held.layouts();
     let name = layouts.current().ok().flatten()?;
     let track = layouts.track(&name).ok().flatten()?;
     let dir = readonly_layout_dir(held, &track, VAULT_LAYOUT_NAME);
 
-    Layout::open(&dir).ok()
+    Layout::open(&dir).ok().map(|layout| (track, layout))
 }
 
 /// Reads what `target` names, in the order a run is likely to have meant it.
@@ -292,6 +314,7 @@ fn found(
         return Ok(Found {
             key: Key::new(version_of(layout, id)?),
             editing: editing(held, layout, path)?,
+            id: Some(id),
         });
     }
 
@@ -310,6 +333,7 @@ fn found(
             return Ok(Found {
                 key: Key::new(version_of(layout, id)?),
                 editing: diff.modified.contains(&rename.to),
+                id: Some(id),
             });
         }
     }
@@ -321,6 +345,7 @@ fn found(
         return Ok(Found {
             key: Key::new(version_of(remote, id)?),
             editing: false,
+            id: Some(id),
         });
     }
 
@@ -329,6 +354,7 @@ fn found(
             return Ok(Found {
                 key: Key::new(version_of(layout, id)?),
                 editing: editing(held, layout, &path)?,
+                id: Some(id),
             });
         }
 
@@ -338,6 +364,7 @@ fn found(
             return Ok(Found {
                 key: Key::new(version_of(remote, id)?),
                 editing: false,
+                id: Some(id),
             });
         }
     }
@@ -348,6 +375,7 @@ fn found(
         return Ok(Found {
             key,
             editing: false,
+            id: None,
         });
     }
 

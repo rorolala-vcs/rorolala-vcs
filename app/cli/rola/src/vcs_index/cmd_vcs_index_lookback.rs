@@ -256,7 +256,7 @@ pub fn handle_vcs_index_lookback(
         Err(error) => return error.into(),
     };
 
-    match from_object(index, &runtime, key) {
+    match from_object(index, &runtime, key, None) {
         Ok(result) => result.into(),
         Err(cause) => ErrorVcsIndexRead { cause }.into(),
     }
@@ -265,7 +265,9 @@ pub fn handle_vcs_index_lookback(
 /// The chain the index object `key` names sits at the top of.
 ///
 /// A Version is the top of the chain. A Variant is the top itself, over the version it is based on;
-/// anything else starts no chain.
+/// anything else starts no chain. `origin` is the version a Vault's own Layout records for the
+/// entry being drawn, with the Vault's name, so that where the Vault stands in the chain can be
+/// marked; a chain drawn by name alone names no Vault and marks nothing.
 ///
 /// # Errors
 ///
@@ -274,6 +276,7 @@ pub fn from_object(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     key: Key,
+    origin: Option<(&str, Blake3Hash)>,
 ) -> Result<ResultVcsIndexLookback, String> {
     let (start, head) = match runtime.block_on(index.read(key)) {
         Ok(VCSIndexObject::Version(version)) => (version, None),
@@ -287,7 +290,7 @@ pub fn from_object(
         Err(error) => return Err(error.reason()),
     };
 
-    gather(index, runtime, start, head.as_ref())
+    gather(index, runtime, start, head.as_ref(), origin)
 }
 
 /// Why a hash that is not the top of a chain is not one.
@@ -306,6 +309,7 @@ fn gather(
     runtime: &tokio::runtime::Runtime,
     start: Version,
     head: Option<&Variant>,
+    origin: Option<(&str, Blake3Hash)>,
 ) -> Result<ResultVcsIndexLookback, String> {
     let mut versions = Vec::new();
     let mut variants = Vec::new();
@@ -330,6 +334,16 @@ fn gather(
         let at = u64::try_from(at).unwrap_or(0);
         number_of.insert(*version.hash().digest(), top.saturating_sub(at));
     }
+
+    // Where the Vault being tracked stands: the version it records, when this chain holds it too.
+    // A Vault ahead of the work, or one never told of the entry, records a version that is not here,
+    // and there is nothing to mark.
+    let origin = origin.and_then(|(vault, version)| {
+        number_of.get(&version).map(|number| Origin {
+            number: *number,
+            vault: vault.to_owned(),
+        })
+    });
 
     // The spine of each level, highest first, and the level each variant sits at.
     let mut level_of: HashMap<Blake3Hash, u64> = HashMap::new();
@@ -402,7 +416,18 @@ fn gather(
         } else {
             TopKind::Version
         },
+        origin,
     })
+}
+
+/// Where a Vault's own Layout stands in the chain being drawn: the version it records for the entry
+/// and the Vault's name.
+#[derive(Serialize)]
+pub struct Origin {
+    /// The number the version has in this chain.
+    number: u64,
+    /// The Vault the version is recorded in.
+    vault: String,
 }
 
 /// One level, its merged variants put in draw order: the one merged in latest furthest out.
@@ -530,6 +555,8 @@ pub struct ResultVcsIndexLookback {
     levels: Vec<LevelView>,
     /// What the top of the chain is.
     top: TopKind,
+    /// The version a Vault records for the entry, when one was named and this chain holds it.
+    origin: Option<Origin>,
 }
 
 impl ResultVcsIndexLookback {
@@ -571,11 +598,53 @@ pub fn render_result_vcs_index_lookback(result: ResultVcsIndexLookback, lookback
             continue;
         };
 
+        // The version the Vault records is the one a run reading this is looking for: where the
+        // Vault stands is what says whether the work has been told to it. It is drawn as a line of
+        // its own colour, so it is found without reading every number.
+        if let Some(origin) = result
+            .origin
+            .as_ref()
+            .filter(|origin| origin.number == level)
+        {
+            let note = notes.get(&level);
+
+            r_println!("{}", marked(row, &origin.vault, note));
+            continue;
+        }
+
         match notes.get(&level) {
             Some(note) => r_println!("{} {}", drawn(row), note),
             None => r_println!("{}", drawn(row)),
         }
     }
+}
+
+/// One row as the line that says the Vault records the version it draws.
+///
+/// The whole line is drawn as one thing — the number, the Vault's name and the version's words —
+/// since what it says is where the Vault stands rather than what any part of it is.
+fn marked(row: &[Cell], vault: &str, note: Option<&String>) -> String {
+    let text = plain(row);
+    let said = note.map_or_else(
+        || format!("{text} ({vault})"),
+        |note| format!("{text} ({vault}) {note}"),
+    );
+
+    said.bold().bright_cyan().to_string()
+}
+
+/// One row of a drawing as its characters alone, with nothing said about colour.
+fn plain(row: &[Cell]) -> String {
+    let mut line = String::new();
+
+    for cell in row {
+        match cell {
+            Cell::Blank => line.push(' '),
+            Cell::Glyph(_, glyph) => line.push(*glyph),
+        }
+    }
+
+    line.trim_end().to_owned()
 }
 
 /// One row of a drawing, its colours and nothing else.

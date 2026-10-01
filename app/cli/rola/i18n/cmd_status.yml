@@ -39,6 +39,11 @@ status:
         A file whose changes were never recorded is drawn with an extra version over it, `??` being
         edited, since the work is on its way to a version the index does not have yet; a target that
         names nothing at all is refused.
+
+        The version the Vault's own Layout records for the entry is drawn with the Vault's name
+        beside it, `(origin)` where `origin` is the name the Workspace bound it by, in a colour of
+        its own. So where the Vault stands in the chain is read without counting versions — and a
+        target naming an entry the Vault was never told of has nothing marked.
     zh-CN: |
         展示工作树相对于布局的状态，或从其中某样东西往回看
 
@@ -57,6 +62,10 @@ status:
         当前布局中的路径移动到的新位置、保险库自己的布局（取回副本所见）中的路径、`Uuid`、
         索引对象的哈希。文件若有未记录的改动，会在它之上多画一个版本 `?? 编辑中的版本`，因为工作
         正走向一个索引里还没有的版本；完全认不出任何东西的目标会被拒绝。
+
+        保险库自己的布局为该条目记录的那个版本，会在旁边标出保险库的名字，如 `(origin)`
+        （`origin` 是工作区绑定它时用的名字），并用另一种颜色整行画出。这样不必数版本号就能看出
+        保险库停在哪一版；保险库从未被告知过的条目则没有任何标记。
 
   description:
     en: Show how the working tree stands beside the Layout
