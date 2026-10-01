@@ -14,12 +14,18 @@ status:
     max_message_length:
       en: How much of a message is shown before it is cut short
       zh-CN: 说明在截断前显示多少字符
+    no_graph:
+      en: Leave out the chain itself
+      zh-CN: 不画出那条版本链
+    no_hint:
+      en: Leave out the lines that say where the file comes from and how it stands
+      zh-CN: 不显示来源与状态两行
   help:
     en: |
         Show how the working tree stands beside the Layout, or look back from one thing in it
 
         **Usage**: `rola status [<TARGET>] [--compact] [--no-creator] [--no-message]
-        [--max-message-length <N>] [--json]`
+        [--max-message-length <N>] [--no-graph] [--no-hint] [--json]`
 
         With nothing named, a line beginning with `>` is a path that moved, `-` one the Layout names
         and the tree does not hold, `+` one the tree holds and the Layout does not name; a line with
@@ -44,11 +50,17 @@ status:
         beside it, `(origin)` where `origin` is the name the Workspace bound it by, in a colour of
         its own. So where the Vault stands in the chain is read without counting versions — and a
         target naming an entry the Vault was never told of has nothing marked.
+
+        A target that names a file is drawn with two lines above the chain: where the file is mapped
+        from in the Vault, and how it stands — who holds it, whether the tree holds changes that were
+        never recorded, and how far its version stands from the Vault's. How it stands is drawn white
+        when the two sides are as they should be and bright yellow when they are not, so what is
+        wrong reads first. `--no-graph` leaves the chain out and `--no-hint` leaves the two lines out.
     zh-CN: |
         展示工作树相对于布局的状态，或从其中某样东西往回看
 
         **用法**：`rola status [<TARGET>] [--compact] [--no-creator] [--no-message]
-        [--max-message-length <N>] [--json]`
+        [--max-message-length <N>] [--no-graph] [--no-hint] [--json]`
 
         不指定目标时：以 `>` 开头的行是移动的路径，`-` 是布局命名而工作树缺失的路径，`+` 是工作树有
         而布局未命名的路径；没有什么开头的行是原地发生内容变化的路径。`(*)` 表示该行同时也有内容变化。
@@ -67,9 +79,97 @@ status:
         （`origin` 是工作区绑定它时用的名字），并用另一种颜色整行画出。这样不必数版本号就能看出
         保险库停在哪一版；保险库从未被告知过的条目则没有任何标记。
 
+        目标指向某个文件时，链的上方会多两行：该文件在保险库中映射自哪个路径，以及它的状态 ——
+        谁持有它、工作树上是否有未记录的改动、它的版本与保险库的版本相差多少。状态正常时用白色，
+        异常时用亮黄色，这样出错的地方先被读到。`--no-graph` 不画链，`--no-hint` 不显示这两行。
+
   description:
     en: Show how the working tree stands beside the Layout
     zh-CN: 展示工作树相对于布局的状态
+
+  source:
+    en: "Mapped from %{path} in %{vault}"
+    zh-CN: "文件映射来自 %{vault} 的 %{path}"
+
+  holder_held:
+    en: "Held by `%{holder}`"
+    zh-CN: "文件由 `%{holder}` 持有"
+
+  holder_nobody:
+    en: Held by nobody
+    zh-CN: 文件无人持有
+
+  state_mine_same:
+    en: You hold it, and it is unmodified
+    zh-CN: 你持有该文件，当前未修改
+
+  state_mine_changed:
+    en: You hold it, and it has changes that were never recorded
+    zh-CN: 你持有该文件，当前已修改但未追踪
+
+  state_mine_only:
+    en: You hold it
+    zh-CN: 你持有该文件
+
+  state_mine_ahead:
+    en: You hold it, and it is %{distance} version(s) ahead
+    zh-CN: 你持有该文件，且已领先 %{distance} 个版本
+
+  state_mine_ahead_changed:
+    en: You hold it, it is %{distance} version(s) ahead, and newer changes were never recorded
+    zh-CN: 你持有该文件，且已领先 %{distance} 个版本，新的修改尚未追踪
+
+  state_mine_behind:
+    en: You hold it, yet it is %{distance} version(s) behind!
+    zh-CN: 你持有该文件，但却落后 %{distance} 个版本！
+
+  state_mine_behind_changed:
+    en: You hold it, it is %{distance} version(s) behind, and it has changes of its own!
+    zh-CN: 你持有该文件，但却落后 %{distance} 个版本，且本地已产生修改！
+
+  state_mine_apart:
+    en: You hold it, but the two versions have diverged!
+    zh-CN: 你持有该文件，但双方版本已分叉！
+
+  state_mine_apart_changed:
+    en: You hold it, the two versions have diverged, and it has changes of its own!
+    zh-CN: 你持有该文件，但双方版本已分叉，且本地已产生修改！
+
+  state_held_same:
+    en: "%{holder}, and it is read-only here"
+    zh-CN: "%{holder}，当前状态为只读"
+
+  state_held_changed:
+    en: "%{holder}, but the file has changed!"
+    zh-CN: "%{holder}，但文件产生了变化！"
+
+  state_held_only:
+    en: "%{holder}"
+    zh-CN: "%{holder}"
+
+  state_held_ahead:
+    en: "%{holder}, yet it is %{distance} version(s) ahead!"
+    zh-CN: "%{holder}，却领先 %{distance} 个版本！"
+
+  state_held_ahead_changed:
+    en: "%{holder}, it is %{distance} version(s) ahead, and the file has changed!"
+    zh-CN: "%{holder}，却领先 %{distance} 个版本，但文件产生了变化！"
+
+  state_held_behind:
+    en: "%{holder}, and it is %{distance} version(s) behind"
+    zh-CN: "%{holder}，当前落后 %{distance} 个版本"
+
+  state_held_behind_changed:
+    en: "%{holder}, it is %{distance} version(s) behind, and the file has changed!"
+    zh-CN: "%{holder}，当前落后 %{distance} 个版本，但文件产生了变化！"
+
+  state_held_apart:
+    en: "%{holder}, but the two versions have diverged!"
+    zh-CN: "%{holder}，但双方版本已分叉！"
+
+  state_held_apart_changed:
+    en: "%{holder}, the two versions have diverged, and the file has changed!"
+    zh-CN: "%{holder}，双方版本已分叉，且文件产生了变化！"
 
   clean:
     en: Your workspace has nothing unrecorded.

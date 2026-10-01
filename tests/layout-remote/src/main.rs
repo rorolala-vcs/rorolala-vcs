@@ -1533,6 +1533,41 @@ async fn main() {
         &format!("it ended with {:?} and said {chain:?}", said.code),
     );
 
+    // Above the chain, a file is given the two lines that say where it is mapped from and how it
+    // stands; each may be left out on its own.
+    checked.wants(
+        "status says where the file is mapped from and how it stands",
+        said.success()
+            && chain.contains("Mapped from")
+            && chain.contains("in origin")
+            && (chain.contains("You hold it") || chain.contains("Held by")),
+        &format!("it ended with {:?} and said {chain:?}", said.code),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/hero.psd", "--no-graph"],
+    ));
+    let hinted = clean(&said.stdout);
+    checked.wants(
+        "`--no-graph` says how the file stands and draws no chain",
+        said.success() && hinted.contains("Mapped from") && !hinted.contains('\\'),
+        &format!("it ended with {:?} and said {hinted:?}", said.code),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/hero.psd", "--no-hint"],
+    ));
+    let graphed = clean(&said.stdout);
+    checked.wants(
+        "`--no-hint` draws the chain and says nothing about the file",
+        said.success() && !graphed.contains("Mapped from") && graphed.contains('\\'),
+        &format!("it ended with {:?} and said {graphed:?}", said.code),
+    );
+
     // Only a local path is taken: a `Uuid` names an entry to other commands, not to this one.
     let said = run(&mut client(
         &workspace,

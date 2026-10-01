@@ -17,6 +17,7 @@ use std::str::FromStr as _;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::storage::{Blake3Hash, Key};
 use librorolala::tree_analyze::tree_diff;
+use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Version};
 use librorolala::workspace::Workspace;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
@@ -25,7 +26,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::EntryPicker,
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResVCSIndex, ResVault, ResWorkspace};
@@ -44,11 +45,19 @@ use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_dir};
 use crate::ownership;
-use crate::vcs_index::cmd_vcs_index_lookback::{ResLookback, from_object};
+use crate::vcs_index::cmd_vcs_index_lookback::{
+    ResLookback, Standing, StandingRelation, from_object,
+};
 use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, parse_hash, runtime};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
+
+/// Draw the lines above the chain without the chain itself.
+const ARG_NO_GRAPH: PickerArg<'static, Flag> = arg![no_graph: Flag];
+
+/// Draw the chain without the lines that say where the file comes from and how it stands.
+const ARG_NO_HINT: PickerArg<'static, Flag> = arg![no_hint: Flag];
 
 #[help(buffer)]
 pub fn help_status(_: EntryStatus, ec: &mut ResExitCode) {
@@ -76,6 +85,8 @@ pub fn complete_status(ctx: ShellContext) -> Suggest {
                 crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_MESSAGE: t!("status.complete.no_message"),
                 crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_CREATOR: t!("status.complete.no_creator"),
                 crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH: t!("status.complete.max_message_length"),
+                ARG_NO_GRAPH: t!("status.complete.no_graph"),
+                ARG_NO_HINT: t!("status.complete.no_hint"),
             },
         );
     }
@@ -116,14 +127,18 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
         .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_MESSAGE)
         .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_CREATOR)
         .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH)
+        .pick(&ARG_NO_GRAPH)
+        .pick(&ARG_NO_HINT)
         .pick(&arg![Option<String>])
         .to_result();
-    let (compact, no_message, no_creator, max_message_length, target) = match picked {
-        Ok(picked) => picked,
-        Err(next) => return next,
-    };
+    let (compact, no_message, no_creator, max_message_length, no_graph, no_hint, target) =
+        match picked {
+            Ok(picked) => picked,
+            Err(next) => return next,
+        };
 
     lookback.asked(compact, no_message, no_creator, max_message_length);
+    lookback.asked_status(no_graph, no_hint);
 
     StateStatus { target }.into()
 }
@@ -153,7 +168,10 @@ pub fn handle_status(
     };
 
     if let Some(target) = state.target {
-        return lookback_of(&target, &layout, held, index);
+        let me = account.get_ref().must_bind().ok();
+        let me = me.as_deref();
+
+        return lookback_of(&target, &layout, held, index, me);
     }
 
     let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
@@ -234,6 +252,7 @@ fn lookback_of(
     layout: &Layout,
     held: &Workspace,
     index: &mut LazyRes<ResVCSIndex>,
+    me: Option<&str>,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
@@ -273,16 +292,168 @@ fn lookback_of(
 
         None
     });
+    let id = found.id;
+    let editing = found.editing;
 
     let mut result = match from_object(index, &runtime, found.key, origin) {
         Ok(result) => result,
         Err(cause) => return ErrorVcsIndexRead::new(cause).into(),
     };
-    if found.editing {
+    if editing {
         result.editing();
+    }
+    if let Some(id) = id {
+        result.standing(standing(
+            id,
+            editing,
+            layout,
+            remote.as_ref(),
+            index,
+            &runtime,
+            me,
+        ));
     }
 
     result.into()
+}
+
+/// How the file the target named stands, for the lines drawn above its chain.
+///
+/// The Vault's copy is what ownership and the version to compare are read from. A Layout that tracks
+/// no Vault, or one whose copy does not hold the entry, falls back to what this Layout itself says,
+/// and there is then no version to compare: the state says who holds the file and whether it was
+/// changed, and nothing about how far the two sides are apart.
+fn standing(
+    id: Uuid,
+    modified: bool,
+    layout: &Layout,
+    remote: Option<&(String, Layout)>,
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    me: Option<&str>,
+) -> Standing {
+    let local = layout
+        .entry(id)
+        .map(|data| data.version())
+        .filter(|version| *version != [0; 32]);
+
+    let (vault, holder, source, upstream) = match remote {
+        Some((vault, copy)) => {
+            let data = copy.entry(id);
+
+            (
+                vault.clone(),
+                data.as_ref()
+                    .and_then(|data| data.owner().map(str::to_owned)),
+                copy.path_of(id).map(|path| path.as_str().to_owned()),
+                data.map(|data| data.version())
+                    .filter(|version| *version != [0; 32]),
+            )
+        }
+        None => (
+            String::new(),
+            layout
+                .entry(id)
+                .and_then(|data| data.owner().map(str::to_owned)),
+            None,
+            None,
+        ),
+    };
+
+    let (relation, distance) = match (local, upstream) {
+        (Some(local), Some(upstream)) => apart(index, runtime, &local, &upstream),
+        _ => (StandingRelation::Unknown, None),
+    };
+
+    Standing {
+        vault,
+        source,
+        mine: holder.is_some() && holder.as_deref() == me,
+        holder,
+        modified,
+        relation,
+        distance,
+    }
+}
+
+/// How the version this Layout is at stands beside the Vault's, and how many versions apart they are.
+///
+/// A version the index does not hold is one this side never had, so how far apart the two are is not
+/// known here: the Vault has moved and the chain that says how far is not local.
+fn apart(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    local: &Blake3Hash,
+    upstream: &Blake3Hash,
+) -> (StandingRelation, Option<u64>) {
+    if local == upstream {
+        return (StandingRelation::Same, Some(0));
+    }
+
+    let (Some(local), Some(upstream)) = (
+        read_version(index, runtime, local),
+        read_version(index, runtime, upstream),
+    ) else {
+        return (StandingRelation::Unknown, None);
+    };
+
+    if let Some(distance) = distance_to(index, runtime, &local, upstream.hash().digest()) {
+        return (StandingRelation::Ahead, Some(distance));
+    }
+    if let Some(distance) = distance_to(index, runtime, &upstream, local.hash().digest()) {
+        return (StandingRelation::Behind, Some(distance));
+    }
+
+    (StandingRelation::Apart, None)
+}
+
+/// How many versions below `descendant` the version `ancestor` is, when it is below it at all.
+fn distance_to(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    descendant: &Version,
+    ancestor: &Blake3Hash,
+) -> Option<u64> {
+    let mut current = descendant.clone();
+    let mut steps = 0;
+
+    while !current.is_root() {
+        let variant = read_variant(index, runtime, current.variant())?;
+        let base = read_version(index, runtime, variant.base_version())?;
+
+        steps += 1;
+        if base.hash().digest() == ancestor {
+            return Some(steps);
+        }
+
+        current = base;
+    }
+
+    None
+}
+
+/// The version the index holds under `hash`, when it holds one.
+fn read_version(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    hash: &Blake3Hash,
+) -> Option<Version> {
+    match runtime.block_on(index.read(Key::new(*hash))) {
+        Ok(VCSIndexObject::Version(version)) => Some(version),
+        _ => None,
+    }
+}
+
+/// The variant the index holds under `hash`, when it holds one.
+fn read_variant(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    hash: &Blake3Hash,
+) -> Option<librorolala::vcs::Variant> {
+    match runtime.block_on(index.read(Key::new(*hash))) {
+        Ok(VCSIndexObject::Variant(variant)) => Some(variant),
+        _ => None,
+    }
 }
 
 /// The copy of the Vault's own Layout the Layout being worked in tracks, when there is one here,

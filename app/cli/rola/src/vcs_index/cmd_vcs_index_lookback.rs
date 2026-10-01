@@ -71,6 +71,10 @@ pub const ARG_MAX_MESSAGE_LENGTH: PickerArg<'static, Option<usize>> =
 /// A resource rather than state, since it is read where the drawing is made — the renderer — and
 /// set where the run's flags are read, which for `rola status` is a command that draws a lookback
 /// only when it was given something to look back from.
+// The fields are the flags a run names, one each, and they are independent of one another: a drawing
+// with no versions between them may still say who made each, and a file may be shown without its
+// chain. A bitfield or an enum of shapes would say less than the run asked for.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone)]
 pub struct ResLookback {
     /// Whether the variants between the versions are left out.
@@ -81,6 +85,10 @@ pub struct ResLookback {
     creator: bool,
     /// How much of a message is shown before it is cut short.
     max_message_length: usize,
+    /// Whether the chain itself is drawn.
+    graph: bool,
+    /// Whether the lines that say where the file comes from and how it stands are drawn.
+    hint: bool,
 }
 
 impl Default for ResLookback {
@@ -90,6 +98,8 @@ impl Default for ResLookback {
             message: true,
             creator: true,
             max_message_length: DEFAULT_MESSAGE_LENGTH,
+            graph: true,
+            hint: true,
         }
     }
 }
@@ -117,6 +127,27 @@ impl ResLookback {
     #[must_use]
     pub const fn max_message_length(&self) -> usize {
         self.max_message_length
+    }
+
+    /// Whether the chain itself is drawn.
+    #[must_use]
+    pub const fn graph(&self) -> bool {
+        self.graph
+    }
+
+    /// Whether the lines that say where the file comes from and how it stands are drawn.
+    #[must_use]
+    pub const fn hint(&self) -> bool {
+        self.hint
+    }
+
+    /// Takes what `rola status` asked for from the two flags only it has.
+    ///
+    /// A chain drawn by a hash has no file to say anything about, so neither line is ever drawn for
+    /// one however these are set.
+    pub const fn asked_status(&mut self, no_graph: Flag, no_hint: Flag) {
+        self.graph = !matches!(no_graph, Flag::Active);
+        self.hint = !matches!(no_hint, Flag::Active);
     }
 
     /// Takes what the run asked for from the flags it gave.
@@ -423,6 +454,7 @@ fn gather(
         },
         origin,
         first,
+        standing: None,
     })
 }
 
@@ -434,6 +466,45 @@ pub struct Origin {
     number: u64,
     /// The Vault the version is recorded in.
     vault: String,
+}
+
+/// How the file a chain was drawn for stands, as `rola status` reads it.
+///
+/// It is the data behind the two lines drawn above the chain — where the file is mapped from and how
+/// it stands — so a `--json` run reads the same thing a person is shown, and the words are put to it
+/// where it is drawn rather than here.
+#[derive(Serialize)]
+pub struct Standing {
+    /// The Vault the entry is tracked in.
+    pub vault: String,
+    /// The path the Vault's own Layout names it by, when it names one.
+    pub source: Option<String>,
+    /// Who holds it in the Vault, as a name; nothing when nobody does.
+    pub holder: Option<String>,
+    /// Whether the run's own account is the holder.
+    pub mine: bool,
+    /// Whether the tree holds changes the Layout does not name.
+    pub modified: bool,
+    /// How the version this Layout is at stands beside the Vault's.
+    pub relation: StandingRelation,
+    /// How many versions apart the two are, when one is below the other.
+    pub distance: Option<u64>,
+}
+
+/// How the version a Layout is at stands beside the Vault's.
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StandingRelation {
+    /// Both are at the same version.
+    Same,
+    /// The Vault's version is on the chain below this one.
+    Ahead,
+    /// This version is on the chain below the Vault's.
+    Behind,
+    /// Neither is below the other.
+    Apart,
+    /// The index does not hold one of them, so how far apart they are is not known here.
+    Unknown,
 }
 
 /// One level, its merged variants put in draw order: the one merged in latest furthest out.
@@ -568,6 +639,8 @@ pub struct ResultVcsIndexLookback {
     /// It is the one based on the root, which is drawn at no level and so is not among the levels;
     /// its words are the oldest version's own, which the drawing would otherwise leave out.
     first: Option<VariantView>,
+    /// How the file the chain was drawn for stands, when it was drawn for one.
+    standing: Option<Standing>,
 }
 
 impl ResultVcsIndexLookback {
@@ -579,6 +652,11 @@ impl ResultVcsIndexLookback {
     pub const fn editing(&mut self) {
         self.top = TopKind::Editing;
     }
+
+    /// Says how the file the chain was drawn for stands, for the two lines drawn above it.
+    pub fn standing(&mut self, standing: Standing) {
+        self.standing = Some(standing);
+    }
 }
 
 /// The 7 hex characters a hash is drawn by in the graph.
@@ -588,46 +666,198 @@ fn short(hash: &str) -> &str {
 
 #[renderer(buffer)]
 pub fn render_result_vcs_index_lookback(result: ResultVcsIndexLookback, lookback: &ResLookback) {
-    let chain = chain_of(&result);
-    let drawing = draw_chain(&chain);
-    let notes = notes(&result, lookback);
-    let mut level_of: HashMap<usize, u64> = drawing
-        .versions()
-        .iter()
-        .map(|version| (version.row(), version.level()))
-        .collect();
+    let hints = if lookback.hint() {
+        hints(&result)
+    } else {
+        Vec::new()
+    };
 
-    for (index, row) in drawing.rows().iter().enumerate() {
-        // `--compact` draws the versions alone: what is between them is what a reader who wants the
-        // chain's shape already has from the numbers.
-        let Some(level) = level_of.remove(&index) else {
-            if lookback.compact() {
+    // The lines above the chain, one blank line apart — and one more between them and the chain
+    // itself, so what a file is reads apart from the versions it has.
+    for (at, hint) in hints.iter().enumerate() {
+        if at > 0 {
+            r_println!("");
+        }
+
+        r_println!("{hint}");
+    }
+
+    if lookback.graph() {
+        if !hints.is_empty() {
+            r_println!("");
+        }
+
+        let chain = chain_of(&result);
+        let drawing = draw_chain(&chain);
+        let notes = notes(&result, lookback);
+        let mut level_of: HashMap<usize, u64> = drawing
+            .versions()
+            .iter()
+            .map(|version| (version.row(), version.level()))
+            .collect();
+
+        for (index, row) in drawing.rows().iter().enumerate() {
+            // `--compact` draws the versions alone: what is between them is what a reader who wants
+            // the chain's shape already has from the numbers.
+            let Some(level) = level_of.remove(&index) else {
+                if lookback.compact() {
+                    continue;
+                }
+
+                r_println!("{}", drawn(row));
+                continue;
+            };
+
+            // The version the Vault records is the one a run reading this is looking for: where the
+            // Vault stands is what says whether the work has been told to it. It is drawn as a line
+            // of its own colour, so it is found without reading every number.
+            if let Some(origin) = result
+                .origin
+                .as_ref()
+                .filter(|origin| origin.number == level)
+            {
+                let note = notes.get(&level);
+
+                r_println!("{}", marked(row, &origin.vault, note));
                 continue;
             }
 
-            r_println!("{}", drawn(row));
-            continue;
-        };
-
-        // The version the Vault records is the one a run reading this is looking for: where the
-        // Vault stands is what says whether the work has been told to it. It is drawn as a line of
-        // its own colour, so it is found without reading every number.
-        if let Some(origin) = result
-            .origin
-            .as_ref()
-            .filter(|origin| origin.number == level)
-        {
-            let note = notes.get(&level);
-
-            r_println!("{}", marked(row, &origin.vault, note));
-            continue;
-        }
-
-        match notes.get(&level) {
-            Some(note) => r_println!("{} {}", drawn(row), note),
-            None => r_println!("{}", drawn(row)),
+            match notes.get(&level) {
+                Some(note) => r_println!("{} {}", drawn(row), note),
+                None => r_println!("{}", drawn(row)),
+            }
         }
     }
+}
+
+/// The lines drawn above the chain: where the file is mapped from, and how it stands.
+///
+/// A chain drawn by a hash has no file behind it and says neither. The state is drawn in a colour of
+/// its own — white when the two sides stand as they should, bright yellow when they do not — so what
+/// is wrong reads before the words do.
+fn hints(result: &ResultVcsIndexLookback) -> Vec<String> {
+    let Some(standing) = &result.standing else {
+        return Vec::new();
+    };
+
+    let mut lines = Vec::with_capacity(2);
+
+    if let Some(source) = &standing.source {
+        lines.push(
+            t!("status.source", vault = standing.vault, path = source)
+                .trim()
+                .to_owned(),
+        );
+    }
+
+    lines.push(standing_state(standing));
+
+    lines
+}
+
+/// How the file stands, as the words that go beside its chain, in the colour of whether it should.
+fn standing_state(standing: &Standing) -> String {
+    let said = state_words(standing);
+
+    if anomalous(standing) {
+        said.bright_yellow().to_string()
+    } else {
+        said.white().to_string()
+    }
+}
+
+/// What the state line says, from who holds the file and how it stands.
+fn state_words(standing: &Standing) -> String {
+    let holder = holder_words(standing);
+    let distance = standing.distance.unwrap_or(0);
+
+    let said = match (standing.mine, standing.relation, standing.modified) {
+        (true, StandingRelation::Same, false) => t!("status.state_mine_same"),
+        (true, StandingRelation::Same | StandingRelation::Unknown, true) => {
+            t!("status.state_mine_changed")
+        }
+        (true, StandingRelation::Unknown, false) => t!("status.state_mine_only"),
+        (true, StandingRelation::Ahead, false) => {
+            t!("status.state_mine_ahead", distance = distance)
+        }
+        (true, StandingRelation::Ahead, true) => {
+            t!("status.state_mine_ahead_changed", distance = distance)
+        }
+        (true, StandingRelation::Behind, false) => {
+            t!("status.state_mine_behind", distance = distance)
+        }
+        (true, StandingRelation::Behind, true) => {
+            t!("status.state_mine_behind_changed", distance = distance)
+        }
+        (true, StandingRelation::Apart, false) => t!("status.state_mine_apart"),
+        (true, StandingRelation::Apart, true) => t!("status.state_mine_apart_changed"),
+        (false, StandingRelation::Same, false) => {
+            t!("status.state_held_same", holder = holder)
+        }
+        (false, StandingRelation::Same | StandingRelation::Unknown, true) => {
+            t!("status.state_held_changed", holder = holder)
+        }
+        (false, StandingRelation::Unknown, false) => {
+            t!("status.state_held_only", holder = holder)
+        }
+        (false, StandingRelation::Ahead, false) => {
+            t!(
+                "status.state_held_ahead",
+                holder = holder,
+                distance = distance
+            )
+        }
+        (false, StandingRelation::Ahead, true) => t!(
+            "status.state_held_ahead_changed",
+            holder = holder,
+            distance = distance
+        ),
+        (false, StandingRelation::Behind, false) => {
+            t!(
+                "status.state_held_behind",
+                holder = holder,
+                distance = distance
+            )
+        }
+        (false, StandingRelation::Behind, true) => t!(
+            "status.state_held_behind_changed",
+            holder = holder,
+            distance = distance
+        ),
+        (false, StandingRelation::Apart, false) => t!("status.state_held_apart", holder = holder),
+        (false, StandingRelation::Apart, true) => {
+            t!("status.state_held_apart_changed", holder = holder)
+        }
+    };
+
+    said.trim().to_owned()
+}
+
+/// Who holds the file, as the clause the state line begins with.
+fn holder_words(standing: &Standing) -> String {
+    standing.holder.as_ref().map_or_else(
+        || t!("status.holder_nobody").trim().to_owned(),
+        |holder| t!("status.holder_held", holder = holder).trim().to_owned(),
+    )
+}
+
+/// Whether the state is one the two sides should not be in.
+///
+/// Holding something the Vault is ahead on, or that has diverged from it, is not how it should be;
+/// neither is not holding something this side is ahead on, apart on, or has changed.
+fn anomalous(standing: &Standing) -> bool {
+    if standing.mine {
+        return matches!(
+            standing.relation,
+            StandingRelation::Behind | StandingRelation::Apart
+        );
+    }
+
+    standing.modified
+        || matches!(
+            standing.relation,
+            StandingRelation::Ahead | StandingRelation::Apart
+        )
 }
 
 /// One row as the line that says the Vault records the version it draws.
@@ -705,17 +935,25 @@ fn notes(result: &ResultVcsIndexLookback, lookback: &ResLookback) -> HashMap<u64
     }
 
     if result.top == TopKind::Editing && lookback.message() {
-        let at = result
-            .levels
-            .iter()
-            .map(|level| level.number)
-            .max()
-            .map_or(0, |highest| highest.saturating_add(2));
-
-        notes.insert(at, t!("vcs_index_lookback.being_edited").trim().to_owned());
+        notes.insert(
+            recorded_top(result).saturating_add(1),
+            t!("vcs_index_lookback.being_edited").trim().to_owned(),
+        );
     }
 
     notes
+}
+
+/// The number the highest version the chain recorded carries.
+///
+/// One version is number 0, and every version over the oldest — a level of the drawing, or the head
+/// a chain was started from — adds one. The levels alone do not count them, since the oldest
+/// version's variant is based on the root and hangs from no level; a chain that recorded nothing is
+/// number 0 all the same, which is where a placeholder stands when there is nothing under it.
+fn recorded_top(result: &ResultVcsIndexLookback) -> u64 {
+    u64::try_from(result.levels.len() + usize::from(result.first.is_some()))
+        .unwrap_or(u64::MAX)
+        .saturating_sub(1)
 }
 
 /// What is said beside one variant: who made it, what it says, or both.
@@ -779,15 +1017,18 @@ fn chain_of(result: &ResultVcsIndexLookback) -> Chain {
         }
     }
 
-    let highest = result.levels.iter().map(|level| level.number).max();
+    // The number the highest recorded version carries: one version is number 0, and every version
+    // over the oldest — a level of the drawing, or the head a chain was started from — adds one.
+    // The levels alone do not count them, since the oldest version's variant is based on the root
+    // and hangs from no level.
+    let recorded = recorded_top(result);
 
     // The version a chain is looked back from a variant is one the index does not number, and one
     // being edited is a version it does not have at all: both are a level of their own over the
     // highest one drawn, so `V{n}` numbers what was recorded and the placeholder stands above it.
-    let top = match (result.top, highest) {
-        (TopKind::Editing, Some(highest)) => highest.saturating_add(2),
-        (_, Some(highest)) => highest.saturating_add(1),
-        (_, None) => 0,
+    let top = match result.top {
+        TopKind::Editing => recorded.saturating_add(1),
+        _ => recorded,
     };
     let top_kind = match result.top {
         TopKind::Version => Top::Numbered,
