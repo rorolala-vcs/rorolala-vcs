@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use librorolala::{
     vault::{CONFIG_PATH, VAULTS_DIR, Vault},
-    workspace::Workspace,
+    workspace::{DATA_DIR, Workspace},
 };
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest, Wrap,
@@ -103,7 +103,14 @@ pub fn handle_create_workspace(
     workspace: &mut LazyRes<ResWorkspace>, // Workspace Resource
 ) -> Next {
     let dir = state.workspace_dir;
-    if workspace.get_ref().exist() {
+
+    // Two different things are refused the same way. A run already inside a Workspace is one
+    // whose place to work is taken, and a target that already holds a Workspace does not need
+    // making; leaving the second to `Workspace::create` would report the Layout that could not
+    // be made instead of the Workspace that is already there. The target is read the way the
+    // library reads one — a directory holding a data directory — rather than by searching
+    // upwards, so a Workspace made inside another is still a Workspace.
+    if workspace.get_ref().exist() || dir.join(DATA_DIR).is_dir() {
         return ErrorWorkspaceAlreadyExist.into();
     }
 
@@ -123,6 +130,15 @@ pub fn handle_create_vault(
     // Vault holds are the directories under its `vaults/`, which is where `RootVault` reads them
     // from — so it is also where they are made.
     let Some(holding) = vault.get_ref().as_ref() else {
+        // `Vault::create` is happy to write over a Vault that is already there, since what it
+        // is handed is a configuration to write rather than a place that must be free. A run
+        // that named an existing Vault asked to make one, not to have it rewritten, so it is
+        // told the Vault is there — the same answer a Vault inside another gives, read the
+        // same way.
+        if dir.join(CONFIG_PATH).is_file() {
+            return ErrorVaultAlreadyExist.into();
+        }
+
         Vault::create(&dir)?;
         return ResultVaultCreated::from(dir).into();
     };
@@ -185,9 +201,16 @@ impl Failure for ErrorCreatePathNotProvided {
 failure!(ErrorCreatePathNotProvided);
 
 #[renderer(buffer)]
-pub fn render_error_create_path_not_provided(error: ErrorCreatePathNotProvided) {
-    r_println!("{}", err_line!(error.reason()).trim());
-    r_println!("{}", help_line!(t!("create.path_not_provided_help").trim()));
+pub fn render_error_create_path_not_provided(
+    error: ErrorCreatePathNotProvided,
+    ec: &mut ResExitCode,
+) {
+    // A failure is not a result: it is said on stderr and ends the run, the way every other
+    // failure does, so a caller reading stdout is never handed an error as if it were the
+    // answer it asked for.
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("create.path_not_provided_help").trim()));
+    ec.exit_code = EC_ERR_CREATION_ARGUMENT;
 }
 
 /// Error: what was given to name a Vault inside another is a path, not a name.

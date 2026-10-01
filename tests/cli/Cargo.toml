@@ -1,0 +1,9 @@
+[package]
+name = "it-cli"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rorolala-utils-sandbox = { path = "../../utils/sandbox" }
+serde_json = "1.0.151"
