@@ -775,6 +775,9 @@ async fn main() {
     let plain = id.simple().to_string();
     let remote_path = format!("@/new/models/hero.psd@{}", &plain[..7]);
 
+    // The name a destination that is a directory takes the entry by: the leaf of the Vault's path.
+    let leaf = format!("hero.psd@{}", &plain[..7]);
+
     let said = run(&mut client(&workspace, &data, &["checkin", &remote_path]));
     checked.wants(
         "checking in what this Layout already holds is refused",
@@ -822,33 +825,30 @@ async fn main() {
     ))
     .expect_success();
 
+    // A glob over the Vault's Layout paths reaches the entry by what it is named there, and a
+    // destination that is a directory takes it under this Workspace's root by its leaf name.
     let said = run(&mut client(
         &other,
         &data,
-        &[
-            "checkin",
-            &remote_path,
-            "copied/hero.psd",
-            "--json",
-        ],
+        &["checkin", "@/new/models/*", "./", "--json"],
     ));
     checked.wants(
         "a checkin brings what only the Vault holds into a fresh Workspace",
         said.success()
-            && fs::read(other.join("copied/hero.psd")).unwrap() == b"second"
+            && fs::read(other.join(&leaf)).unwrap() == b"second"
             && said.stdout.contains(&id.to_string()),
         &format!(
             "it ended with {:?}, said {:?}, and the tree holds {:?}",
             said.code,
             said.stdout.trim(),
-            fs::read(other.join("copied/hero.psd"))
+            fs::read(other.join(&leaf))
         ),
     );
     checked.wants(
         "the Layout names what was checked in",
         Layout::open(other.join(".rola/layouts/main"))
             .expect("the second Layout")
-            .id_of(&LayoutPath::new("copied/hero.psd").unwrap())
+            .id_of(&LayoutPath::new(&leaf).unwrap())
             == Some(id),
         "the second Layout does not name what came in",
     );

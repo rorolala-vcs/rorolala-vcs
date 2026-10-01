@@ -8,8 +8,12 @@ checkin:
         **Usage**: `rola checkin <FROM>... [TO]`
 
         The operands read the way `mv`'s do: every word but the last is what is to come in — a path
-        in the Vault's Layout or a `Uuid` — and the last, when there is more than one word, is where
-        it is to land here.
+        in the Vault's Layout, a glob over those paths, or a `Uuid` — and the last, when there is
+        more than one word, is where it is to land here.
+
+        A glob is matched against the paths the Vault's Layout names, so `Installers/*` names what
+        is directly under `Installers` there and `Installers/**` everything below it. An entry
+        several references name is brought in once.
 
         With no `TO` each one lands at the path the Vault's Layout names it by, which has to be
         somewhere nothing is. A `TO` that is an existing directory takes each `FROM` under it by the
@@ -28,8 +32,11 @@ checkin:
 
         **用法**：`rola checkin <FROM>... [TO]`
 
-        位置参数按 `mv` 的方式读：最后一个是落点，前面的都是要带入的内容——保险库布局中的路径或
-        一个 `Uuid`；只有一个词时它就是要带入的内容，没有落点。
+        位置参数按 `mv` 的方式读：最后一个是落点，前面的都是要带入的内容——保险库布局中的路径、
+        对这些路径的通配，或一个 `Uuid`；只有一个词时它就是要带入的内容，没有落点。
+
+        通配是对保险库布局里的路径做匹配：`Installers/*` 是 `Installers` 直接下面的内容，
+        `Installers/**` 是它下面所有层级。被多个引用同时选中的条目只带入一次。
 
         不给 `TO` 时，每一条都落在保险库布局给它命名的路径上，那里必须是空的。`TO` 是已存在的
         目录时，每个 `FROM` 按保险库给出的名字落到该目录下；其他 `TO` 就是完整的落点路径，因此

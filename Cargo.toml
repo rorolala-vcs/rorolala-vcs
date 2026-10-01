@@ -84,6 +84,11 @@ mingling = { version = "0.5.3", features = [
 # for and the two would be different traits with one name.
 arg-picker = "0.3.2"
 
+# Globbing over the Vault's Layout paths, which is how `rola checkin` reads a reference that names
+# several entries at once. The full syntax is wanted rather than a bare `*`: a Vault's paths are a
+# tree, so `**` is what reaches into one.
+globset = "0.4.20"
+
 # Serialization
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

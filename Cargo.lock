@@ -1680,6 +1680,7 @@ dependencies = [
  "colored",
  "dirs",
  "embed-resource",
+ "globset",
  "indicatif",
  "just_template",
  "libc",

@@ -19,6 +19,7 @@ use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr as _;
 
+use globset::GlobBuilder;
 use librorolala::daemon::{action_fetch_layout, action_sync_index_all_async};
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::protocol::ActionError;
@@ -90,9 +91,13 @@ pub fn complete_checkin(ctx: ShellContext) -> Suggest {
 /// Brings what the Vault holds but this Layout does not into it
 ///
 /// The operands read the way `mv`'s do: every word but the last is a reference — a path in the
-/// Vault's Layout or a `Uuid` — and the last, when there is more than one word, is where those
-/// references are to land here. A reference therefore always comes from the Vault's side; nothing
-/// but the destination is read as a path of this run's.
+/// Vault's Layout, a glob over those paths, or a `Uuid` — and the last, when there is more than one
+/// word, is where those references are to land here. A reference therefore always comes from the
+/// Vault's side; nothing but the destination is read as a path of this run's.
+///
+/// A glob is matched against the paths the Vault's Layout names, so `Installers/*` names everything
+/// directly under `Installers` there and `Installers/**` everything below it. An entry several
+/// references name is brought in once.
 ///
 /// With no destination each reference lands at the path the Vault's Layout names it by. A
 /// destination that is an existing directory takes each reference under it by the name the Vault
@@ -303,6 +308,7 @@ fn pull(
 }
 
 /// What stopped a reference from being read.
+#[derive(Debug)]
 enum Refusal {
     /// The operands name nothing to bring in, or a destination several references cannot share.
     Argument,
@@ -362,19 +368,24 @@ fn resolve(
 ) -> Result<Vec<Wanted>, Refusal> {
     let destination = destination(root, to)?;
 
-    // A destination that is not a directory names one landing, so it can take only one reference.
+    // A destination that is not a directory names one landing. More than one operand is already
+    // more than it can take, the way `mv` reads them; one operand naming several — a glob — is
+    // found out once the references are read below.
     if matches!(destination, Destination::Exact(_)) && refs.len() > 1 {
+        return Err(Refusal::Argument);
+    }
+
+    let matched = expand(remote, refs)?;
+
+    // A destination that is not a directory names one landing, so it can take only one entry.
+    if matches!(destination, Destination::Exact(_)) && matched.len() > 1 {
         return Err(Refusal::Argument);
     }
 
     let mut wanted = Vec::new();
     let mut landings = BTreeSet::new();
 
-    for reference in refs {
-        let Some((id, data)) = find(remote, reference) else {
-            return Err(Refusal::Unknown(reference.clone()));
-        };
-
+    for (id, data) in matched {
         // What is to come in is something this Layout does not hold.
         if layout.entry(id).is_some() {
             return Err(Refusal::Known(id.to_string()));
@@ -397,6 +408,109 @@ fn resolve(
     }
 
     Ok(wanted)
+}
+
+/// Everything the references name, each entry once and in the order the references name them.
+///
+/// An entry several references name — a glob and a path that reaches into what it matched — is one
+/// request rather than a clash, so it is brought in once.
+fn expand(layout: &Layout, refs: &[String]) -> Result<Vec<(Uuid, MutableData)>, Refusal> {
+    let mut entries = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for reference in refs {
+        for (id, data) in named(layout, reference)? {
+            if seen.insert(id) {
+                entries.push((id, data));
+            }
+        }
+    }
+
+    Ok(entries)
+}
+
+/// What one reference names in the Vault's Layout: a `Uuid` read as one, a glob over the paths
+/// there, and anything else one path there.
+///
+/// # Errors
+///
+/// Returns [`Refusal::Argument`] when a reference reads as a pattern but not as a usable one, and
+/// [`Refusal::Unknown`] when it names nothing — a glob that matches nothing included, since a run
+/// that quietly did part of what was asked is worse than one that stops.
+fn named(layout: &Layout, reference: &str) -> Result<Vec<(Uuid, MutableData)>, Refusal> {
+    if let Ok(id) = Uuid::from_str(reference) {
+        return layout
+            .entry(id)
+            .map(|data| vec![(id, data)])
+            .ok_or_else(|| Refusal::Unknown(reference.to_owned()));
+    }
+
+    if is_pattern(reference) {
+        // The Layout lists its paths in no particular order, so they are ordered here: what a glob
+        // matched is reported the same way however the Layout happens to hold it.
+        let mut paths: Vec<LayoutPath> = layout.paths().into_iter().map(|(path, _)| path).collect();
+        paths.sort_unstable();
+
+        let found: Vec<(Uuid, MutableData)> = matching(reference, &paths)?
+            .into_iter()
+            .filter_map(|path| {
+                let id = layout.id_of(&path)?;
+
+                layout.entry(id).map(|data| (id, data))
+            })
+            .collect();
+
+        if found.is_empty() {
+            return Err(Refusal::Unknown(reference.to_owned()));
+        }
+
+        return Ok(found);
+    }
+
+    let Ok(path) = LayoutPath::new(reference) else {
+        return Err(Refusal::Unknown(reference.to_owned()));
+    };
+    let Some(id) = layout.id_of(&path) else {
+        return Err(Refusal::Unknown(reference.to_owned()));
+    };
+
+    layout
+        .entry(id)
+        .map(|data| vec![(id, data)])
+        .ok_or_else(|| Refusal::Unknown(reference.to_owned()))
+}
+
+/// Whether a reference is to be read as a glob over the Vault's Layout paths.
+///
+/// A reference with none of the pattern characters names one path exactly, so a path holding a `[`
+/// or `{` is still nameable; one with them is a pattern, and a literal occurrence has to be written
+/// as a class the way [`globset`] spells one.
+fn is_pattern(reference: &str) -> bool {
+    reference
+        .chars()
+        .any(|character| matches!(character, '*' | '?' | '[' | '{'))
+}
+
+/// The paths among `paths` that the glob `reference` names, keeping the order they came in.
+///
+/// Separators are literal, the way a shell reads a pattern: `*` names what is directly under a
+/// directory and `**` what is anywhere below it, rather than `*` swallowing a whole tree.
+///
+/// # Errors
+///
+/// Returns [`Refusal::Argument`] when the reference does not read as a pattern.
+fn matching(reference: &str, paths: &[LayoutPath]) -> Result<Vec<LayoutPath>, Refusal> {
+    let glob = GlobBuilder::new(reference)
+        .literal_separator(true)
+        .build()
+        .map_err(|_| Refusal::Argument)?;
+    let matcher = glob.compile_matcher();
+
+    Ok(paths
+        .iter()
+        .filter(|path| matcher.is_match(path.as_str()))
+        .cloned()
+        .collect())
 }
 
 /// Splits the operands the way `mv` reads its own: everything but the last word is what is to come
@@ -595,18 +709,6 @@ fn bring_in(
     }
 
     (entries, failed)
-}
-
-/// What a reference names in the Vault's Layout: a `Uuid` read as one, and anything else as a path.
-fn find(layout: &Layout, reference: &str) -> Option<(Uuid, MutableData)> {
-    if let Ok(id) = Uuid::from_str(reference) {
-        return layout.entry(id).map(|data| (id, data));
-    }
-
-    let path = LayoutPath::new(reference).ok()?;
-    let id = layout.id_of(&path)?;
-
-    layout.entry(id).map(|data| (id, data))
 }
 
 /// Error: the Layout being worked in tracks no Vault.
@@ -911,5 +1013,40 @@ mod tests {
             Some(path("b.psd"))
         );
         assert_eq!(landing(&Destination::Under("dir".to_owned()), None), None);
+    }
+
+    #[test]
+    fn a_path_without_a_pattern_character_is_named_exactly() {
+        assert!(!is_pattern("Installers/0dCloud.pkg.tar.zst"));
+        assert!(is_pattern("Installers/*"));
+        assert!(is_pattern("a?b"));
+        assert!(is_pattern("a[0-9]"));
+        assert!(is_pattern("a{b,c}"));
+    }
+
+    #[test]
+    fn a_glob_names_the_paths_it_matches_and_nothing_else() {
+        let paths = [
+            path("Installers/0dCloud.pkg.tar.zst"),
+            path("Installers/sub/extra.pkg"),
+            path("README.md"),
+        ];
+
+        assert_eq!(
+            matching("Installers/*", &paths).unwrap(),
+            vec![path("Installers/0dCloud.pkg.tar.zst")]
+        );
+        assert_eq!(
+            matching("Installers/**", &paths).unwrap(),
+            vec![
+                path("Installers/0dCloud.pkg.tar.zst"),
+                path("Installers/sub/extra.pkg")
+            ]
+        );
+        assert!(matching("Missing/*", &paths).unwrap().is_empty());
+        assert!(matches!(
+            matching("Installers/[", &paths),
+            Err(Refusal::Argument)
+        ));
     }
 }
