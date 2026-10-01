@@ -13,7 +13,7 @@ use mingling::{
     ProgramCollect, Wrap,
     consts::REMAINS,
     macros::arg,
-    picker::{IntoPicker as _, Pickable, value::Flag},
+    picker::{IntoPicker, PickerArg, value::Flag},
     setup::ProgramSetup,
 };
 
@@ -24,13 +24,8 @@ pub struct ResRebuildInverseIndex {
     rebuild: bool,
 }
 
-/// The global flags that say what a write does besides writing.
-#[derive(Pickable)]
-pub struct RebuildFlags {
-    /// Rebuild the inverse index after writing.
-    #[arg(long)]
-    rebuild: Flag,
-}
+/// Rebuild the inverse index after writing.
+const ARG_REBUILD: PickerArg<'static, Flag> = arg![rebuild: Flag];
 
 /// A [`ProgramSetup`] implementation that registers whether the inverse index is to be rebuilt.
 pub struct RebuildSetup;
@@ -42,15 +37,15 @@ where
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
         // UNWRAP: each pick can fall back, so parsing never fails and the `unwrap` is safe — the
         // same reason `GlobalFlagSetup` gives for its own.
-        let (flags, args) = program
+        let (rebuild, args) = program
             .take_args()
-            .pick(&arg![RebuildFlags])
+            .pick(&ARG_REBUILD)
             .pick(&REMAINS)
             .unwrap();
         program.replace_args(args.into());
 
         program.with_resource(ResRebuildInverseIndex {
-            rebuild: matches!(flags.rebuild, Flag::Active),
+            rebuild: matches!(rebuild, Flag::Active),
         });
     }
 }

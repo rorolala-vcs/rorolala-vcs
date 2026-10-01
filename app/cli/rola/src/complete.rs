@@ -13,7 +13,13 @@
 use librorolala::layout::Layout;
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::{VCSIndex, VCSIndexObject};
-use mingling::{ShellContext, Suggest};
+use mingling::{
+    ShellContext, Suggest,
+    picker::{
+        Pickable, PickerArg, PickerArgInfo,
+        parselib::{ParserStyle, build_possible_flags},
+    },
+};
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResVault, ResWorkspace};
 use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_READONLY_LAYOUTS_DIR};
 use rorolala_utils_location::Locate as _;
@@ -50,6 +56,36 @@ pub fn typing_flag(ctx: &ShellContext) -> bool {
     ctx.current_word.starts_with('-')
 }
 
+/// Whether `word` is `arg` written as a flag, with a value after the style's separator.
+///
+/// The flag strings are built from the same `PickerArg` the parse reads — through the parser's own
+/// [`build_possible_flags`] — so a name is written once and the two ends cannot come to disagree
+/// about it. A flag with a short name or aliases is answered for in every form it may be written.
+#[must_use]
+pub fn is_flag<T>(word: &str, arg: &'static PickerArg<'static, T>) -> bool
+where
+    T: Pickable<'static>,
+{
+    let info = PickerArgInfo::from(arg);
+    let style = ParserStyle::global_style();
+
+    build_possible_flags(style, &info).iter().any(|flag| {
+        word == flag
+            || word
+                .strip_prefix(flag.as_str())
+                .is_some_and(|value| value.starts_with(style.value_separator))
+    })
+}
+
+/// Whether the word being completed is the value of `arg`, written after its flag.
+#[must_use]
+pub fn filling_flag<T>(ctx: &ShellContext, arg: &'static PickerArg<'static, T>) -> bool
+where
+    T: Pickable<'static>,
+{
+    is_flag(&ctx.previous_word, arg)
+}
+
 /// The positional word written at `index` after the command node, when one is there.
 ///
 /// It is what a command that reads one of its words as a choice needs: which Vault was named, or
@@ -65,16 +101,38 @@ pub fn positional_word(ctx: &ShellContext, anchor: &str, index: usize) -> Option
     ctx.all_words.get(after_node + index).cloned()
 }
 
-/// The value written after `flag` on the line, when one is there.
+/// The value written after `arg` on the line, when one is there.
 ///
 /// A flag may be named before the argument whose completion needs it — `layout entries --uuid`
 /// after `--layout` — so the value already written is read back from the line rather than
-/// required to be the word in progress.
+/// required to be the word in progress. The value is told apart the way the parser tells it: the
+/// flag is built from the same `PickerArg`, and it carries its value either as the next word or
+/// after the style's separator.
 #[must_use]
-pub fn flag_value(ctx: &ShellContext, flag: &str) -> Option<String> {
-    let after = ctx.all_words.iter().position(|word| word == flag)?;
+pub fn flag_value<T>(ctx: &ShellContext, arg: &'static PickerArg<'static, T>) -> Option<String>
+where
+    T: Pickable<'static>,
+{
+    let info = PickerArgInfo::from(arg);
+    let style = ParserStyle::global_style();
+    let flags = build_possible_flags(style, &info);
 
-    ctx.all_words.get(after + 1).cloned()
+    for (index, word) in ctx.all_words.iter().enumerate() {
+        if flags.iter().any(|flag| flag == word) {
+            return ctx.all_words.get(index + 1).cloned();
+        }
+
+        // A value written with its flag is one word, so the flag is the head of it.
+        for flag in &flags {
+            if let Some(value) = word.strip_prefix(flag.as_str())
+                && let Some(value) = value.strip_prefix(style.value_separator)
+            {
+                return Some(value.to_owned());
+            }
+        }
+    }
+
+    None
 }
 
 /// The candidates among `names` that the word in progress could still become.

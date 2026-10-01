@@ -14,7 +14,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex};
@@ -30,19 +30,11 @@ use crate::exit_codes::{
 };
 use crate::failure::failure;
 
-/// The flags `rola pack` takes.
-///
-/// What is packed by default is everything the run can reach, store and index alike; each flag
-/// leaves one of the two out.
-#[derive(Pickable)]
-struct PackFlags {
-    /// Lay the index's objects out too. Absent means the index is left as it is.
-    #[arg(long)]
-    no_index: Flag,
-    /// Lay the store's objects out too. Absent means the store is left as it is.
-    #[arg(long)]
-    no_storage: Flag,
-}
+/// Lay the index's objects out too. Absent means the index is left as it is.
+const ARG_NO_INDEX: PickerArg<'static, Flag> = arg![no_index: Flag];
+
+/// Lay the store's objects out too. Absent means the store is left as it is.
+const ARG_NO_STORAGE: PickerArg<'static, Flag> = arg![no_storage: Flag];
 
 #[help(buffer)]
 pub fn help_pack(_: EntryPack, ec: &mut ResExitCode) {
@@ -65,8 +57,8 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
         return strip_written(
             &ctx,
             suggest! {
-                "--no-index": t!("pack.complete.no_index"),
-                "--no-storage": t!("pack.complete.no_storage"),
+                ARG_NO_INDEX: t!("pack.complete.no_index"),
+                ARG_NO_STORAGE: t!("pack.complete.no_storage"),
             },
         );
     }
@@ -106,11 +98,11 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
 #[command(node = "pack", entry = EntryPack)]
 pub fn pack(args: EntryPack) -> StatePack {
     // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let flags = args.pick(&arg![PackFlags]).unwrap();
+    let (no_index, no_storage) = args.pick(&ARG_NO_INDEX).pick(&ARG_NO_STORAGE).unwrap();
 
     StatePack {
-        storage: matches!(flags.no_storage, Flag::Inactive),
-        index: matches!(flags.no_index, Flag::Inactive),
+        storage: matches!(no_storage, Flag::Inactive),
+        index: matches!(no_index, Flag::Inactive),
     }
 }
 

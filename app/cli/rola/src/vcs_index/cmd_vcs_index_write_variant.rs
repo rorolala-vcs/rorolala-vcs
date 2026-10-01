@@ -11,7 +11,7 @@ use mingling::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable},
+    picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex};
@@ -21,7 +21,8 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::complete::{
-    IndexObject, index_hashes, offer, positional, store_keys, strip_written, typing_flag,
+    IndexObject, filling_flag, index_hashes, offer, positional, store_keys, strip_written,
+    typing_flag,
 };
 use crate::exit_codes::EC_HELP;
 use crate::rebuild::ResRebuildInverseIndex;
@@ -30,13 +31,8 @@ use crate::vcs_index::{
     ResultVcsIndexHash, parse_hash, rebuild_inverse_index, runtime,
 };
 
-/// The flags `rola vcs-index write-variant` takes.
-#[derive(Pickable)]
-struct WriteVariantFlags {
-    /// The variant this one merges in.
-    #[arg(long)]
-    join: Option<String>,
-}
+/// The variant this one merges in.
+const ARG_JOIN: PickerArg<'static, Option<String>> = arg![join: Option<String>];
 
 #[help(buffer)]
 pub fn help_vcs_index_write_variant(_: EntryVcsIndexWriteVariant, ec: &mut ResExitCode) {
@@ -59,7 +55,7 @@ pub fn complete_vcs_index_write_variant(
     index: &mut LazyRes<ResVCSIndex>,
     storage: &mut LazyRes<ResRorolalaStorage>,
 ) -> Suggest {
-    if ctx.previous_word == "--join" {
+    if filling_flag(&ctx, &ARG_JOIN) {
         return offer(
             &ctx,
             index_hashes(index.get_ref().as_ref(), IndexObject::Variant),
@@ -70,7 +66,7 @@ pub fn complete_vcs_index_write_variant(
         return strip_written(
             &ctx,
             suggest! {
-                "--join": t!("vcs_index_write_variant.complete.join"),
+                ARG_JOIN: t!("vcs_index_write_variant.complete.join"),
             },
         );
     }
@@ -98,7 +94,7 @@ pub fn complete_vcs_index_write_variant(
 #[command(node = "vcs-index.write-variant", entry = EntryVcsIndexWriteVariant)]
 pub fn vcs_index_write_variant(args: EntryVcsIndexWriteVariant) -> Next {
     let picked = args
-        .pick(&arg![WriteVariantFlags])
+        .pick(&ARG_JOIN)
         .pick_or_route(&arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "BASE_VERSION".to_owned(),
@@ -124,7 +120,7 @@ pub fn vcs_index_write_variant(args: EntryVcsIndexWriteVariant) -> Next {
             .into()
         })
         .to_result();
-    let (flags, base_version, storage, creator, message) = match picked {
+    let (join, base_version, storage, creator, message) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -134,7 +130,7 @@ pub fn vcs_index_write_variant(args: EntryVcsIndexWriteVariant) -> Next {
         storage,
         creator,
         message,
-        join: flags.join,
+        join,
     }
     .into()
 }

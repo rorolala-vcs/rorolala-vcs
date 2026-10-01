@@ -34,7 +34,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResForce, ResOffline, ResWorkspace};
@@ -79,13 +79,8 @@ const fn own_name(kind: Own) -> &'static str {
     }
 }
 
-/// The flags `rola hold` and `rola giveup` take.
-#[derive(Pickable)]
-struct OwnershipFlags {
-    /// Move what can be moved when not everything named can be.
-    #[arg(long)]
-    allow_partial: Flag,
-}
+/// Move what can be moved when not everything named can be.
+const ARG_ALLOW_PARTIAL: PickerArg<'static, Flag> = arg![allow_partial: Flag];
 
 #[help(buffer)]
 pub fn help_hold(_: EntryHold, ec: &mut ResExitCode) {
@@ -119,7 +114,7 @@ fn complete_ownership(ctx: &ShellContext) -> Suggest {
         return strip_written(
             ctx,
             suggest! {
-                "--allow-partial": t!("hold.complete.allow_partial"),
+                ARG_ALLOW_PARTIAL: t!("hold.complete.allow_partial"),
             },
         );
     }
@@ -163,7 +158,7 @@ pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
     }
 
     let picked = args
-        .pick(&arg![OwnershipFlags])
+        .pick(&ARG_ALLOW_PARTIAL)
         .pick_or_route(&arg![Vec<String>], || {
             ErrorOwnershipArgument {
                 command: "hold".to_owned(),
@@ -171,7 +166,7 @@ pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
             .into()
         })
         .to_result();
-    let (flags, paths) = match picked {
+    let (allow_partial, paths) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -188,7 +183,7 @@ pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
     StateHold {
         paths,
         force: **force,
-        allow_partial: matches!(flags.allow_partial, Flag::Active),
+        allow_partial: matches!(allow_partial, Flag::Active),
     }
     .into()
 }
@@ -275,7 +270,7 @@ pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next
     }
 
     let picked = args
-        .pick(&arg![OwnershipFlags])
+        .pick(&ARG_ALLOW_PARTIAL)
         .pick_or_route(&arg![Vec<String>], || {
             ErrorOwnershipArgument {
                 command: "giveup".to_owned(),
@@ -283,7 +278,7 @@ pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next
             .into()
         })
         .to_result();
-    let (flags, paths) = match picked {
+    let (allow_partial, paths) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -300,7 +295,7 @@ pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next
     StateGiveup {
         paths,
         force: **force,
-        allow_partial: matches!(flags.allow_partial, Flag::Active),
+        allow_partial: matches!(allow_partial, Flag::Active),
     }
     .into()
 }

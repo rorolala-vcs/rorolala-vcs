@@ -1,6 +1,10 @@
 _version: 2
 
 vault_bind:
+  complete:
+    set_default:
+      en: Also make the name the one the Workspace reaches for
+      zh-CN: 同时把该名字设为工作区默认使用的保险库
   help:
     en: |
         Bind a name to a Vault address

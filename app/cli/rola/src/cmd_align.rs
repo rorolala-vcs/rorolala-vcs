@@ -31,7 +31,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
@@ -44,7 +44,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::complete::{positional, strip_written, typing_flag};
+use crate::complete::{filling_flag, positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_ALIGN, EC_ERR_ALIGN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
@@ -73,38 +73,33 @@ struct Content<'a, 'b> {
 /// one that reading found.
 const DEFAULT_ALIKE: f32 = 0.6;
 
-/// The flags `rola align` takes: exactly one of what may be done with one path.
-#[derive(Pickable)]
-struct AlignFlags {
-    /// Confirm that a path the Layout names but the tree does not hold is gone.
-    #[arg(long)]
-    delete: Flag,
-    /// Confirm that a path that moved has moved.
-    #[arg(long)]
-    rename: Flag,
-    /// Take back a move the reading guessed at, leaving a loss and a gain.
-    #[arg(long = "break")]
-    break_: Flag,
-    /// Assert that the named path moved to `FILE`, so the next reading sees it as a move.
-    #[arg(long = "move")]
-    move_to: Option<String>,
-    /// Put a moved file back where the Layout names it.
-    #[arg(long = "restore-move")]
-    restore_move: Flag,
-    /// Put a changed file back to the version the Layout names.
-    #[arg(long = "restore-modify")]
-    restore_modify: Flag,
-    /// Put a deleted file back, taking the version the Layout names out of the store.
-    #[arg(long = "restore-delete")]
-    restore_delete: Flag,
-    /// Put a path back to what the Layout names, whichever of the three it needs.
-    #[arg(long = "restore")]
-    restore: Flag,
-    /// Put a move's file back where the Layout names it and as the Layout names it, undoing the
-    /// content as well as the place.
-    #[arg(long)]
-    completely: Flag,
-}
+/// Confirm that a path the Layout names but the tree does not hold is gone.
+const ARG_DELETE: PickerArg<'static, Flag> = arg![delete: Flag];
+
+/// Confirm that a path that moved has moved.
+const ARG_RENAME: PickerArg<'static, Flag> = arg![rename: Flag];
+
+/// Take back a move the reading guessed at, leaving a loss and a gain.
+const ARG_BREAK: PickerArg<'static, Flag> = arg![break: Flag];
+
+/// Assert that the named path moved to `FILE`, so the next reading sees it as a move.
+const ARG_MOVE_TO: PickerArg<'static, Option<String>> = arg![move: Option<String>];
+
+/// Put a moved file back where the Layout names it.
+const ARG_RESTORE_MOVE: PickerArg<'static, Flag> = arg![restore_move: Flag];
+
+/// Put a changed file back to the version the Layout names.
+const ARG_RESTORE_MODIFY: PickerArg<'static, Flag> = arg![restore_modify: Flag];
+
+/// Put a deleted file back, taking the version the Layout names out of the store.
+const ARG_RESTORE_DELETE: PickerArg<'static, Flag> = arg![restore_delete: Flag];
+
+/// Put a path back to what the Layout names, whichever of the three it needs.
+const ARG_RESTORE: PickerArg<'static, Flag> = arg![restore: Flag];
+
+/// Put a move's file back where the Layout names it and as the Layout names it, undoing the
+/// content as well as the place.
+const ARG_COMPLETELY: PickerArg<'static, Flag> = arg![completely: Flag];
 
 /// What is to be done with the named path.
 enum Mode {
@@ -148,20 +143,20 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
         return strip_written(
             &ctx,
             suggest! {
-                "--delete": t!("align.complete.delete"),
-                "--rename": t!("align.complete.rename"),
-                "--break": t!("align.complete.break"),
-                "--move": t!("align.complete.move"),
-                "--restore-move": t!("align.complete.restore_move"),
-                "--restore-modify": t!("align.complete.restore_modify"),
-                "--restore-delete": t!("align.complete.restore_delete"),
-                "--restore": t!("align.complete.restore"),
-                "--completely": t!("align.complete.completely"),
+                ARG_DELETE: t!("align.complete.delete"),
+                ARG_RENAME: t!("align.complete.rename"),
+                ARG_BREAK: t!("align.complete.break"),
+                ARG_MOVE_TO: t!("align.complete.move"),
+                ARG_RESTORE_MOVE: t!("align.complete.restore_move"),
+                ARG_RESTORE_MODIFY: t!("align.complete.restore_modify"),
+                ARG_RESTORE_DELETE: t!("align.complete.restore_delete"),
+                ARG_RESTORE: t!("align.complete.restore"),
+                ARG_COMPLETELY: t!("align.complete.completely"),
             },
         );
     }
 
-    if ctx.previous_word == "--move" || positional(&ctx, "align") == 0 {
+    if filling_flag(&ctx, &ARG_MOVE_TO) || positional(&ctx, "align") == 0 {
         Suggest::file_comp()
     } else {
         suggest!()
@@ -206,10 +201,29 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 #[command(node = "align", entry = EntryAlign)]
 pub fn align(args: EntryAlign) -> Next {
     let picked = args
-        .pick(&arg![AlignFlags])
+        .pick(&ARG_DELETE)
+        .pick(&ARG_RENAME)
+        .pick(&ARG_BREAK)
+        .pick(&ARG_MOVE_TO)
+        .pick(&ARG_RESTORE_MOVE)
+        .pick(&ARG_RESTORE_MODIFY)
+        .pick(&ARG_RESTORE_DELETE)
+        .pick(&ARG_RESTORE)
+        .pick(&ARG_COMPLETELY)
         .pick(&arg![Option<String>])
         .to_result();
-    let (flags, path) = match picked {
+    let (
+        delete,
+        rename,
+        break_,
+        move_to,
+        restore_move,
+        restore_modify,
+        restore_delete,
+        restore,
+        completely,
+        path,
+    ) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -218,31 +232,31 @@ pub fn align(args: EntryAlign) -> Next {
         return ErrorAlignArgument.into();
     };
 
-    let completely = matches!(flags.completely, Flag::Active);
+    let completely = matches!(completely, Flag::Active);
 
     let mut modes = Vec::new();
-    if matches!(flags.delete, Flag::Active) {
+    if matches!(delete, Flag::Active) {
         modes.push(Mode::Delete);
     }
-    if matches!(flags.rename, Flag::Active) {
+    if matches!(rename, Flag::Active) {
         modes.push(Mode::Rename);
     }
-    if matches!(flags.break_, Flag::Active) {
+    if matches!(break_, Flag::Active) {
         modes.push(Mode::Break);
     }
-    if let Some(target) = flags.move_to {
+    if let Some(target) = move_to {
         modes.push(Mode::Move(target));
     }
-    if matches!(flags.restore_move, Flag::Active) {
+    if matches!(restore_move, Flag::Active) {
         modes.push(Mode::RestoreMove);
     }
-    if matches!(flags.restore_modify, Flag::Active) {
+    if matches!(restore_modify, Flag::Active) {
         modes.push(Mode::RestoreModify);
     }
-    if matches!(flags.restore_delete, Flag::Active) {
+    if matches!(restore_delete, Flag::Active) {
         modes.push(Mode::RestoreDelete);
     }
-    if matches!(flags.restore, Flag::Active) {
+    if matches!(restore, Flag::Active) {
         modes.push(Mode::Restore);
     }
 

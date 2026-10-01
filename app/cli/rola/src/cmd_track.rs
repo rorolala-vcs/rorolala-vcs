@@ -28,7 +28,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResForce, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
@@ -41,7 +41,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::complete::{strip_written, typing_flag};
+use crate::complete::{filling_flag, is_flag, strip_written, typing_flag};
 use crate::editor::{ResEditor, open};
 use crate::exit_codes::{
     EC_ABORT, EC_ERR_TRACK, EC_ERR_TRACK_ARGUMENT, EC_ERR_TRACK_OWNERSHIP, EC_HELP,
@@ -68,19 +68,14 @@ const DEFAULT_ALIKE: f32 = 0.6;
 /// has to be stopped rather than reopened forever.
 const EDIT_ATTEMPTS: usize = 10;
 
-/// The flags `rola track` takes.
-#[derive(Pickable)]
-struct TrackFlags {
-    /// What the whole group did; the message every file carries unless it is given its own.
-    #[arg(long)]
-    message: Option<String>,
-    /// What one file did, one for each file named, in the order they are named.
-    #[arg(long)]
-    file_message: Vec<String>,
-    /// Record what is already known, and never open an editor.
-    #[arg(long)]
-    no_editor: Flag,
-}
+/// What the whole group did; the message every file carries unless it is given its own.
+const ARG_MESSAGE: PickerArg<'static, Option<String>> = arg![message: Option<String>];
+
+/// What one file did, one for each file named, in the order they are named.
+const ARG_FILE_MESSAGE: PickerArg<'static, Vec<String>> = arg![file_message: Vec<String>];
+
+/// Record what is already known, and never open an editor.
+const ARG_NO_EDITOR: PickerArg<'static, Flag> = arg![no_editor: Flag];
 
 #[help(buffer)]
 pub fn help_track(_: EntryTrack, ec: &mut ResExitCode) {
@@ -104,14 +99,14 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
         return strip_written(
             &ctx,
             suggest! {
-                "--message": t!("track.complete.message"),
-                "--file-message": t!("track.complete.file_message"),
-                "--no-editor": t!("track.complete.no_editor"),
+                ARG_MESSAGE: t!("track.complete.message"),
+                ARG_FILE_MESSAGE: t!("track.complete.file_message"),
+                ARG_NO_EDITOR: t!("track.complete.no_editor"),
             },
         );
     }
 
-    if matches!(ctx.previous_word.as_str(), "--message" | "--file-message") {
+    if filling_flag(&ctx, &ARG_MESSAGE) || filling_flag(&ctx, &ARG_FILE_MESSAGE) {
         return suggest!();
     }
 
@@ -151,10 +146,12 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 #[command(node = "track", entry = EntryTrack)]
 pub fn track(args: EntryTrack, force: &ResForce) -> Next {
     let picked = args
-        .pick(&arg![TrackFlags])
+        .pick(&ARG_MESSAGE)
+        .pick(&ARG_FILE_MESSAGE)
+        .pick(&ARG_NO_EDITOR)
         .pick_or_route(&arg![Vec<String>], || ErrorTrackNoFiles.into())
         .to_result();
-    let (flags, files) = match picked {
+    let (message, file_message, no_editor, files) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -165,15 +162,14 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
 
     StateTrack {
         files,
-        message: flags.message,
-        file_messages: flags
-            .file_message
+        message,
+        file_messages: file_message
             .into_iter()
             // The framework hands a repeated flag its own name back as one of the values; it is not
             // a message a caller wrote.
-            .filter(|message| !message.starts_with("--file-message"))
+            .filter(|message| !is_flag(message, &ARG_FILE_MESSAGE))
             .collect(),
-        no_editor: matches!(flags.no_editor, Flag::Active),
+        no_editor: matches!(no_editor, Flag::Active),
         force: **force,
     }
     .into()

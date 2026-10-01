@@ -10,7 +10,7 @@ use mingling::{
         renderer, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable},
+    picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResVault, ResWorkspace};
@@ -21,7 +21,8 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::complete::{
-    chosen_layout, flag_value, layout_names, layout_uuids, offer, strip_written, typing_flag,
+    chosen_layout, filling_flag, flag_value, layout_names, layout_uuids, offer, strip_written,
+    typing_flag,
 };
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
@@ -41,19 +42,14 @@ const REMOVED_PREFIX: &str = "@/removed/";
 /// reads.
 pub const DEFAULT_FORMAT: &str = "{{ entries.path }}  {{ entries.uuid }}  {{ entries.version }}";
 
-/// The flags `rola layout entries` takes.
-#[derive(Pickable)]
-struct EntriesFlags {
-    /// The Layout to work on; the one being worked in when none is named.
-    ///
-    /// A name written `NAME@VAULT` names the Vault's own Layout instead of one of the Workspace's:
-    /// what is read is the copy a `rola layout fetch` brought here.
-    #[arg(long)]
-    layout: Option<String>,
-    /// The `Uuid` to list alone; every entry when none is named.
-    #[arg(long)]
-    uuid: Option<String>,
-}
+/// The Layout to work on; the one being worked in when none is named.
+///
+/// A name written `NAME@VAULT` names the Vault's own Layout instead of one of the Workspace's:
+/// what is read is the copy a `rola layout fetch` brought here.
+const ARG_LAYOUT: PickerArg<'static, Option<String>> = arg![layout: Option<String>];
+
+/// The `Uuid` to list alone; every entry when none is named.
+const ARG_UUID: PickerArg<'static, Option<String>> = arg![uuid: Option<String>];
 
 #[help(buffer)]
 pub fn help_layout_entries(_: EntryLayoutEntries, ec: &mut ResExitCode) {
@@ -76,12 +72,12 @@ pub fn complete_layout_entries(
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
 ) -> Suggest {
-    if ctx.previous_word == "--layout" {
+    if filling_flag(&ctx, &ARG_LAYOUT) {
         return offer(&ctx, layout_names(workspace.get_ref()));
     }
 
-    if ctx.previous_word == "--uuid" {
-        let named = flag_value(&ctx, "--layout");
+    if filling_flag(&ctx, &ARG_UUID) {
+        let named = flag_value(&ctx, &ARG_LAYOUT);
         let Some(layout) = chosen_layout(workspace.get_ref(), vault.get_ref(), named.as_deref())
         else {
             return suggest!();
@@ -94,8 +90,8 @@ pub fn complete_layout_entries(
         return strip_written(
             &ctx,
             suggest! {
-                "--layout": t!("cmd_layout_entries.complete.layout"),
-                "--uuid": t!("cmd_layout_entries.complete.uuid"),
+                ARG_LAYOUT: t!("cmd_layout_entries.complete.layout"),
+                ARG_UUID: t!("cmd_layout_entries.complete.uuid"),
             },
         );
     }
@@ -118,9 +114,9 @@ pub fn complete_layout_entries(
 #[command(node = "layout.entries", entry = EntryLayoutEntries)]
 pub fn layout_entries(args: EntryLayoutEntries, format: &mut ResFormat) -> Next {
     // Picking flags cannot fail: a flag that is absent is `None`, not an error.
-    let flags = args.pick(&arg![EntriesFlags]).unwrap();
+    let (layout, uuid) = args.pick(&ARG_LAYOUT).pick(&ARG_UUID).unwrap();
 
-    let id = match flags.uuid {
+    let id = match uuid {
         Some(text) => match Uuid::from_str(&text) {
             Ok(id) => Some(id),
             Err(_) => return ErrorLayoutArgument.into(),
@@ -129,11 +125,7 @@ pub fn layout_entries(args: EntryLayoutEntries, format: &mut ResFormat) -> Next 
     };
 
     format.default_template(DEFAULT_FORMAT);
-    StateLayoutEntries {
-        layout: flags.layout,
-        id,
-    }
-    .into()
+    StateLayoutEntries { layout, id }.into()
 }
 
 /// The state a listing of the entries starts in.

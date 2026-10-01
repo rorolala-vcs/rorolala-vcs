@@ -27,8 +27,8 @@ pub mod cmd_layout_un_track;
 
 use mingling::{
     Grouped,
-    macros::{buffer, r_eprintln, r_println, renderer},
-    picker::Pickable,
+    macros::{arg, buffer, r_eprintln, r_println, renderer},
+    picker::PickerArg,
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResVault, ResWorkspace};
@@ -447,17 +447,11 @@ pub fn failed(error: &LayoutError) -> Next {
     }
 }
 
-/// The flags a command that works on one Layout takes.
-#[derive(Pickable)]
-pub struct LayoutOnlyFlags {
-    /// The Layout to work on; the one being worked in when none is named.
-    ///
-    /// A name written `NAME@VAULT` names the Vault's own Layout instead of one of the Workspace's:
-    /// what is read is the copy a `rola layout fetch` brought here, so a command that changes a
-    /// Layout refuses one.
-    #[arg(long)]
-    pub layout: Option<String>,
-}
+/// The `--layout` of a command that works on one Layout.
+///
+/// The name is written once, here: the parse reads it and every completion that answers for a
+/// Layout offers it, so the two cannot come to disagree about what the flag is called.
+pub const ARG_LAYOUT: PickerArg<'static, Option<String>> = arg![layout: Option<String>];
 
 /// What a Layout-content command did, for the one sentence that says so.
 #[derive(Grouped, Clone, Copy)]

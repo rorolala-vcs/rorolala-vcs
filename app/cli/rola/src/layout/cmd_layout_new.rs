@@ -7,7 +7,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable},
+    picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace, ResWorkspaceConfig};
@@ -15,18 +15,13 @@ use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
-use crate::complete::{offer, strip_written, typing_flag, vault_names};
+use crate::complete::{filling_flag, offer, strip_written, typing_flag, vault_names};
 use crate::exit_codes::EC_HELP;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
 use crate::layout::{ErrorLayoutArgument, ErrorLayoutTrackNotBound, failed};
 
-/// The flags `rola layout new` takes.
-#[derive(Pickable)]
-struct NewFlags {
-    /// The Vault upstream the new Layout tracks.
-    #[arg(long)]
-    track: Option<String>,
-}
+/// The Vault upstream the new Layout tracks.
+const ARG_TRACK: PickerArg<'static, Option<String>> = arg![track: Option<String>];
 
 #[help(buffer)]
 pub fn help_layout_new(_: EntryLayoutNew, ec: &mut ResExitCode) {
@@ -48,7 +43,7 @@ pub fn complete_layout_new(
     ctx: ShellContext,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
-    if ctx.previous_word == "--track" {
+    if filling_flag(&ctx, &ARG_TRACK) {
         return offer(&ctx, vault_names(remote.get_ref()));
     }
 
@@ -56,7 +51,7 @@ pub fn complete_layout_new(
         return strip_written(
             &ctx,
             suggest! {
-                "--track": t!("cmd_layout_new.complete.track"),
+                ARG_TRACK: t!("cmd_layout_new.complete.track"),
             },
         );
     }
@@ -81,19 +76,15 @@ pub fn complete_layout_new(
 #[command(node = "layout.new", entry = EntryLayoutNew)]
 pub fn layout_new(args: EntryLayoutNew) -> Next {
     let picked = args
-        .pick(&arg![NewFlags])
+        .pick(&ARG_TRACK)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, name) = match picked {
+    let (track, name) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    StateLayoutNew {
-        name,
-        track: flags.track,
-    }
-    .into()
+    StateLayoutNew { name, track }.into()
 }
 
 /// The state of making a Layout.

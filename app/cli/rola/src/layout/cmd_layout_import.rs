@@ -13,7 +13,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResWorkspace};
@@ -22,22 +22,17 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
-use crate::complete::{positional, strip_written, typing_flag};
+use crate::complete::{filling_flag, positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_LAYOUT, EC_HELP};
 use crate::failure::failure;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
 use crate::layout::{ErrorLayoutArgument, ErrorLayoutFailed, failed};
 
-/// The flags `rola layout import` takes.
-#[derive(Pickable)]
-struct ImportFlags {
-    /// The name to give the Layout; the file's own name when none is given.
-    #[arg(long)]
-    name: Option<String>,
-    /// Import without checking that the content the file names is here.
-    #[arg(long)]
-    no_check: Flag,
-}
+/// The name to give the Layout; the file's own name when none is given.
+const ARG_NAME: PickerArg<'static, Option<String>> = arg![name: Option<String>];
+
+/// Import without checking that the content the file names is here.
+const ARG_NO_CHECK: PickerArg<'static, Flag> = arg![no_check: Flag];
 
 #[help(buffer)]
 pub fn help_layout_import(_: EntryLayoutImport, ec: &mut ResExitCode) {
@@ -60,13 +55,13 @@ pub fn complete_layout_import(ctx: ShellContext) -> Suggest {
         return strip_written(
             &ctx,
             suggest! {
-                "--name": t!("cmd_layout_import.complete.name"),
-                "--no-check": t!("cmd_layout_import.complete.no_check"),
+                ARG_NAME: t!("cmd_layout_import.complete.name"),
+                ARG_NO_CHECK: t!("cmd_layout_import.complete.no_check"),
             },
         );
     }
 
-    if ctx.previous_word == "--name" {
+    if filling_flag(&ctx, &ARG_NAME) {
         return suggest!();
     }
 
@@ -97,18 +92,19 @@ pub fn complete_layout_import(ctx: ShellContext) -> Suggest {
 #[command(node = "layout.import", entry = EntryLayoutImport)]
 pub fn layout_import(args: EntryLayoutImport) -> Next {
     let picked = args
-        .pick(&arg![ImportFlags])
+        .pick(&ARG_NAME)
+        .pick(&ARG_NO_CHECK)
         .pick_or_route(&arg![PathBuf], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, input) = match picked {
+    let (name, no_check, input) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
     StateLayoutImport {
         input,
-        name: flags.name,
-        check: matches!(flags.no_check, Flag::Inactive),
+        name,
+        check: matches!(no_check, Flag::Inactive),
     }
     .into()
 }

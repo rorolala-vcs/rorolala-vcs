@@ -2,7 +2,7 @@ use mingling::{
     ProgramCollect, Wrap,
     consts::REMAINS,
     macros::arg,
-    picker::{IntoPicker, Pickable, value::Flag},
+    picker::{IntoPicker, PickerArg, value::Flag},
     setup::ProgramSetup,
 };
 
@@ -12,13 +12,8 @@ pub struct ResForce {
     force: bool,
 }
 
-/// The global flag that lets a run go on anyway.
-#[derive(Pickable)]
-pub struct ForceFlags {
-    /// Goes on anyway where the command would refuse.
-    #[arg(long)]
-    force: Flag,
-}
+/// Goes on anyway where the command would refuse.
+const ARG_FORCE: PickerArg<'static, Flag> = arg![force: Flag];
 
 /// A [`ProgramSetup`] implementation that registers whether the run is forced.
 pub struct ForceFlagSetup;
@@ -28,17 +23,13 @@ where
     ThisProgram: ProgramCollect<Enum = ThisProgram>,
 {
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
-        // UNWRAP: `pick` for both `ForceFlags` and `REMAINS` is infallible here — each pick can
-        // fall back, so parsing never fails and the `unwrap` is safe.
-        let (flags, args) = program
-            .take_args()
-            .pick(&arg![ForceFlags])
-            .pick(&REMAINS)
-            .unwrap();
+        // UNWRAP: picking ARG_FORCE and REMAINS can each fall back, so parsing never
+        // fails and the `unwrap` is safe.
+        let (force, args) = program.take_args().pick(&ARG_FORCE).pick(&REMAINS).unwrap();
         program.replace_args(args.into());
 
         program.with_resource(ResForce {
-            force: matches!(flags.force, Flag::Active),
+            force: matches!(force, Flag::Active),
         });
     }
 }

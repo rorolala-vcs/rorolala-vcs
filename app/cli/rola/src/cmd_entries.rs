@@ -17,7 +17,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
@@ -37,13 +37,8 @@ use crate::layout::{ErrorLayoutArgument, ErrorLayoutFailed};
 /// What `rola entries` draws: the path alone, one a line.
 const PATH_TEMPLATE: &str = "{{ entries.path }}";
 
-/// The flags `rola entries` takes.
-#[derive(Pickable)]
-struct EntriesFlags {
-    /// Read the Vault's own Layout instead of the one being worked in.
-    #[arg(long)]
-    remote: Flag,
-}
+/// Read the Vault's own Layout instead of the one being worked in.
+const ARG_REMOTE: PickerArg<'static, Flag> = arg![remote: Flag];
 
 #[help(buffer)]
 pub fn help_entries(_: EntryEntries, ec: &mut ResExitCode) {
@@ -66,7 +61,7 @@ pub fn complete_entries(ctx: ShellContext) -> Suggest {
         return strip_written(
             &ctx,
             suggest! {
-                "--remote": t!("entries.complete.remote"),
+                ARG_REMOTE: t!("entries.complete.remote"),
             },
         );
     }
@@ -97,12 +92,12 @@ pub fn complete_entries(ctx: ShellContext) -> Suggest {
 #[command(node = "entries", entry = EntryEntries)]
 pub fn entries(args: EntryEntries, format: &mut ResFormat) -> Next {
     // Picking flags cannot fail: a flag that is absent is `None`, not an error.
-    let flags = args.pick(&arg![EntriesFlags]).unwrap();
+    let remote = args.pick(&ARG_REMOTE).unwrap();
 
     format.default_template(PATH_TEMPLATE);
 
     StateEntries {
-        remote: matches!(flags.remote, Flag::Active),
+        remote: matches!(remote, Flag::Active),
     }
     .into()
 }

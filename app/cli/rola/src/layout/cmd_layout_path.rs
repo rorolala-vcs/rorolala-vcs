@@ -25,16 +25,16 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::complete::{
-    chosen_layout, flag_value, layout_names, layout_paths, layout_uuids, offer, positional,
-    strip_written, typing_flag, workspace_layout_names,
+    chosen_layout, filling_flag, flag_value, layout_names, layout_paths, layout_uuids, offer,
+    positional, strip_written, typing_flag, workspace_layout_names,
 };
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutMoveRefused,
-    ErrorLayoutPathTaken, LayoutDid, LayoutOnlyFlags, ResultLayoutContent, chosen_writable, failed,
-    remote_spec, set_cached_path,
+    ErrorLayoutPathTaken, LayoutDid, ResultLayoutContent, chosen_writable, failed, remote_spec,
+    set_cached_path,
 };
 
 /// The `LayoutPath` `text` names, or the argument failure.
@@ -70,7 +70,7 @@ pub fn complete_layout_path_create(
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
 ) -> Suggest {
-    if ctx.previous_word == "--layout" {
+    if filling_flag(&ctx, &crate::layout::ARG_LAYOUT) {
         return offer(&ctx, workspace_layout_names(workspace.get_ref()));
     }
 
@@ -78,7 +78,7 @@ pub fn complete_layout_path_create(
         return strip_written(
             &ctx,
             suggest! {
-                "--layout": t!("cmd_layout_path.complete.layout"),
+                crate::layout::ARG_LAYOUT: t!("cmd_layout_path.complete.layout"),
             },
         );
     }
@@ -107,21 +107,16 @@ pub fn complete_layout_path_create(
 #[command(node = "layout.path.create", entry = EntryLayoutPathCreate)]
 pub fn layout_path_create(args: EntryLayoutPathCreate) -> Next {
     let picked = args
-        .pick(&arg![LayoutOnlyFlags])
+        .pick(&crate::layout::ARG_LAYOUT)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, path, uuid) = match picked {
+    let (layout, path, uuid) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    StateLayoutPathCreate {
-        path,
-        uuid,
-        layout: flags.layout,
-    }
-    .into()
+    StateLayoutPathCreate { path, uuid, layout }.into()
 }
 
 /// The state of binding a path.
@@ -187,7 +182,7 @@ pub fn complete_layout_path_remove(
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
 ) -> Suggest {
-    if ctx.previous_word == "--layout" {
+    if filling_flag(&ctx, &crate::layout::ARG_LAYOUT) {
         return offer(&ctx, workspace_layout_names(workspace.get_ref()));
     }
 
@@ -195,7 +190,7 @@ pub fn complete_layout_path_remove(
         return strip_written(
             &ctx,
             suggest! {
-                "--layout": t!("cmd_layout_path.complete.layout"),
+                crate::layout::ARG_LAYOUT: t!("cmd_layout_path.complete.layout"),
             },
         );
     }
@@ -223,19 +218,15 @@ pub fn complete_layout_path_remove(
 #[command(node = "layout.path.remove", entry = EntryLayoutPathRemove)]
 pub fn layout_path_remove(args: EntryLayoutPathRemove) -> Next {
     let picked = args
-        .pick(&arg![LayoutOnlyFlags])
+        .pick(&crate::layout::ARG_LAYOUT)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, path) = match picked {
+    let (layout, path) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    StateLayoutPathRemove {
-        path,
-        layout: flags.layout,
-    }
-    .into()
+    StateLayoutPathRemove { path, layout }.into()
 }
 
 /// The state of unbinding a path.
@@ -295,7 +286,7 @@ pub fn complete_layout_path_move(
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
 ) -> Suggest {
-    if ctx.previous_word == "--layout" {
+    if filling_flag(&ctx, &crate::layout::ARG_LAYOUT) {
         return offer(&ctx, layout_names(workspace.get_ref()));
     }
 
@@ -303,7 +294,7 @@ pub fn complete_layout_path_move(
         return strip_written(
             &ctx,
             suggest! {
-                "--layout": t!("cmd_layout_path.complete.layout"),
+                crate::layout::ARG_LAYOUT: t!("cmd_layout_path.complete.layout"),
             },
         );
     }
@@ -325,7 +316,7 @@ fn entry_layout(
     workspace: &ResWorkspace,
     vault: &ResVault,
 ) -> Option<librorolala::layout::Layout> {
-    let named = flag_value(ctx, "--layout");
+    let named = flag_value(ctx, &crate::layout::ARG_LAYOUT);
 
     chosen_layout(workspace, vault, named.as_deref())
 }
@@ -344,21 +335,16 @@ fn entry_layout(
 #[command(node = "layout.path.move", entry = EntryLayoutPathMove)]
 pub fn layout_path_move(args: EntryLayoutPathMove) -> Next {
     let picked = args
-        .pick(&arg![LayoutOnlyFlags])
+        .pick(&crate::layout::ARG_LAYOUT)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, from, to) = match picked {
+    let (layout, from, to) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    StateLayoutPathMove {
-        from,
-        to,
-        layout: flags.layout,
-    }
-    .into()
+    StateLayoutPathMove { from, to, layout }.into()
 }
 
 /// The state of moving an entry between paths.

@@ -36,7 +36,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
@@ -54,7 +54,8 @@ use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
 use crate::complete::{
-    IndexObject, index_hashes, offer, positional, strip_written, typing_flag, vault_names,
+    IndexObject, filling_flag, index_hashes, offer, positional, strip_written, typing_flag,
+    vault_names,
 };
 use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_HELP};
 use crate::failure::failure;
@@ -64,19 +65,14 @@ use crate::layout::{
     ErrorLayoutShouldInWorkspace, chosen, failed as layout_failed, readonly_layout_dir, remote_spec,
 };
 
-/// The flags `rola retrack` takes.
-#[derive(Pickable)]
-struct RetrackFlags {
-    /// Where the pointer goes, one version back unless said.
-    #[arg(long)]
-    until: Option<String>,
-    /// Write the version's content back over the file as well.
-    #[arg(long)]
-    restore_content: Flag,
-    /// Move the pointer to a version that is not on the way back to where it is now.
-    #[arg(long)]
-    allow_jump: Flag,
-}
+/// Where the pointer goes, one version back unless said.
+const ARG_UNTIL: PickerArg<'static, Option<String>> = arg![until: Option<String>];
+
+/// Write the version's content back over the file as well.
+const ARG_RESTORE_CONTENT: PickerArg<'static, Flag> = arg![restore_content: Flag];
+
+/// Move the pointer to a version that is not on the way back to where it is now.
+const ARG_ALLOW_JUMP: PickerArg<'static, Flag> = arg![allow_jump: Flag];
 
 #[help(buffer)]
 pub fn help_retrack(_: EntryRetrack, ec: &mut ResExitCode) {
@@ -101,7 +97,7 @@ pub fn complete_retrack(
     index: &mut LazyRes<ResVCSIndex>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
-    if ctx.previous_word == "--until" {
+    if filling_flag(&ctx, &ARG_UNTIL) {
         let mut names = vec!["-1".to_owned()];
         names.extend(index_hashes(index.get_ref().as_ref(), IndexObject::Version));
         names.extend(vault_names(remote.get_ref()));
@@ -113,9 +109,9 @@ pub fn complete_retrack(
         return strip_written(
             &ctx,
             suggest! {
-                "--until": t!("retrack.complete.until"),
-                "--restore-content": t!("retrack.complete.restore_content"),
-                "--allow-jump": t!("retrack.complete.allow_jump"),
+                ARG_UNTIL: t!("retrack.complete.until"),
+                ARG_RESTORE_CONTENT: t!("retrack.complete.restore_content"),
+                ARG_ALLOW_JUMP: t!("retrack.complete.allow_jump"),
             },
         );
     }
@@ -154,10 +150,12 @@ pub fn complete_retrack(
 #[command(node = "retrack", entry = EntryRetrack)]
 pub fn retrack(args: EntryRetrack) -> Next {
     let picked = args
-        .pick(&arg![RetrackFlags])
+        .pick(&ARG_UNTIL)
+        .pick(&ARG_RESTORE_CONTENT)
+        .pick(&ARG_ALLOW_JUMP)
         .pick_or_route(&arg![Vec<String>], || ErrorRetrackNoFile.into())
         .to_result();
-    let (flags, mut files) = match picked {
+    let (until, restore_content, allow_jump, mut files) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -174,9 +172,9 @@ pub fn retrack(args: EntryRetrack) -> Next {
 
     StateRetrack {
         file,
-        until: flags.until,
-        restore_content: matches!(flags.restore_content, Flag::Active),
-        allow_jump: matches!(flags.allow_jump, Flag::Active),
+        until,
+        restore_content: matches!(restore_content, Flag::Active),
+        allow_jump: matches!(allow_jump, Flag::Active),
     }
     .into()
 }

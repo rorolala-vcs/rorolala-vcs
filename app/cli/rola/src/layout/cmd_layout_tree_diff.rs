@@ -8,7 +8,7 @@ use mingling::{
         renderer, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable},
+    picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResWorkspace;
@@ -17,7 +17,7 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
-use crate::complete::{layout_names, offer, positional, strip_written, typing_flag};
+use crate::complete::{filling_flag, layout_names, offer, positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
@@ -28,13 +28,8 @@ use crate::layout::{
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
 
-/// The flags `rola layout tree-diff` takes.
-#[derive(Pickable)]
-struct DiffFlags {
-    /// How alike two text files have to be to count as the same file moved, from 0 to 1.
-    #[arg(long)]
-    alike: Option<f32>,
-}
+/// How alike two text files have to be to count as the same file moved, from 0 to 1.
+const ARG_ALIKE: PickerArg<'static, Option<f32>> = arg![alike: Option<f32>];
 
 #[help(buffer)]
 pub fn help_layout_tree_diff(_: EntryLayoutTreeDiff, ec: &mut ResExitCode) {
@@ -60,12 +55,12 @@ pub fn complete_layout_tree_diff(
         return strip_written(
             &ctx,
             suggest! {
-                "--alike": t!("cmd_layout_tree_diff.complete.alike"),
+                ARG_ALIKE: t!("cmd_layout_tree_diff.complete.alike"),
             },
         );
     }
 
-    if ctx.previous_word == "--alike" {
+    if filling_flag(&ctx, &ARG_ALIKE) {
         return suggest!();
     }
 
@@ -96,17 +91,17 @@ pub fn complete_layout_tree_diff(
 #[command(node = "layout.tree-diff", entry = EntryLayoutTreeDiff)]
 pub fn layout_tree_diff(args: EntryLayoutTreeDiff) -> Next {
     let picked = args
-        .pick(&arg![DiffFlags])
+        .pick(&ARG_ALIKE)
         .pick(&arg![Option<String>])
         .to_result();
-    let (flags, name) = match picked {
+    let (alike, name) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
     StateLayoutTreeDiff {
         name,
-        alike: flags.alike.unwrap_or(DEFAULT_ALIKE),
+        alike: alike.unwrap_or(DEFAULT_ALIKE),
     }
     .into()
 }

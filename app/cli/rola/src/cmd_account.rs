@@ -25,6 +25,7 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::typing_flag;
 use crate::exit_codes::{EC_ERR_ACCOUNT_NO_DIR, EC_ERR_ACCOUNT_NOT_FOUND, EC_ERR_FORMAT, EC_HELP};
 use crate::failure::failure;
 use crate::format::ResFormat;
@@ -137,7 +138,7 @@ pub fn complete_account(
     vault: &mut LazyRes<ResVault>,
     workspace: &mut LazyRes<ResWorkspace>,
 ) -> Suggest {
-    if ctx.current_word.starts_with('-') {
+    if typing_flag(&ctx) {
         return suggest!();
     }
 

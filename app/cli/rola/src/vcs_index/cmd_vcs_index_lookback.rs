@@ -27,7 +27,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
     setup::ProgramSetup,
 };
@@ -38,7 +38,9 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
-use crate::complete::{IndexObject, index_hashes, offer, positional, strip_written, typing_flag};
+use crate::complete::{
+    IndexObject, filling_flag, index_hashes, offer, positional, strip_written, typing_flag,
+};
 use crate::exit_codes::EC_HELP;
 use crate::vcs_index::{
     ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hex,
@@ -51,22 +53,18 @@ pub const DEFAULT_MESSAGE_LENGTH: usize = 64;
 /// What a message that was cut short ends with.
 const ELLIPSIS: &str = "...";
 
-/// The flags every command that draws a lookback takes.
-#[derive(Pickable)]
-pub struct LookbackFlags {
-    /// Draw the versions alone, without the variants between them.
-    #[arg(long)]
-    compact: Flag,
-    /// Leave out what each version says.
-    #[arg(long)]
-    no_message: Flag,
-    /// Leave out who made each version.
-    #[arg(long)]
-    no_creator: Flag,
-    /// How much of a message is shown before it is cut short.
-    #[arg(long)]
-    max_message_length: Option<usize>,
-}
+/// Draw the versions alone, without the variants between them.
+pub const ARG_COMPACT: PickerArg<'static, Flag> = arg![compact: Flag];
+
+/// Leave out what each version says.
+pub const ARG_NO_MESSAGE: PickerArg<'static, Flag> = arg![no_message: Flag];
+
+/// Leave out who made each version.
+pub const ARG_NO_CREATOR: PickerArg<'static, Flag> = arg![no_creator: Flag];
+
+/// How much of a message is shown before it is cut short.
+pub const ARG_MAX_MESSAGE_LENGTH: PickerArg<'static, Option<usize>> =
+    arg![max_message_length: Option<usize>];
 
 /// What a lookback is drawn as, by the run that asked for it.
 ///
@@ -125,12 +123,18 @@ impl ResLookback {
     ///
     /// It is what a command calls as it is reached, so that the drawing a renderer makes is the one
     /// the run named — whichever of the two commands that draw a lookback it was.
-    pub fn asked(&mut self, flags: &LookbackFlags) {
-        self.compact = matches!(flags.compact, Flag::Active);
-        self.message = !matches!(flags.no_message, Flag::Active);
-        self.creator = !matches!(flags.no_creator, Flag::Active);
+    pub fn asked(
+        &mut self,
+        compact: Flag,
+        no_message: Flag,
+        no_creator: Flag,
+        max_message_length: Option<usize>,
+    ) {
+        self.compact = matches!(compact, Flag::Active);
+        self.message = !matches!(no_message, Flag::Active);
+        self.creator = !matches!(no_creator, Flag::Active);
 
-        if let Some(length) = flags.max_message_length {
+        if let Some(length) = max_message_length {
             self.max_message_length = length;
         }
     }
@@ -170,15 +174,15 @@ pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCS
         return strip_written(
             &ctx,
             suggest! {
-                "--compact": t!("vcs_index_lookback.complete.compact"),
-                "--no-message": t!("vcs_index_lookback.complete.no_message"),
-                "--no-creator": t!("vcs_index_lookback.complete.no_creator"),
-                "--max-message-length": t!("vcs_index_lookback.complete.max_message_length"),
+                ARG_COMPACT: t!("vcs_index_lookback.complete.compact"),
+                ARG_NO_MESSAGE: t!("vcs_index_lookback.complete.no_message"),
+                ARG_NO_CREATOR: t!("vcs_index_lookback.complete.no_creator"),
+                ARG_MAX_MESSAGE_LENGTH: t!("vcs_index_lookback.complete.max_message_length"),
             },
         );
     }
 
-    if ctx.previous_word == "--max-message-length" || positional(&ctx, "lookback") != 0 {
+    if filling_flag(&ctx, &ARG_MAX_MESSAGE_LENGTH) || positional(&ctx, "lookback") != 0 {
         return suggest!();
     }
 
@@ -208,7 +212,10 @@ pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCS
 #[command(node = "vcs-index.lookback", entry = EntryVcsIndexLookback)]
 pub fn vcs_index_lookback(args: EntryVcsIndexLookback, lookback: &mut ResLookback) -> Next {
     let picked = args
-        .pick(&arg![LookbackFlags])
+        .pick(&ARG_COMPACT)
+        .pick(&ARG_NO_MESSAGE)
+        .pick(&ARG_NO_CREATOR)
+        .pick(&ARG_MAX_MESSAGE_LENGTH)
         .pick_or_route(&arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "HASH".to_owned(),
@@ -216,12 +223,12 @@ pub fn vcs_index_lookback(args: EntryVcsIndexLookback, lookback: &mut ResLookbac
             .into()
         })
         .to_result();
-    let (flags, hash) = match picked {
+    let (compact, no_message, no_creator, max_message_length, hash) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    lookback.asked(&flags);
+    lookback.asked(compact, no_message, no_creator, max_message_length);
 
     StateVcsIndexLookback { hash }.into()
 }

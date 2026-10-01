@@ -17,7 +17,7 @@ use mingling::{
         r_println, renderer, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResVault, ResWorkspace};
@@ -26,6 +26,7 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::complete::{strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::keys::{roots, scopes};
@@ -36,13 +37,8 @@ use crate::keys::{roots, scopes};
 /// the result, `paths`.
 const DEFAULT_FORMAT: &str = "{{ paths }}";
 
-/// The flags `rola key` takes.
-#[derive(Pickable)]
-struct KeyFlags {
-    /// Look for private keys — the accounts the work acts as — instead of public ones.
-    #[arg(long)]
-    pem: Flag,
-}
+/// Look for private keys — the accounts the work acts as — instead of public ones.
+const ARG_PEM: PickerArg<'static, Flag> = arg![pem: Flag];
 
 #[help(buffer)]
 pub fn help_key(_: EntryKey, ec: &mut ResExitCode) {
@@ -69,10 +65,10 @@ pub fn desc_key() -> Description {
 #[command(node = "key", entry = EntryKey)]
 pub fn key(args: EntryKey, format: &mut ResFormat) -> StateKeyList {
     // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let flags = args.pick(&arg![KeyFlags]).unwrap();
+    let pem = args.pick(&ARG_PEM).unwrap();
 
     format.default_template(DEFAULT_FORMAT);
-    StateKeyList::from(matches!(flags.pem, Flag::Active))
+    StateKeyList::from(matches!(pem, Flag::Active))
 }
 
 /// The state a listing of keys starts in.
@@ -127,20 +123,16 @@ pub fn handle_key_list(
 /// that are not already on the line.
 #[completion(EntryKey)]
 pub fn complete_key(ctx: ShellContext) -> Suggest {
-    if !ctx.current_word.starts_with('-') {
+    if !typing_flag(&ctx) {
         return suggest!();
     }
 
-    let typed: Vec<&str> = ctx.all_words.iter().map(String::as_str).collect();
-    let mut suggestions = suggest! {
-        "--pem": t!("key.complete.pem"),
-    };
-
-    if let Suggest::Suggest(items) = &mut suggestions {
-        items.retain(|item| !typed.contains(&item.suggest().as_str()));
-    }
-
-    suggestions
+    strip_written(
+        &ctx,
+        suggest! {
+            ARG_PEM: t!("key.complete.pem"),
+        },
+    )
 }
 
 /// Result: keys were found beside the work at hand.

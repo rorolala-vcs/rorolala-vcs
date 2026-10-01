@@ -7,7 +7,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable},
+    picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace, ResWorkspaceConfig};
@@ -16,19 +16,15 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::complete::{
-    offer, positional, strip_written, typing_flag, vault_names, workspace_layout_names,
+    filling_flag, offer, positional, strip_written, typing_flag, vault_names,
+    workspace_layout_names,
 };
 use crate::exit_codes::EC_HELP;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
 use crate::layout::{ErrorLayoutArgument, ErrorLayoutTrackNotBound, failed};
 
-/// The flags `rola layout cp` takes.
-#[derive(Pickable)]
-struct CpFlags {
-    /// The Vault upstream the copy tracks.
-    #[arg(long)]
-    track: Option<String>,
-}
+/// The Vault upstream the copy tracks.
+const ARG_TRACK: PickerArg<'static, Option<String>> = arg![track: Option<String>];
 
 #[help(buffer)]
 pub fn help_layout_cp(_: EntryLayoutCp, ec: &mut ResExitCode) {
@@ -51,7 +47,7 @@ pub fn complete_layout_cp(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
-    if ctx.previous_word == "--track" {
+    if filling_flag(&ctx, &ARG_TRACK) {
         return offer(&ctx, vault_names(remote.get_ref()));
     }
 
@@ -59,7 +55,7 @@ pub fn complete_layout_cp(
         return strip_written(
             &ctx,
             suggest! {
-                "--track": t!("cmd_layout_cp.complete.track"),
+                ARG_TRACK: t!("cmd_layout_cp.complete.track"),
             },
         );
     }
@@ -86,21 +82,16 @@ pub fn complete_layout_cp(
 #[command(node = "layout.cp", entry = EntryLayoutCp)]
 pub fn layout_cp(args: EntryLayoutCp) -> Next {
     let picked = args
-        .pick(&arg![CpFlags])
+        .pick(&ARG_TRACK)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, from, to) = match picked {
+    let (track, from, to) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    StateLayoutCp {
-        from,
-        to,
-        track: flags.track,
-    }
-    .into()
+    StateLayoutCp { from, to, track }.into()
 }
 
 /// The state of copying a Layout.

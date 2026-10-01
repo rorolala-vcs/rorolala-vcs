@@ -29,6 +29,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::typing_flag;
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_CANCELLED, EC_HELP};
 use crate::keys::account_named;
@@ -179,7 +180,7 @@ pub fn complete_storage_sync_all(
     ctx: ShellContext,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
-    if ctx.current_word.starts_with('-') {
+    if typing_flag(&ctx) {
         return suggest!();
     }
 

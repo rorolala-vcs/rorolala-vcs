@@ -8,7 +8,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResWorkspaceConfig;
@@ -19,18 +19,16 @@ use rust_i18n::t;
 use crate::Next;
 use crate::address::ResAddressHistory;
 use crate::cmd_create::ErrorWorkspaceNotExist;
-use crate::complete::positional;
+use crate::complete::{offer, positional, strip_written, typing_flag};
 use crate::error::{ErrorConfigUnreadable, ErrorVaultNameMissing};
 use crate::exit_codes::{EC_ERR_VAULT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 
-/// The flags `rola vault bind` takes.
-#[derive(Pickable)]
-struct VaultBindFlags {
-    /// Also make the name the one the Workspace reaches for.
-    #[arg(long)]
-    set_default: Flag,
-}
+/// The `--set-default` of `rola vault bind`.
+///
+/// The name is written once, here: the parse reads it and the completion offers it, so the
+/// two cannot come to disagree about what the flag is called.
+const ARG_SET_DEFAULT: PickerArg<'static, Flag> = arg![set_default: Flag];
 
 #[help(buffer)]
 pub fn help_vault_bind(_: EntryVaultBind, ec: &mut ResExitCode) {
@@ -56,11 +54,11 @@ pub fn desc_vault_bind() -> Description {
 #[command(node = "vault.bind")]
 pub fn vault_bind(args: EntryVaultBind) -> Next {
     let picked = args
-        .pick(&arg![VaultBindFlags])
+        .pick(&ARG_SET_DEFAULT)
         .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
         .pick_or_route(&arg![String], || ErrorVaultAddressMissing.into())
         .to_result();
-    let (flags, name, address) = match picked {
+    let (set_default, name, address) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -69,11 +67,10 @@ pub fn vault_bind(args: EntryVaultBind) -> Next {
     StateVaultBind {
         name,
         address,
-        set_default: matches!(flags.set_default, Flag::Active),
+        set_default: matches!(set_default, Flag::Active),
     }
     .into()
 }
-
 /// The state of binding a name to a Vault address.
 #[derive(Grouped)]
 pub struct StateVaultBind {
@@ -137,19 +134,25 @@ pub fn handle_vault_bind(
 
 /// Completes what `rola vault bind` can be given next.
 ///
-/// Only the address is completed, from the addresses reached before; the name is
-/// deliberately left alone, since a name is the caller's to choose and nothing here can
-/// know what it should be.
+/// A word that starts a flag is answered with the flags the command takes, read from the same
+/// `PickerArg` the parse reads; the address is completed from the addresses reached before. The
+/// name is deliberately left alone, since a name is the caller's to choose.
 #[completion(EntryVaultBind)]
 pub fn complete_vault_bind(ctx: ShellContext, history: &mut LazyRes<ResAddressHistory>) -> Suggest {
-    if ctx.current_word.starts_with('-') || positional(&ctx, "bind") != 1 {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                ARG_SET_DEFAULT: t!("vault_bind.complete.set_default"),
+            },
+        );
+    }
+
+    if positional(&ctx, "bind") != 1 {
         return suggest!();
     }
 
-    let mut addresses: Vec<String> = history.get_ref().iter().map(str::to_string).collect();
-    addresses.retain(|address| address.starts_with(&ctx.current_word));
-
-    suggest! { addresses }
+    offer(&ctx, history.get_ref().iter().map(str::to_string))
 }
 
 /// Result: a name was bound to an address.

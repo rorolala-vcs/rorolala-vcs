@@ -12,7 +12,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_errors::Failure;
@@ -36,13 +36,8 @@ use crate::failure::failure;
 /// `.pub` is.
 const ALGORITHM: &str = "ed25519";
 
-/// The flags `rola key generate` takes.
-#[derive(Pickable)]
-struct GenerateFlags {
-    /// Put the pair in the user's key directory.
-    #[arg(long)]
-    install: Flag,
-}
+/// Put the pair in the user's key directory.
+const ARG_INSTALL: PickerArg<'static, Flag> = arg![install: Flag];
 
 #[help(buffer)]
 pub fn help_key_generate(_: EntryKeyGenerate, ec: &mut ResExitCode) {
@@ -67,7 +62,7 @@ pub fn complete_key_generate(ctx: ShellContext) -> Suggest {
         return strip_written(
             &ctx,
             suggest! {
-                "--install": t!("key_generate.complete.install"),
+                ARG_INSTALL: t!("key_generate.complete.install"),
             },
         );
     }
@@ -96,10 +91,10 @@ pub fn complete_key_generate(ctx: ShellContext) -> Suggest {
 #[command(node = "key.generate")]
 pub fn key_generate(args: EntryKeyGenerate) -> Next {
     let picked = args
-        .pick(&arg![GenerateFlags])
+        .pick(&ARG_INSTALL)
         .pick_or_route(&arg![String], || ErrorKeyNameMissing.into())
         .to_result();
-    let (flags, named) = match picked {
+    let (install, named) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -114,7 +109,7 @@ pub fn key_generate(args: EntryKeyGenerate) -> Next {
     // Picking a `Flag` cannot fail, so this is `Active` only when it was written.
     StateKeyGenerate {
         name,
-        install: matches!(flags.install, Flag::Active),
+        install: matches!(install, Flag::Active),
     }
     .into()
 }

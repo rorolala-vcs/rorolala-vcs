@@ -16,6 +16,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::cmd_create::ErrorWorkspaceNotExist;
+use crate::complete::typing_flag;
 use crate::error::{ErrorConfigUnreadable, ErrorVaultNameMissing, ErrorVaultNotBound};
 use crate::exit_codes::EC_HELP;
 
@@ -92,7 +93,7 @@ pub fn complete_vault_set_default(
     ctx: ShellContext,
     config: &mut LazyRes<ResWorkspaceConfig>,
 ) -> Suggest {
-    if ctx.current_word.starts_with('-') {
+    if typing_flag(&ctx) {
         return suggest!();
     }
 

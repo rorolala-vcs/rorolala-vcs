@@ -38,12 +38,12 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::complete::{positional, strip_written, typing_flag};
+use crate::complete::{filling_flag, positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_dir};
 use crate::ownership;
-use crate::vcs_index::cmd_vcs_index_lookback::{LookbackFlags, ResLookback, from_object};
+use crate::vcs_index::cmd_vcs_index_lookback::{ResLookback, from_object};
 use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, parse_hash, runtime};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
@@ -71,15 +71,18 @@ pub fn complete_status(ctx: ShellContext) -> Suggest {
         return strip_written(
             &ctx,
             suggest! {
-                "--compact": t!("status.complete.compact"),
-                "--no-message": t!("status.complete.no_message"),
-                "--no-creator": t!("status.complete.no_creator"),
-                "--max-message-length": t!("status.complete.max_message_length"),
+                crate::vcs_index::cmd_vcs_index_lookback::ARG_COMPACT: t!("status.complete.compact"),
+                crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_MESSAGE: t!("status.complete.no_message"),
+                crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_CREATOR: t!("status.complete.no_creator"),
+                crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH: t!("status.complete.max_message_length"),
             },
         );
     }
 
-    if ctx.previous_word == "--max-message-length" {
+    if filling_flag(
+        &ctx,
+        &crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH,
+    ) {
         return suggest!();
     }
 
@@ -108,15 +111,18 @@ pub fn complete_status(ctx: ShellContext) -> Suggest {
 #[command(node = "status", entry = EntryStatus)]
 pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
     let picked = args
-        .pick(&arg![LookbackFlags])
+        .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_COMPACT)
+        .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_MESSAGE)
+        .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_CREATOR)
+        .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH)
         .pick(&arg![Option<String>])
         .to_result();
-    let (flags, target) = match picked {
+    let (compact, no_message, no_creator, max_message_length, target) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    lookback.asked(&flags);
+    lookback.asked(compact, no_message, no_creator, max_message_length);
 
     StateStatus { target }.into()
 }

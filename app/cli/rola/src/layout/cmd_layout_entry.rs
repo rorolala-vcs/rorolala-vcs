@@ -14,7 +14,7 @@ use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{arg, buffer, chain, command, completion, help, metadata, r_eprintln, suggest},
     metadata::Description,
-    picker::{EntryPicker, Pickable},
+    picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResVCSIndex, ResVault, ResWorkspace};
@@ -24,28 +24,21 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::complete::{
-    IndexObject, chosen_layout, flag_value, index_hashes, layout_uuids, offer, positional,
-    strip_written, typing_flag, workspace_layout_names,
+    IndexObject, chosen_layout, filling_flag, flag_value, index_hashes, layout_uuids, offer,
+    positional, strip_written, typing_flag, workspace_layout_names,
 };
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_names;
-use crate::layout::{
-    ErrorLayoutArgument, LayoutDid, LayoutOnlyFlags, ResultLayoutContent, chosen_writable, failed,
-};
+use crate::layout::{ErrorLayoutArgument, LayoutDid, ResultLayoutContent, chosen_writable, failed};
 
-/// The flags `rola layout entry create` and `update` take.
-#[derive(Pickable)]
-struct EntryFlags {
-    /// The account the entry is held by; none when it is left out.
-    #[arg(long)]
-    owner: Option<String>,
-    /// What the entry says about itself; nothing when it is left out.
-    #[arg(long)]
-    description: Option<String>,
-    /// The Layout to work on; the one being worked in when none is named.
-    #[arg(long)]
-    layout: Option<String>,
-}
+/// The account the entry is held by; none when it is left out.
+const ARG_OWNER: PickerArg<'static, Option<String>> = arg![owner: Option<String>];
+
+/// What the entry says about itself; nothing when it is left out.
+const ARG_DESCRIPTION: PickerArg<'static, Option<String>> = arg![description: Option<String>];
+
+/// The Layout to work on; the one being worked in when none is named.
+const ARG_LAYOUT: PickerArg<'static, Option<String>> = arg![layout: Option<String>];
 
 /// The `Uuid` `text` names, or the argument failure.
 fn uuid_of(text: &str) -> Result<Uuid, Next> {
@@ -111,7 +104,7 @@ pub fn complete_layout_entry_remove(
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
 ) -> Suggest {
-    if ctx.previous_word == "--layout" {
+    if filling_flag(&ctx, &ARG_LAYOUT) {
         return offer(&ctx, workspace_layout_names(workspace.get_ref()));
     }
 
@@ -119,7 +112,7 @@ pub fn complete_layout_entry_remove(
         return strip_written(
             &ctx,
             suggest! {
-                "--layout": t!("cmd_layout_entry.complete.layout"),
+                ARG_LAYOUT: t!("cmd_layout_entry.complete.layout"),
             },
         );
     }
@@ -145,15 +138,15 @@ fn complete_entry_written(
     vault: &ResVault,
     index: &ResVCSIndex,
 ) -> Suggest {
-    if ctx.previous_word == "--layout" {
+    if filling_flag(ctx, &ARG_LAYOUT) {
         return offer(ctx, workspace_layout_names(workspace));
     }
 
-    if ctx.previous_word == "--owner" {
+    if filling_flag(ctx, &ARG_OWNER) {
         return offer(ctx, account_names(workspace.as_ref(), vault.as_ref()));
     }
 
-    if ctx.previous_word == "--description" {
+    if filling_flag(ctx, &ARG_DESCRIPTION) {
         return suggest!();
     }
 
@@ -161,9 +154,9 @@ fn complete_entry_written(
         return strip_written(
             ctx,
             suggest! {
-                "--owner": t!("cmd_layout_entry.complete.owner"),
-                "--description": t!("cmd_layout_entry.complete.description"),
-                "--layout": t!("cmd_layout_entry.complete.layout"),
+                ARG_OWNER: t!("cmd_layout_entry.complete.owner"),
+                ARG_DESCRIPTION: t!("cmd_layout_entry.complete.description"),
+                ARG_LAYOUT: t!("cmd_layout_entry.complete.layout"),
             },
         );
     }
@@ -177,7 +170,7 @@ fn complete_entry_written(
 
 /// The entries the Layout a run would work on holds, when there is one to read.
 fn entry_uuids(ctx: &ShellContext, workspace: &ResWorkspace, vault: &ResVault) -> Suggest {
-    let named = flag_value(ctx, "--layout");
+    let named = flag_value(ctx, &ARG_LAYOUT);
     let Some(layout) = chosen_layout(workspace, vault, named.as_deref()) else {
         return suggest!();
     };
@@ -199,11 +192,13 @@ fn entry_uuids(ctx: &ShellContext, workspace: &ResWorkspace, vault: &ResVault) -
 #[command(node = "layout.entry.create", entry = EntryLayoutEntryCreate)]
 pub fn layout_entry_create(args: EntryLayoutEntryCreate) -> Next {
     let picked = args
-        .pick(&arg![EntryFlags])
+        .pick(&ARG_OWNER)
+        .pick(&ARG_DESCRIPTION)
+        .pick(&ARG_LAYOUT)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, uuid, version) = match picked {
+    let (owner, description, layout, uuid, version) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -211,9 +206,9 @@ pub fn layout_entry_create(args: EntryLayoutEntryCreate) -> Next {
     StateLayoutEntry {
         uuid,
         version,
-        owner: flags.owner,
-        description: flags.description,
-        layout: flags.layout,
+        owner,
+        description,
+        layout,
         update: false,
         remove: false,
     }
@@ -244,11 +239,13 @@ pub fn desc_layout_entry_update() -> Description {
 #[command(node = "layout.entry.update", entry = EntryLayoutEntryUpdate)]
 pub fn layout_entry_update(args: EntryLayoutEntryUpdate) -> Next {
     let picked = args
-        .pick(&arg![EntryFlags])
+        .pick(&ARG_OWNER)
+        .pick(&ARG_DESCRIPTION)
+        .pick(&ARG_LAYOUT)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, uuid, version) = match picked {
+    let (owner, description, layout, uuid, version) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -256,9 +253,9 @@ pub fn layout_entry_update(args: EntryLayoutEntryUpdate) -> Next {
     StateLayoutEntry {
         uuid,
         version,
-        owner: flags.owner,
-        description: flags.description,
-        layout: flags.layout,
+        owner,
+        description,
+        layout,
         update: true,
         remove: false,
     }
@@ -286,10 +283,10 @@ pub fn desc_layout_entry_remove() -> Description {
 #[command(node = "layout.entry.remove", entry = EntryLayoutEntryRemove)]
 pub fn layout_entry_remove(args: EntryLayoutEntryRemove) -> Next {
     let picked = args
-        .pick(&arg![LayoutOnlyFlags])
+        .pick(&crate::layout::ARG_LAYOUT)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (flags, uuid) = match picked {
+    let (layout, uuid) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -299,7 +296,7 @@ pub fn layout_entry_remove(args: EntryLayoutEntryRemove) -> Next {
         version: String::new(),
         owner: None,
         description: None,
-        layout: flags.layout,
+        layout,
         remove: true,
         update: false,
     }

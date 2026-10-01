@@ -36,7 +36,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable, value::Flag},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
@@ -69,31 +69,26 @@ use crate::progress::Reporting;
 use crate::sync::{self, Direction, Entry, Kind};
 use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
 
-/// The flags `rola sync` takes.
-#[derive(Pickable)]
-struct SyncFlags {
-    /// Only what this Layout holds goes up.
-    #[arg(long)]
-    up_only: Flag,
-    /// Only what the Vault holds comes down.
-    #[arg(long)]
-    down_only: Flag,
-    /// Both directions; the one taken when neither is named.
-    #[arg(long)]
-    both: Flag,
-    /// Show the plan and change nothing.
-    #[arg(long)]
-    dry_run: Flag,
-    /// Leave the index alone; only the Layout and the store move.
-    #[arg(long)]
-    no_index: Flag,
-    /// Leave the store alone; only the Layout and the index move.
-    #[arg(long)]
-    no_storage: Flag,
-    /// Leave the Vault's Layout alone; only data and index move.
-    #[arg(long)]
-    no_layout: Flag,
-}
+/// Only what this Layout holds goes up.
+const ARG_UP_ONLY: PickerArg<'static, Flag> = arg![up_only: Flag];
+
+/// Only what the Vault holds comes down.
+const ARG_DOWN_ONLY: PickerArg<'static, Flag> = arg![down_only: Flag];
+
+/// Both directions; the one taken when neither is named.
+const ARG_BOTH: PickerArg<'static, Flag> = arg![both: Flag];
+
+/// Show the plan and change nothing.
+const ARG_DRY_RUN: PickerArg<'static, Flag> = arg![dry_run: Flag];
+
+/// Leave the index alone; only the Layout and the store move.
+const ARG_NO_INDEX: PickerArg<'static, Flag> = arg![no_index: Flag];
+
+/// Leave the store alone; only the Layout and the index move.
+const ARG_NO_STORAGE: PickerArg<'static, Flag> = arg![no_storage: Flag];
+
+/// Leave the Vault's Layout alone; only data and index move.
+const ARG_NO_LAYOUT: PickerArg<'static, Flag> = arg![no_layout: Flag];
 
 #[help(buffer)]
 pub fn help_sync(_: EntrySync, ec: &mut ResExitCode) {
@@ -116,13 +111,13 @@ pub fn complete_sync(ctx: ShellContext) -> Suggest {
         return strip_written(
             &ctx,
             suggest! {
-                "--up-only": t!("sync.complete.up_only"),
-                "--down-only": t!("sync.complete.down_only"),
-                "--both": t!("sync.complete.both"),
-                "--dry-run": t!("sync.complete.dry_run"),
-                "--no-index": t!("sync.complete.no_index"),
-                "--no-storage": t!("sync.complete.no_storage"),
-                "--no-layout": t!("sync.complete.no_layout"),
+                ARG_UP_ONLY: t!("sync.complete.up_only"),
+                ARG_DOWN_ONLY: t!("sync.complete.down_only"),
+                ARG_BOTH: t!("sync.complete.both"),
+                ARG_DRY_RUN: t!("sync.complete.dry_run"),
+                ARG_NO_INDEX: t!("sync.complete.no_index"),
+                ARG_NO_STORAGE: t!("sync.complete.no_storage"),
+                ARG_NO_LAYOUT: t!("sync.complete.no_layout"),
             },
         );
     }
@@ -158,11 +153,19 @@ pub fn sync(args: EntrySync, force: &ResForce, offline: &ResOffline) -> Next {
         return ErrorOffline.into();
     }
 
-    let flags = args.pick(&arg![SyncFlags]).unwrap();
+    let (up_only, down_only, both, dry_run, no_index, no_storage, no_layout) = args
+        .pick(&ARG_UP_ONLY)
+        .pick(&ARG_DOWN_ONLY)
+        .pick(&ARG_BOTH)
+        .pick(&ARG_DRY_RUN)
+        .pick(&ARG_NO_INDEX)
+        .pick(&ARG_NO_STORAGE)
+        .pick(&ARG_NO_LAYOUT)
+        .unwrap();
 
-    let up = matches!(flags.up_only, Flag::Active);
-    let down = matches!(flags.down_only, Flag::Active);
-    let both = matches!(flags.both, Flag::Active);
+    let up = matches!(up_only, Flag::Active);
+    let down = matches!(down_only, Flag::Active);
+    let both = matches!(both, Flag::Active);
 
     // At most one direction may be named; naming none is both.
     if [up, down, both].into_iter().filter(|named| *named).count() > 1 {
@@ -180,11 +183,11 @@ pub fn sync(args: EntrySync, force: &ResForce, offline: &ResOffline) -> Next {
     StateSync {
         direction,
         forced: **force,
-        dry_run: matches!(flags.dry_run, Flag::Active),
+        dry_run: matches!(dry_run, Flag::Active),
         skip: Skip {
-            index: matches!(flags.no_index, Flag::Active),
-            storage: matches!(flags.no_storage, Flag::Active),
-            layout: matches!(flags.no_layout, Flag::Active),
+            index: matches!(no_index, Flag::Active),
+            storage: matches!(no_storage, Flag::Active),
+            layout: matches!(no_layout, Flag::Active),
         },
     }
     .into()

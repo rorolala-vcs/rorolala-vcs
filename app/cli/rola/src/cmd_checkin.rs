@@ -29,7 +29,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, Pickable},
+    picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
@@ -47,7 +47,9 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
-use crate::complete::{layout_paths, layout_uuids, offer, strip_written, typing_flag};
+use crate::complete::{
+    filling_flag, is_flag, layout_paths, layout_uuids, offer, strip_written, typing_flag,
+};
 use crate::exit_codes::{EC_ERR_CHECKIN, EC_ERR_CHECKIN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
@@ -60,14 +62,9 @@ use crate::progress::Reporting;
 use crate::sync;
 use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
 
-/// The flags `rola checkin` takes.
-#[derive(Pickable)]
-struct CheckinFlags {
-    /// Where each reference is to be named here, one for each reference, in the order they are
-    /// named.
-    #[arg(long)]
-    to_local: Vec<String>,
-}
+/// Where each reference is to be named here, one for each reference, in the order they are
+/// named.
+const ARG_TO_LOCAL: PickerArg<'static, Vec<String>> = arg![to_local: Vec<String>];
 
 #[help(buffer)]
 pub fn help_checkin(_: EntryCheckin, ec: &mut ResExitCode) {
@@ -95,12 +92,12 @@ pub fn complete_checkin(
         return strip_written(
             &ctx,
             suggest! {
-                "--to-local": t!("checkin.complete.to_local"),
+                ARG_TO_LOCAL: t!("checkin.complete.to_local"),
             },
         );
     }
 
-    if ctx.previous_word == "--to-local" {
+    if filling_flag(&ctx, &ARG_TO_LOCAL) {
         return Suggest::file_comp();
     }
 
@@ -151,20 +148,19 @@ pub fn complete_checkin(
 #[command(node = "checkin", entry = EntryCheckin)]
 pub fn checkin(args: EntryCheckin) -> Next {
     let picked = args
-        .pick(&arg![CheckinFlags])
+        .pick(&ARG_TO_LOCAL)
         .pick_or_route(&arg![Vec<String>], || ErrorCheckinArgument.into())
         .to_result();
-    let (flags, refs) = match picked {
+    let (to_local, refs) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
     // The framework hands a repeated flag its own name back as one of the values; it is not a path
     // a caller wrote.
-    let locals: Vec<String> = flags
-        .to_local
+    let locals: Vec<String> = to_local
         .into_iter()
-        .filter(|path| !path.starts_with("--to-local"))
+        .filter(|path| !is_flag(path, &ARG_TO_LOCAL))
         .collect();
 
     if refs.is_empty() || refs.len() != locals.len() {
