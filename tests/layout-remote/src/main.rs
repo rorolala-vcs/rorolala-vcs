@@ -1535,6 +1535,69 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
+    // `--replace` redoes a file's version rather than adding one after it, the way an amend does:
+    // the new version is built on what the replaced one was built on, so the chain is no longer
+    // than it was, and the words the replaced version had are kept when the run writes none.
+    let amended = workspace.join("models/amended.psd");
+    fs::write(&amended, b"one").expect("the first cut");
+    run(&mut client(
+        &workspace,
+        &data,
+        &["track", "models/amended.psd", "--message", "the first cut"],
+    ))
+    .expect_success();
+
+    fs::write(&amended, b"two").expect("the second cut");
+    run(&mut client(
+        &workspace,
+        &data,
+        &["track", "models/amended.psd", "--message", "the second cut"],
+    ))
+    .expect_success();
+
+    let amended_id = {
+        let held =
+            Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
+        held.entries()
+            .into_iter()
+            .find(|(id, _)| {
+                held.path_of(*id)
+                    .is_some_and(|path| path.as_str() == "models/amended.psd")
+            })
+            .map(|(id, _)| id)
+            .expect("the amended entry")
+    };
+
+    fs::write(&amended, b"three").expect("the third cut");
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["track", "models/amended.psd", "--replace", "--no-editor"],
+    ));
+    let replaced: String = local_version_of(&workspace, amended_id)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let chain = run(&mut client(
+        &workspace,
+        &data,
+        &["vcs-index", "lookback", &replaced, "--no-creator"],
+    ));
+    let drawn = clean(&chain.stdout);
+    checked.wants(
+        "`--replace` redoes the version with the words it had, on the version before it",
+        said.success()
+            && drawn.contains("the second cut")
+            && drawn.lines().filter(|line| line.starts_with('V')).count() == 2,
+        &format!(
+            "it ended with {:?}, said {:?}, the Layout names {:?}, and the chain is {:?}",
+            said.code,
+            said.stdout.trim(),
+            replaced,
+            drawn.trim()
+        ),
+    );
+
     serving.stop();
     checked.report();
 }

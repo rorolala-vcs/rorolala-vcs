@@ -20,7 +20,7 @@ use std::path::{Component, Path, PathBuf};
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::storage::{Key, RorolalaStorage, store_file};
 use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
-use librorolala::vcs::{Creator, Message, VCSIndex, Version};
+use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -77,6 +77,9 @@ const ARG_FILE_MESSAGE: PickerArg<'static, Vec<String>> = arg![file_message: Vec
 /// Record what is already known, and never open an editor.
 const ARG_NO_EDITOR: PickerArg<'static, Flag> = arg![no_editor: Flag];
 
+/// Replace the version the Layout names for each file, the way `git commit --amend` replaces one.
+const ARG_REPLACE: PickerArg<'static, Flag> = arg![replace: Flag];
+
 #[help(buffer)]
 pub fn help_track(_: EntryTrack, ec: &mut ResExitCode) {
     r_eprintln!("{}", trd!(t!("track.help")).trim());
@@ -102,6 +105,7 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
                 ARG_MESSAGE: t!("track.complete.message"),
                 ARG_FILE_MESSAGE: t!("track.complete.file_message"),
                 ARG_NO_EDITOR: t!("track.complete.no_editor"),
+                ARG_REPLACE: t!("track.complete.replace"),
             },
         );
     }
@@ -127,6 +131,16 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 /// own message is empty carries the group's alone; one that begins with `!` carries its own alone,
 /// without the group's. When neither says enough, an editor is opened.
 ///
+/// `--replace` redoes the version each file is at rather than adding one after it, the way
+/// `git commit --amend` redoes the last commit: the new version is built on what the version being
+/// replaced was built on, so that version stands as if it had never been made. It is what a run
+/// asks for when the version it made was wrong — the wrong content, or the wrong words — and the
+/// file's content is what the tree holds now. A file the Layout records nothing for, and a version
+/// that is a merge, are refused: neither is a version a new one can take the place of. The old
+/// version and its variant stay in the index; only the Layout stops naming them. With `--replace`
+/// and no `--message` or `--file-message`, the words the replaced version had are what the editor
+/// opens on — and what `--no-editor` records as they stand.
+///
 /// A file the tree moved is recorded where it is now, and the move is confirmed along with it: what
 /// a run asks for is a version. A move whose file was not edited is nothing to record, though, so
 /// it is left alone — `rola align` is what confirms it.
@@ -138,20 +152,22 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 /// # Errors
 ///
 /// Renders [`ErrorTrackNoFiles`] when no file is named, [`ErrorTrackFile`] when a path is not a file
-/// or is not inside the Workspace, [`ErrorTrackMessage`] when the messages do not line up or are too
-/// long, [`ErrorTrackUnowned`] when a file named is one another account holds,
-/// [`ErrorNoEditor`](crate::editor::ErrorNoEditor) when an editor is needed and none is named,
-/// [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and [`ErrorTrackFailed`]
-/// when the store, the index or the Layout refuses.
+/// or is not inside the Workspace, [`ErrorTrackReplace`] when `--replace` names a file the Layout
+/// records no version for or one whose version is a merge, [`ErrorTrackMessage`] when the messages
+/// do not line up or are too long, [`ErrorTrackUnowned`] when a file named is one another account
+/// holds, [`ErrorNoEditor`](crate::editor::ErrorNoEditor) when an editor is needed and none is
+/// named, [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and
+/// [`ErrorTrackFailed`] when the store, the index or the Layout refuses.
 #[command(node = "track", entry = EntryTrack)]
 pub fn track(args: EntryTrack, force: &ResForce) -> Next {
     let picked = args
         .pick(&ARG_MESSAGE)
         .pick(&ARG_FILE_MESSAGE)
         .pick(&ARG_NO_EDITOR)
+        .pick(&ARG_REPLACE)
         .pick_or_route(&arg![Vec<String>], || ErrorTrackNoFiles.into())
         .to_result();
-    let (message, file_message, no_editor, files) = match picked {
+    let (message, file_message, no_editor, replace, files) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -170,6 +186,7 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
             .filter(|message| !is_flag(message, &ARG_FILE_MESSAGE))
             .collect(),
         no_editor: matches!(no_editor, Flag::Active),
+        replace: matches!(replace, Flag::Active),
         force: **force,
     }
     .into()
@@ -186,6 +203,8 @@ pub struct StateTrack {
     file_messages: Vec<String>,
     /// Whether an editor is never to be opened.
     no_editor: bool,
+    /// Whether each file's version is replaced rather than added after.
+    replace: bool,
     /// Whether a file another account holds is recorded anyway.
     force: bool,
 }
@@ -205,6 +224,7 @@ pub fn handle_track(
         message,
         file_messages,
         no_editor,
+        replace,
         force,
     } = state;
 
@@ -298,7 +318,7 @@ pub fn handle_track(
     // already recorded is never asked for a message: it will not be given a version to carry one.
     let mut staged = Vec::with_capacity(prepared.len());
     for file in prepared {
-        let (storage, changed, base) = match stage(vcs, &runtime, store, &file) {
+        let (storage, changed, recorded) = match stage(vcs, &runtime, store, &file, replace) {
             Ok(staged) => staged,
             Err(next) => return next,
         };
@@ -306,8 +326,10 @@ pub fn handle_track(
         staged.push(Staged {
             file,
             storage,
-            changed,
-            base,
+            // A version being replaced is written even when its content did not move: the words it
+            // says, or the version it says them of, are the change.
+            changed: changed || replace,
+            recorded,
         });
     }
 
@@ -320,10 +342,20 @@ pub fn handle_track(
         return message_error(MessageError::Mismatch);
     }
 
-    let own: Vec<String> = if file_messages.is_empty() {
-        vec![String::new(); files.len()]
-    } else {
+    // An amend with no new words keeps the ones the replaced version said, so they are what the
+    // editor opens on and what `--no-editor` records as they stand. They are read from the index
+    // only in that case, so a run that says what it wants never pays for them.
+    let keeps_words = replace && message.is_none() && file_messages.is_empty();
+
+    let own: Vec<String> = if !file_messages.is_empty() {
         file_messages
+    } else if keeps_words {
+        match replaced_messages(vcs, &runtime, &changing) {
+            Ok(messages) => messages,
+            Err(next) => return next,
+        }
+    } else {
+        vec![String::new(); files.len()]
     };
 
     // Nothing changing is nothing to say: a run that found every file already recorded records
@@ -349,14 +381,18 @@ pub fn handle_track(
         let text = &messages[at];
         at += 1;
 
-        if let Err(next) = commit(&layout, vcs, &runtime, &creator_name, file, text) {
+        if let Err(next) = commit(&layout, vcs, &runtime, &creator_name, file, text, replace) {
             return next;
         }
 
         committed.push((file.file.path.clone(), file.file.disk.clone()));
         items.push(TrackItem {
             path: file.file.path.as_str().to_owned(),
-            action: TrackAction::if_updated(&file.file),
+            action: if replace {
+                TrackAction::Replaced
+            } else {
+                TrackAction::if_updated(&file.file)
+            },
         });
     }
 
@@ -416,7 +452,20 @@ struct Staged {
     /// Whether that is a change from what the Layout already names.
     changed: bool,
     /// The version it is at now, when it was recorded before.
-    base: Option<Version>,
+    recorded: Option<Recorded>,
+}
+
+/// A file's recorded version, and what its variant holds.
+///
+/// The variant is kept whole rather than only the base hash because amending reads the base from it
+/// and writes a variant of its own without needing the version object it was made from.
+struct Recorded {
+    /// The version the Layout names now.
+    version: Version,
+    /// The variant that version points at.
+    variant: Variant,
+    /// The key the version's content is stored under.
+    storage: [u8; 32],
 }
 
 /// Resolves each name against the Layout and the tree, or refuses.
@@ -861,26 +910,59 @@ fn section_name(line: &str) -> Option<String> {
 /// The content is written before anything else is decided because what the Layout names is a key
 /// the store answers with, not something the file on disk can be compared against directly: content
 /// kept as a manifest of chunks hashes to something no reading of the file alone produces.
+///
+/// The version the Layout names is read first when `--replace` was asked for, so a file with no
+/// version to replace, or one whose version is a merge, is refused before anything is put into the
+/// store.
 fn stage(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     store: &RorolalaStorage,
     file: &Prepared,
-) -> Result<(Key, bool, Option<Version>), Next> {
+    replace: bool,
+) -> Result<(Key, bool, Option<Recorded>), Next> {
+    let recorded = match &file.data {
+        Some(data) => Some(read_recorded(index, runtime, data.version())?),
+        None => None,
+    };
+
+    if replace {
+        let Some(recorded) = &recorded else {
+            return Err(ErrorTrackReplace {
+                path: file.path.as_str().to_owned(),
+                kind: ReplaceError::Unrecorded,
+            }
+            .into());
+        };
+
+        // Replacing a merge would drop what was joined in: a version has one base, and a merge is
+        // the record of there being two.
+        if recorded.variant.join().is_some() {
+            return Err(ErrorTrackReplace {
+                path: file.path.as_str().to_owned(),
+                kind: ReplaceError::Merge,
+            }
+            .into());
+        }
+    }
+
     let storage = runtime
         .block_on(store_file(store, &file.disk))
         .map_err(|error| fail(error.to_string()))?;
 
-    match &file.data {
-        Some(data) => {
-            let (version, current) = load(index, runtime, data.version())?;
-            Ok((storage, current != *storage.digest(), Some(version)))
-        }
-        None => Ok((storage, true, None)),
-    }
+    let changed = recorded
+        .as_ref()
+        .is_none_or(|recorded| recorded.storage != *storage.digest());
+
+    Ok((storage, changed, recorded))
 }
 
 /// Makes a version of the staged content and makes the Layout name it.
+///
+/// `replace` builds the new version on what the version being replaced was built on, rather than on
+/// that version: the one that was there stands as if it had never been made, which is what an amend
+/// is. That base is carried by the replaced variant as the hash it is, so the version object it
+/// names is never read back to make the new one.
 fn commit(
     layout: &Layout,
     index: &VCSIndex,
@@ -888,17 +970,8 @@ fn commit(
     creator_name: &str,
     file: &Staged,
     text: &str,
+    replace: bool,
 ) -> Result<(), Next> {
-    let base = if let Some(version) = &file.base {
-        version.clone()
-    } else {
-        let root = Version::root();
-        runtime
-            .block_on(index.write(root.clone()))
-            .map_err(|error| fail(error.reason()))?;
-        root
-    };
-
     let creator =
         Creator::try_from(creator_name.to_owned()).map_err(|error| fail(error.to_string()))?;
     let message = Message::try_from(text.to_owned()).map_err(|error| fail(error.to_string()))?;
@@ -910,11 +983,32 @@ fn commit(
         .block_on(index.write(message))
         .map_err(|error| fail(error.reason()))?;
 
-    let variant = base.new_variant(
-        *file.storage.digest(),
-        *creator_key.digest(),
-        *message_key.digest(),
-    );
+    let variant = match (&file.recorded, replace) {
+        (Some(recorded), true) => Variant::new_bare_variant(
+            *file.storage.digest(),
+            *recorded.variant.base_version(),
+            None,
+            *creator_key.digest(),
+            *message_key.digest(),
+            recorded.variant.base_version_num(),
+        ),
+        (Some(recorded), false) => recorded.version.new_variant(
+            *file.storage.digest(),
+            *creator_key.digest(),
+            *message_key.digest(),
+        ),
+        (None, _) => {
+            let root = Version::root();
+            runtime
+                .block_on(index.write(root.clone()))
+                .map_err(|error| fail(error.reason()))?;
+            root.new_variant(
+                *file.storage.digest(),
+                *creator_key.digest(),
+                *message_key.digest(),
+            )
+        }
+    };
     let version = variant.new_version();
 
     runtime
@@ -956,12 +1050,40 @@ fn commit(
     Ok(())
 }
 
-/// The `Version` stored under `hash`, and the stored hash its variant points at.
-fn load(
+/// What each changing file's version being replaced says, read from the index.
+///
+/// It is read only for a run that amends without writing new words, since that is the only run the
+/// words are read for.
+fn replaced_messages(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    files: &[&Staged],
+) -> Result<Vec<String>, Next> {
+    let mut messages = Vec::with_capacity(files.len());
+
+    for file in files {
+        // UNWRAP: `stage` refuses a file the Layout records nothing for when `--replace` was asked
+        // for, so every changing file here has a version whose words can be read.
+        let recorded = file.recorded.as_ref().unwrap();
+
+        let message = runtime
+            .block_on(index.read(Key::new(*recorded.variant.message())))
+            .map_err(|error| fail(error.reason()))?
+            .expect_message()
+            .map_err(|error| fail(error.to_string()))?;
+
+        messages.push(message.read_to_string().to_owned());
+    }
+
+    Ok(messages)
+}
+
+/// The `Version` stored under `hash`, with the variant it points at and the content key that names.
+fn read_recorded(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     hash: [u8; 32],
-) -> Result<(Version, [u8; 32]), Next> {
+) -> Result<Recorded, Next> {
     let version = runtime
         .block_on(index.read(Key::new(hash)))
         .map_err(|error| fail(error.reason()))?
@@ -974,7 +1096,11 @@ fn load(
         .expect_variant()
         .map_err(|error| fail(error.to_string()))?;
 
-    Ok((version, *variant.storage_hash()))
+    Ok(Recorded {
+        version,
+        storage: *variant.storage_hash(),
+        variant,
+    })
 }
 
 /// The answer a store, an index or a Layout refusing is given.
@@ -989,6 +1115,8 @@ enum TrackAction {
     Added,
     /// It was recorded, and its content changed.
     Updated,
+    /// The version it was at was replaced by a new one.
+    Replaced,
 }
 
 impl TrackAction {
@@ -1023,6 +1151,7 @@ pub fn render_result_track(result: ResultTrack) {
         let said = match item.action {
             TrackAction::Added => t!("track.result_added", path = item.path),
             TrackAction::Updated => t!("track.result_updated", path = item.path),
+            TrackAction::Replaced => t!("track.result_replaced", path = item.path),
         };
 
         r_println!("{}", said.trim());
@@ -1170,6 +1299,47 @@ pub fn render_error_track_file(error: ErrorTrackFile, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("track.err_file_help").trim()));
     ec.exit_code = EC_ERR_TRACK_ARGUMENT;
+}
+
+/// Error: the version `--replace` names cannot be replaced.
+#[derive(Grouped)]
+pub struct ErrorTrackReplace {
+    /// The path named.
+    path: String,
+    /// Why its version cannot be replaced.
+    kind: ReplaceError,
+}
+
+/// The ways a named file's version cannot be replaced.
+pub enum ReplaceError {
+    /// The Layout records no version for it.
+    Unrecorded,
+    /// The version is a merge, and replacing it would drop what was joined in.
+    Merge,
+}
+
+impl Failure for ErrorTrackReplace {
+    fn name(&self) -> &'static str {
+        "error_track_replace"
+    }
+
+    fn reason(&self) -> String {
+        let said = match self.kind {
+            ReplaceError::Unrecorded => t!("track.err_replace_unrecorded", path = self.path),
+            ReplaceError::Merge => t!("track.err_replace_merge", path = self.path),
+        };
+
+        said.trim().to_string()
+    }
+}
+
+failure!(ErrorTrackReplace);
+
+#[renderer(buffer)]
+pub fn render_error_track_replace(error: ErrorTrackReplace, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("track.err_replace_help").trim()));
+    ec.exit_code = EC_ERR_TRACK;
 }
 
 /// Error: the messages do not line up, or none could be worked out.

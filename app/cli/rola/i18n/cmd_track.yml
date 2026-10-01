@@ -11,11 +11,14 @@ track:
     no_editor:
       en: Record what is already known, and never open an editor
       zh-CN: 只记录已知内容，不打开编辑器
+    replace:
+      en: Redo each file's version instead of adding one after it, the way `git commit --amend` does
+      zh-CN: 重做每个文件当前的版本，而不是在其后新增一个，如同 `git commit --amend`
   help:
     en: |
         Record files in the Layout being worked in
 
-        **Usage**: `rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--force]`
+        **Usage**: `rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--no-editor] [--replace] [--force]`
 
         Each file's content goes into the store, a version is made of it, and the Layout is made to
         name that version. A file whose content is what the Layout already names is skipped: it is
@@ -28,10 +31,17 @@ track:
 
         `--message` covers the whole group; `--file-message` gives one file its own words, one for
         each file being recorded. With neither, an editor is opened to write the messages.
+
+        `--replace` redoes the version each file is at instead of adding one after it, the way
+        `git commit --amend` redoes the last commit: the new version is built on what the version
+        being replaced was built on. A file the Layout records no version for, and a version that is
+        a merge, cannot be replaced. With `--replace` and neither `--message` nor `--file-message`,
+        the words the replaced version had are what the editor opens on — and what `--no-editor`
+        records as they stand.
     zh-CN: |
         将文件记入当前正在使用的布局
 
-        **用法**：`rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--force]`
+        **用法**：`rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--no-editor] [--replace] [--force]`
 
         每个文件的内容写入仓库，为其建立版本，并让布局指向该版本。内容与布局已记录一致的
         文件会被跳过：既不记录，也不需要为它撰写提交信息。`FILE` 为目录时会递归处理，其下
@@ -42,6 +52,11 @@ track:
 
         `--message` 描述整组；`--file-message` 为单个文件单独描述，每个待记录文件一个。
         两者都不给时会打开编辑器撰写。
+
+        `--replace` 不新增版本，而是重做每个文件当前所在的版本，如同 `git commit --amend`
+        重做最后一个提交：新版本接在被替换版本原本所基于的版本之上。布局没有记录过版本的文件、
+        以及作为合并的版本，都不能被替换。`--replace` 且既无 `--message` 也无 `--file-message`
+        时，以被替换版本原有的说明作为编辑器打开时的内容；加 `--no-editor` 则原样记录。
 
   description:
     en: Record files in the Layout being worked in
@@ -80,6 +95,25 @@ track:
   result_updated:
     en: "updated  %{path}"
     zh-CN: "已更新  %{path}"
+
+  result_replaced:
+    en: "replaced  %{path}"
+    zh-CN: "已替换  %{path}"
+
+  err_replace_unrecorded:
+    en: "`%{path}` has no version to replace: the Layout records none for it"
+    zh-CN: "`%{path}` 没有可替换的版本：布局没有记录过它"
+
+  err_replace_merge:
+    en: "`%{path}` is at a merge, which cannot be replaced"
+    zh-CN: "`%{path}` 当前是一个合并版本，无法替换"
+
+  err_replace_help:
+    en: |
+        `--replace` redoes the version a file is at: record the file first, and do not replace a
+        merge
+    zh-CN: |
+        `--replace` 重做文件当前所在的版本：请先记录该文件，也不要替换合并版本
 
   err_no_files:
     en: No file was named to record
