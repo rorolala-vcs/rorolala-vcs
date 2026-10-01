@@ -1598,6 +1598,76 @@ async fn main() {
         ),
     );
 
+    // A path the tree holds where the Layout names another is where a file moved to, and a move's
+    // destination is how a run asks after the file that moved: `status` reads the chain of the entry
+    // that moved, and a move that was not edited is not marked as a content change.
+    let moved = workspace.join("models/moved.psd");
+    let moved_to = workspace.join("models/moved-again.psd");
+    let long: String = (0..40)
+        .map(|line| format!("line {line} of a file long enough to stay alike\n"))
+        .collect();
+    fs::write(&moved, &long).expect("the file to move");
+    run(&mut client(
+        &workspace,
+        &data,
+        &["track", "models/moved.psd", "--message", "the file to move"],
+    ))
+    .expect_success();
+
+    fs::rename(&moved, &moved_to).expect("the move");
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/moved-again.psd"],
+    ));
+    checked.wants(
+        "status with the destination of a move looks back from the entry that moved",
+        said.success() && said.stdout.contains('V'),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let said = clean(
+        &run(&mut client(&workspace, &data, &["status"])).stdout,
+    );
+    checked.wants(
+        "a move that was not edited is not drawn as a content change",
+        said.contains("models/moved.psd -> models/moved-again.psd")
+            && !said.contains("models/moved.psd -> models/moved-again.psd (*)"),
+        &format!("it said {said:?}"),
+    );
+
+    let edited = long.replace("line 20 of", "line 20 EDITED of");
+    fs::write(&moved_to, &edited).expect("the moved file, edited");
+
+    let said = clean(
+        &run(&mut client(&workspace, &data, &["status"])).stdout,
+    );
+    checked.wants(
+        "a move whose file was edited is marked as a content change",
+        said.contains("models/moved.psd -> models/moved-again.psd (*)"),
+        &format!("it said {said:?}"),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/moved-again.psd"],
+    ));
+    checked.wants(
+        "an edited move's destination is drawn being edited",
+        said.success() && said.stdout.contains("??"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
     serving.stop();
     checked.report();
 }

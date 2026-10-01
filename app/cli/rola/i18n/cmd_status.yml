@@ -34,10 +34,11 @@ status:
         With a `<TARGET>` named, the chain that thing sits at the top of is drawn instead, the same
         drawing `rola vcs-index lookback` makes and with the same flags to shape it. What a target
         may be is read in this order, and the first that names something is what is drawn: a path in
-        the Layout being worked in, a path in the Vault's own Layout as the copy here has it, a
-        `Uuid`, then the hash of an index object. A file whose changes were never recorded is drawn
-        with an extra version over it, `??` being edited, since the work is on its way to a version
-        the index does not have yet; a target that names nothing at all is refused.
+        the Layout being worked in, where a path of the Layout has moved to in the tree, a path in
+        the Vault's own Layout as the copy here has it, a `Uuid`, then the hash of an index object.
+        A file whose changes were never recorded is drawn with an extra version over it, `??` being
+        edited, since the work is on its way to a version the index does not have yet; a target that
+        names nothing at all is refused.
     zh-CN: |
         展示工作树相对于布局的状态，或从其中某样东西往回看
 
@@ -53,9 +54,9 @@ status:
 
         指定 `<TARGET>` 时，改为画出以它为目标的那条版本链 —— 与 `rola vcs-index lookback` 同一幅图，
         同样的那几个 flag 也一并可用。目标的解读顺序如下，先认出什么就画什么：当前布局中的路径、
-        保险库自己的布局（取回副本所见）中的路径、`Uuid`、索引对象的哈希。文件若有未记录的改动，
-        会在它之上多画一个版本 `?? 编辑中的版本`，因为工作正走向一个索引里还没有的版本；完全认不出
-        任何东西的目标会被拒绝。
+        当前布局中的路径移动到的新位置、保险库自己的布局（取回副本所见）中的路径、`Uuid`、
+        索引对象的哈希。文件若有未记录的改动，会在它之上多画一个版本 `?? 编辑中的版本`，因为工作
+        正走向一个索引里还没有的版本；完全认不出任何东西的目标会被拒绝。
 
   description:
     en: Show how the working tree stands beside the Layout

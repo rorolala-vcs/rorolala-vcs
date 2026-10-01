@@ -32,6 +32,7 @@ use rorolala_cli_setups::{ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
 use serde::Serialize;
 use uuid::Uuid;
@@ -172,11 +173,9 @@ pub fn handle_status(
     };
     let not_mine: BTreeSet<&str> = unowned.iter().map(String::as_str).collect();
 
-    let moved: BTreeSet<&str> = diff
-        .renamed
-        .iter()
-        .map(|rename| rename.to.as_str())
-        .collect();
+    // Which of the moves were edited as well: a move's destination is among the modified when what
+    // it holds is not what the Layout agreed with at the path it came from.
+    let edited: BTreeSet<&str> = diff.modified.iter().map(LayoutPath::as_str).collect();
 
     ResultStatus {
         lost: diff
@@ -201,7 +200,7 @@ pub fn handle_status(
             .map(|rename| RenameItem {
                 from: rename.from.as_str().to_owned(),
                 to: rename.to.as_str().to_owned(),
-                modified: moved.contains(rename.to.as_str()),
+                modified: edited.contains(rename.to.as_str()),
                 strong: rename.strong,
             })
             .collect(),
@@ -222,10 +221,11 @@ struct Found {
 /// Draws the chain what `target` names sits at the top of.
 ///
 /// What a target may name is read in the order a run is likely to have meant: a path in the Layout
-/// being worked in, a path in the Vault's own Layout as the copy here has it, a `Uuid`, then the
-/// hash of an index object. The first that names something is what is drawn — so a name that is a
-/// path of this work is the work's, even when some object of the index happens to hash to it — and
-/// a target that names nothing at all is refused rather than guessed at.
+/// being worked in, where a path of the Layout has moved to in the tree, a path in the Vault's own
+/// Layout as the copy here has it, a `Uuid`, then the hash of an index object. The first that names
+/// something is what is drawn — so a name that is a path of this work is the work's, even when some
+/// object of the index happens to hash to it — and a target that names nothing at all is refused
+/// rather than guessed at.
 #[routeify]
 fn lookback_of(
     target: &str,
@@ -293,6 +293,25 @@ fn found(
             key: Key::new(version_of(layout, id)?),
             editing: editing(held, layout, path)?,
         });
+    }
+
+    // A path the Layout does not name is still a path of this work when the tree reading finds a
+    // path it does name moved there: a move's destination is how a run asks after the file that
+    // moved, since that is where it is now. What is on disk is asked before the reading is, so a
+    // hash — which also reads as a path — does not walk the tree for nothing.
+    if let Some(path) = &path
+        && held.get_root().join(path.to_path_buf()).is_file()
+    {
+        let diff = tree_diff(layout, held, DEFAULT_ALIKE).map_err(|error| error.to_string())?;
+
+        if let Some(rename) = diff.renamed.iter().find(|rename| rename.to == *path)
+            && let Some(id) = layout.id_of(&rename.from)
+        {
+            return Ok(Found {
+                key: Key::new(version_of(layout, id)?),
+                editing: diff.modified.contains(&rename.to),
+            });
+        }
     }
 
     if let Some(remote) = remote
