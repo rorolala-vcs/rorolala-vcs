@@ -345,6 +345,11 @@ fn gather(
         })
     });
 
+    // The words of the oldest version come from the variant that made it, which is based on the root
+    // — a version that is never drawn — so it hangs from no level. It is kept apart here so that
+    // version is drawn saying what it was, like every other.
+    let first = variants.last().map(|variant| view(index, runtime, variant));
+
     // The spine of each level, highest first, and the level each variant sits at.
     let mut level_of: HashMap<Blake3Hash, u64> = HashMap::new();
     let mut spine = Vec::with_capacity(levels);
@@ -417,6 +422,7 @@ fn gather(
             TopKind::Version
         },
         origin,
+        first,
     })
 }
 
@@ -557,6 +563,11 @@ pub struct ResultVcsIndexLookback {
     top: TopKind,
     /// The version a Vault records for the entry, when one was named and this chain holds it.
     origin: Option<Origin>,
+    /// The variant that made the oldest version, when the chain has one.
+    ///
+    /// It is the one based on the root, which is drawn at no level and so is not among the levels;
+    /// its words are the oldest version's own, which the drawing would otherwise leave out.
+    first: Option<VariantView>,
 }
 
 impl ResultVcsIndexLookback {
@@ -681,6 +692,15 @@ fn notes(result: &ResultVcsIndexLookback, lookback: &ResLookback) -> HashMap<u64
         let said = said(&level.variant, lookback);
         if !said.is_empty() {
             notes.insert(level.number.saturating_add(1), said);
+        }
+    }
+
+    // The oldest version's words come from the variant based on the root, which is drawn at no
+    // level: they belong beside version 0, which no level names.
+    if let Some(first) = &result.first {
+        let said = said(first, lookback);
+        if !said.is_empty() {
+            notes.insert(0, said);
         }
     }
 

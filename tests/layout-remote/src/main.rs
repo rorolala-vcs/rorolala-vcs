@@ -1518,16 +1518,19 @@ async fn main() {
 
     // The chain a file is drawn at says where the Vault stands in it: the version the Vault's own
     // Layout records is marked with the Vault's name, so a run reads what is left to send without
-    // counting versions.
+    // counting versions. The oldest version is drawn with its own words too, which is the one whose
+    // variant is based on the root and so hangs from no level of the drawing.
     let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    let chain = clean(&said.stdout);
     checked.wants(
         "the version the Vault records is marked in the chain",
-        said.success() && clean(&said.stdout).contains("(origin)"),
-        &format!(
-            "it ended with {:?} and said {:?}",
-            said.code,
-            clean(&said.stdout)
-        ),
+        said.success() && chain.contains("(origin)"),
+        &format!("it ended with {:?} and said {chain:?}", said.code),
+    );
+    checked.wants(
+        "the oldest version in the chain says what it was",
+        said.success() && chain.contains("the first model"),
+        &format!("it ended with {:?} and said {chain:?}", said.code),
     );
 
     // Only a local path is taken: a `Uuid` names an entry to other commands, not to this one.
