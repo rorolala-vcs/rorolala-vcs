@@ -1,19 +1,20 @@
 _version: 2
 
 checkin:
-  complete:
-    to_local:
-      en: Where each reference is to be named here, one for each reference
-      zh-CN: 每个引用在本地应命名的路径，按引用顺序一一对应
   help:
     en: |
         Bring what the Vault holds but this Layout does not into it
 
-        **Usage**: `rola checkin <REF>... --to-local <PATH>...`
+        **Usage**: `rola checkin <FROM>... [TO]`
 
-        Each `REF` is a path in the Vault's Layout or a `Uuid`, and `--to-local` says where that
-        one is to be named here. The two lists are paired by position and have to be the same
-        length.
+        The operands read the way `mv`'s do: every word but the last is what is to come in — a path
+        in the Vault's Layout or a `Uuid` — and the last, when there is more than one word, is where
+        it is to land here.
+
+        With no `TO` each one lands at the path the Vault's Layout names it by, which has to be
+        somewhere nothing is. A `TO` that is an existing directory takes each `FROM` under it by the
+        name the Vault gives it; any other `TO` names the whole landing path, so it takes exactly
+        one `FROM`.
 
         What a reference names has to be something this Layout does not already hold, and where it
         is to land has to be somewhere nothing is: a name this Layout already gives, or a file
@@ -25,10 +26,14 @@ checkin:
     zh-CN: |
         把保险库持有、而当前布局没有的内容带入当前布局
 
-        **用法**：`rola checkin <REF>... --to-local <PATH>...`
+        **用法**：`rola checkin <FROM>... [TO]`
 
-        每个 `REF` 是保险库布局中的路径或一个 `Uuid`，`--to-local` 说明这一条在本地要落到哪个
-        路径。两个列表按位置一一配对，长度必须相同。
+        位置参数按 `mv` 的方式读：最后一个是落点，前面的都是要带入的内容——保险库布局中的路径或
+        一个 `Uuid`；只有一个词时它就是要带入的内容，没有落点。
+
+        不给 `TO` 时，每一条都落在保险库布局给它命名的路径上，那里必须是空的。`TO` 是已存在的
+        目录时，每个 `FROM` 按保险库给出的名字落到该目录下；其他 `TO` 就是完整的落点路径，因此
+        只能有一个 `FROM`。
 
         引用所指的内容必须是当前布局尚未持有的；落点也必须是空的：当前布局已经给出的名字，或
         路径上已存在的文件，都会被拒绝而不是覆盖。
@@ -51,14 +56,17 @@ checkin:
         请用 `rola layout set-track <LAYOUT> <VAULT>` 指定一个，然后重试
 
   err_argument:
-    en: "`rola checkin` was given references and paths that do not line up"
-    zh-CN: "`rola checkin` 收到的引用与路径没有一一对应"
+    en: "`rola checkin` was given operands it cannot use"
+    zh-CN: "`rola checkin` 收到的参数无法使用"
 
   err_argument_help:
     en: |
-        Name one path with `--to-local` for each reference, and no more
+        Name what is to come in and, when it is to land elsewhere, a `TO` after it: one path for one
+        reference, or an existing directory for several. A path outside the Workspace cannot be a
+        destination
     zh-CN: |
-        请为每个引用用一个 `--to-local` 指定路径，不要多也不要少
+        写出要带入的内容；若要落到别处，在最后写一个 `TO`：一个引用给一个路径，多个引用给一个
+        已存在的目录。工作区之外的路径不能作为落点
 
   err_unknown:
     en: "The Vault's Layout names nothing by `%{reference}`"
@@ -69,6 +77,17 @@ checkin:
         Run `rola sync --dry-run` to see what the Vault holds that is not here yet
     zh-CN: |
         运行 `rola sync --dry-run` 查看保险库还持有哪些本地没有的内容
+
+  err_unnamed:
+    en: "The Vault's Layout gives `%{uuid}` no path, so there is no name to land it under"
+    zh-CN: "保险库的布局没有给 `%{uuid}` 路径，因此没有可用的落点名字"
+
+  err_unnamed_help:
+    en: |
+        Name the whole path it is to land at with a `TO`; a directory is not enough, since there is
+        no name to put under it
+    zh-CN: |
+        用一个 `TO` 指明完整的落点路径；给目录不够，因为没有可以放到目录下的名字
 
   err_taken:
     en: "Something is already at `%{path}` here"

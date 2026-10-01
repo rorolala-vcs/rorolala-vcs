@@ -3,8 +3,9 @@
 //! A `Uuid` enters a Layout by being tracked and enters the Vault's Layout by going up, which
 //! leaves what only the Vault holds out of reach: a sync names it rather than bringing it, since a
 //! `Uuid` is not something a sync may invent a local path for. This is how one is asked for by
-//! name: each reference — a remote logical path or a `Uuid` — is paired with the local path it is
-//! to be named by, and the content its version names is put there.
+//! name: the operands read the way `mv`'s do — what is to come in first, where it is to land last —
+//! so a reference the Vault's Layout names is put at a path here, under a directory here, or at the
+//! path the Vault itself names it by when no destination was written.
 
 // `#[chain]` copies the attributes of the function it is given onto the struct it generates,
 // so a lint allowed on the handler below is reported as defined twice. The allow lives here,
@@ -14,7 +15,8 @@
 // is what the command needs of the run rather than a signature this program shaped.
 #![allow(clippy::trivially_copy_pass_by_ref, clippy::too_many_arguments)]
 
-use std::path::Path;
+use std::collections::BTreeSet;
+use std::path::{Component, Path, PathBuf};
 use std::str::FromStr as _;
 
 use librorolala::daemon::{action_fetch_layout, action_sync_index_all_async};
@@ -29,7 +31,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, PickerArg},
+    picker::EntryPicker,
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
@@ -47,9 +49,7 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
-use crate::complete::{
-    filling_flag, is_flag, layout_paths, layout_uuids, offer, strip_written, typing_flag,
-};
+use crate::complete::typing_flag;
 use crate::exit_codes::{EC_ERR_CHECKIN, EC_ERR_CHECKIN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
@@ -61,10 +61,6 @@ use crate::layout::{
 use crate::progress::Reporting;
 use crate::sync;
 use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
-
-/// Where each reference is to be named here, one for each reference, in the order they are
-/// named.
-const ARG_TO_LOCAL: PickerArg<'static, Vec<String>> = arg![to_local: Vec<String>];
 
 #[help(buffer)]
 pub fn help_checkin(_: EntryCheckin, ec: &mut ResExitCode) {
@@ -79,62 +75,34 @@ pub fn desc_checkin() -> Description {
 
 /// Completes what `rola checkin` can be given next.
 ///
-/// A reference names something in the Vault's Layout the Layout being worked in tracks — a path
-/// there or a `Uuid` it holds — so the fetched copy is what is read. `--to-local` names where each
-/// one lands here, which is a path of this run's.
+/// Every word names where something is to land here, so the filesystem answers it. Which entry a
+/// reference names is the Vault's to say, and a reference is read there rather than here, so there
+/// is nothing of the Vault to list. There are no flags of this command's to offer.
 #[completion(EntryCheckin)]
-pub fn complete_checkin(
-    ctx: ShellContext,
-    workspace: &mut LazyRes<ResWorkspace>,
-    remote: &mut LazyRes<ResCurrentRemoteVault>,
-) -> Suggest {
+pub fn complete_checkin(ctx: ShellContext) -> Suggest {
     if typing_flag(&ctx) {
-        return strip_written(
-            &ctx,
-            suggest! {
-                ARG_TO_LOCAL: t!("checkin.complete.to_local"),
-            },
-        );
+        return suggest!();
     }
 
-    if filling_flag(&ctx, &ARG_TO_LOCAL) {
-        return Suggest::file_comp();
-    }
-
-    let Some(workspace) = workspace.get_ref().as_ref() else {
-        return suggest!();
-    };
-
-    // Which Vault is read is the one the worked-in Layout tracks, the way the command itself
-    // resolves it; a Layout that tracks none has no references to offer.
-    let layouts = workspace.layouts();
-    let Ok(Some(name)) = layouts.current() else {
-        return suggest!();
-    };
-    let Ok(Some(track)) = layouts.track(&name) else {
-        return suggest!();
-    };
-    let Ok(vault) = remote.get_ref().name_or_default(track) else {
-        return suggest!();
-    };
-
-    let Ok(layout) = Layout::open(readonly_layout_dir(workspace, &vault, VAULT_LAYOUT_NAME)) else {
-        return suggest!();
-    };
-
-    let mut names = layout_paths(&layout);
-    names.extend(layout_uuids(&layout));
-
-    offer(&ctx, names)
+    Suggest::file_comp()
 }
 
 /// Brings what the Vault holds but this Layout does not into it
 ///
-/// Each reference is a path in the Vault's Layout or a `Uuid`, and `--to-local` says where that one
-/// is to be named here: the two lists are paired by position and have to be the same length. What
-/// the reference names has to be something this Layout does not already hold, and where it is to
-/// land has to be somewhere nothing is: a name this Layout already gives, or a file already at the
-/// path, is refused rather than written over.
+/// The operands read the way `mv`'s do: every word but the last is a reference — a path in the
+/// Vault's Layout or a `Uuid` — and the last, when there is more than one word, is where those
+/// references are to land here. A reference therefore always comes from the Vault's side; nothing
+/// but the destination is read as a path of this run's.
+///
+/// With no destination each reference lands at the path the Vault's Layout names it by. A
+/// destination that is an existing directory takes each reference under it by the name the Vault
+/// gives it; any other destination names the whole landing path, so it takes exactly one reference.
+///
+/// What a reference names has to be something this Layout does not already hold, and every landing
+/// has to be somewhere nothing is: a name this Layout already gives, a file already at the path, or
+/// another reference of the same run landing there, is refused rather than written over. Every
+/// landing is worked out before anything is written, so a run that is refused leaves nothing half
+/// done.
 ///
 /// The version the Vault holds is what comes with it — its content is taken out of the store and
 /// put at the path — and what the Layout then says is that version and the holder the Vault names.
@@ -142,32 +110,19 @@ pub fn complete_checkin(
 /// # Errors
 ///
 /// Renders [`ErrorCheckinNoTrack`] when the Layout being worked in tracks no Vault,
-/// [`ErrorCheckinArgument`] when the references and `--to-local` do not line up, and
-/// [`ErrorCheckinUnknown`], [`ErrorCheckinTaken`] or [`ErrorCheckinKnown`] when one reference does
-/// not name something that can be brought in.
+/// [`ErrorCheckinArgument`] when the operands name nothing to bring in or a destination several
+/// references cannot share, and [`ErrorCheckinUnknown`], [`ErrorCheckinKnown`],
+/// [`ErrorCheckinUnnamed`] or [`ErrorCheckinTaken`] when one reference cannot be brought in.
 #[command(node = "checkin", entry = EntryCheckin)]
 pub fn checkin(args: EntryCheckin) -> Next {
-    let picked = args
-        .pick(&ARG_TO_LOCAL)
-        .pick_or_route(&arg![Vec<String>], || ErrorCheckinArgument.into())
-        .to_result();
-    let (to_local, refs) = match picked {
-        Ok(picked) => picked,
-        Err(next) => return next,
+    // Picking cannot fail: the positions are one list, and an absent one is the empty list.
+    let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
+
+    let Some((refs, to)) = split(words) else {
+        return ErrorCheckinArgument.into();
     };
 
-    // The framework hands a repeated flag its own name back as one of the values; it is not a path
-    // a caller wrote.
-    let locals: Vec<String> = to_local
-        .into_iter()
-        .filter(|path| !is_flag(path, &ARG_TO_LOCAL))
-        .collect();
-
-    if refs.is_empty() || refs.len() != locals.len() {
-        return ErrorCheckinArgument.into();
-    }
-
-    StateCheckin { refs, locals }.into()
+    StateCheckin { refs, to }.into()
 }
 
 /// The state a checkin starts in.
@@ -175,8 +130,8 @@ pub fn checkin(args: EntryCheckin) -> Next {
 pub struct StateCheckin {
     /// What to bring in, each a path in the Vault's Layout or a `Uuid`.
     refs: Vec<String>,
-    /// Where each is to be named here, paired with the references by position.
-    locals: Vec<String>,
+    /// Where they are to land here, or nothing to land each at the path the Vault names it by.
+    to: Option<String>,
 }
 
 #[chain(routeify)]
@@ -190,7 +145,7 @@ pub fn handle_checkin(
     progress: &ResProgressSetting,
     offline: &ResOffline,
 ) -> Next {
-    let StateCheckin { refs, locals } = state;
+    let StateCheckin { refs, to } = state;
 
     workspace.get_ref().check()?;
 
@@ -257,14 +212,15 @@ pub fn handle_checkin(
     };
     let store = storage.get_ref().as_ref();
 
-    let wanted = match resolve(&remote_layout, &layout, held.get_root(), &refs, &locals) {
+    let wanted = match resolve(
+        &remote_layout,
+        &layout,
+        held.get_root(),
+        &refs,
+        to.as_deref(),
+    ) {
         Ok(wanted) => wanted,
-        Err(Refusal::Argument) => return ErrorCheckinArgument.into(),
-        Err(Refusal::Unknown(reference)) => {
-            return ErrorCheckinUnknown { reference }.into();
-        }
-        Err(Refusal::Taken(path)) => return ErrorCheckinTaken { path }.into(),
-        Err(Refusal::Known(uuid)) => return ErrorCheckinKnown { uuid }.into(),
+        Err(refusal) => return refused(refusal),
     };
 
     let runtime = match index_runtime() {
@@ -348,14 +304,41 @@ fn pull(
 
 /// What stopped a reference from being read.
 enum Refusal {
-    /// A path named here does not read as one.
+    /// The operands name nothing to bring in, or a destination several references cannot share.
     Argument,
     /// The Vault's Layout names nothing by the reference.
     Unknown(String),
+    /// The Vault's Layout gives the `Uuid` no path, and a name is needed where it is to land.
+    Unnamed(Uuid),
     /// Something is already at the path the reference was to land at.
     Taken(String),
     /// This Layout already holds the `Uuid` the reference names.
     Known(String),
+}
+
+/// The failure a refused reference is answered with.
+fn refused(refusal: Refusal) -> Next {
+    match refusal {
+        Refusal::Argument => ErrorCheckinArgument.into(),
+        Refusal::Unknown(reference) => ErrorCheckinUnknown { reference }.into(),
+        Refusal::Unnamed(uuid) => ErrorCheckinUnnamed {
+            uuid: uuid.to_string(),
+        }
+        .into(),
+        Refusal::Taken(path) => ErrorCheckinTaken { path }.into(),
+        Refusal::Known(uuid) => ErrorCheckinKnown { uuid }.into(),
+    }
+}
+
+/// Where the references are to land here, read from the operands the way `mv` reads its target.
+enum Destination {
+    /// No destination was written: each reference lands at the path the Vault names it by.
+    Named,
+    /// One reference lands at exactly this path.
+    Exact(LayoutPath),
+    /// Every reference lands under this directory, joined with the name the Vault gives it; `""`
+    /// names the Workspace root, the one directory with no name of its own.
+    Under(String),
 }
 
 /// One reference read: the `Uuid`, what the Vault says about it, and where it lands here.
@@ -375,31 +358,156 @@ fn resolve(
     layout: &Layout,
     root: &Path,
     refs: &[String],
-    locals: &[String],
+    to: Option<&str>,
 ) -> Result<Vec<Wanted>, Refusal> {
-    let mut wanted = Vec::new();
+    let destination = destination(root, to)?;
 
-    for (reference, local) in refs.iter().zip(locals) {
+    // A destination that is not a directory names one landing, so it can take only one reference.
+    if matches!(destination, Destination::Exact(_)) && refs.len() > 1 {
+        return Err(Refusal::Argument);
+    }
+
+    let mut wanted = Vec::new();
+    let mut landings = BTreeSet::new();
+
+    for reference in refs {
         let Some((id, data)) = find(remote, reference) else {
             return Err(Refusal::Unknown(reference.clone()));
         };
-        let Ok(path) = LayoutPath::new(local) else {
-            return Err(Refusal::Argument);
-        };
 
-        // What is to come in is something this Layout does not hold, and where it lands is
-        // somewhere nothing is: neither a name this Layout gives nor a file already there.
+        // What is to come in is something this Layout does not hold.
         if layout.entry(id).is_some() {
             return Err(Refusal::Known(id.to_string()));
         }
-        if layout.id_of(&path).is_some() || root.join(path.to_path_buf()).exists() {
-            return Err(Refusal::Taken(local.clone()));
+
+        let Some(path) = landing(&destination, remote.path_of(id).as_ref()) else {
+            return Err(Refusal::Unnamed(id));
+        };
+
+        // Where it lands is somewhere nothing is: not a name this Layout gives, not a file already
+        // there, and not where an earlier reference of this run is to land.
+        if !landings.insert(path.as_str().to_owned())
+            || layout.id_of(&path).is_some()
+            || root.join(path.to_path_buf()).exists()
+        {
+            return Err(Refusal::Taken(path.as_str().to_owned()));
         }
 
         wanted.push(Wanted { id, data, path });
     }
 
     Ok(wanted)
+}
+
+/// Splits the operands the way `mv` reads its own: everything but the last word is what is to come
+/// in, and the last — when there is more than one word — is where it is to go.
+///
+/// `None` is a run that named nothing at all.
+fn split(mut words: Vec<String>) -> Option<(Vec<String>, Option<String>)> {
+    if words.is_empty() {
+        return None;
+    }
+
+    if words.len() == 1 {
+        return Some((words, None));
+    }
+
+    let to = words.pop();
+
+    Some((words, to))
+}
+
+/// Where the operands say the references are to land.
+///
+/// A destination is read where the run was made, the way `rola track` and `rola align` read a name:
+/// `.` is the directory the run is in and `..` climbs from there. It has to be somewhere the
+/// Workspace holds, since a Layout names nothing outside its own root.
+fn destination(root: &Path, to: Option<&str>) -> Result<Destination, Refusal> {
+    let Some(to) = to else {
+        return Ok(Destination::Named);
+    };
+
+    let Ok(cwd) = std::env::current_dir() else {
+        return Err(Refusal::Argument);
+    };
+
+    let absolute = normalize(&resolve_against(&cwd, to));
+
+    let Ok(relative) = absolute.strip_prefix(root) else {
+        return Err(Refusal::Argument);
+    };
+
+    if absolute.is_dir() {
+        return Ok(Destination::Under(prefix(relative)));
+    }
+
+    LayoutPath::from_relative(relative)
+        .map(Destination::Exact)
+        .map_err(|_| Refusal::Argument)
+}
+
+/// The path one reference lands at: the name the Vault gives it, joined into the destination when
+/// that is a directory, or the destination itself when that is the whole name.
+///
+/// `None` is a reference the Vault gives no path while a name is needed, which the destination
+/// being a directory — or absent — is.
+fn landing(destination: &Destination, named: Option<&LayoutPath>) -> Option<LayoutPath> {
+    match destination {
+        Destination::Named => named.cloned(),
+        Destination::Exact(path) => Some(path.clone()),
+        Destination::Under(directory) => {
+            let name = named?;
+
+            // A directory takes something by its leaf name, the way `mv` names what it puts in one:
+            // the directories above it are the Vault's own arrangement, kept there rather than
+            // remade here.
+            let leaf = name.as_str().rsplit('/').next()?;
+            let joined = if directory.is_empty() {
+                leaf.to_owned()
+            } else {
+                format!("{directory}/{leaf}")
+            };
+
+            // Both halves are names a `LayoutPath` already accepted, so joining them cannot name
+            // something one would not.
+            LayoutPath::new(&joined).ok()
+        }
+    }
+}
+
+/// The path `given` names, made absolute against the directory the run was made in.
+fn resolve_against(cwd: &Path, given: &str) -> PathBuf {
+    if Path::new(given).is_absolute() {
+        PathBuf::from(given)
+    } else {
+        cwd.join(given)
+    }
+}
+
+/// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
+///
+/// Working it out here, before the disk is asked anything, is what lets `.` name the Workspace root
+/// rather than a path with no components in it.
+fn normalize(path: &Path) -> PathBuf {
+    let mut components: Vec<Component<'_>> = Vec::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
+                components.pop();
+            }
+            other => components.push(other),
+        }
+    }
+
+    components.into_iter().collect()
+}
+
+/// The prefix the paths under `relative` share, or `""` for the Workspace root itself.
+fn prefix(relative: &Path) -> String {
+    LayoutPath::from_relative(relative)
+        .map_or_else(|_| String::new(), |path| path.as_str().to_owned())
 }
 
 /// Puts each version's content at its path, and makes the Layout name it.
@@ -575,6 +683,34 @@ pub fn render_error_checkin_unknown(error: ErrorCheckinUnknown, ec: &mut ResExit
     ec.exit_code = EC_ERR_CHECKIN;
 }
 
+/// Error: the Vault's Layout gives the `Uuid` no path, and nothing here names where it is to land.
+#[derive(Grouped)]
+pub struct ErrorCheckinUnnamed {
+    /// The `Uuid` the Vault's Layout gives no path.
+    pub uuid: String,
+}
+
+impl Failure for ErrorCheckinUnnamed {
+    fn name(&self) -> &'static str {
+        "error_checkin_unnamed"
+    }
+
+    fn reason(&self) -> String {
+        t!("checkin.err_unnamed", uuid = self.uuid)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorCheckinUnnamed);
+
+#[renderer(buffer)]
+pub fn render_error_checkin_unnamed(error: ErrorCheckinUnnamed, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("checkin.err_unnamed_help").trim()));
+    ec.exit_code = EC_ERR_CHECKIN;
+}
+
 /// Error: something is already at the path the reference was to be named by.
 #[derive(Grouped)]
 pub struct ErrorCheckinTaken {
@@ -706,5 +842,74 @@ pub fn render_result_checked_in(result: ResultCheckedIn, ec: &mut ResExitCode) {
 
     if !result.failed.is_empty() {
         ec.exit_code = EC_ERR_CHECKIN;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The words of a command line, as the picker hands them over.
+    fn words(texts: &[&str]) -> Vec<String> {
+        texts.iter().map(|text| (*text).to_owned()).collect()
+    }
+
+    /// A path a Layout would name.
+    fn path(text: &str) -> LayoutPath {
+        LayoutPath::new(text).expect("a path a Layout could name")
+    }
+
+    #[test]
+    fn the_last_word_is_the_destination_unless_it_is_the_only_one() {
+        assert_eq!(split(words(&["a"])), Some((words(&["a"]), None)));
+        assert_eq!(
+            split(words(&["a", "b"])),
+            Some((words(&["a"]), Some("b".to_owned())))
+        );
+        assert_eq!(
+            split(words(&["a", "b", "c"])),
+            Some((words(&["a", "b"]), Some("c".to_owned())))
+        );
+        assert_eq!(split(words(&[])), None);
+    }
+
+    #[test]
+    fn a_missing_destination_lands_at_the_name_the_vault_gives() {
+        assert_eq!(
+            landing(&Destination::Named, Some(&path("a/b.psd"))),
+            Some(path("a/b.psd"))
+        );
+        assert_eq!(landing(&Destination::Named, None), None);
+    }
+
+    #[test]
+    fn a_whole_name_destination_is_the_path_itself() {
+        assert_eq!(
+            landing(
+                &Destination::Exact(path("here.psd")),
+                Some(&path("a/b.psd"))
+            ),
+            Some(path("here.psd"))
+        );
+        assert_eq!(
+            landing(&Destination::Exact(path("here.psd")), None),
+            Some(path("here.psd"))
+        );
+    }
+
+    #[test]
+    fn a_directory_destination_is_joined_with_the_name_the_vault_gives() {
+        assert_eq!(
+            landing(
+                &Destination::Under("dir".to_owned()),
+                Some(&path("a/b.psd"))
+            ),
+            Some(path("dir/b.psd"))
+        );
+        assert_eq!(
+            landing(&Destination::Under(String::new()), Some(&path("a/b.psd"))),
+            Some(path("b.psd"))
+        );
+        assert_eq!(landing(&Destination::Under("dir".to_owned()), None), None);
     }
 }

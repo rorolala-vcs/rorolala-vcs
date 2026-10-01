@@ -775,11 +775,7 @@ async fn main() {
     let plain = id.simple().to_string();
     let remote_path = format!("@/new/models/hero.psd@{}", &plain[..7]);
 
-    let said = run(&mut client(
-        &workspace,
-        &data,
-        &["checkin", &remote_path, "--to-local", "elsewhere/hero.psd"],
-    ));
+    let said = run(&mut client(&workspace, &data, &["checkin", &remote_path]));
     checked.wants(
         "checking in what this Layout already holds is refused",
         said.code == Some(240),
@@ -789,16 +785,10 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &[
-            "checkin",
-            &remote_path,
-            "a.psd",
-            "--to-local",
-            "only/one.psd",
-        ],
+        &["checkin", &remote_path, "a.psd", "only/one.psd"],
     ));
     checked.wants(
-        "references and paths that do not line up are refused",
+        "several references with a destination that is not a directory are refused",
         said.code == Some(241),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
@@ -838,7 +828,6 @@ async fn main() {
         &[
             "checkin",
             &remote_path,
-            "--to-local",
             "copied/hero.psd",
             "--json",
         ],
