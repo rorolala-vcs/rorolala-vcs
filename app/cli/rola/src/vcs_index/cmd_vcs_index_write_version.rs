@@ -5,8 +5,10 @@
 
 use librorolala::vcs::{UNKNOWN_VERSION, Version};
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -17,6 +19,7 @@ use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{IndexObject, index_hashes, offer, positional, typing_flag};
 use crate::exit_codes::EC_HELP;
 use crate::rebuild::ResRebuildInverseIndex;
 use crate::vcs_index::{
@@ -33,6 +36,24 @@ pub fn help_vcs_index_write_version(_: EntryVcsIndexWriteVersion, ec: &mut ResEx
 #[metadata(EntryVcsIndexWriteVersion)]
 pub fn desc_vcs_index_write_version() -> Description {
     t!("vcs_index_write_version.description").to_string().into()
+}
+
+/// Completes what `rola vcs-index write-version` can be given next.
+///
+/// What is named is the variant the version points at, which is an object the index holds.
+#[completion(EntryVcsIndexWriteVersion)]
+pub fn complete_vcs_index_write_version(
+    ctx: ShellContext,
+    index: &mut LazyRes<ResVCSIndex>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "write-version") != 0 {
+        return suggest!();
+    }
+
+    offer(
+        &ctx,
+        index_hashes(index.get_ref().as_ref(), IndexObject::Variant),
+    )
 }
 
 /// Writes a Version into the index, answering with its hash

@@ -1,6 +1,13 @@
 _version: 2
 
 pack:
+  complete:
+    no_index:
+      en: Leave the index as it is
+      zh-CN: 保持索引不变
+    no_storage:
+      en: Leave the store as it is
+      zh-CN: 保持仓库不变
   help:
     en: |
         Lay the objects a store and an index hold out in packs

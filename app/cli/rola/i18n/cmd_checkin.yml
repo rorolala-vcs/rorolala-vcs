@@ -1,6 +1,10 @@
 _version: 2
 
 checkin:
+  complete:
+    to_local:
+      en: Where each reference is to be named here, one for each reference
+      zh-CN: 每个引用在本地应命名的路径，按引用顺序一一对应
   help:
     en: |
         Bring what the Vault holds but this Layout does not into it

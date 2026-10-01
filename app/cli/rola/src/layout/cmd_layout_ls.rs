@@ -5,8 +5,11 @@
 //! Layout by its name, whether it is the one checked out, and the Vault upstream it tracks.
 
 use mingling::{
-    Grouped, LazyRes, StructuralData,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer},
+    Grouped, LazyRes, StructuralData, Suggest,
+    macros::{
+        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, suggest,
+    },
     metadata::Description,
     res::ResExitCode,
 };
@@ -37,6 +40,14 @@ pub fn help_layout_ls(_: EntryLayoutLs, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutLs)]
 pub fn desc_layout_ls() -> Description {
     t!("cmd_layout_ls.description").to_string().into()
+}
+
+/// Completes what `rola layout ls` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryLayoutLs)]
+pub fn complete_layout_ls() -> Suggest {
+    suggest!()
 }
 
 /// Lists the Layouts a run works in

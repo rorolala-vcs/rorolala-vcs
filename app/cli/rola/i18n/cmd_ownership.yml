@@ -1,6 +1,10 @@
 _version: 2
 
 hold:
+  complete:
+    allow_partial:
+      en: Move what can be moved when not everything named can be
+      zh-CN: 无法全部处理时，先处理可以处理的部分
   help:
     en: |
         Claim entries for your account

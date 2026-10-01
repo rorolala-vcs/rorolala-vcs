@@ -4,8 +4,11 @@ use std::path::PathBuf;
 
 use librorolala::layout::LayoutFile;
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -16,6 +19,7 @@ use rorolala_utils_constants::LAYOUT_TRACK_FILE;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{offer, positional, typing_flag, workspace_layout_names};
 use crate::exit_codes::EC_HELP;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, Place, failed, place,
@@ -30,6 +34,23 @@ pub fn help_layout_shot(_: EntryLayoutShot, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutShot)]
 pub fn desc_layout_shot() -> Description {
     t!("cmd_layout_shot.description").to_string().into()
+}
+
+/// Completes what `rola layout shot` can be given next.
+///
+/// The output is a file the run writes, so the filesystem answers it; the optional Layout is one the
+/// Workspace holds and is offered by name.
+#[completion(EntryLayoutShot)]
+pub fn complete_layout_shot(ctx: ShellContext, workspace: &mut LazyRes<ResWorkspace>) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    match positional(&ctx, "shot") {
+        0 => Suggest::file_comp(),
+        1 => offer(&ctx, workspace_layout_names(workspace.get_ref())),
+        _ => suggest!(),
+    }
 }
 
 /// Writes a Layout down as a `.rolayout` file

@@ -1,6 +1,10 @@
 _version: 2
 
 entries:
+  complete:
+    remote:
+      en: Read the Vault's own Layout instead of the one being worked in
+      zh-CN: 读取保险库自己的 Layout，而不是当前工作的 Layout
   help:
     en: |
         List the paths a Layout names, one a line

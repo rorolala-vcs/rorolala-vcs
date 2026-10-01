@@ -9,9 +9,10 @@ use std::path::PathBuf;
 
 use librorolala::storage::{Key, store_file};
 use mingling::{
-    Grouped, LazyRes, StructuralData, Wrap,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -24,6 +25,7 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::complete::{positional, typing_flag};
 use crate::exit_codes::{
     EC_ERR_STORAGE_WRITE_FILE_ARGUMENT, EC_ERR_STORAGE_WRITE_FILE_FAILED,
     EC_ERR_STORAGE_WRITE_FILE_NO_STORAGE, EC_ERR_STORAGE_WRITE_FILE_NOT_A_FILE, EC_HELP,
@@ -41,6 +43,23 @@ pub fn desc_storage_write_file() -> Description {
     t!("storage_write_file.cmd_storage_write_file_description")
         .to_string()
         .into()
+}
+
+/// Completes what `rola storage write-file` can be given next.
+///
+/// What is named is a file the run can reach, so the filesystem answers it; there are no flags to
+/// offer.
+#[completion(EntryStorageWriteFile)]
+pub fn complete_storage_write_file(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    if positional(&ctx, "write-file") == 0 {
+        Suggest::file_comp()
+    } else {
+        suggest!()
+    }
 }
 
 /// Stores the content of `FILE`, and prints the hash it is kept under.

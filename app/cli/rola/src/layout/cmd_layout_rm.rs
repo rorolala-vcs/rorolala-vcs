@@ -6,9 +6,12 @@
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
 use mingling::{
-    Grouped, LazyRes,
+    Grouped, LazyRes, ShellContext, Suggest,
     confirm::YesConfirm,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::{ResConfirm, ResExitCode},
@@ -20,6 +23,7 @@ use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{offer, positional, typing_flag, workspace_layout_names};
 use crate::exit_codes::{EC_ERR_LAYOUT, EC_HELP};
 use crate::failure::failure;
 use crate::layout::{ErrorLayoutArgument, Place, failed, place};
@@ -33,6 +37,19 @@ pub fn help_layout_rm(_: EntryLayoutRm, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutRm)]
 pub fn desc_layout_rm() -> Description {
     t!("cmd_layout_rm.description").to_string().into()
+}
+
+/// Completes what `rola layout rm` can be given next.
+///
+/// What is named is a Layout the Workspace holds; a Vault holds one and has nothing to name, so a
+/// run there has nothing to offer either.
+#[completion(EntryLayoutRm)]
+pub fn complete_layout_rm(ctx: ShellContext, workspace: &mut LazyRes<ResWorkspace>) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "rm") != 0 {
+        return suggest!();
+    }
+
+    offer(&ctx, workspace_layout_names(workspace.get_ref()))
 }
 
 /// Takes a Layout away, or empties the one a Vault keeps

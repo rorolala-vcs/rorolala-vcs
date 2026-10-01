@@ -30,9 +30,10 @@ use librorolala::tree_analyze::{Cache, cache_path, entry_of};
 use librorolala::vcs::{VCSIndex, VCSWrite as _, Variant, Version};
 use librorolala::workspace::Workspace;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
@@ -52,6 +53,9 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
+use crate::complete::{
+    IndexObject, index_hashes, offer, positional, strip_written, typing_flag, vault_names,
+};
 use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
@@ -83,6 +87,44 @@ pub fn help_retrack(_: EntryRetrack, ec: &mut ResExitCode) {
 #[metadata(EntryRetrack)]
 pub fn desc_retrack() -> Description {
     t!("retrack.description").to_string().into()
+}
+
+/// Completes what `rola retrack` can be given next.
+///
+/// `FILE` is a local path the Layout records, so the filesystem answers it. `--until` names where
+/// the pointer goes: a level, a version the index holds, or a Vault whose own Layout records one —
+/// and a level such as `-1` is itself a word that starts with a dash, so it is answered before the
+/// flags are.
+#[completion(EntryRetrack)]
+pub fn complete_retrack(
+    ctx: ShellContext,
+    index: &mut LazyRes<ResVCSIndex>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if ctx.previous_word == "--until" {
+        let mut names = vec!["-1".to_owned()];
+        names.extend(index_hashes(index.get_ref().as_ref(), IndexObject::Version));
+        names.extend(vault_names(remote.get_ref()));
+
+        return offer(&ctx, names);
+    }
+
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--until": t!("retrack.complete.until"),
+                "--restore-content": t!("retrack.complete.restore_content"),
+                "--allow-jump": t!("retrack.complete.allow_jump"),
+            },
+        );
+    }
+
+    if positional(&ctx, "retrack") == 0 {
+        Suggest::file_comp()
+    } else {
+        suggest!()
+    }
 }
 
 /// Moves a file's recorded version back, in the Layout being worked in

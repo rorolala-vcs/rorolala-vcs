@@ -182,6 +182,14 @@ pub fn desc_account_ls() -> Description {
     t!("account_ls.description").to_string().into()
 }
 
+/// Completes what `rola account ls` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryAccountLs)]
+pub fn complete_account_ls() -> Suggest {
+    suggest!()
+}
+
 /// Lists the accounts the work can act as, each with whether it is the one
 ///
 /// Every account any scope holds, in name order, drawn through a template the way every query is:
@@ -273,6 +281,14 @@ pub fn help_account_current(_: EntryAccountCurrent, ec: &mut ResExitCode) {
 #[metadata(EntryAccountCurrent)]
 pub fn desc_account_current() -> Description {
     t!("account_current.description").to_string().into()
+}
+
+/// Completes what `rola account current` can be given next.
+///
+/// The command names nothing, so there is nothing to offer.
+#[completion(EntryAccountCurrent)]
+pub fn complete_account_current() -> Suggest {
+    suggest!()
 }
 
 /// Prints the account the work acts as

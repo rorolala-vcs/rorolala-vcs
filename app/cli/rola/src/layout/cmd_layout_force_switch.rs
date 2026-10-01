@@ -1,8 +1,11 @@
 //! The `rola layout force-switch` command: work in another Layout.
 
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -12,6 +15,7 @@ use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{offer, positional, typing_flag, workspace_layout_names};
 use crate::exit_codes::EC_HELP;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace, failed,
@@ -26,6 +30,22 @@ pub fn help_layout_force_switch(_: EntryLayoutForceSwitch, ec: &mut ResExitCode)
 #[metadata(EntryLayoutForceSwitch)]
 pub fn desc_layout_force_switch() -> Description {
     t!("cmd_layout_force_switch.description").to_string().into()
+}
+
+/// Completes what `rola layout force-switch` can be given next.
+///
+/// What is named is a Layout the Workspace holds, so those are what is offered. A Vault's fetched
+/// copy is not: the command works in a Layout, and a fetched copy is read rather than worked in.
+#[completion(EntryLayoutForceSwitch)]
+pub fn complete_layout_force_switch(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "force-switch") != 0 {
+        return suggest!();
+    }
+
+    offer(&ctx, workspace_layout_names(workspace.get_ref()))
 }
 
 /// Works in another Layout

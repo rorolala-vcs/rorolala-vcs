@@ -7,9 +7,10 @@
 
 use librorolala::storage::{Key, StorageBackend as _};
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer, routeify,
+        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -45,6 +46,14 @@ pub fn desc_storage_ls_storaged() -> Description {
     t!("storage_ls_storaged.cmd_storage_ls_storaged_description")
         .to_string()
         .into()
+}
+
+/// Completes what `rola storage ls-storaged` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryStorageLsStoraged)]
+pub fn complete_storage_ls_storaged() -> Suggest {
+    suggest!()
 }
 
 /// Lists every object the store holds, one key per line.

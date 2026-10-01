@@ -6,18 +6,23 @@
 
 use librorolala::vcs::{UNKNOWN_VERSION, Variant};
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::{EntryPicker, Pickable},
     res::ResExitCode,
 };
-use rorolala_cli_setups::ResVCSIndex;
+use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex};
 use rorolala_errors::Failure as _;
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{
+    IndexObject, index_hashes, offer, positional, store_keys, strip_written, typing_flag,
+};
 use crate::exit_codes::EC_HELP;
 use crate::rebuild::ResRebuildInverseIndex;
 use crate::vcs_index::{
@@ -42,6 +47,42 @@ pub fn help_vcs_index_write_variant(_: EntryVcsIndexWriteVariant, ec: &mut ResEx
 #[metadata(EntryVcsIndexWriteVariant)]
 pub fn desc_vcs_index_write_variant() -> Description {
     t!("vcs_index_write_variant.description").to_string().into()
+}
+
+/// Completes what `rola vcs-index write-variant` can be given next.
+///
+/// Each word names an object the run already has: the base version, the creator and the message are
+/// index objects, the storage entry is a key the store holds, and `--join` names another variant.
+#[completion(EntryVcsIndexWriteVariant)]
+pub fn complete_vcs_index_write_variant(
+    ctx: ShellContext,
+    index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+) -> Suggest {
+    if ctx.previous_word == "--join" {
+        return offer(
+            &ctx,
+            index_hashes(index.get_ref().as_ref(), IndexObject::Variant),
+        );
+    }
+
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--join": t!("vcs_index_write_variant.complete.join"),
+            },
+        );
+    }
+
+    let held = index.get_ref().as_ref();
+    match positional(&ctx, "write-variant") {
+        0 => offer(&ctx, index_hashes(held, IndexObject::Version)),
+        1 => offer(&ctx, store_keys(storage.get_ref().as_ref())),
+        2 => offer(&ctx, index_hashes(held, IndexObject::Creator)),
+        3 => offer(&ctx, index_hashes(held, IndexObject::Message)),
+        _ => suggest!(),
+    }
 }
 
 /// Writes a Variant into the index, answering with its hash

@@ -7,8 +7,11 @@ use std::path::PathBuf;
 use librorolala::layout::{LayoutFile, MutableData};
 use librorolala::storage::{Key, StorageBackend as _};
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
@@ -19,6 +22,7 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_LAYOUT, EC_HELP};
 use crate::failure::failure;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
@@ -44,6 +48,33 @@ pub fn help_layout_import(_: EntryLayoutImport, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutImport)]
 pub fn desc_layout_import() -> Description {
     t!("cmd_layout_import.description").to_string().into()
+}
+
+/// Completes what `rola layout import` can be given next.
+///
+/// The input is a file or directory the run can reach, so the filesystem answers it; `--name` is the
+/// caller's own words, and `--no-check` is a flag.
+#[completion(EntryLayoutImport)]
+pub fn complete_layout_import(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--name": t!("cmd_layout_import.complete.name"),
+                "--no-check": t!("cmd_layout_import.complete.no_check"),
+            },
+        );
+    }
+
+    if ctx.previous_word == "--name" {
+        return suggest!();
+    }
+
+    if positional(&ctx, "import") == 0 {
+        Suggest::file_comp()
+    } else {
+        suggest!()
+    }
 }
 
 /// Makes a Layout from a `.rolayout` file

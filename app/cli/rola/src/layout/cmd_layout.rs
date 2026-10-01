@@ -4,7 +4,8 @@
 //! run works in, whether that is a Workspace's many Layouts or a Vault's one.
 
 use mingling::{
-    macros::{buffer, command, help, metadata, r_eprintln},
+    Suggest,
+    macros::{buffer, command, completion, help, metadata, r_eprintln, suggest},
     metadata::Description,
     res::ResExitCode,
 };
@@ -24,6 +25,15 @@ pub fn help_layout(_: EntryLayout, ec: &mut ResExitCode) {
 #[metadata(EntryLayout)]
 pub fn desc_layout() -> Description {
     t!("cmd_layout.description").to_string().into()
+}
+
+/// Completes what `rola layout` can be given next.
+///
+/// The namespace names nothing of its own and its subcommands are put to the line by the
+/// dispatcher, so there is nothing here to offer.
+#[completion(EntryLayout)]
+pub fn complete_layout() -> Suggest {
+    suggest!()
 }
 
 /// Lists the Layouts a run works in

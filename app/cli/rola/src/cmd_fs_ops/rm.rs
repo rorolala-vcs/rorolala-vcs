@@ -3,8 +3,10 @@
 use std::path::PathBuf;
 
 use mingling::{
-    Grouped,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -14,6 +16,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::cmd_fs_ops::{self, ErrorFsOpsArguments, ErrorFsOpsFailed, ResultFsOps};
+use crate::complete::typing_flag;
 use crate::exit_codes::EC_HELP;
 
 #[help(buffer)]
@@ -25,6 +28,18 @@ pub fn help_fs_ops_rm(_: EntryFsOpsRm, ec: &mut ResExitCode) {
 #[metadata(EntryFsOpsRm)]
 pub fn desc_fs_ops_rm() -> Description {
     t!("fs_ops.rm_description").to_string().into()
+}
+
+/// Completes what `rola fs-ops rm` can be given next.
+///
+/// The path is the filesystem's to answer; there are no flags to offer.
+#[completion(EntryFsOpsRm)]
+pub fn complete_fs_ops_rm(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    Suggest::file_comp()
 }
 
 /// Takes `PATH` away, and everything under it when it is a directory.

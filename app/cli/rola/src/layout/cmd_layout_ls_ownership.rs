@@ -6,9 +6,10 @@
 
 use librorolala::layout::Layout;
 use mingling::{
-    Grouped, LazyRes, StructuralData, Wrap,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -21,6 +22,7 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::exit_codes::EC_HELP;
 use crate::layout::{ErrorLayoutFailed, ErrorLayoutNotCached, readonly_layout_dir};
 
@@ -33,6 +35,22 @@ pub fn help_layout_ls_ownership(_: EntryLayoutLsOwnership, ec: &mut ResExitCode)
 #[metadata(EntryLayoutLsOwnership)]
 pub fn desc_layout_ls_ownership() -> Description {
     t!("cmd_layout_ls_ownership.description").to_string().into()
+}
+
+/// Completes what `rola layout ls-ownership` can be given next.
+///
+/// The one word is the Vault whose copy is read, so the names the Workspace has bound are what is
+/// offered; naming none reads the one it reaches for.
+#[completion(EntryLayoutLsOwnership)]
+pub fn complete_layout_ls_ownership(
+    ctx: ShellContext,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "ls-ownership") != 0 {
+        return suggest!();
+    }
+
+    offer(&ctx, vault_names(remote.get_ref()))
 }
 
 /// Lists who holds each entry, from the Vault's fetched copy

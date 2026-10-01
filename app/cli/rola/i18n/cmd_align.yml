@@ -1,6 +1,34 @@
 _version: 2
 
 align:
+  complete:
+    delete:
+      en: Confirm that a path the Layout names but the tree does not hold is gone
+      zh-CN: 确认 Layout 记录而工作树已不存在的路径已经丢失
+    rename:
+      en: Confirm that a path that moved has moved
+      zh-CN: 确认已移动的路径确实移动了
+    break:
+      en: Take back a move the reading guessed at
+      zh-CN: 撤销读取所猜测的一次移动
+    move:
+      en: Assert that the path moved to the file named
+      zh-CN: 声明该路径移动到了所给的文件
+    restore_move:
+      en: Put a moved file back where the Layout names it
+      zh-CN: 把移动过的文件放回 Layout 记录的位置
+    restore_modify:
+      en: Put a changed file back to the version the Layout names
+      zh-CN: 把改动过的文件恢复到 Layout 记录的版本
+    restore_delete:
+      en: Put a deleted file back, taking it out of the store
+      zh-CN: 从仓库把删除的文件取回
+    restore:
+      en: Put a path back to what the Layout names, whichever of the three it needs
+      zh-CN: 按需要把路径恢复成 Layout 记录的样子，三种方式自动选择
+    completely:
+      en: Put a move's file back where and as the Layout names it
+      zh-CN: 按 Layout 记录的位置和内容完整还原一次移动
   help:
     en: |
         Bring the tree and the Layout back into agreement

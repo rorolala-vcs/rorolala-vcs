@@ -23,9 +23,10 @@ use librorolala::protocol::ActionError;
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::VCSIndex;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable},
@@ -46,6 +47,7 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
+use crate::complete::{layout_paths, layout_uuids, offer, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_CHECKIN, EC_ERR_CHECKIN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
@@ -76,6 +78,57 @@ pub fn help_checkin(_: EntryCheckin, ec: &mut ResExitCode) {
 #[metadata(EntryCheckin)]
 pub fn desc_checkin() -> Description {
     t!("checkin.description").to_string().into()
+}
+
+/// Completes what `rola checkin` can be given next.
+///
+/// A reference names something in the Vault's Layout the Layout being worked in tracks — a path
+/// there or a `Uuid` it holds — so the fetched copy is what is read. `--to-local` names where each
+/// one lands here, which is a path of this run's.
+#[completion(EntryCheckin)]
+pub fn complete_checkin(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--to-local": t!("checkin.complete.to_local"),
+            },
+        );
+    }
+
+    if ctx.previous_word == "--to-local" {
+        return Suggest::file_comp();
+    }
+
+    let Some(workspace) = workspace.get_ref().as_ref() else {
+        return suggest!();
+    };
+
+    // Which Vault is read is the one the worked-in Layout tracks, the way the command itself
+    // resolves it; a Layout that tracks none has no references to offer.
+    let layouts = workspace.layouts();
+    let Ok(Some(name)) = layouts.current() else {
+        return suggest!();
+    };
+    let Ok(Some(track)) = layouts.track(&name) else {
+        return suggest!();
+    };
+    let Ok(vault) = remote.get_ref().name_or_default(track) else {
+        return suggest!();
+    };
+
+    let Ok(layout) = Layout::open(readonly_layout_dir(workspace, &vault, VAULT_LAYOUT_NAME)) else {
+        return suggest!();
+    };
+
+    let mut names = layout_paths(&layout);
+    names.extend(layout_uuids(&layout));
+
+    offer(&ctx, names)
 }
 
 /// Brings what the Vault holds but this Layout does not into it

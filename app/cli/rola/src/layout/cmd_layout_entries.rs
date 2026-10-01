@@ -4,9 +4,10 @@ use std::str::FromStr as _;
 
 use librorolala::storage::Key;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable},
@@ -19,6 +20,9 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::Next;
+use crate::complete::{
+    chosen_layout, flag_value, layout_names, layout_uuids, offer, strip_written, typing_flag,
+};
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::layout::{ErrorLayoutArgument, chosen};
@@ -60,6 +64,43 @@ pub fn help_layout_entries(_: EntryLayoutEntries, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutEntries)]
 pub fn desc_layout_entries() -> Description {
     t!("cmd_layout_entries.description").to_string().into()
+}
+
+/// Completes what `rola layout entries` can be given next.
+///
+/// Both words answer flags: `--layout` names a Layout a run can work on, and `--uuid` names an entry
+/// of the Layout already named beside it, or of the one being worked in when none was.
+#[completion(EntryLayoutEntries)]
+pub fn complete_layout_entries(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    vault: &mut LazyRes<ResVault>,
+) -> Suggest {
+    if ctx.previous_word == "--layout" {
+        return offer(&ctx, layout_names(workspace.get_ref()));
+    }
+
+    if ctx.previous_word == "--uuid" {
+        let named = flag_value(&ctx, "--layout");
+        let Some(layout) = chosen_layout(workspace.get_ref(), vault.get_ref(), named.as_deref())
+        else {
+            return suggest!();
+        };
+
+        return offer(&ctx, layout_uuids(&layout));
+    }
+
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--layout": t!("cmd_layout_entries.complete.layout"),
+                "--uuid": t!("cmd_layout_entries.complete.uuid"),
+            },
+        );
+    }
+
+    suggest!()
 }
 
 /// Lists what a Layout's entries hold

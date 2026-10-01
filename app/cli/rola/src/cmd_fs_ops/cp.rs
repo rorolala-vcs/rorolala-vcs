@@ -3,8 +3,10 @@
 use std::path::PathBuf;
 
 use mingling::{
-    Grouped,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -14,6 +16,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::cmd_fs_ops::{self, ErrorFsOpsArguments, ErrorFsOpsFailed, ResultFsOps};
+use crate::complete::typing_flag;
 use crate::exit_codes::EC_HELP;
 
 #[help(buffer)]
@@ -25,6 +28,19 @@ pub fn help_fs_ops_cp(_: EntryFsOpsCp, ec: &mut ResExitCode) {
 #[metadata(EntryFsOpsCp)]
 pub fn desc_fs_ops_cp() -> Description {
     t!("fs_ops.cp_description").to_string().into()
+}
+
+/// Completes what `rola fs-ops cp` can be given next.
+///
+/// Both words name where something sits, so the filesystem answers them; there are no flags to
+/// offer.
+#[completion(EntryFsOpsCp)]
+pub fn complete_fs_ops_cp(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    Suggest::file_comp()
 }
 
 /// Copies `FROM` to `TO`, `FROM` being left where it is.

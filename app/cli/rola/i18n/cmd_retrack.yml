@@ -1,6 +1,16 @@
 _version: 2
 
 retrack:
+  complete:
+    until:
+      en: "Where the version pointer goes: a level, a version, or a Vault"
+      zh-CN: 版本指针指向哪里：层级、版本或保险库
+    restore_content:
+      en: Write the version's content back over the file as well
+      zh-CN: 同时把该版本的内容写回文件
+    allow_jump:
+      en: Allow a version that is not on the way back
+      zh-CN: 允许跳到不在回退路径上的版本
   help:
     en: |
         Move a file's recorded version back, in the Layout being worked in

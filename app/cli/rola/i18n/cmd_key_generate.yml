@@ -1,6 +1,10 @@
 _version: 2
 
 key_generate:
+  complete:
+    install:
+      en: Put the pair in the user's key directory
+      zh-CN: 把密钥对放入用户的密钥目录
   help:
     en: |
         Generate an Ed25519 key pair under a name

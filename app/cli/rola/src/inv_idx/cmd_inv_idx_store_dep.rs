@@ -3,23 +3,26 @@
 use librorolala::inverse_index::InverseIndex;
 use librorolala::storage::Key;
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::ResVCSIndex;
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{offer, positional, store_keys, typing_flag};
 use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
 use crate::inv_idx::{
     DEFAULT_FORMAT_HASHES, ErrorInvIdxArgument, ErrorInvIdxHash, ErrorInvIdxNoIndex,
     ResultInvIdxHashes, parse_hash, reading_error, runtime,
 };
+use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex};
 
 #[help(buffer)]
 pub fn help_inv_idx_store_dep(_: EntryInvIdxStoreDep, ec: &mut ResExitCode) {
@@ -94,4 +97,19 @@ pub fn handle_inv_idx_store_dep(
         }
         Err(error) => reading_error(error),
     }
+}
+
+/// Completes what `rola inv-idx store-dep` can be given next.
+///
+/// The hash names a key the store holds, so those are what is offered.
+#[completion(EntryInvIdxStoreDep)]
+pub fn complete_inv_idx_store_dep(
+    ctx: ShellContext,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "store-dep") != 0 {
+        return suggest!();
+    }
+
+    offer(&ctx, store_keys(storage.get_ref().as_ref()))
 }

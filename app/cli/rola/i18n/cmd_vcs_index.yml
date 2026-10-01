@@ -204,6 +204,10 @@ vcs_index_write_msg:
     zh-CN: 将 Message 写入索引
 
 vcs_index_write_variant:
+  complete:
+    join:
+      en: The variant this one merges in
+      zh-CN: 本变体合并进来的那个变体
   help:
     en: |
         Write a Variant into the index, answering with its hash
@@ -269,6 +273,19 @@ vcs_index_my_creator_hash:
     zh-CN: 输出当前账户对应的 Creator 哈希
 
 vcs_index_lookback:
+  complete:
+    compact:
+      en: Draw the versions alone, without the variants between them
+      zh-CN: 只画版本，不画中间的变体
+    no_message:
+      en: Leave out what each version says
+      zh-CN: 不显示每个版本的说明
+    no_creator:
+      en: Leave out who made each version
+      zh-CN: 不显示每个版本由谁创建
+    max_message_length:
+      en: How much of a message is shown before it is cut short
+      zh-CN: 说明在截断前显示多少字符
   help:
     en: |
         Draw the chain one index object sits at the top of

@@ -1,6 +1,19 @@
 _version: 2
 
 status:
+  complete:
+    compact:
+      en: Draw the versions alone, without the variants between them
+      zh-CN: 只画版本，不画中间的变体
+    no_message:
+      en: Leave out what each version says
+      zh-CN: 不显示每个版本的说明
+    no_creator:
+      en: Leave out who made each version
+      zh-CN: 不显示每个版本由谁创建
+    max_message_length:
+      en: How much of a message is shown before it is cut short
+      zh-CN: 说明在截断前显示多少字符
   help:
     en: |
         Show how the working tree stands beside the Layout, or look back from one thing in it

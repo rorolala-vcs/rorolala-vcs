@@ -17,8 +17,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use mingling::{
-    Grouped,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, renderer, routeify},
+    Grouped, Suggest,
+    macros::{
+        buffer, chain, command, completion, help, metadata, r_eprintln, renderer, routeify, suggest,
+    },
     metadata::Description,
     res::{ResCurrentDir, ResExitCode},
 };
@@ -57,6 +59,15 @@ pub fn help_desktop(_: EntryDesktop, ec: &mut ResExitCode) {
 #[metadata(EntryDesktop)]
 pub fn desc_desktop() -> Description {
     t!("desktop.cmd_desktop_description").to_string().into()
+}
+
+/// Completes what `rola desktop` can be given next.
+///
+/// The command names nothing at all, so there is nothing to offer rather than a filename that
+/// would not be accepted.
+#[completion(EntryDesktop)]
+pub fn complete_desktop() -> Suggest {
+    suggest!()
 }
 
 /// Opens the Desktop program that sits beside this one.

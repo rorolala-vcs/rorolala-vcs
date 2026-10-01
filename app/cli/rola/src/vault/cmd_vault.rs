@@ -9,10 +9,10 @@
 //! program is done with it.
 
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, empty_result, help, metadata, r_eprintln, r_print, r_println,
-        renderer,
+        buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
+        r_println, renderer, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -47,6 +47,15 @@ pub fn help_vault(_: EntryVault, ec: &mut ResExitCode) {
 #[metadata(EntryVault)]
 pub fn desc_vault() -> Description {
     t!("vault.cmd_vault_description").to_string().into()
+}
+
+/// Completes what `rola vault` can be given next.
+///
+/// The namespace names nothing of its own and its subcommands are put to the line by the
+/// dispatcher, so there is nothing here to offer.
+#[completion(EntryVault)]
+pub fn complete_vault() -> Suggest {
+    suggest!()
 }
 
 /// Lists the Vaults this Workspace knows.
@@ -135,6 +144,14 @@ pub fn help_vault_ls(_: EntryVaultLs, ec: &mut ResExitCode) {
 #[metadata(EntryVaultLs)]
 pub fn desc_vault_ls() -> Description {
     t!("vault_ls.description").to_string().into()
+}
+
+/// Completes what `rola vault ls` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryVaultLs)]
+pub fn complete_vault_ls() -> Suggest {
+    suggest!()
 }
 
 /// Lists the Vaults this Workspace knows, each with whether it is the one reached for
@@ -237,6 +254,14 @@ pub fn help_vault_default(_: EntryVaultDefault, ec: &mut ResExitCode) {
 #[metadata(EntryVaultDefault)]
 pub fn desc_vault_default() -> Description {
     t!("vault_default.description").to_string().into()
+}
+
+/// Completes what `rola vault default` can be given next.
+///
+/// The command names nothing, so there is nothing to offer.
+#[completion(EntryVaultDefault)]
+pub fn complete_vault_default() -> Suggest {
+    suggest!()
 }
 
 /// Prints the Vault the Workspace reaches for

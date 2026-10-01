@@ -19,9 +19,10 @@ use librorolala::storage::{Blake3Hash, Key};
 use librorolala::tree_analyze::tree_diff;
 use librorolala::workspace::Workspace;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -37,6 +38,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_dir};
@@ -56,6 +58,36 @@ pub fn help_status(_: EntryStatus, ec: &mut ResExitCode) {
 #[metadata(EntryStatus)]
 pub fn desc_status() -> Description {
     t!("status.description").to_string().into()
+}
+
+/// Completes what `rola status` can be given next.
+///
+/// What is read is the tree, so a target that names a path is answered by the filesystem. The flags
+/// are the look-back ones the command shares with `vcs-index lookback`; the length one takes a
+/// number, which is nothing a list of names can offer.
+#[completion(EntryStatus)]
+pub fn complete_status(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--compact": t!("status.complete.compact"),
+                "--no-message": t!("status.complete.no_message"),
+                "--no-creator": t!("status.complete.no_creator"),
+                "--max-message-length": t!("status.complete.max_message_length"),
+            },
+        );
+    }
+
+    if ctx.previous_word == "--max-message-length" {
+        return suggest!();
+    }
+
+    if positional(&ctx, "status") == 0 {
+        Suggest::file_comp()
+    } else {
+        suggest!()
+    }
 }
 
 /// Shows how the working tree stands beside the Layout being worked in

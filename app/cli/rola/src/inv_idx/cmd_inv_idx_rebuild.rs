@@ -6,8 +6,10 @@
 
 use librorolala::inverse_index::InverseIndex;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, renderer, routeify},
+    Grouped, LazyRes, StructuralData, Suggest,
+    macros::{
+        buffer, chain, command, completion, help, metadata, r_eprintln, renderer, routeify, suggest,
+    },
     metadata::Description,
     res::ResExitCode,
 };
@@ -111,4 +113,12 @@ pub struct ResultInvIdxRebuild {
 pub fn render_result_inv_idx_rebuild(_result: ResultInvIdxRebuild) {
     // A rebuild produces a file, not a line: nothing is said on stdout, and a `--json` run is
     // answered with the report through the structured renderer.
+}
+
+/// Completes what `rola inv-idx rebuild` can be given next.
+///
+/// The command names nothing, so there is nothing to offer.
+#[completion(EntryInvIdxRebuild)]
+pub fn complete_inv_idx_rebuild() -> Suggest {
+    suggest!()
 }

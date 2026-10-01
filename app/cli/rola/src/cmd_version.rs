@@ -10,8 +10,8 @@
 //! at run time — a binary installed on its own has no `.cache` to read.
 
 use mingling::{
-    Grouped, StructuralData,
-    macros::{buffer, chain, command, metadata, r_println, renderer},
+    Grouped, StructuralData, Suggest,
+    macros::{buffer, chain, command, completion, metadata, r_println, renderer, suggest},
     metadata::Description,
 };
 use rust_i18n::t;
@@ -78,6 +78,15 @@ struct Reference {
 #[metadata(EntryVersion)]
 pub fn desc_version() -> Description {
     t!("version.cmd_version_description").to_string().into()
+}
+
+/// Completes what the version output can be given next.
+///
+/// The node names nothing, and it is reached by the program rather than typed, so there is nothing
+/// to offer.
+#[completion(EntryVersion)]
+pub fn complete_version() -> Suggest {
+    suggest!()
 }
 
 /// Prints what this build is

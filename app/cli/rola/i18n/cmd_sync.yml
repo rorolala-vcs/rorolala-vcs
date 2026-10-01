@@ -1,6 +1,28 @@
 _version: 2
 
 sync:
+  complete:
+    up_only:
+      en: Only what this Layout holds goes up
+      zh-CN: 只把本 Layout 的内容上传
+    down_only:
+      en: Only what the Vault holds comes down
+      zh-CN: 只把保险库的内容下载
+    both:
+      en: Move in both directions
+      zh-CN: 双向同步
+    dry_run:
+      en: Show the plan and change nothing
+      zh-CN: 只显示计划，不做任何改动
+    no_index:
+      en: Leave the index alone; only the Layout and the store move
+      zh-CN: 不动索引，只移动 Layout 和仓库
+    no_storage:
+      en: Leave the store alone; only the Layout and the index move
+      zh-CN: 不动仓库，只移动 Layout 和索引
+    no_layout:
+      en: Leave the Vault's Layout alone; only data and index move
+      zh-CN: 不动保险库的 Layout，只移动数据和索引
   help:
     en: |
         Bring the Layout being worked in together with the Vault it tracks

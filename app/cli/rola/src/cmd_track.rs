@@ -22,8 +22,11 @@ use librorolala::storage::{Key, RorolalaStorage, store_file};
 use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
 use librorolala::vcs::{Creator, Message, VCSIndex, Version};
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
@@ -38,6 +41,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{strip_written, typing_flag};
 use crate::editor::{ResEditor, open};
 use crate::exit_codes::{
     EC_ABORT, EC_ERR_TRACK, EC_ERR_TRACK_ARGUMENT, EC_ERR_TRACK_OWNERSHIP, EC_HELP,
@@ -87,6 +91,31 @@ pub fn help_track(_: EntryTrack, ec: &mut ResExitCode) {
 #[metadata(EntryTrack)]
 pub fn desc_track() -> Description {
     t!("track.description").to_string().into()
+}
+
+/// Completes what `rola track` can be given next.
+///
+/// Every `FILE` names where something sits in the tree, so the filesystem answers it. A message is
+/// the caller's own words and `--no-editor` is a flag, so neither has anything to list but the
+/// flags themselves.
+#[completion(EntryTrack)]
+pub fn complete_track(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--message": t!("track.complete.message"),
+                "--file-message": t!("track.complete.file_message"),
+                "--no-editor": t!("track.complete.no_editor"),
+            },
+        );
+    }
+
+    if matches!(ctx.previous_word.as_str(), "--message" | "--file-message") {
+        return suggest!();
+    }
+
+    Suggest::file_comp()
 }
 
 /// Records one or more files in the Layout being worked in

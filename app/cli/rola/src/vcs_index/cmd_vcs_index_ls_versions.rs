@@ -6,9 +6,10 @@
 use librorolala::storage::Key;
 use librorolala::vcs::{VCSIndexObject, VCSWrite as _, Variant, Version};
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer, routeify,
+        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -160,4 +161,12 @@ pub fn render_result_vcs_index_ls_versions(
             );
         }
     }
+}
+
+/// Completes what `rola vcs-index ls-versions` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryVcsIndexLsVersions)]
+pub fn complete_vcs_index_ls_versions() -> Suggest {
+    suggest!()
 }

@@ -19,15 +19,10 @@ use rust_i18n::t;
 use crate::Next;
 use crate::address::ResAddressHistory;
 use crate::cmd_create::ErrorWorkspaceNotExist;
+use crate::complete::positional;
 use crate::error::{ErrorConfigUnreadable, ErrorVaultNameMissing};
 use crate::exit_codes::{EC_ERR_VAULT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
-
-/// The last word of the two `rola vault bind` is dispatched by.
-///
-/// The argument being completed is counted from the words after it, so this is what tells
-/// an address being typed from a name being typed.
-const BIND_NODE_TAIL: &str = "bind";
 
 /// The flags `rola vault bind` takes.
 #[derive(Pickable)]
@@ -147,7 +142,7 @@ pub fn handle_vault_bind(
 /// know what it should be.
 #[completion(EntryVaultBind)]
 pub fn complete_vault_bind(ctx: ShellContext, history: &mut LazyRes<ResAddressHistory>) -> Suggest {
-    if ctx.current_word.starts_with('-') || positional(&ctx) != 1 {
+    if ctx.current_word.starts_with('-') || positional(&ctx, "bind") != 1 {
         return suggest!();
     }
 
@@ -155,23 +150,6 @@ pub fn complete_vault_bind(ctx: ShellContext, history: &mut LazyRes<ResAddressHi
     addresses.retain(|address| address.starts_with(&ctx.current_word));
 
     suggest! { addresses }
-}
-
-/// Which positional argument the word being completed is, counting from zero.
-///
-/// The words after the command node are the positional arguments. A word that has already
-/// been typed fills its position; the word being completed fills the position it is about
-/// to, so it is the words after the node that are counted, less the one in progress.
-fn positional(ctx: &ShellContext) -> usize {
-    let after_node = ctx
-        .all_words
-        .iter()
-        .position(|word| word == BIND_NODE_TAIL)
-        .map_or(0, |index| index + 1);
-
-    let typed = ctx.all_words.len().saturating_sub(after_node);
-
-    typed.saturating_sub(usize::from(!ctx.current_word.is_empty()))
 }
 
 /// Result: a name was bound to an address.

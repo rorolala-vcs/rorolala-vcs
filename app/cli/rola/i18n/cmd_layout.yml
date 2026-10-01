@@ -179,6 +179,10 @@ cmd_layout_ls:
     zh-CN: "%{layout}  （当前签出）"
 
 cmd_layout_new:
+  complete:
+    track:
+      en: The Vault upstream the new Layout tracks
+      zh-CN: 新 Layout 要跟踪的上游保险库
   help:
     en: |
         Make an empty Layout
@@ -205,6 +209,10 @@ cmd_layout_new:
     zh-CN: "已创建布局 `%{name}`"
 
 cmd_layout_cp:
+  complete:
+    track:
+      en: The Vault upstream the copy tracks
+      zh-CN: 副本要跟踪的上游保险库
   help:
     en: |
         Copy a Layout to a new name
@@ -348,6 +356,10 @@ cmd_layout_rm:
     zh-CN: 未做任何更改
 
 cmd_layout_tree_diff:
+  complete:
+    alike:
+      en: How alike two text files have to be to count as the same file moved, from 0 to 1
+      zh-CN: 两个文本文件要有多相似才算同一次移动，取值 0 到 1
   help:
     en: |
         Show what the working tree holds beside a Layout
@@ -400,6 +412,13 @@ cmd_layout_shot:
     zh-CN: "布局已写入 `%{path}`"
 
 cmd_layout_import:
+  complete:
+    name:
+      en: The name to give the Layout; the file's own name when none is given
+      zh-CN: 给 Layout 起的名字，未指定时用文件名
+    no_check:
+      en: Import without checking that the content the file names is here
+      zh-CN: 导入时不检查文件所引用的内容是否存在
   help:
     en: |
         Make a Layout from a `.rolayout` file
@@ -439,6 +458,16 @@ cmd_layout_import:
     zh-CN: "已建立布局 `%{name}`，命名了 %{count} 条路径"
 
 cmd_layout_entry:
+  complete:
+    owner:
+      en: The account the entry is held by
+      zh-CN: 持有该条目的账户
+    description:
+      en: What the entry says about itself
+      zh-CN: 条目对自身的说明
+    layout:
+      en: The Layout to work on; the one being worked in when none is named
+      zh-CN: 要操作的 Layout，未指定时用当前工作的 Layout
   create_help:
     en: |
         Make an entry hold data
@@ -504,6 +533,10 @@ cmd_layout_entry:
     zh-CN: "已删除条目 `%{what}`"
 
 cmd_layout_path:
+  complete:
+    layout:
+      en: The Layout to work on; the one being worked in when none is named
+      zh-CN: 要操作的 Layout，未指定时用当前工作的 Layout
   create_help:
     en: |
         Make a path name an entry
@@ -564,6 +597,13 @@ cmd_layout_path:
     zh-CN: "条目已移动：%{what}"
 
 cmd_layout_entries:
+  complete:
+    layout:
+      en: The Layout to work on; the one being worked in when none is named
+      zh-CN: 要操作的 Layout，未指定时用当前工作的 Layout
+    uuid:
+      en: The entry to list alone; every entry when none is named
+      zh-CN: 只列出该条目，未指定时列出全部条目
   help:
     en: |
         List what a Layout's entries hold

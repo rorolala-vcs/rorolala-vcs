@@ -6,9 +6,10 @@
 
 use librorolala::daemon::{Ownership, action_giveup_ownership};
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -22,6 +23,9 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{
+    cached_layout_uuids, offer, positional, positional_word, typing_flag, vault_names,
+};
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
@@ -41,6 +45,36 @@ pub fn desc_layout_giveup_ownership() -> Description {
     t!("cmd_layout_giveup_ownership.description")
         .to_string()
         .into()
+}
+
+/// Completes what `rola layout giveup-ownership` can be given next.
+///
+/// The Vault may be named first and the `Uuid`s follow it, so the names are offered where the Vault
+/// belongs and the entries the copy fetched under a name holds are offered throughout: a run that
+/// named no Vault is reaching for the one the Workspace does.
+#[completion(EntryLayoutGiveupOwnership)]
+pub fn complete_layout_giveup_ownership(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    let named = positional_word(&ctx, "giveup-ownership", 0).unwrap_or_default();
+    let mut names = if positional(&ctx, "giveup-ownership") == 0 {
+        vault_names(remote.get_ref())
+    } else {
+        Vec::new()
+    };
+    names.extend(cached_layout_uuids(
+        workspace.get_ref(),
+        remote.get_ref(),
+        &named,
+    ));
+
+    offer(&ctx, names)
 }
 
 /// Asks the Vault to name nobody as an entry's holder

@@ -1,17 +1,21 @@
 //! The `rola layout set-track` command: name the Vault upstream a Layout tracks.
 
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResWorkspace, ResWorkspaceConfig};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace, ResWorkspaceConfig};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{offer, positional, typing_flag, vault_names, workspace_layout_names};
 use crate::exit_codes::EC_HELP;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
 use crate::layout::{ErrorLayoutArgument, ErrorLayoutTrackNotBound, failed};
@@ -25,6 +29,27 @@ pub fn help_layout_set_track(_: EntryLayoutSetTrack, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutSetTrack)]
 pub fn desc_layout_set_track() -> Description {
     t!("cmd_layout_set_track.description").to_string().into()
+}
+
+/// Completes what `rola layout set-track` can be given next.
+///
+/// The Layout is one the Workspace holds and the Vault is one it has bound, so both words are read
+/// from what the run already knows.
+#[completion(EntryLayoutSetTrack)]
+pub fn complete_layout_set_track(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    match positional(&ctx, "set-track") {
+        0 => offer(&ctx, workspace_layout_names(workspace.get_ref())),
+        1 => offer(&ctx, vault_names(remote.get_ref())),
+        _ => suggest!(),
+    }
 }
 
 /// Names the Vault upstream a Layout tracks

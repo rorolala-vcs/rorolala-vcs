@@ -12,15 +12,16 @@ use librorolala::daemon::action_sync_hashes_async;
 use librorolala::protocol::ActionError;
 use librorolala::storage::Key;
 use mingling::{
-    Grouped, LazyRes,
+    Grouped, LazyRes, ShellContext, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResRorolalaStorage, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_progress::Progress;
@@ -28,6 +29,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{offer, store_keys, typing_flag, vault_names};
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH, EC_HELP};
 use crate::failure::failure;
@@ -42,6 +44,26 @@ pub fn help_storage_sync_hashes(_: EntryStorageSyncHashes, ec: &mut ResExitCode)
 #[metadata(EntryStorageSyncHashes)]
 pub fn desc_storage_sync_hashes() -> Description {
     t!("storage_sync_hashes.description").to_string().into()
+}
+
+/// Completes what `rola storage sync-hashes` can be given next.
+///
+/// Every word but the last is a key the store holds; the last may be the Vault to reach instead, so
+/// both are offered wherever the word in progress is.
+#[completion(EntryStorageSyncHashes)]
+pub fn complete_storage_sync_hashes(
+    ctx: ShellContext,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    let mut names = store_keys(storage.get_ref().as_ref());
+    names.extend(vault_names(remote.get_ref()));
+
+    offer(&ctx, names)
 }
 
 /// Makes the stores at both ends hold the keys named

@@ -21,9 +21,10 @@ use librorolala::vcs::{
     draw as draw_chain,
 };
 use mingling::{
-    Grouped, LazyRes, ProgramCollect, StructuralData,
+    Grouped, LazyRes, ProgramCollect, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
@@ -37,6 +38,7 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::complete::{IndexObject, index_hashes, offer, positional, strip_written, typing_flag};
 use crate::exit_codes::EC_HELP;
 use crate::vcs_index::{
     ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hex,
@@ -155,6 +157,36 @@ pub fn help_vcs_index_lookback(_: EntryVcsIndexLookback, ec: &mut ResExitCode) {
 #[metadata(EntryVcsIndexLookback)]
 pub fn desc_vcs_index_lookback() -> Description {
     t!("vcs_index_lookback.description").to_string().into()
+}
+
+/// Completes what `rola vcs-index lookback` can be given next.
+///
+/// The hash is the top of a chain, which is a version or a variant — a variant sits over the version
+/// it is based on — so both kinds are offered. `--max-message-length` takes a number, which no list
+/// of hashes answers.
+#[completion(EntryVcsIndexLookback)]
+pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--compact": t!("vcs_index_lookback.complete.compact"),
+                "--no-message": t!("vcs_index_lookback.complete.no_message"),
+                "--no-creator": t!("vcs_index_lookback.complete.no_creator"),
+                "--max-message-length": t!("vcs_index_lookback.complete.max_message_length"),
+            },
+        );
+    }
+
+    if ctx.previous_word == "--max-message-length" || positional(&ctx, "lookback") != 0 {
+        return suggest!();
+    }
+
+    let held = index.get_ref().as_ref();
+    let mut names = index_hashes(held, IndexObject::Version);
+    names.extend(index_hashes(held, IndexObject::Variant));
+
+    offer(&ctx, names)
 }
 
 /// Draws the chain one index object sits at the top of

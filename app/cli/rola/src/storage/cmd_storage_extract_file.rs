@@ -9,9 +9,10 @@ use std::path::PathBuf;
 
 use librorolala::storage::{Error as StorageError, Key, StorageBackend as _};
 use mingling::{
-    Grouped, LazyRes,
+    Grouped, LazyRes, ShellContext, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -23,6 +24,7 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{offer, positional, store_keys, typing_flag};
 use crate::exit_codes::{
     EC_ERR_STORAGE_EXTRACT_FILE_ARGUMENT, EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH,
     EC_ERR_STORAGE_EXTRACT_FILE_EXISTS, EC_ERR_STORAGE_EXTRACT_FILE_FAILED,
@@ -41,6 +43,26 @@ pub fn desc_storage_extract_file() -> Description {
     t!("storage_extract_file.cmd_storage_extract_file_description")
         .to_string()
         .into()
+}
+
+/// Completes what `rola storage extract-file` can be given next.
+///
+/// The hash is a key the store holds, which is the same list `storage ls-storaged` prints; the
+/// directory the content lands in is the filesystem's to answer.
+#[completion(EntryStorageExtractFile)]
+pub fn complete_storage_extract_file(
+    ctx: ShellContext,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    match positional(&ctx, "extract-file") {
+        0 => offer(&ctx, store_keys(storage.get_ref().as_ref())),
+        1 => Suggest::file_comp(),
+        _ => suggest!(),
+    }
 }
 
 /// Takes the content stored under `HASH` out of the store, into `DIR`.

@@ -5,8 +5,10 @@
 
 use librorolala::vcs::Message;
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -102,4 +104,13 @@ pub fn handle_vcs_index_write_msg(
         }
         .into(),
     }
+}
+
+/// Completes what `rola vcs-index write-msg` can be given next.
+///
+/// The message is the caller's own words, so there is nothing to offer rather than a
+/// filename that would not be accepted.
+#[completion(EntryVcsIndexWriteMsg)]
+pub fn complete_vcs_index_write_msg() -> Suggest {
+    suggest!()
 }

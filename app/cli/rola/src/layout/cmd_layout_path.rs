@@ -8,8 +8,10 @@
 use librorolala::daemon::{PathMove, action_move_remote_path};
 use librorolala::layout::LayoutPath;
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -22,6 +24,10 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{
+    chosen_layout, flag_value, layout_names, layout_paths, layout_uuids, offer, positional,
+    strip_written, typing_flag, workspace_layout_names,
+};
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
@@ -52,6 +58,40 @@ pub fn help_layout_path_create(_: EntryLayoutPathCreate, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutPathCreate)]
 pub fn desc_layout_path_create() -> Description {
     t!("cmd_layout_path.create_description").to_string().into()
+}
+
+/// Completes what `rola layout path create` can be given next.
+///
+/// The path is one the Layout names and the entry is one it holds, so both are read from the Layout
+/// the run would work on; `--layout` is which Layout that is.
+#[completion(EntryLayoutPathCreate)]
+pub fn complete_layout_path_create(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    vault: &mut LazyRes<ResVault>,
+) -> Suggest {
+    if ctx.previous_word == "--layout" {
+        return offer(&ctx, workspace_layout_names(workspace.get_ref()));
+    }
+
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--layout": t!("cmd_layout_path.complete.layout"),
+            },
+        );
+    }
+
+    let Some(layout) = entry_layout(&ctx, workspace.get_ref(), vault.get_ref()) else {
+        return suggest!();
+    };
+
+    match positional(&ctx, "create") {
+        0 => offer(&ctx, layout_paths(&layout)),
+        1 => offer(&ctx, layout_uuids(&layout)),
+        _ => suggest!(),
+    }
 }
 
 /// Makes a path name an entry
@@ -138,6 +178,39 @@ pub fn desc_layout_path_remove() -> Description {
     t!("cmd_layout_path.remove_description").to_string().into()
 }
 
+/// Completes what `rola layout path remove` can be given next.
+///
+/// The path is one the Layout names, read from the Layout the run would work on.
+#[completion(EntryLayoutPathRemove)]
+pub fn complete_layout_path_remove(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    vault: &mut LazyRes<ResVault>,
+) -> Suggest {
+    if ctx.previous_word == "--layout" {
+        return offer(&ctx, workspace_layout_names(workspace.get_ref()));
+    }
+
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--layout": t!("cmd_layout_path.complete.layout"),
+            },
+        );
+    }
+
+    let Some(layout) = entry_layout(&ctx, workspace.get_ref(), vault.get_ref()) else {
+        return suggest!();
+    };
+
+    if positional(&ctx, "remove") == 0 {
+        offer(&ctx, layout_paths(&layout))
+    } else {
+        suggest!()
+    }
+}
+
 /// Makes a path name nothing
 ///
 /// What is left is the entry the path named, at no path: a half-made entry, which the Layout
@@ -211,6 +284,50 @@ pub fn help_layout_path_move(_: EntryLayoutPathMove, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutPathMove)]
 pub fn desc_layout_path_move() -> Description {
     t!("cmd_layout_path.move_description").to_string().into()
+}
+
+/// Completes what `rola layout path move` can be given next.
+///
+/// Both words are paths the Layout names, so the Layout the run would work on answers both.
+#[completion(EntryLayoutPathMove)]
+pub fn complete_layout_path_move(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    vault: &mut LazyRes<ResVault>,
+) -> Suggest {
+    if ctx.previous_word == "--layout" {
+        return offer(&ctx, layout_names(workspace.get_ref()));
+    }
+
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--layout": t!("cmd_layout_path.complete.layout"),
+            },
+        );
+    }
+
+    let Some(layout) = entry_layout(&ctx, workspace.get_ref(), vault.get_ref()) else {
+        return suggest!();
+    };
+
+    if positional(&ctx, "move") < 2 {
+        offer(&ctx, layout_paths(&layout))
+    } else {
+        suggest!()
+    }
+}
+
+/// The Layout a `layout path` command would work on, from the `--layout` written beside it.
+fn entry_layout(
+    ctx: &ShellContext,
+    workspace: &ResWorkspace,
+    vault: &ResVault,
+) -> Option<librorolala::layout::Layout> {
+    let named = flag_value(ctx, "--layout");
+
+    chosen_layout(workspace, vault, named.as_deref())
 }
 
 /// Moves the entry at one path to another

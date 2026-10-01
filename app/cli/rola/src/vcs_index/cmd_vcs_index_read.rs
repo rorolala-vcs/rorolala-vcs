@@ -8,10 +8,10 @@
 use librorolala::storage::Key;
 use librorolala::vcs::{VCSIndexObject, VCSWrite as _};
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer,
-        routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -24,6 +24,7 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::complete::{IndexObject, index_hashes, offer, positional, typing_flag};
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::vcs_index::{
@@ -48,6 +49,21 @@ pub fn help_vcs_index_read(_: EntryVcsIndexRead, ec: &mut ResExitCode) {
 #[metadata(EntryVcsIndexRead)]
 pub fn desc_vcs_index_read() -> Description {
     t!("vcs_index_read.description").to_string().into()
+}
+
+/// Completes what `rola vcs-index read` can be given next.
+///
+/// Any object the index holds can be read, so every hash it keeps is offered.
+#[completion(EntryVcsIndexRead)]
+pub fn complete_vcs_index_read(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "read") != 0 {
+        return suggest!();
+    }
+
+    offer(
+        &ctx,
+        index_hashes(index.get_ref().as_ref(), IndexObject::Any),
+    )
 }
 
 /// Reads one index object

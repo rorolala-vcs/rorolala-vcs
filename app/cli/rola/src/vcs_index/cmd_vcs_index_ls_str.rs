@@ -6,9 +6,10 @@
 
 use librorolala::vcs::VCSIndexObject;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer, routeify,
+        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -35,6 +36,14 @@ pub fn desc_vcs_index_ls_str() -> Description {
     t!("vcs_index_ls_str.cmd_vcs_index_ls_str_description")
         .to_string()
         .into()
+}
+
+/// Completes what `rola vcs-index ls-str` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryVcsIndexLsStr)]
+pub fn complete_vcs_index_ls_str() -> Suggest {
+    suggest!()
 }
 
 /// Lists the hashes of the text objects the index holds

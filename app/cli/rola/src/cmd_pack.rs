@@ -8,9 +8,10 @@
 
 use librorolala::storage::Lockable as _;
 use mingling::{
-    Grouped, LazyRes,
+    Grouped, LazyRes, ShellContext, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
@@ -22,6 +23,7 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{strip_written, typing_flag};
 use crate::exit_codes::{
     EC_ERR_PACK_FAILED, EC_ERR_PACK_LOCKED, EC_ERR_PACK_NO_STORAGE, EC_ERR_PACK_NOTHING_TO_PACK,
     EC_HELP,
@@ -51,6 +53,25 @@ pub fn help_pack(_: EntryPack, ec: &mut ResExitCode) {
 #[metadata(EntryPack)]
 pub fn desc_pack() -> Description {
     t!("pack.cmd_pack_description").to_string().into()
+}
+
+/// Completes what `rola pack` can be given next.
+///
+/// A packing names nothing: what is laid out is whatever store and index the run works on, and the
+/// only thing a caller chooses is which of the two to leave alone.
+#[completion(EntryPack)]
+pub fn complete_pack(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--no-index": t!("pack.complete.no_index"),
+                "--no-storage": t!("pack.complete.no_storage"),
+            },
+        );
+    }
+
+    suggest!()
 }
 
 /// Lays the objects a store and an index hold out in packs.

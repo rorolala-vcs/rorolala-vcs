@@ -2,9 +2,10 @@
 
 use librorolala::tree_analyze::tree_diff;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable},
@@ -16,6 +17,7 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::complete::{layout_names, offer, positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
@@ -43,6 +45,35 @@ pub fn help_layout_tree_diff(_: EntryLayoutTreeDiff, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutTreeDiff)]
 pub fn desc_layout_tree_diff() -> Description {
     t!("cmd_layout_tree_diff.description").to_string().into()
+}
+
+/// Completes what `rola layout tree-diff` can be given next.
+///
+/// What is read is the tree beside a Layout, so the optional Layout is offered by name; `--alike` is
+/// a number between nothing and one, which no list of names can offer.
+#[completion(EntryLayoutTreeDiff)]
+pub fn complete_layout_tree_diff(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--alike": t!("cmd_layout_tree_diff.complete.alike"),
+            },
+        );
+    }
+
+    if ctx.previous_word == "--alike" {
+        return suggest!();
+    }
+
+    if positional(&ctx, "tree-diff") == 0 {
+        offer(&ctx, layout_names(workspace.get_ref()))
+    } else {
+        suggest!()
+    }
 }
 
 /// Shows what the working tree holds beside a Layout

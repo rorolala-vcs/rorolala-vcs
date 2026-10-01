@@ -7,8 +7,8 @@
 
 use librorolala::vcs::Creator;
 use mingling::{
-    Grouped, LazyRes,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, Suggest,
+    macros::{buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest},
     metadata::Description,
     res::ResExitCode,
 };
@@ -100,4 +100,12 @@ pub fn handle_vcs_index_my_creator_hash(
         }
         .into(),
     }
+}
+
+/// Completes what `rola vcs-index my-creator-hash` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryVcsIndexMyCreatorHash)]
+pub fn complete_vcs_index_my_creator_hash() -> Suggest {
+    suggest!()
 }

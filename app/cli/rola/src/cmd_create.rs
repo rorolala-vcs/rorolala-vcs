@@ -6,9 +6,10 @@ use librorolala::{
     workspace::Workspace,
 };
 use mingling::{
-    Grouped, LazyRes, Wrap,
+    Grouped, LazyRes, ShellContext, Suggest, Wrap,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -22,6 +23,7 @@ use rust_i18n::t;
 
 use crate::{
     Next,
+    complete::positional,
     exit_codes::{EC_ALREADY_EXIST, EC_ERR_CREATION_ARGUMENT, EC_HELP, EC_NOT_EXIST},
     failure::failure,
 };
@@ -35,6 +37,19 @@ pub fn help_create(_: EntryCreate, ec: &mut ResExitCode) {
 #[metadata(EntryCreate)]
 pub fn desc_create() -> Description {
     t!("create.cmd_create_description").to_string().into()
+}
+
+/// Completes what `rola create` can be given next.
+///
+/// A creation is named by a path and nothing else, so the whole of what can be offered is what
+/// the filesystem holds where the path is being typed.
+#[completion(EntryCreate)]
+pub fn complete_create(ctx: ShellContext) -> Suggest {
+    if positional(&ctx, "create") == 0 {
+        Suggest::file_comp()
+    } else {
+        suggest!()
+    }
 }
 
 #[command(entry = EntryCreate, routeify)]

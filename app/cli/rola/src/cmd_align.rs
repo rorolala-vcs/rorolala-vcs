@@ -25,8 +25,11 @@ use librorolala::storage::{Key, StorageBackend as _};
 use librorolala::tree_analyze::{Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff};
 use librorolala::vcs::VCSIndex;
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
@@ -41,6 +44,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_ALIGN, EC_ERR_ALIGN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
@@ -131,6 +135,37 @@ pub fn help_align(_: EntryAlign, ec: &mut ResExitCode) {
 #[metadata(EntryAlign)]
 pub fn desc_align() -> Description {
     t!("align.description").to_string().into()
+}
+
+/// Completes what `rola align` can be given next.
+///
+/// The path is the tree's, so the filesystem answers it; `--move` names where a file went, which is
+/// a path too. Everything else the command takes is one of its modes, and those are the flags put
+/// to a word that starts one.
+#[completion(EntryAlign)]
+pub fn complete_align(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--delete": t!("align.complete.delete"),
+                "--rename": t!("align.complete.rename"),
+                "--break": t!("align.complete.break"),
+                "--move": t!("align.complete.move"),
+                "--restore-move": t!("align.complete.restore_move"),
+                "--restore-modify": t!("align.complete.restore_modify"),
+                "--restore-delete": t!("align.complete.restore_delete"),
+                "--restore": t!("align.complete.restore"),
+                "--completely": t!("align.complete.completely"),
+            },
+        );
+    }
+
+    if ctx.previous_word == "--move" || positional(&ctx, "align") == 0 {
+        Suggest::file_comp()
+    } else {
+        suggest!()
+    }
 }
 
 /// Brings the tree and the Layout back into agreement about a path

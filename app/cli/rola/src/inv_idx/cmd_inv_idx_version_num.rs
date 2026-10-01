@@ -2,10 +2,10 @@
 
 use librorolala::inverse_index::InverseIndex;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer,
-        routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -17,6 +17,7 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::complete::{IndexObject, index_hashes, offer, positional, typing_flag};
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::inv_idx::{
@@ -129,4 +130,22 @@ pub fn render_result_inv_idx_number(
     } else {
         r_println!("{}", result.number);
     }
+}
+
+/// Completes what `rola inv-idx version-num` can be given next.
+///
+/// The hash names a version the index holds, so those are what is offered.
+#[completion(EntryInvIdxVersionNum)]
+pub fn complete_inv_idx_version_num(
+    ctx: ShellContext,
+    index: &mut LazyRes<ResVCSIndex>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "version-num") != 0 {
+        return suggest!();
+    }
+
+    offer(
+        &ctx,
+        index_hashes(index.get_ref().as_ref(), IndexObject::Version),
+    )
 }

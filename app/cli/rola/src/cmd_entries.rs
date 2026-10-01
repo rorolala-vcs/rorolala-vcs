@@ -11,8 +11,11 @@
 //! what is already at hand.
 
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, renderer, routeify},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, renderer, routeify,
+        suggest,
+    },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
@@ -24,6 +27,7 @@ use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_LAYOUT, EC_HELP};
 use crate::failure::failure;
 use crate::format::ResFormat;
@@ -50,6 +54,24 @@ pub fn help_entries(_: EntryEntries, ec: &mut ResExitCode) {
 #[metadata(EntryEntries)]
 pub fn desc_entries() -> Description {
     t!("entries.description").to_string().into()
+}
+
+/// Completes what `rola entries` can be given next.
+///
+/// The command names no argument of its own — what it lists is whatever the run is in — so the
+/// only thing to answer is a word that starts a flag.
+#[completion(EntryEntries)]
+pub fn complete_entries(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--remote": t!("entries.complete.remote"),
+            },
+        );
+    }
+
+    suggest!()
 }
 
 /// Lists the paths a Layout names, one a line

@@ -6,9 +6,10 @@
 
 use librorolala::daemon::action_fetch_layout;
 use mingling::{
-    Grouped, LazyRes, StructuralData, Wrap,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -22,6 +23,7 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
@@ -36,6 +38,22 @@ pub fn help_layout_fetch(_: EntryLayoutFetch, ec: &mut ResExitCode) {
 #[metadata(EntryLayoutFetch)]
 pub fn desc_layout_fetch() -> Description {
     t!("cmd_layout_fetch.description").to_string().into()
+}
+
+/// Completes what `rola layout fetch` can be given next.
+///
+/// What is named is a Vault the Workspace has bound, and never an address: the copy is kept under
+/// the name, so a name is the whole of what the command can take.
+#[completion(EntryLayoutFetch)]
+pub fn complete_layout_fetch(
+    ctx: ShellContext,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "fetch") != 0 {
+        return suggest!();
+    }
+
+    offer(&ctx, vault_names(remote.get_ref()))
 }
 
 /// Brings a Vault's Layout here as a read-only copy

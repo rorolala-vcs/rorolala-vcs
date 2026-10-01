@@ -6,8 +6,11 @@ use std::process::Command;
 
 use librorolala::auth::user_keys_dir;
 use mingling::{
-    Grouped,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer},
+    Grouped, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
     res::ResExitCode,
@@ -18,6 +21,7 @@ use rorolala_utils_constants::{PRIVATE_KEY_EXTENSION, PUBLIC_KEY_EXTENSION};
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{strip_written, typing_flag};
 use crate::exit_codes::{
     EC_ERR_KEY_ARGUMENT, EC_ERR_KEYGEN_FAILED, EC_ERR_KEYGEN_INSTALL_FAILED,
     EC_ERR_KEYGEN_NO_KEY_DIR, EC_ERR_KEYGEN_NO_OPENSSL, EC_HELP,
@@ -51,6 +55,24 @@ pub fn desc_key_generate() -> Description {
     t!("key_generate.cmd_key_generate_description")
         .to_string()
         .into()
+}
+
+/// Completes what `rola key generate` can be given next.
+///
+/// The name is a new one the caller chooses, so there is nothing to offer for it; `--install` says
+/// where the pair is kept.
+#[completion(EntryKeyGenerate)]
+pub fn complete_key_generate(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--install": t!("key_generate.complete.install"),
+            },
+        );
+    }
+
+    suggest!()
 }
 
 /// Generates an Ed25519 key pair with the system's `openssl`.

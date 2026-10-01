@@ -10,19 +10,22 @@ use librorolala::protocol::ActionError;
 use librorolala::storage::Key;
 use librorolala::vcs::{UNKNOWN_VERSION, VCSIndexObject};
 use mingling::{
-    Grouped, LazyRes,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, ShellContext, Suggest,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
+use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResVCSIndex, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 use std::str::FromStr as _;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{IndexObject, index_hashes, offer, positional, typing_flag, vault_names};
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
@@ -41,6 +44,29 @@ pub fn help_vcs_index_read_remote(_: EntryVcsIndexReadRemote, ec: &mut ResExitCo
 #[metadata(EntryVcsIndexReadRemote)]
 pub fn desc_vcs_index_read_remote() -> Description {
     t!("vcs_index_read_remote.description").to_string().into()
+}
+
+/// Completes what `rola vcs-index read-remote` can be given next.
+///
+/// The hash is one the other end's index holds, and what is here to read is this index, which a sync
+/// keeps to the same hashes. The Vault follows it and is offered where it belongs.
+#[completion(EntryVcsIndexReadRemote)]
+pub fn complete_vcs_index_read_remote(
+    ctx: ShellContext,
+    index: &mut LazyRes<ResVCSIndex>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) {
+        return suggest!();
+    }
+
+    match positional(&ctx, "read-remote") {
+        0 => offer(
+            &ctx,
+            index_hashes(index.get_ref().as_ref(), IndexObject::Any),
+        ),
+        _ => offer(&ctx, vault_names(remote.get_ref())),
+    }
 }
 
 /// Reads one index object from the index at the other end

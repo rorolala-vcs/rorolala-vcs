@@ -7,9 +7,10 @@
 
 use librorolala::storage::Key;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, StructuralData, Suggest,
     macros::{
-        buffer, chain, command, help, metadata, r_eprintln, r_print, r_println, renderer, routeify,
+        buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
+        renderer, routeify, suggest,
     },
     metadata::Description,
     res::ResExitCode,
@@ -46,6 +47,14 @@ pub fn desc_storage_ls_manifests() -> Description {
     t!("storage_ls_manifests.cmd_storage_ls_manifests_description")
         .to_string()
         .into()
+}
+
+/// Completes what `rola storage ls-manifests` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryStorageLsManifests)]
+pub fn complete_storage_ls_manifests() -> Suggest {
+    suggest!()
 }
 
 /// Lists every content the store keeps as a manifest of chunks, one key per line.

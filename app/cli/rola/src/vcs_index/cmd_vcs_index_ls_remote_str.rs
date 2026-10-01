@@ -7,8 +7,10 @@
 //! text itself.
 
 use mingling::{
-    Grouped, LazyRes, Wrap,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, ShellContext, Suggest, Wrap,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -19,6 +21,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
@@ -109,4 +112,20 @@ pub fn handle_vcs_index_ls_remote_str(
     );
 
     listing.into()
+}
+
+/// Completes what `rola vcs-index ls-remote-str` can be given next.
+///
+/// The one word names the Vault to reach, so the names the Workspace has bound are what is offered;
+/// naming none reaches for the one it reaches for.
+#[completion(EntryVcsIndexLsRemoteStr)]
+pub fn complete_vcs_index_ls_remote_str(
+    ctx: ShellContext,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "ls-remote-str") != 0 {
+        return suggest!();
+    }
+
+    offer(&ctx, vault_names(remote.get_ref()))
 }

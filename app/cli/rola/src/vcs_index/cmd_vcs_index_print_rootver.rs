@@ -7,8 +7,8 @@
 
 use librorolala::vcs::{VCSIndexReadingError, VCSWrite as _, Version};
 use mingling::{
-    Grouped, LazyRes,
-    macros::{buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, Suggest,
+    macros::{buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest},
     metadata::Description,
     res::ResExitCode,
 };
@@ -87,4 +87,12 @@ pub fn handle_vcs_index_print_rootver(
         }
         .into(),
     }
+}
+
+/// Completes what `rola vcs-index print-rootver` can be given next.
+///
+/// The listing names nothing, so there is nothing to offer.
+#[completion(EntryVcsIndexPrintRootver)]
+pub fn complete_vcs_index_print_rootver() -> Suggest {
+    suggest!()
 }

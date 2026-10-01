@@ -39,6 +39,7 @@ mod cmd_status;
 mod cmd_sync;
 mod cmd_track;
 mod cmd_version;
+mod complete;
 mod editor;
 mod error;
 mod exit_codes;

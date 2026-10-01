@@ -1,5 +1,6 @@
 use mingling::{
-    macros::{buffer, command, help, metadata, r_eprintln},
+    Suggest,
+    macros::{buffer, command, completion, help, metadata, r_eprintln, suggest},
     metadata::Description,
     res::{ResCurrentDir, ResExitCode},
 };
@@ -18,6 +19,15 @@ pub fn help_init(_: EntryInit, ec: &mut ResExitCode) {
 #[metadata(EntryInit)]
 pub fn desc_init() -> Description {
     t!("init.cmd_init_description").to_string().into()
+}
+
+/// Completes what `rola init` can be given next.
+///
+/// The command names nothing: it makes a Workspace or a Vault where the run already is, so there is
+/// nothing to offer.
+#[completion(EntryInit)]
+pub fn complete_init() -> Suggest {
+    suggest!()
 }
 
 #[command(node = "init")]

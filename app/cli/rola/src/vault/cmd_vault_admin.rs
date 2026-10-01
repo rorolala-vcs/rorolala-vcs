@@ -10,15 +10,16 @@
 
 use librorolala::vault::Config as VaultConfig;
 use mingling::{
-    Grouped, LazyRes, StructuralData, Wrap,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::ResVaultConfig;
+use rorolala_cli_setups::{ResVault, ResVaultConfig, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 use serde::Serialize;
@@ -26,11 +27,13 @@ use serde::Serialize;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::cmd_create::ErrorVaultNotExist;
+use crate::complete::{offer, positional, typing_flag};
 use crate::error::{
     ErrorConfigUnreadable, ErrorVaultAdminMissing, ErrorVaultAdminUnknown, ErrorVaultLastAdmin,
     ErrorVaultNameMissing, ErrorVaultNotAdmin,
 };
 use crate::exit_codes::EC_HELP;
+use crate::keys::account_names;
 
 #[help(buffer)]
 pub fn help_vault_admin(_: EntryVaultAdmin, ec: &mut ResExitCode) {
@@ -41,6 +44,15 @@ pub fn help_vault_admin(_: EntryVaultAdmin, ec: &mut ResExitCode) {
 #[metadata(EntryVaultAdmin)]
 pub fn desc_vault_admin() -> Description {
     t!("vault_admin.description").to_string().into()
+}
+
+/// Completes what `rola vault admin` can be given next.
+///
+/// The namespace names nothing of its own and its subcommands are put to the line by the
+/// dispatcher, so there is nothing here to offer.
+#[completion(EntryVaultAdmin)]
+pub fn complete_vault_admin() -> Suggest {
+    suggest!()
 }
 
 /// Lists the administrators of this Vault
@@ -76,6 +88,26 @@ pub fn help_vault_admin_add(_: EntryVaultAdminAdd, ec: &mut ResExitCode) {
 #[metadata(EntryVaultAdminAdd)]
 pub fn desc_vault_admin_add() -> Description {
     t!("vault_admin.add_description").to_string().into()
+}
+
+/// Completes what `rola vault admin add` can be given next.
+///
+/// What is named is a member of the Vault, which is a key the run can reach, so the accounts are
+/// what is offered.
+#[completion(EntryVaultAdminAdd)]
+pub fn complete_vault_admin_add(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    vault: &mut LazyRes<ResVault>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "add") != 0 {
+        return suggest!();
+    }
+
+    offer(
+        &ctx,
+        account_names(workspace.get_ref().as_ref(), vault.get_ref().as_ref()),
+    )
 }
 
 /// Names a member an administrator of this Vault
@@ -141,6 +173,26 @@ pub fn help_vault_admin_rm(_: EntryVaultAdminRm, ec: &mut ResExitCode) {
 #[metadata(EntryVaultAdminRm)]
 pub fn desc_vault_admin_rm() -> Description {
     t!("vault_admin.rm_description").to_string().into()
+}
+
+/// Completes what `rola vault admin rm` can be given next.
+///
+/// What is named is a member of the Vault, which is a key the run can reach, so the accounts are
+/// what is offered.
+#[completion(EntryVaultAdminRm)]
+pub fn complete_vault_admin_rm(
+    ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
+    vault: &mut LazyRes<ResVault>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "rm") != 0 {
+        return suggest!();
+    }
+
+    offer(
+        &ctx,
+        account_names(workspace.get_ref().as_ref(), vault.get_ref().as_ref()),
+    )
 }
 
 /// Stops a member being an administrator of this Vault

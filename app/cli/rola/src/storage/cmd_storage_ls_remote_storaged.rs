@@ -11,8 +11,10 @@ use librorolala::daemon::action_list_remote_async;
 use librorolala::protocol::ActionError;
 use librorolala::storage::Key;
 use mingling::{
-    Grouped, LazyRes, Wrap,
-    macros::{arg, buffer, chain, command, help, metadata, r_eprintln, routeify},
+    Grouped, LazyRes, ShellContext, Suggest, Wrap,
+    macros::{
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+    },
     metadata::Description,
     picker::EntryPicker,
     res::ResExitCode,
@@ -24,6 +26,7 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
@@ -41,6 +44,21 @@ pub fn desc_storage_ls_remote_storaged() -> Description {
     t!("storage_ls_remote_storaged.description")
         .to_string()
         .into()
+}
+
+/// Completes what `rola storage ls-remote-storaged` can be given next.
+///
+/// The one word names the Vault to reach, so the names the Workspace has bound are what is offered.
+#[completion(EntryStorageLsRemoteStoraged)]
+pub fn complete_storage_ls_remote_storaged(
+    ctx: ShellContext,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+) -> Suggest {
+    if typing_flag(&ctx) || positional(&ctx, "ls-remote-storaged") != 0 {
+        return suggest!();
+    }
+
+    offer(&ctx, vault_names(remote.get_ref()))
 }
 
 /// Lists the objects the store at the other end holds

@@ -30,9 +30,10 @@ use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::VCSIndex;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
@@ -54,6 +55,7 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
+use crate::complete::{strip_written, typing_flag};
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_SYNC, EC_ERR_SYNC_ARGUMENT, EC_HELP};
 use crate::failure::failure;
@@ -102,6 +104,30 @@ pub fn help_sync(_: EntrySync, ec: &mut ResExitCode) {
 #[metadata(EntrySync)]
 pub fn desc_sync() -> Description {
     t!("sync.description").to_string().into()
+}
+
+/// Completes what `rola sync` can be given next.
+///
+/// The command names nothing: what moves is decided by the plan the Layout and the Vault make, and
+/// the whole of what a caller chooses is which parts of it are left alone.
+#[completion(EntrySync)]
+pub fn complete_sync(ctx: ShellContext) -> Suggest {
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                "--up-only": t!("sync.complete.up_only"),
+                "--down-only": t!("sync.complete.down_only"),
+                "--both": t!("sync.complete.both"),
+                "--dry-run": t!("sync.complete.dry_run"),
+                "--no-index": t!("sync.complete.no_index"),
+                "--no-storage": t!("sync.complete.no_storage"),
+                "--no-layout": t!("sync.complete.no_layout"),
+            },
+        );
+    }
+
+    suggest!()
 }
 
 /// Brings the Layout being worked in together with the Vault it tracks

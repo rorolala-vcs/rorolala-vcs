@@ -28,9 +28,10 @@ use librorolala::protocol::VaultAddress;
 use librorolala::tree_analyze::{TreeDiff, tree_diff, walk};
 use librorolala::workspace::Workspace;
 use mingling::{
-    Grouped, LazyRes, StructuralData,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
-        arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::{EntryPicker, Pickable, value::Flag},
@@ -47,6 +48,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
+use crate::complete::{strip_written, typing_flag};
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_OWNERSHIP, EC_HELP};
 use crate::failure::failure;
@@ -94,6 +96,35 @@ pub fn help_hold(_: EntryHold, ec: &mut ResExitCode) {
 #[metadata(EntryHold)]
 pub fn desc_hold() -> Description {
     t!("hold.description").to_string().into()
+}
+
+/// Completes what `rola hold` can be given next.
+#[completion(EntryHold)]
+pub fn complete_hold(ctx: ShellContext) -> Suggest {
+    complete_ownership(&ctx)
+}
+
+/// Completes what `rola giveup` can be given next.
+#[completion(EntryGiveup)]
+pub fn complete_giveup(ctx: ShellContext) -> Suggest {
+    complete_ownership(&ctx)
+}
+
+/// The completion the two commands that move ownership share.
+///
+/// Every word that is not a flag names where a file sits, so the filesystem answers it; the one
+/// flag says whether a batch that cannot be done whole may be done in part.
+fn complete_ownership(ctx: &ShellContext) -> Suggest {
+    if typing_flag(ctx) {
+        return strip_written(
+            ctx,
+            suggest! {
+                "--allow-partial": t!("hold.complete.allow_partial"),
+            },
+        );
+    }
+
+    Suggest::file_comp()
 }
 
 /// Claims entries for this run's account
