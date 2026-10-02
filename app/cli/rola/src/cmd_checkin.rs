@@ -12,8 +12,13 @@
 // where it covers the one signature that needs it.
 //
 // The handler's parameters are the resources the framework injects, so how many of them there are
-// is what the command needs of the run rather than a signature this program shaped.
-#![allow(clippy::trivially_copy_pass_by_ref, clippy::too_many_arguments)]
+// is what the command needs of the run rather than a signature this program shaped. It is long
+// because it reads every reference, the Variant mode included, before anything is written.
+#![allow(
+    clippy::trivially_copy_pass_by_ref,
+    clippy::too_many_arguments,
+    clippy::too_many_lines
+)]
 
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
@@ -24,7 +29,8 @@ use librorolala::daemon::{action_fetch_layout, action_sync_index_all_async};
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::protocol::ActionError;
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
-use librorolala::vcs::VCSIndex;
+use librorolala::vcs::{VCSIndex, VCSIndexObject, Variant};
+use librorolala::workspace::{Merging, Pending};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
@@ -32,12 +38,12 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::EntryPicker,
+    picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResRorolalaStorage, ResVCSIndex,
-    ResWorkspace,
+    ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting, ResRorolalaStorage,
+    ResVCSIndex, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -50,7 +56,10 @@ use uuid::Uuid;
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
-use crate::complete::typing_flag;
+use crate::complete::{
+    IndexObject, filling_flag, flag_value, index_hashes, offer, positional, strip_written,
+    typing_flag,
+};
 use crate::exit_codes::{EC_ERR_CHECKIN, EC_ERR_CHECKIN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
@@ -61,7 +70,11 @@ use crate::layout::{
 };
 use crate::progress::Reporting;
 use crate::sync;
-use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
+use crate::vcs_index::{ErrorVcsIndexNoIndex, parse_hash, runtime as index_runtime};
+
+/// The file a variant is to be joined into, for the mode that checks a variant in rather than
+/// bringing a `Uuid` the Vault holds into this Layout.
+const ARG_JOIN: PickerArg<'static, Option<String>> = arg![join: Option<String>];
 
 #[help(buffer)]
 pub fn help_checkin(_: EntryCheckin, ec: &mut ResExitCode) {
@@ -78,11 +91,28 @@ pub fn desc_checkin() -> Description {
 ///
 /// Every word names where something is to land here, so the filesystem answers it. Which entry a
 /// reference names is the Vault's to say, and a reference is read there rather than here, so there
-/// is nothing of the Vault to list. There are no flags of this command's to offer.
+/// is nothing of the Vault to list. The variant mode is the one thing only this run knows: its
+/// first word is a variant the index holds, and the rest is a place like any other.
 #[completion(EntryCheckin)]
-pub fn complete_checkin(ctx: ShellContext) -> Suggest {
+pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> Suggest {
     if typing_flag(&ctx) {
-        return suggest!();
+        return strip_written(
+            &ctx,
+            suggest! {
+                ARG_JOIN: t!("checkin.complete.join"),
+            },
+        );
+    }
+
+    if filling_flag(&ctx, &ARG_JOIN) {
+        return Suggest::file_comp();
+    }
+
+    if flag_value(&ctx, &ARG_JOIN).is_some() && positional(&ctx, "checkin") == 0 {
+        return offer(
+            &ctx,
+            index_hashes(index.get_ref().as_ref(), IndexObject::Variant),
+        );
     }
 
     Suggest::file_comp()
@@ -121,22 +151,30 @@ pub fn complete_checkin(ctx: ShellContext) -> Suggest {
 #[command(node = "checkin", entry = EntryCheckin)]
 pub fn checkin(args: EntryCheckin) -> Next {
     // Picking cannot fail: the positions are one list, and an absent one is the empty list.
-    let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
+    let picked = args.pick(&arg![Vec<String>]).pick(&ARG_JOIN).to_result();
+    let (words, join): (Vec<String>, Option<String>) = match picked {
+        Ok(picked) => picked,
+        Err(next) => return next,
+    };
 
-    let Some((refs, to)) = split(words) else {
+    let Some((refs, to)) = split(join.as_deref(), words) else {
         return ErrorCheckinArgument.into();
     };
 
-    StateCheckin { refs, to }.into()
+    StateCheckin { refs, to, join }.into()
 }
 
 /// The state a checkin starts in.
 #[derive(Grouped)]
 pub struct StateCheckin {
-    /// What to bring in, each a path in the Vault's Layout or a `Uuid`.
+    /// What to bring in: paths in the Vault's Layout and `Uuid`s, or the one variant a merge checks
+    /// in.
     refs: Vec<String>,
-    /// Where they are to land here, or nothing to land each at the path the Vault names it by.
+    /// Where they are to land here, or nothing to land each at the path the Vault names it by — and
+    /// for the variant mode, where its file is to lie.
     to: Option<String>,
+    /// The file a variant is to be joined into, when this run checks one in.
+    join: Option<String>,
 }
 
 #[chain(routeify)]
@@ -149,8 +187,9 @@ pub fn handle_checkin(
     storage: &mut LazyRes<ResRorolalaStorage>,
     progress: &ResProgressSetting,
     offline: &ResOffline,
+    force: &ResForce,
 ) -> Next {
-    let StateCheckin { refs, to } = state;
+    let StateCheckin { refs, to, join } = state;
 
     workspace.get_ref().check()?;
 
@@ -169,6 +208,29 @@ pub fn handle_checkin(
         Ok(None) => return ErrorLayoutMissing.into(),
         Err(error) => return failed(&error),
     };
+
+    // A variant is not a `Uuid` the Vault's Layout names, so the mode that checks one in reads its
+    // own operands and asks for the Vault only when what it wants is not here: a merge of something
+    // already synced is local work, and a Workspace that tracks no Vault can still do it.
+    if let Some(target) = join {
+        // UNWRAP: `split` keeps one reference for this mode, and refuses when there is none.
+        let variant = refs.first().map(String::as_str).unwrap_or_default();
+
+        return checkin_variant(
+            &target,
+            variant,
+            to.as_deref(),
+            held,
+            &layout,
+            index,
+            storage,
+            remote,
+            current,
+            progress,
+            offline,
+            **force,
+        );
+    }
 
     let Some(track) = (match layouts.track(&name) {
         Ok(track) => track,
@@ -273,6 +335,274 @@ pub fn handle_checkin(
         vault: vault_name,
         entries,
         failed,
+    }
+    .into()
+}
+
+/// Checks a variant in to be joined into a file this Layout names.
+///
+/// What comes in is not a path of the Vault's Layout but a variant the index holds — content that
+/// already happened elsewhere and is to be joined into a file here without either side giving up.
+/// The content is written to a **variant file** beside its target, under a name of the convention or
+/// of the run's own, and what is waiting for what is written into [`Merging`] rather than into the
+/// Layout: a merge is work in this tree alone, and the Layout is what the work is.
+///
+/// The variant and its content are asked of the Vault the Layout tracks only when they are not here;
+/// a merge of something already synced is local work, so a run that has both does not need a Vault,
+/// an account, or a reachable one.
+fn checkin_variant(
+    target: &str,
+    variant: &str,
+    at: Option<&str>,
+    held: &librorolala::workspace::Workspace,
+    layout: &Layout,
+    index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    progress: &ResProgressSetting,
+    offline: &ResOffline,
+    force: bool,
+) -> Next {
+    let Some(variant_key) = parse_hash(variant) else {
+        return join_failed(target, t!("checkin.err_join_hash").trim());
+    };
+
+    let root = held.get_root();
+    let cwd = std::env::current_dir().ok();
+    let Some(id) = target_id(layout, root, cwd.as_deref(), target) else {
+        return join_failed(target, t!("checkin.err_join_target").trim());
+    };
+    let Some(data) = layout.entry(id) else {
+        return join_failed(target, t!("checkin.err_join_target").trim());
+    };
+
+    let mut merging = Merging::read(root);
+
+    // One variant joins one file once: a second waiting on the same file would leave the first with
+    // nowhere to go, and the same variant checked in twice would be two names for one thing.
+    if merging.at(id).is_some() {
+        return join_failed(target, t!("checkin.err_join_merging").trim());
+    }
+    if merging.holds_variant(variant_key.digest()) {
+        return join_failed(target, t!("checkin.err_join_checked_in").trim());
+    }
+
+    let Some(index) = index.get_ref().as_ref() else {
+        return ErrorVcsIndexNoIndex.into();
+    };
+    let runtime = match index_runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => return error.into(),
+    };
+
+    let mut found = read_variant(index, &runtime, &variant_key);
+
+    // What is not here is asked of the Vault, unless the run was made offline: an offline run reads
+    // what is here and says so where the read wants what is not.
+    if found.is_none() && !**offline {
+        match index_from_vault(held, layout, remote, current, progress, &runtime, **offline) {
+            Ok(()) => found = read_variant(index, &runtime, &variant_key),
+            Err(cause) => return join_failed(target, cause),
+        }
+    }
+
+    let Some(variant_object) = found else {
+        return join_failed(target, t!("checkin.err_join_unknown").trim());
+    };
+
+    // A variant is joined into a file whose history it shares: its base has to be a version the
+    // file's own chain holds, or the two are histories that never met and the drawing has no place
+    // to put it. `--force` is how a run says it knows that and means to join it anyway.
+    if !force {
+        match on_chain(
+            index,
+            &runtime,
+            data.version(),
+            variant_object.base_version(),
+        ) {
+            Ok(true) => {}
+            Ok(false) => return join_failed(target, t!("checkin.err_join_off_chain").trim()),
+            Err(cause) => return join_failed(target, cause),
+        }
+    }
+
+    let Some(store) = storage.get_ref().as_ref() else {
+        return join_failed(target, t!("checkin.err_join_no_store").trim());
+    };
+    let content = Key::new(*variant_object.storage_hash());
+
+    // The content itself is brought the way any other checkin brings it: asked of whichever Vault
+    // holds it, when there is an account to ask as and a run that may reach one at all.
+    let account = current
+        .get_ref()
+        .must_bind()
+        .ok()
+        .and_then(|name| account_named(&name, Some(held), None).ok());
+    if let Some(account) = &account {
+        let tracked = crate::ownership::tracked_vault(held, layout);
+        let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
+
+        if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline) {
+            sources.bring(store, &[content]);
+            sources.report();
+        }
+    }
+
+    let pending = Pending::new(id, *variant_key.digest(), at.map(PathBuf::from));
+    let Some(path) = merging.variant_path(layout, &pending) else {
+        return join_failed(target, t!("checkin.err_join_place").trim());
+    };
+    let disk = root.join(path.to_path_buf());
+
+    // Nothing is written over: a file already at the place is something to be told about rather than
+    // replaced, which is how `checkin` reads a landing everywhere else.
+    if disk.exists() {
+        return join_failed(
+            target,
+            t!("checkin.err_join_taken", path = path.as_str()).trim(),
+        );
+    }
+
+    if let Some(parent) = disk.parent()
+        && let Err(error) = std::fs::create_dir_all(parent)
+    {
+        return join_failed(target, error.to_string());
+    }
+    if let Err(error) = runtime.block_on(store.extract_file(&content, &disk)) {
+        return join_failed(target, error.to_string());
+    }
+
+    merging.push(pending);
+    if let Err(error) = merging.write(root) {
+        return join_failed(target, error.to_string());
+    }
+
+    ResultCheckinJoin {
+        target: target.to_owned(),
+        variant: variant.to_owned(),
+        path: path.as_str().to_owned(),
+    }
+    .into()
+}
+
+/// Brings the index over from the Vault the Layout tracks, so what the run names can be read here.
+///
+/// What cannot be done is a cause rather than a failure of its own: the run that wanted the variant
+/// is the one that reports it, and it is that run's name the reader needs beside it.
+fn index_from_vault(
+    held: &librorolala::workspace::Workspace,
+    layout: &Layout,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    progress: &ResProgressSetting,
+    runtime: &tokio::runtime::Runtime,
+    offline: bool,
+) -> Result<(), String> {
+    let Some(vault_name) = crate::ownership::tracked_vault(held, layout) else {
+        return Err(t!("checkin.err_join_no_track").trim().to_owned());
+    };
+    let Some(account_name) = current.get_ref().must_bind().ok() else {
+        return Err(t!("checkin.err_join_no_account").trim().to_owned());
+    };
+    let Some(account) = account_named(&account_name, Some(held), None).ok() else {
+        return Err(t!("checkin.err_join_no_account").trim().to_owned());
+    };
+    let Ok(target) = remote.get_ref().vault_or_default(vault_name) else {
+        return Err(t!("checkin.err_join_no_vault").trim().to_owned());
+    };
+
+    let reporting = Reporting::start(*progress);
+    let pulled = pull(
+        held,
+        &account,
+        &target.to_string(),
+        runtime,
+        &reporting,
+        offline,
+    );
+    reporting.finish();
+
+    pulled.map_err(|error| error.to_string())
+}
+
+/// The `Uuid` of the file `target` names, read from where the run was made and then as it stands.
+///
+/// It is the same reading `rola track` and `rola align` give a name, since a person writes one the
+/// same way wherever it is written.
+fn target_id(layout: &Layout, root: &Path, cwd: Option<&Path>, target: &str) -> Option<Uuid> {
+    if let Some(cwd) = cwd {
+        let rooted = normalize(root);
+        let absolute = normalize(&resolve_against(cwd, target));
+
+        if let Ok(relative) = absolute.strip_prefix(&rooted)
+            && let Ok(path) = LayoutPath::from_relative(relative)
+            && let Some(id) = layout.id_of(&path)
+        {
+            return Some(id);
+        }
+    }
+
+    LayoutPath::new(target)
+        .ok()
+        .and_then(|path| layout.id_of(&path))
+}
+
+/// The variant the index holds under `key`, when it holds one.
+fn read_variant(index: &VCSIndex, runtime: &tokio::runtime::Runtime, key: &Key) -> Option<Variant> {
+    match runtime.block_on(index.read(*key)) {
+        Ok(VCSIndexObject::Variant(variant)) => Some(variant),
+        _ => None,
+    }
+}
+
+/// Whether `base` is a version on the chain the version `head` heads.
+///
+/// The chain is read by following what each version points at and what that variant was based on,
+/// back to the root. A version met twice is the end of the reading rather than a loop to follow,
+/// since only a corrupted index has one.
+fn on_chain(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    head: [u8; 32],
+    base: &[u8; 32],
+) -> Result<bool, String> {
+    let mut seen = BTreeSet::new();
+    let mut current = head;
+
+    loop {
+        if current == *base {
+            return Ok(true);
+        }
+        if !seen.insert(current) {
+            return Ok(false);
+        }
+
+        let version = match runtime.block_on(index.read(Key::new(current))) {
+            Ok(VCSIndexObject::Version(version)) => version,
+            Ok(_) => return Err(t!("checkin.err_join_chain").trim().to_owned()),
+            Err(error) => return Err(error.reason()),
+        };
+
+        if version.is_root() {
+            return Ok(false);
+        }
+
+        let variant = match runtime.block_on(index.read(Key::new(*version.variant()))) {
+            Ok(VCSIndexObject::Variant(variant)) => variant,
+            Ok(_) => return Err(t!("checkin.err_join_chain").trim().to_owned()),
+            Err(error) => return Err(error.reason()),
+        };
+
+        current = *variant.base_version();
+    }
+}
+
+/// The failure a variant that could not be checked in is answered with.
+fn join_failed(target: &str, cause: impl Into<String>) -> Next {
+    ErrorCheckinJoin {
+        target: target.to_owned(),
+        cause: cause.into(),
     }
     .into()
 }
@@ -516,10 +846,23 @@ fn matching(reference: &str, paths: &[LayoutPath]) -> Result<Vec<LayoutPath>, Re
 /// Splits the operands the way `mv` reads its own: everything but the last word is what is to come
 /// in, and the last — when there is more than one word — is where it is to go.
 ///
-/// `None` is a run that named nothing at all.
-fn split(mut words: Vec<String>) -> Option<(Vec<String>, Option<String>)> {
+/// The variant mode reads the same words differently: the first is the variant to check in and, when
+/// a second is written, it is where that variant's file is to lie rather than another reference.
+///
+/// `None` is a run that named nothing at all, or one that named more than a mode can hold.
+fn split(join: Option<&str>, mut words: Vec<String>) -> Option<(Vec<String>, Option<String>)> {
     if words.is_empty() {
         return None;
+    }
+
+    if join.is_some() {
+        if words.len() > 2 {
+            return None;
+        }
+
+        let at = (words.len() == 2).then(|| words.pop()).flatten();
+
+        return Some((words, at));
     }
 
     if words.len() == 1 {
@@ -893,6 +1236,36 @@ pub fn render_error_checkin_failed(error: ErrorCheckinFailed, ec: &mut ResExitCo
     ec.exit_code = EC_ERR_CHECKIN;
 }
 
+/// Error: a variant could not be checked in to be joined into a file.
+#[derive(Grouped)]
+pub struct ErrorCheckinJoin {
+    /// The file it was to be joined into, as the run named it.
+    pub target: String,
+    /// Why it could not be checked in.
+    pub cause: String,
+}
+
+impl Failure for ErrorCheckinJoin {
+    fn name(&self) -> &'static str {
+        "error_checkin_join"
+    }
+
+    fn reason(&self) -> String {
+        t!("checkin.err_join", target = self.target, cause = self.cause)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorCheckinJoin);
+
+#[renderer(buffer)]
+pub fn render_error_checkin_join(error: ErrorCheckinJoin, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("checkin.err_join_help").trim()));
+    ec.exit_code = EC_ERR_CHECKIN;
+}
+
 /// One entry that came in.
 #[derive(Serialize)]
 pub struct CheckinItem {
@@ -947,6 +1320,31 @@ pub fn render_result_checked_in(result: ResultCheckedIn, ec: &mut ResExitCode) {
     }
 }
 
+/// Result: a variant was checked in to be joined into a file.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultCheckinJoin {
+    /// The file it is to be joined into, as the run named it.
+    target: String,
+    /// The variant that was checked in.
+    variant: String,
+    /// The path its file was written to.
+    path: String,
+}
+
+#[renderer(buffer)]
+pub fn render_result_checkin_join(result: ResultCheckinJoin) {
+    r_println!(
+        "{}",
+        t!(
+            "checkin.joined",
+            target = result.target,
+            variant = result.variant,
+            path = result.path
+        )
+        .trim()
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -963,16 +1361,30 @@ mod tests {
 
     #[test]
     fn the_last_word_is_the_destination_unless_it_is_the_only_one() {
-        assert_eq!(split(words(&["a"])), Some((words(&["a"]), None)));
+        assert_eq!(split(None, words(&["a"])), Some((words(&["a"]), None)));
         assert_eq!(
-            split(words(&["a", "b"])),
+            split(None, words(&["a", "b"])),
             Some((words(&["a"]), Some("b".to_owned())))
         );
         assert_eq!(
-            split(words(&["a", "b", "c"])),
+            split(None, words(&["a", "b", "c"])),
             Some((words(&["a", "b"]), Some("c".to_owned())))
         );
-        assert_eq!(split(words(&[])), None);
+        assert_eq!(split(None, words(&[])), None);
+    }
+
+    #[test]
+    fn the_variant_mode_reads_the_second_word_as_where_its_file_lies() {
+        assert_eq!(
+            split(Some("target"), words(&["variant"])),
+            Some((words(&["variant"]), None))
+        );
+        assert_eq!(
+            split(Some("target"), words(&["variant", "here.psd"])),
+            Some((words(&["variant"]), Some("here.psd".to_owned())))
+        );
+        assert_eq!(split(Some("target"), words(&["a", "b", "c"])), None);
+        assert_eq!(split(Some("target"), words(&[])), None);
     }
 
     #[test]

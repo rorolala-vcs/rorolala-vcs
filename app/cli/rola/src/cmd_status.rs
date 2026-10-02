@@ -10,6 +10,11 @@
 //! reading as data, since a reading is what it is either way; a template is not offered, as what a
 //! person is shown here is not a list of one shape but a sentence about several.
 
+// The reading of how a file stands takes every part of it — the version, the Vault's copy, the
+// index, the merge in progress — and gathering them into one value would only move the count
+// somewhere else.
+#![allow(clippy::too_many_arguments)]
+
 use std::collections::BTreeSet;
 
 use std::path::{Component, Path, PathBuf};
@@ -17,9 +22,9 @@ use std::str::FromStr as _;
 
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::storage::{Blake3Hash, Key};
-use librorolala::tree_analyze::tree_diff;
+use librorolala::tree_analyze::{entry_of, tree_diff};
 use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Version};
-use librorolala::workspace::Workspace;
+use librorolala::workspace::{Merging, Pending, Workspace};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
@@ -47,7 +52,7 @@ use crate::failure::failure;
 use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_dir};
 use crate::ownership;
 use crate::vcs_index::cmd_vcs_index_lookback::{
-    ResLookback, Standing, StandingRelation, from_object,
+    MergeHint, ResLookback, Standing, StandingRelation, from_object,
 };
 use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, parse_hash, runtime};
 
@@ -168,6 +173,8 @@ pub fn handle_status(
         return ErrorLayoutShouldInWorkspace.into();
     };
 
+    let merging = Merging::read(held.get_root());
+
     if let Some(target) = state.target {
         let me = account.get_ref().must_bind().ok();
         let me = me.as_deref();
@@ -177,7 +184,22 @@ pub fn handle_status(
         // reads the name as the Layout writes it.
         let cwd = std::env::current_dir().ok();
 
-        return lookback_of(&target, &layout, held, index, me, cwd.as_deref());
+        // A variant file is not a path the Layout names, so no chain hangs from it: what it is and
+        // what it is waiting for are said instead of a drawing.
+        if let Some((pending, path)) =
+            variant_pending(&merging, &layout, held.get_root(), cwd.as_deref(), &target)
+        {
+            return ResultStatusMerge {
+                variant: crate::vcs_index::hex(pending.variant()),
+                path: path.as_str().to_owned(),
+                target: layout
+                    .path_of(pending.target())
+                    .map(|path| path.as_str().to_owned()),
+            }
+            .into();
+        }
+
+        return lookback_of(&target, &layout, held, index, me, cwd.as_deref(), &merging);
     }
 
     let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
@@ -200,6 +222,10 @@ pub fn handle_status(
     // Which of the moves were edited as well: a move's destination is among the modified when what
     // it holds is not what the Layout agreed with at the path it came from.
     let edited: BTreeSet<&str> = diff.modified.iter().map(LayoutPath::as_str).collect();
+
+    // What is waiting to be joined is read against the Layout, the tree and the index: a record that
+    // does not stand is not a merge, and saying so is the point of reading them at all.
+    let (merging, broken) = merging_view(&merging, &layout, held, index.get_ref().as_ref());
 
     ResultStatus {
         lost: diff
@@ -229,8 +255,118 @@ pub fn handle_status(
             })
             .collect(),
         unowned,
+        merging,
+        broken,
     }
     .into()
+}
+
+/// The variant waiting whose file is at the path `target` names, when the target is one.
+///
+/// A variant file is not a path the Layout names, so it is found by the reading a name gets anywhere
+/// else — from where the run was made, then as it stands — and answered from the merge in progress
+/// rather than from the Layout.
+fn variant_pending<'a>(
+    merging: &'a Merging,
+    layout: &Layout,
+    root: &Path,
+    cwd: Option<&Path>,
+    target: &str,
+) -> Option<(&'a Pending, LayoutPath)> {
+    for path in targets(target, root, cwd) {
+        if let Some(pending) = merging.variant_of(layout, &path) {
+            return Some((pending, path));
+        }
+    }
+
+    None
+}
+
+/// What the merge in progress says, read against the Layout, the tree and the index.
+///
+/// A record is a merge only while all of it stands: the target is still named, the variant file is
+/// still there, the index still holds the variant and the file still holds that variant's content.
+/// One that does not is not dropped quietly — a merge that cannot go on is worse unseen — so it is
+/// answered as what it is rather than among the merges that are.
+fn merging_view(
+    merging: &Merging,
+    layout: &Layout,
+    held: &Workspace,
+    index: Option<&VCSIndex>,
+) -> (Vec<MergingItem>, Vec<String>) {
+    let Ok(runtime) = crate::vcs_index::runtime() else {
+        return (Vec::new(), Vec::new());
+    };
+
+    let mut waiting = Vec::new();
+    let mut broken = Vec::new();
+
+    for pending in merging.iter() {
+        match merging_item(merging, layout, held, index, &runtime, pending) {
+            Ok(item) => waiting.push(item),
+            Err(cause) => broken.push(cause),
+        }
+    }
+
+    (waiting, broken)
+}
+
+/// One record of the merge in progress, read as a merge that can go on or as why it cannot.
+fn merging_item(
+    merging: &Merging,
+    layout: &Layout,
+    held: &Workspace,
+    index: Option<&VCSIndex>,
+    runtime: &tokio::runtime::Runtime,
+    pending: &Pending,
+) -> Result<MergingItem, String> {
+    let variant = crate::vcs_index::hex(pending.variant());
+
+    let Some(target) = layout.path_of(pending.target()) else {
+        return Err(t!("status.merge_no_target", variant = variant)
+            .trim()
+            .to_owned());
+    };
+    let Some(path) = merging.variant_path(layout, pending) else {
+        return Err(t!("status.merge_no_place", variant = variant)
+            .trim()
+            .to_owned());
+    };
+
+    let disk = held.get_root().join(path.to_path_buf());
+    if !disk.is_file() {
+        return Err(t!("status.merge_file_gone", path = path.as_str())
+            .trim()
+            .to_owned());
+    }
+
+    let Some(index) = index else {
+        return Err(t!("status.merge_no_index", path = path.as_str())
+            .trim()
+            .to_owned());
+    };
+    let Some(joined) = read_variant(index, runtime, pending.variant()) else {
+        return Err(t!("status.merge_no_variant", variant = variant)
+            .trim()
+            .to_owned());
+    };
+
+    let Ok(entry) = entry_of(&disk) else {
+        return Err(t!("status.merge_unreadable", path = path.as_str())
+            .trim()
+            .to_owned());
+    };
+    if entry.digest() != *joined.storage_hash() {
+        return Err(t!("status.merge_changed", path = path.as_str())
+            .trim()
+            .to_owned());
+    }
+
+    Ok(MergingItem {
+        target: target.as_str().to_owned(),
+        variant,
+        path: path.as_str().to_owned(),
+    })
 }
 
 /// One thing a target named: the index object to look back from, and whether the work on it has
@@ -260,6 +396,7 @@ fn lookback_of(
     index: &mut LazyRes<ResVCSIndex>,
     me: Option<&str>,
     cwd: Option<&Path>,
+    merging: &Merging,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
@@ -319,6 +456,7 @@ fn lookback_of(
             index,
             &runtime,
             me,
+            merging,
         ));
     }
 
@@ -339,6 +477,7 @@ fn standing(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     me: Option<&str>,
+    merging: &Merging,
 ) -> Standing {
     let local = layout
         .entry(id)
@@ -381,6 +520,12 @@ fn standing(
         modified,
         relation,
         distance,
+        merging: merging.at(id).map(|pending| MergeHint {
+            variant: crate::vcs_index::hex(pending.variant()),
+            path: merging
+                .variant_path(layout, pending)
+                .map_or_else(String::new, |path| path.as_str().to_owned()),
+        }),
     }
 }
 
@@ -476,6 +621,11 @@ fn tracked_layout(held: &Workspace) -> Option<(String, Layout)> {
     let dir = readonly_layout_dir(held, &track, VAULT_LAYOUT_NAME);
 
     Layout::open(&dir).ok().map(|layout| (track, layout))
+}
+
+/// The 7 hex characters a hash is drawn by.
+fn short(hash: &str) -> &str {
+    &hash[..hash.len().min(7)]
 }
 
 /// The paths `target` may name, in the order a run is likely to have meant them.
@@ -720,6 +870,57 @@ pub struct ResultStatus {
     renamed: Vec<RenameItem>,
     /// Paths the fetched copy of the Vault's Layout says another account holds.
     unowned: Vec<String>,
+    /// Files a variant is waiting to be joined into, and the variant waiting.
+    merging: Vec<MergingItem>,
+    /// Merges that cannot go on, one line each.
+    broken: Vec<String>,
+}
+
+/// One variant waiting to be joined into one file.
+#[derive(Serialize)]
+pub struct MergingItem {
+    /// The file it is to be joined into.
+    target: String,
+    /// The variant that was checked in.
+    variant: String,
+    /// The path its file lies at.
+    path: String,
+}
+
+/// Result: one thing a variant is waiting to be joined into.
+///
+/// A variant file is no path the Layout names, so there is no chain to draw for it: what is said is
+/// the variant it holds and the file it is waiting for, which is what a run that named it wanted.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultStatusMerge {
+    /// The variant the file holds.
+    variant: String,
+    /// The path the variant file lies at.
+    path: String,
+    /// The file it is to be joined into, when the Layout still names one.
+    target: Option<String>,
+}
+
+#[renderer(buffer)]
+pub fn render_result_status_merge(result: ResultStatusMerge, lookback: &ResLookback) {
+    r_println!(
+        "{}",
+        trd!(t!(
+            "status.merge_variant_from",
+            variant = short(&result.variant),
+            path = result.path
+        ))
+        .trim()
+    );
+
+    if lookback.hint()
+        && let Some(target) = &result.target
+    {
+        r_println!(
+            "{}",
+            help_line!(t!("status.merge_variant_into", target = target).trim())
+        );
+    }
 }
 
 #[renderer(buffer)]
@@ -740,15 +941,53 @@ pub fn render_result_status(result: ResultStatus) {
         .map(String::as_str)
         .collect();
 
-    if structural == 0 && changed.is_empty() && result.unowned.is_empty() {
+    if structural == 0
+        && changed.is_empty()
+        && result.unowned.is_empty()
+        && result.merging.is_empty()
+        && result.broken.is_empty()
+    {
         r_println!("{}", trd!(t!("status.clean")).trim());
     } else {
         let mark = t!("status.mark_modified");
         let unowned = !result.unowned.is_empty();
+        let merging = !result.merging.is_empty() || !result.broken.is_empty();
+
+        // What is being merged is said first: it is work already under way, and what the next
+        // `rola track` of the file would record.
+        if merging {
+            r_println!(
+                "{}",
+                trd!(t!("status.header_merging", count = result.merging.len())).trim()
+            );
+            r_println!("{}", trd!(t!("status.body_merging")).trim());
+            r_println!("");
+
+            for item in &result.merging {
+                r_println!(
+                    "{}",
+                    trd!(t!(
+                        "status.merging_line",
+                        target = item.target,
+                        variant = short(&item.variant),
+                        path = item.path
+                    ))
+                    .trim()
+                );
+            }
+
+            for cause in &result.broken {
+                r_println!("{}", err_line!(cause));
+            }
+        }
 
         // What must not be recorded is said first: a run that reads the rest as its work has read past
         // the one thing it is not to do.
         if unowned {
+            if merging {
+                r_println!("");
+            }
+
             r_println!(
                 "{}",
                 trd!(t!("status.header_unowned", count = result.unowned.len())).trim()
@@ -763,7 +1002,7 @@ pub fn render_result_status(result: ResultStatus) {
 
         if structural > 0 {
             // A blank line separates the blocks; the first block has none before it.
-            if unowned {
+            if unowned || merging {
                 r_println!("");
             }
 
@@ -800,7 +1039,7 @@ pub fn render_result_status(result: ResultStatus) {
 
         if !changed.is_empty() {
             // A blank line separates the blocks; the first block has none before it.
-            if unowned || structural > 0 {
+            if unowned || merging || structural > 0 {
                 r_println!("");
             }
 
@@ -821,6 +1060,9 @@ pub fn render_result_status(result: ResultStatus) {
 
         if !result.unowned.is_empty() {
             r_println!("{}", help_line!(t!("status.help_unowned").trim()));
+        }
+        if merging {
+            r_println!("{}", help_line!(t!("status.help_merging").trim()));
         }
         if structural > 0 {
             let said = if changed.is_empty() {

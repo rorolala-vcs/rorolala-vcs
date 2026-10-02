@@ -21,9 +21,10 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
-use librorolala::storage::{Key, StorageBackend as _};
+use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
 use librorolala::tree_analyze::{Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff};
 use librorolala::vcs::VCSIndex;
+use librorolala::workspace::Merging;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -41,6 +42,7 @@ use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
+use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
@@ -363,9 +365,29 @@ pub fn handle_align(
         }
     };
 
+    // A variant file is not a path the Layout names, so the ways a Layout path is settled do not
+    // apply to it. The two that do are ending the merge by its file and putting its file back: a
+    // run that asks for anything else about one is asking for what it cannot have.
+    let mut merging = Merging::read(&root);
+
+    if let Selector::One(path) = &selected
+        && let Some(pending) = merging.variant_of(&layout, path)
+    {
+        let target = pending.target();
+        let variant = *pending.variant();
+
+        return match mode {
+            Mode::Delete => unmerge(&mut merging, &root, target, path),
+            Mode::Restore | Mode::RestoreModify | Mode::RestoreDelete => {
+                single(restore_variant(path, &root, content, variant))
+            }
+            _ => ErrorAlignArgument.into(),
+        };
+    }
+
     let next = match (mode, selected) {
-        (Mode::Delete, Selector::One(path)) => delete(&layout, &diff, &path),
-        (Mode::Rename, Selector::One(path)) => rename(&layout, &diff, &path, &root),
+        (Mode::Delete, Selector::One(path)) => delete(&layout, &diff, &mut merging, &root, &path),
+        (Mode::Rename, Selector::One(path)) => rename(&layout, &diff, &merging, &path, &root),
         (Mode::Break, Selector::One(path)) => take_back(&layout, &diff, &path, &root),
         (Mode::Move(target), Selector::One(path)) => {
             assert_move(&layout, &diff, &path, &root, &target)
@@ -499,7 +521,13 @@ fn single(outcome: Result<(AlignDid, String), Next>) -> Next {
 }
 
 /// Confirms that a path the Layout names and the tree does not hold is gone.
-fn delete(layout: &Layout, diff: &TreeDiff, path: &LayoutPath) -> Next {
+fn delete(
+    layout: &Layout,
+    diff: &TreeDiff,
+    merging: &mut Merging,
+    root: &Path,
+    path: &LayoutPath,
+) -> Next {
     if !diff.lost.contains(path) {
         return ErrorAlignNotLost {
             path: path.as_str().to_owned(),
@@ -518,7 +546,69 @@ fn delete(layout: &Layout, diff: &TreeDiff, path: &LayoutPath) -> Next {
         return failed(&error);
     }
 
+    // A file the Layout no longer names has no merge waiting for it: its variant file, if there is
+    // one, is left where it lies as a file of its own.
+    if merging.remove(id)
+        && let Err(error) = merging.write(root)
+    {
+        return align_failed(error.to_string());
+    }
+
     ResultAlign::one(AlignDid::Deleted, path.as_str().to_owned()).into()
+}
+
+/// Ends the merge a variant file was checked in for, taking its record away.
+///
+/// The variant file itself is not touched: the run that ends a merge has already taken it away, and
+/// one that is still there is a file the reading will report in its own words.
+fn unmerge(merging: &mut Merging, root: &Path, target: Uuid, path: &LayoutPath) -> Next {
+    // The file being gone is what ends the merge, as a path being gone is what confirms a loss: one
+    // still there is a merge still waiting, and a run that wants it gone takes it away first.
+    if root.join(path.to_path_buf()).is_file() {
+        return ErrorAlignNotLost {
+            path: path.as_str().to_owned(),
+        }
+        .into();
+    }
+
+    merging.remove(target);
+
+    if let Err(error) = merging.write(root) {
+        return align_failed(error.to_string());
+    }
+
+    ResultAlign::one(AlignDid::Unmerged, path.as_str().to_owned()).into()
+}
+
+/// Puts a variant file back, taking the content the variant was checked in with out of the store.
+///
+/// It is the other half of ending a merge: a variant file taken away can be brought back as long as
+/// the record waits, and the content it is written from is the variant's own rather than a version's.
+fn restore_variant(
+    path: &LayoutPath,
+    root: &Path,
+    content: Content<'_, '_>,
+    variant: Blake3Hash,
+) -> Result<(AlignDid, String), Next> {
+    let disk = root.join(path.to_path_buf());
+
+    if disk.exists() {
+        return Err(ErrorAlignRestoreExists {
+            path: path.as_str().to_owned(),
+        }
+        .into());
+    }
+
+    let Some(vcs) = content.index.as_ref() else {
+        return Err(align_failed(t!("align.err_no_index").trim()));
+    };
+    let runtime =
+        tokio::runtime::Runtime::new().map_err(|error| align_failed(error.to_string()))?;
+    let stored = variant_storage(vcs, &runtime, variant).map_err(align_failed)?;
+
+    write_stored(content, &runtime, stored, &disk)?;
+
+    Ok((AlignDid::RestoredMerge, path.as_str().to_owned()))
 }
 
 /// Confirms a move the reading found.
@@ -527,7 +617,13 @@ fn delete(layout: &Layout, diff: &TreeDiff, path: &LayoutPath) -> Next {
 /// version the file held before it moved. A move that was edited is therefore left changed — and
 /// what the reading wrote down says the two agree, so the disagreement is written down here rather
 /// than left for a reading that would never find it.
-fn rename(layout: &Layout, diff: &TreeDiff, path: &LayoutPath, root: &Path) -> Next {
+fn rename(
+    layout: &Layout,
+    diff: &TreeDiff,
+    merging: &Merging,
+    path: &LayoutPath,
+    root: &Path,
+) -> Next {
     let Some(pair) = rename_of(diff, path) else {
         return ErrorAlignNoRename {
             path: path.as_str().to_owned(),
@@ -537,6 +633,13 @@ fn rename(layout: &Layout, diff: &TreeDiff, path: &LayoutPath, root: &Path) -> N
 
     if let Err(error) = layout.move_path(&pair.from, &pair.to) {
         return failed(&error);
+    }
+
+    // A file a variant is waiting for takes that variant file with it.
+    if let Some(target) = layout.id_of(&pair.to)
+        && let Err(error) = merging.follow(root, target, &pair.from, &pair.to)
+    {
+        return align_failed(error.to_string());
     }
 
     if let Err(next) = remember_rename(layout, root, &pair.to, diff.modified.contains(&pair.to)) {
@@ -813,9 +916,6 @@ fn restore_delete(
 /// back together at the path. Content the store does not hold is brought from a Vault first, when
 /// the run has one to ask.
 fn write_recorded(content: Content<'_, '_>, version: [u8; 32], disk: &Path) -> Result<(), Next> {
-    let Some(store) = content.storage.as_ref() else {
-        return Err(align_failed(t!("align.err_no_store").trim()));
-    };
     let Some(vcs) = content.index.as_ref() else {
         return Err(align_failed(t!("align.err_no_index").trim()));
     };
@@ -824,6 +924,24 @@ fn write_recorded(content: Content<'_, '_>, version: [u8; 32], disk: &Path) -> R
         tokio::runtime::Runtime::new().map_err(|error| align_failed(error.to_string()))?;
     let recorded = recorded_hash(vcs, &runtime, version).map_err(align_failed)?;
 
+    write_stored(content, &runtime, recorded, disk)
+}
+
+/// Writes the content stored under `stored` out to `disk`, making the way to it.
+///
+/// A version names its content through the variant it points at, while a variant file is written
+/// from what the variant holds directly; both end here, where the content is brought when the store
+/// does not have it and then put at the path.
+fn write_stored(
+    content: Content<'_, '_>,
+    runtime: &tokio::runtime::Runtime,
+    stored: [u8; 32],
+    disk: &Path,
+) -> Result<(), Next> {
+    let Some(store) = content.storage.as_ref() else {
+        return Err(align_failed(t!("align.err_no_store").trim()));
+    };
+
     if let Some(parent) = disk.parent()
         && let Err(error) = fs::create_dir_all(parent)
     {
@@ -831,12 +949,27 @@ fn write_recorded(content: Content<'_, '_>, version: [u8; 32], disk: &Path) -> R
     }
 
     if let Some(sources) = content.sources {
-        sources.bring(store, &[Key::new(recorded)]);
+        sources.bring(store, &[Key::new(stored)]);
     }
 
     runtime
-        .block_on(store.extract_file(&Key::new(recorded), disk))
+        .block_on(store.extract_file(&Key::new(stored), disk))
         .map_err(|error| align_failed(error.to_string()))
+}
+
+/// The content the variant `hash` was checked in with.
+fn variant_storage(
+    vcs: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    hash: Blake3Hash,
+) -> Result<Blake3Hash, String> {
+    let variant = runtime
+        .block_on(vcs.read(Key::new(hash)))
+        .map_err(|error| error.reason())?
+        .expect_variant()
+        .map_err(|error| error.to_string())?;
+
+    Ok(*variant.storage_hash())
 }
 
 /// Writes down that a path put back holds what the Layout names again.
@@ -1022,6 +1155,10 @@ enum AlignDid {
     RestoredModify,
     /// A deleted file was put back, taken out of the store.
     RestoredDelete,
+    /// A variant file was put back, ending the wait to be joined.
+    RestoredMerge,
+    /// A merge waiting on a variant file was ended, and its record taken away.
+    Unmerged,
 }
 
 /// One path, as `align` reports it.
@@ -1062,6 +1199,8 @@ pub fn render_result_align(result: ResultAlign) {
             }
             AlignDid::RestoredModify => t!("align.result_restored_modify", what = item.what),
             AlignDid::RestoredDelete => t!("align.result_restored_delete", what = item.what),
+            AlignDid::RestoredMerge => t!("align.result_restored_merge", what = item.what),
+            AlignDid::Unmerged => t!("align.result_unmerged", what = item.what),
         };
 
         r_println!("{}", said.trim());

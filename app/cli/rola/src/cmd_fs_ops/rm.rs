@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
-use librorolala::workspace::Workspace;
+use librorolala::workspace::{Merging, Workspace};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -14,6 +14,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_utils_cli_theme::trd;
+use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
 use uuid::Uuid;
 
@@ -138,11 +139,27 @@ pub fn handle_fs_ops_rm(state: StateFsOpsRm, account: &mut LazyRes<ResCurrentAcc
         .into();
     }
 
-    if let Some((_, layout, named)) = plan {
+    if let Some((held, layout, named)) = plan {
+        // A file the Layout no longer names has no merge waiting for it either: its variant file, if
+        // there is one, is left where it lies as a file of its own, the way `rola align --delete`
+        // leaves it.
+        let mut merging = Merging::read(held.get_root());
+        let mut ended = false;
+
         for (_, id) in named {
             if let Err(error) = layout.remove_entry(id) {
                 return crate::layout::failed(&error);
             }
+
+            ended |= merging.remove(id);
+        }
+
+        if ended && let Err(error) = merging.write(held.get_root()) {
+            return ErrorFsOpsFailed {
+                verb: "rm",
+                cause: error.to_string(),
+            }
+            .into();
         }
     }
 

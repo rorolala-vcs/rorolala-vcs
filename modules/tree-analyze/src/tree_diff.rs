@@ -34,7 +34,7 @@ use std::path::{Path, PathBuf};
 use rorolala_layout::{Layout, LayoutPath};
 use rorolala_utils_constants::WORKSPACE_CACHE_DIR;
 use rorolala_utils_location::Locate as _;
-use rorolala_workspace::Workspace;
+use rorolala_workspace::{Merging, Workspace};
 
 use crate::cache::{Cache, Entry};
 use crate::error::TreeDiffError;
@@ -121,6 +121,15 @@ pub fn tree_diff(
 
     let root = workspace.get_root();
     let (found, mut failed) = scan::walk(root);
+
+    // A variant file is content waiting to be joined into a file the Layout names rather than work
+    // of its own, so it is not read at all: what is not read is neither a change nor a gain, and it
+    // is not written down for the next reading to mistake for one either.
+    let ignored = Merging::read(root).ignored(layout);
+    let found: Vec<scan::Found> = found
+        .into_iter()
+        .filter(|file| !ignored.contains(&file.path))
+        .collect();
 
     let tracked: BTreeSet<LayoutPath> = layout.paths().into_iter().map(|(path, _)| path).collect();
 

@@ -1,9 +1,14 @@
 //! The `rola fs-ops mv` command: put a path at another.
 
+// What a move is about — the two paths, the Workspace each sits in, the entries it renames, and the
+// merge a variant file carries with it — is read in one place, so the order the two are kept in step
+// reads off the handler rather than being assembled from helpers.
+#![allow(clippy::too_many_lines)]
+
 use std::path::{Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
-use librorolala::workspace::Workspace;
+use librorolala::workspace::{Merging, Workspace};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -127,6 +132,17 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv, account: &mut LazyRes<ResCurrentAcc
         .zip(target.as_ref())
         .is_some_and(|(source, target)| source.get_root() == target.get_root());
 
+    // A variant file is not a path the Layout names, so it is no part of the plan below. Moving one
+    // keeps its merge: what is written down is the place it now lies at, relative to the file it is
+    // for.
+    let variant_place = match &source {
+        Some(held) => match plan_variant_mv(held, &cwd, &from, &to, same) {
+            Ok(place) => place,
+            Err(next) => return next,
+        },
+        None => None,
+    };
+
     let plan = source
         .as_ref()
         .and_then(|held| plan_mv(held, &cwd, &from, &to, same).map(|plan| (held, plan)));
@@ -172,7 +188,29 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv, account: &mut LazyRes<ResCurrentAcc
         .into();
     }
 
+    // A moved variant file is written down where it now lies, so the merge is not left looking for it
+    // where the convention used to put it.
+    if let Some((waiting, place)) = variant_place
+        && let Some(held) = &source
+    {
+        let mut merging = Merging::read(held.get_root());
+
+        if merging.relocate(waiting, Some(place))
+            && let Err(error) = merging.write(held.get_root())
+        {
+            return ErrorFsOpsFailed {
+                verb: "mv",
+                cause: error.to_string(),
+            }
+            .into();
+        }
+    }
+
     if let Some((held, plan)) = plan {
+        // A file a variant is waiting for takes that variant file with it, since both lie in the
+        // same place by the convention; the merge is work in this tree and moves with it.
+        let merging = Merging::read(held.get_root());
+
         for (path, id) in plan.named {
             // A move out of the Workspace leaves the Layout naming a path that is not there, so the
             // entry is let go of instead: what left is not something this Layout still holds.
@@ -187,6 +225,14 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv, account: &mut LazyRes<ResCurrentAcc
 
             match outcome {
                 Ok(Some(moved)) => {
+                    if let Err(error) = merging.follow(held.get_root(), id, &path, &moved) {
+                        return ErrorFsOpsFailed {
+                            verb: "mv",
+                            cause: error.to_string(),
+                        }
+                        .into();
+                    }
+
                     if let Err(next) = remember(&plan.layout, held, &moved) {
                         return next;
                     }
@@ -248,4 +294,53 @@ fn plan_mv(held: &Workspace, cwd: &Path, from: &Path, to: &Path, same: bool) -> 
         source,
         target,
     })
+}
+
+/// Where a variant file is being moved to, when the path being moved is one.
+///
+/// A variant file is not a path the Layout names, so the move plan says nothing about it. What the
+/// merge needs is the file it is for and the place it now lies at, relative to that file's
+/// directory. A move out of the Workspace is refused rather than allowed: a place is read from the
+/// Workspace's own root, and a variant file outside it is one no merge can say where is.
+fn plan_variant_mv(
+    held: &Workspace,
+    cwd: &Path,
+    from: &Path,
+    to: &Path,
+    same: bool,
+) -> Result<Option<(Uuid, PathBuf)>, Next> {
+    let Some(layout) = cmd_fs_ops::working(held) else {
+        return Ok(None);
+    };
+    let Some(from_text) = cmd_fs_ops::inside(held, cwd, from) else {
+        return Ok(None);
+    };
+    let Ok(from_path) = LayoutPath::new(&from_text) else {
+        return Ok(None);
+    };
+
+    let merging = Merging::read(held.get_root());
+    let Some(pending) = merging.variant_of(&layout, &from_path) else {
+        return Ok(None);
+    };
+    let Some(target) = layout.path_of(pending.target()) else {
+        return Ok(None);
+    };
+
+    let Some(to_path) = same
+        .then(|| cmd_fs_ops::inside(held, cwd, to))
+        .flatten()
+        .and_then(|text| LayoutPath::new(&text).ok())
+    else {
+        return Err(ErrorFsOpsBlocked {
+            path: from.display().to_string(),
+            kind: FsOpsBlock::Variant,
+        }
+        .into());
+    };
+
+    Ok(Some((
+        pending.target(),
+        Merging::place_of(&target, &to_path),
+    )))
 }

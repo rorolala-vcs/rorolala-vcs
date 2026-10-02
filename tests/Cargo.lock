@@ -1881,6 +1881,7 @@ dependencies = [
  "rorolala-utils-location",
  "serde",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

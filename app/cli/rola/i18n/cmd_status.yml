@@ -178,6 +178,62 @@ status:
     en: Your workspace has nothing unrecorded.
     zh-CN: 你的工作区无未提交内容。
 
+  header_merging:
+    en: "Your workspace has %{count} merge(s) in progress:"
+    zh-CN: "你的工作区有 %{count} 项正在进行的合并："
+
+  body_merging:
+    en: "These files have a variant waiting to be joined into them:"
+    zh-CN: "这些文件有变体正在等待并入："
+
+  merging_line:
+    en: "& %{target} <- %{variant} (%{path})"
+    zh-CN: "& %{target} <- %{variant}（%{path}）"
+
+  help_merging:
+    en: "Record a merge with `rola track <file>`, or cancel it with `rola align --delete`"
+    zh-CN: "用 `rola track <文件>` 记录合并，或用 `rola align --delete` 取消"
+
+  merging_into:
+    en: "Variant %{variant} in %{path} is being joined into this file"
+    zh-CN: "变体 %{variant}（%{path}）正在并入当前文件"
+
+  merge_variant_from:
+    en: "Current variant from %{variant}"
+    zh-CN: "当前变体来自 %{variant}"
+
+  merge_variant_into:
+    en: "Preparing to join into %{target}"
+    zh-CN: "正准备并入 %{target}"
+
+  merge_no_target:
+    en: "merge %{variant}: the file it is for is no longer named by the Layout"
+    zh-CN: "合并 %{variant}：它要并入的文件已不再被布局命名"
+
+  merge_no_place:
+    en: "merge %{variant}: nowhere here can hold its variant file"
+    zh-CN: "合并 %{variant}：本地没有可以放置其变体文件的位置"
+
+  merge_file_gone:
+    en: "merge: the variant file %{path} is gone"
+    zh-CN: "合并：变体文件 %{path} 已不存在"
+
+  merge_no_index:
+    en: "merge %{path}: this run has no index to read the variant from"
+    zh-CN: "合并 %{path}：本次运行没有可读取变体的索引"
+
+  merge_no_variant:
+    en: "merge %{variant}: the index does not hold that variant"
+    zh-CN: "合并 %{variant}：索引中没有该变体"
+
+  merge_unreadable:
+    en: "merge %{path}: its variant file could not be read"
+    zh-CN: "合并 %{path}：无法读取其变体文件"
+
+  merge_changed:
+    en: "merge %{path}: its variant file no longer holds the variant's content"
+    zh-CN: "合并 %{path}：其变体文件已不再持有该变体的内容"
+
   err_target:
     en: "`%{target}` is nothing a chain can be looked back from: %{cause}"
     zh-CN: "`%{target}` 不是可以往回看的东西：%{cause}"

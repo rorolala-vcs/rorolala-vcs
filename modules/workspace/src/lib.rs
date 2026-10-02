@@ -16,10 +16,12 @@ mod config;
 mod error;
 mod ffi;
 mod init;
+mod merging;
 
 pub use config::*;
 pub use error::*;
 pub use ffi::*;
+pub use merging::*;
 
 /// Where the Workspace keeps its data, its configuration, its keys, its store and its index
 ///

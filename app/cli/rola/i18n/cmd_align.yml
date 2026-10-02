@@ -106,6 +106,14 @@ align:
     en: "recovered  %{what}"
     zh-CN: "已恢复  %{what}"
 
+  result_restored_merge:
+    en: "variant recovered  %{what}"
+    zh-CN: "变体已恢复  %{what}"
+
+  result_unmerged:
+    en: "merge ended  %{what}"
+    zh-CN: "已结束合并  %{what}"
+
   err_argument:
     en: A path and exactly one mode are needed
     zh-CN: 需要给出一个路径和恰好一个模式

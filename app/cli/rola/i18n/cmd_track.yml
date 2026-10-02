@@ -108,12 +108,27 @@ track:
     en: "`%{path}` is at a merge, which cannot be replaced"
     zh-CN: "`%{path}` 当前是一个合并版本，无法替换"
 
+  err_replace_merging:
+    en: "`%{path}` has a variant waiting to be merged, which `--replace` would drop"
+    zh-CN: "`%{path}` 有变体正在等待合并，`--replace` 会把它丢掉"
+
   err_replace_help:
     en: |
         `--replace` redoes the version a file is at: record the file first, and do not replace a
         merge
     zh-CN: |
         `--replace` 重做文件当前所在的版本：请先记录该文件，也不要替换合并版本
+
+  err_merge_changed:
+    en: "the variant file `%{path}` no longer holds the variant's content"
+    zh-CN: "变体文件 `%{path}` 已不再持有该变体的内容"
+
+  err_merge_changed_help:
+    en: |
+        Put the variant file back with `rola align --restore`, or end the merge with `rola align
+        --delete`, then try again
+    zh-CN: |
+        用 `rola align --restore` 把变体文件放回，或用 `rola align --delete` 结束合并，然后重试
 
   err_no_files:
     en: No file was named to record

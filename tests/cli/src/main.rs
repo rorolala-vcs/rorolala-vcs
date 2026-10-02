@@ -57,6 +57,7 @@ fn main() {
     movement(&rola, &plain, &files, &mut checked);
     accounts(&rola, &plain, &ws, &mut checked);
     lookback(&rola, &ws, &mut checked);
+    merging(&rola, &ws, &files, &mut checked);
     vaults(&rola, &ws, &mut checked);
     explain(&rola, &ws, &mut checked);
     output(&rola, &ws, &mut checked);
@@ -554,7 +555,13 @@ fn lookback(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(
         ws,
-        &["track", "models/hero.psd", "--message", "hero", "--no-editor"],
+        &[
+            "track",
+            "models/hero.psd",
+            "--message",
+            "hero",
+            "--no-editor",
+        ],
     );
     checked.exits("a file under a directory is recorded", &ran, 0);
 
@@ -572,6 +579,163 @@ fn lookback(rola: &Rola, ws: &Path, checked: &mut Checked) {
     // so it still reads when a run beside the file names it that way.
     let ran = rola.run(&models, &["status", "models/hero.psd"]);
     checked.exits("a path written from the root still reads", &ran, 0);
+}
+
+/// A variant waiting to be joined into a file, and the merge that records it.
+fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
+    let work = ws.join("merge");
+    fs::create_dir_all(&work).expect("a directory to work in");
+    fs::write(work.join("file.txt"), "base\n").expect("a file to merge into");
+
+    let ran = rola.run(
+        ws,
+        &[
+            "track",
+            "merge/file.txt",
+            "--message",
+            "base",
+            "--no-editor",
+        ],
+    );
+    checked.exits("a file to merge into is recorded", &ran, 0);
+
+    // A variant made by hand, as one handed over from elsewhere would be, so that nothing of the
+    // Vault has to be reached to check it in.
+    let incoming = files.join("incoming.bin");
+    fs::write(&incoming, "from elsewhere\n").expect("the incoming content");
+
+    let ran = rola.run(ws, &["storage", "write-file", &text(&incoming)]);
+    checked.exits("the incoming content is stored", &ran, 0);
+    let storage = ran.stdout.trim().to_owned();
+
+    let creator = rola.run(ws, &["vcs-index", "write-creator", "bob"]);
+    let creator = creator.stdout.trim().to_owned();
+    let message = rola.run(ws, &["vcs-index", "write-msg", "from bob"]);
+    let message = message.stdout.trim().to_owned();
+    let root = rola.run(ws, &["vcs-index", "print-rootver"]);
+    let root = root.stdout.trim().to_owned();
+
+    let ran = rola.run(
+        ws,
+        &[
+            "vcs-index",
+            "write-variant",
+            &root,
+            &storage,
+            &creator,
+            &message,
+        ],
+    );
+    checked.exits("a variant is written", &ran, 0);
+    let variant = ran.stdout.trim().to_owned();
+
+    // A variant based on a version the file's chain does not hold is refused; `--force` is how a
+    // run says it knows and means to join it anyway.
+    let stranger = "11".repeat(32);
+    let ran = rola.run(
+        ws,
+        &[
+            "vcs-index",
+            "write-variant",
+            &stranger,
+            &storage,
+            &creator,
+            &message,
+        ],
+    );
+    checked.exits("a variant on another history is written", &ran, 0);
+    let off_chain = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["checkin", &off_chain, "--join", "merge/file.txt"]);
+    checked.exits("a variant off the file's chain is refused", &ran, 240);
+    checked.stderr_has("the refusal names the way past it", &ran, "--force");
+
+    let ran = rola.run(ws, &["checkin", &variant, "--join", "merge/file.txt"]);
+    checked.exits("a variant is checked in for a file", &ran, 0);
+
+    let variant_file = fs::read_dir(&work)
+        .expect("the files beside the target")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .find(|name| name != "file.txt")
+        .expect("a variant file beside the target");
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("a merge in progress still answers", &ran, 0);
+    checked.stdout_has("the merge is named", &ran, "merge/file.txt");
+
+    let ran = rola.run(ws, &["status", "--json"]);
+    checked.wants(
+        "the merge is in the data",
+        json(&ran).is_some_and(|value| {
+            value
+                .get("merging")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|merging| !merging.is_empty())
+        }),
+        &said(&ran),
+    );
+
+    // The variant file is not a file of the work: a run that names one records nothing.
+    let ran = rola.run(
+        ws,
+        &["track", &format!("merge/{variant_file}"), "--no-editor"],
+    );
+    checked.exits("a variant file records nothing", &ran, 0);
+
+    // A variant file moved by hand is written down where it now lies, and the merge goes on.
+    let moved = "moved.bin";
+    let ran = rola.run(
+        ws,
+        &[
+            "fs-ops",
+            "mv",
+            &format!("merge/{variant_file}"),
+            &format!("merge/{moved}"),
+        ],
+    );
+    checked.exits("a variant file is moved by hand", &ran, 0);
+
+    let ran = rola.run(ws, &["status", "--json"]);
+    checked.wants(
+        "the merge follows the moved variant file",
+        json(&ran).is_some_and(|value| {
+            value
+                .get("merging")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|merging| {
+                    merging.iter().any(|item| {
+                        item.get("path").and_then(serde_json::Value::as_str)
+                            == Some("merge/moved.bin")
+                    })
+                })
+        }),
+        &said(&ran),
+    );
+
+    // Recording the file the variant waits for joins it and ends the wait.
+    fs::write(work.join("file.txt"), "base and theirs\n").expect("the merged work");
+    let ran = rola.run(
+        ws,
+        &[
+            "track",
+            "merge/file.txt",
+            "--message",
+            "merged",
+            "--no-editor",
+        ],
+    );
+    checked.exits("the merge is recorded", &ran, 0);
+    checked.wants(
+        "the variant file is gone",
+        !work.join(moved).exists(),
+        &said(&ran),
+    );
+    checked.wants(
+        "the merge is over",
+        !ws.join(".rola/MERGING").exists(),
+        &said(&ran),
+    );
 }
 
 /// The Vaults a Workspace knows, and what a run that may not reach one does.

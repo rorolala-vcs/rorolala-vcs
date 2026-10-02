@@ -5,7 +5,7 @@ checkin:
     en: |
         Bring what the Vault holds but this Layout does not into it
 
-        **Usage**: `rola checkin <FROM>... [TO]`
+        **Usage**: `rola checkin <FROM>... [TO]` — or `rola checkin <VARIANT> --join <FILE> [PLACE]`
 
         The operands read the way `mv`'s do: every word but the last is what is to come in — a path
         in the Vault's Layout, a glob over those paths, or a `Uuid` — and the last, when there is
@@ -27,10 +27,18 @@ checkin:
         The version the Vault holds is what comes with it — its content is taken out of the store
         and put at the path — and what the Layout then says is that version and the holder the
         Vault names.
+
+        With `--join`, what is checked in is a variant the index holds rather than a path of the
+        Vault's Layout, and it is to be joined into a file this Layout names. The variant's content
+        is written beside that file as a **variant file** waiting to be merged, and `rola track` on
+        the file records the merge; `rola status` shows it as merging until then. A `PLACE` of the
+        run's own says where the variant file lies, relative to the file it is for, and it moves
+        with that file. The variant has to be based on a version of the file's own chain — one from a
+        history the file does not share is refused unless `--force` is given.
     zh-CN: |
         把保险库持有、而当前布局没有的内容带入当前布局
 
-        **用法**：`rola checkin <FROM>... [TO]`
+        **用法**：`rola checkin <FROM>... [TO]`——或 `rola checkin <变体HASH> --join <文件> [位置]`
 
         位置参数按 `mv` 的方式读：最后一个是落点，前面的都是要带入的内容——保险库布局中的路径、
         对这些路径的通配，或一个 `Uuid`；只有一个词时它就是要带入的内容，没有落点。
@@ -48,9 +56,89 @@ checkin:
         随之而来的是保险库持有的那个版本——其内容会从存储中取出并写到该路径——之后本地布局
         记录的就是这个版本以及保险库给出的持有者。
 
+        加上 `--join` 时，签入的不是保险库布局中的路径，而是索引持有的一个变体，它要并入当前布局
+        命名的某个文件。变体的内容会写到该文件旁边，成为一个等待合并的**变体文件**，随后对该文件
+        执行 `rola track` 才会记下这次合并；在此之前 `rola status` 会显示为合并中。自选的 `位置`
+        给出变体文件相对目标文件的落点，它会随目标文件一起移动。变体必须基于该文件版本链上的某一版
+        ——来自该文件并不共享的历史会被拒绝，除非加上 `--force`。
+
   description:
     en: Bring what the Vault holds but this Layout does not into it
     zh-CN: 把保险库持有而当前布局没有的内容带入当前布局
+
+  complete:
+    join:
+      en: Check a variant in to be joined into a file this Layout names
+      zh-CN: 签入一个变体，等待并入当前布局命名的文件
+
+  err_join:
+    en: "a variant cannot be joined into `%{target}`: %{cause}"
+    zh-CN: "无法把变体并入 `%{target}`：%{cause}"
+
+  err_join_help:
+    en: |
+        Name a variant the index holds and a file this Layout names: `rola checkin <VARIANT> --join
+        <FILE>`. The variant comes from wherever the index has it, and is joined in when the file is
+        recorded with `rola track`
+    zh-CN: |
+        给出索引持有的变体，以及当前布局命名的文件：`rola checkin <变体HASH> --join <文件>`。变体来自
+        索引持有它的地方，并在用 `rola track` 记录该文件时才真正并入
+
+  err_join_hash:
+    en: what was named is no variant hash
+    zh-CN: 给出的不是变体哈希
+
+  err_join_target:
+    en: it is no path this Layout names
+    zh-CN: 它不是当前布局命名的路径
+
+  err_join_merging:
+    en: a variant is already waiting to be joined into it
+    zh-CN: 已经有一个变体正在等待并入它
+
+  err_join_checked_in:
+    en: that variant was already checked in
+    zh-CN: 该变体已经签入过
+
+  err_join_off_chain:
+    en: it is not based on a version of this file's own chain — pass `--force` to join it anyway
+    zh-CN: 它并非基于该文件版本链上的某一版——确需并入请加 `--force`
+
+  err_join_chain:
+    en: the file's version chain could not be read
+    zh-CN: 无法读取该文件的版本链
+
+  err_join_unknown:
+    en: the index holds no such variant, and no Vault could be asked for it
+    zh-CN: 索引中没有该变体，也未能向保险库取到
+
+  err_join_no_track:
+    en: the variant is not here, and the Layout being worked in tracks no Vault to ask
+    zh-CN: 本地没有该变体，而当前使用的布局没有追踪可询问的保险库
+
+  err_join_no_account:
+    en: the variant is not here, and the run acts as no account to ask a Vault as
+    zh-CN: 本地没有该变体，而本次运行没有可用于询问保险库的账户
+
+  err_join_no_vault:
+    en: the variant is not here, and the Vault the Layout tracks cannot be named
+    zh-CN: 本地没有该变体，而无法指出布局所追踪的保险库
+
+  err_join_no_store:
+    en: this run has no store to write the content out of
+    zh-CN: 本次运行没有可写出内容的存储
+
+  err_join_place:
+    en: nowhere here can hold a variant file
+    zh-CN: 本地没有可以放置变体文件的位置
+
+  err_join_taken:
+    en: "something is already at `%{path}` here"
+    zh-CN: "`%{path}` 在本地已经有内容了"
+
+  joined:
+    en: "`%{variant}` was checked in as `%{path}`, waiting to be joined into `%{target}`"
+    zh-CN: "`%{variant}` 已签入为 `%{path}`，等待并入 `%{target}`"
 
   err_no_track:
     en: The Layout being worked in tracks no Vault

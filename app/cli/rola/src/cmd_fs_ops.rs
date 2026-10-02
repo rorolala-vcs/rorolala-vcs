@@ -408,6 +408,8 @@ pub enum FsOpsBlock {
     Held(String),
     /// The destination already names something in this Layout.
     Named,
+    /// A variant file would be moved to where no record can say it lies.
+    Variant,
 }
 
 impl Failure for ErrorFsOpsBlocked {
@@ -421,6 +423,7 @@ impl Failure for ErrorFsOpsBlocked {
                 t!("fs_ops.err_blocked_held", path = self.path, owner = owner)
             }
             FsOpsBlock::Named => t!("fs_ops.err_blocked_named", path = self.path),
+            FsOpsBlock::Variant => t!("fs_ops.err_blocked_variant", path = self.path),
         };
 
         said.trim().to_string()

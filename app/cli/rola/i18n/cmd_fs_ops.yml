@@ -132,6 +132,10 @@ fs_ops:
     en: "`%{path}` already names something in this Layout"
     zh-CN: "本布局已经命名了 `%{path}`"
 
+  err_blocked_variant:
+    en: "`%{path}` is a variant file, and a place outside the Workspace is one no merge can hold"
+    zh-CN: "`%{path}` 是变体文件，而工作区之外的落点是任何合并都无法记录的"
+
   err_blocked_help:
     en: |
         The file operations keep the Layout in step, and a change the Layout refuses is stopped rather

@@ -11,6 +11,10 @@
 //! command line, so what it does not say is asked for in an editor. See [`crate::editor`].
 
 #![allow(clippy::too_many_lines)]
+// A recording of one file needs everything about it — where it is, what it holds, the version it is
+// at, the merge waiting for it and the move it confirms — and gathering them into one value would
+// only move the count somewhere else.
+#![allow(clippy::too_many_arguments)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -21,6 +25,7 @@ use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::storage::{Key, RorolalaStorage, store_file};
 use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
 use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
+use librorolala::workspace::{Merging, Pending};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -239,6 +244,11 @@ pub fn handle_track(
 
     let root = held.get_root().to_path_buf();
 
+    // A variant file is content waiting to be joined rather than work to record, so where it lies is
+    // left out of every reading here — and a file waiting for one is recorded as the merge it is.
+    let mut merging = Merging::read(&root);
+    let ignored = merging.ignored(&layout);
+
     // Recording works on a tree that is settled: a path the Layout names and the tree does not hold
     // is something to settle first, with `rola align`, rather than something to record around. A
     // move is not one of these — naming a path where it is now is how a move is confirmed.
@@ -276,7 +286,7 @@ pub fn handle_track(
         Err(error) => return fail(error.to_string()),
     };
 
-    let prepared = match prepare(&layout, &root, &cwd, &files, &diff.renamed) {
+    let prepared = match prepare(&layout, &root, &cwd, &files, &diff.renamed, &ignored) {
         Ok(prepared) => prepared,
         Err(next) => return next,
     };
@@ -381,8 +391,40 @@ pub fn handle_track(
         let text = &messages[at];
         at += 1;
 
-        if let Err(next) = commit(&layout, vcs, &runtime, &creator_name, file, text, replace) {
+        // A file a variant is waiting for is recorded as the merge it is, and the waiting is over
+        // once it is: what the merge was is read here, where the version is made.
+        let pending = merging.at(file.file.id);
+
+        if let Err(next) = commit(
+            &layout,
+            vcs,
+            &runtime,
+            &creator_name,
+            file,
+            text,
+            replace,
+            pending,
+            &merging,
+            &root,
+        ) {
             return next;
+        }
+
+        if let Some(pending) = pending {
+            if let Some(path) = merging.variant_path(&layout, pending) {
+                let disk = root.join(path.to_path_buf());
+
+                // A variant file that is already gone is one the merge can still be recorded from:
+                // the content that was checked in is what the version names, and the file was only
+                // how it was shown.
+                if disk.is_file()
+                    && let Err(error) = fs::remove_file(&disk)
+                {
+                    return fail(error.to_string());
+                }
+            }
+
+            merging.remove(file.file.id);
         }
 
         committed.push((file.file.path.clone(), file.file.disk.clone()));
@@ -401,6 +443,10 @@ pub fn handle_track(
     // with it and a later `rola status` would have nothing to say about them.
     if let Err(next) = remember(&layout, &root, &committed) {
         return next;
+    }
+
+    if let Err(error) = merging.write(&root) {
+        return fail(error.to_string());
     }
 
     ResultTrack { items }.into()
@@ -482,6 +528,7 @@ fn prepare(
     cwd: &Path,
     names: &[String],
     renames: &[PathRename],
+    ignored: &BTreeSet<LayoutPath>,
 ) -> Result<Vec<Prepared>, Next> {
     let root = normalize(root);
 
@@ -499,22 +546,34 @@ fn prepare(
             return Err(ErrorTrackFile::new(given, TrackFileError::OutsideWorkspace).into());
         };
 
-        standing.push(if disk.is_dir() {
-            Named::Directory(directory_prefix(relative, given)?)
+        if disk.is_dir() {
+            standing.push(Named::Directory(directory_prefix(relative, given)?));
         } else if disk.is_file() {
-            Named::File(file_path(relative, given)?, disk)
+            // A variant file is content waiting to be joined rather than work to record, so a run
+            // that names one is asking for nothing and is answered with nothing.
+            let path = file_path(relative, given)?;
+            if ignored.contains(&path) {
+                continue;
+            }
+
+            standing.push(Named::File(path, disk));
         } else {
             return Err(ErrorTrackFile::new(given, TrackFileError::NotAFile).into());
-        });
+        }
     }
 
     // A directory is read through the same walk the tree reading uses, so what it leaves out — the
-    // Workspace's own `.rola`, a Workspace nested inside it, a symbolic link — is left out here too.
+    // Workspace's own `.rola`, a Workspace nested inside it, a symbolic link — is left out here too,
+    // and so is every variant file among what it found.
     let walked = if standing
         .iter()
         .any(|name| matches!(name, Named::Directory(_)))
     {
-        walk(&root).0
+        walk(&root)
+            .0
+            .into_iter()
+            .filter(|found| !ignored.contains(&found.path))
+            .collect()
     } else {
         Vec::new()
     };
@@ -971,7 +1030,18 @@ fn commit(
     file: &Staged,
     text: &str,
     replace: bool,
+    pending: Option<&Pending>,
+    merging: &Merging,
+    root: &Path,
 ) -> Result<(), Next> {
+    if replace && pending.is_some() {
+        return Err(ErrorTrackReplace {
+            path: file.file.path.as_str().to_owned(),
+            kind: ReplaceError::Merging,
+        }
+        .into());
+    }
+
     let creator =
         Creator::try_from(creator_name.to_owned()).map_err(|error| fail(error.to_string()))?;
     let message = Message::try_from(text.to_owned()).map_err(|error| fail(error.to_string()))?;
@@ -992,11 +1062,35 @@ fn commit(
             *message_key.digest(),
             recorded.variant.base_version_num(),
         ),
-        (Some(recorded), false) => recorded.version.new_variant(
-            *file.storage.digest(),
-            *creator_key.digest(),
-            *message_key.digest(),
-        ),
+        (Some(recorded), false) => {
+            let base = recorded.version.new_variant(
+                *file.storage.digest(),
+                *creator_key.digest(),
+                *message_key.digest(),
+            );
+
+            match pending {
+                None => base,
+                Some(pending) => {
+                    let joined = runtime
+                        .block_on(index.read(Key::new(*pending.variant())))
+                        .map_err(|error| fail(error.reason()))?
+                        .expect_variant()
+                        .map_err(|error| fail(error.to_string()))?;
+
+                    verify_variant_file(layout, merging, root, pending, &joined)?;
+
+                    // Content that is exactly the variant's own is no merge but a replacement: the
+                    // file now holds what was checked in, and what is recorded is that, on the chain
+                    // the file was already on. Only content of its own is joined.
+                    if *joined.storage_hash() == *file.storage.digest() {
+                        base
+                    } else {
+                        base.new_merge_variant(*file.storage.digest(), &joined)
+                    }
+                }
+            }
+        }
         (None, _) => {
             let root = Version::root();
             runtime
@@ -1025,11 +1119,18 @@ fn commit(
     );
 
     // A moved file is brought to where it is now: the move is the last thing done, so that a
-    // failure before it — writing the version the change is — leaves the Layout as it was.
-    if let Some(from) = &file.file.moved_from
-        && let Err(error) = layout.move_path(from, &file.file.path)
-    {
-        return Err(failed(&error));
+    // failure before it — writing the version the change is — leaves the Layout as it was. The
+    // variant file waiting for it, if there is one, moves with it.
+    if let Some(from) = &file.file.moved_from {
+        if let Err(error) = layout.move_path(from, &file.file.path) {
+            return Err(failed(&error));
+        }
+
+        if let Some(target) = layout.id_of(&file.file.path)
+            && let Err(error) = merging.follow(root, target, from, &file.file.path)
+        {
+            return Err(fail(error.to_string()));
+        }
     }
 
     if file.file.data.is_some() {
@@ -1045,6 +1146,39 @@ fn commit(
     }
     if let Err(error) = layout.create_path(&file.file.path, file.file.id) {
         return Err(failed(&error));
+    }
+
+    Ok(())
+}
+
+/// Reads the variant file waiting for a file, refusing when it no longer holds the variant's content.
+///
+/// What a recording says is that this variant was joined; a file that no longer holds what the
+/// variant names would record a merge of something else, which is worse than recording nothing.
+fn verify_variant_file(
+    layout: &Layout,
+    merging: &Merging,
+    root: &Path,
+    pending: &Pending,
+    joined: &Variant,
+) -> Result<(), Next> {
+    let Some(path) = merging.variant_path(layout, pending) else {
+        return Ok(());
+    };
+    let disk = root.join(path.to_path_buf());
+
+    // A variant file that is already gone is one the merge can still be recorded from: what was
+    // checked in is what the version names, and the file was only how it was shown.
+    if !disk.is_file() {
+        return Ok(());
+    }
+
+    let entry = entry_of(&disk).map_err(|error| fail(error.to_string()))?;
+    if entry.digest() != *joined.storage_hash() {
+        return Err(ErrorTrackMergeChanged {
+            path: path.as_str().to_owned(),
+        }
+        .into());
     }
 
     Ok(())
@@ -1316,6 +1450,8 @@ pub enum ReplaceError {
     Unrecorded,
     /// The version is a merge, and replacing it would drop what was joined in.
     Merge,
+    /// A variant is waiting to be joined into it, and an amend would drop that join.
+    Merging,
 }
 
 impl Failure for ErrorTrackReplace {
@@ -1327,6 +1463,7 @@ impl Failure for ErrorTrackReplace {
         let said = match self.kind {
             ReplaceError::Unrecorded => t!("track.err_replace_unrecorded", path = self.path),
             ReplaceError::Merge => t!("track.err_replace_merge", path = self.path),
+            ReplaceError::Merging => t!("track.err_replace_merging", path = self.path),
         };
 
         said.trim().to_string()
@@ -1339,6 +1476,34 @@ failure!(ErrorTrackReplace);
 pub fn render_error_track_replace(error: ErrorTrackReplace, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("track.err_replace_help").trim()));
+    ec.exit_code = EC_ERR_TRACK;
+}
+
+/// Error: a variant file no longer holds the variant's own content.
+#[derive(Grouped)]
+pub struct ErrorTrackMergeChanged {
+    /// The variant file that changed.
+    pub path: String,
+}
+
+impl Failure for ErrorTrackMergeChanged {
+    fn name(&self) -> &'static str {
+        "error_track_merge_changed"
+    }
+
+    fn reason(&self) -> String {
+        t!("track.err_merge_changed", path = self.path)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorTrackMergeChanged);
+
+#[renderer(buffer)]
+pub fn render_error_track_merge_changed(error: ErrorTrackMergeChanged, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("track.err_merge_changed_help").trim()));
     ec.exit_code = EC_ERR_TRACK;
 }
 

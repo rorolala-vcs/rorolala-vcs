@@ -489,6 +489,17 @@ pub struct Standing {
     pub relation: StandingRelation,
     /// How many versions apart the two are, when one is below the other.
     pub distance: Option<u64>,
+    /// The variant waiting to be joined into this file, when the work is in a merge.
+    pub merging: Option<MergeHint>,
+}
+
+/// A variant waiting to be joined into the file a chain was drawn for.
+#[derive(Serialize)]
+pub struct MergeHint {
+    /// The variant's hash, as hex.
+    pub variant: String,
+    /// The path its file lies at.
+    pub path: String,
 }
 
 /// How the version a Layout is at stands beside the Vault's.
@@ -740,7 +751,7 @@ fn hints(result: &ResultVcsIndexLookback) -> Vec<String> {
         return Vec::new();
     };
 
-    let mut lines = Vec::with_capacity(2);
+    let mut lines = Vec::with_capacity(3);
 
     if let Some(source) = &standing.source {
         lines.push(
@@ -751,6 +762,20 @@ fn hints(result: &ResultVcsIndexLookback) -> Vec<String> {
     }
 
     lines.push(standing_state(standing));
+
+    // A variant waiting to be joined is drawn last: it is what the next `rola track` would record,
+    // so it reads below how the file stands rather than before it.
+    if let Some(merging) = &standing.merging {
+        lines.push(
+            t!(
+                "status.merging_into",
+                variant = short(&merging.variant),
+                path = &merging.path
+            )
+            .trim()
+            .to_owned(),
+        );
+    }
 
     lines
 }
