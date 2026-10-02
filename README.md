@@ -33,8 +33,8 @@ If you are interested, you can pull the source code and build it. The dependency
 | `cc`/`gcc` | Any |
 | .NET SDK | `≥ 10.0.100`|
 | .NET 8 Targeting Pack | 8.0 SDK |
-| | or restore `Microsoft.NETCore.App.Ref 8.0.x` via NuGet |
-| NuGet packages | `Avalonia 12.1.3`, `Avalonia.Desktop`, `Avalonia.Themes.Simple`, etc. |
+| | or restore `Microsoft.NETCore.App.Ref 8.0.x` via `NuGet` |
+| `NuGet` packages | `Avalonia 12.1.3`, `Avalonia.Desktop`, `Avalonia.Themes.Simple`, etc. |
 
 After pulling the project, you can build it with the following command:
 
