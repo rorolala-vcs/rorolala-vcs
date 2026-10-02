@@ -94,6 +94,9 @@ internal abstract class EntryView : UserControl
     /// <summary>Whether a frame is being drawn.</summary>
     private bool _framing;
 
+    /// <summary>Whether a column edge is being dragged, which the view drives rather than a control.</summary>
+    private bool _resizing;
+
     /// <summary>The band a frame is drawn with.</summary>
     private readonly Border _band = Band();
 
@@ -193,6 +196,10 @@ internal abstract class EntryView : UserControl
         AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
 
+        // A resize captures the pointer to the view, so losing it is this control's to hear rather than the
+        // list's.
+        AddHandler(PointerCaptureLostEvent, Uncaptured, RoutingStrategies.Tunnel);
+
         // The wheel is taken over for the same reason the keys above are: the toolkit's own scrolling moves
         // in whole steps, and a directory read a row at a time at a stretch is what this glide is for.
         _ = new SmoothScroll(List);
@@ -260,6 +267,36 @@ internal abstract class EntryView : UserControl
     /// entries away from the dock they are read in.
     /// </remarks>
     protected virtual Thickness PanelPadding => new(12, 8, 12, 16);
+
+    /// <summary>
+    /// Whether a press begins a resize of something the view draws, which the view then drives.
+    /// </summary>
+    /// <remarks>
+    /// Asked before the choice and the frame, and answered by taking the press: the pointer is captured to
+    /// the view itself, so a drag that leaves the grip keeps resizing, and a press near a column edge
+    /// resizes rather than dropping the choice or beginning a frame. A frame begins wherever no entry is,
+    /// and a column edge is exactly such a place, so the two would otherwise be the same gesture.
+    /// </remarks>
+    /// <param name="e">The press.</param>
+    /// <returns>Whether the press is the view's to resize with.</returns>
+    protected virtual bool StartResize(PointerPressedEventArgs e) => false;
+
+    /// <summary>Follows a resize the view took.</summary>
+    /// <param name="e">The move.</param>
+    protected virtual void FollowResize(PointerEventArgs e) { }
+
+    /// <summary>Ends a resize the view took.</summary>
+    protected virtual void EndResize() { }
+
+    /// <summary>
+    /// Lights whatever the pointer is over, on a move that is not part of a drag or a frame.
+    /// </summary>
+    /// <remarks>
+    /// A resize is reached through a band wider than the grip drawn in it, and the band has nothing to
+    /// draw: this is where the view says what the pointer is over, so that the band is not invisible.
+    /// </remarks>
+    /// <param name="at">Where the pointer is, in the view's own coordinates.</param>
+    protected virtual void Hovered(Point at) { }
 
     /// <summary>
     /// Puts what the view is made of on screen, on the panel and with the frame's band drawn over it.
@@ -907,6 +944,21 @@ internal abstract class EntryView : UserControl
 
         _mayFrame = false;
 
+        // A column edge is taken before the choice and the frame, and taken away from whatever is under
+        // it: a press there resizes the column, and marked handled here it never reaches the grip the
+        // look draws, whose own drag would then be a second answer to the same press.
+        if (
+            e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+            && StartResize(e)
+        )
+        {
+            _resizing = true;
+            e.Pointer.Capture(this);
+            e.Handled = true;
+
+            return;
+        }
+
         if (at >= 0)
         {
             _lead = at;
@@ -950,6 +1002,15 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The move.</param>
     private void Moved(object? sender, PointerEventArgs e)
     {
+        if (_resizing)
+        {
+            FollowResize(e);
+
+            return;
+        }
+
+        Hovered(e.GetPosition(this));
+
         if (!e.GetCurrentPoint(List).Properties.IsLeftButtonPressed)
         {
             return;
@@ -1044,9 +1105,30 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The release.</param>
     private void Released(object? sender, PointerReleasedEventArgs e)
     {
+        if (_resizing)
+        {
+            _resizing = false;
+            EndResize();
+            e.Pointer.Capture(null);
+
+            return;
+        }
+
         if (_mayFrame)
         {
             Stop();
+        }
+    }
+
+    /// <summary>Ends a resize whose capture was taken away, which leaves the columns as they stand.</summary>
+    /// <param name="sender">The view.</param>
+    /// <param name="e">The lost capture.</param>
+    private void Uncaptured(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_resizing)
+        {
+            _resizing = false;
+            EndResize();
         }
     }
 
@@ -1296,11 +1378,24 @@ internal sealed class ListBrowser : EntryView
     /// </remarks>
     private const double GrabColumn = 4;
 
+    /// <summary>
+    /// How wide the band a column edge can be taken in is.
+    /// </summary>
+    /// <remarks>
+    /// Wider than the grip drawn in it, and deliberately: four pixels is what the line is centred in, not
+    /// what a pointer can be asked to find. The grip is still drawn at four, and the band around it is the
+    /// room to press — the two are different questions and this is the one the hand answers.
+    /// </remarks>
+    private const double GrabZone = 12;
+
     /// <summary>What a grab between two of anything is marked with.</summary>
     private const string GrabMark = "dock-splitter";
 
     /// <summary>What a grab that resizes columns is marked with as well.</summary>
     private const string GrabColumnMark = "dock-splitter-columns";
+
+    /// <summary>The pointer a column edge is taken with, made once rather than per move.</summary>
+    private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeWestEast);
 
     /// <summary>How narrow a column may be dragged.</summary>
     private const double MinColumn = 56;
@@ -1331,6 +1426,15 @@ internal sealed class ListBrowser : EntryView
 
     /// <summary>The row of column names, which every row is kept in step with.</summary>
     private readonly Grid _header = new();
+
+    /// <summary>
+    /// The band the column names sit in, which is also where a column edge may be taken.
+    /// </summary>
+    /// <remarks>
+    /// The edge is the header's to resize because that is where a column is named; the rows below are the
+    /// entries, and a press there is a choice.
+    /// </remarks>
+    private Border? _heading;
 
     /// <summary>Where a grab was taken, and how wide the two columns each side of it were then.</summary>
     private (int Left, int Right, double At, double LeftWas, double RightWas)? _grabbed;
@@ -1368,6 +1472,10 @@ internal sealed class ListBrowser : EntryView
         );
 
         var header = Header();
+
+        // The band a column edge is taken in is wider than the line drawn in it, so the pointer is the only
+        // sign that the edge is within reach; leaving the view takes that sign away.
+        PointerExited += (_, _) => Cursor = null;
 
         var panel = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(header, Dock.Top);
@@ -1475,16 +1583,10 @@ internal sealed class ListBrowser : EntryView
             Head(RolaI18N.Get("rorolala_file_system.column_name")),
         };
 
-        // A grab is between two columns, so the pair it takes in is its own place in the layout plus or
-        // minus one.
-        var left = NameColumn;
-
         foreach (var column in _values)
         {
-            cells.Add(Grab(left, left + 2));
+            cells.Add(Grip());
             cells.Add(Head(RolaI18N.Get(column.Header), column.Align));
-
-            left += 2;
         }
 
         Place(_header, cells);
@@ -1498,6 +1600,8 @@ internal sealed class ListBrowser : EntryView
         };
         band[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.sunken");
         band[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
+
+        _heading = band;
 
         return band;
     }
@@ -1540,50 +1644,122 @@ internal sealed class ListBrowser : EntryView
     }
 
     /// <summary>
-    /// The grab between two columns of the table.
+    /// The grip drawn between two columns of the table.
     /// </summary>
     /// <remarks>
     /// A <see cref="GridSplitter"/>, because that is the control the look is written for: the shell marks
     /// the grab between two regions with these classes and the look draws one, and a grab between two
-    /// columns is that same grab.
+    /// columns is that same grab — its line, and the pointer it takes when the pointer is on it.
     /// <para>
     /// It is put in a panel rather than in the header's own grid, and that is load-bearing rather than tidy.
     /// A splitter moves the columns of the grid it is in, and the table's rows are one grid each, so a
-    /// splitter in the header would move the header's columns alone; put in a panel it moves nothing at all,
-    /// which is the behaviour this leans on, and the columns are moved in the handlers below instead. A grid
-    /// of its own would not do: asking a grid for its columns is what a splitter does when it is pressed,
-    /// and a grid asked for its columns outside a layout pass is a grid whose next arrange dereferences
-    /// something only a measure creates.
+    /// splitter in the header would move the header's columns alone; put in a panel it moves nothing, which
+    /// is what this leans on. The columns are moved by the view instead, which takes the press before the
+    /// splitter can (see <see cref="StartResize"/>).
+    /// </para>
+    /// <para>
+    /// The grip is four pixels, the width the look centres its line in, and that is not the width a press
+    /// is taken in: a column edge is taken within the wider band <see cref="GrabZone"/> states.
     /// </para>
     /// </remarks>
-    /// <param name="left">The column on its left.</param>
-    /// <param name="right">The column on its right.</param>
-    private Control Grab(int left, int right)
-    {
-        var grab = new GridSplitter
+    private static Control Grip() =>
+        new Panel
         {
-            ResizeDirection = GridResizeDirection.Columns,
-            Width = GrabColumn,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Classes = { GrabMark, GrabColumnMark },
+            Children =
+            {
+                new GridSplitter
+                {
+                    ResizeDirection = GridResizeDirection.Columns,
+                    Width = GrabColumn,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Classes = { GrabMark, GrabColumnMark },
+                },
+            },
         };
 
-        // Handled events too, because the splitter takes the pointer itself and a handler that skipped what
-        // it had handled would never hear a drag.
-        grab.AddHandler(PointerPressedEvent, (_, e) => Taken(left, right, e), RoutingStrategies.Bubble, true);
-        grab.AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Bubble, true);
-        grab.AddHandler(PointerReleasedEvent, (_, _) => _grabbed = null, RoutingStrategies.Bubble, true);
-        grab.AddHandler(PointerCaptureLostEvent, (_, _) => _grabbed = null, RoutingStrategies.Bubble, true);
+    /// <summary>
+    /// Whether a press is on a column edge, and if so, takes it.
+    /// </summary>
+    /// <remarks>
+    /// The band is the header's, because the header is where a column is named and the rows below it are the
+    /// entries. It is measured from the columns rather than from the grip, so that the room to press is the
+    /// band and not the four pixels the line is drawn in.
+    /// </remarks>
+    /// <param name="e">The press.</param>
+    /// <returns>Whether the press began a resize.</returns>
+    protected override bool StartResize(PointerPressedEventArgs e)
+    {
+        if (Edge(e.GetPosition(this)) is not var (left, right))
+        {
+            return false;
+        }
 
-        return new Panel { Children = { grab } };
+        _grabbed = (left, right, e.GetPosition(this).X, Pixels(left), Pixels(right));
+
+        return true;
     }
 
-    /// <summary>Takes a grab, remembering where and how wide the two columns each side of it were.</summary>
-    /// <param name="left">The column on its left.</param>
-    /// <param name="right">The column on its right.</param>
-    /// <param name="e">The press.</param>
-    private void Taken(int left, int right, PointerPressedEventArgs e) =>
-        _grabbed = (left, right, e.GetPosition(this).X, Pixels(left), Pixels(right));
+    /// <summary>Follows a resize: the two columns the edge is between take the move between them.</summary>
+    /// <param name="e">The move.</param>
+    protected override void FollowResize(PointerEventArgs e) => Resize(e);
+
+    /// <summary>Ends a resize, leaving the columns as they were dragged.</summary>
+    protected override void EndResize() => _grabbed = null;
+
+    /// <summary>
+    /// Says with the pointer that a column edge is within reach.
+    /// </summary>
+    /// <remarks>
+    /// The band a press may take an edge in is wider than the line drawn in it, so without this the room to
+    /// press would be room the user cannot see.
+    /// </remarks>
+    /// <param name="at">Where the pointer is, in the view's own coordinates.</param>
+    protected override void Hovered(Point at) => Cursor = Edge(at) is null ? null : ResizeCursor;
+
+    /// <summary>
+    /// The column edge a point in the view falls on, as the pair of columns it is between.
+    /// </summary>
+    /// <remarks>
+    /// An edge is the centre of a grab column, which the layout knows and a fixed measurement would not: the
+    /// name column takes what is left, so where every other edge stands depends on the dock.
+    /// </remarks>
+    /// <param name="at">Where the pointer is, in the view's own coordinates.</param>
+    /// <returns>The pair the edge is between, or nothing when no edge is within reach.</returns>
+    private (int Left, int Right)? Edge(Point at)
+    {
+        if (
+            _heading is null
+            || this.TranslatePoint(at, _heading) is not { } band
+            || band.Y < 0
+            || band.Y > _heading.Bounds.Height
+            || this.TranslatePoint(at, _header) is not { } header
+        )
+        {
+            return null;
+        }
+
+        var left = 0.0;
+
+        for (var column = 0; column < _header.ColumnDefinitions.Count; column++)
+        {
+            var width = _header.ColumnDefinitions[column].ActualWidth;
+
+            // A grab column is every other one after the name, which is the table's own shape rather than a
+            // measurement of it.
+            if (
+                column > NameColumn
+                && (column - NameColumn) % 2 == 1
+                && Math.Abs(header.X - (left + (width / 2))) <= GrabZone / 2
+            )
+            {
+                return (column - 1, column + 1);
+            }
+
+            left += width;
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Moves the grab: the two columns it is between take the move between them.
@@ -1598,9 +1774,8 @@ internal sealed class ListBrowser : EntryView
     /// and the name counts as a column here, which is why its width is asked of the layout.
     /// </para>
     /// </remarks>
-    /// <param name="sender">The grab.</param>
     /// <param name="e">The move.</param>
-    private void Moved(object? sender, PointerEventArgs e)
+    private void Resize(PointerEventArgs e)
     {
         if (_grabbed is not { } grab)
         {
