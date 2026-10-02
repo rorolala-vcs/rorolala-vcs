@@ -224,8 +224,15 @@ pub fn handle_status(
     let edited: BTreeSet<&str> = diff.modified.iter().map(LayoutPath::as_str).collect();
 
     // What is waiting to be joined is read against the Layout, the tree and the index: a record that
-    // does not stand is not a merge, and saying so is the point of reading them at all.
-    let (merging, broken) = merging_view(&merging, &layout, held, index.get_ref().as_ref());
+    // does not stand is not a merge, and saying so is the point of reading them at all. A variant
+    // file the tree holds elsewhere is claimed here, so it is not also reported as a new file.
+    let (merging, broken, moved) = merging_view(
+        &merging,
+        &layout,
+        held,
+        index.get_ref().as_ref(),
+        &diff.untagged,
+    );
 
     ResultStatus {
         lost: diff
@@ -236,6 +243,7 @@ pub fn handle_status(
         untagged: diff
             .untagged
             .iter()
+            .filter(|path| !moved.contains(*path))
             .map(|path| path.as_str().to_owned())
             .collect(),
         modified: diff
@@ -285,30 +293,53 @@ fn variant_pending<'a>(
 /// What the merge in progress says, read against the Layout, the tree and the index.
 ///
 /// A record is a merge only while all of it stands: the target is still named, the variant file is
-/// still there, the index still holds the variant and the file still holds that variant's content.
-/// One that does not is not dropped quietly — a merge that cannot go on is worse unseen — so it is
-/// answered as what it is rather than among the merges that are.
+/// still there — or is found again where a move put it — the index still holds the variant and the
+/// file still holds that variant's content. One that does not stand is not dropped quietly — a merge
+/// that cannot go on is worse unseen — so it is answered as what it is rather than among the merges
+/// that are.
+///
+/// The paths the variant files were found at are handed back with it, so a reading that was told to
+/// leave variant files out can leave these out too.
 fn merging_view(
     merging: &Merging,
     layout: &Layout,
     held: &Workspace,
     index: Option<&VCSIndex>,
-) -> (Vec<MergingItem>, Vec<String>) {
+    untagged: &[LayoutPath],
+) -> (Vec<MergingItem>, Vec<String>, BTreeSet<LayoutPath>) {
     let Ok(runtime) = crate::vcs_index::runtime() else {
-        return (Vec::new(), Vec::new());
+        return (Vec::new(), Vec::new(), BTreeSet::new());
     };
 
+    let moves = crate::merging::moves(merging, layout, held.get_root(), index, &runtime, untagged);
     let mut waiting = Vec::new();
     let mut broken = Vec::new();
+    let mut claimed = BTreeSet::new();
 
     for pending in merging.iter() {
+        // A file that moved is not one to report as gone: the record still stands, and what is to be
+        // confirmed is where the file now lies.
+        if let Some(moved) = moves.iter().find(|moved| moved.target == pending.target())
+            && let Some(target) = layout.path_of(pending.target())
+        {
+            claimed.insert(moved.to.clone());
+            waiting.push(MergingItem {
+                target: target.as_str().to_owned(),
+                variant: crate::vcs_index::hex(pending.variant()),
+                path: moved.from.as_str().to_owned(),
+                moved: Some(moved.to.as_str().to_owned()),
+            });
+
+            continue;
+        }
+
         match merging_item(merging, layout, held, index, &runtime, pending) {
             Ok(item) => waiting.push(item),
             Err(cause) => broken.push(cause),
         }
     }
 
-    (waiting, broken)
+    (waiting, broken, claimed)
 }
 
 /// One record of the merge in progress, read as a merge that can go on or as why it cannot.
@@ -366,6 +397,7 @@ fn merging_item(
         target: target.as_str().to_owned(),
         variant,
         path: path.as_str().to_owned(),
+        moved: None,
     })
 }
 
@@ -883,8 +915,10 @@ pub struct MergingItem {
     target: String,
     /// The variant that was checked in.
     variant: String,
-    /// The path its file lies at.
+    /// The path its file lies at, or lay at before a move.
     path: String,
+    /// Where the tree holds its file now, when a move was found.
+    moved: Option<String>,
 }
 
 /// Result: one thing a variant is waiting to be joined into.
@@ -964,16 +998,27 @@ pub fn render_result_status(result: ResultStatus) {
             r_println!("");
 
             for item in &result.merging {
-                r_println!(
-                    "{}",
-                    trd!(t!(
-                        "status.merging_line",
-                        target = item.target,
-                        variant = short(&item.variant),
-                        path = item.path
-                    ))
-                    .trim()
+                let said = item.moved.as_ref().map_or_else(
+                    || {
+                        t!(
+                            "status.merging_line",
+                            target = item.target,
+                            variant = short(&item.variant),
+                            path = item.path
+                        )
+                    },
+                    |to| {
+                        t!(
+                            "status.merging_line_moved",
+                            target = item.target,
+                            variant = short(&item.variant),
+                            from = item.path,
+                            to = to
+                        )
+                    },
                 );
+
+                r_println!("{}", trd!(said).trim());
             }
 
             for cause in &result.broken {
@@ -1062,6 +1107,10 @@ pub fn render_result_status(result: ResultStatus) {
             r_println!("{}", help_line!(t!("status.help_unowned").trim()));
         }
         if merging {
+            if result.merging.iter().any(|item| item.moved.is_some()) {
+                r_println!("{}", help_line!(t!("status.help_merging_moved").trim()));
+            }
+
             r_println!("{}", help_line!(t!("status.help_merging").trim()));
         }
         if structural > 0 {

@@ -24,7 +24,7 @@ use librorolala::layout::{Layout, LayoutPath};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
 use librorolala::tree_analyze::{Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff};
 use librorolala::vcs::VCSIndex;
-use librorolala::workspace::Merging;
+use librorolala::workspace::{Merging, Pending};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -366,23 +366,43 @@ pub fn handle_align(
     };
 
     // A variant file is not a path the Layout names, so the ways a Layout path is settled do not
-    // apply to it. The two that do are ending the merge by its file and putting its file back: a
-    // run that asks for anything else about one is asking for what it cannot have.
+    // apply to it. It may be where the record says or somewhere a move put it, and what settles it
+    // is ending the merge, putting its file back, or writing down where it moved to.
     let mut merging = Merging::read(&root);
+    let moves = variant_moves(&merging, &layout, &root, content, &diff);
 
-    if let Selector::One(path) = &selected
-        && let Some(pending) = merging.variant_of(&layout, path)
-    {
-        let target = pending.target();
-        let variant = *pending.variant();
+    if let Selector::One(path) = &selected {
+        let at = merging.variant_of(&layout, path);
+        let found = moves
+            .iter()
+            .find(|pair| &pair.from == path || &pair.to == path);
 
-        return match mode {
-            Mode::Delete => unmerge(&mut merging, &root, target, path),
-            Mode::Restore | Mode::RestoreModify | Mode::RestoreDelete => {
-                single(restore_variant(path, &root, content, variant))
-            }
-            _ => ErrorAlignArgument.into(),
-        };
+        if let Some(target) = at
+            .map(Pending::target)
+            .or_else(|| found.map(|pair| pair.target))
+        {
+            let variant = at
+                .map(|pending| *pending.variant())
+                .or_else(|| found.map(|pair| pair.variant));
+
+            return match mode {
+                Mode::Delete => unmerge(&mut merging, &root, target, path),
+                Mode::Rename => found.map_or_else(
+                    || ErrorAlignArgument.into(),
+                    |pair| {
+                        relocate_variant(&mut merging, &layout, &root, target, &pair.from, &pair.to)
+                    },
+                ),
+                Mode::Move(to) => {
+                    assert_variant_move(&mut merging, &layout, &root, target, path, &to)
+                }
+                Mode::Restore | Mode::RestoreModify | Mode::RestoreDelete => variant.map_or_else(
+                    || ErrorAlignArgument.into(),
+                    |variant| single(restore_variant(path, &root, content, variant)),
+                ),
+                _ => ErrorAlignArgument.into(),
+            };
+        }
     }
 
     let next = match (mode, selected) {
@@ -578,6 +598,99 @@ fn unmerge(merging: &mut Merging, root: &Path, target: Uuid, path: &LayoutPath) 
     }
 
     ResultAlign::one(AlignDid::Unmerged, path.as_str().to_owned()).into()
+}
+
+/// The variant files the tree holds somewhere other than where the merge records put them.
+///
+/// It is the finding `rola status` makes, so what a reading reports and what an alignment settles
+/// are one move seen twice: an untagged file whose content is the variant's own is the file that
+/// moved, and nothing else can be.
+fn variant_moves(
+    merging: &Merging,
+    layout: &Layout,
+    root: &Path,
+    content: Content<'_, '_>,
+    diff: &TreeDiff,
+) -> Vec<crate::merging::VariantMove> {
+    let Ok(runtime) = tokio::runtime::Runtime::new() else {
+        return Vec::new();
+    };
+
+    crate::merging::moves(
+        merging,
+        layout,
+        root,
+        content.index.as_ref(),
+        &runtime,
+        &diff.untagged,
+    )
+}
+
+/// Writes down that the variant file waiting for `target` now lies at `to`.
+fn relocate_variant(
+    merging: &mut Merging,
+    layout: &Layout,
+    root: &Path,
+    target: Uuid,
+    from: &LayoutPath,
+    to: &LayoutPath,
+) -> Next {
+    let Some(target_path) = layout.path_of(target) else {
+        return ErrorAlignNotLost {
+            path: from.as_str().to_owned(),
+        }
+        .into();
+    };
+
+    let place = Merging::place_of(&target_path, to);
+
+    if !merging.relocate(target, Some(place)) {
+        return ErrorAlignNotLost {
+            path: from.as_str().to_owned(),
+        }
+        .into();
+    }
+
+    if let Err(error) = merging.write(root) {
+        return align_failed(error.to_string());
+    }
+
+    ResultAlign::one(
+        AlignDid::Moved,
+        format!("{} -> {}", from.as_str(), to.as_str()),
+    )
+    .into()
+}
+
+/// Asserts that the variant file waiting for `target` moved to `to`, for a reading that found no
+/// move of its own.
+fn assert_variant_move(
+    merging: &mut Merging,
+    layout: &Layout,
+    root: &Path,
+    target: Uuid,
+    from: &LayoutPath,
+    to: &str,
+) -> Next {
+    let Ok(to) = LayoutPath::new(to) else {
+        return ErrorAlignMove {
+            path: to.to_owned(),
+            kind: MoveError::Missing,
+        }
+        .into();
+    };
+
+    // A move asserted to somewhere nothing is, is a move to nowhere: the file has to be where the
+    // run says, as a path asserted for a Layout entry does.
+    if !root.join(to.to_path_buf()).is_file() {
+        return ErrorAlignMove {
+            path: to.as_str().to_owned(),
+            kind: MoveError::Missing,
+        }
+        .into();
+    }
+
+    relocate_variant(merging, layout, root, target, from, &to)
 }
 
 /// Puts a variant file back, taking the content the variant was checked in with out of the store.

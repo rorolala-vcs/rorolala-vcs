@@ -190,9 +190,17 @@ status:
     en: "& %{target} <- %{variant} (%{path})"
     zh-CN: "& %{target} <- %{variant}（%{path}）"
 
+  merging_line_moved:
+    en: "& %{target} <- %{variant} (%{from} -> %{to})"
+    zh-CN: "& %{target} <- %{variant}（%{from} -> %{to}）"
+
   help_merging:
     en: "Record a merge with `rola track <file>`, or cancel it with `rola align --delete`"
     zh-CN: "用 `rola track <文件>` 记录合并，或用 `rola align --delete` 取消"
+
+  help_merging_moved:
+    en: "Confirm where a variant file moved to with `rola align --rename`, or assert it with `rola align --move`"
+    zh-CN: "用 `rola align --rename` 确认变体文件移到何处，或用 `rola align --move` 断言这次移动"
 
   merging_into:
     en: "Variant %{variant} in %{path} is being joined into this file"

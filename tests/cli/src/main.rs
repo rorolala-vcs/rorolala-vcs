@@ -713,6 +713,38 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
         &said(&ran),
     );
 
+    // A move no command of ours made — a shell `mv`, an editor saving elsewhere — is found again by
+    // what the file holds, and `rola align --rename` writes down where it went.
+    let renamed = "renamed.bin";
+    fs::rename(work.join(moved), work.join(renamed)).expect("a move by hand");
+
+    let ran = rola.run(ws, &["status", "--json"]);
+    checked.wants(
+        "a move no command made is found by content",
+        json(&ran).is_some_and(|value| {
+            value
+                .get("merging")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|merging| {
+                    merging.iter().any(|item| {
+                        item.get("moved").and_then(serde_json::Value::as_str)
+                            == Some("merge/renamed.bin")
+                    })
+                })
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["align", &format!("merge/{moved}"), "--rename"]);
+    checked.exits("the move is confirmed", &ran, 0);
+
+    let ran = rola.run(ws, &["status"]);
+    checked.stdout_has(
+        "the merge names where the file went",
+        &ran,
+        "merge/renamed.bin",
+    );
+
     // Recording the file the variant waits for joins it and ends the wait.
     fs::write(work.join("file.txt"), "base and theirs\n").expect("the merged work");
     let ran = rola.run(
@@ -728,7 +760,7 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     checked.exits("the merge is recorded", &ran, 0);
     checked.wants(
         "the variant file is gone",
-        !work.join(moved).exists(),
+        !work.join(renamed).exists(),
         &said(&ran),
     );
     checked.wants(
