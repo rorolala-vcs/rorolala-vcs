@@ -96,10 +96,17 @@ internal sealed class ThemeConfiguration
     public Color AccentOrDefault => Accent ?? DefaultAccent;
 }
 
-/// <summary>The user's state for one plugin: whether it loads, and how the user ordered it.</summary>
+/// <summary>
+/// The user's state for one plugin: whether it loads, and where it stands.
+/// </summary>
+/// <remarks>
+/// The position is not held here but by the sequence the record sits in: the order is what the user
+/// arranged by hand, and a number beside each plugin would be a second statement of it that can
+/// disagree with the first.
+/// </remarks>
+/// <param name="Id">The plugin's identity.</param>
 /// <param name="Enabled">Whether the plugin loads.</param>
-/// <param name="Order">The user's ordering within one dependency tier.</param>
-internal sealed record PluginState(bool Enabled, int Order);
+internal sealed record PluginState(PluginId Id, bool Enabled);
 
 /// <summary>
 /// <c>plugins.json</c>: the user's state for plugins that have been discovered.
@@ -107,14 +114,41 @@ internal sealed record PluginState(bool Enabled, int Order);
 /// <remarks>
 /// The file stores user state only. It does not list plugin paths, dependencies, contract versions,
 /// or display names — those are declared by the plugin itself and discovered from the assembly.
+/// <para>
+/// The sequence is the load order. It is the user's to arrange rather than the program's to work
+/// out, so a dependency that is disabled, absent, or placed later makes the dependent unloadable
+/// rather than being silently reordered, and the plugin manager says so on the card it belongs to.
+/// </para>
 /// </remarks>
 internal sealed class PluginsConfiguration
 {
-    /// <summary>The schema version this program reads and writes.</summary>
+    /// <summary>
+    /// The schema version this program reads and writes.
+    /// </summary>
+    /// <remarks>
+    /// It stays at the lowest it has ever been and is never raised. A change to the file's shape is
+    /// made in place, so a file of an older shape is refused for its shape rather than converted,
+    /// and no reader here ever grows a branch for a version it no longer writes.
+    /// </remarks>
     public const int SchemaVersion = 1;
 
-    /// <summary>Every plugin the user has state for, in the order the file states them.</summary>
-    public Dictionary<PluginId, PluginState> Plugins { get; } = [];
+    /// <summary>Every plugin the user has state for, in the order the user put them.</summary>
+    public List<PluginState> Plugins { get; } = [];
+
+    /// <summary>The state of one plugin, or nothing when the file does not name it.</summary>
+    /// <param name="id">The plugin's identity.</param>
+    /// <returns>The state the file holds, or nothing.</returns>
+    public PluginState? Find(PluginId id) => Plugins.Find(state => state.Id == id);
+
+    /// <summary>Whether the file leaves a plugin enabled; a plugin it does not name is not enabled.</summary>
+    /// <param name="id">The plugin's identity.</param>
+    /// <returns>Whether the plugin loads.</returns>
+    public bool Enabled(PluginId id) => Find(id)?.Enabled ?? false;
+
+    /// <summary>Whether the file holds any state for a plugin.</summary>
+    /// <param name="id">The plugin's identity.</param>
+    /// <returns>Whether the plugin is named.</returns>
+    public bool Contains(PluginId id) => Find(id) is not null;
 }
 
 /// <summary>

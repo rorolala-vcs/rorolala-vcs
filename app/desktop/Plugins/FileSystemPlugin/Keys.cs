@@ -10,7 +10,16 @@ namespace FileSystemPlugin;
 /// <param name="Copy">Puts what is chosen on the clipboard.</param>
 /// <param name="Cut">Puts what is chosen on the clipboard to be moved.</param>
 /// <param name="Paste">Puts what is on the clipboard where this view is looking.</param>
-internal readonly record struct Clipboard(Action Copy, Action Cut, Action Paste);
+/// <param name="NewFolder">
+/// Makes a directory where this view is looking, and names it; nothing for a view that has no listing of
+/// its own to make one in.
+/// </param>
+internal readonly record struct Clipboard(
+    Action Copy,
+    Action Cut,
+    Action Paste,
+    Action? NewFolder = null
+);
 
 /// <summary>
 /// The keys the File System answers itself, beyond what the toolkit's own controls do with them.
@@ -65,11 +74,42 @@ internal static class Keys
                 log.Info("Ctrl+V: pasting into the directory being looked at");
                 clipboard.Paste();
                 break;
+            case Key.N when e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+                log.Info("Ctrl+Shift+N: making a folder in the directory being looked at");
+                clipboard.NewFolder?.Invoke();
+                break;
             default:
                 return false;
         }
 
         e.Handled = true;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether this key is a user asking to rename what is chosen, and takes it if it is.
+    /// </summary>
+    /// <remarks>
+    /// Taken at the top of a dock like the clipboard's keys, so that it is answered wherever the keyboard is
+    /// inside the dock. A field is left alone: <c>F2</c> in the address is not the address's key, but it is
+    /// still the field's press rather than the listing's.
+    /// </remarks>
+    /// <param name="e">The key.</param>
+    /// <param name="rename">What this view's rename is.</param>
+    /// <param name="log">Where the press is said.</param>
+    /// <returns>Whether the key was taken.</returns>
+    public static bool Rename(KeyEventArgs e, Action rename, ILog log)
+    {
+        if (e.Key != Key.F2 || e.Source is TextBox)
+        {
+            return false;
+        }
+
+        log.Info("F2: renaming what is chosen");
+
+        e.Handled = true;
+        rename();
 
         return true;
     }

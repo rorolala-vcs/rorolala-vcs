@@ -449,7 +449,7 @@ internal sealed class PreferenceView : UserControl
 
         if (setting.Default is { Length: > 0 } declared)
         {
-            notes.Add(_i18n.Get("setting.default", declared));
+            notes.Add(_i18n.Get("setting.default", Default(setting, declared)));
         }
 
         if (setting.RestartRequired)
@@ -511,6 +511,61 @@ internal sealed class PreferenceView : UserControl
 
                 return choice;
 
+            case SettingKind.MultiChoice:
+                // A dropdown holding one box per option rather than a `ComboBox`: the toolkit's own list
+                // selection is single-valued, and a list of ticked boxes says what is chosen without a second
+                // click. The label above is drawn again by `Show` on every change, so it is not kept here.
+                var chosen = (value.Length == 0 ? [] : value.Split(',')).ToHashSet(StringComparer.Ordinal);
+                var boxes = new StackPanel { Spacing = 4 };
+
+                foreach (var option in setting.Options ?? [])
+                {
+                    var box = new CheckBox
+                    {
+                        Content = _i18n.Get(option.LabelKey),
+                        IsChecked = chosen.Contains(option.Value),
+                    };
+
+                    box.IsCheckedChanged += (_, _) =>
+                    {
+                        if (box.IsChecked == true)
+                        {
+                            chosen.Add(option.Value);
+                        }
+                        else
+                        {
+                            chosen.Remove(option.Value);
+                        }
+
+                        // Written at once rather than when the window is left, because the value is a list
+                        // and the reader of it — the plugin the setting belongs to — acts as soon as it is
+                        // written: a reader that waited for the window to close would show a listing the
+                        // panel already disagreed with.
+                        _settings.Keep(
+                            owner,
+                            setting,
+                            string.Join(
+                                ',',
+                                (setting.Options ?? [])
+                                    .Where(each => chosen.Contains(each.Value))
+                                    .Select(each => each.Value)
+                            )
+                        );
+                    };
+
+                    boxes.Children.Add(box);
+                }
+
+                var picked = new Button
+                {
+                    Content = MultiChoiceLabel(setting, chosen),
+                    MinWidth = 240,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Flyout = new Flyout { Content = boxes },
+                };
+
+                return picked;
+
             case SettingKind.Preset:
                 // A preset has no value of its own: what is shown is the option the settings it stands for
                 // already agree with — `value` is that option — and choosing one writes them, after which
@@ -560,4 +615,34 @@ internal sealed class PreferenceView : UserControl
 
         return at <= 0 ? setting.Id : setting.Id[..at];
     }
+
+    /// <summary>
+    /// What a multi-choice setting's button says: the options chosen, by name.
+    /// </summary>
+    /// <remarks>
+    /// Every chosen option is named rather than a count, because the set is small — it is what one plugin
+    /// offers — and a number would make the reader open the list to find out what they already chose.
+    /// </remarks>
+    /// <param name="setting">The setting.</param>
+    /// <param name="chosen">The values chosen.</param>
+    private string MultiChoiceLabel(PluginSetting setting, IReadOnlySet<string> chosen)
+    {
+        var shown = (setting.Options ?? [])
+            .Where(option => chosen.Contains(option.Value))
+            .Select(option => _i18n.Get(option.LabelKey))
+            .ToArray();
+
+        return shown.Length == 0 ? _i18n.Get("setting.none") : string.Join(" · ", shown);
+    }
+
+    /// <summary>What a declaration's default reads as, naming the options of a multi-choice setting.</summary>
+    /// <param name="setting">The setting.</param>
+    /// <param name="declared">The default, as it is written.</param>
+    private string Default(PluginSetting setting, string declared) =>
+        setting.Kind == SettingKind.MultiChoice
+            ? MultiChoiceLabel(
+                setting,
+                declared.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal)
+            )
+            : declared;
 }

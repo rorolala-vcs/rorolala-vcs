@@ -9,6 +9,16 @@ internal enum Operation
     /// <summary>Move a source to a destination directory.</summary>
     Move,
 
+    /// <summary>
+    /// Move a source to the whole path it is to have, rather than into a directory.
+    /// </summary>
+    /// <remarks>
+    /// A rename is a move and nothing else — the same command carries it out — and what tells it apart is
+    /// that the target is named outright: a new name beside the old one, rather than a directory the old
+    /// name is taken into.
+    /// </remarks>
+    Rename,
+
     /// <summary>Remove directories.</summary>
     RemoveDirs,
 
@@ -16,10 +26,11 @@ internal enum Operation
     RemoveFiles,
 }
 
-/// <summary>One source and, for a transfer, the destination directory it goes to.</summary>
+/// <summary>One source and, for a transfer, the destination it goes to.</summary>
 /// <param name="From">The source path, as it was given.</param>
 /// <param name="To">
-/// The destination directory, or empty when the item names none — which is every removal.
+/// The destination directory, or the whole path it is to have for a rename; empty when the item names
+/// none, which is every removal.
 /// </param>
 internal readonly record struct Pair(string From, string To);
 
@@ -103,6 +114,7 @@ internal sealed class Plan
     {
         var items = new List<Item>(pairs.Count);
         var copying = operation is Operation.Copy;
+        var renaming = operation is Operation.Rename;
 
         foreach (var pair in pairs)
         {
@@ -121,7 +133,7 @@ internal sealed class Plan
             }
             else
             {
-                PlanTransfer(item, pair, copying);
+                PlanTransfer(item, pair, copying, renaming);
             }
 
             items.Add(item);
@@ -132,9 +144,10 @@ internal sealed class Plan
 
     /// <summary>Works out one transfer's target, or why it cannot be made.</summary>
     /// <param name="item">The item to plan.</param>
-    /// <param name="pair">The source and the directory it goes into.</param>
+    /// <param name="pair">The source and where it goes.</param>
     /// <param name="copying">Whether this run copies rather than moves.</param>
-    private static void PlanTransfer(Item item, Pair pair, bool copying)
+    /// <param name="renaming">Whether the destination is the whole path rather than a directory.</param>
+    private static void PlanTransfer(Item item, Pair pair, bool copying, bool renaming)
     {
         if (!Pathing.Exists(pair.From))
         {
@@ -144,27 +157,36 @@ internal sealed class Plan
 
         if (string.IsNullOrEmpty(pair.To))
         {
-            item.Problem = $"the pair for `{pair.From}` names no destination directory";
+            item.Problem = $"the pair for `{pair.From}` names no destination";
             return;
         }
 
-        if (!Directory.Exists(pair.To))
+        string target;
+
+        if (renaming)
         {
-            item.Problem = $"the destination `{pair.To}` is not a directory";
-            return;
+            target = pair.To;
         }
-
-        // A source named with a trailing separator has no file name to take, so the separator is
-        // dropped first: `to/a/` transfers as `a`.
-        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(pair.From));
-
-        if (name.Length == 0)
+        else
         {
-            item.Problem = $"the source `{pair.From}` has no file name to transfer";
-            return;
-        }
+            if (!Directory.Exists(pair.To))
+            {
+                item.Problem = $"the destination `{pair.To}` is not a directory";
+                return;
+            }
 
-        var target = Path.Combine(pair.To, name);
+            // A source named with a trailing separator has no file name to take, so the separator is
+            // dropped first: `to/a/` transfers as `a`.
+            var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(pair.From));
+
+            if (name.Length == 0)
+            {
+                item.Problem = $"the source `{pair.From}` has no file name to transfer";
+                return;
+            }
+
+            target = Path.Combine(pair.To, name);
+        }
 
         if (Pathing.Same(pair.From, target))
         {

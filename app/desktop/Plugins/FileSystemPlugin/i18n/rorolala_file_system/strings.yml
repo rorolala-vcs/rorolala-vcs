@@ -37,10 +37,39 @@ rorolala_file_system:
     en: This folder is empty
     zh-CN: 此文件夹为空
 
-  # What the toggle in a listing's corner says: whether the entries the platform hides are shown.
+  # What the switch in a listing's corner says: whether what the rules hide is shown, drawn fainter. It is a
+  # question of its own rather than a rule like the ones below — the rules say what is hidden, this says
+  # whether the user is looking at it.
   hidden:
     en: Show hidden
     zh-CN: 显示隐藏项
+
+  # What the dropdown beside the switch says and holds: which rules hide what, each of them a box the user
+  # ticks. What each rule hides is on the branch below, because a dependent plugin offers one of its own
+  # beside them and a listing's label is the name of whichever is in force.
+  hidden_none:
+    en: Nothing hidden
+    zh-CN: 不隐藏
+  hidden_many:
+    en: "%{count} hide rules"
+    zh-CN: "%{count} 条隐藏规则"
+
+  # What each hide rule hides, and the name of the setting the choice is kept in. The names are the user's
+  # words for the rules rather than the type names, because they are what a listing and the preference panel
+  # show.
+  hides:
+    providers:
+      en: Hide rules
+      zh-CN: 隐藏规则
+    dot_file:
+      en: Hide files whose name begins with a dot
+      zh-CN: 隐藏 . 开头的文件
+    dot_dir:
+      en: Hide directories whose name begins with a dot
+      zh-CN: 隐藏 . 开头的目录
+    windows_hidden:
+      en: Hide what Windows marks as hidden
+      zh-CN: 隐藏 Windows 隐藏文件
 
   # What the toggle beside it says: whether this dock follows the location the whole File System is looking
   # at, or is looked at on its own.
@@ -91,6 +120,20 @@ rorolala_file_system:
   delete_many:
     en: "Delete the %{count} selected items? This cannot be undone."
     zh-CN: "确定删除选中的 %{count} 项吗？此操作不可撤销。"
+
+  # Renaming edits the name where the entry is drawn, so the menu and the key both lead to the same box.
+  rename:
+    en: Rename
+    zh-CN: 重命名
+
+  # A new folder is made with a name that is free, and the row it makes is where the user types the name
+  # they wanted: the plugin cannot ask for one, since the host's dialog carries no field.
+  new_folder:
+    en: New folder
+    zh-CN: 新建文件夹
+  new_folder_name:
+    en: New folder
+    zh-CN: 新建文件夹
 
   # What a file operation says when the command it ran did not finish cleanly. The command's own error
   # stream goes under this heading, unphrased: the program is the user's, and its words are its own.

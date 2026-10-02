@@ -100,9 +100,22 @@ plugin_manager:
   problems:
     en: Problems
     zh-CN: 问题
-  order:
-    en: Order
-    zh-CN: 顺序
+  error:
+    en: ERROR
+    zh-CN: 错误
+  fault:
+    missing:
+      en: "Depends on `%{dependency}`, which was not found."
+      zh-CN: "依赖 `%{dependency}` 未找到。"
+    disabled:
+      en: "Depends on `%{dependency}`, which is disabled."
+      zh-CN: "依赖 `%{dependency}` 已停用。"
+    later:
+      en: "Depends on `%{dependency}`, which comes after it."
+      zh-CN: "依赖 `%{dependency}` 排在本插件之后。"
+    unavailable:
+      en: "Depends on `%{dependency}`, which cannot be enabled."
+      zh-CN: "依赖 `%{dependency}` 无法启用。"
   not_loaded:
     en: not loaded
     zh-CN: 未加载

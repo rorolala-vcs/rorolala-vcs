@@ -101,15 +101,34 @@ public sealed class FileSystemPlugin : IRolaPlugin
         host.Config.Add(new PluginSetting(FileOps.RemoveDirsSetting, SettingKind.Text, "rorolala_file_system.setting.remove_dirs", FileOps.DefaultRemoveDirs, 30));
         host.Config.Add(new PluginSetting(FileOps.RemoveFilesSetting, SettingKind.Text, "rorolala_file_system.setting.remove_files", FileOps.DefaultRemoveFiles, 40));
 
+        // The hide providers are the plugin's own defaults, and the settings they are read through are
+        // declared here; a dependent plugin adds its provider during its own start, which the host runs after
+        // this one, and the setting's options are the live catalogue (see HideRegistry).
+        var hides = new HideRegistry(host.Config);
+        HideRegistry.Declare(host);
+
         // One location for the whole plugin, and one set of answers every location shares. Every dock is a
         // view onto the location — the browser docks differ in layout and in nothing else, and the navigation
         // dock has one address and one history to show — unless a dock has been taken out of step, in which
         // case it is given a location of its own (Section 7.5) and only the answers stay everybody's. The
         // clipboard is shared the same way: a copy made in one directory dock is a copy the other can paste.
         var at = Start();
-        var shared = new Shared(at);
+        var shared = new Shared(at, hides, host.Config);
         var browser = new Browser(host.Log, shared, at);
         var clip = new Clip(host.Log);
+
+        // Either setting changes what is shown rather than what is there: every location stages its listing
+        // again out of what was read, and no directory is read a second time.
+        host.Config.Changed += setting =>
+        {
+            if (
+                string.Equals(setting, HideRegistry.Setting, StringComparison.Ordinal)
+                || string.Equals(setting, Shared.ShowSetting, StringComparison.Ordinal)
+            )
+            {
+                shared.Hidden();
+            }
+        };
 
         // A browser with nothing watching the filesystem is told to look again when the program is come back to:
         // a change another program made is most likely to have happened while it was in front.

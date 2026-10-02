@@ -78,9 +78,6 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>The dock key the zoom is kept under.</summary>
     private const string ZoomKey = "zoom";
 
-    /// <summary>The dock key the choice about hidden entries is kept under.</summary>
-    private const string HiddenKey = "hidden";
-
     /// <summary>The dock key the choice about following the whole is kept under.</summary>
     private const string SyncKey = "sync";
 
@@ -117,8 +114,22 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>The zoom the entries are read at, as a percentage.</summary>
     private readonly Slider _zoom = new();
 
-    /// <summary>Whether the entries the platform hides are shown.</summary>
-    private readonly CheckBox _hidden = new();
+    /// <summary>
+    /// The switch that shows what the rules hide, and the dropdown that chooses the rules.
+    /// </summary>
+    /// <remarks>
+    /// Two controls because they answer two questions: the switch is whether the user is looking at what is
+    /// hidden — the entries then shown faded — and the dropdown is what is hidden in the first place. Both
+    /// write the plugin's own settings rather than the dock's state, so one switch serves every dock and the
+    /// choice outlives the dock it was made in.
+    /// </remarks>
+    private readonly CheckBox _show = new();
+
+    /// <summary>The dropdown that switches which providers hide what.</summary>
+    private readonly Button _rules = new();
+
+    /// <summary>One box per provider, so that the boxes follow the choice rather than leading it.</summary>
+    private readonly List<(IEntryHideProvider Provider, CheckBox Box)> _hiders = [];
 
     /// <summary>Whether this dock follows the whole, or looks at a directory of its own.</summary>
     private readonly CheckBox _sync = new();
@@ -204,7 +215,8 @@ internal sealed class DirectoryControl : UserControl
         FillZoom();
         FillHidden();
         FillSync();
-        _trailing.Children.Add(_hidden);
+        _trailing.Children.Add(_show);
+        _trailing.Children.Add(_rules);
         _trailing.Children.Add(_sync);
 
         // A dock is a place the keyboard can be put, which is how the shell hands it to the thing being read: what
@@ -248,8 +260,7 @@ internal sealed class DirectoryControl : UserControl
     }
 
     /// <summary>
-    /// Takes what this dock was: the zoom it was left at, whether hidden entries were shown, and whether it
-    /// followed the whole.
+    /// Takes what this dock was: the zoom it was left at, and whether it followed the whole.
     /// </summary>
     /// <remarks>
     /// Read before the dock is drawn, so that a directory that was left as tiles comes back as tiles rather
@@ -266,13 +277,6 @@ internal sealed class DirectoryControl : UserControl
             _zoom.Value = zoom;
         }
 
-        // Read before the dock is drawn, for the same reason the zoom is: a dock left showing what is hidden
-        // should come back showing it rather than drawing the listing without and redoing it.
-        if (bool.TryParse(state.Read(HiddenKey), out var hidden))
-        {
-            _hidden.IsChecked = hidden;
-        }
-
         // And for the same reason again: a dock left out of step comes back out of step, at a directory of its
         // own that nothing keeps — the location is not written into the layout (Section 7.3) — rather than
         // being drawn in step and switching under the first frame.
@@ -284,25 +288,99 @@ internal sealed class DirectoryControl : UserControl
         Draw();
     }
 
-    /// <summary>Sets the toggle up, and what turning it does.</summary>
+    /// <summary>
+    /// Sets the switch and the dropdown up: what is shown, and what the rules hide.
+    /// </summary>
     /// <remarks>
-    /// The choice is the dock's to keep and the shared answers are the plugin's to hold: the listing follows
-    /// the base and the hiding wherever it is, and a dock that kept them to itself would list something the
-    /// next dock did not.
+    /// Both are the plugin's rather than the dock's: they write the settings every dock and the preference
+    /// panel read, so a switch turned here is turned in the next dock as well — and a dock that kept either
+    /// to itself would list something the next one did not.
     /// </remarks>
     private void FillHidden()
     {
-        _hidden.Content = RolaI18N.Get("rorolala_file_system.hidden");
-        _hidden.VerticalAlignment = VerticalAlignment.Center;
+        _show.Content = RolaI18N.Get("rorolala_file_system.hidden");
+        _show.VerticalAlignment = VerticalAlignment.Center;
+        _show.IsChecked = _shared.ShowHidden;
 
-        _hidden.IsCheckedChanged += (_, _) =>
+        // Written rather than read here: a dock attached to the tree is the one that drew the rows, so it is
+        // the one the shell tells to look again — a dock in a region nobody can see has no rows to redraw.
+        _show.IsCheckedChanged += (_, _) => _shared.ShowHidden = _show.IsChecked == true;
+
+        _rules.VerticalAlignment = VerticalAlignment.Center;
+        _rules.MinWidth = 120;
+        _rules.Flyout = new Flyout { Content = HiddenBoxes() };
+
+        RefreshHidden();
+    }
+
+    /// <summary>Builds the boxes the dropdown holds, one per provider.</summary>
+    private StackPanel HiddenBoxes()
+    {
+        var boxes = new StackPanel { Spacing = 4 };
+
+        foreach (var provider in HideRegistry.All)
         {
-            var shown = _hidden.IsChecked == true;
+            var box = new CheckBox { Content = RolaI18N.Get(provider.LabelKey) };
 
-            // Written rather than saved, as the zoom is: the dock keeps what it was and the host writes the
-            // layout, which is the same division as everything else about where a dock is.
-            _state?.Write(HiddenKey, shown.ToString(CultureInfo.InvariantCulture));
-            _shared.ShowHidden = shown;
+            // Ticking one is what puts a rule in force, so the set starts empty for every box: a box built
+            // already ticked would be a rule the user asked for by opening a menu.
+            box.IsCheckedChanged += (_, _) =>
+            {
+                var chosen = _shared.HideRegistry.Selection().ToHashSet(StringComparer.Ordinal);
+
+                if (box.IsChecked == true)
+                {
+                    chosen.Add(provider.Id);
+                }
+                else
+                {
+                    chosen.Remove(provider.Id);
+                }
+
+                // Written through the config rather than kept here, because the setting is the user's and
+                // the file is where it lives: what this dock changed takes effect in every other dock.
+                _host.Config.Keep(
+                    HideRegistry.Setting,
+                    string.Join(',', HideRegistry.All.Where(each => chosen.Contains(each.Id)).Select(each => each.Id))
+                );
+            };
+
+            _hiders.Add((provider, box));
+            boxes.Children.Add(box);
+        }
+
+        return boxes;
+    }
+
+    /// <summary>
+    /// Says on the dropdown what is in force, and brings it and the switch in step with the settings.
+    /// </summary>
+    /// <remarks>
+    /// Read here rather than remembered, because the settings are changed in the preference panel and in other
+    /// docks as well as in this one: a dock drawing what it last wrote would disagree with the listing beside
+    /// it the moment another dock wrote something else.
+    /// </remarks>
+    private void RefreshHidden()
+    {
+        var chosen = _shared.HideRegistry.Selection();
+
+        foreach (var (provider, box) in _hiders)
+        {
+            box.IsChecked = chosen.Contains(provider.Id);
+        }
+
+        _show.IsChecked = _shared.ShowHidden;
+
+        var named = HideRegistry
+            .All.Where(provider => chosen.Contains(provider.Id))
+            .Select(provider => RolaI18N.Get(provider.LabelKey))
+            .ToArray();
+
+        _rules.Content = named.Length switch
+        {
+            0 => RolaI18N.Get("rorolala_file_system.hidden_none"),
+            1 => named[0],
+            _ => RolaI18N.Get("rorolala_file_system.hidden_many", named.Length),
         };
     }
 
@@ -454,7 +532,16 @@ internal sealed class DirectoryControl : UserControl
                 return;
             }
 
-            _ = Keys.Clipboard(e, new Clipboard(view.Copy, view.Cut, view.Paste), _host.Log);
+            if (Keys.Rename(e, view.Rename, _host.Log))
+            {
+                return;
+            }
+
+            _ = Keys.Clipboard(
+                e,
+                new Clipboard(view.Copy, view.Cut, view.Paste, view.NewFolder),
+                _host.Log
+            );
         }
     }
 
@@ -479,22 +566,25 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Draws the entries again when they are not the ones it drew.</summary>
     /// <remarks>
     /// Every read of a directory is a new list, so one list being another is what a step, a refresh
-    /// and a change of base all look like from here.
+    /// and a change of base all look like from here. Two changes are not that — switching what is shown, and
+    /// switching a rule that matches nothing in this directory — and they are the ones the rows are drawn
+    /// again for: the entries are the same ones, and how they are drawn is not.
     /// </remarks>
     private void Update()
     {
-        // The toggle follows the shared answer as well as leading it: what is shown is one answer for every
-        // dock, so one opened after another was toggled shows what that one shows rather than its own last word
-        // on it.
-        if (_hidden.IsChecked != _shared.ShowHidden)
+        // The switch and the dropdown follow the settings as well as leading them: what is hidden is one
+        // choice for every dock, so one opened after another was switched shows what that one shows rather
+        // than its own last word on it.
+        RefreshHidden();
+
+        if (ReferenceEquals(_drawn, Location.Shown))
         {
-            _hidden.IsChecked = _shared.ShowHidden;
+            _view?.Repaint();
+
+            return;
         }
 
-        if (!ReferenceEquals(_drawn, Location.Shown))
-        {
-            Draw();
-        }
+        Draw();
     }
 
     /// <summary>Draws what is there, at the zoom this dock reads it.</summary>

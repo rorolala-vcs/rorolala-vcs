@@ -63,6 +63,16 @@ public interface II18n
 public interface IPluginConfig
 {
     /// <summary>
+    /// Raised when one of the plugin's own settings has been kept or taken back.
+    /// </summary>
+    /// <remarks>
+    /// This is what lets a plugin act on a setting at once rather than at the next start, whether the user
+    /// changed it in the preference panel or through a control the plugin put in a dock of its own. It is
+    /// raised after the value is written, so a listener that reads the setting back reads what was written.
+    /// </remarks>
+    event Action<string>? Changed;
+
+    /// <summary>
     /// Reads one of the plugin's settings as a value of the requested type.
     /// </summary>
     /// <typeparam name="T">The type to read the value as.</typeparam>
@@ -70,6 +80,21 @@ public interface IPluginConfig
     /// <param name="fallback">What to answer when the setting is not stored and states no default.</param>
     /// <returns>The value, the setting's default, or <paramref name="fallback"/>.</returns>
     T? ReadKeyAs<T>(string id, T? fallback = default);
+
+    /// <summary>
+    /// Keeps one of the plugin's own settings, as the preference panel keeps it.
+    /// </summary>
+    /// <remarks>
+    /// This is what a plugin uses when the setting is changed from somewhere the host does not draw — a
+    /// control the plugin puts in a dock of its own, which is a shortcut to a setting the panel also shows.
+    /// The value is written to the file at once, and a setting the plugin reads while it works takes effect
+    /// without a restart; what the plugin declared decides how it is written.
+    /// </remarks>
+    /// <param name="id">The setting's identity, written as <c>Group/Key</c>.</param>
+    /// <param name="value">
+    /// What to keep, or nothing to take the setting back to the default it declared.
+    /// </param>
+    void Keep(string id, string? value);
 
     /// <summary>
     /// Declares a setting, so that the host shows it and keeps what the user chooses.
@@ -98,6 +123,16 @@ public enum SettingKind
     Choice,
 
     /// <summary>
+    /// Any number of the values the setting offers, chosen together.
+    /// </summary>
+    /// <remarks>
+    /// The value is kept and read as the list of chosen option values. A setting with nothing chosen
+    /// keeps nothing at all, which is also how it is taken back to its default: every option is then in
+    /// force, which is what a plugin means by declaring a list of them.
+    /// </remarks>
+    MultiChoice,
+
+    /// <summary>
     /// A named bundle of other settings, chosen as a whole and shown from them.
     /// </summary>
     /// <remarks>
@@ -109,7 +144,10 @@ public enum SettingKind
     Preset,
 }
 
-/// <summary>One value a <see cref="SettingKind.Choice"/> or <see cref="SettingKind.Preset"/> offers.</summary>
+/// <summary>
+/// One value a <see cref="SettingKind.Choice"/>, <see cref="SettingKind.MultiChoice"/> or
+/// <see cref="SettingKind.Preset"/> offers.
+/// </summary>
 /// <param name="Value">The value, as it is kept.</param>
 /// <param name="LabelKey">An i18n key naming it.</param>
 /// <param name="Writes">
@@ -138,15 +176,16 @@ public sealed record SettingOption(
 /// <param name="LabelKey">An i18n key naming it.</param>
 /// <param name="Default">
 /// What it holds until the user chooses another, written the way it is kept: <c>true</c> or <c>false</c>
-/// for a boolean, a number written out for a number, and the text itself otherwise. Nothing means it
+/// for a boolean, a number written out for a number, and the text itself otherwise. A multi-choice
+/// setting writes its options comma-separated here and reads back as the list of them. Nothing means it
 /// holds nothing until it is set.
 /// </param>
 /// <param name="Order">Where it sits among the settings of its group.</param>
 /// <param name="RestartRequired">Whether it takes effect on the next start rather than at once.</param>
 /// <param name="Options">
-/// The values a <see cref="SettingKind.Choice"/> or <see cref="SettingKind.Preset"/> offers, and
-/// nothing otherwise. A preset must offer exactly one option that names no <see cref="SettingOption.Writes"/>
-/// (its fallback), and it must be the last.
+/// The values a <see cref="SettingKind.Choice"/>, <see cref="SettingKind.MultiChoice"/> or
+/// <see cref="SettingKind.Preset"/> offers, and nothing otherwise. A preset must offer exactly one option
+/// that names no <see cref="SettingOption.Writes"/> (its fallback), and it must be the last.
 /// </param>
 public sealed record PluginSetting(
     string Id,

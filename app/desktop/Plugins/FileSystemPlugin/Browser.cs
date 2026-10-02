@@ -194,18 +194,30 @@ internal sealed class Browser : IDisposable
     public IReadOnlyList<Entry> Entries => _entries;
 
     /// <summary>
-    /// Whether the entries the platform hides are shown.
+    /// Whether a provider in force hides an entry.
     /// </summary>
     /// <remarks>
     /// One answer for the whole plugin rather than for this location (see <see cref="Shared"/>), reached
     /// through a location because a location is what a view holds — and because the completions an address
     /// offers keep the same entries out, a path that cannot be reached by typing it not being an address.
+    /// <para>
+    /// Asked rather than kept on the entry, because the answer changes with a switch the user turns and must
+    /// not need the directory read again: a listing read without the hidden entries would be a listing that
+    /// had to be read again the moment they were asked for.
+    /// </para>
     /// </remarks>
-    public bool ShowHidden
-    {
-        get => _shared.ShowHidden;
-        set => _shared.ShowHidden = value;
-    }
+    /// <param name="entry">The entry to consider.</param>
+    /// <returns>Whether it is hidden.</returns>
+    public bool Hides(Entry entry) => _shared.Hides(entry);
+
+    /// <summary>
+    /// Whether the entries a provider hides are shown, which the address completions read too.
+    /// </summary>
+    /// <remarks>
+    /// The completions offer what the listing offers, so a path that is not in the listing is not offered by
+    /// typing it either — and a path the listing is showing is one that can be reached.
+    /// </remarks>
+    public bool ShowHidden => _shared.ShowHidden;
 
     /// <summary>
     /// The entries as a listing shows them: the way up, when there is somewhere to go, and then the entries.
@@ -400,57 +412,40 @@ internal sealed class Browser : IDisposable
     /// a user works in, and a listing that offered a step out of it would offer a step out of the work — which
     /// is what the base is for preventing. Going above it is still possible by the other ways the location
     /// changes; what the listing does not do is make one of them.
+    /// <para>
+    /// The hidden ones come out here rather than never being read, because a listing that was read without
+    /// them would have to be read again the moment the switch that shows them was turned. What is hidden is
+    /// what a provider in force says, asked each time the listing is staged rather than carried on the entry.
+    /// </para>
     /// </remarks>
     /// <param name="directory">The directory the entries were read from.</param>
     /// <param name="entries">What it holds.</param>
     private IReadOnlyList<Entry> Stage(string directory, IReadOnlyList<Entry> entries)
     {
-        // The hidden ones come out here rather than never being read, because a listing that was read
-        // without them would have to be read again the moment they were asked for.
-        var shown = _shared.ShowHidden ? entries : entries.Where(entry => !entry.Hidden).ToArray();
+        var shown = _shared.ShowHidden ? entries : entries.Where(entry => !Hides(entry)).ToArray();
+
+        // Copied rather than handed on as it came, so that a staging with nothing switched is still a list
+        // another one is not: what a dock holds to tell a staged listing from one it has not staged again is
+        // the list itself, and the switch that shows what is hidden leaves the entries exactly as they are.
+        var staged = shown.ToArray();
 
         return ParentOf(directory) is null || Same(directory, _shared.BaseDir)
-            ? shown
-            : [new Entry(UpName, EntryKind.Directory), .. shown];
+            ? staged
+            : [new Entry(UpName, EntryKind.Directory), .. staged];
     }
 
     /// <summary>
-    /// Whether the platform hides an item.
+    /// Whether an item is a file or a directory.
     /// </summary>
     /// <remarks>
-    /// A name beginning with a dot is the Unix convention; Windows marks an attribute instead, but a
-    /// dot-name is read the same way there by everything that is not Explorer, so both count there. Asking
-    /// for the attribute can fail on an item this process may not touch, and an item that cannot be asked
-    /// about is shown rather than hidden: hiding something for not being inspectable is the worse mistake.
-    /// <para>
-    /// It is the browser's rule rather than a listing's, because the completions an address offers keep the
-    /// same entries out — a path that cannot be reached by typing it is not an address.
-    /// </para>
+    /// Asked of the platform rather than taken from what a listing read, because a path typed into the
+    /// address is not an entry of any listing yet, and a hidden provider that rules on files apart from
+    /// directories has to be told which one it is looking at.
     /// </remarks>
     /// <param name="path">The item.</param>
-    public static bool IsHidden(string path)
-    {
-        var name = Path.GetFileName(path);
-
-        if (name.Length > 1 && name[0] == '.' && name != UpName)
-        {
-            return true;
-        }
-
-        if (!OperatingSystem.IsWindows())
-        {
-            return false;
-        }
-
-        try
-        {
-            return (File.GetAttributes(path) & FileAttributes.Hidden) != 0;
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
+    /// <returns>What it is.</returns>
+    public static EntryKind KindOf(string path) =>
+        System.IO.Directory.Exists(path) ? EntryKind.Directory : EntryKind.File;
 
     /// <summary>
     /// The directory holding one, or nothing when there is nowhere further up.
@@ -529,13 +524,7 @@ internal sealed class Browser : IDisposable
 
             foreach (var path in System.IO.Directory.EnumerateFileSystemEntries(directory))
             {
-                entries.Add(
-                    new Entry(
-                        path,
-                        System.IO.Directory.Exists(path) ? EntryKind.Directory : EntryKind.File,
-                        IsHidden(path)
-                    )
-                );
+                entries.Add(new Entry(path, KindOf(path)));
             }
 
             entries.Sort(Compare);

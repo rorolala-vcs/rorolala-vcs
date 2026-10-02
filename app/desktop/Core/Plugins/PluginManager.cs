@@ -14,8 +14,13 @@ namespace RorolalaDesktop.Plugins;
 /// The order of the steps is the one Section 4.6 lays down: discover, reconcile with the file, check
 /// the versions, check the dependencies, order, and initialize. A version check that fails, or an
 /// <c>Initialize</c> that throws, leaves that plugin and the plugins depending on it out and is
-/// reported but is not fatal; a dependency that is missing, disabled, or in a cycle is fatal, since
-/// the user's configuration asks for something that cannot be honoured.
+/// reported but is not fatal; a cycle is fatal, since no order honors one at all.
+/// <para>
+/// The load order is the user's own sequence, subject to nothing: a plugin whose dependency is
+/// disabled, absent, or placed after it is left out rather than moved, and the fault is shown on
+/// the card that belongs to it (Section 14.2). Nothing is reordered behind the user's back, which is
+/// what makes the arrangement in the plugin manager the arrangement that is started.
+/// </para>
 /// </remarks>
 internal sealed class PluginManager
 {
@@ -25,17 +30,28 @@ internal sealed class PluginManager
     /// <summary>What went wrong with a plugin, in the order it was noticed.</summary>
     private readonly List<PluginProblem> _problems = [];
 
-    /// <summary>Where the user's ordering contradicts the dependency order.</summary>
-    private readonly List<PluginProblem> _orderingNotes = [];
-
     /// <summary>Every plugin that was loaded and may be started, in load order.</summary>
     private readonly List<PlannedPlugin> _loadOrder = [];
 
     /// <summary>Plugins left out though it was not fatal, and why.</summary>
     private readonly HashSet<PluginId> _unavailable = [];
 
+    /// <summary>
+    /// Plugins that cannot load for a reason the order cannot state, such as a version mismatch.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="_unavailable"/>, which also collects what the order itself leaves
+    /// out: the plugin manager asks for the live answer while the user is dragging, and a set that
+    /// already holds the order's own verdict would blame a stale arrangement for the new one.
+    /// </remarks>
+    private readonly HashSet<PluginId> _broken = [];
+
     /// <summary>Every plugin assembly that was found.</summary>
     private List<DiscoveredPlugin> _discovered = [];
+
+    /// <summary>Every discovered plugin's declared dependencies, by identity.</summary>
+    private IReadOnlyDictionary<PluginId, IReadOnlyList<PluginId>> _dependencies =
+        new Dictionary<PluginId, IReadOnlyList<PluginId>>();
 
     /// <summary>The context the plugin assemblies are loaded into.</summary>
     private PluginLoadContext? _context;
@@ -53,11 +69,21 @@ internal sealed class PluginManager
     /// <summary>What went wrong with a plugin, in the order it was noticed.</summary>
     public IReadOnlyList<PluginProblem> Problems => _problems;
 
-    /// <summary>Where the user's ordering contradicts the dependency order.</summary>
-    public IReadOnlyList<PluginProblem> OrderingNotes => _orderingNotes;
-
     /// <summary>Every plugin that may be started, in load order.</summary>
     public IReadOnlyList<PlannedPlugin> LoadOrder => _loadOrder;
+
+    /// <summary>
+    /// Which enabled plugins an order leaves unable to load, as they stand in that order.
+    /// </summary>
+    /// <remarks>
+    /// It takes the order rather than reading the one on disk so that the plugin manager can ask for
+    /// the arrangement the user is still dragging, which is what lets the cards turn red before the
+    /// pointer is let go of.
+    /// </remarks>
+    /// <param name="order">The plugins in the user's order, each with whether it is enabled.</param>
+    /// <returns>One entry per dependency that stops a plugin.</returns>
+    public IReadOnlyList<PluginFault> Faults(IReadOnlyList<PluginState> order) =>
+        PluginFaults.Of(order, _dependencies, _broken);
 
     /// <summary>
     /// Discovers the plugins, reconciles them with the file, and works out the load order.
@@ -73,12 +99,45 @@ internal sealed class PluginManager
             _discovered.Select(plugin => plugin.Id).ToArray()
         );
 
+        _dependencies = _discovered.ToDictionary(
+            plugin => plugin.Id,
+            plugin => plugin.Manifest.Dependencies
+        );
+
         var loadable = CheckVersions();
-        CheckDependencies(loadable);
+        CheckCycles(loadable);
+        ResolveAvailability(loadable);
 
-        var active = ResolveAvailability(loadable);
+        // The sequence is the user's, so a plugin the order cannot support is left out where it
+        // stands rather than moved to where it would load. The plugin manager shows it on its card.
+        foreach (var fault in Faults(Configuration.Plugins))
+        {
+            _unavailable.Add(fault.Plugin);
+        }
 
-        _loadOrder.AddRange(Order(active));
+        var byId = loadable.ToDictionary(plugin => plugin.Id);
+        var position = 0;
+
+        foreach (var state in Configuration.Plugins)
+        {
+            if (
+                !state.Enabled
+                || _unavailable.Contains(state.Id)
+                || !byId.TryGetValue(state.Id, out var plugin)
+            )
+            {
+                continue;
+            }
+
+            _loadOrder.Add(
+                new PlannedPlugin
+                {
+                    Instance = plugin.Instance,
+                    Manifest = plugin.Manifest,
+                    Position = position++,
+                }
+            );
+        }
     }
 
     /// <summary>
@@ -300,6 +359,7 @@ internal sealed class PluginManager
             }
 
             _unavailable.Add(plugin.Id);
+            _broken.Add(plugin.Id);
             _problems.Add(new PluginProblem(plugin.Id.Value, $"not loaded: {mismatch}"));
         }
 
@@ -307,47 +367,68 @@ internal sealed class PluginManager
     }
 
     /// <summary>
-    /// Refuses the program when a plugin's declared dependencies cannot be honoured.
+    /// Refuses the program when enabled plugins depend on one another in a cycle.
     /// </summary>
     /// <remarks>
-    /// A dependency that is not discovered, or is disabled, stops the program: the configuration
-    /// asks for something that cannot be done, and carrying on would load a plugin whose premise is
-    /// missing. A dependency that failed its version check is not this: it is handled by leaving the
-    /// dependent out, which the user is told about rather than being stopped.
+    /// A cycle is the one arrangement no order can honor: every plugin in it would be left out with a
+    /// fault blaming the next, and the user would be told nothing about the shape of the knot. The
+    /// plugins in it are named instead.
+    /// <para>
+    /// Only enabled plugins are followed. A disabled plugin breaks a chain rather than forming one,
+    /// since nothing is waiting on a plugin that does not load.
+    /// </para>
     /// </remarks>
-    private void CheckDependencies(List<DiscoveredPlugin> loadable)
+    private void CheckCycles(List<DiscoveredPlugin> loadable)
     {
-        foreach (var plugin in loadable)
+        var byId = loadable
+            .Where(plugin => Enabled(plugin.Id))
+            .ToDictionary(plugin => plugin.Id);
+
+        var done = new HashSet<PluginId>();
+        var path = new List<PluginId>();
+
+        foreach (var plugin in byId.Values)
         {
-            if (!Enabled(plugin.Id))
+            Visit(plugin);
+        }
+
+        return;
+
+        void Visit(DiscoveredPlugin plugin)
+        {
+            if (done.Contains(plugin.Id))
             {
-                continue;
+                return;
             }
+
+            var at = path.IndexOf(plugin.Id);
+
+            if (at >= 0)
+            {
+                throw Fatal(
+                    $"the plugins {Names(path.Skip(at))} depend on one another in a cycle"
+                );
+            }
+
+            path.Add(plugin.Id);
 
             foreach (var dependency in plugin.Manifest.Dependencies)
             {
-                if (dependency == plugin.Id)
+                if (byId.TryGetValue(dependency, out var found))
                 {
-                    throw Fatal($"`{plugin.Id}` depends on itself");
-                }
-
-                if (_discovered.All(found => found.Id != dependency))
-                {
-                    throw Fatal($"`{plugin.Id}` depends on `{dependency}`, which is not discovered");
-                }
-
-                if (!Enabled(dependency))
-                {
-                    throw Fatal($"`{plugin.Id}` depends on `{dependency}`, which is disabled");
+                    Visit(found);
                 }
             }
+
+            path.RemoveAt(path.Count - 1);
+            done.Add(plugin.Id);
         }
     }
 
     /// <summary>
     /// Leaves out the enabled plugins that depend, at any depth, on one that was left out.
     /// </summary>
-    private List<DiscoveredPlugin> ResolveAvailability(List<DiscoveredPlugin> loadable)
+    private void ResolveAvailability(List<DiscoveredPlugin> loadable)
     {
         var active = loadable
             .Where(plugin => Enabled(plugin.Id) && !_unavailable.Contains(plugin.Id))
@@ -379,119 +460,10 @@ internal sealed class PluginManager
                 changed = true;
             }
         }
-
-        return active.Where(plugin => !_unavailable.Contains(plugin.Id)).ToList();
-    }
-
-    /// <summary>
-    /// Sorts the plugins: dependency order first, then the user's order within a tier, then the
-    /// identity so the result does not depend on the file system's order.
-    /// </summary>
-    private List<PlannedPlugin> Order(List<DiscoveredPlugin> active)
-    {
-        var byId = active.ToDictionary(plugin => plugin.Id);
-        var remaining = new Dictionary<PluginId, int>();
-
-        foreach (var plugin in active)
-        {
-            remaining[plugin.Id] = plugin.Manifest.Dependencies.Count(byId.ContainsKey);
-        }
-
-        var ready = new SortedSet<PluginId>(
-            Comparer<PluginId>.Create(
-                (left, right) =>
-                {
-                    var byOrder = OrderOf(left).CompareTo(OrderOf(right));
-
-                    return byOrder != 0
-                        ? byOrder
-                        : string.CompareOrdinal(left.Value, right.Value);
-                }
-            )
-        );
-
-        foreach (var plugin in active)
-        {
-            if (remaining[plugin.Id] == 0)
-            {
-                ready.Add(plugin.Id);
-            }
-        }
-
-        var ordered = new List<PlannedPlugin>();
-
-        while (ready.Count > 0)
-        {
-            var id = ready.Min;
-            ready.Remove(id);
-            ordered.Add(
-                new PlannedPlugin
-                {
-                    Instance = byId[id].Instance,
-                    Manifest = byId[id].Manifest,
-                    Position = ordered.Count,
-                }
-            );
-
-            foreach (var plugin in active)
-            {
-                if (!plugin.Manifest.Dependencies.Contains(id))
-                {
-                    continue;
-                }
-
-                remaining[plugin.Id] -= 1;
-
-                if (remaining[plugin.Id] == 0)
-                {
-                    ready.Add(plugin.Id);
-                }
-            }
-        }
-
-        if (ordered.Count != active.Count)
-        {
-            var stuck = active
-                .Select(plugin => plugin.Id)
-                .Except(ordered.Select(plugin => plugin.Id))
-                .OrderBy(id => id.Value, StringComparer.Ordinal);
-
-            throw Fatal(
-                $"the plugins {Names(stuck)} depend on one another in a cycle"
-            );
-        }
-
-        // The user's ordering is kept only where it does not contradict the dependency order. Where
-        // it does, the dependency order wins and the user is told who must follow whom.
-        foreach (var planned in ordered)
-        {
-            foreach (var dependency in planned.Manifest.Dependencies)
-            {
-                if (
-                    byId.ContainsKey(dependency)
-                    && OrderOf(planned.Id) < OrderOf(dependency)
-                )
-                {
-                    _orderingNotes.Add(
-                        new PluginProblem(
-                            planned.Id.Value,
-                            $"must come after `{dependency}`"
-                        )
-                    );
-                }
-            }
-        }
-
-        return ordered;
     }
 
     /// <summary>Whether the user left a plugin enabled.</summary>
-    private bool Enabled(PluginId id) =>
-        Configuration.Plugins.TryGetValue(id, out var state) && state.Enabled;
-
-    /// <summary>The user's ordering for a plugin, or zero when the file states none.</summary>
-    private int OrderOf(PluginId id) =>
-        Configuration.Plugins.TryGetValue(id, out var state) ? state.Order : 0;
+    private bool Enabled(PluginId id) => Configuration.Enabled(id);
 
     /// <summary>Names a run of plugin identities as a sentence reads them.</summary>
     private static string Names(IEnumerable<PluginId> ids) =>

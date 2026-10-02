@@ -16,9 +16,9 @@ public sealed class PluginTests
     /// <summary>Begins each test from no configuration at all.</summary>
     public PluginTests() => DataHome.Clean();
 
-    /// <summary>A discovered plugin the file does not name is enabled with order zero.</summary>
+    /// <summary>A discovered plugin the file does not name is enabled and put at the end.</summary>
     [Fact]
-    public void EveryDiscoveredPluginIsEnabledWithOrderZeroWithoutAFile()
+    public void EveryDiscoveredPluginIsEnabledAndAppendedWithoutAFile()
     {
         var manager = new PluginManager(Fixtures.Only("ItAlpha", "ItBeta"));
 
@@ -26,38 +26,52 @@ public sealed class PluginTests
 
         Assert.Equal(2, manager.Discovered.Count);
         Assert.Equal(
-            new PluginState(Enabled: true, Order: 0),
-            manager.Configuration.Plugins[new PluginId("it.alpha")]
+            new[]
+            {
+                new PluginState(new PluginId("it.alpha"), Enabled: true),
+                new PluginState(new PluginId("it.beta"), Enabled: true),
+            },
+            manager.Configuration.Plugins
         );
     }
 
-    /// <summary>A dependency nothing discovered answers to stops the program.</summary>
+    /// <summary>A dependency nothing discovered answers to leaves the plugin out rather than stopping.</summary>
     [Fact]
-    public void ADependencyThatIsNotDiscoveredStopsTheProgram()
+    public void ADependencyThatIsNotDiscoveredLeavesThePluginOut()
     {
         var manager = new PluginManager(Fixtures.Only("ItOrphan"));
 
-        var failure = Assert.Throws<ConfigurationFailure>(() =>
-            manager.Load(new PluginsConfiguration())
-        );
+        manager.Load(new PluginsConfiguration());
 
-        Assert.Equal(ExitCode.Plugins, failure.Code);
-        Assert.Contains("it.missing", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(manager.LoadOrder);
+        Assert.Contains(
+            manager.Faults(manager.Configuration.Plugins),
+            fault =>
+                fault.Plugin.Value == "it.orphan"
+                && fault.Dependency.Value == "it.missing"
+                && fault.Kind == PluginFaultKind.DependencyMissing
+        );
     }
 
-    /// <summary>A dependency the user disabled stops the program.</summary>
+    /// <summary>A dependency the user disabled leaves the dependent out rather than stopping.</summary>
     [Fact]
-    public void ADependencyThatIsDisabledStopsTheProgram()
+    public void ADependencyThatIsDisabledLeavesTheDependentOut()
     {
-        var configuration = new PluginsConfiguration();
-        configuration.Plugins[new PluginId("it.alpha")] = new PluginState(Enabled: false, Order: 0);
-
         var manager = new PluginManager(Fixtures.Only("ItAlpha", "ItBeta"));
 
-        Assert.Throws<ConfigurationFailure>(() => manager.Load(configuration));
+        manager.Load(Order(("it.alpha", false)));
+
+        Assert.Empty(manager.LoadOrder);
+        Assert.Contains(
+            manager.Faults(manager.Configuration.Plugins),
+            fault =>
+                fault.Plugin.Value == "it.beta"
+                && fault.Dependency.Value == "it.alpha"
+                && fault.Kind == PluginFaultKind.DependencyDisabled
+        );
     }
 
-    /// <summary>A dependency cycle stops the program.</summary>
+    /// <summary>A dependency cycle stops the program, because no order can honor one.</summary>
     [Fact]
     public void ADependencyCycleStopsTheProgram()
     {
@@ -70,13 +84,13 @@ public sealed class PluginTests
         Assert.Contains("cycle", failure.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>A dependency is loaded before the plugin that depends on it.</summary>
+    /// <summary>The file's sequence is the load order, and a dependency the user put first is honored.</summary>
     [Fact]
-    public void ADependencyIsLoadedBeforeThePluginThatDependsOnIt()
+    public void TheFileSequenceIsTheLoadOrder()
     {
         var manager = new PluginManager(Fixtures.Only("ItAlpha", "ItBeta"));
 
-        manager.Load(new PluginsConfiguration());
+        manager.Load(Order(("it.alpha", true), ("it.beta", true)));
 
         Assert.Equal(
             new[] { "it.alpha", "it.beta" },
@@ -84,27 +98,24 @@ public sealed class PluginTests
         );
     }
 
-    /// <summary>An order that contradicts a dependency is kept, and the user is told who follows whom.</summary>
+    /// <summary>A dependency placed after its dependent leaves the dependent out.</summary>
     [Fact]
-    public void AnOrderThatContradictsADependencyIsKeptAndReported()
+    public void AnOrderThatPutsADependencyLastLeavesTheDependentOut()
     {
-        var configuration = new PluginsConfiguration();
-        configuration.Plugins[new PluginId("it.alpha")] = new PluginState(Enabled: true, Order: 5);
-        configuration.Plugins[new PluginId("it.beta")] = new PluginState(Enabled: true, Order: 0);
-
         var manager = new PluginManager(Fixtures.Only("ItAlpha", "ItBeta"));
 
-        manager.Load(configuration);
+        manager.Load(Order(("it.beta", true), ("it.alpha", true)));
 
         Assert.Equal(
-            new[] { "it.alpha", "it.beta" },
+            new[] { "it.alpha" },
             manager.LoadOrder.Select(planned => planned.Id.Value).ToArray()
         );
         Assert.Contains(
-            manager.OrderingNotes,
-            note =>
-                note.Subject == "it.beta"
-                && note.Description.Contains("it.alpha", StringComparison.Ordinal)
+            manager.Faults(manager.Configuration.Plugins),
+            fault =>
+                fault.Plugin.Value == "it.beta"
+                && fault.Dependency.Value == "it.alpha"
+                && fault.Kind == PluginFaultKind.DependencyLater
         );
     }
 
@@ -152,5 +163,20 @@ public sealed class PluginTests
         Assert.Empty(manager.Discovered);
         Assert.Empty(manager.LoadOrder);
         Assert.Empty(manager.Problems);
+    }
+
+    /// <summary>A configuration holding the named plugins, in the order they are given.</summary>
+    /// <param name="states">Each plugin's identity and whether it is enabled.</param>
+    /// <returns>The user state a file would have held.</returns>
+    private static PluginsConfiguration Order(params (string Id, bool Enabled)[] states)
+    {
+        var configuration = new PluginsConfiguration();
+
+        foreach (var (id, enabled) in states)
+        {
+            configuration.Plugins.Add(new PluginState(new PluginId(id), enabled));
+        }
+
+        return configuration;
     }
 }

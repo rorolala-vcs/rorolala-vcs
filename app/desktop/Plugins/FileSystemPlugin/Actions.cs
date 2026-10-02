@@ -117,6 +117,119 @@ internal sealed class BrowserActions
         _clip.Paste(from, into, _host.Log.Error, _browser.Touch);
     }
 
+    /// <summary>Renames an entry, which is a move to a name beside it.</summary>
+    /// <remarks>
+    /// The new name is a name and not a path: it sits in the directory the entry is already in, so what is
+    /// handed to the move is the whole path that makes. A name that would leave the entry where it is, and
+    /// one that is empty, are nothing to do.
+    /// </remarks>
+    /// <param name="entry">What is being renamed.</param>
+    /// <param name="name">The name it is to have.</param>
+    public void Rename(Entry entry, string name)
+    {
+        var wanted = name.Trim();
+        var directory = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(entry.Path));
+
+        if (wanted.Length == 0 || directory is null)
+        {
+            _host.Log.Info("rename: no name was written");
+
+            return;
+        }
+
+        var target = Path.Combine(directory, wanted);
+
+        if (Pathing.Same(entry.Path, target))
+        {
+            _host.Log.Info($"rename: `{entry.Path}` already has the name `{wanted}`");
+
+            return;
+        }
+
+        _ = Renamed([new Pair(entry.Path, target)]);
+    }
+
+    /// <summary>Has entries renamed, and reads the directory again once that is done.</summary>
+    /// <remarks>
+    /// The reading is asked for whether or not the command finished cleanly, because the box the name was
+    /// written in belongs to a row the reading replaces: a rename that failed would otherwise leave it there.
+    /// </remarks>
+    /// <param name="pairs">Each a source and the whole path it is to have.</param>
+    private async Task Renamed(IReadOnlyList<Pair> pairs)
+    {
+        await FileOps.Rename(pairs, _host.Log.Error);
+        _browser.Touch();
+    }
+
+    /// <summary>
+    /// The entry whose name is to be typed as soon as the listing that draws it is made.
+    /// </summary>
+    /// <remarks>
+    /// Making a folder reads the directory again, and reading it again makes a new view: a row belongs to the
+    /// view that draws it, so the name to be typed is handed to the view about to be made rather than put in
+    /// a row of the one about to go.
+    /// </remarks>
+    public Entry? Naming { get; set; }
+
+    /// <summary>Makes a directory in `into`, named so that the name is free.</summary>
+    /// <remarks>
+    /// A directory is made here rather than by a command, because there is no word of Rorolala's for it yet
+    /// and a folder that took a shell to make would be a folder that shell's syntax decides. It is named by
+    /// the plugin because the caller has not been asked for a name; the row it makes is where one is typed.
+    /// </remarks>
+    /// <param name="into">The directory to make it in.</param>
+    /// <returns>The path made, or nothing when none was.</returns>
+    public string? NewFolder(string into)
+    {
+        if (Browser.IsComputer(into))
+        {
+            _host.Log.Info("new folder: the computer is not a place to make one in");
+
+            return null;
+        }
+
+        var made = Path.Combine(into, FreeName(into));
+
+        try
+        {
+            Directory.CreateDirectory(made);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _host.Log.Error(error.Message);
+
+            return null;
+        }
+
+        _host.Log.Info($"new folder: `{made}`");
+
+        // Written down before the reading, because the reading is what makes the view that will ask for it:
+        // a hand-off made after the reading would be a hand-off to a view already made.
+        Naming = new Entry(made, EntryKind.Directory);
+
+        _browser.Touch();
+
+        return made;
+    }
+
+    /// <summary>The first name beside `into` that nothing holds, from the plain one and then numbered.</summary>
+    /// <param name="into">The directory the name is to be free in.</param>
+    private static string FreeName(string into)
+    {
+        var plain = RolaI18N.Get("rorolala_file_system.new_folder_name");
+
+        for (var at = 1; ; at++)
+        {
+            var name = at == 1 ? plain : $"{plain} ({at})";
+            var path = Path.Combine(into, name);
+
+            if (!Directory.Exists(path) && !File.Exists(path))
+            {
+                return name;
+            }
+        }
+    }
+
     /// <summary>
     /// Removes what is chosen, telling the user first unless they said not to be told.
     /// </summary>
@@ -253,6 +366,20 @@ internal sealed class BrowserActions
             menu.Items.Add(Item("rorolala_file_system.delete", () => Remove(entries, ask: true)));
         }
 
+        // Renaming is one entry at a time, because a name is what one thing has; the way up is not a thing
+        // to name, so it is left out.
+        if (from is EntryView view && entries.Count == 1 && !Browser.IsUp(entries[0].Path))
+        {
+            var only = entries[0];
+            menu.Items.Add(Item("rorolala_file_system.rename", () => view.Rename(only)));
+        }
+
+        // A new folder lands in the directory being looked at, wherever the menu was opened.
+        if (from is EntryView maker)
+        {
+            menu.Items.Add(Item("rorolala_file_system.new_folder", maker.NewFolder));
+        }
+
         if (entries.Count == 1)
         {
             var only = entries[0];
@@ -284,6 +411,15 @@ internal sealed class BrowserActions
         if (!Browser.IsComputer(here))
         {
             menu.Items.Add(Item("rorolala_file_system.paste", () => Paste(from, here)));
+
+            // A listing's own space is the one place a folder is made: the tree is rooted at the base and
+            // draws no single directory to make one in, so it is left out of this rather than given a
+            // folder somewhere the user was not pointing.
+            if (from is EntryView)
+            {
+                menu.Items.Add(Item("rorolala_file_system.new_folder", () => NewFolder(here)));
+            }
+
             menu.Items.Add(Item("rorolala_file_system.reveal", () => Openers.Reveal(new Entry(here, EntryKind.Directory), _host.Log.Error)));
         }
 

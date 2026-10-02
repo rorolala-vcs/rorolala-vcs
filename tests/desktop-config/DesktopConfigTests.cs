@@ -33,17 +33,20 @@ public sealed class DesktopConfigTests
     [Fact]
     public void APluginsVersionThisProgramCannotReadStopsWithCodeOne()
     {
-        var run = Start(plugins: """{"_version": 2, "plugins": {}}""", preference: null);
+        var run = Start(plugins: """{"_version": 3, "plugins": []}""", preference: null);
 
         Assert.Equal(1, run.ExitCode);
         Assert.Contains("_version", run.Error, StringComparison.Ordinal);
     }
 
-    /// <summary>A plugins key that names no discovered plugin stops with code 1.</summary>
+    /// <summary>A plugins name that answers to no discovered plugin stops with code 1.</summary>
     [Fact]
-    public void APluginsKeyThatNamesNoDiscoveredPluginStopsWithCodeOne()
+    public void APluginsNameThatNamesNoDiscoveredPluginStopsWithCodeOne()
     {
-        var run = Start(plugins: """{"_version": 1, "plugins": {"it.nothing": {}}}""", preference: null);
+        var run = Start(
+            plugins: """{"_version": 1, "plugins": [{"id": "it.nothing"}]}""",
+            preference: null
+        );
 
         Assert.Equal(1, run.ExitCode);
         Assert.Contains("names no discovered plugin", run.Error, StringComparison.Ordinal);

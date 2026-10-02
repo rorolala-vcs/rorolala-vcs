@@ -6,7 +6,7 @@ namespace RorolalaDesktop.Contract;
 /// </summary>
 /// <remarks>
 /// Everything here is declared by the plugin and none of it by the user. <c>plugins.json</c> records
-/// only whether a plugin is enabled and how the user wants it ordered among its peers.
+/// only whether a plugin is enabled and where the user put it in the load order.
 /// </remarks>
 /// <param name="Id">The stable identity, globally unique.</param>
 /// <param name="DisplayNameKey">

@@ -161,6 +161,17 @@ internal static class FileOps
     public static Task<bool> Move(IReadOnlyList<string> sources, string into, Action<string> failed) =>
         Transfer(Operation.Move, Command(MoveSetting, DefaultMove), sources, into, failed);
 
+    /// <summary>Renames entries: each is moved to the whole path it is to have.</summary>
+    /// <remarks>
+    /// A rename is a move and nothing else, so it is the move command that carries it out; what differs is
+    /// only that the target is named outright rather than being a directory the old name is taken into.
+    /// </remarks>
+    /// <param name="pairs">What is being renamed, each a source and the whole path it is to have.</param>
+    /// <param name="failed">Where a failure is reported.</param>
+    /// <returns>Whether anything was renamed.</returns>
+    public static Task<bool> Rename(IReadOnlyList<Pair> pairs, Action<string> failed) =>
+        Ask(Operation.Rename, Command(MoveSetting, DefaultMove), pairs, failed);
+
     /// <summary>
     /// Removes entries.
     /// </summary>

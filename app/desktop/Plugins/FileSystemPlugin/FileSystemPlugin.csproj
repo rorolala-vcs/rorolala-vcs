@@ -12,6 +12,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The Desktop host's suite, which starts this plugin against a scratch directory and reads the
+         listing it staged: what is checked is which entries a listing leaves out, which is not visible
+         from outside the plugin. -->
+    <InternalsVisibleTo Include="RorolalaDesktopHost.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Plugins build the UI out of Avalonia controls directly, which is the deliberate trade that
          keeps the contract small. The load context delegates Avalonia to the host's copy, so what
          is built here is inserted into the host's tree as the same kind of control. -->

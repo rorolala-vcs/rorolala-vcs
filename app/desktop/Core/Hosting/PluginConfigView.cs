@@ -37,11 +37,38 @@ internal sealed class PluginConfigView : IPluginConfig
     {
         _settings = settings;
         _id = id;
+
+        // Re-said for this plugin's own settings only: the registry knows every owner, and a plugin is not
+        // told about a setting it does not own. Both halves are forwarded, because a listener acts on the
+        // value and the identity together.
+        _settings.Changed += setting =>
+        {
+            if (settings.Of(_id).Any(declared => string.Equals(declared.Id, setting, StringComparison.Ordinal)))
+            {
+                Changed?.Invoke(setting);
+            }
+        };
     }
+
+    /// <inheritdoc />
+    public event Action<string>? Changed;
 
     /// <inheritdoc />
     public T? ReadKeyAs<T>(string id, T? fallback = default) =>
         _settings.InForce(_id, id) is { } element ? Read<T>(element, fallback) : fallback;
+
+    /// <inheritdoc />
+    public void Keep(string id, string? value)
+    {
+        // Written as the value's own kind where the plugin declared one, and as text otherwise: the host
+        // interprets no key, so a plugin keeping one it never declared is keeping a string.
+        _settings.Keep(
+            _id,
+            _settings.Of(_id).FirstOrDefault(setting => string.Equals(setting.Id, id, StringComparison.Ordinal))
+                ?? new PluginSetting(id, SettingKind.Text, id),
+            value
+        );
+    }
 
     /// <inheritdoc />
     public void Add(PluginSetting setting) => _settings.Declare(_id, setting);

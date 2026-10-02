@@ -534,7 +534,7 @@ internal sealed class NavigationBar : UserControl
             found = System.IO.Directory
                 .EnumerateFileSystemEntries(directory)
                 .Where(entry => Path.GetFileName(entry).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                .Where(entry => _browser.ShowHidden || !Browser.IsHidden(entry))
+                .Where(entry => _browser.ShowHidden || !_browser.Hides(new Entry(entry, Browser.KindOf(entry))))
                 .OrderBy(entry => Path.GetFileName(entry), StringComparer.OrdinalIgnoreCase)
                 .Take(Completions)
                 .Select(entry => (Path: entry, Directory: System.IO.Directory.Exists(entry)))

@@ -78,17 +78,35 @@ internal sealed class SettingRegistry
     public bool Chosen(PluginId owner, string id) => Stored(owner, id) is not null;
 
     /// <summary>
+    /// Raised when a setting was kept or taken back, so that whoever acts on it acts at once.
+    /// </summary>
+    /// <remarks>
+    /// Raised after the file is written, so a listener that reads the setting back reads what was written.
+    /// A setting kept without being declared raises it too: what the file states is a reader's business,
+    /// not this registry's. The identity is what was written, which is how the owner of one setting acts on
+    /// it alone.
+    /// </remarks>
+    public event Action<string>? Changed;
+
+    /// <summary>
     /// What a setting is worth, as the text the panel shows and takes.
     /// </summary>
+    /// <remarks>
+    /// A multi-choice setting with nothing stored reads as every option it offers, which is the default a
+    /// list of options is declared with: the panel draws them all ticked, and a reader that works its own
+    /// default out from the options is given the same answer.
+    /// </remarks>
     /// <param name="owner">The owner of the setting.</param>
     /// <param name="setting">The setting.</param>
     /// <returns>The chosen value, the declared default, or nothing.</returns>
     public string? Value(PluginId owner, PluginSetting setting) =>
         setting.Kind == SettingKind.Preset
             ? Preset(owner, setting)
-            : Stored(owner, setting.Id) is { } stored
-                ? Show(setting.Kind, stored)
-                : setting.Default;
+            : InForce(owner, setting.Id) is { } element
+                ? Show(setting.Kind, element)
+                : setting.Kind == SettingKind.MultiChoice
+                    ? string.Join(',', (setting.Options ?? []).Select(option => option.Value))
+                    : setting.Default;
 
     /// <summary>
     /// Chooses one option of a preset: writes every setting the option names, or, for the fallback,
@@ -114,6 +132,11 @@ internal sealed class SettingRegistry
         }
 
         ConfigurationLoader.WritePreference(_preference);
+
+        foreach (var (id, _) in writes)
+        {
+            Changed?.Invoke(id);
+        }
     }
 
     /// <summary>
@@ -141,12 +164,21 @@ internal sealed class SettingRegistry
 
             ConfigurationLoader.WritePreference(_preference);
 
+            foreach (var id in Written(setting))
+            {
+                Changed?.Invoke(id);
+            }
+
             return;
         }
 
         var section = Section(owner);
 
-        if (string.IsNullOrEmpty(text))
+        // Nothing at all is what taking the setting back writes, and what the user asks for when they
+        // reset it. An empty text is not that: a multi-choice setting with nothing chosen keeps an empty
+        // list, because "nothing is chosen" and "this was never chosen" are different states and the
+        // second would read as the declaration's default again the moment the last box was unticked.
+        if (text is null)
         {
             section.Remove(setting.Id);
         }
@@ -156,6 +188,7 @@ internal sealed class SettingRegistry
         }
 
         ConfigurationLoader.WritePreference(_preference);
+        Changed?.Invoke(setting.Id);
     }
 
     /// <summary>
@@ -163,7 +196,9 @@ internal sealed class SettingRegistry
     /// </summary>
     /// <remarks>
     /// A key that was stored without ever being declared reads as itself, so that a hand-written file is
-    /// still read the way it says.
+    /// still read the way it says. A multi-choice setting with nothing stored has nothing in force here:
+    /// what its options mean as a default is the declaration's business, and the panel and the reader work
+    /// it out from the options they both see.
     /// </remarks>
     /// <param name="owner">The owner of the setting.</param>
     /// <param name="id">The setting's identity.</param>
@@ -288,8 +323,20 @@ internal sealed class SettingRegistry
             SettingKind.Bool when bool.TryParse(text, out var flag) => JsonSerializer.SerializeToElement(flag),
             SettingKind.Number when double.TryParse(text, out var number) => JsonSerializer.SerializeToElement(number),
             SettingKind.Bool or SettingKind.Number => null,
+            SettingKind.MultiChoice => JsonSerializer.SerializeToElement(Chosen(text)),
             _ => JsonSerializer.SerializeToElement(text),
         };
+
+    /// <summary>
+    /// The values a multi-choice setting holds, read from the text they are written as.
+    /// </summary>
+    /// <remarks>
+    /// An empty text is no values at all rather than one empty value, because taking every value away is
+    /// one of the states the setting has — and the one that reads as the default.
+    /// </remarks>
+    /// <param name="text">The values, comma-separated.</param>
+    private static string[] Chosen(string text) =>
+        text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>What a written value reads as in the panel.</summary>
     /// <param name="kind">The kind of the setting.</param>
@@ -299,6 +346,12 @@ internal sealed class SettingRegistry
         {
             SettingKind.Bool => element.ValueKind == JsonValueKind.True ? "true" : "false",
             SettingKind.Number => element.GetRawText(),
+            SettingKind.MultiChoice => string.Join(
+                ',',
+                element.ValueKind == JsonValueKind.Array
+                    ? element.EnumerateArray().Select(value => value.GetString() ?? string.Empty)
+                    : []
+            ),
             _ => element.ValueKind == JsonValueKind.String ? element.GetString() ?? string.Empty : element.GetRawText(),
         };
 }

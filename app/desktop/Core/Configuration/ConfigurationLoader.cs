@@ -111,33 +111,38 @@ internal static class ConfigurationLoader
     /// Completes the plugins' state for the plugins that were discovered, and writes it back.
     /// </summary>
     /// <remarks>
-    /// A plugin the file does not name is enabled with order <c>0</c>. A key the file names that no
-    /// discovered plugin answers to is refused: it is either a plugin that was removed, whose state
-    /// would otherwise linger, or a mistake in the file.
+    /// A plugin the file does not name is enabled and appended after the ones it does, because a
+    /// plugin that was just installed has no place in the user's order yet and putting it anywhere
+    /// else would move plugins the user arranged. A name that no discovered plugin answers to is
+    /// refused: it is either a plugin that was removed, whose state would otherwise linger, or a
+    /// mistake in the file.
     /// </remarks>
     /// <param name="config">What the file stated, or empty when it was not there.</param>
     /// <param name="discovered">Every plugin discovery found.</param>
     /// <returns>The completed state, written to the file.</returns>
-    /// <exception cref="ConfigurationFailure">A key names no discovered plugin.</exception>
+    /// <exception cref="ConfigurationFailure">A name states no discovered plugin.</exception>
     public static PluginsConfiguration ReconcilePlugins(
         PluginsConfiguration config,
         IReadOnlyCollection<PluginId> discovered
     )
     {
-        foreach (var id in config.Plugins.Keys)
+        foreach (var state in config.Plugins)
         {
-            if (!discovered.Contains(id))
+            if (!discovered.Contains(state.Id))
             {
                 throw new ConfigurationFailure(
                     ExitCode.Plugins,
-                    $"{ConfigPaths.Plugins}: `{id}` names no discovered plugin"
+                    $"{ConfigPaths.Plugins}: `{state.Id}` names no discovered plugin"
                 );
             }
         }
 
         foreach (var id in discovered)
         {
-            config.Plugins.TryAdd(id, new PluginState(Enabled: true, Order: 0));
+            if (!config.Contains(id))
+            {
+                config.Plugins.Add(new PluginState(id, Enabled: true));
+            }
         }
 
         WritePlugins(config);
@@ -151,13 +156,11 @@ internal static class ConfigurationLoader
     {
         var dto = new PluginsDto { Version = PluginsConfiguration.SchemaVersion };
 
-        foreach (var (id, state) in config.Plugins)
+        foreach (var state in config.Plugins)
         {
-            dto.Plugins[id.Value] = new PluginStateDto
-            {
-                Enabled = state.Enabled,
-                Order = state.Order,
-            };
+            dto.Plugins.Add(
+                new PluginStateDto { Id = state.Id.Value, Enabled = state.Enabled }
+            );
         }
 
         Write(ConfigPaths.Plugins, dto, ExitCode.Plugins);
@@ -229,70 +232,64 @@ internal static class ConfigurationLoader
 
         if (
             !root.TryGetProperty("plugins", out var plugins)
-            || plugins.ValueKind != JsonValueKind.Object
+            || plugins.ValueKind != JsonValueKind.Array
         )
         {
-            throw Fail(ExitCode.Plugins, path, "`plugins` must be an object");
+            throw Fail(ExitCode.Plugins, path, "`plugins` must be an array");
         }
 
         var config = new PluginsConfiguration();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var property in plugins.EnumerateObject())
+        foreach (var element in plugins.EnumerateArray())
         {
-            if (!seen.Add(property.Name))
+            var state = ParseState(element, path);
+
+            if (!seen.Add(state.Id.Value))
             {
-                throw Fail(ExitCode.Plugins, path, $"`{property.Name}` is repeated");
+                throw Fail(ExitCode.Plugins, path, $"`{state.Id}` is repeated");
             }
 
-            if (!PluginId.IsWellFormed(property.Name))
-            {
-                throw Fail(ExitCode.Plugins, path, $"`{property.Name}` is not a plugin id");
-            }
-
-            config.Plugins[new PluginId(property.Name)] = ParseState(
-                property.Value,
-                path,
-                property.Name
-            );
+            config.Plugins.Add(state);
         }
 
         return config;
     }
 
-    /// <summary>Reads the shape of one plugin's state entry.</summary>
-    private static PluginState ParseState(JsonElement element, string path, string id)
+    /// <summary>Reads the shape of one plugin's state entry, which states which plugin it is about.</summary>
+    private static PluginState ParseState(JsonElement element, string path)
     {
         if (element.ValueKind != JsonValueKind.Object)
         {
-            throw Fail(ExitCode.Plugins, path, $"`{id}` must be an object");
+            throw Fail(ExitCode.Plugins, path, "every plugin entry must be an object");
         }
 
+        string? id = null;
         var enabled = true;
-        var order = 0;
 
         foreach (var property in element.EnumerateObject())
         {
             switch (property.Name)
             {
+                case "id":
+                    if (property.Value.ValueKind != JsonValueKind.String)
+                    {
+                        throw Fail(ExitCode.Plugins, path, "`id` must be a string");
+                    }
+
+                    id = property.Value.GetString();
+                    break;
+
                 case "enabled":
                     if (
                         property.Value.ValueKind
                         is not (JsonValueKind.True or JsonValueKind.False)
                     )
                     {
-                        throw Fail(ExitCode.Plugins, path, $"`{id}.enabled` must be true or false");
+                        throw Fail(ExitCode.Plugins, path, "`enabled` must be true or false");
                     }
 
                     enabled = property.Value.GetBoolean();
-                    break;
-
-                case "order":
-                    if (!TryInt(property.Value, out order))
-                    {
-                        throw Fail(ExitCode.Plugins, path, $"`{id}.order` must be an integer");
-                    }
-
                     break;
 
                 default:
@@ -302,7 +299,17 @@ internal static class ConfigurationLoader
             }
         }
 
-        return new PluginState(enabled, order);
+        if (id is null)
+        {
+            throw Fail(ExitCode.Plugins, path, "a plugin entry must state `id`");
+        }
+
+        if (!PluginId.IsWellFormed(id))
+        {
+            throw Fail(ExitCode.Plugins, path, $"`{id}` is not a plugin id");
+        }
+
+        return new PluginState(new PluginId(id), enabled);
     }
 
     /// <summary>Reads the shape of <c>preference.json</c>.</summary>
@@ -581,18 +588,17 @@ internal static class ConfigurationLoader
         public int Version { get; set; }
 
         [JsonPropertyName("plugins")]
-        public Dictionary<string, PluginStateDto> Plugins { get; set; } =
-            new(StringComparer.Ordinal);
+        public List<PluginStateDto> Plugins { get; set; } = [];
     }
 
     /// <summary>How one plugin's state is written.</summary>
     private sealed class PluginStateDto
     {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; }
-
-        [JsonPropertyName("order")]
-        public int Order { get; set; }
     }
 
     /// <summary>How <c>preference.json</c> is written.</summary>

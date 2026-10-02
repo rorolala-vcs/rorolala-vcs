@@ -1,4 +1,5 @@
 using Avalonia.Threading;
+using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
 
@@ -6,11 +7,11 @@ namespace FileSystemPlugin;
 /// The few things about looking at files that are the whole plugin's rather than one location's.
 /// </summary>
 /// <remarks>
-/// Where the tree is rooted, whether the entries the platform hides are shown, and the news that the files
-/// themselves may have changed. None of them is where anything is looking, and each is one answer for the
-/// whole File System: a base per dock would be several answers to where the tree is rooted, a hiding per dock
-/// would let two docks list one directory differently, and a change made through one dock is one every other
-/// dock may be looking at.
+/// Where the tree is rooted, which providers hide what, and the news that the files themselves may have
+/// changed. None of them is where anything is looking, and each is one answer for the whole File System: a
+/// base per dock would be several answers to where the tree is rooted, a hiding per dock would let two docks
+/// list one directory differently, and a change made through one dock is one every other dock may be looking
+/// at.
 /// <para>
 /// They live here rather than on a <see cref="Browser"/> because a dock may be taken out of step and given a
 /// location of its own (Section 7.5). The location is then that dock's alone, while these stay everybody's —
@@ -20,18 +21,35 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal sealed class Shared
 {
+    /// <summary>The setting the choice about showing what is hidden is kept under.</summary>
+    public const string ShowSetting = "Hides/show";
+
     /// <summary>Whether a read has been asked for and is waiting for the turn to end.</summary>
     private bool _asked;
 
     /// <summary>The directory the tree is rooted at.</summary>
     private string _base;
 
-    /// <summary>Whether the entries the platform hides are shown.</summary>
-    private bool _hidden;
+    /// <summary>Whether the entries the providers hide are shown, faded.</summary>
+    private bool _shown;
+
+    /// <summary>Which providers hide what, asked afresh wherever an entry is staged or faded.</summary>
+    private readonly HideRegistry _hides;
+
+    /// <summary>The plugin's own settings, where the choice about showing what is hidden is kept.</summary>
+    private readonly IPluginConfig _config;
 
     /// <summary>Makes the shared answers, with the tree rooted at a directory.</summary>
     /// <param name="baseDir">The directory to root the tree at.</param>
-    public Shared(string baseDir) => _base = baseDir;
+    /// <param name="hides">The hide providers, and the choice of which are in force.</param>
+    /// <param name="config">The plugin's settings, where the show choice is read and kept.</param>
+    public Shared(string baseDir, HideRegistry hides, IPluginConfig config)
+    {
+        _base = baseDir;
+        _hides = hides;
+        _config = config;
+        _shown = config.ReadKeyAs(ShowSetting, false);
+    }
 
     /// <summary>
     /// Raised when either answer changes, so that every location stages its listing again.
@@ -80,6 +98,15 @@ internal sealed class Shared
     }
 
     /// <summary>
+    /// Says that what is shown of the files has changed, which every location stages again.
+    /// </summary>
+    /// <remarks>
+    /// Raised when a hide provider is switched on or off, which changes what a listing shows without
+    /// changing what the directory holds: every location stages its listing again and none is read again.
+    /// </remarks>
+    public void Hidden() => Changed?.Invoke();
+
+    /// <summary>
     /// The directory the tree is rooted at, which a directory's own menu sets.
     /// </summary>
     /// <remarks>
@@ -103,26 +130,56 @@ internal sealed class Shared
     }
 
     /// <summary>
-    /// Whether the entries the platform hides are shown.
+    /// Whether the entries a provider hides are shown, faded.
     /// </summary>
     /// <remarks>
-    /// It is the plugin's rather than a view's, because the listing is what it changes: two docks looking at
-    /// one directory — and a dock out of step still looks at directories — must not list different things.
-    /// What a dock keeps is whether the user asked for them, since a dock is what a toggle sits in
-    /// (Section 7.5).
+    /// It is the plugin's rather than a dock's, because the listing is what it changes: two docks looking at
+    /// one directory must not list different things. It is kept in the plugin's own settings rather than in a
+    /// dock's own state, so that one switch serves every dock and the choice outlives the dock it was made in.
+    /// <para>
+    /// Kept here and written through the plugin's settings in both directions, so that the preference panel
+    /// drawing it and a listing reading it are one answer.
+    /// </para>
     /// </remarks>
     public bool ShowHidden
     {
-        get => _hidden;
+        get => _shown;
         set
         {
-            if (_hidden == value)
+            if (_shown == value)
             {
                 return;
             }
 
-            _hidden = value;
-            Changed?.Invoke();
+            _shown = value;
+
+            // Written rather than restaged directly, and the restage left to the one listener of a setting
+            // change: a second path here would stage every listing twice for one click.
+            _config.Keep(ShowSetting, value ? "true" : "false");
         }
     }
+
+    /// <summary>
+    /// Whether an entry is hidden by a provider in force.
+    /// </summary>
+    /// <remarks>
+    /// It is the plugin's rather than a view's, because the listing is what it changes: two docks looking at
+    /// one directory — and a dock out of step still looks at directories — must not list different things.
+    /// What a dock shows is the one setting every dock reads, so a switch turned in one of them is turned
+    /// in all (Section 7.5).
+    /// <para>
+    /// Asked of the registry rather than kept here, so that turning a provider off takes effect without a
+    /// second read of any directory: what the directory holds is unchanged, and only what is shown of it is.
+    /// </para>
+    /// </remarks>
+    /// <param name="entry">The entry to consider.</param>
+    /// <returns>Whether it is hidden.</returns>
+    public bool Hides(Entry entry) => HideRegistry.Hides(entry);
+
+    /// <summary>The registry itself, for the choice of which providers are in force.</summary>
+    /// <remarks>
+    /// The catalogue it reads is the run's rather than this instance's — see <see cref="HideRegistry.All"/> —
+    /// so a dock draws the rules from the class and the choice from the registry.
+    /// </remarks>
+    public HideRegistry HideRegistry => _hides;
 }

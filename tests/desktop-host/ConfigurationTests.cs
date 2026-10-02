@@ -186,7 +186,7 @@ public sealed class ConfigurationTests
     [Fact]
     public void APluginsVersionThisProgramCannotReadIsRefused()
     {
-        Given(ConfigPaths.Plugins, """{"_version": 2, "plugins": {}}""");
+        Given(ConfigPaths.Plugins, """{"_version": 3, "plugins": []}""");
 
         var failure = Assert.Throws<ConfigurationFailure>(ConfigurationLoader.LoadPlugins);
 
@@ -196,11 +196,11 @@ public sealed class ConfigurationTests
 
     /// <summary>A plugin named twice in the file is refused, rather than the last one winning.</summary>
     [Fact]
-    public void APluginsKeyThatIsRepeatedIsRefused()
+    public void APluginNamedTwiceIsRefused()
     {
         Given(
             ConfigPaths.Plugins,
-            """{"_version": 1, "plugins": {"it.alpha": {}, "it.alpha": {}}}"""
+            """{"_version": 1, "plugins": [{"id": "it.alpha"}, {"id": "it.alpha"}]}"""
         );
 
         var failure = Assert.Throws<ConfigurationFailure>(ConfigurationLoader.LoadPlugins);
@@ -209,13 +209,13 @@ public sealed class ConfigurationTests
         Assert.Contains("repeated", failure.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>A key that answers to no discovered plugin is refused.</summary>
+    /// <summary>A name that answers to no discovered plugin is refused.</summary>
     [Fact]
-    public void APluginsKeyThatNamesNoDiscoveredPluginIsRefused()
+    public void APluginsNameThatNamesNoDiscoveredPluginIsRefused()
     {
         Given(
             ConfigPaths.Plugins,
-            """{"_version": 1, "plugins": {"it.nothing": {"enabled": true}}}"""
+            """{"_version": 1, "plugins": [{"id": "it.nothing", "enabled": true}]}"""
         );
 
         var plugins = ConfigurationLoader.LoadPlugins();
@@ -228,13 +228,27 @@ public sealed class ConfigurationTests
         Assert.Contains("names no discovered plugin", failure.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>A discovered plugin the file does not name is enabled with order zero.</summary>
+    /// <summary>A plugin entry the file does not name a plugin for is refused.</summary>
     [Fact]
-    public void APluginTheFileDoesNotNameIsEnabledWithOrderZero()
+    public void APluginsEntryWithoutAnIdIsRefused()
+    {
+        Given(ConfigPaths.Plugins, """{"_version": 1, "plugins": [{"enabled": false}]}""");
+
+        var failure = Assert.Throws<ConfigurationFailure>(ConfigurationLoader.LoadPlugins);
+
+        Assert.Equal(ExitCode.Plugins, failure.Code);
+        Assert.Contains("must state `id`", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A discovered plugin the file does not name is enabled and put at the end of the order.
+    /// </summary>
+    [Fact]
+    public void APluginTheFileDoesNotNameIsEnabledAtTheEnd()
     {
         Given(
             ConfigPaths.Plugins,
-            """{"_version": 1, "plugins": {"it.alpha": {"enabled": false, "order": 3}}}"""
+            """{"_version": 1, "plugins": [{"id": "it.alpha", "enabled": false}]}"""
         );
 
         var plugins = ConfigurationLoader.LoadPlugins();
@@ -243,8 +257,14 @@ public sealed class ConfigurationTests
             [new PluginId("it.alpha"), new PluginId("it.beta")]
         );
 
-        Assert.Equal(new PluginState(Enabled: false, Order: 3), plugins.Plugins[new PluginId("it.alpha")]);
-        Assert.Equal(new PluginState(Enabled: true, Order: 0), plugins.Plugins[new PluginId("it.beta")]);
+        Assert.Equal(
+            new[]
+            {
+                new PluginState(new PluginId("it.alpha"), Enabled: false),
+                new PluginState(new PluginId("it.beta"), Enabled: true),
+            },
+            plugins.Plugins
+        );
     }
 
     /// <summary>A preference file that will not read stops the program with its own code.</summary>
@@ -365,6 +385,78 @@ public sealed class ConfigurationTests
         Assert.False(settings.Chosen(owner, copy.Id));
         Assert.False(settings.Chosen(owner, move.Id));
         Assert.Equal("posix", settings.Value(owner, preset));
+    }
+
+    /// <summary>
+    /// A multi-choice setting with nothing stored is shown as every option, which is the default a list of
+    /// options is declared with; ticking one keeps the list; and unticking the last keeps an empty list,
+    /// which is not the same as never having chosen — the default must not come back on its own.
+    /// </summary>
+    [Fact]
+    public void AMultiChoiceSettingWithNothingStoredIsShownAsEveryOption()
+    {
+        Given(ConfigPaths.Preference, """{"_version": 1, "language": "en"}""");
+
+        var preference = ConfigurationLoader.LoadPreference();
+        var settings = new SettingRegistry(preference);
+        var owner = new PluginId("it.alpha");
+
+        var setting = new PluginSetting(
+            "Hides/providers",
+            SettingKind.MultiChoice,
+            "label",
+            null,
+            0,
+            false,
+            [new SettingOption("dot_file", "one"), new SettingOption("dot_dir", "two")]
+        );
+        settings.Declare(owner, setting);
+
+        var config = new PluginConfigView(settings, owner);
+
+        // Never chosen: the panel shows every option, and nothing is stored for the reader to disagree with.
+        Assert.False(settings.Chosen(owner, setting.Id));
+        Assert.Equal("dot_file,dot_dir", settings.Value(owner, setting));
+
+        // One option ticked is what is kept, as a list rather than as text.
+        settings.Keep(owner, setting, "dot_dir");
+        Assert.Equal(["dot_dir"], config.ReadKeyAs<string[]>(setting.Id)!);
+
+        // Every option unticked keeps an empty list, which reads as that rather than as the default again.
+        settings.Keep(owner, setting, string.Empty);
+        Assert.True(settings.Chosen(owner, setting.Id));
+        Assert.Empty(config.ReadKeyAs<string[]>(setting.Id) ?? []);
+
+        // Taking the setting back is the default again, which the panel and the reader both work out.
+        settings.Keep(owner, setting, null);
+        Assert.False(settings.Chosen(owner, setting.Id));
+        Assert.Equal("dot_file,dot_dir", settings.Value(owner, setting));
+    }
+
+    /// <summary>
+    /// The switch that shows what is hidden reads as off until the user turns it on, and keeps what they
+    /// chose — it is what decides whether a listing leaves the hidden entries out.
+    /// </summary>
+    [Fact]
+    public void TheShowHiddenSwitchReadsAsOffUntilItIsTurnedOn()
+    {
+        Given(ConfigPaths.Preference, """{"_version": 1, "language": "en"}""");
+
+        var preference = ConfigurationLoader.LoadPreference();
+        var settings = new SettingRegistry(preference);
+        var owner = new PluginId("it.alpha");
+
+        settings.Declare(owner, new PluginSetting("Hides/show", SettingKind.Bool, "label", "false"));
+
+        var config = new PluginConfigView(settings, owner);
+
+        Assert.False(config.ReadKeyAs("Hides/show", true));
+
+        settings.Keep(owner, settings.Of(owner)[0], "true");
+        Assert.True(config.ReadKeyAs("Hides/show", false));
+
+        settings.Keep(owner, settings.Of(owner)[0], "false");
+        Assert.False(config.ReadKeyAs("Hides/show", true));
     }
 
     /// <summary>A preset option's writes, built from pairs.</summary>

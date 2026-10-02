@@ -1,0 +1,19 @@
+_version: 2
+
+# What the Git plugin says. Every key is namespaced by the plugin's identity — the id with dots
+# underscored — which is the convention that keeps two plugins' keys apart.
+#
+# The one exception is stated in full below and is deliberate: the label of the hide provider is an option
+# of the File System plugin's setting, so it is keyed under that plugin. A key is what a call site names
+# and any registered file may state it, and this plugin is where the provider itself lives.
+
+rorolala_git:
+  name:
+    en: Git
+    zh-CN: Git
+
+rorolala_file_system:
+  hides:
+    git_ignored:
+      en: Hide what Git ignores
+      zh-CN: 隐藏 Git 忽略的文件

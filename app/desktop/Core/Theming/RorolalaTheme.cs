@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Styling;
+using RorolalaDesktop.CoreDocks;
 using RorolalaDesktop.Docking;
 
 namespace RorolalaDesktop.Theming;
@@ -118,7 +119,7 @@ internal sealed class RorolalaTheme
 
         var palette = new Style(selector => selector.OfType<Window>()) { Resources = _palette };
 
-        Styles = [palette, .. Type(), .. Roles(), .. Content(), .. Parts(), .. Chrome()];
+        Styles = [palette, .. Type(), .. Roles(), .. Content(), .. Parts(), .. Chrome(), .. Cards()];
     }
 
     /// <summary>The size every word is set at.</summary>
@@ -195,6 +196,30 @@ internal sealed class RorolalaTheme
     private const string Warn = "rorolala.warn";
     private const string Shadow = "rorolala.shadow";
     private const string Ring = "rorolala.ring";
+
+    /// <summary>The colour a failure is drawn in.</summary>
+    internal const string DelInk = "rorolala.del";
+
+    /// <summary>The wash a failure is drawn on.</summary>
+    internal const string DelBackground = "rorolala.del.bg";
+
+    /// <summary>The wash a plugin card takes when the pointer is on it, or a drag is over it.</summary>
+    internal const string AccentWash = "rorolala.accent.wash";
+
+    /// <summary>The wash a plugin card takes while it is the one being dragged: the accent, lifted.</summary>
+    internal const string AccentBrightWash = "rorolala.accent.bright.wash";
+
+    /// <summary>The wash a plugin card takes when what it depends on leaves it unloadable.</summary>
+    internal const string DelWash = "rorolala.del.wash";
+
+    /// <summary>
+    /// The class the words for a fault wear, which the tip on a card's mark shows.
+    /// </summary>
+    /// <remarks>
+    /// A class rather than a colour written where the text is made, so that the red is the look's and
+    /// follows a variant or a recolour like every other colour the program paints.
+    /// </remarks>
+    private const string FaultText = "plugin-fault";
 
     /// <summary>
     /// The class the one action a surface exists for wears.
@@ -462,13 +487,16 @@ internal sealed class RorolalaTheme
             [PrimaryBright] = Fill(_primaryBright),
             [PrimaryText] = Fill(_primaryText),
             [Accent] = Fill(_accent),
+            [AccentWash] = Fill(WithAlpha(_accent, 0x2E)),
+            [AccentBrightWash] = Fill(WithAlpha(Mix(_accent, Colors.White, 0.18), 0x59)),
             [Selection] = Fill(selection),
             [Shadow] = grounds.Raised,
             [Ring] = _ring,
             ["rorolala.add"] = Fill(grounds.Add),
             ["rorolala.add.bg"] = Fill(grounds.AddBg),
-            ["rorolala.del"] = Fill(grounds.Del),
-            ["rorolala.del.bg"] = Fill(grounds.DelBg),
+            [DelInk] = Fill(grounds.Del),
+            [DelBackground] = Fill(grounds.DelBg),
+            [DelWash] = Fill(WithAlpha(grounds.Del, 0x2E)),
         };
 
     /// <summary>
@@ -1000,8 +1028,8 @@ internal sealed class RorolalaTheme
                         .Class(":pointerover")
                         .Template()
                         .Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BackgroundProperty, "rorolala.del.bg"),
-                Brushed(ContentPresenter.ForegroundProperty, "rorolala.del")
+                Brushed(ContentPresenter.BackgroundProperty, DelBackground),
+                Brushed(ContentPresenter.ForegroundProperty, DelInk)
             ),
 
             // A splitter draws nothing until the pointer is on it, and then the accent hairline through
@@ -1049,6 +1077,97 @@ internal sealed class RorolalaTheme
                         .Class(DockArea.DropTargetClass),
                 NewBrush(Border.BackgroundProperty, WithAlpha(_accent, 0x40)),
                 Brushed(Border.BorderBrushProperty, Accent)
+            ),
+        ];
+
+    /// <summary>
+    /// The cards the plugin manager arranges: one raised surface per plugin, and its wash.
+    /// </summary>
+    /// <remarks>
+    /// A card is the same raised surface as every other control, with one addition: a child border
+    /// filled with a translucent colour, which is what says "the pointer is on this" and "this is
+    /// the one being dragged" and "this cannot load" without the card becoming a different colour
+    /// from the ones beside it. The wash is a child rather than the card's own background because a
+    /// background cannot be laid over a ground — it replaces it — and a tint that replaced the
+    /// surface would read as a different control rather than as the same one under the pointer.
+    /// <para>
+    /// The card's own error state is stated last, so that it beats the pointer and the drag: an
+    /// error a hover could hide would be an error the user loses the moment they reach for it.
+    /// </para>
+    /// </remarks>
+    private static Style[] Cards() =>
+        [
+            On(
+                selector => selector.OfType<Border>().Class(PluginCard.CardClass),
+                Brushed(Border.BackgroundProperty, Elevated),
+                new Setter(Border.BorderThicknessProperty, Edge),
+                Brushed(Border.BorderBrushProperty, BorderLine),
+                new Setter(Border.CornerRadiusProperty, Radius),
+                new Setter(Border.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<Border>().Class(PluginCard.CardClass).Class(":pointerover"),
+                Brushed(Border.BorderBrushProperty, Accent)
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Border>()
+                        .Class(PluginCard.CardClass)
+                        .Class(PluginCard.DraggingClass),
+                Brushed(Border.BorderBrushProperty, Accent)
+            ),
+            On(
+                selector =>
+                    selector.OfType<Border>().Class(PluginCard.CardClass).Class(PluginCard.ErrorClass),
+                Brushed(Border.BorderBrushProperty, DelInk)
+            ),
+
+            // The mark a faulted card carries beside its switch: the card's red, at the size of a
+            // word rather than of a line. It is a button only so that it can carry the words for the
+            // fault as a tip; pressing it does nothing. Its red is stated again on the presenter,
+            // because the base theme's hover and press rules reach that part rather than the button
+            // and would otherwise grey the mark the moment the pointer came near it.
+            On(
+                selector => selector.OfType<Button>().Class(PluginCard.ErrorBadgeClass),
+                Brushed(TemplatedControl.BackgroundProperty, DelBackground),
+                Brushed(TemplatedControl.BorderBrushProperty, DelInk),
+                Brushed(TemplatedControl.ForegroundProperty, DelInk),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(7, 2)),
+                new Setter(TemplatedControl.FontSizeProperty, 11.0),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.Bold)
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(PluginCard.ErrorBadgeClass)
+                        .Template()
+                        .Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BackgroundProperty, DelBackground),
+                Brushed(ContentPresenter.BorderBrushProperty, DelInk),
+                Brushed(ContentPresenter.ForegroundProperty, DelInk)
+            ),
+
+            // The wash: its shape, and the resting state it starts in. Which of the three colours it
+            // takes is decided while the program runs, because it turns on a hover, a drag, and a
+            // fault the look cannot see; the resources it chooses between are named above, so a
+            // recolour reaches a wash that is up as readily as one that is not.
+            On(
+                selector => selector.OfType<Border>().Class(PluginCard.WashClass),
+                Brushed(Border.BackgroundProperty, AccentWash),
+                new Setter(Border.CornerRadiusProperty, new CornerRadius(7)),
+                new Setter(Visual.OpacityProperty, 0.0),
+                new Setter(Visual.TransitionsProperty, Fading())
+            ),
+
+            // The words for a fault, which a hover on a card's mark shows, in the same red the card's
+            // edge takes.
+            On(
+                selector => selector.OfType<TextBlock>().Class(FaultText),
+                Brushed(TextBlock.ForegroundProperty, DelInk)
             ),
         ];
 

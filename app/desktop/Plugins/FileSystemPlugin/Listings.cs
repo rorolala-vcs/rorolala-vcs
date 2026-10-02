@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -172,8 +173,16 @@ internal abstract class EntryView : UserControl
         // The keyboard is the list's, taken on the way down before the list reads it itself: the arrows are
         // replaced by ones that know about a wrapped grid, and Enter and the typed letters are not the
         // toolkit's at all. A handler that let the list act first would be correcting an action already taken.
+        //
+        // Text is not a key: only the element with the keyboard raises it, and it is raised on the way up, so
+        // the letters are taken on both legs — the down leg reaches nothing while no field has the keyboard,
+        // and what a field does raise is left to the field (see `Typed`).
         List.AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
-        List.AddHandler(TextInputEvent, Typed, RoutingStrategies.Tunnel);
+        List.AddHandler(
+            TextInputEvent,
+            Typed,
+            RoutingStrategies.Tunnel | RoutingStrategies.Bubble
+        );
 
         // The pointer is taken for the whole view rather than for the list alone, so that a frame can begin in
         // the room the view leaves around the card as much as in the room left between the rows: the list is hit
@@ -207,6 +216,16 @@ internal abstract class EntryView : UserControl
         // of anything to keep in step.
         AttachedToVisualTree += (_, _) => Clipboard.Changed += Repaint;
         DetachedFromVisualTree += (_, _) => Clipboard.Changed -= Repaint;
+
+        // A name waiting to be typed, if one was made while this view was being made — which is what a new
+        // folder is: its row is this view's, and this view is not laid out yet, so the box goes in a moment
+        // later rather than at a row that does not exist.
+        if (actions.Naming is { } naming)
+        {
+            actions.Naming = null;
+
+            Dispatcher.UIThread.Post(() => Rename(naming), DispatcherPriority.Background);
+        }
     }
 
     /// <summary>The host, for what cannot be done.</summary>
@@ -398,6 +417,151 @@ internal abstract class EntryView : UserControl
     /// <param name="ask">Whether to put the question to the user first.</param>
     public void Delete(bool ask) => Actions.Remove(Offered(), ask);
 
+    /// <summary>The box a name is being edited in, and the entry it is about, while one is.</summary>
+    /// <remarks>
+    /// The name is edited in the row itself rather than asked for in a window: what is being renamed is a
+    /// name in a listing, and the listing is where it can be seen against the names around it.
+    /// </remarks>
+    private TextBox? _editor;
+    private Entry? _editing;
+
+    /// <summary>Renames what is chosen, or the entry the pointer last landed on.</summary>
+    public void Rename()
+    {
+        if (Offered() is [{ } only])
+        {
+            Rename(only);
+        }
+    }
+
+    /// <summary>Puts the name of `entry` into a box where the listing draws it.</summary>
+    /// <param name="entry">What is being renamed.</param>
+    public void Rename(Entry entry)
+    {
+        // What is edited is a row, and a row that is not on screen has no container to hold a cell: bringing
+        // it into view is what makes a name reachable in a directory too long to show at once.
+        List.ScrollIntoView(entry);
+
+        if (Beginning(entry))
+        {
+            return;
+        }
+
+        // The container is made by the layout the scroll asks for, so it is a moment behind: one more turn
+        // of the loop is what puts the box in a row rather than nowhere.
+        Dispatcher.UIThread.Post(() => Beginning(entry), DispatcherPriority.Background);
+    }
+
+    /// <summary>Puts the name of `entry` into a box, where its row and the cell in it are already drawn.</summary>
+    /// <param name="entry">What is being renamed.</param>
+    /// <returns>Whether the box was made.</returns>
+    private bool Beginning(Entry entry)
+    {
+        if (_editor is not null)
+        {
+            return true;
+        }
+
+        var label = _rows
+            .Where(row => string.Equals(row.Entry.Path, entry.Path, StringComparison.Ordinal))
+            .Select(row => row.Row)
+            .SelectMany(row => row.GetVisualDescendants())
+            .OfType<TextBlock>()
+            .FirstOrDefault(text => text.Classes.Contains("entry-name"));
+
+        if (label?.Parent is not Panel parent)
+        {
+            return false;
+        }
+
+        var at = parent.Children.IndexOf(label);
+        var box = new TextBox
+        {
+            Text = Path.GetFileName(Path.TrimEndingDirectorySeparator(entry.Path)),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        // The box takes the place the name had, in the cell that name sat in: a grid's cell is the child's,
+        // so it is carried over rather than the row being built again around it.
+        Grid.SetColumn(box, Grid.GetColumn(label));
+        Grid.SetRow(box, Grid.GetRow(label));
+        Grid.SetColumnSpan(box, Grid.GetColumnSpan(label));
+
+        parent.Children[at] = box;
+
+        _editor = box;
+        _editing = entry;
+
+        // Taken on the way down, so that Enter and Escape are read before the box's own reading of them: a
+        // field that took Enter for itself would be a name nobody could finish.
+        box.AddHandler(KeyDownEvent, (_, args) => Edited(args), RoutingStrategies.Tunnel);
+        box.LostFocus += (_, _) => Committed();
+
+        box.Focus();
+        box.SelectAll();
+
+        return true;
+    }
+
+    /// <summary>Makes a directory in the directory being looked at, which is then named where it is drawn.</summary>
+    public void NewFolder() => Actions.NewFolder(Browser.Current);
+
+    /// <summary>Reads a key while a name is being edited: Enter takes it, Escape leaves the name alone.</summary>
+    /// <param name="e">The key.</param>
+    private void Edited(KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Enter:
+                e.Handled = true;
+                Committed();
+                break;
+            case Key.Escape:
+                e.Handled = true;
+                Cancelled();
+                break;
+            default:
+                break;
+        }
+    }
+
+    /// <summary>Takes what the box says as the name the entry is to have, and lets go of the box.</summary>
+    private void Committed()
+    {
+        var box = _editor;
+        var entry = _editing;
+
+        if (box is null || entry is null)
+        {
+            return;
+        }
+
+        _editor = null;
+        _editing = null;
+
+        Actions.Rename(entry, box.Text ?? string.Empty);
+
+        // The box belongs to a row, and the reading is what puts the name back: a rename that had nothing to
+        // do would otherwise leave the field standing. The keyboard goes back to the listing with it.
+        Browser.Touch();
+        Listen();
+    }
+
+    /// <summary>Leaves the name as it was, and reads the directory again so the box goes away.</summary>
+    private void Cancelled()
+    {
+        if (_editor is null)
+        {
+            return;
+        }
+
+        _editor = null;
+        _editing = null;
+
+        Browser.Touch();
+        Listen();
+    }
+
     /// <summary>
     /// Puts the keyboard in the listing, so that the dock's own keys reach it again.
     /// </summary>
@@ -442,23 +606,46 @@ internal abstract class EntryView : UserControl
     }
 
     /// <summary>
-    /// How faded a row is: one the platform hides reads as secondary, and one that is cut as on its way out.
+    /// How faded a row is: one a hidden provider hides reads as secondary, and one that is cut as on its way
+    /// out.
     /// </summary>
     /// <remarks>
     /// Both are said here rather than in two passes over the rows, because a row has one opacity and the second
     /// pass would be the one that decided it. Cut wins, because being on its way out is what the user just did.
+    /// <para>
+    /// What is hidden is asked of the providers rather than carried on the entry, so a row drawn while a
+    /// provider was switched off is faded again the moment it is switched on.
+    /// </para>
     /// </remarks>
     /// <param name="row">The row to fade.</param>
     /// <param name="entry">What it stands for.</param>
     protected virtual void Apply(Control row, Entry entry) =>
         row.Opacity = Clipboard.IsCut(entry.Path)
             ? Clipboard.Faded
-            : entry.Hidden
+            : Hides(entry)
                 ? HiddenOpacity
                 : 1.0;
 
-    /// <summary>Draws the cut state again on every row that is on screen.</summary>
-    private void Repaint()
+    /// <summary>
+    /// Whether a hidden provider hides an entry, which is what the location a row belongs to answers.
+    /// </summary>
+    /// <remarks>
+    /// The location is what a view holds, and a row staged for one location has to be faded by the same
+    /// answer that left it out of that location's listing.
+    /// </remarks>
+    /// <param name="entry">The entry to consider.</param>
+    /// <returns>Whether it is hidden.</returns>
+    protected bool Hides(Entry entry) => Browser.Hides(entry);
+
+    /// <summary>
+    /// Draws every row again with what the listing is worth now: how faded, and whether it is cut.
+    /// </summary>
+    /// <remarks>
+    /// For a change that leaves the entries exactly as they are — the switch that shows what is hidden
+    /// changes how the entries are drawn and not which ones there are, so the rows are already in the tree and
+    /// need their opacity said again rather than the view being built a second time.
+    /// </remarks>
+    public void Repaint()
     {
         foreach (var (entry, row) in _rows)
         {
@@ -479,6 +666,13 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The key.</param>
     private void Keyed(object? sender, KeyEventArgs e)
     {
+        // A name being edited is the box's own: the arrows move its caret and Enter takes what it says, so
+        // the keys below are not read while a row is a field. The listing is not what has the keyboard then.
+        if (_editor is not null || e.Source is TextBox)
+        {
+            return;
+        }
+
         _modifiers = e.KeyModifiers;
 
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
@@ -550,6 +744,13 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The text typed.</param>
     private void Typed(object? sender, TextInputEventArgs e)
     {
+        // The letters are the box's while a name is being edited, and the field's wherever else a field is
+        // what has the keyboard: what is typed there is a name, not a run to seek entries by.
+        if (_editor is not null || e.Source is TextBox)
+        {
+            return;
+        }
+
         var text = e.Text;
 
         if (_modifiers.HasFlag(KeyModifiers.Control) ||
@@ -1518,6 +1719,9 @@ internal sealed class ListBrowser : EntryView
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
+            // Marked with the class rather than kept in a field, because the row is made once and reused by
+            // the toolkit's virtualisation: what a rename edits is the name cell of the row as it stands.
+            Classes = { "entry-name" },
             FontWeight = entry.Kind == EntryKind.Directory && !Browser.IsUp(entry.Path)
                 ? FontWeight.SemiBold
                 : FontWeight.Normal,
@@ -1679,7 +1883,7 @@ internal sealed class GridBrowser : EntryView
                         TextAlignment = TextAlignment.Center,
                         TextWrapping = TextWrapping.NoWrap,
                         TextTrimming = TextTrimming.CharacterEllipsis,
-                        Classes = { "caption" },
+                        Classes = { "entry-name", "caption" },
                     },
                 },
             },

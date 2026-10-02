@@ -182,8 +182,8 @@ internal sealed class Desktop
     /// </summary>
     /// <remarks>
     /// A plugin that was not loaded is something the user may want to act on, so it is raised as well
-    /// as logged; an ordering note is information, so it is only logged. The plugin manager shows
-    /// both.
+    /// as logged. What the user's order costs is not reported here: the plugin manager shows it on
+    /// the card it belongs to, which is where it can be fixed.
     /// </remarks>
     private void Report(HostServices services)
     {
@@ -198,15 +198,6 @@ internal sealed class Desktop
                 LogLevel.Warn,
                 Core.Source,
                 $"{problem.Subject}: {problem.Description}"
-            );
-        }
-
-        foreach (var note in _state.Plugins.OrderingNotes)
-        {
-            services.Log.Record(
-                LogLevel.Info,
-                Core.Source,
-                $"{note.Subject} {note.Description}"
             );
         }
     }
