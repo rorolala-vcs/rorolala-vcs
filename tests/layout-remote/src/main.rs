@@ -14,6 +14,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::storage::Key;
 use librorolala::vault::{CONFIG_PATH, KEYS_DIR, LAYOUT_DIR, Vault};
 use librorolala::workspace::Workspace;
 use rorolala_utils_sandbox::{Guard, Serving, command, run, serve};
@@ -1788,8 +1789,72 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
+    // `--no-layout` reads no Layout, so there is no plan to name the content by; what moves is what
+    // the index holds, and only `--no-storage` leaves the content behind. A variant the Vault just
+    // gained has the stored object it points at carried with it.
+    run(&mut client(&workspace, &data, &["account", ALICE])).expect_success();
+
+    let source = workspace.join("nolayout/source.bin");
+    fs::create_dir_all(source.parent().expect("somewhere to put it")).expect("the directory");
+    fs::write(&source, b"no layout content").expect("content to send");
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["storage", "write-file", "nolayout/source.bin"],
+    ));
+    let stored = keys(&said.stdout);
+    let stored = stored.first().copied().expect("the stored key");
+
+    run(&mut client(
+        &workspace,
+        &data,
+        &["track", "nolayout/source.bin", "--message", "no layout"],
+    ))
+    .expect_success();
+
+    let before = run(&mut client(
+        &workspace,
+        &data,
+        &["storage", "ls-remote-storaged", VAULT_NAME],
+    ));
+    let before = keys(&before.stdout);
+
+    run(&mut client(
+        &workspace,
+        &data,
+        &["sync", "--no-layout", "--up-only"],
+    ))
+    .expect_success();
+
+    let after = run(&mut client(
+        &workspace,
+        &data,
+        &["storage", "ls-remote-storaged", VAULT_NAME],
+    ));
+    let after = keys(&after.stdout);
+
+    checked.wants(
+        "`--no-layout` carries the content of what it sends",
+        !before.contains(&stored) && after.contains(&stored),
+        &format!(
+            "the content was held before: {}, and after: {}",
+            before.contains(&stored),
+            after.contains(&stored)
+        ),
+    );
+
     serving.stop();
     checked.report();
+}
+
+/// The keys a store listing names, one a line.
+fn keys(said: &str) -> Vec<Key> {
+    said.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| line.parse().ok())
+        .collect()
 }
 
 /// The text of `said` with any terminal escape sequences taken out.

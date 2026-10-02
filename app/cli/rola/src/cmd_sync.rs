@@ -28,7 +28,7 @@ use librorolala::daemon::{
 };
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
-use librorolala::vcs::VCSIndex;
+use librorolala::vcs::{VCSIndex, VCSIndexObject};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
@@ -474,6 +474,14 @@ fn carry_with(
     vault_name: &str,
     account_name: &str,
 ) -> Result<(usize, usize, Vec<String>), ErrorSyncFailed> {
+    // A plan is what names the content to move, and `--no-layout` is the run that has none. Reading
+    // no Layout must not leave the content behind, though: `--no-storage` is the only thing that
+    // suppresses moving content. So with no plan what moves is everything the index holds — the
+    // stored object every variant points at, the new ones included — and it is read here, before the
+    // index is synced, so what crosses is this side's own work rather than everything the Vault
+    // holds as well.
+    let indexed = (plan.is_none() && !state.skip.storage).then(|| indexed(carry));
+
     if !state.skip.index
         && let Err(error) = carry.runtime.block_on(action_sync_index_all_async(
             carry.workspace,
@@ -512,15 +520,21 @@ fn carry_with(
     };
 
     if let Some(sources) = &sources {
-        let (receive, send) = content_of(&entries, state, carry);
+        if let Some(keys) = &indexed {
+            sources
+                .send(keys)
+                .map_err(|cause| ErrorSyncFailed { cause })?;
+        } else {
+            let (receive, send) = content_of(&entries, state, carry);
 
-        if let Some(store) = carry.store {
-            sources.bring(store, &receive);
+            if let Some(store) = carry.store {
+                sources.bring(store, &receive);
+            }
+
+            sources
+                .send(&send)
+                .map_err(|cause| ErrorSyncFailed { cause })?;
         }
-
-        sources
-            .send(&send)
-            .map_err(|cause| ErrorSyncFailed { cause })?;
     }
 
     let up_total = count(&entries, false);
@@ -573,6 +587,30 @@ fn carry_with(
     }
 
     Ok((applied, received, failed))
+}
+
+/// Every stored object the index names, for a run with no plan to name content by.
+///
+/// A variant is meaningful only once what it stored is beside it, and a run that read no Layout has
+/// no list of versions to work from: what the index holds is the list. Every variant's content is
+/// named, so the new variants a run just made have theirs carried the same way the old ones do.
+fn indexed(carry: &Carry<'_>) -> Vec<Key> {
+    let Ok(objects) = carry.runtime.block_on(carry.index.read_objects()) else {
+        return Vec::new();
+    };
+
+    let mut keys: Vec<Key> = objects
+        .into_iter()
+        .filter_map(|(_, object)| match object {
+            VCSIndexObject::Variant(variant) => Some(Key::new(*variant.storage_hash())),
+            _ => None,
+        })
+        .collect();
+
+    keys.sort_unstable();
+    keys.dedup();
+
+    keys
 }
 
 /// The content a plan needs moved: the objects a pull writes here, and the objects a push puts in
