@@ -285,6 +285,32 @@ impl Merging {
         place
     }
 
+    /// Whether the place `at`, read from `target`'s directory, is a path inside the Workspace.
+    ///
+    /// It is the check a run that is told where to put a variant file makes. A place that climbs out
+    /// of the Workspace is not one a record can hold — though a place that becomes one later, because
+    /// the target moved shallower, is held at the root rather than refused, which is what
+    /// [`Merging::variant_path`] does.
+    #[must_use]
+    pub fn place_holds(target: &LayoutPath, at: &Path) -> bool {
+        if at.is_absolute() {
+            return false;
+        }
+
+        let (directory, _) = target
+            .as_str()
+            .rsplit_once('/')
+            .unwrap_or(("", target.as_str()));
+
+        let mut said = String::from(directory);
+        if !said.is_empty() {
+            said.push('/');
+        }
+        said.push_str(&at.to_string_lossy());
+
+        LayoutPath::new(&said).is_ok()
+    }
+
     /// The paths of every variant file waiting, for a reading of the tree to leave out.
     ///
     /// A record whose target the Layout no longer names names no path: what is left of it is nothing
@@ -352,6 +378,12 @@ impl Merging {
 /// where the target is `hero.psd`, and `README_1a2b3c4` where it has no suffix, since a suffix a
 /// file did not have is not one to give it. The hash is there so the name says which variant it is
 /// without anything being read, and the target's directory is there so both move together.
+///
+/// A place of the run's own is read from the target's directory. A target that moves to a shallower
+/// directory can leave such a place climbing past the root — `../x` read from `a/` is `x`, and read
+/// from the root it is nothing — and it is then held at the root rather than refused: the file is
+/// where it is, and a merge that lost it because its target moved would be a tracking lost for no
+/// reason. What a run may *say* is still checked on the way in, by [`Merging::place_holds`].
 fn variant_path(
     target: &LayoutPath,
     at: Option<&Path>,
@@ -362,8 +394,6 @@ fn variant_path(
         .rsplit_once('/')
         .unwrap_or(("", target.as_str()));
 
-    // A place of the run's own is read from the target's directory, and one that reaches out of the
-    // Workspace names nothing a Layout could hold.
     if at.is_some_and(Path::is_absolute) {
         return None;
     }
@@ -377,18 +407,34 @@ fn variant_path(
                 format!("{directory}/{derived}")
             }
         },
-        |at| {
-            let mut said = String::from(directory);
-            if !said.is_empty() {
-                said.push('/');
-            }
-            said.push_str(&at.to_string_lossy());
-
-            said
-        },
+        |at| held_at(directory, at),
     );
 
     LayoutPath::new(&name).ok()
+}
+
+/// The path `at` names, read from `directory` and held inside the Workspace.
+///
+/// A `..` with nothing before it is dropped rather than climbing past the root, which is what keeps
+/// a place readable after its target moves shallower.
+fn held_at(directory: &str, at: &Path) -> String {
+    let mut parts: Vec<&str> = directory
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
+    let text = at.to_string_lossy();
+
+    for part in text.split(['/', '\\']) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            other => parts.push(other),
+        }
+    }
+
+    parts.join("/")
 }
 
 /// The name a variant file takes beside a target named `target`.
@@ -426,7 +472,7 @@ mod tests {
     use rorolala_layout::LayoutPath;
     use uuid::Uuid;
 
-    use super::{Merging, Pending, derived_name};
+    use super::{Merging, Pending, derived_name, variant_path};
 
     /// A variant hash whose short form is `0102030`, so a name it makes is obvious.
     const VARIANT: [u8; 32] = [
@@ -537,5 +583,52 @@ mod tests {
             Some(Path::new("moved.psd"))
         );
         assert!(!merging.relocate(Uuid::from_u128(8), None));
+    }
+
+    /// Where the variant file for the target `target`, said to lie at `at`, is read.
+    fn variant_place(target: &str, at: &str) -> String {
+        variant_path(&path(target), Some(Path::new(at)), &VARIANT)
+            .expect("a place a Layout could name")
+            .as_str()
+            .to_owned()
+    }
+
+    #[test]
+    fn a_place_beside_the_targets_directory_is_read_from_it() {
+        assert_eq!(
+            variant_place("models/hero.psd", "moved.psd"),
+            "models/moved.psd"
+        );
+        assert_eq!(
+            variant_place("models/hero.psd", "sub/x.psd"),
+            "models/sub/x.psd"
+        );
+    }
+
+    #[test]
+    fn a_place_that_climbs_stops_at_the_root() {
+        assert_eq!(variant_place("models/hero.psd", "../x.psd"), "x.psd");
+        assert_eq!(variant_place("models/sub/hero.psd", "../../x.psd"), "x.psd");
+        assert_eq!(variant_place("hero.psd", "../x.psd"), "x.psd");
+    }
+
+    #[test]
+    fn a_place_a_run_is_told_is_held_to_what_it_can_hold() {
+        assert!(Merging::place_holds(
+            &path("models/hero.psd"),
+            Path::new("../x.psd")
+        ));
+        assert!(Merging::place_holds(
+            &path("models/hero.psd"),
+            Path::new("sub/x.psd")
+        ));
+        assert!(!Merging::place_holds(
+            &path("hero.psd"),
+            Path::new("../x.psd")
+        ));
+        assert!(!Merging::place_holds(
+            &path("hero.psd"),
+            Path::new("/elsewhere/x.psd")
+        ));
     }
 }

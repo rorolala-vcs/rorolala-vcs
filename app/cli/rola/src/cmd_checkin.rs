@@ -449,6 +449,16 @@ fn checkin_variant(
         }
     }
 
+    // A place the run names is checked as it is given: one that climbs out of the Workspace is
+    // refused rather than held at the root, since there is no target that has moved yet to excuse
+    // it. A place that comes to climb out later, by the target moving shallower, is held instead.
+    if let Some(at) = at
+        && let Some(target_path) = layout.path_of(id)
+        && !Merging::place_holds(&target_path, Path::new(at))
+    {
+        return join_failed(target, t!("checkin.err_join_place").trim());
+    }
+
     let pending = Pending::new(id, *variant_key.digest(), at.map(PathBuf::from));
     let Some(path) = merging.variant_path(layout, &pending) else {
         return join_failed(target, t!("checkin.err_join_place").trim());
