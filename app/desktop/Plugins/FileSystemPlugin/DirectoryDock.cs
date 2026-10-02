@@ -171,6 +171,17 @@ internal sealed class DirectoryControl : UserControl
     private IReadOnlyList<Entry>? _drawn;
 
     /// <summary>
+    /// The directory the dock last drew, so that a choice is only carried across a rebuild of the same one.
+    /// </summary>
+    /// <remarks>
+    /// Stepping into another directory builds the view again as much as a reread does, and a choice is about the
+    /// files of the directory it was made in: carrying it into another one would choose whatever happened to be
+    /// named the same there, and the way up, which is named the same everywhere, would be chosen in every
+    /// directory the user stepped into.
+    /// </remarks>
+    private string? _drawnAt;
+
+    /// <summary>
     /// What this dock is looking at now.
     /// </summary>
     /// <remarks>
@@ -597,12 +608,18 @@ internal sealed class DirectoryControl : UserControl
         var on = Keys.On(this);
         var seating = _view is { } was && Keys.Holds(on, was);
 
+        // What was chosen goes with it, for the same reason the tree keeps what was open: a read that found the
+        // files it found before is not a reason to stop working with them (Section 7.7). Only within one
+        // directory — stepping elsewhere is a different listing, and its choice starts empty.
+        var chosen = _drawnAt == Location.Current ? _view?.Chosen() ?? [] : [];
+
         EntryView drawn = _zoom.Value > GridAbove
             ? new GridBrowser(_host, Location, _actions, _clip, Icons.SizeAt(_zoom.Value))
             : new ListBrowser(_host, Location, _actions, _clip);
         _view = drawn;
 
         _content.Content = drawn;
+        drawn.Choose(chosen);
 
         // Said here rather than left to the view: whether the listing was drawn again is the other half of
         // "did a change reach this dock", and a report of one that did not cannot tell the two halves apart.
@@ -614,6 +631,7 @@ internal sealed class DirectoryControl : UserControl
         }
 
         _drawn = Location.Shown;
+        _drawnAt = Location.Current;
     }
 
     /// <summary>

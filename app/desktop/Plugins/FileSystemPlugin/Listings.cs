@@ -625,10 +625,21 @@ internal abstract class EntryView : UserControl
         return chosen.Count > 0 || Lead is not { } lead ? chosen : [lead];
     }
 
+    /// <summary>
+    /// What this view is showing.
+    /// </summary>
+    /// <remarks>
+    /// The listing the view was built with rather than the browser's latest: a read of the directory replaces what
+    /// the browser shows before anything is told of it, so a view asked what was chosen just before it is built
+    /// again has to answer for the rows it is still showing, or the choice would be read against files that moved
+    /// under it.
+    /// </remarks>
+    private IReadOnlyList<Entry> ShownEntries => List.ItemsSource as IReadOnlyList<Entry> ?? Browser.Shown;
+
     /// <summary>The chosen entries, in the order the listing shows.</summary>
-    protected IReadOnlyList<Entry> Chosen()
+    public IReadOnlyList<Entry> Chosen()
     {
-        var shown = Browser.Shown;
+        var shown = ShownEntries;
         var chosen = new List<Entry>();
 
         foreach (var at in List.Selection.SelectedIndexes)
@@ -640,6 +651,68 @@ internal abstract class EntryView : UserControl
         }
 
         return chosen;
+    }
+
+    /// <summary>
+    /// Puts the choice back on what it was on before the listing was built again.
+    /// </summary>
+    /// <remarks>
+    /// A listing is built again whenever its directory is read again — a window come back to, a key asking for a
+    /// refresh, a change of zoom — and the choice is what the user was working with. Losing it to a read that
+    /// found the same files is losing work rather than changing the subject, and the tree keeps its own choice
+    /// across the same rebuild for the same reason. An entry that is gone is simply not chosen again: a listing
+    /// whose files have changed is not the place to report which of them went.
+    /// </remarks>
+    /// <param name="chosen">What was chosen, in the order it was.</param>
+    public void Choose(IReadOnlyList<Entry> chosen)
+    {
+        if (chosen.Count == 0)
+        {
+            return;
+        }
+
+        var shown = ShownEntries;
+        var last = -1;
+
+        using (List.Selection.BatchUpdate())
+        {
+            List.Selection.Clear();
+
+            foreach (var entry in chosen)
+            {
+                var at = Index(shown, entry);
+
+                if (at < 0)
+                {
+                    continue;
+                }
+
+                List.Selection.Select(at);
+                last = at;
+            }
+        }
+
+        if (last >= 0)
+        {
+            _lead = last;
+        }
+    }
+
+    /// <summary>Where an entry stands in a listing, or nothing when it is not there.</summary>
+    /// <param name="shown">The listing.</param>
+    /// <param name="entry">The entry to find.</param>
+    /// <returns>The place it stands in, or nothing.</returns>
+    private static int Index(IReadOnlyList<Entry> shown, Entry entry)
+    {
+        for (var at = 0; at < shown.Count; at++)
+        {
+            if (shown[at] == entry)
+            {
+                return at;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>
