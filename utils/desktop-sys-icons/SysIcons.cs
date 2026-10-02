@@ -91,7 +91,7 @@ public static class SysIcons
         {
             if (OperatingSystem.IsWindows())
             {
-                return ShellIcon.Drawn(kind);
+                return ShellIcon.Drawn(kind, size);
             }
 
             if (OperatingSystem.IsLinux())

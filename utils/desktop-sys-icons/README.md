@@ -17,7 +17,10 @@ though it belongs wherever it is started.
   per icon: what comes back is kept.
 - **Windows** — the shell, through `SHGetFileInfo`, asked about the kind of thing rather than about a
   path: every directory is drawn with the folder icon, and nothing has to exist on disk to be asked
-  about.
+  about. The shell keeps that icon at four sizes — 16, 32, 48 and 256 pixels — and the one wanted is
+  read from the list that holds it, so what a caller draws at the size it asks for is the size the
+  shell has and not one size stretched: only 56 to 256, which the shell keeps nothing in between, is
+  read at 256 and drawn smaller.
 - **Anywhere else** — nothing, which a caller draws as it likes. macOS is one of those for now.
 
 ## What it is not

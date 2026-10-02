@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -17,15 +18,25 @@ namespace RorolalaDesktop.SysIcons;
 /// disk, and every directory gets the same picture, which is what an icon for a kind of thing is.
 /// </para>
 /// <para>
+/// The shell keeps that picture at four sizes and the one wanted is read from the list that holds it,
+/// rather than the one size there is and a stretch afterward: a grid whose icons are drawn at the
+/// size the zoom asks for is drawn from the size the shell has, and only a size the shell does not
+/// keep is scaled at all.
+/// </para>
+/// <para>
 /// This cannot be run where it is written — it is Windows-only code on a machine that has no Windows —
-/// and it is written so that being wrong costs a placeholder icon rather than a broken listing.
+/// and it is written so that being wrong costs a placeholder icon rather than a broken listing. What
+/// it is written on is said by the attribute below rather than by a comment, so that the compiler
+/// checks it holds of every caller.
 /// </para>
 /// </remarks>
+[SupportedOSPlatform("windows")]
 internal static class ShellIcon
 {
-    /// <summary>The shell's icon for one kind of thing, at its small size, or nothing.</summary>
+    /// <summary>The shell's icon for one kind of thing, at a size, or nothing.</summary>
     /// <param name="kind">The kind of thing the icon is for.</param>
-    public static Bitmap? Drawn(Kind kind)
+    /// <param name="size">How many pixels wide and tall the icon is wanted.</param>
+    public static Bitmap? Drawn(Kind kind, int size)
     {
         var info = default(SHFILEINFO);
 
@@ -34,7 +45,7 @@ internal static class ShellIcon
             kind == Kind.Directory ? FileAttributeDirectory : FileAttributeNormal,
             ref info,
             (uint)Marshal.SizeOf<SHFILEINFO>(),
-            Icon | SmallIcon | UseFileAttributes
+            Icon | SysIconIndex | UseFileAttributes
         );
 
         if (answered == IntPtr.Zero || info.Icon == IntPtr.Zero)
@@ -44,11 +55,59 @@ internal static class ShellIcon
 
         try
         {
-            return Pixels(info.Icon);
+            return Listed(info.Index, size) ?? Pixels(info.Icon);
         }
         finally
         {
             DestroyIcon(info.Icon);
+        }
+    }
+
+    /// <summary>
+    /// The shell's picture of the icon at <paramref name="index"/>, in the list that keeps it at a
+    /// size, or nothing when the shell will not give it.
+    /// </summary>
+    /// <remarks>
+    /// The four lists hold the same icons, one size each — 16, 32, 48 and 256 pixels, measured rather
+    /// than remembered — so the index one is named by is the index in all of them. What is asked for
+    /// is the smallest list that is not smaller than the size wanted, since a picture enlarged is a
+    /// picture the shell could have given better, and the shell keeps nothing between 48 and 256: a
+    /// size in between is read at 256 and drawn smaller, which is what the grid's larger zooms are.
+    /// </remarks>
+    /// <param name="index">Where the icon sits in the shell's own list of icons.</param>
+    /// <param name="size">How many pixels wide and tall the icon is wanted.</param>
+    private static Bitmap? Listed(int index, int size)
+    {
+        var iid = IIDImageList;
+        var chosen = size <= Small ? List.Small
+            : size <= Large ? List.Large
+            : size <= ExtraLarge ? List.ExtraLarge
+            : List.Jumbo;
+
+        if (SHGetImageList(chosen, ref iid, out var list) != 0 || list is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (list.GetIcon(index, Transparent, out var icon) != 0 || icon == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                return Pixels(icon);
+            }
+            finally
+            {
+                DestroyIcon(icon);
+            }
+        }
+        finally
+        {
+            _ = Marshal.ReleaseComObject(list);
         }
     }
 
@@ -158,6 +217,10 @@ internal static class ShellIcon
         uint flags
     );
 
+    /// <summary>Asks the shell for one of the four lists it keeps its icons in.</summary>
+    [DllImport("shell32")]
+    private static extern int SHGetImageList(List list, ref Guid iid, out IImageList? images);
+
     /// <summary>Gives an icon handle back, since what the shell handed out is the caller's to free.</summary>
     [DllImport("user32")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -200,8 +263,11 @@ internal static class ShellIcon
     /// <summary>An icon, wanted as one rather than as what it stands for.</summary>
     private const uint Icon = 0x0000_0100;
 
-    /// <summary>An icon at the size the shell keeps for a list, which is the size a listing draws.</summary>
-    private const uint SmallIcon = 0x0000_0001;
+    /// <summary>
+    /// The place the icon has in the shell's own lists, which is what the icon is read from when it is
+    /// wanted at a size the shell keeps a separate list for.
+    /// </summary>
+    private const uint SysIconIndex = 0x0000_4000;
 
     /// <summary>An answer about a kind of thing rather than about a path, so that nothing has to exist.</summary>
     private const uint UseFileAttributes = 0x0000_0010;
@@ -212,8 +278,95 @@ internal static class ShellIcon
     /// <summary>What a file that is nothing in particular is, as an attribute.</summary>
     private const uint FileAttributeNormal = 0x0000_0080;
 
+    /// <summary>What an icon drawn from a list is taken with: the mask it is cut out by is not drawn.</summary>
+    private const uint Transparent = 0x0000_0001;
+
     /// <summary>Pixels packed four bytes to a pixel, in the order red, green, blue, unused.</summary>
     private const uint Rgb = 0;
+
+    /// <summary>The size of the smallest picture the shell keeps of an icon.</summary>
+    private const int Small = 16;
+
+    /// <summary>The size of the second smallest, which is the one a path asked about is answered with.</summary>
+    private const int Large = 32;
+
+    /// <summary>The largest size below the one the shell keeps for a thumbnail view.</summary>
+    private const int ExtraLarge = 48;
+
+    /// <summary>The interface an icon list is reached through, which is the one the shell hands back.</summary>
+    private static readonly Guid IIDImageList = new("46EB5926-582E-4017-9FDF-E8998DAA0950");
+
+    /// <summary>
+    /// One of the four lists the shell keeps its icons in, by the size it holds them at.
+    /// </summary>
+    /// <remarks>
+    /// The values are the shell's own, and they are not in size order: the large list is the first one
+    /// and the small one the second. What each actually holds — 32, 16, 48 and 256 — is what asking it
+    /// answers with, which is not something the names say.
+    /// </remarks>
+    private enum List
+    {
+        /// <summary>Thirty-two pixels.</summary>
+        Large = 0,
+
+        /// <summary>Sixteen pixels.</summary>
+        Small = 1,
+
+        /// <summary>Forty-eight pixels.</summary>
+        ExtraLarge = 2,
+
+        /// <summary>Two hundred and fifty-six pixels, which is the largest the shell keeps.</summary>
+        Jumbo = 4,
+    }
+
+    /// <summary>
+    /// A list of icons, as the shell hands one over.
+    /// </summary>
+    /// <remarks>
+    /// A COM interface is reached by the order its methods are declared in rather than by their names, so
+    /// the seven that come before the one this needs are declared and never called: leaving them out would
+    /// put <see cref="GetIcon"/> in front of them, where the shell's <c>AddMasked</c> is.
+    /// </remarks>
+    [ComImport]
+    [Guid("46EB5926-582E-4017-9FDF-E8998DAA0950")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IImageList
+    {
+        /// <summary>Never called: the first slot, which the shell's <c>Add</c> is at.</summary>
+        [PreserveSig]
+        int Add(IntPtr parameters);
+
+        /// <summary>Never called: the second slot, which the shell's <c>ReplaceIcon</c> is at.</summary>
+        [PreserveSig]
+        int ReplaceIcon(int index, IntPtr icon, out int replaced);
+
+        /// <summary>Never called: the third slot, which the shell's <c>SetOverlayImage</c> is at.</summary>
+        [PreserveSig]
+        int SetOverlayImage(int image, int overlay);
+
+        /// <summary>Never called: the fourth slot, which the shell's <c>Replace</c> is at.</summary>
+        [PreserveSig]
+        int Replace(int index, IntPtr icon);
+
+        /// <summary>Never called: the fifth slot, which the shell's <c>AddMasked</c> is at.</summary>
+        [PreserveSig]
+        int AddMasked(IntPtr mask, int colour);
+
+        /// <summary>Never called: the sixth slot, which the shell's <c>Draw</c> is at.</summary>
+        [PreserveSig]
+        int Draw(IntPtr parameters);
+
+        /// <summary>Never called: the seventh slot, which the shell's <c>Remove</c> is at.</summary>
+        [PreserveSig]
+        int Remove(int index);
+
+        /// <summary>The icon at a place in this list, which the caller frees.</summary>
+        /// <param name="index">Where the icon sits in the list.</param>
+        /// <param name="flags">What the icon is taken with.</param>
+        /// <param name="icon">The icon, or nothing where there is none.</param>
+        [PreserveSig]
+        int GetIcon(int index, uint flags, out IntPtr icon);
+    }
 
     /// <summary>What the shell says about a name.</summary>
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
