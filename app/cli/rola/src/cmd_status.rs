@@ -998,27 +998,43 @@ pub fn render_result_status(result: ResultStatus) {
             r_println!("");
 
             for item in &result.merging {
-                let said = item.moved.as_ref().map_or_else(
-                    || {
-                        t!(
-                            "status.merging_line",
-                            target = item.target,
-                            variant = short(&item.variant),
-                            path = item.path
-                        )
-                    },
-                    |to| {
-                        t!(
-                            "status.merging_line_moved",
-                            target = item.target,
-                            variant = short(&item.variant),
-                            from = item.path,
-                            to = to
-                        )
-                    },
-                );
-
-                r_println!("{}", trd!(said).trim());
+                match &item.moved {
+                    // Where the file moved from and to is said on a line of its own, quoted: `<-`
+                    // and `->` on one line would be read as the theme's flag markers, and a marker
+                    // that is never closed takes the rest of the line with it.
+                    Some(to) => {
+                        r_println!(
+                            "{}",
+                            trd!(t!(
+                                "status.merging_line_moved",
+                                target = item.target,
+                                variant = short(&item.variant)
+                            ))
+                            .trim()
+                        );
+                        r_println!(
+                            "{}",
+                            trd!(t!(
+                                "status.merging_line_moved_to",
+                                from = item.path,
+                                to = to
+                            ))
+                            .trim()
+                        );
+                    }
+                    None => {
+                        r_println!(
+                            "{}",
+                            trd!(t!(
+                                "status.merging_line",
+                                target = item.target,
+                                variant = short(&item.variant),
+                                path = item.path
+                            ))
+                            .trim()
+                        );
+                    }
+                }
             }
 
             for cause in &result.broken {

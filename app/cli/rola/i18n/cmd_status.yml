@@ -191,8 +191,12 @@ status:
     zh-CN: "& %{target} <- %{variant}（%{path}）"
 
   merging_line_moved:
-    en: "& %{target} <- %{variant} (%{from} -> %{to})"
-    zh-CN: "& %{target} <- %{variant}（%{from} -> %{to}）"
+    en: "& %{target} <- %{variant}"
+    zh-CN: "& %{target} <- %{variant}"
+
+  merging_line_moved_to:
+    en: "> %{from} -> %{to}"
+    zh-CN: "> %{from} -> %{to}"
 
   help_merging:
     en: "Record a merge with `rola track <file>`, or cancel it with `rola align --delete`"
