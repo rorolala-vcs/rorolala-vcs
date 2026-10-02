@@ -56,6 +56,7 @@ fn main() {
     index(&rola, &ws, &mut checked);
     movement(&rola, &plain, &files, &mut checked);
     accounts(&rola, &plain, &ws, &mut checked);
+    lookback(&rola, &ws, &mut checked);
     vaults(&rola, &ws, &mut checked);
     explain(&rola, &ws, &mut checked);
     output(&rola, &ws, &mut checked);
@@ -543,6 +544,34 @@ fn accounts(rola: &Rola, plain: &Path, ws: &Path, checked: &mut Checked) {
             == Some("bob"),
         &said(&ran),
     );
+}
+
+/// Looking back from one thing in the tree, named the way a shell names it.
+fn lookback(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    let models = ws.join("models");
+    fs::create_dir_all(&models).expect("a directory to work in");
+    fs::write(models.join("hero.psd"), "hero\n").expect("a file to record");
+
+    let ran = rola.run(
+        ws,
+        &["track", "models/hero.psd", "--message", "hero", "--no-editor"],
+    );
+    checked.exits("a file under a directory is recorded", &ran, 0);
+
+    // A name is completed from where the run was made, so that is where it is read from: a run made
+    // above the file and one made beside it name the same file, each the way its shell writes it.
+    let ran = rola.run(ws, &["status", "models/hero.psd"]);
+    checked.exits("a path from the run's own directory is found", &ran, 0);
+    checked.stdout_has("the chain is drawn", &ran, "hero");
+
+    let ran = rola.run(&models, &["status", "hero.psd"]);
+    checked.exits("a name read from where the run was made is found", &ran, 0);
+    checked.stdout_has("the chain is drawn there too", &ran, "hero");
+
+    // A path written from the Layout's root is what a run elsewhere in the tree would have meant,
+    // so it still reads when a run beside the file names it that way.
+    let ran = rola.run(&models, &["status", "models/hero.psd"]);
+    checked.exits("a path written from the root still reads", &ran, 0);
 }
 
 /// The Vaults a Workspace knows, and what a run that may not reach one does.

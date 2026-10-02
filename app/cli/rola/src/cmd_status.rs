@@ -12,6 +12,7 @@
 
 use std::collections::BTreeSet;
 
+use std::path::{Component, Path, PathBuf};
 use std::str::FromStr as _;
 
 use librorolala::layout::{Layout, LayoutPath};
@@ -171,7 +172,12 @@ pub fn handle_status(
         let me = account.get_ref().must_bind().ok();
         let me = me.as_deref();
 
-        return lookback_of(&target, &layout, held, index, me);
+        // A name is written against where the run was made, the way `rola track` and `rola align`
+        // read one, so the reading starts there. A run whose own directory cannot be read still
+        // reads the name as the Layout writes it.
+        let cwd = std::env::current_dir().ok();
+
+        return lookback_of(&target, &layout, held, index, me, cwd.as_deref());
     }
 
     let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
@@ -240,12 +246,12 @@ struct Found {
 
 /// Draws the chain what `target` names sits at the top of.
 ///
-/// What a target may name is read in the order a run is likely to have meant: a path in the Layout
-/// being worked in, where a path of the Layout has moved to in the tree, a path in the Vault's own
-/// Layout as the copy here has it, a `Uuid`, then the hash of an index object. The first that names
-/// something is what is drawn — so a name that is a path of this work is the work's, even when some
-/// object of the index happens to hash to it — and a target that names nothing at all is refused
-/// rather than guessed at.
+/// What a target may name is read in the order a run is likely to have meant: a path read from where
+/// the run was made, a path of the Layout being worked in, where a path of the Layout has moved to
+/// in the tree, a path in the Vault's own Layout as the copy here has it, a `Uuid`, then the hash of
+/// an index object. The first that names something is what is drawn — so a name that is a path of
+/// this work is the work's, even when some object of the index happens to hash to it — and a target
+/// that names nothing at all is refused rather than guessed at.
 #[routeify]
 fn lookback_of(
     target: &str,
@@ -253,6 +259,7 @@ fn lookback_of(
     held: &Workspace,
     index: &mut LazyRes<ResVCSIndex>,
     me: Option<&str>,
+    cwd: Option<&Path>,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
@@ -268,6 +275,7 @@ fn lookback_of(
         layout,
         remote.as_ref().map(|(_, layout)| layout),
         held,
+        cwd,
     ) {
         Ok(found) => found,
         Err(cause) => {
@@ -470,54 +478,119 @@ fn tracked_layout(held: &Workspace) -> Option<(String, Layout)> {
     Layout::open(&dir).ok().map(|layout| (track, layout))
 }
 
+/// The paths `target` may name, in the order a run is likely to have meant them.
+///
+/// A name is written the way a shell writes one — against the directory the run was made in, or
+/// absolute — while a Layout names a path from the Workspace root. Where the run was made is what
+/// the name is read against first, since that is what the completion offered and what the commands
+/// acting on the tree take. A relative name as it stands is read after, so a path written from the
+/// root keeps working from anywhere in the tree. An absolute name has no such second reading: a
+/// Layout path is always relative, and taking the leading separator off would name a path of the
+/// root beginning with the name's own first component rather than the file that was named.
+fn targets(target: &str, root: &Path, cwd: Option<&Path>) -> Vec<LayoutPath> {
+    let mut paths = Vec::new();
+
+    if let Some(cwd) = cwd {
+        let root = normalize(root);
+        let absolute = normalize(&resolve(cwd, target));
+
+        if let Ok(relative) = absolute.strip_prefix(&root)
+            && let Ok(path) = LayoutPath::from_relative(relative)
+        {
+            paths.push(path);
+        }
+    }
+
+    if !Path::new(target).is_absolute()
+        && let Ok(path) = LayoutPath::new(target)
+        && !paths.contains(&path)
+    {
+        paths.push(path);
+    }
+
+    paths
+}
+
+/// The path `given` names, made absolute against the directory the run was made in.
+fn resolve(cwd: &Path, given: &str) -> PathBuf {
+    if Path::new(given).is_absolute() {
+        PathBuf::from(given)
+    } else {
+        cwd.join(given)
+    }
+}
+
+/// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
+///
+/// Working it out here, before the disk is asked anything, is what lets a name be read from where
+/// the run was made even when the path it makes does not exist — a file the Layout names and the
+/// tree has lost is exactly what a status is asked about.
+fn normalize(path: &Path) -> PathBuf {
+    let mut components: Vec<Component<'_>> = Vec::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
+                components.pop();
+            }
+            other => components.push(other),
+        }
+    }
+
+    components.into_iter().collect()
+}
+
 /// Reads what `target` names, in the order a run is likely to have meant it.
+///
+/// Every path is read from where the run was made first, which is how a shell writes a name and how
+/// `rola track`, `rola align` and the completion read one, and a relative one is read again as it
+/// stands, which is how a Layout names a path from its root. The first reading that names something
+/// is what is answered, so a name means the file beside the run when there is one, and keeps meaning
+/// the file at the root otherwise. A `Uuid` and a hash are read by shape and name no path at all.
 fn found(
     target: &str,
     layout: &Layout,
     remote: Option<&Layout>,
     held: &Workspace,
+    cwd: Option<&Path>,
 ) -> Result<Found, String> {
-    let path = LayoutPath::new(target).ok();
-
-    if let Some(path) = &path
-        && let Some(id) = layout.id_of(path)
-    {
-        return Ok(Found {
-            key: Key::new(version_of(layout, id)?),
-            editing: editing(held, layout, path)?,
-            id: Some(id),
-        });
-    }
-
-    // A path the Layout does not name is still a path of this work when the tree reading finds a
-    // path it does name moved there: a move's destination is how a run asks after the file that
-    // moved, since that is where it is now. What is on disk is asked before the reading is, so a
-    // hash — which also reads as a path — does not walk the tree for nothing.
-    if let Some(path) = &path
-        && held.get_root().join(path.to_path_buf()).is_file()
-    {
-        let diff = tree_diff(layout, held, DEFAULT_ALIKE).map_err(|error| error.to_string())?;
-
-        if let Some(rename) = diff.renamed.iter().find(|rename| rename.to == *path)
-            && let Some(id) = layout.id_of(&rename.from)
-        {
+    for path in targets(target, held.get_root(), cwd) {
+        if let Some(id) = layout.id_of(&path) {
             return Ok(Found {
                 key: Key::new(version_of(layout, id)?),
-                editing: diff.modified.contains(&rename.to),
+                editing: editing(held, layout, &path)?,
                 id: Some(id),
             });
         }
-    }
 
-    if let Some(remote) = remote
-        && let Some(path) = &path
-        && let Some(id) = remote.id_of(path)
-    {
-        return Ok(Found {
-            key: Key::new(version_of(remote, id)?),
-            editing: false,
-            id: Some(id),
-        });
+        // A path the Layout does not name is still a path of this work when the tree reading finds a
+        // path it does name moved there: a move's destination is how a run asks after the file that
+        // moved, since that is where it is now. What is on disk is asked before the reading is, so a
+        // hash — which also reads as a path — does not walk the tree for nothing.
+        if held.get_root().join(path.to_path_buf()).is_file() {
+            let diff = tree_diff(layout, held, DEFAULT_ALIKE).map_err(|error| error.to_string())?;
+
+            if let Some(rename) = diff.renamed.iter().find(|rename| rename.to == path)
+                && let Some(id) = layout.id_of(&rename.from)
+            {
+                return Ok(Found {
+                    key: Key::new(version_of(layout, id)?),
+                    editing: diff.modified.contains(&rename.to),
+                    id: Some(id),
+                });
+            }
+        }
+
+        if let Some(remote) = remote
+            && let Some(id) = remote.id_of(&path)
+        {
+            return Ok(Found {
+                key: Key::new(version_of(remote, id)?),
+                editing: false,
+                id: Some(id),
+            });
+        }
     }
 
     if let Ok(id) = Uuid::from_str(target) {
@@ -760,5 +833,81 @@ pub fn render_result_status(result: ResultStatus) {
         if !changed.is_empty() {
             r_println!("{}", help_line!(t!("status.help_track").trim()));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::targets;
+
+    /// The paths a run in `cwd` makes of `target`, in the order they would be tried.
+    fn candidates(target: &str, cwd: &str) -> Vec<String> {
+        targets(target, Path::new("/ws"), Some(Path::new(cwd)))
+            .into_iter()
+            .map(|path| path.as_str().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_name_beside_the_run_is_read_from_where_the_run_was_made() {
+        assert_eq!(
+            candidates("hero.psd", "/ws/models"),
+            vec!["models/hero.psd".to_owned(), "hero.psd".to_owned()]
+        );
+    }
+
+    #[test]
+    fn a_path_written_from_the_root_is_read_after_the_name_beside_the_run() {
+        assert_eq!(
+            candidates("models/hero.psd", "/ws/models"),
+            vec![
+                "models/models/hero.psd".to_owned(),
+                "models/hero.psd".to_owned()
+            ]
+        );
+    }
+
+    #[test]
+    fn a_name_read_at_the_root_is_read_once() {
+        assert_eq!(
+            candidates("models/hero.psd", "/ws"),
+            vec!["models/hero.psd".to_owned()]
+        );
+    }
+
+    #[test]
+    fn a_run_that_climbs_out_of_its_directory_is_read_where_it_lands() {
+        assert_eq!(
+            candidates("../hero.psd", "/ws/models/sub"),
+            vec!["models/hero.psd".to_owned()]
+        );
+    }
+
+    #[test]
+    fn an_absolute_name_is_read_from_the_root_once() {
+        assert_eq!(
+            candidates("/ws/models/hero.psd", "/elsewhere"),
+            vec!["models/hero.psd".to_owned()]
+        );
+    }
+
+    #[test]
+    fn a_name_climbing_out_of_the_root_names_nothing() {
+        assert!(candidates("../hero.psd", "/ws").is_empty());
+    }
+
+    #[test]
+    fn a_run_that_cannot_say_where_it_is_reads_the_name_as_written() {
+        let paths = targets("hero.psd", Path::new("/ws"), None);
+
+        assert_eq!(
+            paths
+                .into_iter()
+                .map(|path| path.as_str().to_owned())
+                .collect::<Vec<_>>(),
+            vec!["hero.psd".to_owned()]
+        );
     }
 }

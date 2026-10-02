@@ -42,6 +42,8 @@ status:
         may be is read in this order, and the first that names something is what is drawn: a path in
         the Layout being worked in, where a path of the Layout has moved to in the tree, a path in
         the Vault's own Layout as the copy here has it, a `Uuid`, then the hash of an index object.
+        A path is read from where the run was made, the way `rola track` reads one, and from the
+        Workspace root when that names nothing.
         A file whose changes were never recorded is drawn with an extra version over it, `??` being
         edited, since the work is on its way to a version the index does not have yet; a target that
         names nothing at all is refused.
@@ -72,7 +74,8 @@ status:
         指定 `<TARGET>` 时，改为画出以它为目标的那条版本链 —— 与 `rola vcs-index lookback` 同一幅图，
         同样的那几个 flag 也一并可用。目标的解读顺序如下，先认出什么就画什么：当前布局中的路径、
         当前布局中的路径移动到的新位置、保险库自己的布局（取回副本所见）中的路径、`Uuid`、
-        索引对象的哈希。文件若有未记录的改动，会在它之上多画一个版本 `?? 编辑中的版本`，因为工作
+        索引对象的哈希。路径按运行所在目录解读（与 `rola track` 相同），认不出时再按工作区根目录
+        解读。文件若有未记录的改动，会在它之上多画一个版本 `?? 编辑中的版本`，因为工作
         正走向一个索引里还没有的版本；完全认不出任何东西的目标会被拒绝。
 
         保险库自己的布局为该条目记录的那个版本，会在旁边标出保险库的名字，如 `(origin)`
