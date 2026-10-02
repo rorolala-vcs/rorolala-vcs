@@ -49,18 +49,18 @@ internal sealed class ThemeConfiguration
     /// The primary used when the file names none.
     /// </summary>
     /// <remarks>
-    /// A pale cyan: a light, quiet brand colour that the ink on it can be read against.
+    /// A warm pink: a quiet brand colour that the dark ink on it can be read against.
     /// </remarks>
-    public static readonly Color DefaultPrimary = Color.FromRgb(0xB2, 0xEB, 0xF2);
+    public static readonly Color DefaultPrimary = Color.FromRgb(0xFF, 0x7E, 0xA2);
 
     /// <summary>
     /// The accent used when the file names none.
     /// </summary>
     /// <remarks>
-    /// A pale pink, and spent only on the marks a drag draws — never on a selection, so that a mark can
+    /// A pale blue, and spent only on the marks a drag draws — never on a selection, so that a mark can
     /// always be told from a choice.
     /// </remarks>
-    public static readonly Color DefaultAccent = Color.FromRgb(0xF8, 0xBB, 0xD0);
+    public static readonly Color DefaultAccent = Color.FromRgb(0x7E, 0xA2, 0xFF);
 
     /// <summary>
     /// What is written on the primary when the file names none.
@@ -70,7 +70,7 @@ internal sealed class ThemeConfiguration
     /// its own lime rather than working one out. A primary the user chooses has no such name, so the look
     /// works one out by contrast when the file states none (Section 10).
     /// </remarks>
-    public static readonly Color DefaultPrimaryText = Color.FromRgb(0x0E, 0x24, 0x27);
+    public static readonly Color DefaultPrimaryText = Color.FromRgb(0x42, 0x21, 0x2A);
 
     /// <summary>The variant the program is drawn in, or nothing when the file names none.</summary>
     public ColorMode? Mode { get; set; }

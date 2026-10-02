@@ -49,9 +49,9 @@ public sealed class ConfigurationTests
         var written = File.ReadAllText(ConfigPaths.Theme);
         Assert.Contains("\"_version\": 1", written, StringComparison.Ordinal);
         Assert.Contains("\"mode\": \"system\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"primary\": \"#B2EBF2\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"primaryText\": \"#0E2427\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"accent\": \"#F8BBD0\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"primary\": \"#FF7EA2\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"primaryText\": \"#42212A\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"accent\": \"#7EA2FF\"", written, StringComparison.Ordinal);
     }
 
     /// <summary>A field the file does not name is a choice not made, which is not the same as the default.</summary>
