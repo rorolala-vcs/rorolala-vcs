@@ -136,16 +136,6 @@ pub fn render_error_workspace_creation(err: ErrorWorkspaceCreation, ec: &mut Res
                 .trim()
             );
         }
-        rorolala_workspace::CreationError::LayoutCreateFailed => {
-            r_eprintln!(
-                "{}",
-                err_line!(t!("error.workspace_creation.err_layout_create_failed")).trim()
-            );
-            r_eprintln!(
-                "{}",
-                help_line!(t!("error.workspace_creation.err_layout_create_failed_help")).trim()
-            );
-        }
         rorolala_workspace::CreationError::ConfigLocked => {
             r_eprintln!(
                 "{}",

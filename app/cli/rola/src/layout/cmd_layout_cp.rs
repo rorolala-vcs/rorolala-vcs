@@ -7,7 +7,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, PickerArg},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace, ResWorkspaceConfig};
@@ -25,6 +25,9 @@ use crate::layout::{ErrorLayoutArgument, ErrorLayoutTrackNotBound, failed};
 
 /// The Vault upstream the copy tracks.
 const ARG_TRACK: PickerArg<'static, Option<String>> = arg![track: Option<String>];
+
+/// Leave the Layout being worked in where it is, even when the Workspace had none.
+const ARG_NO_SET_LAYOUT: PickerArg<'static, Flag> = arg![no_set_layout: Flag];
 
 #[help(buffer)]
 pub fn help_layout_cp(_: EntryLayoutCp, ec: &mut ResExitCode) {
@@ -56,6 +59,7 @@ pub fn complete_layout_cp(
             &ctx,
             suggest! {
                 ARG_TRACK: t!("cmd_layout_cp.complete.track"),
+                ARG_NO_SET_LAYOUT: t!("cmd_layout_cp.complete.no_set_layout"),
             },
         );
     }
@@ -70,8 +74,10 @@ pub fn complete_layout_cp(
 /// Copies a Layout to a new name
 ///
 /// What is copied is the Layout's own files. What it was tracking is not: a copy is a new place to
-/// work, so it tracks only what `--track` names, or nothing when it names none. What is worked in
-/// does not change: `rola layout force-switch` is what switches.
+/// work, so it tracks only what `--track` names, or nothing when it names none. Making the first
+/// Layout in a Workspace is also choosing what is worked in, since there is then no other;
+/// `--no-set-layout` leaves the Workspace working in nothing. Otherwise what is worked in does not
+/// change: `rola layout force-switch` is what switches.
 ///
 /// # Errors
 ///
@@ -83,15 +89,22 @@ pub fn complete_layout_cp(
 pub fn layout_cp(args: EntryLayoutCp) -> Next {
     let picked = args
         .pick(&ARG_TRACK)
+        .pick(&ARG_NO_SET_LAYOUT)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (track, from, to) = match picked {
+    let (track, no_set_layout, from, to) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    StateLayoutCp { from, to, track }.into()
+    StateLayoutCp {
+        from,
+        to,
+        track,
+        set_current: matches!(no_set_layout, Flag::Inactive),
+    }
+    .into()
 }
 
 /// The state of copying a Layout.
@@ -103,6 +116,8 @@ pub struct StateLayoutCp {
     to: String,
     /// The Vault the copy is to track, when one was named.
     track: Option<String>,
+    /// Whether making it may also choose it as the one worked in.
+    set_current: bool,
 }
 
 #[chain]
@@ -111,7 +126,12 @@ pub fn handle_layout_cp(
     workspace: &mut LazyRes<ResWorkspace>,
     config: &mut LazyRes<ResWorkspaceConfig>,
 ) -> Next {
-    let StateLayoutCp { from, to, track } = state;
+    let StateLayoutCp {
+        from,
+        to,
+        track,
+        set_current,
+    } = state;
 
     let Some(workspace) = workspace.get_ref().as_ref() else {
         return ErrorShouldInWorkspace.into();
@@ -130,11 +150,25 @@ pub fn handle_layout_cp(
     }
 
     let layouts = workspace.layouts();
+
+    // Whether there is a Layout to work in is read before the copy is made: a Workspace that had
+    // none is one the copy is the first Layout of, and the first is what gets worked in.
+    let was_empty = match layouts.names() {
+        Ok(names) => names.is_empty(),
+        Err(error) => return failed(&error),
+    };
+
     if let Err(error) = layouts.copy(&from, &to) {
         return failed(&error);
     }
     if let Some(track) = &track
         && let Err(error) = layouts.set_track(&to, track)
+    {
+        return failed(&error);
+    }
+    if was_empty
+        && set_current
+        && let Err(error) = layouts.set_current(&to)
     {
         return failed(&error);
     }

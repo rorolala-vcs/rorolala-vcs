@@ -263,12 +263,29 @@ impl Layouts {
     }
 }
 
+/// The name a Layout would be given, worked out from what a caller wrote.
+///
+/// A name is a directory name, so it is the kebab-case form of what was written: one word of
+/// letters and digits with the words joined by `-`. What comes back is what the name is to be taken
+/// as — `My Vault` and `my-vault` are the same name said two ways rather than two names — or
+/// nothing when what was written holds no name at all, which is a name a Layout cannot be given.
+///
+/// This is the same rule a Layout's name is refused by, so a caller that normalises a name to show
+/// a person what it will become and one that refuses a name that was not normalised cannot come to
+/// disagree about what a name is.
+#[must_use]
+pub fn normalize_name(name: &str) -> Option<String> {
+    let normalized = CaseFormatter::from(name).to_kebab_case();
+
+    (!normalized.is_empty()).then_some(normalized)
+}
+
 /// Refuses `name` unless it is one a Layout may be given: kebab-case, and not nothing.
 fn checked(name: &str) -> Result<(), LayoutError> {
     // What makes a name kebab-case is that it is already what the formatter would make of it: a
     // word of letters and digits has no separator to be split on and comes back as itself, while a
     // path, a run of mixed case, or nothing at all does not.
-    if name.is_empty() || CaseFormatter::from(name).to_kebab_case() != name {
+    if normalize_name(name).as_deref() != Some(name) {
         return Err(LayoutError::Name(name.to_owned()));
     }
 

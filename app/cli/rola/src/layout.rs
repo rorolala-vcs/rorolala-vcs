@@ -44,8 +44,8 @@ use librorolala::layout::{Layout, LayoutError, LayoutPath, Layouts, MutableData}
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ALREADY_EXIST, EC_ERR_LAYOUT, EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_NOT_CACHED,
-    EC_ERR_LAYOUT_OWNERSHIP, EC_ERR_SHOULD_IN_WORKSPACE, EC_NOT_EXIST,
+    EC_ALREADY_EXIST, EC_ERR_LAYOUT, EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_NO_CURRENT,
+    EC_ERR_LAYOUT_NOT_CACHED, EC_ERR_LAYOUT_OWNERSHIP, EC_ERR_SHOULD_IN_WORKSPACE, EC_NOT_EXIST,
 };
 use crate::failure::failure;
 
@@ -164,11 +164,11 @@ pub fn render_error_layout_failed(error: ErrorLayoutFailed, ec: &mut ResExitCode
 ///
 /// # Errors
 ///
-/// Answers with the rendered failures of [`place`], with [`ErrorLayoutArgument`] when nothing is
-/// named and nothing is being worked in, or when a Vault run named one, with
-/// [`ErrorLayoutShouldInWorkspace`] when a Vault's Layout is named outside a Workspace, with
-/// [`ErrorLayoutNotCached`] when that Layout was never fetched, and with [`ErrorLayoutMissing`]
-/// when the one named is not there.
+/// Answers with the rendered failures of [`place`], with [`ErrorLayoutNoCurrent`] when nothing is
+/// named and the Workspace has no Layout being worked in, with [`ErrorLayoutArgument`] when a Vault
+/// run named one, with [`ErrorLayoutShouldInWorkspace`] when a Vault's Layout is named outside a
+/// Workspace, with [`ErrorLayoutNotCached`] when that Layout was never fetched, and with
+/// [`ErrorLayoutMissing`] when the one named is not there.
 pub fn chosen(
     workspace: &ResWorkspace,
     vault: &ResVault,
@@ -184,7 +184,10 @@ pub fn chosen(
                 Some(name) => name.to_owned(),
                 None => match layouts.current() {
                     Ok(Some(name)) => name,
-                    Ok(None) => return Err(ErrorLayoutArgument.into()),
+                    // A Workspace with no Layout being worked in has nowhere to work, which is a
+                    // different thing from a name that does not resolve: what is missing is the
+                    // Layout itself, and adding one is what makes the Workspace usable.
+                    Ok(None) => return Err(ErrorLayoutNoCurrent.into()),
                     Err(error) => return Err(failed(&error)),
                 },
             };
@@ -347,6 +350,40 @@ pub fn render_error_layout_argument(_: ErrorLayoutArgument, ec: &mut ResExitCode
         help_line!(t!("cmd_layout.err_layout_argument_help").trim())
     );
     ec.exit_code = EC_ERR_LAYOUT_ARGUMENT;
+}
+
+/// Error: the Workspace has no Layout to work in.
+///
+/// A Workspace that has just been made has none, and one whose Layouts were all taken away is back
+/// to that: nothing is wrong with the arguments, and nothing is missing by name — what is missing
+/// is the Layout itself, so it gets an answer of its own rather than the one for a name that does
+/// not resolve.
+#[derive(Grouped)]
+pub struct ErrorLayoutNoCurrent;
+
+impl Failure for ErrorLayoutNoCurrent {
+    fn name(&self) -> &'static str {
+        "error_layout_no_current"
+    }
+
+    fn reason(&self) -> String {
+        t!("cmd_layout.err_layout_no_current").trim().to_string()
+    }
+}
+
+failure!(ErrorLayoutNoCurrent);
+
+#[renderer(buffer)]
+pub fn render_error_layout_no_current(_: ErrorLayoutNoCurrent, ec: &mut ResExitCode) {
+    r_eprintln!(
+        "{}",
+        err_line!(t!("cmd_layout.err_layout_no_current").trim())
+    );
+    r_eprintln!(
+        "{}",
+        help_line!(t!("cmd_layout.err_layout_no_current_help").trim())
+    );
+    ec.exit_code = EC_ERR_LAYOUT_NO_CURRENT;
 }
 
 /// Error: there is already a Layout by that name.

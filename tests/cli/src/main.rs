@@ -33,6 +33,7 @@ fn main() {
     let initme = sandbox.join("initme");
     let files = sandbox.join("files");
     let ws = sandbox.join("ws");
+    let bindme = sandbox.join("bindme");
     let vault = sandbox.join("vault");
 
     for dir in [&home, &data, &rola_home, &empty, &plain, &initme, &files] {
@@ -50,6 +51,7 @@ fn main() {
     identity(&rola, &empty, &mut checked);
     creation(&rola, &empty, &initme, &ws, &vault, &mut checked);
     placement(&rola, &empty, &vault, &ws, &mut checked);
+    binding(&rola, &empty, &bindme, &mut checked);
     workspace(&rola, &ws, &mut checked);
     layouts(&rola, &ws, &vault, &mut checked);
     storage(&rola, &ws, &files, &mut checked);
@@ -211,6 +213,27 @@ fn placement(rola: &Rola, empty: &Path, vault: &Path, ws: &Path, checked: &mut C
 /// The local work a Workspace does: what is unrecorded, and what is asked of it before an
 /// account is named.
 fn workspace(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    // A Workspace is made without a Layout, since a name is the caller's to choose; one that has
+    // none cannot be worked in, and says so rather than answering as if it held nothing.
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("a Workspace with no Layout cannot be worked in", &ran, 194);
+    checked.stderr_has(
+        "the refusal says there is no Layout",
+        &ran,
+        "no Layout to work in",
+    );
+    checked.stdout_empty("the refusal is not a result", &ran);
+
+    let ran = rola.run(ws, &["layout", "ls"]);
+    checked.exits("a Workspace with no Layout still lists", &ran, 0);
+    checked.stdout_empty("a Workspace with no Layout lists nothing", &ran);
+
+    // Making the first Layout is also choosing what is worked in: there is nothing else it could
+    // be, and a Workspace nothing is worked in is one no local command can act on.
+    let ran = rola.run(ws, &["layout", "new", "main"]);
+    checked.exits("the first Layout is made", &ran, 0);
+    checked.stdout_has("the made Layout is named", &ran, "main");
+
     let ran = rola.run(ws, &["status"]);
     checked.exits("a fresh Workspace has nothing unrecorded", &ran, 0);
     checked.stdout_has("it says so", &ran, "nothing unrecorded");
@@ -264,15 +287,180 @@ fn workspace(rola: &Rola, ws: &Path, checked: &mut Checked) {
     checked.exits("packing what the store holds is made", &ran, 0);
 }
 
+/// Binding a Vault address as a name, which is what puts a fresh Workspace to work.
+fn binding(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
+    let ran = rola.run(empty, &["create", &text(ws)]);
+    checked.exits("a Workspace to bind into is made", &ran, 0);
+
+    let ran = rola.run(ws, &["bind"]);
+    checked.exits("binding with no address is refused", &ran, 70);
+    checked.stderr_has("the refusal says what is missing", &ran, "address");
+
+    // A name a Layout already holds is refused before anything is written, so what the Workspace
+    // was is what it still is.
+    let ran = rola.run(ws, &["layout", "new", "main"]);
+    checked.exits("a Layout is made to stand in the way", &ran, 0);
+
+    let ran = rola.run(ws, &["bind", "rola://127.0.0.1:7000/", "main"]);
+    checked.exits("a name a Layout holds is refused", &ran, 10);
+    checked.stderr_has("the refusal says the name is taken", &ran, "already");
+    checked.stdout_empty("the refusal is not a result", &ran);
+    checked.wants(
+        "the refused address was not written down",
+        !fs::read_to_string(ws.join(".rola/workspace.toml"))
+            .unwrap_or_default()
+            .contains("7000"),
+        &said(&ran),
+    );
+
+    // Everything after this is about a Workspace that has nothing in its way, so it is made
+    // again from nothing.
+    fs::remove_dir_all(ws).expect("the Workspace with the standing Layout");
+    let ran = rola.run(empty, &["create", &text(ws)]);
+    checked.exits("a Workspace with nothing in the way is made", &ran, 0);
+
+    // The name is one thing said once: the Vault is bound under it and a Layout by it is made, and
+    // the Workspace reaches for the Vault and works in the Layout.
+    let ran = rola.run(ws, &["bind", "rola://127.0.0.1:7001/"]);
+    checked.exits("an address is bound as `origin`", &ran, 0);
+    checked.stdout_has("the binding names the name", &ran, "origin");
+    checked.stdout_has("the binding names the address", &ran, "127.0.0.1:7001");
+    checked.stdout_has("it says the Layout is worked in", &ran, "worked in");
+    checked.wants(
+        "the Layout that was made is the one checked out",
+        fs::read_to_string(ws.join(".rola/LAYOUT")).is_ok_and(|it| it.trim() == "origin"),
+        &said(&ran),
+    );
+    checked.wants(
+        "the Layout tracks the Vault of the same name",
+        fs::read_to_string(ws.join(".rola/layouts/origin/TRACK"))
+            .is_ok_and(|it| it.trim() == "origin"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["vault"]);
+    checked.exits("the bound Vault is listed", &ran, 0);
+    checked.stdout_has("the bound Vault is the one reached for", &ran, "origin");
+
+    let ran = rola.run(ws, &["layout", "ls", "--json"]);
+    checked.exits("the Layouts are listed as data", &ran, 0);
+    checked.wants(
+        "the Layout being worked in is marked",
+        json(&ran).is_some_and(|value| {
+            layout_of(&value, "origin").and_then(|item| item.get("is_current"))
+                == Some(&serde_json::Value::Bool(true))
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("the Workspace is now one that can be worked in", &ran, 0);
+
+    // Binding it again under the same name is how the address is changed, the same as
+    // `rola vault bind`: the Layout that tracks it is the one this binding made, so it is the same
+    // binding said again rather than a name in the way.
+    let ran = rola.run(ws, &["bind", "rola://127.0.0.1:7002/"]);
+    checked.exits("binding a name that is there changes it", &ran, 0);
+    checked.stdout_has("the new address is named", &ran, "127.0.0.1:7002");
+    checked.wants(
+        "the changed address is written down",
+        fs::read_to_string(ws.join(".rola/workspace.toml")).is_ok_and(|it| it.contains("7002")),
+        &said(&ran),
+    );
+
+    // A name is normalised the way a Layout's is, so what is made is the kebab-case form of what
+    // was written.
+    let ran = rola.run(ws, &["bind", "rola://127.0.0.1:7004/", "Up Stream"]);
+    checked.exits("a name is normalised", &ran, 0);
+    checked.stdout_has("the normalised name is named", &ran, "up-stream");
+    checked.wants(
+        "the Layout is made under the normalised name",
+        ws.join(".rola/layouts/up-stream").is_dir(),
+        &said(&ran),
+    );
+
+    // A name that holds no name at all is refused: it cannot be a directory. The word is one the
+    // parser reads as a positional, so what is refused is the name rather than a flag in its place.
+    let ran = rola.run(ws, &["bind", "rola://127.0.0.1:7005/", "."]);
+    checked.exits("a name that is not one is refused", &ran, 190);
+    checked.stderr_has("the refusal says it is not a name", &ran, "name a Layout");
+    checked.stdout_empty("the refusal is not a result", &ran);
+    checked.wants(
+        "the refused address was not written down",
+        !fs::read_to_string(ws.join(".rola/workspace.toml"))
+            .unwrap_or_default()
+            .contains("7005"),
+        &said(&ran),
+    );
+
+    // An address that will not read is refused the way `rola vault bind` refuses one.
+    let ran = rola.run(ws, &["bind", "not an address", "other"]);
+    checked.exits("an address that is not one is refused", &ran, 70);
+    checked.stderr_has("the refusal says it is not an address", &ran, "not an address");
+
+    let ran = rola.run(empty, &["bind", "rola://127.0.0.1:7006/"]);
+    checked.exits("binding outside a Workspace is refused", &ran, 11);
+    checked.stdout_empty("the refusal is not a result", &ran);
+
+    // The Layout the binding made may be left unworked-in, which is what `--no-set-layout` asks
+    // for; the Workspace then has one and works in none, which is the state a later command says.
+    fs::remove_dir_all(ws).expect("the Workspace that was bound into");
+    let ran = rola.run(empty, &["create", &text(ws)]);
+    checked.exits("a third Workspace is made", &ran, 0);
+
+    let ran = rola.run(ws, &["bind", "rola://127.0.0.1:7007/", "--no-set-layout"]);
+    checked.exits("a binding may leave the work where it is", &ran, 0);
+    checked.wants(
+        "no Layout is checked out",
+        !ws.join(".rola/LAYOUT").is_file(),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("the Workspace with a Layout it does not work in says so", &ran, 194);
+
+    // `--no-set-default-vault` binds the address without choosing the Vault to reach for.
+    fs::remove_dir_all(ws).expect("the Workspace that was not worked in");
+    let ran = rola.run(empty, &["create", &text(ws)]);
+    checked.exits("a fourth Workspace is made", &ran, 0);
+
+    let ran = rola.run(
+        ws,
+        &[
+            "bind",
+            "rola://127.0.0.1:7008/",
+            "--no-set-default-vault",
+        ],
+    );
+    checked.exits("a binding may leave the default Vault alone", &ran, 0);
+    checked.stdout_has("the Layout is still worked in", &ran, "worked in");
+
+    let ran = rola.run(ws, &["vault", "default"]);
+    checked.exits("no default Vault was chosen", &ran, 0);
+    checked.stdout_empty("nothing is named as the default Vault", &ran);
+}
+
 /// The Layouts a Workspace holds, and a Vault's one.
 fn layouts(rola: &Rola, ws: &Path, vault: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["layout", "ls"]);
     checked.exits("the Layouts are listed", &ran, 0);
-    checked.stdout_has("the Layout made with the Workspace is there", &ran, "main");
+    checked.stdout_has("the Layout made first is there", &ran, "main");
 
     let ran = rola.run(ws, &["layout", "new", "extra"]);
     checked.exits("a Layout is made", &ran, 0);
     checked.stdout_has("the made Layout is named", &ran, "extra");
+
+    // A Layout made beside the one being worked in is not the one being worked in: choosing one is
+    // what `force-switch` is for, and making one must not choose it behind the caller's back.
+    let ran = rola.run(ws, &["layout", "ls", "--json"]);
+    checked.wants(
+        "making a Layout leaves the work where it was",
+        json(&ran).is_some_and(|value| {
+            layout_of(&value, "main").and_then(|item| item.get("is_current"))
+                == Some(&serde_json::Value::Bool(true))
+        }),
+        &said(&ran),
+    );
 
     let ran = rola.run(ws, &["layout", "new", "extra"]);
     checked.exits("a Layout whose name is taken is refused", &ran, 10);

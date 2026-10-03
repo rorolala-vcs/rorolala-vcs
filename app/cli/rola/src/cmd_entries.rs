@@ -32,7 +32,7 @@ use crate::exit_codes::{EC_ERR_LAYOUT, EC_HELP};
 use crate::failure::failure;
 use crate::format::ResFormat;
 use crate::layout::cmd_layout_entries::StateLayoutEntries;
-use crate::layout::{ErrorLayoutArgument, ErrorLayoutFailed};
+use crate::layout::{ErrorLayoutFailed, ErrorLayoutNoCurrent};
 
 /// What `rola entries` draws: the path alone, one a line.
 const PATH_TEMPLATE: &str = "{{ entries.path }}";
@@ -84,7 +84,7 @@ pub fn complete_entries(ctx: ShellContext) -> Suggest {
 /// # Errors
 ///
 /// Renders the run-not-in-a-workspace failure when the run is not inside a Workspace,
-/// [`ErrorLayoutArgument`] when there is no Layout to read, [`ErrorEntriesNoTrack`] when the
+/// [`ErrorLayoutNoCurrent`] when there is no Layout to read, [`ErrorEntriesNoTrack`] when the
 /// Layout being worked in tracks no Vault, [`ErrorLayoutNotCached`] when the Vault's Layout has not
 /// been fetched here, and [`ErrorLayoutFailed`] when what is there cannot be read.
 ///
@@ -138,7 +138,7 @@ pub fn handle_entries(
     let layouts = held.layouts();
     let name = match layouts.current() {
         Ok(Some(name)) => name,
-        Ok(None) => return ErrorLayoutArgument.into(),
+        Ok(None) => return ErrorLayoutNoCurrent.into(),
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     };
     let Some(track) = (match layouts.track(&name) {

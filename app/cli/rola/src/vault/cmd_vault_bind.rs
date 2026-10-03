@@ -196,6 +196,9 @@ pub fn render_result_vault_bound(result: ResultVaultBound) {
 }
 
 /// Error: the address a `rola vault bind` was given is missing.
+///
+/// It is shared with `rola bind`, which reads an address the same way; what is missing is the same
+/// thing either time, and only the example a person is shown is one command's.
 #[derive(Grouped)]
 pub struct ErrorVaultAddressMissing;
 
@@ -222,10 +225,14 @@ pub fn render_error_vault_address_missing(error: ErrorVaultAddressMissing, ec: &
 }
 
 /// Error: the address a `rola vault bind` was given would not read as one.
+///
+/// It is shared with `rola bind`, which reads an address the same way; the field is visible so the
+/// failure can be built where the address was read, and the words a person is shown stay this
+/// command's.
 #[derive(Grouped)]
 pub struct ErrorVaultAddressInvalid {
     /// The address that would not read.
-    address: String,
+    pub(crate) address: String,
 }
 
 impl Failure for ErrorVaultAddressInvalid {

@@ -18,6 +18,7 @@ rola:
 
         **Everyday**
             status                  Show how the working tree stands beside the Layout
+            bind <LINK> [NAME]      Bind a Vault address as NAME and start a Layout on it
             align <PATH>            Bring the tree and the Layout back into agreement
             fetch [VAULT]           Bring a Vault's Layout here as a read-only copy
             checkin <REF>... [TO]   Bring what the Vault holds but this Layout does not into it
@@ -55,6 +56,7 @@ rola:
 
         **日常使用**
             status                  展示工作树相对于布局的状态
+            bind <LINK> [NAME]      将保险库地址绑定为 NAME，并以此建立布局
             align <PATH>            让工作树与布局重新一致
             fetch [VAULT]           将某个保险库的布局取回为只读副本
             checkin <REF>... [TO]   把保险库持有、而当前布局没有的内容带入当前布局

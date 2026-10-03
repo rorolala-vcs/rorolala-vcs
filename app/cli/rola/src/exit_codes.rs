@@ -268,6 +268,9 @@ pub const EC_ERR_LAYOUT_NOT_CACHED: i32 = 192;
 /// `exit_codes.layout_ownership`
 pub const EC_ERR_LAYOUT_OWNERSHIP: i32 = 193;
 
+/// `exit_codes.layout_no_current`
+pub const EC_ERR_LAYOUT_NO_CURRENT: i32 = 194;
+
 // Tracking — writing content and recording it in a Layout
 
 /// `exit_codes.track`

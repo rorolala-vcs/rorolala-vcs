@@ -501,6 +501,7 @@ mod tests {
     use std::time::Duration;
 
     use rorolala_layout::{LayoutPath, MutableData};
+    use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
@@ -526,18 +527,33 @@ mod tests {
         LayoutPath::new(text).unwrap()
     }
 
-    /// A Workspace in a directory of its own, and the Layout it starts with.
+    /// A Workspace in a directory of its own, and the Layout it works in.
+    ///
+    /// A Workspace is made with no Layout, since the name of the first one is the caller's to
+    /// choose; every test here works in one, so the fixture makes it and works in it.
     fn workspace(label: &str) -> (PathBuf, Workspace) {
         let dir = scratch(label);
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
+        let layouts = workspace.layouts();
+        layouts.create(DEFAULT_LAYOUT_NAME).unwrap();
+        layouts.set_current(DEFAULT_LAYOUT_NAME).unwrap();
 
         (dir, workspace)
     }
 
-    /// Makes the Layout a Workspace starts with name `text`, held by no account.
+    /// The Layout a Workspace works in, which the fixture has made and chosen.
+    fn working(workspace: &Workspace) -> rorolala_layout::Layout {
+        workspace
+            .layouts()
+            .get(DEFAULT_LAYOUT_NAME)
+            .unwrap()
+            .unwrap()
+    }
+
+    /// Makes the Layout a Workspace works in name `text`, held by no account.
     fn track(workspace: &Workspace, id: u128, text: &str) {
-        let layout = workspace.layouts().get("main").unwrap().unwrap();
+        let layout = working(workspace);
         layout
             .create_entry(
                 Uuid::from_u128(id),
@@ -558,7 +574,7 @@ mod tests {
         fs::write(dir.join("kept.txt"), b"kept").unwrap();
         fs::write(dir.join("new.txt"), b"new").unwrap();
 
-        let layout = workspace.layouts().get("main").unwrap().unwrap();
+        let layout = working(&workspace);
         let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
 
         assert_eq!(diff.lost, vec![path("gone.txt")], "{diff:?}");
@@ -574,7 +590,7 @@ mod tests {
         track(&workspace, 1, "a.txt");
         fs::write(dir.join("a.txt"), b"the same content\n").unwrap();
 
-        let layout = workspace.layouts().get("main").unwrap().unwrap();
+        let layout = working(&workspace);
         // A first reading writes down what the file holds, so the move can be told next time.
         tree_diff(&layout, &workspace, 0.5).unwrap();
 
@@ -602,7 +618,7 @@ mod tests {
         track(&workspace, 1, "a.txt");
         fs::write(dir.join("a.txt"), b"before\n").unwrap();
 
-        let layout = workspace.layouts().get("main").unwrap().unwrap();
+        let layout = working(&workspace);
         // A first reading writes down what the file holds, so the change can be told next time.
         tree_diff(&layout, &workspace, 0.5).unwrap();
 
@@ -622,7 +638,7 @@ mod tests {
         track(&workspace, 1, "a.txt");
         fs::write(dir.join("a.txt"), b"one\ntwo\nthree\nfour\n").unwrap();
 
-        let layout = workspace.layouts().get("main").unwrap().unwrap();
+        let layout = working(&workspace);
         // A first reading writes down what the file holds, so the move can be told next time.
         tree_diff(&layout, &workspace, 0.5).unwrap();
 
@@ -655,7 +671,7 @@ mod tests {
 
         fs::write(dir.join("seen.txt"), b"here").unwrap();
 
-        let layout = workspace.layouts().get("main").unwrap().unwrap();
+        let layout = working(&workspace);
         let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
 
         assert_eq!(diff.untagged, vec![path("seen.txt")], "{diff:?}");
@@ -674,7 +690,7 @@ mod tests {
         }
         expected.sort_unstable();
 
-        let layout = workspace.layouts().get("main").unwrap().unwrap();
+        let layout = working(&workspace);
         let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
 
         assert_eq!(diff.untagged, expected, "{diff:?}");

@@ -51,6 +51,18 @@ cmd_layout:
     zh-CN: |
         运行 `rola layout --help` 查看它接受什么
 
+  err_layout_no_current:
+    en: This Workspace has no Layout to work in
+    zh-CN: 本工作区没有可使用的布局
+
+  err_layout_no_current_help:
+    en: |
+        A Workspace starts with no Layout: add one with `rola layout new <NAME>`, or bind a Vault
+        with `rola bind <LINK>` and let its name be the Layout's
+    zh-CN: |
+        工作区创建时没有布局：请用 `rola layout new <NAME>` 添加一个，
+        或用 `rola bind <LINK>` 绑定保险库并以其名字作为布局名
+
   err_layout_exists:
     en: There is already something by that name
     zh-CN: 该名字下已存在内容
@@ -183,22 +195,32 @@ cmd_layout_new:
     track:
       en: The Vault upstream the new Layout tracks
       zh-CN: 新 Layout 要跟踪的上游保险库
+    no_set_layout:
+      en: Leave the Layout being worked in where it is, even when the Workspace had none
+      zh-CN: 即使工作区原本没有布局，也不切换当前使用的布局
   help:
     en: |
         Make an empty Layout
 
-        **Usage**: `rola layout new <NAME> [--track <VAULT>]`
+        **Usage**: `rola layout new <NAME> [--track <VAULT>] [--no-set-layout]`
 
         `NAME` is the name of a directory, so it is words of letters and digits joined by `-`.
-        `--track` names a Vault the Workspace has bound, which the new Layout is to track. What is
-        worked in does not change; `rola layout force-switch` is what switches.
+        `--track` names a Vault the Workspace has bound, which the new Layout is to track.
+
+        Making the first Layout in a Workspace also chooses what is worked in, since there is then
+        no other; `--no-set-layout` leaves the Workspace working in nothing. Otherwise what is
+        worked in does not change, and `rola layout force-switch` is what switches.
     zh-CN: |
         新建一个空布局
 
-        **用法**：`rola layout new <NAME> [--track <VAULT>]`
+        **用法**：`rola layout new <NAME> [--track <VAULT>] [--no-set-layout]`
 
         `NAME` 是目录名，因此由字母数字组成的词以 `-` 相连。`--track` 指定工作区已绑定的保险库，
-        新布局将追踪它。当前使用的布局不会改变；切换请用 `rola layout force-switch`。
+        新布局将追踪它。
+
+        在工作区里新建第一个布局时，它同时会成为当前使用的布局，因为此前没有别的；
+        `--no-set-layout` 则不切换，工作区仍不使用任何布局。其余情况下当前使用的布局不会改变，
+        切换请用 `rola layout force-switch`。
 
   description:
     en: Make an empty Layout
@@ -213,21 +235,29 @@ cmd_layout_cp:
     track:
       en: The Vault upstream the copy tracks
       zh-CN: 副本要跟踪的上游保险库
+    no_set_layout:
+      en: Leave the Layout being worked in where it is, even when the Workspace had none
+      zh-CN: 即使工作区原本没有布局，也不切换当前使用的布局
   help:
     en: |
         Copy a Layout to a new name
 
-        **Usage**: `rola layout cp <LAYOUT> <NAME> [--track <VAULT>]`
+        **Usage**: `rola layout cp <LAYOUT> <NAME> [--track <VAULT>] [--no-set-layout]`
 
-        What the Layout tracked is not copied: a copy tracks only what `--track` names. What is
-        worked in does not change; `rola layout force-switch` is what switches.
+        What the Layout tracked is not copied: a copy tracks only what `--track` names.
+
+        When the Workspace has no Layout, the copy is the first one and becomes what is worked in;
+        `--no-set-layout` leaves it working in nothing. Otherwise what is worked in does not change,
+        and `rola layout force-switch` is what switches.
     zh-CN: |
         复制布局为新名字
 
-        **用法**：`rola layout cp <LAYOUT> <NAME> [--track <VAULT>]`
+        **用法**：`rola layout cp <LAYOUT> <NAME> [--track <VAULT>] [--no-set-layout]`
 
-        原布局所追踪的东西不会被复制：副本只追踪 `--track` 指定的内容。当前使用的布局不会改变；
-        切换请用 `rola layout force-switch`。
+        原布局所追踪的东西不会被复制：副本只追踪 `--track` 指定的内容。
+
+        工作区原本没有布局时，副本就是第一个，并成为当前使用的布局；`--no-set-layout` 则不切换。
+        其余情况下当前使用的布局不会改变，切换请用 `rola layout force-switch`。
 
   description:
     en: Copy a Layout to a new name
@@ -416,24 +446,43 @@ cmd_layout_import:
     name:
       en: The name to give the Layout; the file's own name when none is given
       zh-CN: 给 Layout 起的名字，未指定时用文件名
+    track:
+      en: The Vault upstream the imported Layout tracks; the file's own when none is given
+      zh-CN: 导入的布局要追踪的上游保险库，未指定时用文件记录的那个
     no_check:
       en: Import without checking that the content the file names is here
       zh-CN: 导入时不检查文件所引用的内容是否存在
+    no_set_layout:
+      en: Leave the Layout being worked in where it is, even when the Workspace had none
+      zh-CN: 即使工作区原本没有布局，也不切换当前使用的布局
   help:
     en: |
         Make a Layout from a `.rolayout` file
 
-        **Usage**: `rola layout import <INPUT> [--name <NAME>] [--no-check]`
+        **Usage**: `rola layout import <INPUT> [--name <NAME>] [--track <VAULT>] [--no-check]
+        [--no-set-layout]`
 
-        `NAME` is the file's own name when none is given. A file that names the keys a checkout
-        needs is checked to have them all here, unless `--no-check`.
+        `NAME` is the file's own name when none is given. What the file says it was tracking is
+        tracked again, unless `--track` names a Vault to track instead.
+
+        When the Workspace has no Layout, the imported one is the first and becomes what is worked
+        in; `--no-set-layout` leaves it working in nothing.
+
+        A file that names the keys a checkout needs is checked to have them all here, unless
+        `--no-check`.
     zh-CN: |
         从 `.rolayout` 文件建立布局
 
-        **用法**：`rola layout import <INPUT> [--name <NAME>] [--no-check]`
+        **用法**：`rola layout import <INPUT> [--name <NAME>] [--track <VAULT>] [--no-check]
+        [--no-set-layout]`
 
-        `NAME` 缺省时取文件自身的名字。若文件记下了签出所需的键，会先检查这些键是否都在，
-        除非给出 `--no-check`。
+        `NAME` 缺省时取文件自身的名字。文件记录的追踪保险库会被继续追踪，除非用 `--track`
+        指定另一个。
+
+        工作区原本没有布局时，导入的布局就是第一个，并成为当前使用的布局；`--no-set-layout`
+        则不切换。
+
+        若文件记下了签出所需的键，会先检查这些键是否都在，除非给出 `--no-check`。
 
   description:
     en: Make a Layout from a `.rolayout` file

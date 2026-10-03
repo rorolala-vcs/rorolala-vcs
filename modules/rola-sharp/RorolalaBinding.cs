@@ -739,37 +739,33 @@ internal enum WorkspaceCreationError : int
     /// </summary>
     WorkspaceCreationError_DataDirCreateFailed = 0,
     /// <summary>
-    /// Failure when the Layout the Workspace starts with cannot be made
-    /// </summary>
-    WorkspaceCreationError_LayoutCreateFailed = 1,
-    /// <summary>
     /// Failure when reading the staging file to check if it already exists
     /// </summary>
-    WorkspaceCreationError_ConfigLocked = 2,
+    WorkspaceCreationError_ConfigLocked = 1,
     /// <summary>
     /// Failure when rendering the default value into the configuration format
     /// </summary>
-    WorkspaceCreationError_ConfigRenderFailed = 3,
+    WorkspaceCreationError_ConfigRenderFailed = 2,
     /// <summary>
     /// Failure when writing the staging file
     /// </summary>
-    WorkspaceCreationError_ConfigStageFailed = 4,
+    WorkspaceCreationError_ConfigStageFailed = 3,
     /// <summary>
     /// Failure when publishing (copying) the staging file to the configuration file
     /// </summary>
-    WorkspaceCreationError_ConfigPublishFailed = 5,
+    WorkspaceCreationError_ConfigPublishFailed = 4,
     /// <summary>
     /// Failure when the staging file cannot be rendered
     /// </summary>
-    WorkspaceCreationError_ConfigWriteRenderFailed = 6,
+    WorkspaceCreationError_ConfigWriteRenderFailed = 5,
     /// <summary>
     /// Failure when the staging file cannot be written
     /// </summary>
-    WorkspaceCreationError_ConfigWriteStageFailed = 7,
+    WorkspaceCreationError_ConfigWriteStageFailed = 6,
     /// <summary>
     /// Failure with an unknown or unclassified cause
     /// </summary>
-    WorkspaceCreationError_UnknownError = 8,
+    WorkspaceCreationError_UnknownError = 7,
 }
 
 /// <summary>
@@ -1054,7 +1050,7 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_VAULT_LAYOUT_DIR();
 
     /// <summary>
-    /// The name a Workspace's Layout is given when it is made
+    /// The name a Workspace's first Layout is commonly given
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_DEFAULT_LAYOUT_NAME();

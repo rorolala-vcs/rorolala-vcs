@@ -1,0 +1,73 @@
+_version: 2
+
+bind:
+  help:
+    en: |
+        Bind a Vault address under a name and start a Layout on it
+
+        **Usage**: `rola bind <LINK> [NAME] [--no-set-default-vault] [--no-set-layout]`
+
+        `NAME` is used for both halves of what this does, and is `origin` when none is given: the
+        Vault is bound under it, and a Layout of that name is made to track that Vault. The name is
+        normalised to kebab-case — words of letters and digits joined by `-`.
+
+        Binding a name the Workspace has already bound changes what it means. A name a Layout
+        already holds is refused, and nothing is written.
+
+        The Vault becomes the one the Workspace reaches for, unless `--no-set-default-vault`.
+
+        When the Workspace has no Layout, the one made is the first and becomes what is worked in;
+        `--no-set-layout` leaves it working in nothing.
+
+        **Example**: `rola create workspace && cd workspace && rola bind rola://127.0.0.1:7000/`
+    zh-CN: |
+        将保险库地址绑定到一个名字，并以该名字建立布局
+
+        **用法**：`rola bind <LINK> [NAME] [--no-set-default-vault] [--no-set-layout]`
+
+        `NAME` 同时用于这一步所做的两件事，未指定时为 `origin`：保险库以它绑定，
+        并建立一个同名布局来追踪该保险库。名字会被规格化为 kebab-case，
+        即由字母数字组成的词以 `-` 相连。
+
+        绑定工作区已绑定的名字会改变它的含义。若已有布局占用该名字，则直接报错，不写入任何内容。
+
+        该保险库会成为工作区默认使用的保险库，除非给出 `--no-set-default-vault`。
+
+        工作区原本没有布局时，建立的布局就是第一个，并成为当前使用的布局；
+        `--no-set-layout` 则不切换。
+
+        **例如**：`rola create workspace && cd workspace && rola bind rola://127.0.0.1:7000/`
+
+  description:
+    en: Bind a Vault address under a name and start a Layout on it
+    zh-CN: 将保险库地址绑定到名字并以此建立布局
+
+  complete:
+    no_set_default_vault:
+      en: Leave the Vault being reached for where it is
+      zh-CN: 不改变默认使用的保险库
+    no_set_layout:
+      en: Leave the Layout being worked in where it is, even when the Workspace had none
+      zh-CN: 即使工作区原本没有布局，也不切换当前使用的布局
+
+  err_name_invalid:
+    en: "`%{name}` is not a name a Layout may be given"
+    zh-CN: "`%{name}` 不是布局可以使用的名字"
+
+  err_name_invalid_help:
+    en: |
+        A name is a directory name: words of letters and digits joined by `-`, and not nothing
+
+        **Example**: `rola bind rola://127.0.0.1:7000/ upstream`
+    zh-CN: |
+        名字即目录名：由字母数字组成的词以 `-` 相连，且不能为空
+
+        **例如**：`rola bind rola://127.0.0.1:7000/ upstream`
+
+  result_bound:
+    en: "`%{name}` is bound to %{address}"
+    zh-CN: "`%{name}` 已绑定到 %{address}"
+
+  result_working:
+    en: "The Layout `%{name}` was made, and is now the one worked in"
+    zh-CN: "已建立布局 `%{name}`，并已成为当前使用的布局"

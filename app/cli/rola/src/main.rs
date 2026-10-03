@@ -25,6 +25,7 @@ mod address;
 mod checkout;
 mod cmd_account;
 mod cmd_align;
+mod cmd_bind;
 mod cmd_checkin;
 mod cmd_create;
 mod cmd_desktop;

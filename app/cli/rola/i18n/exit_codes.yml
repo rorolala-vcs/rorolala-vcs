@@ -289,6 +289,10 @@ exit_codes:
     en: An entry's ownership could not be taken or let go of
     zh-CN: 无法取得或放弃某个条目的所有权
 
+  layout_no_current:
+    en: The Workspace has no Layout to work in
+    zh-CN: 工作区没有可使用的布局
+
   track:
     en: A file could not be recorded in the Layout
     zh-CN: 无法将文件记入布局

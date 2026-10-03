@@ -79,9 +79,11 @@ pub const LAYOUT_TRACK_FILE: &str = "TRACK";
 #[lazyffi(export = ROLA_VAULT_LAYOUT_DIR)]
 pub const VAULT_LAYOUT_DIR: &str = "./layout/";
 
-/// The name a Workspace's Layout is given when it is made
+/// The name a Workspace's first Layout is commonly given
 ///
-/// A Workspace that exists has one, so that there is always somewhere to work.
+/// It is a name to offer rather than one that is imposed: a Workspace is made with no Layout at
+/// all, and the name of the first one is whoever adds it to choose. This is what that name is
+/// expected to be, for anything that has to suggest one.
 #[lazyffi(export = ROLA_DEFAULT_LAYOUT_NAME)]
 pub const DEFAULT_LAYOUT_NAME: &str = "main";
 

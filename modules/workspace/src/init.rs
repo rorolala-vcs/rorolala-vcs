@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 
 use rorolala_storage::RorolalaStorage;
 use rorolala_utils_configure::Config;
-use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
 use rorolala_utils_lazyffi::lazyffi;
 
 use crate::{CONFIG_PATH, CreationError, DATA_DIR, INDEX_DIR, STORAGE_DIR, Workspace};
@@ -21,6 +20,9 @@ impl Workspace {
     ///
     /// The store it keeps its objects in is made with it too, so that a Workspace that exists
     /// has somewhere to keep them; see [`Workspace::get_current_rola_storage`].
+    ///
+    /// No Layout is made: a Workspace that has just been created has none, and one is added —
+    /// and becomes the one worked in — by whoever chooses its name.
     ///
     /// # Errors
     ///
@@ -61,18 +63,11 @@ impl Workspace {
         let storage: PathBuf = dir.join(STORAGE_DIR).components().collect();
         let _ = RorolalaStorage::create(storage);
 
-        // The Workspace starts with a Layout to work in, so that one that exists has somewhere to
-        // put work the moment it does. It is the one that is checked out until another is.
-        let layouts = Self {
-            current_dir: dir.to_path_buf(),
-        }
-        .layouts();
-        layouts
-            .create(DEFAULT_LAYOUT_NAME)
-            .map_err(|_| CreationError::LayoutCreateFailed)?;
-        layouts
-            .set_current(DEFAULT_LAYOUT_NAME)
-            .map_err(|_| CreationError::LayoutCreateFailed)?;
+        // No Layout is made here. A Layout is a named place to work, and what a Workspace starts
+        // with is the fact that it has none: the name of the first one is the caller's to choose,
+        // and whether it tracks a Vault is decided with it. A Workspace with no Layout is one
+        // that cannot work yet, which is said where a run asks for the Layout to work in rather
+        // than guessed at here.
 
         Ok(())
     }
@@ -86,7 +81,6 @@ mod tests {
 
     use rorolala_storage::internals::Internals as _;
     use rorolala_utils_configure::Configure;
-    use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
     use rorolala_utils_location::Locate;
 
     use crate::{CONFIG_PATH, CreationError, DATA_DIR, INDEX_DIR, STORAGE_DIR, Workspace};
@@ -165,21 +159,16 @@ mod tests {
     }
 
     #[test]
-    fn creating_a_workspace_makes_the_layout_it_starts_in() {
+    fn creating_a_workspace_leaves_it_with_no_layout_to_work_in() {
         let dir = scratch("layout");
 
         Workspace::create(&dir).unwrap();
 
-        // A Workspace that exists has somewhere to work: one Layout, and it is the one checked out.
+        // A name is the caller's to choose, so a Workspace that has just been made has none: what
+        // makes one is adding a Layout, which is what also chooses the one being worked in.
         let layouts = Workspace::locate(&dir).unwrap().layouts();
-        assert_eq!(
-            layouts.names().unwrap(),
-            vec![DEFAULT_LAYOUT_NAME.to_owned()]
-        );
-        assert_eq!(
-            layouts.current().unwrap(),
-            Some(DEFAULT_LAYOUT_NAME.to_owned())
-        );
+        assert!(layouts.names().unwrap().is_empty());
+        assert_eq!(layouts.current().unwrap(), None);
 
         let _ = fs::remove_dir_all(&dir);
     }

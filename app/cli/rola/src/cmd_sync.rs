@@ -62,7 +62,7 @@ use crate::failure::failure;
 use crate::fetch;
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNotCached,
+    ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, ErrorLayoutNotCached,
     add_cached_entry, failed, readonly_layout_dir, set_cached_version,
 };
 use crate::progress::Reporting;
@@ -238,7 +238,7 @@ pub fn handle_sync(
     let layouts = held.layouts();
     let name = match layouts.current() {
         Ok(Some(name)) => name,
-        Ok(None) => return ErrorLayoutArgument.into(),
+        Ok(None) => return ErrorLayoutNoCurrent.into(),
         Err(error) => return failed(&error),
     };
     let layout = match layouts.get(&name) {

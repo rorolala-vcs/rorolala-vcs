@@ -22,7 +22,7 @@ use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
 use crate::layout::{
-    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, cached_layout, failed, remote_spec,
+    ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, cached_layout, failed, remote_spec,
 };
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
@@ -85,7 +85,7 @@ pub fn complete_layout_tree_diff(
 /// # Errors
 ///
 /// Renders [`ErrorShouldInWorkspace`] when the run is not inside a Workspace,
-/// [`ErrorLayoutArgument`] when there is no Layout being worked in and none was named,
+/// [`ErrorLayoutNoCurrent`] when there is no Layout being worked in and none was named,
 /// [`ErrorLayoutMissing`] when the one named is not there, and [`ErrorLayoutFailed`] when the tree
 /// or the Layout could not be read.
 #[command(node = "layout.tree-diff", entry = EntryLayoutTreeDiff)]
@@ -148,7 +148,7 @@ pub fn handle_layout_tree_diff(
             Some(name) => name,
             None => match layouts.current() {
                 Ok(Some(name)) => name,
-                Ok(None) => return ErrorLayoutArgument.into(),
+                Ok(None) => return ErrorLayoutNoCurrent.into(),
                 Err(error) => return failed(&error),
             },
         };

@@ -16,7 +16,7 @@ use std::time::Duration;
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::storage::Key;
 use librorolala::vault::{CONFIG_PATH, KEYS_DIR, LAYOUT_DIR, Vault};
-use librorolala::workspace::Workspace;
+use librorolala::workspace::{Workspace, locate_workspace};
 use rorolala_utils_sandbox::{Guard, Serving, command, run, serve};
 use uuid::Uuid;
 
@@ -48,6 +48,11 @@ async fn main() {
 
     Workspace::create(&workspace)
         .unwrap_or_else(|error| panic!("making {}: {error:?}", workspace.display()));
+    // A Workspace is made with no Layout, and what this works in is one of the Workspace's own: a
+    // Vault's Layout is the read-only copy a fetch brings here, not a place to work.
+    let layouts = locate_workspace(&workspace).unwrap().layouts();
+    layouts.create("main").expect("the Workspace's Layout");
+    layouts.set_current("main").expect("working in it");
     let auth = workspace.join(".rola").join("auth");
     for name in [ALICE, BOB] {
         pair(&auth, name);
@@ -799,6 +804,9 @@ async fn main() {
 
     let other = sandbox.join("ws2");
     Workspace::create(&other).expect("a second workspace");
+    let other_layouts = locate_workspace(&other).unwrap().layouts();
+    other_layouts.create("main").expect("the second Layout");
+    other_layouts.set_current("main").expect("working in it");
 
     // The same account, so the Vault admits the run: the keys belong to the Workspace, so they are
     // copied beside the new one rather than made again — a new pair would be a stranger.

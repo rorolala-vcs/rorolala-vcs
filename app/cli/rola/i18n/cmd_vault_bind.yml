@@ -51,8 +51,11 @@ vault_bind:
     zh-CN: 缺少地址
 
   err_address_missing_help:
-    en: Please name the address, as in `rola vault bind origin 127.0.0.1:7000`
-    zh-CN: 请给出地址，例如 `rola vault bind origin 127.0.0.1:7000`
+    en: |
+        Please name the address, as in `rola vault bind origin 127.0.0.1:7000` or
+        `rola bind 127.0.0.1:7000`
+    zh-CN: |
+        请给出地址，例如 `rola vault bind origin 127.0.0.1:7000` 或 `rola bind 127.0.0.1:7000`
 
   err_address_invalid:
     en: "`%{address}` is not an address"

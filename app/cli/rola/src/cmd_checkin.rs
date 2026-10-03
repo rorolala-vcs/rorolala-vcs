@@ -65,7 +65,7 @@ use crate::failure::failure;
 use crate::fetch::{self, Sources};
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNotCached, failed,
+    ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, ErrorLayoutNotCached, failed,
     readonly_layout_dir,
 };
 use crate::progress::Reporting;
@@ -200,7 +200,7 @@ pub fn handle_checkin(
     let layouts = held.layouts();
     let name = match layouts.current() {
         Ok(Some(name)) => name,
-        Ok(None) => return ErrorLayoutArgument.into(),
+        Ok(None) => return ErrorLayoutNoCurrent.into(),
         Err(error) => return failed(&error),
     };
     let layout = match layouts.get(&name) {

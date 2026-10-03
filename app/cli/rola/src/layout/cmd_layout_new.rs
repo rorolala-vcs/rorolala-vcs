@@ -7,7 +7,7 @@ use mingling::{
         suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, PickerArg},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace, ResWorkspaceConfig};
@@ -22,6 +22,9 @@ use crate::layout::{ErrorLayoutArgument, ErrorLayoutTrackNotBound, failed};
 
 /// The Vault upstream the new Layout tracks.
 const ARG_TRACK: PickerArg<'static, Option<String>> = arg![track: Option<String>];
+
+/// Leave the Layout being worked in where it is, even when the Workspace had none.
+const ARG_NO_SET_LAYOUT: PickerArg<'static, Flag> = arg![no_set_layout: Flag];
 
 #[help(buffer)]
 pub fn help_layout_new(_: EntryLayoutNew, ec: &mut ResExitCode) {
@@ -52,6 +55,7 @@ pub fn complete_layout_new(
             &ctx,
             suggest! {
                 ARG_TRACK: t!("cmd_layout_new.complete.track"),
+                ARG_NO_SET_LAYOUT: t!("cmd_layout_new.complete.no_set_layout"),
             },
         );
     }
@@ -64,8 +68,10 @@ pub fn complete_layout_new(
 ///
 /// The name has to be one a Layout may be given — words of letters and digits joined by `-` — since
 /// it is the name of a directory. `--track` names a Vault the Workspace has bound, which the Layout
-/// is to track; naming none leaves it tracking nothing. What is worked in does not change: a new
-/// Layout is made beside the one being worked in, and `rola layout force-switch` is what switches.
+/// is to track; naming none leaves it tracking nothing. Making the first Layout in a Workspace is
+/// also choosing what is worked in, since there is then no other; `--no-set-layout` leaves the
+/// Workspace working in nothing. Otherwise what is worked in does not change: a new Layout is made
+/// beside the one being worked in, and `rola layout force-switch` is what switches.
 ///
 /// # Errors
 ///
@@ -77,14 +83,20 @@ pub fn complete_layout_new(
 pub fn layout_new(args: EntryLayoutNew) -> Next {
     let picked = args
         .pick(&ARG_TRACK)
+        .pick(&ARG_NO_SET_LAYOUT)
         .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
         .to_result();
-    let (track, name) = match picked {
+    let (track, no_set_layout, name) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
 
-    StateLayoutNew { name, track }.into()
+    StateLayoutNew {
+        name,
+        track,
+        set_current: matches!(no_set_layout, Flag::Inactive),
+    }
+    .into()
 }
 
 /// The state of making a Layout.
@@ -94,6 +106,8 @@ pub struct StateLayoutNew {
     name: String,
     /// The Vault it is to track, when one was named.
     track: Option<String>,
+    /// Whether making it may also choose it as the one worked in.
+    set_current: bool,
 }
 
 #[chain]
@@ -102,7 +116,11 @@ pub fn handle_layout_new(
     workspace: &mut LazyRes<ResWorkspace>,
     config: &mut LazyRes<ResWorkspaceConfig>,
 ) -> Next {
-    let StateLayoutNew { name, track } = state;
+    let StateLayoutNew {
+        name,
+        track,
+        set_current,
+    } = state;
 
     let Some(workspace) = workspace.get_ref().as_ref() else {
         return ErrorShouldInWorkspace.into();
@@ -121,11 +139,25 @@ pub fn handle_layout_new(
     }
 
     let layouts = workspace.layouts();
+
+    // Whether there is a Layout to work in is read before the new one is made: a Workspace that had
+    // none is one the new Layout is the first of, and the first is what gets worked in.
+    let was_empty = match layouts.names() {
+        Ok(names) => names.is_empty(),
+        Err(error) => return failed(&error),
+    };
+
     if let Err(error) = layouts.create(&name) {
         return failed(&error);
     }
     if let Some(track) = &track
         && let Err(error) = layouts.set_track(&name, track)
+    {
+        return failed(&error);
+    }
+    if was_empty
+        && set_current
+        && let Err(error) = layouts.set_current(&name)
     {
         return failed(&error);
     }
