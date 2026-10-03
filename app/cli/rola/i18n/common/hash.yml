@@ -1,0 +1,18 @@
+_version: 2
+
+common:
+  err_hash_unknown:
+    en: "`%{hash}` names no hash here"
+    zh-CN: "`%{hash}` 在此没有对应的哈希"
+
+  err_hash_ambiguous:
+    en: "`%{hash}` names more than one hash: %{candidates}"
+    zh-CN: "`%{hash}` 对应多个哈希：%{candidates}"
+
+  err_hash_help:
+    en: |
+        A hash may be written by the head of it — at least four hex digits — when only one hash
+        here starts with it. Please give more digits, or write the hash in full
+    zh-CN: |
+        若此处的哈希中只有一个以某前缀开头，可以只写该前缀（至少四位十六进制）。
+        请补足位数，或写出完整哈希

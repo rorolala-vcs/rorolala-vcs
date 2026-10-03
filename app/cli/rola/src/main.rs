@@ -48,6 +48,7 @@ mod exit_codes;
 mod failure;
 mod fetch;
 mod format;
+mod hash;
 mod inv_idx;
 mod key;
 mod keys;

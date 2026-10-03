@@ -39,12 +39,12 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::complete::{
-    IndexObject, filling_flag, index_hashes, offer, positional, strip_written, typing_flag,
+    IndexObject, filling_flag, index_hashes, index_keys, offer, positional, strip_written,
+    typing_flag,
 };
 use crate::exit_codes::EC_HELP;
 use crate::vcs_index::{
-    ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hex,
-    parse_hash, runtime,
+    ErrorVcsIndexArgument, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hash_of, hex, runtime,
 };
 
 /// How much of a message a drawing shows before it is cut short, when the run names no length.
@@ -218,8 +218,7 @@ pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCS
     }
 
     let held = index.get_ref().as_ref();
-    let mut names = index_hashes(held, IndexObject::Version);
-    names.extend(index_hashes(held, IndexObject::Variant));
+    let names = index_hashes(held, IndexObject::Chain);
 
     offer(&ctx, names)
 }
@@ -238,7 +237,7 @@ pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCS
 /// # Errors
 ///
 /// Renders [`ErrorVcsIndexNoIndex`] when the run is nowhere an index is,
-/// [`ErrorVcsIndexHash`] when the hash does not read, [`ErrorVcsIndexArgument`] when
+/// [`ErrorVcsIndexHash`](crate::vcs_index::ErrorVcsIndexHash) when the hash does not read, [`ErrorVcsIndexArgument`] when
 /// `--max-message-length` does not read, and [`ErrorVcsIndexRead`] when the chain cannot be read.
 #[command(node = "vcs-index.lookback", entry = EntryVcsIndexLookback)]
 pub fn vcs_index_lookback(args: EntryVcsIndexLookback, lookback: &mut ResLookback) -> Next {
@@ -276,11 +275,13 @@ pub fn handle_vcs_index_lookback(
     state: StateVcsIndexLookback,
     index: &mut LazyRes<ResVCSIndex>,
 ) -> Next {
-    let Some(key) = parse_hash(&state.hash) else {
-        return ErrorVcsIndexHash { hash: state.hash }.into();
-    };
+    let StateVcsIndexLookback { hash } = state;
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
+    };
+    let key = match hash_of(&hash, || index_keys(Some(index), IndexObject::Chain)) {
+        Ok(key) => key,
+        Err(error) => return error.into(),
     };
     let runtime = match runtime() {
         Ok(runtime) => runtime,

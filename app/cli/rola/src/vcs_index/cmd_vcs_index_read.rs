@@ -24,12 +24,11 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
-use crate::complete::{IndexObject, index_hashes, offer, positional, typing_flag};
+use crate::complete::{IndexObject, index_hashes, index_keys, offer, positional, typing_flag};
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
 use crate::vcs_index::{
-    ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, parse_hash,
-    runtime, variant_tail,
+    ErrorVcsIndexArgument, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hash_of, runtime, variant_tail,
 };
 
 /// How one object is drawn when no template is named.
@@ -74,7 +73,7 @@ pub fn complete_vcs_index_read(ctx: ShellContext, index: &mut LazyRes<ResVCSInde
 /// # Errors
 ///
 /// Renders [`ErrorVcsIndexNoIndex`] when the run is nowhere an index is,
-/// [`ErrorVcsIndexHash`] when the hash does not read, and [`ErrorVcsIndexRead`] when the object
+/// [`ErrorVcsIndexHash`](crate::vcs_index::ErrorVcsIndexHash) when the hash does not read, and [`ErrorVcsIndexRead`] when the object
 /// could not be read.
 #[command(node = "vcs-index.read", entry = EntryVcsIndexRead)]
 pub fn vcs_index_read(args: EntryVcsIndexRead, format: &mut ResFormat) -> Next {
@@ -108,11 +107,13 @@ pub fn handle_vcs_index_read(
     index: &mut LazyRes<ResVCSIndex>,
     format: &mut ResFormat,
 ) -> Next {
-    let Some(key) = parse_hash(&state.hash) else {
-        return ErrorVcsIndexHash { hash: state.hash }.into();
-    };
+    let StateVcsIndexRead { hash } = state;
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
+    };
+    let key = match hash_of(&hash, || index_keys(Some(index), IndexObject::Any)) {
+        Ok(key) => key,
+        Err(error) => return error.into(),
     };
     let runtime = match runtime() {
         Ok(runtime) => runtime,

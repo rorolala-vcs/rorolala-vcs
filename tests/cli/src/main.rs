@@ -396,7 +396,11 @@ fn binding(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
     // An address that will not read is refused the way `rola vault bind` refuses one.
     let ran = rola.run(ws, &["bind", "not an address", "other"]);
     checked.exits("an address that is not one is refused", &ran, 70);
-    checked.stderr_has("the refusal says it is not an address", &ran, "not an address");
+    checked.stderr_has(
+        "the refusal says it is not an address",
+        &ran,
+        "not an address",
+    );
 
     let ran = rola.run(empty, &["bind", "rola://127.0.0.1:7006/"]);
     checked.exits("binding outside a Workspace is refused", &ran, 11);
@@ -417,7 +421,11 @@ fn binding(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
     );
 
     let ran = rola.run(ws, &["status"]);
-    checked.exits("the Workspace with a Layout it does not work in says so", &ran, 194);
+    checked.exits(
+        "the Workspace with a Layout it does not work in says so",
+        &ran,
+        194,
+    );
 
     // `--no-set-default-vault` binds the address without choosing the Vault to reach for.
     fs::remove_dir_all(ws).expect("the Workspace that was not worked in");
@@ -426,11 +434,7 @@ fn binding(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(
         ws,
-        &[
-            "bind",
-            "rola://127.0.0.1:7008/",
-            "--no-set-default-vault",
-        ],
+        &["bind", "rola://127.0.0.1:7008/", "--no-set-default-vault"],
     );
     checked.exits("a binding may leave the default Vault alone", &ran, 0);
     checked.stdout_has("the Layout is still worked in", &ran, "worked in");
@@ -589,6 +593,26 @@ fn storage(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
         &said(&ran),
     );
 
+    // The head of the hash names the same content, since nothing here starts with it.
+    let head = &key.trim_start_matches("blake3:")[..8];
+    let by_head = files.join("out-by-head");
+    fs::create_dir_all(&by_head).expect("a directory to write into");
+    let ran = rola.run(ws, &["storage", "extract-file", head, &text(&by_head)]);
+    checked.exits("a hash written by its head names the same content", &ran, 0);
+    checked.wants(
+        "what the head named wrote the same bytes",
+        fs::read_to_string(by_head.join(key.trim_start_matches("blake3:")))
+            .ok()
+            .as_deref()
+            == Some("hello storage\n"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["storage", "extract-file", "1234"]);
+    checked.exits("a head that names nothing is refused", &ran, 86);
+    let ran = rola.run(ws, &["storage", "extract-file", "not-a-hash"]);
+    checked.exits("a word that is not a hash at all is refused", &ran, 86);
+
     let ran = rola.run(ws, &["storage", "extract-file"]);
     checked.exits("extracting without a hash is refused", &ran, 84);
 }
@@ -639,6 +663,18 @@ fn index(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["vcs-index", "read", &root]);
     checked.exits("one index object is read back", &ran, 0);
     checked.stdout_has("what is read names the object", &ran, &root);
+
+    // The head of the hash reads the same object, since only one here starts with it.
+    let ran = rola.run(ws, &["vcs-index", "read", &root[..8]]);
+    checked.exits("an index object is read by the head of its hash", &ran, 0);
+    checked.stdout_has("what the head read names the object", &ran, &root);
+
+    let ran = rola.run(ws, &["vcs-index", "read", "1234"]);
+    checked.exits(
+        "a head that names nothing in the index is refused",
+        &ran,
+        123,
+    );
 }
 
 /// Moving, copying and removing a path by hand.

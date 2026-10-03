@@ -51,6 +51,16 @@ cmd_layout:
     zh-CN: |
         运行 `rola layout --help` 查看它接受什么
 
+  err_layout_hash:
+    en: "`%{hash}` is not a hash"
+    zh-CN: "`%{hash}` 不是哈希"
+
+  err_layout_hash_help:
+    en: |
+        Please give a hash as hex, or as `blake3:<hex>`
+    zh-CN: |
+        请给出十六进制哈希，或 `blake3:<hex>` 形式的哈希
+
   err_layout_no_current:
     en: This Workspace has no Layout to work in
     zh-CN: 本工作区没有可使用的布局

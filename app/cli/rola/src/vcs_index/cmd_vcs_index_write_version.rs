@@ -19,12 +19,12 @@ use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
-use crate::complete::{IndexObject, index_hashes, offer, positional, typing_flag};
+use crate::complete::{IndexObject, index_hashes, index_keys, offer, positional, typing_flag};
 use crate::exit_codes::EC_HELP;
 use crate::rebuild::ResRebuildInverseIndex;
 use crate::vcs_index::{
-    ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNoIndex, ErrorVcsIndexWrite,
-    ResultVcsIndexHash, parse_hash, rebuild_inverse_index, runtime,
+    ErrorVcsIndexArgument, ErrorVcsIndexNoIndex, ErrorVcsIndexWrite, ResultVcsIndexHash, hash_of,
+    rebuild_inverse_index, runtime,
 };
 
 #[help(buffer)]
@@ -64,7 +64,7 @@ pub fn complete_vcs_index_write_version(
 /// # Errors
 ///
 /// Renders [`ErrorVcsIndexNoIndex`] when the run is nowhere an index is,
-/// [`ErrorVcsIndexArgument`] when an argument is missing, [`ErrorVcsIndexHash`] when one does not
+/// [`ErrorVcsIndexArgument`] when an argument is missing, [`ErrorVcsIndexHash`](crate::vcs_index::ErrorVcsIndexHash) when one does not
 /// read as a hash, and [`ErrorVcsIndexWrite`] when the index cannot be written to.
 #[command(node = "vcs-index.write-version", entry = EntryVcsIndexWriteVersion)]
 pub fn vcs_index_write_version(args: EntryVcsIndexWriteVersion) -> Next {
@@ -97,15 +97,13 @@ pub fn handle_vcs_index_write_version(
     index: &mut LazyRes<ResVCSIndex>,
     rebuild: &ResRebuildInverseIndex,
 ) -> Next {
-    let Some(variant) = parse_hash(&state.variant) else {
-        return ErrorVcsIndexHash {
-            hash: state.variant,
-        }
-        .into();
-    };
-
+    let StateVcsIndexWriteVersion { variant } = state;
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
+    };
+    let variant = match hash_of(&variant, || index_keys(Some(index), IndexObject::Variant)) {
+        Ok(variant) => variant,
+        Err(error) => return error.into(),
     };
     let runtime = match runtime() {
         Ok(runtime) => runtime,

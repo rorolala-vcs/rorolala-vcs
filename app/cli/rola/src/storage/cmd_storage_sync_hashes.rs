@@ -6,11 +6,8 @@
 //! of the two ends working them out between them. Because what it changes is only what was named, it
 //! does not ask first.
 
-use std::str::FromStr as _;
-
 use librorolala::daemon::action_sync_hashes_async;
 use librorolala::protocol::ActionError;
-use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -29,10 +26,11 @@ use rust_i18n::t;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::complete::{offer, store_keys, typing_flag, vault_names};
+use crate::complete::{offer, store_key_set, store_keys, typing_flag, vault_names};
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH, EC_HELP};
 use crate::failure::failure;
+use crate::hash::{HashMiss, looks_like_hash, resolve_among};
 use crate::keys::account_named;
 
 #[help(buffer)]
@@ -106,14 +104,11 @@ pub fn storage_sync_hashes(args: EntryStorageSyncHashes, offline: &ResOffline) -
 
 /// Splits the arguments into the hashes and the Vault, when one is named.
 ///
-/// The Vault comes last, and is told apart by not reading as a hash: a hash is 64 hex digits, so a
-/// name or an address — which is what a Vault is named by — is not one, and a name that happened to
-/// be 64 hex digits is the one case this cannot tell apart.
+/// The Vault comes last, and is told apart by not reading as a hash: a hash is hex, or the head of
+/// one, so a name or an address — which is what a Vault is named by — is not one, and a name that
+/// happened to be hex is the one case this cannot tell apart.
 fn with_vault(mut words: Vec<String>) -> (Option<String>, Vec<String>) {
-    let vault = words
-        .last()
-        .filter(|word| Key::from_str(word).is_err())
-        .cloned();
+    let vault = words.last().filter(|word| !looks_like_hash(word)).cloned();
 
     if vault.is_some() {
         words.pop();
@@ -135,6 +130,7 @@ pub struct StateStorageSyncHashes {
 pub fn handle_storage_sync_hashes(
     state: StateStorageSyncHashes,
     workspace: &mut LazyRes<ResWorkspace>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
 ) -> Next {
@@ -152,12 +148,20 @@ pub fn handle_storage_sync_hashes(
     let account = account_named(&name, Some(held), None)?;
 
     // The hashes are read here, so a word that is not one is told apart from a hash before anything
-    // crosses; what the action is handed is the hex it reads the same way.
+    // crosses. A head is resolved against what this side's store holds — the far side's own keys
+    // are not listed for it — and what the action is handed is the hex it reads the same way.
+    let stored = store_key_set(storage.get_ref().as_ref());
     let mut hashes = Vec::with_capacity(state.hashes.len());
     for hash in &state.hashes {
-        match Key::from_str(hash) {
+        match resolve_among(hash, &stored) {
             Ok(key) => hashes.push(key.hex()),
-            Err(_) => return ErrorSyncHashesHash { hash: hash.clone() }.into(),
+            Err(miss) => {
+                return ErrorSyncHashesHash {
+                    hash: hash.clone(),
+                    miss,
+                }
+                .into();
+            }
         }
     }
 
@@ -182,11 +186,13 @@ pub fn render_result_sync_hashes(_: ResultSyncHashes) {
     r_println!("{}", t!("storage_sync_hashes.result_synced").trim());
 }
 
-/// Error: an argument does not read as a hash.
+/// Error: an argument does not read as a hash, or names no one key.
 #[derive(Grouped)]
 pub struct ErrorSyncHashesHash {
     /// What was given instead of a hash.
     hash: String,
+    /// Why it named no one hash.
+    miss: HashMiss,
 }
 
 impl Failure for ErrorSyncHashesHash {
@@ -195,9 +201,11 @@ impl Failure for ErrorSyncHashesHash {
     }
 
     fn reason(&self) -> String {
-        t!("storage_sync_hashes.err_bad_hash", hash = self.hash)
-            .trim()
-            .to_string()
+        self.miss.reason(&self.hash, || {
+            t!("storage_sync_hashes.err_bad_hash", hash = self.hash)
+                .trim()
+                .to_string()
+        })
     }
 }
 
@@ -206,9 +214,9 @@ failure!(ErrorSyncHashesHash);
 #[renderer(buffer)]
 pub fn render_error_sync_hashes_hash(error: ErrorSyncHashesHash, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!(
-        "{}",
-        help_line!(t!("storage_sync_hashes.err_bad_hash_help").trim())
-    );
+    let malformed = t!("storage_sync_hashes.err_bad_hash_help")
+        .trim()
+        .to_string();
+    r_eprintln!("{}", help_line!(error.miss.help(&malformed)));
     ec.exit_code = EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH;
 }

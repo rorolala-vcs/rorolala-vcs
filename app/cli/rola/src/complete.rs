@@ -279,6 +279,8 @@ pub enum IndexObject {
     Variant,
     /// A Version.
     Version,
+    /// A Version or a Variant: the two kinds a chain is made of.
+    Chain,
     /// A Creator.
     Creator,
     /// A Message.
@@ -287,11 +289,16 @@ pub enum IndexObject {
 
 impl IndexObject {
     /// Whether `object` is of this kind.
-    fn holds(self, object: &VCSIndexObject) -> bool {
+    #[must_use]
+    pub fn holds(self, object: &VCSIndexObject) -> bool {
         match self {
             Self::Any => true,
             Self::Variant => matches!(object, VCSIndexObject::Variant(_)),
             Self::Version => matches!(object, VCSIndexObject::Version(_)),
+            Self::Chain => matches!(
+                object,
+                VCSIndexObject::Variant(_) | VCSIndexObject::Version(_)
+            ),
             Self::Creator => matches!(object, VCSIndexObject::Creator(_)),
             Self::Message => matches!(object, VCSIndexObject::Message(_)),
         }
@@ -323,13 +330,16 @@ pub fn cached_layout_uuids(
     layout_uuids(&layout)
 }
 
-/// The hashes the index holds of one kind, in the index's own order.
+/// Every key the index holds, with the object under it, in the index's own order.
 ///
 /// The index is asynchronous and a completion is not, so the two meet here: the objects are read
-/// whole and filtered, which is the same read the `ls-*` commands make. An index that is not
-/// there, or will not read, leaves nothing to offer.
+/// whole, which is the same read the `ls-*` commands make. An index that is not there, or will not
+/// read, leaves nothing.
+///
+/// A caller that wants several kinds asks for this once rather than [`index_keys`] a time each:
+/// reading the index whole once is what one listing costs, and four kinds are not four listings.
 #[must_use]
-pub fn index_hashes(index: Option<&VCSIndex>, kind: IndexObject) -> Vec<String> {
+pub fn index_keyed(index: Option<&VCSIndex>) -> Vec<(Key, VCSIndexObject)> {
     let Some(index) = index else {
         return Vec::new();
     };
@@ -342,10 +352,25 @@ pub fn index_hashes(index: Option<&VCSIndex>, kind: IndexObject) -> Vec<String> 
     };
 
     objects
+}
+
+/// The keys the index holds of one kind, in the index's own order.
+///
+/// It is also what a short hash is resolved against — see [`crate::hash`] — since a head names an
+/// object only beside the ones that are there.
+#[must_use]
+pub fn index_keys(index: Option<&VCSIndex>, kind: IndexObject) -> Vec<Key> {
+    index_keyed(index)
         .into_iter()
         .filter(|(_, object)| kind.holds(object))
-        .map(|(key, _)| key.hex())
+        .map(|(key, _)| key)
         .collect()
+}
+
+/// The hashes the index holds of one kind, in the index's own order.
+#[must_use]
+pub fn index_hashes(index: Option<&VCSIndex>, kind: IndexObject) -> Vec<String> {
+    index_keys(index, kind).iter().map(Key::hex).collect()
 }
 
 /// The keys the store holds.
@@ -353,7 +378,7 @@ pub fn index_hashes(index: Option<&VCSIndex>, kind: IndexObject) -> Vec<String> 
 /// It is the listing [`storage ls-storaged`](crate::storage::cmd_storage_ls_storaged) prints, so
 /// a key that can be completed is one the store would answer for.
 #[must_use]
-pub fn store_keys(store: Option<&RorolalaStorage>) -> Vec<String> {
+pub fn store_key_set(store: Option<&RorolalaStorage>) -> Vec<Key> {
     let Some(store) = store else {
         return Vec::new();
     };
@@ -365,5 +390,11 @@ pub fn store_keys(store: Option<&RorolalaStorage>) -> Vec<String> {
         return Vec::new();
     };
 
-    keys.iter().map(Key::hex).collect()
+    keys
+}
+
+/// The keys the store holds, as hex.
+#[must_use]
+pub fn store_keys(store: Option<&RorolalaStorage>) -> Vec<String> {
+    store_key_set(store).iter().map(Key::hex).collect()
 }

@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use librorolala::storage::{Error as StorageError, Key, StorageBackend as _};
+use librorolala::storage::{Error as StorageError, StorageBackend as _};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -24,13 +24,14 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
-use crate::complete::{offer, positional, store_keys, typing_flag};
+use crate::complete::{offer, positional, store_key_set, store_keys, typing_flag};
 use crate::exit_codes::{
     EC_ERR_STORAGE_EXTRACT_FILE_ARGUMENT, EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH,
     EC_ERR_STORAGE_EXTRACT_FILE_EXISTS, EC_ERR_STORAGE_EXTRACT_FILE_FAILED,
     EC_ERR_STORAGE_EXTRACT_FILE_NO_STORAGE, EC_HELP,
 };
 use crate::failure::failure;
+use crate::hash::{HashMiss, resolve};
 
 #[help(buffer)]
 pub fn help_storage_extract_file(_: EntryStorageExtractFile, ec: &mut ResExitCode) {
@@ -119,8 +120,11 @@ pub fn handle_storage_extract_file(
         return ErrorExtractNoStorage.into();
     };
 
-    let Ok(key) = hash.parse::<Key>() else {
-        return ErrorBadHash { hash }.into();
+    // A short hash is resolved against what the store holds, since that is what it can name.
+    let keys = store_key_set(Some(store));
+    let key = match resolve(&hash, || keys) {
+        Ok(key) => key,
+        Err(miss) => return ErrorBadHash { hash, miss }.into(),
     };
 
     // The content goes into the directory named, or the current one: what is written is the
@@ -226,11 +230,13 @@ pub fn render_error_extract_no_storage(error: ErrorExtractNoStorage, ec: &mut Re
     ec.exit_code = EC_ERR_STORAGE_EXTRACT_FILE_NO_STORAGE;
 }
 
-/// Error: what was named does not read as a hash.
+/// Error: what was named does not read as a hash, or names no one key.
 #[derive(Grouped)]
 pub struct ErrorBadHash {
     /// What was named.
     hash: String,
+    /// Why it named no one hash.
+    miss: HashMiss,
 }
 
 impl Failure for ErrorBadHash {
@@ -239,9 +245,11 @@ impl Failure for ErrorBadHash {
     }
 
     fn reason(&self) -> String {
-        t!("storage_extract_file.err_bad_hash", hash = self.hash)
-            .trim()
-            .to_string()
+        self.miss.reason(&self.hash, || {
+            t!("storage_extract_file.err_bad_hash", hash = self.hash)
+                .trim()
+                .to_string()
+        })
     }
 }
 
@@ -250,10 +258,10 @@ failure!(ErrorBadHash);
 #[renderer(buffer)]
 pub fn render_error_bad_hash(err: ErrorBadHash, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(err.reason()));
-    r_eprintln!(
-        "{}",
-        help_line!(t!("storage_extract_file.err_bad_hash_help").trim())
-    );
+    let malformed = t!("storage_extract_file.err_bad_hash_help")
+        .trim()
+        .to_string();
+    r_eprintln!("{}", help_line!(err.miss.help(&malformed)));
     ec.exit_code = EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH;
 }
 

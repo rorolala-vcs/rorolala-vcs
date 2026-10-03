@@ -16,8 +16,6 @@ pub mod cmd_inv_idx_variant_dep;
 pub mod cmd_inv_idx_version_dep;
 pub mod cmd_inv_idx_version_num;
 
-use std::str::FromStr as _;
-
 use librorolala::inverse_index::InverseIndexReadingError;
 use librorolala::storage::Key;
 use mingling::{
@@ -38,6 +36,7 @@ use crate::exit_codes::{
 };
 use crate::failure::failure;
 use crate::format::ResFormat;
+use crate::hash::{HashMiss, resolve};
 
 /// How a listing of hashes is drawn when no template is named.
 ///
@@ -78,9 +77,14 @@ pub fn render_result_inv_idx_help(_: ResultInvIdxHelp, ec: &mut ResExitCode) {
     ec.exit_code = EC_HELP;
 }
 
-/// The hash `text` names, if it names one.
-pub fn parse_hash(text: &str) -> Option<Key> {
-    Key::from_str(text).ok()
+/// The hash `text` names, or the failure for a word that names no one.
+///
+/// A whole hash is taken as it is; only the head of one is resolved, and then among `candidates`.
+pub fn hash_of(text: &str, candidates: impl FnOnce() -> Vec<Key>) -> Result<Key, ErrorInvIdxHash> {
+    resolve(text, candidates).map_err(|miss| ErrorInvIdxHash {
+        hash: text.to_owned(),
+        miss,
+    })
 }
 
 /// The runtime a command drives the index with, or the failure to make one.
@@ -214,11 +218,13 @@ pub fn render_error_inv_idx_argument(error: ErrorInvIdxArgument, ec: &mut ResExi
     ec.exit_code = EC_ERR_INV_IDX_ARGUMENT;
 }
 
-/// Error: an argument does not read as a hash.
+/// Error: an argument does not read as a hash, or names no one object.
 #[derive(Grouped)]
 pub struct ErrorInvIdxHash {
     /// What was given instead of a hash.
     hash: String,
+    /// Why it named no one hash.
+    miss: HashMiss,
 }
 
 impl Failure for ErrorInvIdxHash {
@@ -227,9 +233,11 @@ impl Failure for ErrorInvIdxHash {
     }
 
     fn reason(&self) -> String {
-        t!("inv_idx.err_bad_hash", hash = self.hash)
-            .trim()
-            .to_string()
+        self.miss.reason(&self.hash, || {
+            t!("inv_idx.err_bad_hash", hash = self.hash)
+                .trim()
+                .to_string()
+        })
     }
 }
 
@@ -238,7 +246,8 @@ failure!(ErrorInvIdxHash);
 #[renderer(buffer)]
 pub fn render_error_inv_idx_hash(error: ErrorInvIdxHash, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("inv_idx.err_bad_hash_help").trim()));
+    let malformed = t!("inv_idx.err_bad_hash_help").trim().to_string();
+    r_eprintln!("{}", help_line!(error.miss.help(&malformed)));
     ec.exit_code = EC_ERR_INV_IDX_ARGUMENT;
 }
 

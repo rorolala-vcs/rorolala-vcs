@@ -9,7 +9,6 @@
 use std::str::FromStr as _;
 
 use librorolala::layout::MutableData;
-use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{arg, buffer, chain, command, completion, help, metadata, r_eprintln, suggest},
@@ -24,12 +23,14 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::complete::{
-    IndexObject, chosen_layout, filling_flag, flag_value, index_hashes, layout_uuids, offer,
-    positional, strip_written, typing_flag, workspace_layout_names,
+    IndexObject, chosen_layout, filling_flag, flag_value, index_hashes, index_keys, layout_uuids,
+    offer, positional, strip_written, typing_flag, workspace_layout_names,
 };
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_names;
-use crate::layout::{ErrorLayoutArgument, LayoutDid, ResultLayoutContent, chosen_writable, failed};
+use crate::layout::{
+    ErrorLayoutArgument, LayoutDid, ResultLayoutContent, chosen_writable, failed, hash_of,
+};
 
 /// The account the entry is held by; none when it is left out.
 const ARG_OWNER: PickerArg<'static, Option<String>> = arg![owner: Option<String>];
@@ -43,11 +44,6 @@ const ARG_LAYOUT: PickerArg<'static, Option<String>> = arg![layout: Option<Strin
 /// The `Uuid` `text` names, or the argument failure.
 fn uuid_of(text: &str) -> Result<Uuid, Next> {
     Uuid::from_str(text).map_err(|_| ErrorLayoutArgument.into())
-}
-
-/// The version `text` names, or the argument failure.
-fn version_of(text: &str) -> Result<Key, Next> {
-    Key::from_str(text).map_err(|_| ErrorLayoutArgument.into())
 }
 
 #[help(buffer)]
@@ -327,6 +323,7 @@ pub fn handle_layout_entry(
     state: StateLayoutEntry,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
+    index: &mut LazyRes<ResVCSIndex>,
 ) -> Next {
     let StateLayoutEntry {
         uuid,
@@ -362,9 +359,13 @@ pub fn handle_layout_entry(
         .into();
     }
 
-    let version = match version_of(&version) {
+    // A whole hash is taken whether or not an index is here to resolve a head against; only a head
+    // needs one, and a run with none is told the head names nothing rather than refused outright.
+    let version = match hash_of(&version, || {
+        index_keys(index.get_ref().as_ref(), IndexObject::Version)
+    }) {
         Ok(version) => version,
-        Err(next) => return next,
+        Err(error) => return error.into(),
     };
     let data = MutableData::new(owner, *version.digest(), description.unwrap_or_default());
 

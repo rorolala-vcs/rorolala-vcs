@@ -57,12 +57,13 @@ use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
 use crate::complete::{
-    IndexObject, filling_flag, flag_value, index_hashes, offer, positional, strip_written,
-    typing_flag,
+    IndexObject, filling_flag, flag_value, index_hashes, index_keys, offer, positional,
+    strip_written, typing_flag,
 };
 use crate::exit_codes::{EC_ERR_CHECKIN, EC_ERR_CHECKIN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
+use crate::hash::resolve as resolve_hash;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, ErrorLayoutNotCached, failed,
@@ -70,7 +71,7 @@ use crate::layout::{
 };
 use crate::progress::Reporting;
 use crate::sync;
-use crate::vcs_index::{ErrorVcsIndexNoIndex, parse_hash, runtime as index_runtime};
+use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
 
 /// The file a variant is to be joined into, for the mode that checks a variant in rather than
 /// bringing a `Uuid` the Vault holds into this Layout.
@@ -364,8 +365,17 @@ fn checkin_variant(
     offline: &ResOffline,
     force: bool,
 ) -> Next {
-    let Some(variant_key) = parse_hash(variant) else {
-        return join_failed(target, t!("checkin.err_join_hash").trim());
+    let Some(index) = index.get_ref().as_ref() else {
+        return ErrorVcsIndexNoIndex.into();
+    };
+    let variant_key = match resolve_hash(variant, || index_keys(Some(index), IndexObject::Variant))
+    {
+        Ok(key) => key,
+        Err(miss) => {
+            let said = miss.reason(variant, || t!("checkin.err_join_hash").trim().to_string());
+
+            return join_failed(target, said);
+        }
     };
 
     let root = held.get_root();
@@ -388,9 +398,6 @@ fn checkin_variant(
         return join_failed(target, t!("checkin.err_join_checked_in").trim());
     }
 
-    let Some(index) = index.get_ref().as_ref() else {
-        return ErrorVcsIndexNoIndex.into();
-    };
     let runtime = match index_runtime() {
         Ok(runtime) => runtime,
         Err(error) => return error.into(),

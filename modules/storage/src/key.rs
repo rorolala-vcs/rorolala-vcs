@@ -8,6 +8,13 @@ use crate::Error;
 /// The width, in bytes, of a content hash.
 pub const BLAKE3_HASH_LEN: usize = 32;
 
+/// The fewest hex digits a hash may be named by.
+///
+/// Four is short enough to type and long enough that a head names one object in anything a person
+/// keeps: two digests collide on four digits once in sixty-five thousand, so a listing would have
+/// to hold that many before a short name became a nuisance.
+pub const SHORT_HASH_MIN: usize = 4;
+
 /// The content hash itself: the digest `Blake3` produces.
 pub type Blake3Hash = [u8; BLAKE3_HASH_LEN];
 
@@ -55,6 +62,92 @@ impl Key {
         }
 
         hex
+    }
+}
+
+/// The head of a digest, which names an object when no other digest shares it.
+///
+/// A whole digest is [`Key`]'s to read; this is only the short form, so it is strictly shorter
+/// than what [`Key`] takes. The digits alone cannot say what they name — a head names an object
+/// only beside the keys that are there — so a caller settles it with [`resolve`](Self::resolve)
+/// against the keys it can list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShortHash {
+    /// The digits, lowercase, so that comparing against a written-out digest is a byte compare.
+    digits: String,
+}
+
+/// What a short hash named among the keys it was put to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Resolved {
+    /// Exactly one key starts with the digits.
+    ExactlyOne(Key),
+    /// No key starts with them.
+    NoMatch,
+    /// More than one does, in the order the keys were given.
+    Ambiguous(Vec<Key>),
+}
+
+impl ShortHash {
+    /// Reads `text` as the head of a digest: hex, [`SHORT_HASH_MIN`] digits or more and fewer
+    /// than a whole digest, with or without the name of the hash in front of it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Malformed`] when `text` is not hex of a length a head may have.
+    pub fn new(text: &str) -> Result<Self, Error> {
+        let hex = text
+            .strip_prefix("blake3:")
+            .or_else(|| text.strip_prefix("manifest:"))
+            .unwrap_or(text);
+        if hex.len() < SHORT_HASH_MIN || hex.len() >= BLAKE3_HASH_LEN * 2 {
+            return Err(Error::Malformed);
+        }
+        if !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(Error::Malformed);
+        }
+
+        Ok(Self {
+            digits: hex.to_ascii_lowercase(),
+        })
+    }
+
+    /// The digits, lowercase.
+    #[must_use]
+    pub fn digits(&self) -> &str {
+        &self.digits
+    }
+
+    /// Whether `key`'s digest starts with these digits.
+    #[must_use]
+    pub fn matches(&self, key: &Key) -> bool {
+        let digest = key.digest();
+
+        self.digits.bytes().enumerate().all(|(at, digit)| {
+            let byte = digest[at / 2];
+            let nibble = if at % 2 == 0 { byte >> 4 } else { byte & 0x0f };
+
+            DIGITS[usize::from(nibble)] == digit
+        })
+    }
+
+    /// The key `candidates` names with this head, or none, or every one it names.
+    ///
+    /// Every match is kept rather than the first: a head that names two objects is a question the
+    /// caller has to ask again with more digits, and which two they are is what lets it.
+    #[must_use]
+    pub fn resolve<'a>(&self, candidates: impl IntoIterator<Item = &'a Key>) -> Resolved {
+        let named: Vec<Key> = candidates
+            .into_iter()
+            .filter(|key| self.matches(key))
+            .copied()
+            .collect();
+
+        match named.len() {
+            0 => Resolved::NoMatch,
+            1 => Resolved::ExactlyOne(named[0]),
+            _ => Resolved::Ambiguous(named),
+        }
     }
 }
 
@@ -121,7 +214,7 @@ impl FromStr for Key {
 mod tests {
     use std::str::FromStr as _;
 
-    use super::Key;
+    use super::{Key, Resolved, SHORT_HASH_MIN, ShortHash};
 
     #[test]
     fn a_key_reads_with_or_without_a_name_in_front() {
@@ -136,5 +229,62 @@ mod tests {
 
         assert!(Key::from_str("not a hash").is_err());
         assert!(Key::from_str(&format!("manifest:{}", "0f".repeat(31))).is_err());
+    }
+
+    #[test]
+    fn a_head_reads_as_hex_of_a_length_a_head_may_have() {
+        // The two names a listing puts in front of a digest read in front of a head too, and an
+        // uppercase head is the same head: the digits are kept lowercase for comparing against
+        // what a digest is written out with.
+        assert_eq!(ShortHash::new("blake3:0F1e").unwrap().digits(), "0f1e");
+        assert_eq!(ShortHash::new("manifest:0f1e").unwrap().digits(), "0f1e");
+        assert_eq!(ShortHash::new("0f1e").unwrap().digits(), "0f1e");
+
+        // Four is the fewest, and a whole digest is not a head: [`Key`] takes that.
+        assert!(ShortHash::new(&"0".repeat(SHORT_HASH_MIN - 1)).is_err());
+        assert!(ShortHash::new(&"0f".repeat(32)).is_err());
+        assert!(ShortHash::new("0f1g").is_err());
+        assert!(ShortHash::new("0f1").is_err());
+    }
+
+    #[test]
+    fn a_head_names_what_starts_with_it() {
+        let one = Key::new([0x0f; 32]);
+        let other = Key::new([0xf0; 32]);
+
+        assert!(ShortHash::new("0f").is_err());
+        assert!(ShortHash::new("0f0f").unwrap().matches(&one));
+        assert!(!ShortHash::new("0f0f").unwrap().matches(&other));
+
+        // A head of an odd number of digits still lines up with the digest's own nibbles.
+        assert!(ShortHash::new("0f0f0").unwrap().matches(&one));
+        assert!(!ShortHash::new("0f0f0").unwrap().matches(&other));
+    }
+
+    #[test]
+    fn a_head_resolves_to_none_one_or_several() {
+        let one = Key::new([0x0f; 32]);
+        let mut digest = [0x0f; 32];
+        digest[31] = 0x1f;
+        let two = Key::new(digest);
+
+        // `one` and `two` share their first sixty-two digits, so a head of any length up to that
+        // names both of them.
+        match ShortHash::new("0f0f0f0f0f0f0f0f0f")
+            .unwrap()
+            .resolve([&one, &two])
+        {
+            Resolved::Ambiguous(named) => assert_eq!(named, vec![one, two]),
+            other => panic!("a head two keys share is ambiguous, not {other:?}"),
+        }
+
+        assert_eq!(
+            ShortHash::new("0f0f").unwrap().resolve([&one]),
+            Resolved::ExactlyOne(one)
+        );
+        assert_eq!(
+            ShortHash::new("f0f0").unwrap().resolve([&one]),
+            Resolved::NoMatch
+        );
     }
 }

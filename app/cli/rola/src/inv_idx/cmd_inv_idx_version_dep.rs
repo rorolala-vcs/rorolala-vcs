@@ -16,12 +16,12 @@ use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
-use crate::complete::{IndexObject, index_hashes, offer, positional, typing_flag};
+use crate::complete::{IndexObject, index_hashes, index_keys, offer, positional, typing_flag};
 use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
 use crate::inv_idx::{
-    DEFAULT_FORMAT_HASHES, ErrorInvIdxArgument, ErrorInvIdxHash, ErrorInvIdxNoIndex,
-    ResultInvIdxHashes, parse_hash, reading_error, runtime,
+    DEFAULT_FORMAT_HASHES, ErrorInvIdxArgument, ErrorInvIdxNoIndex, ResultInvIdxHashes, hash_of,
+    reading_error, runtime,
 };
 
 #[help(buffer)]
@@ -40,7 +40,7 @@ pub fn desc_inv_idx_version_dep() -> Description {
 /// # Errors
 ///
 /// Renders [`ErrorInvIdxNoIndex`] when the run is nowhere an index is, [`ErrorInvIdxArgument`] when
-/// the argument is missing, [`ErrorInvIdxHash`] when it does not read as a hash, and the reading
+/// the argument is missing, [`ErrorInvIdxHash`](crate::inv_idx::ErrorInvIdxHash) when it does not read as a hash, and the reading
 /// failure when the index could not be read.
 #[command(node = "inv-idx.version-dep", entry = EntryInvIdxVersionDep)]
 pub fn inv_idx_version_dep(args: EntryInvIdxVersionDep, format: &mut ResFormat) -> Next {
@@ -74,11 +74,13 @@ pub fn handle_inv_idx_version_dep(
     index: &mut LazyRes<ResVCSIndex>,
     format: &mut ResFormat,
 ) -> Next {
-    let Some(key) = parse_hash(&state.hash) else {
-        return ErrorInvIdxHash { hash: state.hash }.into();
-    };
+    let StateInvIdxVersionDep { hash } = state;
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorInvIdxNoIndex.into();
+    };
+    let key = match hash_of(&hash, || index_keys(Some(index), IndexObject::Version)) {
+        Ok(key) => key,
+        Err(error) => return error.into(),
     };
     let runtime = match runtime() {
         Ok(runtime) => runtime,

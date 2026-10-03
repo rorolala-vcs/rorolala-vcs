@@ -54,12 +54,13 @@ use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
 use crate::complete::{
-    IndexObject, filling_flag, index_hashes, offer, positional, strip_written, typing_flag,
-    vault_names,
+    IndexObject, filling_flag, index_hashes, index_keys, offer, positional, strip_written,
+    typing_flag, vault_names,
 };
 use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
+use crate::hash::{HashMiss, resolve as resolve_hash};
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutShouldInWorkspace, chosen, failed as layout_failed, readonly_layout_dir, remote_spec,
@@ -212,7 +213,9 @@ pub fn handle_retrack(
 
     // The level is read before anything is looked at, so a run that misspelled it is told that
     // rather than a complaint about a file it would have refused for another reason.
-    let level = until_of(until.as_deref())?;
+    let level = until_of(until.as_deref(), || {
+        index_keys(index.get_ref().as_ref(), IndexObject::Version)
+    })?;
     let text = until.unwrap_or_else(|| "-1".to_owned());
 
     let layout = chosen(workspace.get_ref(), vault.get_ref(), None)?;
@@ -721,8 +724,18 @@ enum Until {
 ///
 /// One step back is what saying nothing means. `~N` is a step count, digits are a version number,
 /// a hash is a version, and anything else is taken as a Vault's name — the order a run is likely
-/// to have meant, with the two shapes a Vault's name can never be settled first.
-fn until_of(text: Option<&str>) -> Result<Until, ErrorRetrackLevel> {
+/// to have meant, with the two shapes a Vault's name can never be settled first. The hash may be
+/// only the head of one, and `versions` is what it is settled against; a name of hex digits is
+/// therefore read as a hash where it would once have been a Vault's name.
+///
+/// # Errors
+///
+/// [`ErrorRetrackLevel`] when `text` is no level, and when it is a hash that names no one version
+/// or more than one.
+fn until_of(
+    text: Option<&str>,
+    versions: impl FnOnce() -> Vec<Key>,
+) -> Result<Until, ErrorRetrackLevel> {
     let Some(text) = text else {
         return Ok(Until::Steps(1));
     };
@@ -761,11 +774,19 @@ fn until_of(text: Option<&str>) -> Result<Until, ErrorRetrackLevel> {
         return Err(not_a_level());
     }
 
-    if let Ok(key) = Key::from_str(text) {
-        return Ok(Until::Hash(key));
+    match resolve_hash(text, versions) {
+        Ok(key) => Ok(Until::Hash(key)),
+        // What is not hash-shaped at all is a Vault's name, which is read later.
+        Err(HashMiss::Malformed) => Ok(Until::Vault(text.to_owned())),
+        Err(HashMiss::Unknown) => Err(ErrorRetrackLevel {
+            until: text.to_owned(),
+            kind: RetrackLevelError::NotAVersion,
+        }),
+        Err(HashMiss::Ambiguous(candidates)) => Err(ErrorRetrackLevel {
+            until: text.to_owned(),
+            kind: RetrackLevelError::AmbiguousHash { candidates },
+        }),
     }
-
-    Ok(Until::Vault(text.to_owned()))
 }
 
 /// The stored hash `hash` is written as, in hex.
@@ -1003,6 +1024,11 @@ pub enum RetrackLevelError {
     },
     /// The hash names no version in the index.
     NotAVersion,
+    /// The hash names more than one version in the index.
+    AmbiguousHash {
+        /// The versions it names, as hex.
+        candidates: Vec<String>,
+    },
     /// The hash names a version that is not on the way back from where the entry is.
     NotAncestor {
         /// Where the entry sits in the Layout.
@@ -1016,6 +1042,7 @@ impl Failure for ErrorRetrackLevel {
             RetrackLevelError::NotALevel => "error_retrack_not_a_level",
             RetrackLevelError::OutOfChain { .. } => "error_retrack_out_of_chain",
             RetrackLevelError::NotAVersion => "error_retrack_not_a_version",
+            RetrackLevelError::AmbiguousHash { .. } => "error_retrack_ambiguous_hash",
             RetrackLevelError::NotAncestor { .. } => "error_retrack_not_ancestor",
         }
     }
@@ -1029,6 +1056,11 @@ impl Failure for ErrorRetrackLevel {
             RetrackLevelError::NotAVersion => {
                 t!("retrack.err_not_a_version", until = self.until)
             }
+            RetrackLevelError::AmbiguousHash { candidates } => t!(
+                "common.err_hash_ambiguous",
+                hash = self.until,
+                candidates = candidates.join(", ")
+            ),
             RetrackLevelError::NotAncestor { path } => {
                 t!("retrack.err_not_ancestor", until = self.until, path = path)
             }
@@ -1050,6 +1082,7 @@ pub fn render_error_retrack_level(error: ErrorRetrackLevel, ec: &mut ResExitCode
             (t!("retrack.err_out_of_chain_help"), EC_ERR_RETRACK)
         }
         RetrackLevelError::NotAVersion => (t!("retrack.err_not_a_version_help"), EC_ERR_RETRACK),
+        RetrackLevelError::AmbiguousHash { .. } => (t!("common.err_hash_help"), EC_ERR_RETRACK),
         RetrackLevelError::NotAncestor { .. } => {
             (t!("retrack.err_not_ancestor_help"), EC_ERR_RETRACK)
         }
@@ -1120,42 +1153,91 @@ pub fn render_error_retrack_failed(error: ErrorRetrackFailed, ec: &mut ResExitCo
 
 #[cfg(test)]
 mod tests {
-    use super::{Until, until_of};
+    use super::{RetrackLevelError, Until, until_of};
     use librorolala::storage::Key;
 
     /// The default and the two spellings of one step back are the same level.
     #[test]
     fn one_step_back_is_the_default_and_the_two_spellings_of_it() {
-        assert!(matches!(until_of(None), Ok(Until::Steps(1))));
-        assert!(matches!(until_of(Some("-1")), Ok(Until::Steps(1))));
-        assert!(matches!(until_of(Some("~1")), Ok(Until::Steps(1))));
+        assert!(matches!(until_of(None, Vec::new), Ok(Until::Steps(1))));
+        assert!(matches!(
+            until_of(Some("-1"), Vec::new),
+            Ok(Until::Steps(1))
+        ));
+        assert!(matches!(
+            until_of(Some("~1"), Vec::new),
+            Ok(Until::Steps(1))
+        ));
     }
 
     /// A step count is `~N`, a version number is digits, a hash is a hash, and anything else is
     /// the name of a Vault.
     #[test]
     fn each_shape_is_read_as_the_level_it_is() {
-        assert!(matches!(until_of(Some("~3")), Ok(Until::Steps(3))));
-        assert!(matches!(until_of(Some("~0")), Ok(Until::Steps(0))));
-        assert!(matches!(until_of(Some("0")), Ok(Until::Number(0))));
-        assert!(matches!(until_of(Some("12")), Ok(Until::Number(12))));
-        assert!(matches!(until_of(Some("origin")), Ok(Until::Vault(name)) if name == "origin"));
+        assert!(matches!(
+            until_of(Some("~3"), Vec::new),
+            Ok(Until::Steps(3))
+        ));
+        assert!(matches!(
+            until_of(Some("~0"), Vec::new),
+            Ok(Until::Steps(0))
+        ));
+        assert!(matches!(
+            until_of(Some("0"), Vec::new),
+            Ok(Until::Number(0))
+        ));
+        assert!(matches!(
+            until_of(Some("12"), Vec::new),
+            Ok(Until::Number(12))
+        ));
+        assert!(
+            matches!(until_of(Some("origin"), Vec::new), Ok(Until::Vault(name)) if name == "origin")
+        );
 
         let hex = "0f".repeat(32);
-        let Ok(Until::Hash(key)) = until_of(Some(&hex)) else {
+        let Ok(Until::Hash(key)) = until_of(Some(&hex), Vec::new) else {
             panic!("a hash is read as a hash");
         };
         assert_eq!(key, Key::new([0x0f; 32]));
     }
 
+    /// The head of a hash is read against the versions there are: one match is that version, none
+    /// is a version that is not here, and more than one is a question that needs more digits.
+    #[test]
+    fn a_head_is_read_against_the_versions_there_are() {
+        let one = Key::new([0x0f; 32]);
+        let mut digest = [0x0f; 32];
+        digest[31] = 0x1f;
+        let two = Key::new(digest);
+
+        assert!(matches!(
+            until_of(Some("0f0f"), || vec![one]),
+            Ok(Until::Hash(key)) if key == one
+        ));
+        assert!(matches!(
+            until_of(Some("0f0f"), Vec::new),
+            Err(super::ErrorRetrackLevel {
+                kind: RetrackLevelError::NotAVersion,
+                ..
+            })
+        ));
+        assert!(matches!(
+            until_of(Some("0f0f"), || vec![one, two]),
+            Err(super::ErrorRetrackLevel {
+                kind: RetrackLevelError::AmbiguousHash { .. },
+                ..
+            })
+        ));
+    }
+
     /// What is neither a level nor a hash is refused where it cannot be a name at all: a sign
-    /// that is not `-1`, a step count with no number, and a hash of the wrong width.
+    /// that is not `-1`, a step count with no number, and something hash-shaped that names nothing.
     #[test]
     fn a_level_that_is_not_one_is_refused() {
-        assert!(until_of(Some("~")).is_err());
-        assert!(until_of(Some("~x")).is_err());
-        assert!(until_of(Some("-5")).is_err());
-        assert!(until_of(Some("+1")).is_err());
-        assert!(until_of(Some("")).is_err());
+        assert!(until_of(Some("~"), Vec::new).is_err());
+        assert!(until_of(Some("~x"), Vec::new).is_err());
+        assert!(until_of(Some("-5"), Vec::new).is_err());
+        assert!(until_of(Some("+1"), Vec::new).is_err());
+        assert!(until_of(Some(""), Vec::new).is_err());
     }
 }

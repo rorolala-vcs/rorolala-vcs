@@ -45,7 +45,6 @@ use rorolala_utils_cli_theme::{Colorize as _, err_line, help_line, trd};
 use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 use serde::Serialize;
-use std::str::FromStr as _;
 
 use crate::Next;
 use crate::exit_codes::{
@@ -54,6 +53,7 @@ use crate::exit_codes::{
 };
 use crate::failure::failure;
 use crate::format::ResFormat;
+use crate::hash::{HashMiss, resolve};
 
 /// How a listing of hashes is drawn when no template is named.
 ///
@@ -131,9 +131,18 @@ pub fn variant_tail(storage: &[u8; 32], join: Option<&[u8; 32]>) -> String {
     tail
 }
 
-/// The hash `text` names, if it names one.
-pub fn parse_hash(text: &str) -> Option<Key> {
-    Key::from_str(text).ok()
+/// The hash `text` names, or the failure for a word that names no one.
+///
+/// A whole hash is taken as it is, whether or not the index holds it: a write records hashes it
+/// was never asked to check. Only the head of one is resolved, and then among `candidates`.
+pub fn hash_of(
+    text: &str,
+    candidates: impl FnOnce() -> Vec<Key>,
+) -> Result<Key, ErrorVcsIndexHash> {
+    resolve(text, candidates).map_err(|miss| ErrorVcsIndexHash {
+        hash: text.to_owned(),
+        miss,
+    })
 }
 
 /// The runtime a command drives the index with, or the failure to make one.
@@ -311,11 +320,13 @@ pub fn render_error_vcs_index_argument(error: ErrorVcsIndexArgument, ec: &mut Re
     ec.exit_code = EC_ERR_VCS_INDEX_ARGUMENT;
 }
 
-/// Error: an argument does not read as a hash.
+/// Error: an argument does not read as a hash, or names no one object.
 #[derive(Grouped)]
 pub struct ErrorVcsIndexHash {
     /// What was given instead of a hash.
     hash: String,
+    /// Why it named no one hash.
+    miss: HashMiss,
 }
 
 impl Failure for ErrorVcsIndexHash {
@@ -324,9 +335,11 @@ impl Failure for ErrorVcsIndexHash {
     }
 
     fn reason(&self) -> String {
-        t!("vcs_index.err_bad_hash", hash = self.hash)
-            .trim()
-            .to_string()
+        self.miss.reason(&self.hash, || {
+            t!("vcs_index.err_bad_hash", hash = self.hash)
+                .trim()
+                .to_string()
+        })
     }
 }
 
@@ -335,7 +348,8 @@ failure!(ErrorVcsIndexHash);
 #[renderer(buffer)]
 pub fn render_error_vcs_index_hash(error: ErrorVcsIndexHash, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("vcs_index.err_bad_hash_help").trim()));
+    let malformed = t!("vcs_index.err_bad_hash_help").trim().to_string();
+    r_eprintln!("{}", help_line!(error.miss.help(&malformed)));
     ec.exit_code = EC_ERR_VCS_INDEX_ARGUMENT;
 }
 

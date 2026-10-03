@@ -41,6 +41,7 @@ use rust_i18n::t;
 use uuid::Uuid;
 
 use librorolala::layout::{Layout, LayoutError, LayoutPath, Layouts, MutableData};
+use librorolala::storage::Key;
 
 use crate::Next;
 use crate::exit_codes::{
@@ -48,6 +49,7 @@ use crate::exit_codes::{
     EC_ERR_LAYOUT_NOT_CACHED, EC_ERR_LAYOUT_OWNERSHIP, EC_ERR_SHOULD_IN_WORKSPACE, EC_NOT_EXIST,
 };
 use crate::failure::failure;
+use crate::hash::{HashMiss, resolve};
 
 /// What a run works its Layouts through.
 pub enum Place {
@@ -350,6 +352,49 @@ pub fn render_error_layout_argument(_: ErrorLayoutArgument, ec: &mut ResExitCode
         help_line!(t!("cmd_layout.err_layout_argument_help").trim())
     );
     ec.exit_code = EC_ERR_LAYOUT_ARGUMENT;
+}
+
+/// Error: a hash argument does not read as a hash, or names no one object.
+#[derive(Grouped)]
+pub struct ErrorLayoutHash {
+    /// What was given instead of a hash.
+    hash: String,
+    /// Why it named no one hash.
+    miss: HashMiss,
+}
+
+impl Failure for ErrorLayoutHash {
+    fn name(&self) -> &'static str {
+        "error_layout_hash"
+    }
+
+    fn reason(&self) -> String {
+        self.miss.reason(&self.hash, || {
+            t!("cmd_layout.err_layout_hash", hash = self.hash)
+                .trim()
+                .to_string()
+        })
+    }
+}
+
+failure!(ErrorLayoutHash);
+
+#[renderer(buffer)]
+pub fn render_error_layout_hash(error: ErrorLayoutHash, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    let malformed = t!("cmd_layout.err_layout_hash_help").trim().to_string();
+    r_eprintln!("{}", help_line!(error.miss.help(&malformed)));
+    ec.exit_code = EC_ERR_LAYOUT_ARGUMENT;
+}
+
+/// The hash `text` names, or the failure for a word that names no one.
+///
+/// A whole hash is taken as it is; only the head of one is resolved, and then among `candidates`.
+pub fn hash_of(text: &str, candidates: impl FnOnce() -> Vec<Key>) -> Result<Key, ErrorLayoutHash> {
+    resolve(text, candidates).map_err(|miss| ErrorLayoutHash {
+        hash: text.to_owned(),
+        miss,
+    })
 }
 
 /// Error: the Workspace has no Layout to work in.

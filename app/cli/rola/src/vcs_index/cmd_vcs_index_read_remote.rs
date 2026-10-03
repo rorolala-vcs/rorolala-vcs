@@ -7,7 +7,6 @@
 //! the chain is there and not here.
 
 use librorolala::protocol::ActionError;
-use librorolala::storage::Key;
 use librorolala::vcs::{UNKNOWN_VERSION, VCSIndexObject};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
@@ -21,19 +20,19 @@ use mingling::{
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResVCSIndex, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
-use std::str::FromStr as _;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::complete::{IndexObject, index_hashes, offer, positional, typing_flag, vault_names};
+use crate::complete::{
+    IndexObject, index_hashes, index_keys, offer, positional, typing_flag, vault_names,
+};
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
+use crate::hash::looks_like_hash;
 use crate::keys::account_named;
 use crate::vcs_index::cmd_vcs_index_read::{DEFAULT_FORMAT, ResultVcsIndexRead, view_of};
-use crate::vcs_index::{
-    ErrorVcsIndexArgument, ErrorVcsIndexHash, ErrorVcsIndexNotFound, parse_hash, read_remote,
-};
+use crate::vcs_index::{ErrorVcsIndexArgument, ErrorVcsIndexNotFound, hash_of, read_remote};
 
 #[help(buffer)]
 pub fn help_vcs_index_read_remote(_: EntryVcsIndexReadRemote, ec: &mut ResExitCode) {
@@ -81,7 +80,7 @@ pub fn complete_vcs_index_read_remote(
 ///
 /// # Errors
 ///
-/// Renders [`ErrorVcsIndexHash`] when the hash does not read, [`ErrorVcsIndexNotFound`] when no
+/// Renders [`ErrorVcsIndexHash`](crate::vcs_index::ErrorVcsIndexHash) when the hash does not read, [`ErrorVcsIndexNotFound`] when no
 /// object is held under it, and — as
 /// [`vcs-index ls-remote-variants`](crate::vcs_index::cmd_vcs_index_ls_remote_variants) — whatever
 /// the exchange reports.
@@ -115,12 +114,10 @@ pub fn vcs_index_read_remote(
 ///
 /// A hash reads as one and a Vault does not, so the last word is the Vault when it is not a hash —
 /// the same reading [`storage sync-hashes`](crate::storage::cmd_storage_sync_hashes) gives its
-/// trailing Vault, so the two are named the same way.
+/// trailing Vault, so the two are named the same way. A head of a hash counts as a hash here, so a
+/// Vault named in hex is the one name this cannot tell apart.
 fn with_vault(mut words: Vec<String>) -> (Option<String>, Vec<String>) {
-    let vault = words
-        .last()
-        .filter(|word| Key::from_str(word).is_err())
-        .cloned();
+    let vault = words.last().filter(|word| !looks_like_hash(word)).cloned();
 
     if vault.is_some() {
         words.pop();
@@ -142,15 +139,22 @@ pub struct StateVcsIndexReadRemote {
 pub fn handle_vcs_index_read_remote(
     state: StateVcsIndexReadRemote,
     workspace: &mut LazyRes<ResWorkspace>,
+    index: &mut LazyRes<ResVCSIndex>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     format: &mut ResFormat,
 ) -> Next {
-    // The hash is checked here so that a word that is not one is refused in this run's words rather
-    // than carried to the Vault; what crosses is the hash as it was given.
-    if parse_hash(&state.hash).is_none() {
-        return ErrorVcsIndexHash { hash: state.hash }.into();
-    }
+    // The hash is resolved here, against the index this side holds — which a sync keeps to the
+    // hashes the Vault has — so that what crosses is a whole hash whichever way it was written.
+    // A whole hash needs no index and is taken as it is, which is how a run reaches an object the
+    // index here does not hold yet.
+    let key = match hash_of(&state.hash, || {
+        index_keys(index.get_ref().as_ref(), IndexObject::Any)
+    }) {
+        Ok(key) => key,
+        Err(error) => return error.into(),
+    };
+    let hash = key.hex();
 
     workspace.get_ref().check()?;
 
@@ -165,12 +169,12 @@ pub fn handle_vcs_index_read_remote(
     let name = current.get_ref().must_bind()?;
     let account = account_named(&name, Some(held), None)?;
 
-    let remote_read = read_remote(held, &account, &target.to_string(), &state.hash);
+    let remote_read = read_remote(held, &account, &target.to_string(), &hash);
 
     // The same answer the local read gives when nothing is stored under a hash: the read was
     // finished and had nothing to hand back.
     if matches!(&remote_read, Err(ActionError::MissingObject)) {
-        return ErrorVcsIndexNotFound { hash: state.hash }.into();
+        return ErrorVcsIndexNotFound { hash }.into();
     }
 
     let object = remote_read?;

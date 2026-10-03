@@ -46,15 +46,18 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::complete::{filling_flag, positional, strip_written, typing_flag};
+use crate::complete::{
+    IndexObject, filling_flag, index_keys, positional, strip_written, typing_flag,
+};
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
+use crate::hash::resolve as resolve_hash;
 use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_dir};
 use crate::ownership;
 use crate::vcs_index::cmd_vcs_index_lookback::{
     MergeHint, ResLookback, Standing, StandingRelation, from_object,
 };
-use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, parse_hash, runtime};
+use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, runtime};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
@@ -444,6 +447,7 @@ fn lookback_of(
         layout,
         remote.as_ref().map(|(_, layout)| layout),
         held,
+        Some(index),
         cwd,
     ) {
         Ok(found) => found,
@@ -729,12 +733,14 @@ fn normalize(path: &Path) -> PathBuf {
 /// `rola track`, `rola align` and the completion read one, and a relative one is read again as it
 /// stands, which is how a Layout names a path from its root. The first reading that names something
 /// is what is answered, so a name means the file beside the run when there is one, and keeps meaning
-/// the file at the root otherwise. A `Uuid` and a hash are read by shape and name no path at all.
+/// the file at the root otherwise. A `Uuid` and a hash are read by shape and name no path at all;
+/// a hash may be only the head of one, which is settled against what `index` holds last of all.
 fn found(
     target: &str,
     layout: &Layout,
     remote: Option<&Layout>,
     held: &Workspace,
+    index: Option<&VCSIndex>,
     cwd: Option<&Path>,
 ) -> Result<Found, String> {
     for path in targets(target, held.get_root(), cwd) {
@@ -797,15 +803,16 @@ fn found(
 
     // A `Uuid` and a path are read by shape, so what is left is a hash: which kind of object it is
     // is what reading it settles, and one that is no chain is refused where it is read.
-    if let Some(key) = parse_hash(target) {
-        return Ok(Found {
+    match resolve_hash(target, || index_keys(index, IndexObject::Any)) {
+        Ok(key) => Ok(Found {
             key,
             editing: false,
             id: None,
-        });
+        }),
+        Err(miss) => Err(miss.reason(target, || {
+            t!("status.err_target_names_nothing").trim().to_owned()
+        })),
     }
-
-    Err(t!("status.err_target_names_nothing").trim().to_owned())
 }
 
 /// The version the Layout names the entry `id` at.
