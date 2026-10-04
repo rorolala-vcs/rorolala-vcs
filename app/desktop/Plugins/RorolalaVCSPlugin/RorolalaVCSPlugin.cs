@@ -38,6 +38,9 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // locked tile wears. It is this plugin's to answer rather than the File System plugin's,
         // because who holds an entry is Rorolala's question and the answer comes through the C ABI.
         RorolalaLocks.Declare(host);
+
+        // What an entry's menu offers about who holds it: the two ownership commands, plain and forced.
+        OwnershipActions.Declare(host);
     }
 
     /// <summary>

@@ -14,10 +14,14 @@ internal static partial class Icons
     /// <summary>The key the `create` picture is held under.</summary>
     public const string Create = "rorolala_vcs.create";
 
+    /// <summary>The key the `lock_open` picture is held under.</summary>
+    public const string LockOpen = "rorolala_vcs.lock_open";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
         (Lock, "lock"),
         (Create, "create"),
+        (LockOpen, "lock_open"),
     ];
 }

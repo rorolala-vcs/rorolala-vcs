@@ -116,9 +116,7 @@ internal sealed class ContextMenuRegistry
     public void Add(PluginId owner, int position, ContextMenuTarget target, ContextMenuItem item) =>
         _items.Add(new OwnedContextItem(owner, position, target, item));
 
-    /// <summary>Every item in a context, in the order they are shown.</summary>
-    /// <param name="target">The context.</param>
-    /// <returns>The items, or nothing when the context has none.</returns>
+    /// <inheritdoc />
     public IReadOnlyList<ContextMenuItem> Items(ContextMenuTarget target) =>
         _items
             .Where(entry => entry.Target == target)

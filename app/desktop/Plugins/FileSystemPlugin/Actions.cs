@@ -321,7 +321,14 @@ internal sealed class BrowserActions
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
     /// <param name="entries">What the menu is about.</param>
     /// <param name="deletable">Whether the entries may be removed.</param>
-    public void Fill(ContextMenu menu, Control from, IReadOnlyList<Entry> entries, bool deletable = true)
+    /// <param name="force">Whether the forced actions are shown to begin with, which Shift is what decides.</param>
+    public void Fill(
+        ContextMenu menu,
+        Control from,
+        IReadOnlyList<Entry> entries,
+        bool deletable = true,
+        bool force = false
+    )
     {
         menu.Items.Clear();
 
@@ -397,6 +404,103 @@ internal sealed class BrowserActions
         {
             menu.Items.Add(Item("rorolala_file_system.copy_path", () => Openers.Copy(from, Paths(entries), _host.Log.Error)));
         }
+
+        Contributed(menu, entries, force);
+    }
+
+    /// <summary>The class a forced action wears, which the look draws as what it is.</summary>
+    public const string Force = "force";
+
+    /// <summary>
+    /// What the plugins registered for a context, in the order they are shown.
+    /// </summary>
+    /// <remarks>
+    /// Read here and built elsewhere, so that what a menu would hold can be asked without a screen: what an
+    /// item is offered for, and whether it is one of the forced ones, are questions of the contract, while
+    /// building one needs a picture and a picture needs a screen.
+    /// </remarks>
+    /// <param name="registry">What the plugins registered.</param>
+    /// <param name="target">The context the menu was opened on.</param>
+    /// <param name="was">What it was opened on.</param>
+    /// <param name="force">Whether the forced actions are the ones being asked for.</param>
+    /// <returns>The items.</returns>
+    public static IReadOnlyList<ContextMenuItem> Offer(
+        IContextMenuRegistry registry,
+        ContextMenuTarget target,
+        ContextTarget was,
+        bool force
+    )
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(was);
+
+        return
+        [
+            .. registry
+                .Items(target)
+                .Where(item => item.Force == force && (item.Applies is null || item.Applies(was))),
+        ];
+    }
+
+    /// <summary>
+    /// Adds what the plugins registered, after what this plugin offers itself.
+    /// </summary>
+    /// <remarks>
+    /// Only ever for one entry: a contributed action is about what was right-clicked, and a handful of files is
+    /// not one thing to be about — the contract says as much by naming the target after one of them.
+    /// <para>
+    /// The forced actions are added too, hidden, rather than left out: a menu is laid out when it opens, and
+    /// what Shift unfolds is a layer of what is already there rather than a menu built a second time.
+    /// </para>
+    /// </remarks>
+    /// <param name="menu">The menu to add to.</param>
+    /// <param name="entries">What the menu is about.</param>
+    /// <param name="force">Whether the forced actions are shown to begin with.</param>
+    private void Contributed(ContextMenu menu, IReadOnlyList<Entry> entries, bool force)
+    {
+        if (entries is not [{ } only])
+        {
+            return;
+        }
+
+        var target = only.Kind == EntryKind.Directory ? ContextMenuTarget.Directory : ContextMenuTarget.File;
+        var was = new ContextTarget(_browser.Current, only);
+
+        foreach (var wanted in new[] { false, true })
+        {
+            foreach (var item in Offer(_host.ContextMenus, target, was, wanted))
+            {
+                menu.Items.Add(Contributed(item, was, force));
+            }
+        }
+    }
+
+    /// <summary>One action a plugin registered, as an item in the menu.</summary>
+    /// <param name="item">What it registered.</param>
+    /// <param name="was">What the menu was opened on.</param>
+    /// <param name="shown">Whether the forced actions are shown to begin with.</param>
+    /// <returns>The item.</returns>
+    private MenuItem Contributed(ContextMenuItem item, ContextTarget was, bool shown)
+    {
+        var menu = new MenuItem { Header = RolaI18N.Get(item.LabelKey) };
+
+        // The picture is the library's, because it was contributed to the library: it belongs to the plugin
+        // that drew it, and this one only hands it on. A key the library does not hold is an item without a
+        // picture rather than a menu that will not open.
+        if (item.IconKey is { } key && _host.Icons.Find(key) is { } picture)
+        {
+            menu.Icon = Icons.Inked(picture, Icons.Menu, typeof(MenuItem));
+        }
+
+        if (item.Force)
+        {
+            menu.Classes.Add(Force);
+            menu.IsVisible = shown;
+        }
+
+        menu.Click += (_, _) => item.Command(was);
+
+        return menu;
     }
 
     /// <summary>The menu opened on the space around the entries.</summary>

@@ -11,7 +11,7 @@
          in a comment and the documentation file is what a plugin author reads it from. The version
          is raised when the surface changes: a plugin built against one surface is not loaded against
          another, since the two would part company at first use rather than where the check is. -->
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>

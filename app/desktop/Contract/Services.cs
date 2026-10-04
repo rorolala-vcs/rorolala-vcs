@@ -222,6 +222,28 @@ public interface IRefocus
 }
 
 /// <summary>
+/// What the files may have done, said by whichever plugin changed them.
+/// </summary>
+/// <remarks>
+/// A plugin that changes the files does it by running something of its own — a command line, another program
+/// — and nothing about the filesystem tells the listing that shows them. The one that made the change knows
+/// it did, so it says so, and every listing reads again for it: it is the same signal a plugin's own
+/// operation raises, said by whoever knows rather than guessed at by whoever draws.
+/// <para>
+/// It is a pair because the two halves belong to different plugins: the one that changed something says so and
+/// has nothing to read again for, and the one that draws reads again for a change it did not make.
+/// </para>
+/// </remarks>
+public interface IFileChanges
+{
+    /// <summary>Raised when something a plugin did may have changed the files.</summary>
+    event Action? Changed;
+
+    /// <summary>Says that what this plugin has just done may have changed the files.</summary>
+    void Touch();
+}
+
+/// <summary>
 /// One question the host puts to the user over its windows, and what to run when it is answered.
 /// </summary>
 /// <remarks>
@@ -235,7 +257,18 @@ public interface IRefocus
 public sealed record Dialog(string Title, string Message, Action Confirmed);
 
 /// <summary>
-/// Where a plugin asks the user something over the host's windows.
+/// What has happened, said rather than asked.
+/// </summary>
+/// <remarks>
+/// An error is not a question: nothing about it is the user's to decide, and a window that offered "cancel"
+/// would be offering to call the failure off. What is here is therefore only what there is to say.
+/// </remarks>
+/// <param name="Title">What it is called.</param>
+/// <param name="Message">What happened, in the words of whoever knows.</param>
+public sealed record Report(string Title, string Message);
+
+/// <summary>
+/// Where a plugin asks the user something over the host's windows, and tells them something.
 /// </summary>
 /// <remarks>
 /// The host shows it, so that a question a plugin puts looks like the program rather than like the
@@ -252,4 +285,10 @@ public interface IDialogs
     /// </remarks>
     /// <param name="dialog">The question to put.</param>
     void Show(Dialog dialog);
+
+    /// <summary>
+    /// Shows something that has happened, which the user reads and closes.
+    /// </summary>
+    /// <param name="report">What to say.</param>
+    void Report(Report report);
 }

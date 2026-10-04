@@ -87,6 +87,9 @@ internal sealed class HostServices
     /// <summary>When one of the host's windows is come back to.</summary>
     public required Refocus Refocus { get; init; }
 
+    /// <summary>What a plugin says when the files may have changed.</summary>
+    public required FileChanges FileChanges { get; init; }
+
     /// <summary>Questions put to the user over the host's windows.</summary>
     public required Dialogs Dialogs { get; init; }
 
@@ -176,6 +179,9 @@ internal sealed class PluginHost
     public IDialogs Dialogs => _services.Dialogs;
 
     /// <inheritdoc />
+    public IFileChanges Files => _services.FileChanges;
+
+    /// <inheritdoc />
     public WindowIcon? ProgramIcon => _services.ProgramIcon;
 
     /// <inheritdoc />
@@ -189,6 +195,10 @@ internal sealed class PluginHost
     /// <inheritdoc />
     void IContextMenuRegistry.Add(ContextMenuTarget target, ContextMenuItem item) =>
         _services.ContextMenus.Add(_id, _position, target, item);
+
+    /// <inheritdoc />
+    IReadOnlyList<ContextMenuItem> IContextMenuRegistry.Items(ContextMenuTarget target) =>
+        _services.ContextMenus.Items(target);
 
     /// <inheritdoc />
     void INavigationRegistry.Add(NavigationButton button) =>

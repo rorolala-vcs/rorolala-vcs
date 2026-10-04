@@ -57,6 +57,7 @@ icons = [
 plugin = "RorolalaVCSPlugin"
 key = "rorolala_vcs"
 
-# What an entry's lock is drawn with. `lock` is somebody else holding it, and `create` — the set's pencil —
-# is the reader holding it, since holding it is what makes it theirs to change.
-icons = ["lock", "create"]
+# What an entry's lock is drawn with, and what taking and letting go of one is: `lock` is somebody else
+# holding it and is also what claiming it wears, `lock_open` is letting go of it, and `create` — the set's
+# pencil — is the reader holding it, since holding it is what makes it theirs to change.
+icons = ["lock", "create", "lock_open"]

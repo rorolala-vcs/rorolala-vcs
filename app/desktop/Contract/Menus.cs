@@ -25,11 +25,22 @@ public sealed record ContextTarget(string Directory, Entry? Entry);
 /// <param name="Order">Where the item sits among those of the same context.</param>
 /// <param name="Command">What the item does, given what was right-clicked.</param>
 /// <param name="IconKey">An optional key naming the item's icon.</param>
+/// <param name="Force">
+/// Whether the item is one of the forced actions, which are shown while the user holds Shift and are drawn
+/// as what they are: what an action does past the checks it would otherwise make is not what a plain click
+/// should come to.
+/// </param>
+/// <param name="Applies">
+/// What the item is offered for, or nothing for everything in its context: an item about a Workspace has no
+/// business in the menu of a file that is in none.
+/// </param>
 public sealed record ContextMenuItem(
     string LabelKey,
     int Order,
     Action<ContextTarget> Command,
-    string? IconKey = null
+    string? IconKey = null,
+    bool Force = false,
+    Func<ContextTarget, bool>? Applies = null
 );
 
 /// <summary>Where a plugin adds context-menu items.</summary>
@@ -45,6 +56,17 @@ public interface IContextMenuRegistry
     /// <param name="target">The context the item belongs to.</param>
     /// <param name="item">The item to add.</param>
     void Add(ContextMenuTarget target, ContextMenuItem item);
+
+    /// <summary>
+    /// Every item of one context, in the order they are shown.
+    /// </summary>
+    /// <remarks>
+    /// Read by whatever draws the context: the registrations are a plugin's, and the menu they end up in is
+    /// another plugin's, so the one that draws has to be able to ask what there is.
+    /// </remarks>
+    /// <param name="target">The context.</param>
+    /// <returns>The items, or nothing when that context has none.</returns>
+    IReadOnlyList<ContextMenuItem> Items(ContextMenuTarget target);
 }
 
 /// <summary>One item under a menu.</summary>

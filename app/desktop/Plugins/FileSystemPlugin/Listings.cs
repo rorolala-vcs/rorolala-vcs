@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using MenuItem = Avalonia.Controls.MenuItem;
 
 namespace FileSystemPlugin;
 
@@ -442,8 +443,17 @@ internal abstract class EntryView : UserControl
     protected Control Prepared(Entry entry, Control row)
     {
         var menu = new ContextMenu();
-        menu.Opening += (_, _) => Actions.Fill(menu, this, Chosen(entry));
+        menu.Opening += (_, _) => Actions.Fill(menu, this, Chosen(entry), force: Held);
         row.ContextMenu = menu;
+
+        // What the pointer held is read when it is pressed, because the menu that opens next is laid out before
+        // anything can be asked of it, and Shift+right-click means the forced actions are wanted from the start.
+        row.PointerPressed += (_, pressed) => Held = (pressed.KeyModifiers & KeyModifiers.Shift) != 0;
+
+        // And while the menu is up, the key itself decides: Shift unfolds what it forces, and letting it go
+        // folds it away again. Tunnelled, because the item under the keyboard reads the key first.
+        menu.AddHandler(KeyDownEvent, (_, key) => Revealed(menu, key), RoutingStrategies.Tunnel);
+        menu.AddHandler(KeyUpEvent, (_, key) => Revealed(menu, key), RoutingStrategies.Tunnel);
 
         Apply(row, entry);
 
@@ -460,6 +470,26 @@ internal abstract class EntryView : UserControl
         };
 
         return row;
+    }
+
+    /// <summary>Whether Shift was held when the pointer was last pressed, which a menu opens with.</summary>
+    protected bool Held { get; private set; }
+
+    /// <summary>Shows the forced actions while Shift is held, and hides them when it is let go.</summary>
+    /// <param name="menu">The menu being read.</param>
+    /// <param name="key">The key, which says what is being held.</param>
+    private static void Revealed(ContextMenu menu, KeyEventArgs key)
+    {
+        var forced = (key.KeyModifiers & KeyModifiers.Shift) != 0;
+
+        foreach (
+            var item in menu
+                .Items.OfType<MenuItem>()
+                .Where(item => item.Classes.Contains(BrowserActions.Force))
+        )
+        {
+            item.IsVisible = forced;
+        }
     }
 
     /// <summary>What a menu opened on an entry is about: the whole choice when that entry is in it.</summary>

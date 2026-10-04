@@ -111,6 +111,7 @@ internal sealed class Desktop
             Docks = new DockManager(new DockRegistry(), i18n, log, popups),
             OpenHooks = new OpenHookRegistry(),
             Refocus = new Refocus(),
+            FileChanges = new FileChanges(),
             Dialogs = dialogs,
             IconBadges = new IconBadgeRegistry(),
             Icons = new IconLibrary(),

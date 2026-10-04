@@ -28,3 +28,43 @@ rorolala_vcs:
     mine:
       en: You
       zh-CN: 你
+
+  # What an entry's menu offers about who holds it. What is claimed is one file, or everything under a
+  # directory — the command line takes a directory recursively — so the two are said apart. The forced
+  # pair is shown while Shift is held: what it does is past the checks the plain pair makes, which is
+  # worth saying twice, in the words and in the red the look gives it.
+  ownership_menu:
+    hold_file:
+      en: Take ownership of this file
+      zh-CN: 获得文件的所有权
+    give_file:
+      en: Give up ownership of this file
+      zh-CN: 放弃文件的所有权
+    hold_file_forced:
+      en: Force taking ownership of this file
+      zh-CN: 强制获得文件的所有权
+    give_file_forced:
+      en: Force giving up ownership of this file
+      zh-CN: 强制放弃文件的所有权
+    hold_directory:
+      en: Take ownership of everything in this folder
+      zh-CN: 获得目录下所有条目的所有权
+    give_directory:
+      en: Give up ownership of everything in this folder
+      zh-CN: 放弃目录下所有条目的所有权
+    hold_directory_forced:
+      en: Force taking ownership of everything in this folder
+      zh-CN: 强制获得目录下所有条目的所有权
+    give_directory_forced:
+      en: Force giving up ownership of everything in this folder
+      zh-CN: 强制放弃目录下所有条目的所有权
+
+  # What the menu says when the command it ran did not finish, and when there is no command to run:
+  # this window is only told which `rola` to run by the run that opened it, so a window opened on its
+  # own has none to reach for.
+  ownership_failed:
+    en: Ownership could not be changed
+    zh-CN: 所有权未能更改
+  ownership_unknown:
+    en: This window was not opened by `rola`, so it does not know which one to run
+    zh-CN: 本窗口不是由 `rola` 打开的，因此不知道要运行哪一个

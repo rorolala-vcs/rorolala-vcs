@@ -134,6 +134,11 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // a change another program made is most likely to have happened while it was in front.
         host.Refocus.Regained += browser.Touch;
 
+        // And when another plugin says it changed something, which is the same thing said by the one that
+        // knows: an ownership claimed by the Rorolala plugin is a claim that moves, and the column that draws
+        // who holds what has to read the Layout again for it.
+        host.Files.Changed += browser.Touch;
+
         host.Docks.Register(
             new DockRegistration(
                 Manifest.Id,

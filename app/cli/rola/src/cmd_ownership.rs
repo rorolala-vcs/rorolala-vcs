@@ -162,15 +162,15 @@ pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
     }
 
     let picked = args
-        .pick(&ARG_ALLOW_PARTIAL)
         .pick_or_route(&arg![Vec<String>], || {
             ErrorOwnershipArgument {
                 command: "hold".to_owned(),
             }
             .into()
         })
+        .pick(&ARG_ALLOW_PARTIAL)
         .to_result();
-    let (allow_partial, paths) = match picked {
+    let (paths, allow_partial) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -274,15 +274,15 @@ pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next
     }
 
     let picked = args
-        .pick(&ARG_ALLOW_PARTIAL)
         .pick_or_route(&arg![Vec<String>], || {
             ErrorOwnershipArgument {
                 command: "giveup".to_owned(),
             }
             .into()
         })
+        .pick(&ARG_ALLOW_PARTIAL)
         .to_result();
-    let (allow_partial, paths) = match picked {
+    let (paths, allow_partial) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };

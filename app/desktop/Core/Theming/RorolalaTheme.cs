@@ -258,6 +258,16 @@ internal sealed class RorolalaTheme
     /// </remarks>
     private const string OnClass = "on";
 
+    /// <summary>
+    /// The class a menu item wears when it is one of the forced actions.
+    /// </summary>
+    /// <remarks>
+    /// What an action does past the checks it would otherwise make is worth saying twice — in its words and in
+    /// its colour — because it is the one kind of item a user should reach on purpose rather than by pointing
+    /// at whatever is under the pointer.
+    /// </remarks>
+    private const string Forced = "force";
+
     /// <summary>The colour what is chosen is drawn in.</summary>
     private readonly Color _primary;
 
@@ -778,6 +788,13 @@ internal sealed class RorolalaTheme
                 new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Center),
                 new Setter(ContentControl.VerticalContentAlignmentProperty, VerticalAlignment.Center),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            // A forced action is drawn as what it is: the red the program draws a failure in, because what it
+            // does is past the checks every other action makes. Its picture is the mark of an item's picture
+            // read from the item's own ink, so it is drawn in the same red without being told.
+            On(
+                selector => selector.OfType<MenuItem>().Class(Forced),
+                Brushed(TemplatedControl.ForegroundProperty, DelInk)
             ),
             On(
                 selector => selector.OfType<ContextMenu>(),

@@ -261,8 +261,25 @@ internal static partial class Icons
     /// <param name="picture">The picture to stamp.</param>
     /// <param name="extent">How many pixels wide and tall it is.</param>
     /// <returns>What to draw, which is drawn in the ink of the button it was put in.</returns>
-    public static Border Inked(Bitmap picture, double extent)
+    public static Border Inked(Bitmap picture, double extent) => Inked(picture, extent, typeof(Button));
+
+    /// <summary>
+    /// A picture drawn as a mask over the ink of the control it is in, which is the one named.
+    /// </summary>
+    /// <remarks>
+    /// The holder is named rather than guessed at because the ink is stated by whatever holds the picture — a
+    /// button states one, and so does a menu item — and what is between the two is a template that states
+    /// nothing of its own. A mark that read the ink of whatever it happened to sit in would take the ink of a
+    /// grid or a presenter, which have none to give.
+    /// </remarks>
+    /// <param name="picture">The picture to stamp.</param>
+    /// <param name="extent">How many pixels wide and tall it is.</param>
+    /// <param name="holder">What the ink is read from.</param>
+    /// <returns>What to draw, which is drawn in the ink of the holder.</returns>
+    public static Border Inked(Bitmap picture, double extent, Type holder)
     {
+        ArgumentNullException.ThrowIfNull(holder);
+
         var glyph = new Border
         {
             Width = extent,
@@ -272,8 +289,6 @@ internal static partial class Icons
             OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
         };
 
-        // The button rather than whatever is nearest: a picture sits in a grid in a presenter in the button, and
-        // the ink is the button's to state.
         glyph.Bind(
             Border.BackgroundProperty,
             new Binding("Foreground")
@@ -281,7 +296,7 @@ internal static partial class Icons
                 RelativeSource = new RelativeSource
                 {
                     Mode = RelativeSourceMode.FindAncestor,
-                    AncestorType = typeof(Button),
+                    AncestorType = holder,
                 },
             }
         );

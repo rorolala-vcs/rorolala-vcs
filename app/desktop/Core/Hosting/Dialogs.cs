@@ -56,6 +56,19 @@ internal sealed class Dialogs : IDialogs
         Dispatcher.UIThread.Post(() => Put(dialog));
     }
 
+    /// <inheritdoc />
+    public void Report(Report report)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Told(report);
+
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => Told(report));
+    }
+
     /// <summary>Puts one question to the user.</summary>
     /// <remarks>
     /// Shown on the main window and waited for, which is what makes it modal: what it asks is about
@@ -142,5 +155,66 @@ internal sealed class Dialogs : IDialogs
         {
             dialog.Confirmed();
         }
+    }
+
+    /// <summary>Puts something that has happened, which is read and closed.</summary>
+    /// <remarks>
+    /// The same window as a question with one button rather than two: there is nothing to agree to, so there
+    /// is nothing to call off either, and a "cancel" would be offering to undo what has already been done.
+    /// </remarks>
+    /// <param name="report">What to say.</param>
+    private async void Told(Report report)
+    {
+        if (_shell.Window is not { IsVisible: true } owner)
+        {
+            return;
+        }
+
+        var message = new TextBlock
+        {
+            Text = report.Message,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 8),
+        };
+
+        var close = new Button
+        {
+            Content = _i18n.Get("window.dialog.confirm"),
+            Classes = { "primary" },
+            IsDefault = true,
+            IsCancel = true,
+            MinWidth = 88,
+        };
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(16, 8, 16, 16),
+            Children = { close },
+        };
+
+        var panel = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        panel.Children.Add(buttons);
+        panel.Children.Add(message);
+
+        var window = new Window
+        {
+            Title = report.Title,
+            Icon = _icon,
+            Width = 480,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel,
+        };
+
+        window[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+
+        close.Click += (_, _) => window.Close();
+
+        await window.ShowDialog(owner);
     }
 }

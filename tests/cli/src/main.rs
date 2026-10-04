@@ -36,9 +36,10 @@ fn main() {
     let bindme = sandbox.join("bindme");
     let vault = sandbox.join("vault");
     let held = sandbox.join("held");
+    let claimed = sandbox.join("claimed");
 
     for dir in [
-        &home, &data, &rola_home, &empty, &plain, &initme, &files, &held,
+        &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -68,6 +69,7 @@ fn main() {
     output(&rola, &ws, &mut checked);
     language(&rola, &ws, &mut checked);
     held_by_another(&rola, &held, &mut checked);
+    ownership(&rola, &claimed, &mut checked);
 
     checked.report();
 }
@@ -1219,6 +1221,45 @@ fn held_by_another(rola: &Rola, dir: &Path, checked: &mut Checked) {
         !dir.join("solo.psd").exists(),
         &said(&ran),
     );
+}
+
+/// Taking ownership and letting it go, which the Desktop's ownership menu runs the same way.
+///
+/// What the Layout says about a Vault is what `hold` and `giveup` need, and a Workspace that tracks none is
+/// refused for that. What is checked is that the paths are read at all: the run has to be refused for the
+/// Vault it does not track rather than for the arguments it was given. It was refused for those, because the
+/// flag was picked before the paths were — the picker reads a command's arguments by position — so a path
+/// landed where the flag was looked for and the real argument was never named.
+fn ownership(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    fs::create_dir_all(dir.join("art")).expect("a place to claim in");
+
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to claim in", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "new", "main"]);
+    checked.exits("and a Layout to claim in", &ran, 0);
+
+    fs::write(dir.join("art/hero.psd"), "art\n").expect("a file to claim");
+
+    for verb in ["hold", "giveup"] {
+        let ran = rola.run(&dir.join("art"), &[verb, "hero.psd"]);
+        checked.exits(
+            &format!("`{verb}` reads a file it was named"),
+            &ran,
+            193,
+        );
+        checked.stderr_has(
+            &format!("`{verb}` is refused for the Vault it tracks, and not for its arguments"),
+            &ran,
+            "tracks no Vault",
+        );
+    }
+
+    let ran = rola.run(&dir.join("art"), &["hold", "--force", "hero.psd"]);
+    checked.exits("and the forced form reads the same file", &ran, 193);
+
+    let ran = rola.run(dir, &["hold"]);
+    checked.exits("while `hold` with nothing named is still refused", &ran, 191);
 }
 
 /// Copies a directory and everything under it, which is the shape a fetched Layout is laid down in.

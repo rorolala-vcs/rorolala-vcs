@@ -66,6 +66,8 @@ internal static class Host
             Refocus = new Refocus(),
             // A dialog needs a window to be shown on, and a headless test has none: nothing is ever shown.
             Dialogs = dialogs,
+            // What a plugin says when the files may have changed: nothing changes them, so nothing is said.
+            FileChanges = new FileChanges(),
         };
     }
 }

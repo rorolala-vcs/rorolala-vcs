@@ -48,6 +48,9 @@ public interface IPluginHost
     /// <summary>When one of the host's windows is come back to.</summary>
     IRefocus Refocus { get; }
 
+    /// <summary>Where a plugin says that what it did changed the files, and hears another say so.</summary>
+    IFileChanges Files { get; }
+
     /// <summary>Where the plugin asks the user something.</summary>
     IDialogs Dialogs { get; }
 
