@@ -31,6 +31,10 @@ key = "rorolala_file_system"
 # hide — an eye, and an eye struck through — and `link` and `link_off` are whether a dock follows the whole
 # or looks at a directory of its own; `arrow_back`, `arrow_forward`, `arrow_upward` and `refresh` are the
 # four ways a browser moves.
+#
+# The rest are what an entry's menu is read by: `launch` opens it or shows it where the system keeps it,
+# `file_copy` copies it or its path, `content_cut` cuts it, `content_paste` pastes onto it, `delete` removes
+# it, `local_offer` renames it, and `create_new_folder` makes a directory beside it.
 icons = [
     "visibility",
     "visibility_off",
@@ -40,6 +44,13 @@ icons = [
     "arrow_forward",
     "arrow_upward",
     "refresh",
+    "launch",
+    "file_copy",
+    "content_cut",
+    "content_paste",
+    "delete",
+    "local_offer",
+    "create_new_folder",
 ]
 
 [[set]]

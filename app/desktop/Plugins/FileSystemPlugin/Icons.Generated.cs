@@ -32,6 +32,27 @@ internal static partial class Icons
     /// <summary>The key the `refresh` picture is held under.</summary>
     public const string Refresh = "rorolala_file_system.refresh";
 
+    /// <summary>The key the `launch` picture is held under.</summary>
+    public const string Launch = "rorolala_file_system.launch";
+
+    /// <summary>The key the `file_copy` picture is held under.</summary>
+    public const string FileCopy = "rorolala_file_system.file_copy";
+
+    /// <summary>The key the `content_cut` picture is held under.</summary>
+    public const string ContentCut = "rorolala_file_system.content_cut";
+
+    /// <summary>The key the `content_paste` picture is held under.</summary>
+    public const string ContentPaste = "rorolala_file_system.content_paste";
+
+    /// <summary>The key the `delete` picture is held under.</summary>
+    public const string Delete = "rorolala_file_system.delete";
+
+    /// <summary>The key the `local_offer` picture is held under.</summary>
+    public const string LocalOffer = "rorolala_file_system.local_offer";
+
+    /// <summary>The key the `create_new_folder` picture is held under.</summary>
+    public const string CreateNewFolder = "rorolala_file_system.create_new_folder";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -43,5 +64,12 @@ internal static partial class Icons
         (ArrowForward, "arrow_forward"),
         (ArrowUpward, "arrow_upward"),
         (Refresh, "refresh"),
+        (Launch, "launch"),
+        (FileCopy, "file_copy"),
+        (ContentCut, "content_cut"),
+        (ContentPaste, "content_paste"),
+        (Delete, "delete"),
+        (LocalOffer, "local_offer"),
+        (CreateNewFolder, "create_new_folder"),
     ];
 }

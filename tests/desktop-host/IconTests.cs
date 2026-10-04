@@ -30,4 +30,20 @@ public sealed class IconTests
             Assert.EndsWith(name, key, StringComparison.Ordinal);
         }
     }
+
+    /// <summary>Every picture a menu item is meant to wear is one this plugin draws.</summary>
+    /// <remarks>
+    /// What a menu item wears is looked up by the words it is named with, so a picture named there that the
+    /// manifest does not hold is an item that draws its icon and finds nothing — which is a menu where one
+    /// entry is a word where its neighbours are a mark and a word. The lookup itself cannot be exercised here,
+    /// because what it makes is a picture and a picture needs a screen to be made on.
+    /// </remarks>
+    [Fact]
+    public void EveryPictureAMenuItemWearsIsOneThisPluginDraws()
+    {
+        var drawn = Icons.Pictures.Select(picture => picture.Key).ToHashSet(StringComparer.Ordinal);
+
+        Assert.NotEmpty(BrowserActions.Pictures);
+        Assert.All(BrowserActions.Pictures.Values, picture => Assert.Contains(picture, drawn));
+    }
 }

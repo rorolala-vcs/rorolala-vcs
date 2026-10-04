@@ -1,6 +1,6 @@
 # The FileSystemPlugin pictures
 
-The pictures the `FileSystemPlugin` plugin draws: `visibility`, `visibility_off`, `link`, `link_off`, `arrow_back`, `arrow_forward`, `arrow_upward`, `refresh`.
+The pictures the `FileSystemPlugin` plugin draws: `visibility`, `visibility_off`, `link`, `link_off`, `arrow_back`, `arrow_forward`, `arrow_upward`, `refresh`, `launch`, `file_copy`, `content_cut`, `content_paste`, `delete`, `local_offer`, `create_new_folder`.
 
 They are Google's Material Design icons, taken from the maintained mirror of the set,
 [material-icons/material-icons](https://github.com/material-icons/material-icons) — the same artwork as

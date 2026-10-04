@@ -39,6 +39,23 @@ internal static partial class Icons
     /// <summary>The size a grid's icons are at the zoom it opens at.</summary>
     private const int Base = 64;
 
+    /// <summary>How many pixels wide and tall the mark on a menu item is.</summary>
+    /// <remarks>
+    /// The look gives a menu item a square of sixteen pixels to put a picture in, and the picture is drawn to
+    /// fill it: a mark smaller than the square it was given reads as a picture that lost its way in, and one
+    /// larger is clipped by it.
+    /// </remarks>
+    public const int Menu = 16;
+
+    /// <summary>The theme resource an icon of a tool that is not on is drawn in.</summary>
+    /// <remarks>
+    /// Written as the literal the look publishes, because a plugin has nowhere else to read it from: the shell's
+    /// own constants live in the host, which a plugin may not reference. What is drawn in it is a mark that is
+    /// nobody's button — a menu item's — and is therefore read from the look rather than from the control that
+    /// holds it.
+    /// </remarks>
+    public const string PlainInk = "rorolala.fg";
+
     /// <summary>How many pixels wide and tall a toolbar's icon is.</summary>
     /// <remarks>
     /// A tool is a square hit area of its own — 28 pixels, which the look gives it — and the picture sits

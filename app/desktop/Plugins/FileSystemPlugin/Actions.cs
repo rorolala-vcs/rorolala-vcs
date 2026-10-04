@@ -466,6 +466,11 @@ internal sealed class BrowserActions
     /// Open to the views as well as to the menus here, so that a view with an item of its own to add —
     /// the tree closes every step from its root — adds one that is named the way the items around it
     /// are named rather than spelling a label out.
+    /// <para>
+    /// What the item wears is looked up rather than handed in, because an action is one action wherever it is
+    /// offered: copying a path from one entry and from a set of them are the same words and the same picture,
+    /// and a menu that had to be told every time would be one that could disagree with itself.
+    /// </para>
     /// </remarks>
     /// <param name="key">The translation key the item is named by.</param>
     /// <param name="action">What choosing it does.</param>
@@ -473,8 +478,39 @@ internal sealed class BrowserActions
     public static MenuItem Item(string key, Action action)
     {
         var item = new MenuItem { Header = RolaI18N.Get(key) };
+
+        if (Pictures.TryGetValue(key, out var picture))
+        {
+            item.Icon = Icons.Glyph(Icons.Picture(picture), Icons.PlainInk, Icons.Menu);
+        }
+
         item.Click += (_, _) => action();
 
         return item;
     }
+
+    /// <summary>
+    /// The picture each menu item wears, by the translation key it is named by.
+    /// </summary>
+    /// <remarks>
+    /// An action that is a way of opening something — the entry itself, and the directory holding it in the
+    /// system's own file manager — is drawn the same way, and so is one that is a way of copying something,
+    /// since what the pair of them say apart is in their words rather than in their picture.
+    /// <para>
+    /// It is read by the check that every one of these is a picture this plugin draws, so it is not private:
+    /// a picture named here that the manifest does not hold would be an item whose icon is silently missing.
+    /// </para>
+    /// </remarks>
+    internal static readonly Dictionary<string, string> Pictures = new(StringComparer.Ordinal)
+    {
+        ["rorolala_file_system.open"] = Icons.Launch,
+        ["rorolala_file_system.copy"] = Icons.FileCopy,
+        ["rorolala_file_system.cut"] = Icons.ContentCut,
+        ["rorolala_file_system.paste"] = Icons.ContentPaste,
+        ["rorolala_file_system.delete"] = Icons.Delete,
+        ["rorolala_file_system.rename"] = Icons.LocalOffer,
+        ["rorolala_file_system.new_folder"] = Icons.CreateNewFolder,
+        ["rorolala_file_system.reveal"] = Icons.Launch,
+        ["rorolala_file_system.copy_path"] = Icons.FileCopy,
+    };
 }
