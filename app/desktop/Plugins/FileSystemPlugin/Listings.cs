@@ -38,6 +38,36 @@ internal static class Names
                 : Path.GetFileName(entry.Path) is { Length: > 0 } name
                     ? name
                     : entry.Path;
+
+    /// <summary>
+    /// How much of a name a rename chooses to begin with.
+    /// </summary>
+    /// <remarks>
+    /// The extension of a file is left out of what is chosen, since what is being renamed is the name:
+    /// typing over the whole of <c>hero.psd</c> to call it <c>villain</c> would take the extension with it,
+    /// which is a way to lose what a file is by accident. Where the extension begins is the last dot, so
+    /// <c>archive.tar.gz</c> renames to <c>archive</c> and keeps <c>.tar.gz</c> — what a program that names a
+    /// file by its extension calls the extension.
+    /// <para>
+    /// A directory has no extension to leave out, and neither has a dot-file: the dot that begins
+    /// <c>.gitignore</c> is part of the name rather than the start of one, and a name with no dot at all has
+    /// none.
+    /// </para>
+    /// </remarks>
+    /// <param name="kind">What is being renamed.</param>
+    /// <param name="name">The name it has.</param>
+    /// <returns>Where the chosen part of the name ends, which is the whole name when there is none to leave.</returns>
+    public static int Chosen(EntryKind kind, string name)
+    {
+        if (kind is EntryKind.Directory)
+        {
+            return name.Length;
+        }
+
+        var dot = name.LastIndexOf('.');
+
+        return dot > 0 ? dot : name.Length;
+    }
 }
 
 /// <summary>
@@ -514,9 +544,10 @@ internal abstract class EntryView : UserControl
         }
 
         var at = parent.Children.IndexOf(label);
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(entry.Path)) ?? string.Empty;
         var box = new TextBox
         {
-            Text = Path.GetFileName(Path.TrimEndingDirectorySeparator(entry.Path)),
+            Text = name,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
@@ -537,7 +568,11 @@ internal abstract class EntryView : UserControl
         box.LostFocus += (_, _) => Committed();
 
         box.Focus();
-        box.SelectAll();
+
+        // The name is chosen rather than taken whole, so that what is typed over is the name and not the
+        // extension: see `Names.Chosen` for what is left out and why.
+        box.SelectionStart = 0;
+        box.SelectionEnd = Names.Chosen(entry.Kind, name);
 
         return true;
     }
