@@ -35,8 +35,11 @@ fn main() {
     let ws = sandbox.join("ws");
     let bindme = sandbox.join("bindme");
     let vault = sandbox.join("vault");
+    let held = sandbox.join("held");
 
-    for dir in [&home, &data, &rola_home, &empty, &plain, &initme, &files] {
+    for dir in [
+        &home, &data, &rola_home, &empty, &plain, &initme, &files, &held,
+    ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
 
@@ -64,6 +67,7 @@ fn main() {
     explain(&rola, &ws, &mut checked);
     output(&rola, &ws, &mut checked);
     language(&rola, &ws, &mut checked);
+    held_by_another(&rola, &held, &mut checked);
 
     checked.report();
 }
@@ -1118,6 +1122,119 @@ fn language(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["-l", "zh-CN", "layout", "ls"]);
     checked.exits("the short language flag is taken", &ran, 0);
+}
+
+/// Moving and removing a path another account holds.
+///
+/// Neither is refused, and that is the whole of what is asked here: a file operation is about this
+/// tree, and what the Vault's Layout names is changed by recording the change and sending it up, not
+/// by a file being put somewhere else or taken away. Ownership was once read here — the fetched copy's
+/// `owner` compared with the account the run acts as — and a move was refused for it, which made a
+/// browser's drag stop on a file somebody else held while changing nothing the refusal protected.
+///
+/// The fixture is the shape a `layout fetch` leaves behind: the Workspace's own Layout names the paths,
+/// a `TRACK` file names the Vault, and the Vault's fetched copy under the cache holds the `owner`. What
+/// is not needed is a Vault: the copy is the Layout's own files, so the same three lookups are made
+/// without one being served.
+fn held_by_another(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made for the held entries", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "new", "main"]);
+    checked.exits("a Layout is made to name them", &ran, 0);
+
+    // Two entries, held by an account this run does not act as: one to move and one to remove.
+    let moving = "00000000-0000-0000-0000-000000000001";
+    let removing = "00000000-0000-0000-0000-000000000002";
+    let version = "11".repeat(32);
+
+    for (uuid, path) in [(moving, "hero.psd"), (removing, "solo.psd")] {
+        let ran = rola.run(
+            dir,
+            &[
+                "layout", "entry", "create", uuid, &version, "--owner", "alice",
+            ],
+        );
+        checked.exits(
+            &format!("an entry held by another account is written: `{path}`"),
+            &ran,
+            0,
+        );
+
+        let ran = rola.run(dir, &["layout", "path", "create", path, uuid]);
+        checked.exits(
+            &format!("the entry is named at a path: `{path}`"),
+            &ran,
+            0,
+        );
+
+        fs::write(dir.join(path), "art\n").expect("the file an entry is about");
+    }
+
+    // The Vault the Layout tracks, and the copy of its Layout that ownership is read from. The name is
+    // written where `layout set-track` would write it rather than bound: a Vault named by a run is one
+    // the run fetched from, and what is checked here is read from the copy alone.
+    fs::write(dir.join(".rola/layouts/main/TRACK"), "vault\n").expect("the tracked Vault");
+    copy_into(
+        &dir.join(".rola/layouts/main"),
+        &dir.join(".rola/cache/readonly-layouts/vault/truth"),
+    );
+
+    let ran = rola.run(dir, &["key", "generate", "--install", "carol"]);
+    checked.exits("an account holding neither entry is installed", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "carol"]);
+    checked.exits("the work acts as that account", &ran, 0);
+
+    let ran = rola.run(dir, &["fs-ops", "mv", "hero.psd", "hero-moved.psd"]);
+    checked.exits("a path another account holds is moved", &ran, 0);
+    checked.wants(
+        "the held path is at its new name and not the old one",
+        dir.join("hero-moved.psd").is_file() && !dir.join("hero.psd").exists(),
+        &said(&ran),
+    );
+
+    // The Layout is the Workspace's own record of the tree, and a move keeps it in step whichever
+    // account holds the entry upstream.
+    let ran = rola.run(dir, &["layout", "entries"]);
+    checked.exits("the Layout is read back", &ran, 0);
+    checked.stdout_has(
+        "the Layout names the path the entry was moved to",
+        &ran,
+        "hero-moved.psd",
+    );
+    checked.wants(
+        "the Layout no longer names the path it was moved from",
+        !ran
+            .stdout
+            .lines()
+            .any(|line| line.starts_with("hero.psd ")),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["fs-ops", "rm", "solo.psd"]);
+    checked.exits("a path another account holds is removed", &ran, 0);
+    checked.wants(
+        "the held path is gone",
+        !dir.join("solo.psd").exists(),
+        &said(&ran),
+    );
+}
+
+/// Copies a directory and everything under it, which is the shape a fetched Layout is laid down in.
+fn copy_into(from: &Path, to: &Path) {
+    fs::create_dir_all(to).expect("the copy's own directory");
+
+    for entry in fs::read_dir(from).expect("the directory to copy") {
+        let entry = entry.expect("an entry of it");
+        let under = to.join(entry.file_name());
+
+        if entry.file_type().expect("what it is").is_dir() {
+            copy_into(&entry.path(), &under);
+        } else {
+            fs::copy(entry.path(), under).expect("a copied file");
+        }
+    }
 }
 
 /// A command that runs `rola`, working in `dir` and keeping the user's files in the sandbox.

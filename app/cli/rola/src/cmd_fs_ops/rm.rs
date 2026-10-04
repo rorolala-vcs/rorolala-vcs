@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::workspace::{Merging, Workspace};
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -19,10 +19,7 @@ use rust_i18n::t;
 use uuid::Uuid;
 
 use crate::Next;
-use crate::account::ResCurrentAccount;
-use crate::cmd_fs_ops::{
-    self, ErrorFsOpsArguments, ErrorFsOpsBlocked, ErrorFsOpsFailed, FsOpsBlock, ResultFsOps,
-};
+use crate::cmd_fs_ops::{self, ErrorFsOpsArguments, ErrorFsOpsFailed, ResultFsOps};
 use crate::complete::typing_flag;
 use crate::exit_codes::EC_HELP;
 
@@ -58,6 +55,9 @@ pub fn complete_fs_ops_rm(ctx: ShellContext) -> Suggest {
 ///
 /// A symbolic link is unlinked and not followed: removing a link is removing the link.
 ///
+/// Who holds the entry upstream is not read: a removal is about this tree, and the Vault's Layout goes on
+/// naming the entry until the change is recorded and sent up.
+///
 /// # Errors
 ///
 /// Renders [`ErrorFsOpsArguments`] when no path was named, and [`ErrorFsOpsFailed`] when the
@@ -90,7 +90,7 @@ pub struct StateFsOpsRm {
 }
 
 #[chain(routeify)]
-pub fn handle_fs_ops_rm(state: StateFsOpsRm, account: &mut LazyRes<ResCurrentAccount>) -> Next {
+pub fn handle_fs_ops_rm(state: StateFsOpsRm) -> Next {
     // Taken apart rather than borrowed from, so that the state is consumed rather than only read.
     let StateFsOpsRm { path } = state;
 
@@ -108,25 +108,14 @@ pub fn handle_fs_ops_rm(state: StateFsOpsRm, account: &mut LazyRes<ResCurrentAcc
     // What the removal is about in the Layout being worked in, when there is one. It is the Workspace
     // the path itself sits in, and never the one the run was made in: a path in no Workspace has
     // nothing here to keep in step.
-    let me = account.get_ref().must_bind().ok();
+    //
+    // Nothing is refused before it: who holds an entry upstream is deliberately not read, because a
+    // removal is about this tree and the Vault's Layout goes on naming the entry until the change is
+    // recorded and sent up (see `cmd_fs_ops`).
     let workspace = cmd_fs_ops::workspace_of(&cwd, &path);
     let plan = workspace
         .as_ref()
         .and_then(|held| plan_rm(held, &cwd, &path).map(|(layout, named)| (held, layout, named)));
-
-    // What is not this run's to change is refused before anything is removed: a removal takes the
-    // entry with it, and one over another account's entry is the conflict rather than the fix.
-    if let Some((held, layout, named)) = &plan {
-        for (path, id) in named {
-            if let Some(owner) = cmd_fs_ops::held_elsewhere(held, layout, *id, me.as_deref()) {
-                return ErrorFsOpsBlocked {
-                    path: path.as_str().to_owned(),
-                    kind: FsOpsBlock::Held(owner),
-                }
-                .into();
-            }
-        }
-    }
 
     // The filesystem first, since that is what was asked for, and the Layout follows it. A removal
     // that could not be written leaves the path the Layout names unheld, which is what `rola align`

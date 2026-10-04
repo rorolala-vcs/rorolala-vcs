@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::workspace::{Merging, Workspace};
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -24,7 +24,6 @@ use rust_i18n::t;
 use uuid::Uuid;
 
 use crate::Next;
-use crate::account::ResCurrentAccount;
 use crate::cmd_fs_ops::{
     self, ErrorFsOpsArguments, ErrorFsOpsBlocked, ErrorFsOpsFailed, FsOpsBlock, ResultFsOps,
 };
@@ -61,10 +60,14 @@ pub fn complete_fs_ops_mv(ctx: ShellContext) -> Suggest {
 /// taken there means was settled before this was called. Either path may name a file or a directory,
 /// and moving a directory moves everything under it.
 ///
+/// Who holds the entry upstream is not read: a move is about this tree, and the Vault's Layout goes on
+/// naming what it named until the change is recorded and sent up.
+///
 /// # Errors
 ///
-/// Renders [`ErrorFsOpsArguments`] when both paths were not named, and [`ErrorFsOpsFailed`] when the
-/// filesystem refused the move.
+/// Renders [`ErrorFsOpsArguments`] when both paths were not named, [`ErrorFsOpsBlocked`] when the
+/// destination already names something in the Layout being worked in, or a variant file would be moved
+/// to a place no merge can record, and [`ErrorFsOpsFailed`] when the filesystem refused the move.
 #[command(node = "fs-ops.mv")]
 pub fn fs_ops_mv(args: EntryFsOpsMv) -> Next {
     let picked = args
@@ -102,7 +105,7 @@ pub struct StateFsOpsMv {
 }
 
 #[chain(routeify)]
-pub fn handle_fs_ops_mv(state: StateFsOpsMv, account: &mut LazyRes<ResCurrentAccount>) -> Next {
+pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
     // Taken apart rather than borrowed from, so that the state is consumed rather than only read: what the
     // operation needs is the two paths, and keeping the whole of a state alive for them would be keeping
     // more than it is used.
@@ -118,8 +121,6 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv, account: &mut LazyRes<ResCurrentAcc
             .into();
         }
     };
-
-    let me = account.get_ref().must_bind().ok();
 
     // The Workspace each path sits in, looked for from the paths themselves and never from where the
     // run was made: a run made outside any Workspace still keeps the tree its paths are in step. What
@@ -147,32 +148,31 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv, account: &mut LazyRes<ResCurrentAcc
         .as_ref()
         .and_then(|held| plan_mv(held, &cwd, &from, &to, same).map(|plan| (held, plan)));
 
-    // What is not this run's to change is refused before anything moves, and so is a destination that
-    // already names an entry: a move that took it would leave two names for one path, which is the
-    // replacement the caller settled being made where the Layout cannot hold it.
-    if let Some((held, plan)) = &plan {
-        for (path, id) in &plan.named {
-            if let Some(owner) = cmd_fs_ops::held_elsewhere(held, &plan.layout, *id, me.as_deref())
-            {
+    // A destination that already names an entry is refused before anything moves: a move that took it
+    // would leave two names for one path, which is the replacement the caller settled being made where
+    // the Layout cannot hold it. Who holds an entry upstream is deliberately not read: a move is about
+    // this tree, and what the Vault's Layout names is changed by recording and sending the change up
+    // rather than by a path being put somewhere else (see `cmd_fs_ops`). A move that lands outside the
+    // Workspace has no destination in this Layout at all, which is what the pattern leaves out.
+    if let Some((
+        _,
+        MovePlan {
+            layout,
+            named,
+            source,
+            target: Some(target),
+        },
+    )) = &plan
+    {
+        for (path, _) in named {
+            let moved = cmd_fs_ops::moved(source, target, path);
+
+            if moved != *path && layout.id_of(&moved).is_some() {
                 return ErrorFsOpsBlocked {
-                    path: path.as_str().to_owned(),
-                    kind: FsOpsBlock::Held(owner),
+                    path: moved.as_str().to_owned(),
+                    kind: FsOpsBlock::Named,
                 }
                 .into();
-            }
-        }
-
-        if let Some(target) = &plan.target {
-            for (path, _) in &plan.named {
-                let moved = cmd_fs_ops::moved(&plan.source, target, path);
-
-                if moved != *path && plan.layout.id_of(&moved).is_some() {
-                    return ErrorFsOpsBlocked {
-                        path: moved.as_str().to_owned(),
-                        kind: FsOpsBlock::Named,
-                    }
-                    .into();
-                }
             }
         }
     }

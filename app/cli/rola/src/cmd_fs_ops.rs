@@ -12,6 +12,13 @@
 //! than only from a terminal. There are no `-r` and no `-f` either: whether a path is a directory is
 //! read from the path itself, and nothing is ever coerced.
 //!
+//! **Ownership is not read here.** Who holds an entry upstream is the Vault's, and none of these
+//! operations touches it: a path moved, copied or removed in the tree leaves the Vault's Layout naming
+//! what it named, until the change is recorded and sent up. Gating an operation on it would stop the
+//! work exactly where the work is — a drag that refuses because somebody else holds the file — while
+//! changing nothing the refusal was meant to protect. The Layout the Workspace works in is kept in step,
+//! because that is this side's own record of the tree; the upstream view is not.
+//!
 //! Reaching `fs-ops` with none of those words is a question about the namespace rather than about one
 //! of its commands, so it is answered with what the namespace holds — see [`handle_fs_ops`] — and the
 //! same words answer `rola fs-ops -h`.
@@ -29,7 +36,6 @@ use mingling::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_location::normalize;
 use rust_i18n::t;
@@ -329,26 +335,6 @@ pub fn moved(from: &str, to: &str, moving: &LayoutPath) -> LayoutPath {
     LayoutPath::new(&text).unwrap_or_else(|_| moving.clone())
 }
 
-/// The account that holds `id` upstream, when that is not the one this run acts as.
-///
-/// Ownership is the Vault's, and what answers is the fetched copy — the same reading `rola track`
-/// makes before it records. A Layout that tracks no Vault, a copy nobody fetched, and a run with no
-/// account bound are each "no one is in the way" rather than a reason to refuse.
-pub fn held_elsewhere(
-    held: &Workspace,
-    layout: &Layout,
-    id: Uuid,
-    me: Option<&str>,
-) -> Option<String> {
-    let me = me?;
-    let vault = crate::ownership::tracked_vault(held, layout)?;
-    let dir = crate::layout::readonly_layout_dir(held, &vault, VAULT_LAYOUT_NAME);
-    let copy = Layout::open(&dir).ok()?;
-    let owner = copy.entry(id)?.owner()?.to_owned();
-
-    (owner != me).then_some(owner)
-}
-
 /// The path `given` names, made absolute against the directory the run was made in.
 fn resolve(cwd: &Path, given: &Path) -> PathBuf {
     if given.is_absolute() {
@@ -388,8 +374,6 @@ pub struct ErrorFsOpsBlocked {
 
 /// The ways the Layout stops a filesystem operation.
 pub enum FsOpsBlock {
-    /// Another account holds the entry upstream.
-    Held(String),
     /// The destination already names something in this Layout.
     Named,
     /// A variant file would be moved to where no record can say it lies.
@@ -403,9 +387,6 @@ impl Failure for ErrorFsOpsBlocked {
 
     fn reason(&self) -> String {
         let said = match &self.kind {
-            FsOpsBlock::Held(owner) => {
-                t!("fs_ops.err_blocked_held", path = self.path, owner = owner)
-            }
             FsOpsBlock::Named => t!("fs_ops.err_blocked_named", path = self.path),
             FsOpsBlock::Variant => t!("fs_ops.err_blocked_variant", path = self.path),
         };

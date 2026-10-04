@@ -47,8 +47,9 @@ fs_ops:
         path the move takes in is renamed to where it now sits, so the two keep agreeing. It is the
         paths that say which Workspace — and never where the run was made — so a run made elsewhere
         still keeps the tree its paths are in step. A move out of the Workspace lets those entries go
-        instead, since the Layout names nothing outside its own root. An entry another account holds,
-        and a destination the Layout already names, are refused rather than moved over.
+        instead, since the Layout names nothing outside its own root. A destination the Layout already
+        names is refused rather than moved over; who holds an entry upstream is not read at all, since a
+        move is about this tree and changes nothing the Vault or its Layout holds.
     zh-CN: |
         把一个路径放到另一个位置
 
@@ -60,7 +61,8 @@ fs_ops:
         两条路径同属一个工作区时，该工作区的布局会随之移动：这次移动带到的每条路径都改挂到它的新位置，
         两边保持一致。是路径本身决定属于哪个工作区——而不是运行所在的目录——因此从别处运行也照样让
         路径所在的那棵树保持一致。移到该工作区之外则改为让这些条目离开，因为布局不会命名自己根之外的
-        东西。别人持有的条目、以及布局已经命名的目标位置，会被拒绝而不是覆盖过去。
+        东西。布局已经命名的目标位置会被拒绝而不是覆盖过去；上游谁持有该条目则完全不看：移动只关乎这棵
+        树，不改变保险库或其布局持有的任何东西。
 
   mv_description:
     en: Put a path at another
@@ -104,8 +106,9 @@ fs_ops:
 
         When the path is in a Workspace, that Workspace's Layout goes with it: every entry the path
         names is let go of, so a path the Layout still named is not left behind for `rola align` to
-        settle. It is the path that says which Workspace — and never where the run was made. An entry
-        another account holds is refused rather than removed.
+        settle. It is the path that says which Workspace — and never where the run was made. Who holds
+        an entry upstream is not read: a removal is about this tree, and the Vault's Layout goes on
+        naming the entry until the change is recorded and sent up.
     zh-CN: |
         移除一个路径
 
@@ -118,15 +121,12 @@ fs_ops:
 
         该路径在某个工作区内时，那个工作区的布局会随之处理：该路径命名的每个条目都会被让出，不会留下
         一个布局仍在命名、却要等 `rola align` 来收尾的路径。是路径本身决定属于哪个工作区——而不是
-        运行所在的目录。别人持有的条目会被拒绝而不是删除。
+        运行所在的目录。上游谁持有该条目则完全不看：删除只关乎这棵树，保险库的布局仍会命名它，直到改动
+        被记录下来并送上去。
 
   rm_description:
     en: Take a path away
     zh-CN: 移除一个路径
-
-  err_blocked_held:
-    en: "`%{path}` is held by `%{owner}`, and this run is not the one to change it"
-    zh-CN: "`%{path}` 由 `%{owner}` 持有，本次运行无权改动它"
 
   err_blocked_named:
     en: "`%{path}` already names something in this Layout"
@@ -139,10 +139,9 @@ fs_ops:
   err_blocked_help:
     en: |
         The file operations keep the Layout in step, and a change the Layout refuses is stopped rather
-        than half made; `rola layout giveup-ownership` is how a holder lets an entry go
+        than half made
     zh-CN: |
-        文件操作会让布局保持一致；布局拒绝的改动会被拦下而不是做一半；持有者可用
-        `rola layout giveup-ownership` 让出条目
+        文件操作会让布局保持一致；布局拒绝的改动会被拦下而不是做一半
 
   result_two:
     en: "%{verb}: %{from} -> %{to}"
