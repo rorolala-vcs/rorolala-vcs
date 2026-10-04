@@ -443,34 +443,57 @@ internal sealed class BrowserActions
     }
 
     /// <summary>
+    /// What a menu opened on a choice is about, or nothing when nothing was chosen.
+    /// </summary>
+    /// <remarks>
+    /// The kind of what was right-clicked decides which of the two menus this is, while the whole choice is what
+    /// an item acts on: what is claimed or let go of is every path that was chosen, and the words are the words
+    /// for the kind of thing the menu was pointed at. Reading it here rather than building it here is what lets
+    /// what a choice comes to be asked without a screen, since building an item needs a picture of one.
+    /// </remarks>
+    /// <param name="entries">What the menu is about, the one right-clicked first.</param>
+    /// <param name="directory">The directory the menu was opened in.</param>
+    /// <returns>Which menu it is and what it is about, or nothing when the choice is empty.</returns>
+    public static (ContextMenuTarget Target, ContextTarget Was)? About(
+        IReadOnlyList<Entry> entries,
+        string directory
+    )
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        if (entries is not [{ } clicked, ..])
+        {
+            return null;
+        }
+
+        return (
+            clicked.Kind == EntryKind.Directory ? ContextMenuTarget.Directory : ContextMenuTarget.File,
+            new ContextTarget(directory, entries)
+        );
+    }
+
+    /// <summary>
     /// Adds what the plugins registered, after what this plugin offers itself.
     /// </summary>
     /// <remarks>
-    /// Only ever for one entry: a contributed action is about what was right-clicked, and a handful of files is
-    /// not one thing to be about — the contract says as much by naming the target after one of them.
-    /// <para>
     /// The forced actions are added too, hidden, rather than left out: a menu is laid out when it opens, and
     /// what Shift unfolds is a layer of what is already there rather than a menu built a second time.
-    /// </para>
     /// </remarks>
     /// <param name="menu">The menu to add to.</param>
     /// <param name="entries">What the menu is about.</param>
     /// <param name="force">Whether the forced actions are shown to begin with.</param>
     private void Contributed(ContextMenu menu, IReadOnlyList<Entry> entries, bool force)
     {
-        if (entries is not [{ } only])
+        if (About(entries, _browser.Current) is not { } about)
         {
             return;
         }
 
-        var target = only.Kind == EntryKind.Directory ? ContextMenuTarget.Directory : ContextMenuTarget.File;
-        var was = new ContextTarget(_browser.Current, only);
-
         foreach (var wanted in new[] { false, true })
         {
-            foreach (var item in Offer(_host.ContextMenus, target, was, wanted))
+            foreach (var item in Offer(_host.ContextMenus, about.Target, about.Was, wanted))
             {
-                menu.Items.Add(Contributed(item, was, force));
+                menu.Items.Add(Contributed(item, about.Was, force));
             }
         }
     }

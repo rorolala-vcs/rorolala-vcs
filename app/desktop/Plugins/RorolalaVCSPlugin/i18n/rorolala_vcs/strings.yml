@@ -59,12 +59,14 @@ rorolala_vcs:
       en: Force giving up ownership of everything in this folder
       zh-CN: 强制放弃目录下所有条目的所有权
 
-  # What the menu says when the command it ran did not finish, and when there is no command to run:
-  # this window is only told which `rola` to run by the run that opened it, so a window opened on its
-  # own has none to reach for.
+  # What the menu says when the command it ran did not finish, and when there is no command to run.
+  # Several entries are one run that is allowed to be partly done, so the words allow for some of it
+  # having been changed and some refused; which of them, and why, is the command's own to say. This
+  # window is only told which `rola` to run by the run that opened it, so a window opened on its own
+  # has none to reach for.
   ownership_failed:
-    en: Ownership could not be changed
-    zh-CN: 所有权未能更改
+    en: Ownership could not be changed for everything chosen
+    zh-CN: 所选条目的所有权未能全部更改
   ownership_unknown:
     en: This window was not opened by `rola`, so it does not know which one to run
     zh-CN: 本窗口不是由 `rola` 打开的，因此不知道要运行哪一个

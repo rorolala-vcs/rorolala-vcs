@@ -112,22 +112,26 @@ internal static class OwnershipActions
             )
         );
 
-    /// <summary>Runs one ownership command over one entry, and reports what it came to.</summary>
+    /// <summary>Runs one ownership command over the whole choice, and reports what it came to.</summary>
     /// <remarks>
+    /// One run for the whole choice rather than one per entry: the command line takes several paths at once, and
+    /// a claim that is one claim is one exchange with the Vault rather than three.
+    /// <para>
     /// Run off the window's thread and not waited for: the command talks to a Vault, which takes as long as a
     /// network takes, and a window that stopped drawing until it answered would be a window that stopped. What
-    /// the files may have become is said once it is done, so that a listing draws the ownership that is rather
-    /// than the ownership that was.
+    /// the files may have become is said once it is done either way, because a run that ends unhappily may have
+    /// claimed some of what it was given — which is what it was asked to do.
+    /// </para>
     /// </remarks>
     /// <param name="verb">Which command it is.</param>
-    /// <param name="target">What was right-clicked.</param>
+    /// <param name="target">What the menu was opened on, the entry right-clicked first.</param>
     /// <param name="force">Whether the checks are to be gone past.</param>
     /// <param name="host">The host, for the report and for saying the files may have changed.</param>
     private static void Run(string verb, ContextTarget target, bool force, IPluginHost host)
     {
         var program = Environment.GetEnvironmentVariable(Program);
 
-        if (string.IsNullOrEmpty(program) || target.Entry is not { } entry)
+        if (string.IsNullOrEmpty(program) || target.Entries.Count == 0)
         {
             host.Dialogs.Report(
                 new Report(RolaI18N.Get("rorolala_vcs.ownership_failed"), RolaI18N.Get("rorolala_vcs.ownership_unknown"))
@@ -143,20 +147,29 @@ internal static class OwnershipActions
             arguments.Add("--force");
         }
 
-        arguments.Add(entry.Path);
+        // A batch that cannot be done whole is not half done, and a user who chose three files wants the two
+        // that can be claimed rather than none of them: what was refused is said, and the run ends unhappily.
+        arguments.Add("--allow-partial");
+
+        foreach (var entry in target.Entries)
+        {
+            // A name inside the directory the menu was opened in, because that is where the run is made: the
+            // command line reads a path as a place in the Workspace being worked in, so the run has to be inside
+            // that Workspace for it to be found, and a name is what it is given there.
+            arguments.Add(Path.GetRelativePath(target.Directory, entry.Path));
+        }
 
         _ = Task.Run(() =>
         {
-            var (done, said) = Ask(program, arguments);
+            var (done, said) = Ask(program, arguments, target.Directory);
 
-            if (done)
+            // Either way the files may have moved, which is what the listing reads again for.
+            host.Files.Touch();
+
+            if (!done)
             {
-                host.Files.Touch();
-
-                return;
+                host.Dialogs.Report(new Report(RolaI18N.Get("rorolala_vcs.ownership_failed"), said));
             }
-
-            host.Dialogs.Report(new Report(RolaI18N.Get("rorolala_vcs.ownership_failed"), said));
         });
     }
 
@@ -168,12 +181,18 @@ internal static class OwnershipActions
     /// </remarks>
     /// <param name="program">The program to run.</param>
     /// <param name="arguments">What to run it with.</param>
+    /// <param name="directory">Where to run it, which is where the names it was given are read from.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
-    private static (bool Done, string Said) Ask(string program, IReadOnlyList<string> arguments)
+    private static (bool Done, string Said) Ask(
+        string program,
+        IReadOnlyList<string> arguments,
+        string directory
+    )
     {
         var start = new ProcessStartInfo
         {
             FileName = program,
+            WorkingDirectory = directory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

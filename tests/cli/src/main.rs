@@ -1240,6 +1240,7 @@ fn ownership(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.exits("and a Layout to claim in", &ran, 0);
 
     fs::write(dir.join("art/hero.psd"), "art\n").expect("a file to claim");
+    fs::write(dir.join("art/second.psd"), "art\n").expect("and another to claim beside it");
 
     for verb in ["hold", "giveup"] {
         let ran = rola.run(&dir.join("art"), &[verb, "hero.psd"]);
@@ -1257,6 +1258,19 @@ fn ownership(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     let ran = rola.run(&dir.join("art"), &["hold", "--force", "hero.psd"]);
     checked.exits("and the forced form reads the same file", &ran, 193);
+
+    // A menu over several chosen entries is one run of the same command: every path it was given, and the
+    // flag that lets the ones that do pass be claimed while the ones that do not are said.
+    let ran = rola.run(
+        &dir.join("art"),
+        &["hold", "hero.psd", "second.psd", "--allow-partial"],
+    );
+    checked.exits("several files are claimed in one run", &ran, 193);
+    checked.stderr_has(
+        "and that run is refused for the Vault as well",
+        &ran,
+        "tracks no Vault",
+    );
 
     let ran = rola.run(dir, &["hold"]);
     checked.exits("while `hold` with nothing named is still refused", &ran, 191);

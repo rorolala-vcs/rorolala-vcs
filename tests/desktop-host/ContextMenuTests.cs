@@ -16,7 +16,7 @@ public sealed class ContextMenuTests
     /// <summary>The entry every one of these menus is opened on.</summary>
     private static readonly ContextTarget Was = new(
         "/work",
-        new Entry("/work/hero.psd", EntryKind.File)
+        [new Entry("/work/hero.psd", EntryKind.File)]
     );
 
     /// <summary>
@@ -57,7 +57,7 @@ public sealed class ContextMenuTests
             Names(BrowserActions.Offer(registry, ContextMenuTarget.File, Was, force: false))
         );
 
-        var elsewhere = new ContextTarget("/work", new Entry("/work/other.psd", EntryKind.File));
+        var elsewhere = new ContextTarget("/work", [new Entry("/work/other.psd", EntryKind.File)]);
 
         Assert.Empty(BrowserActions.Offer(registry, ContextMenuTarget.File, elsewhere, force: false));
     }
@@ -90,6 +90,86 @@ public sealed class ContextMenuTests
         registry.Add(ContextMenuTarget.Directory, new ContextMenuItem("for-folders", 0, _ => { }));
 
         Assert.Empty(BrowserActions.Offer(registry, ContextMenuTarget.File, Was, force: false));
+    }
+
+    /// <summary>
+    /// A menu opened on several entries is about all of them, and wears the words of the one that was clicked.
+    /// </summary>
+    /// <remarks>
+    /// The whole choice, because an action may be about all of it — claiming three files is one claim, and a
+    /// menu item handed only the first would have to be pointed at three times. And the kind of the one that was
+    /// clicked, because a menu is about what was pointed at first: a folder among files is still a menu opened
+    /// on a folder, which is the kind of thing its words are about.
+    /// </remarks>
+    [Fact]
+    public void AChoiceIsAboutAllOfItAndTheKindThatWasClicked()
+    {
+        Entry[] chosen =
+        [
+            new("/work/folder", EntryKind.Directory),
+            new("/work/hero.psd", EntryKind.File),
+        ];
+
+        var about = BrowserActions.About(chosen, "/work");
+
+        Assert.NotNull(about);
+
+        var (target, was) = about.Value;
+
+        Assert.Equal(ContextMenuTarget.Directory, target);
+        Assert.Equal("/work", was.Directory);
+        Assert.Equal(chosen, was.Entries);
+        Assert.Equal(chosen[0], was.Entry);
+    }
+
+    /// <summary>A choice of files is a menu opened on a file, and a folder clicked among them decides.</summary>
+    [Fact]
+    public void TheClickedOneDecidesWhichMenuItIs()
+    {
+        Entry[] files = [new("/work/hero.psd", EntryKind.File), new("/work/second.psd", EntryKind.File)];
+
+        Assert.Equal(ContextMenuTarget.File, BrowserActions.About(files, "/work")?.Target);
+
+        Entry[] clickedFolder =
+        [
+            new("/work/folder", EntryKind.Directory),
+            new("/work/hero.psd", EntryKind.File),
+        ];
+
+        Assert.Equal(ContextMenuTarget.Directory, BrowserActions.About(clickedFolder, "/work")?.Target);
+    }
+
+    /// <summary>A menu opened on nothing is about nothing, and offers nothing of a plugin's.</summary>
+    [Fact]
+    public void AChoiceOfNothingIsAboutNothing()
+    {
+        Assert.Null(BrowserActions.About([], "/work"));
+    }
+
+    /// <summary>An item that asks about the choice is answered with all of it, and not only the clicked one.</summary>
+    [Fact]
+    public void AnItemAboutTheWholeChoiceIsOfferedTheWholeOfIt()
+    {
+        var registry = Host.Services().For(new PluginId("it.mine"), 0).ContextMenus;
+
+        registry.Add(
+            ContextMenuTarget.File,
+            new ContextMenuItem(
+                "several",
+                10,
+                _ => { },
+                Applies: was => was.Entries.Count > 1 && was.Entry?.Kind == EntryKind.File
+            )
+        );
+
+        Entry[] chosen = [new("/work/hero.psd", EntryKind.File), new("/work/second.psd", EntryKind.File)];
+        var was = new ContextTarget("/work", chosen);
+
+        Assert.Equal(["several"], Names(BrowserActions.Offer(registry, ContextMenuTarget.File, was, force: false)));
+
+        var alone = new ContextTarget("/work", [chosen[0]]);
+
+        Assert.Empty(BrowserActions.Offer(registry, ContextMenuTarget.File, alone, force: false));
     }
 
     /// <summary>What the items say, in the order they are offered.</summary>

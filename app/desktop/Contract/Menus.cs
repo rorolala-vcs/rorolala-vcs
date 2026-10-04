@@ -15,10 +15,20 @@ public enum ContextMenuTarget
 
 /// <summary>What a context-menu item was opened on.</summary>
 /// <param name="Directory">The directory the menu was opened in.</param>
-/// <param name="Entry">
-/// The file or directory that was right-clicked, or nothing when empty space was.
+/// <param name="Entries">
+/// The whole choice, in the order the menu is about it: the entry that was right-clicked first, so that a menu
+/// is about what was pointed at before it is about the rest of the choice — and nothing at all when the menu
+/// was opened on empty space.
 /// </param>
-public sealed record ContextTarget(string Directory, Entry? Entry);
+/// <remarks>
+/// The whole choice rather than one of it, because an action may be about all of it: claiming three files is
+/// one claim, and a menu item that was handed only the first would have to be pointed at three times.
+/// </remarks>
+public sealed record ContextTarget(string Directory, IReadOnlyList<Entry> Entries)
+{
+    /// <summary>The file or directory that was right-clicked, or nothing when empty space was.</summary>
+    public Entry? Entry => Entries.Count > 0 ? Entries[0] : null;
+}
 
 /// <summary>One context-menu item.</summary>
 /// <param name="LabelKey">An i18n key for the item's label.</param>

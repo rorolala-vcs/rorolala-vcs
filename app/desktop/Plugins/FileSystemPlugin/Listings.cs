@@ -492,15 +492,27 @@ internal abstract class EntryView : UserControl
         }
     }
 
-    /// <summary>What a menu opened on an entry is about: the whole choice when that entry is in it.</summary>
+    /// <summary>
+    /// What a menu opened on an entry is about: the whole choice when that entry is in it.
+    /// </summary>
+    /// <remarks>
+    /// The entry the menu was opened on comes first, because a menu is about what was pointed at before it is
+    /// about the rest of the choice: it is the one whose kind decides which menu this is, and the one whose
+    /// words a contributed action is named by.
+    /// </remarks>
     /// <param name="entry">The entry the menu was opened on.</param>
     protected IReadOnlyList<Entry> Chosen(Entry entry)
     {
         var chosen = Chosen();
 
-        return chosen.Any(item => string.Equals(item.Path, entry.Path, StringComparison.Ordinal))
+        if (!chosen.Any(item => string.Equals(item.Path, entry.Path, StringComparison.Ordinal)))
+        {
+            return [entry];
+        }
+
+        return chosen[0].Path == entry.Path
             ? chosen
-            : [entry];
+            : [entry, .. chosen.Where(item => item.Path != entry.Path)];
     }
 
     /// <summary>Copies what is chosen to the clipboard.</summary>
