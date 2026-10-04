@@ -5,11 +5,17 @@
 //! pointer moving: the `Uuid`, the path and the description are left as they are, and nothing is
 //! removed from the index.
 //!
-//! The file on disk is not touched unless `--restore-content` says so. That is deliberate — a run
-//! that only wants the record to say something else leaves the work alone, and what the tree then
-//! holds is newer than the version named, which is what `rola status` reports as a change that was
-//! never recorded. With `--restore-content` the version's content is written back over the file
-//! and the reading is told the two agree again, the way [`crate::checkout`] tells it for a pull.
+//! Moving the pointer and leaving the file alone would leave the two apart — the file holds what a
+//! newer version did, and the Layout now names an older one — so the version's content is written
+//! back over the file as well, and the reading is told the two agree again, the way
+//! [`crate::checkout`] tells it for a pull. `--only-index` is what a run gives when it wants the
+//! record moved and the work left alone; what the tree then holds is what `rola status` reports as
+//! a change that was never recorded.
+//!
+//! A file with changes that were never recorded, and one a variant is waiting to be joined into,
+//! are not states a retrack may write over: both are refused. `--force` is how a run says to go
+//! ahead anyway — for the first, the changes are discarded and the content switched; for the
+//! second, the merge is ended, its variant file removed, and the content switched.
 
 // A retrack reads a level, a Layout, a chain and a version before it moves one pointer, and every
 // step of that is a refusal of its own to say; keeping them in one function is what lets the order
@@ -26,9 +32,9 @@ use std::str::FromStr as _;
 use librorolala::daemon::action_fetch_layout;
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
-use librorolala::tree_analyze::{Cache, cache_path, entry_of};
+use librorolala::tree_analyze::{Cache, cache_path, entry_of, tree_diff};
 use librorolala::vcs::{VCSIndex, VCSWrite as _, Variant, Version};
-use librorolala::workspace::Workspace;
+use librorolala::workspace::{Merging, Pending, Workspace};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
@@ -40,7 +46,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResOffline, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+    ResCurrentRemoteVault, ResForce, ResOffline, ResRorolalaStorage, ResVCSIndex, ResVault,
+    ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -57,7 +64,7 @@ use crate::complete::{
     IndexObject, filling_flag, index_hashes, index_keys, offer, positional, strip_written,
     typing_flag, vault_names,
 };
-use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_HELP};
+use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_ERR_RETRACK_DIRTY, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
 use crate::hash::{HashMiss, resolve as resolve_hash};
@@ -66,11 +73,16 @@ use crate::layout::{
     ErrorLayoutShouldInWorkspace, chosen, failed as layout_failed, readonly_layout_dir, remote_spec,
 };
 
+/// How alike two text files have to be to count as the same file moved.
+///
+/// It is the same default the reading uses, since what this acts on is what the reading found.
+const DEFAULT_ALIKE: f32 = 0.6;
+
 /// Where the pointer goes, one version back unless said.
 const ARG_UNTIL: PickerArg<'static, Option<String>> = arg![until: Option<String>];
 
-/// Write the version's content back over the file as well.
-const ARG_RESTORE_CONTENT: PickerArg<'static, Flag> = arg![restore_content: Flag];
+/// Move the pointer and leave the file on disk alone.
+const ARG_ONLY_INDEX: PickerArg<'static, Flag> = arg![only_index: Flag];
 
 /// Move the pointer to a version that is not on the way back to where it is now.
 const ARG_ALLOW_JUMP: PickerArg<'static, Flag> = arg![allow_jump: Flag];
@@ -111,7 +123,7 @@ pub fn complete_retrack(
             &ctx,
             suggest! {
                 ARG_UNTIL: t!("retrack.complete.until"),
-                ARG_RESTORE_CONTENT: t!("retrack.complete.restore_content"),
+                ARG_ONLY_INDEX: t!("retrack.complete.only_index"),
                 ARG_ALLOW_JUMP: t!("retrack.complete.allow_jump"),
             },
         );
@@ -126,9 +138,9 @@ pub fn complete_retrack(
 
 /// Moves a file's recorded version back, in the Layout being worked in
 ///
-/// Only the entry's version pointer moves: its `Uuid`, its path and its description stay as they
-/// are, and nothing is removed from the index. `FILE` is one local path in this Workspace — a
-/// `Uuid`, a hash and a remote name are refused — and it has to be a path the Layout records.
+/// The entry's version pointer moves: its `Uuid`, its path and its description stay as they are,
+/// and nothing is removed from the index. `FILE` is one local path in this Workspace — a `Uuid`, a
+/// hash and a remote name are refused — and it has to be a path the Layout records.
 ///
 /// `--until` is where the pointer goes, and is one version back when it is not given: `-1` one
 /// version back, `~N` N versions back, `N` the version numbered N, a hash a version on the way
@@ -136,27 +148,34 @@ pub fn complete_retrack(
 /// records for the file. A hash that is not on the way back is refused unless `--allow-jump` is
 /// given; `~N` and `N` past either end of the chain are always refused.
 ///
-/// Without `--restore-content` the file on disk is left alone, so it is then newer than the
-/// version the Layout names and `rola status` reports it as changed. With it, the version's
-/// content is written back over the file.
+/// The version's content is written back over the file with the pointer, so the two agree again.
+/// `--only-index` moves the pointer and leaves the file alone, which is what a run wants when the
+/// work on disk is not to be touched: `rola status` then reports the file as changed.
+///
+/// A file with changes that were never recorded is refused, and so is one a variant is waiting to
+/// be joined into. `--force` goes ahead anyway: the changes are discarded and the content switched,
+/// and a merge is ended, its variant file removed, and the content switched. `--force` and
+/// `--only-index` say opposite things and cannot be given together.
 ///
 /// # Errors
 ///
-/// Renders [`ErrorRetrackNoFile`] when no file or several are named, [`ErrorRetrackFile`] when what
-/// was named is not a local path the Layout records, [`ErrorRetrackLevel`] when `--until` names no
-/// version the entry can reach, [`ErrorRetrackNothing`] when the entry was never recorded,
-/// [`ErrorRetrackUpstream`] when the Vault's Layout records no version for it,
-/// [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and
+/// Renders [`ErrorRetrackNoFile`] when no file or several are named, [`ErrorRetrackFlags`] when
+/// `--force` and `--only-index` are given together, [`ErrorRetrackFile`] when what was named is not
+/// a local path the Layout records, [`ErrorRetrackLevel`] when `--until` names no version the entry
+/// can reach, [`ErrorRetrackNothing`] when the entry was never recorded, [`ErrorRetrackModified`]
+/// when the file has changes the Layout does not name, [`ErrorRetrackMerging`] when a variant is
+/// waiting for the file, [`ErrorRetrackUpstream`] when the Vault's Layout records no version for
+/// it, [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and
 /// [`ErrorRetrackFailed`] when the store, the index or the Layout refuses.
 #[command(node = "retrack", entry = EntryRetrack)]
-pub fn retrack(args: EntryRetrack) -> Next {
+pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
     let picked = args
         .pick(&ARG_UNTIL)
-        .pick(&ARG_RESTORE_CONTENT)
+        .pick(&ARG_ONLY_INDEX)
         .pick(&ARG_ALLOW_JUMP)
         .pick_or_route(&arg![Vec<String>], || ErrorRetrackNoFile.into())
         .to_result();
-    let (until, restore_content, allow_jump, mut files) = match picked {
+    let (until, only_index, allow_jump, mut files) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -171,11 +190,20 @@ pub fn retrack(args: EntryRetrack) -> Next {
         return ErrorRetrackNoFile.into();
     };
 
+    let only_index = matches!(only_index, Flag::Active);
+
+    // `--force` and `--only-index` say opposite things about the file on disk, so a run that gives
+    // both is refused before anything is read rather than one of them winning silently.
+    if **force && only_index {
+        return ErrorRetrackFlags.into();
+    }
+
     StateRetrack {
         file,
         until,
-        restore_content: matches!(restore_content, Flag::Active),
+        only_index,
         allow_jump: matches!(allow_jump, Flag::Active),
+        force: **force,
     }
     .into()
 }
@@ -187,10 +215,12 @@ pub struct StateRetrack {
     file: String,
     /// Where the pointer goes, as it was written; one version back when it was not said.
     until: Option<String>,
-    /// Whether the version's content is written back over the file.
-    restore_content: bool,
+    /// Whether the pointer moves and the file on disk is left alone.
+    only_index: bool,
     /// Whether a version off the way back may be jumped to.
     allow_jump: bool,
+    /// Whether changes that were never recorded, and a merge in progress, are gone past anyway.
+    force: bool,
 }
 
 #[chain(routeify)]
@@ -207,8 +237,9 @@ pub fn handle_retrack(
     let StateRetrack {
         file,
         until,
-        restore_content,
+        only_index,
         allow_jump,
+        force,
     } = state;
 
     // The level is read before anything is looked at, so a run that misspelled it is told that
@@ -278,6 +309,38 @@ pub fn handle_retrack(
     let current_hash = data.version();
     let moved = target != current_hash;
 
+    // What the run is to do to the file is worked out before anything is written, so a run that is
+    // refused leaves the Layout, the tree and the merge exactly as they were.
+    let mut merging = Merging::read(&root);
+    let pending = merging.at(id).cloned();
+    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
+        Ok(diff) => diff,
+        Err(error) => return failed(error.to_string()),
+    };
+
+    let action = match &pending {
+        // A variant waiting for the file is a merge that was never recorded, and a pointer moved
+        // under it would leave the merge with a file it does not match. `--only-index` cannot end
+        // one, so it is refused rather than answered with a merge still in progress.
+        Some(pending) if only_index || !force => {
+            return ErrorRetrackMerging {
+                path: path.as_str().to_owned(),
+                variant: hex(*pending.variant()),
+            }
+            .into();
+        }
+        None if only_index => Action::Pointer,
+        // Changes the Layout does not name are the run's to discard or to leave alone, and they are
+        // not something a retrack may decide by itself.
+        None if !force && diff.modified.contains(&path) => {
+            return ErrorRetrackModified {
+                path: path.as_str().to_owned(),
+            }
+            .into();
+        }
+        _ => Action::Content,
+    };
+
     if moved {
         let owner = data.owner().map(str::to_owned);
         let description = data.description().to_owned();
@@ -287,13 +350,19 @@ pub fn handle_retrack(
         }
     }
 
-    // Content is read only when the run writes it back, so a Vault is reached for only then: a
-    // retrack that moves a pointer reads nothing it does not already have.
-    let account = if restore_content {
-        let bound = current.get_ref().must_bind()?;
-        Some(account_named(&bound, Some(held), None)?)
-    } else {
-        None
+    // Content is read, and a Vault is bound to, only when the run writes it back — and only when
+    // the store here does not already hold it: a retrack of content this Workspace has is local
+    // work, and asking for an account would make it fail where there is nothing to fetch.
+    let content = match action {
+        Action::Pointer => None,
+        Action::Content => Some(content_of(vcs, &runtime, target)?),
+    };
+    let account = match content {
+        Some(recorded) if !holds(storage, &runtime, recorded) => {
+            let bound = current.get_ref().must_bind()?;
+            Some(account_named(&bound, Some(held), None)?)
+        }
+        _ => None,
     };
     let sources = match &account {
         Some(account) => {
@@ -307,14 +376,35 @@ pub fn handle_retrack(
         None => None,
     };
 
-    if restore_content {
-        // UNWRAP: a run that restores content is one whose account was bound just above, which is
-        // the very thing that makes `sources` here.
-        let sources = sources.as_ref().unwrap();
-
+    if let Some(recorded) = content {
         restore(
-            storage, vcs, &runtime, &layout, &root, &path, target, sources,
+            storage,
+            &runtime,
+            &layout,
+            &root,
+            &path,
+            recorded,
+            sources.as_ref(),
         )?;
+
+        // Only a forced run reaches here with a merge waiting, and forcing it is what ends it: the
+        // variant file is the content that was just replaced, so the record and the file go with it.
+        if let Some(pending) = &pending {
+            end_merge(
+                &mut merging,
+                &layout,
+                &root,
+                vcs,
+                &runtime,
+                &diff.untagged,
+                id,
+                pending,
+            )?;
+        }
+
+        if let Some(sources) = &sources {
+            sources.report();
+        }
     } else if moved {
         // What the file is to agree with now, which is the content the version moved to holds. One
         // the index does not hold is nothing to read, and the agreement is then taken back.
@@ -325,18 +415,117 @@ pub fn handle_retrack(
         disagree(&layout, &root, &path, agreed)?;
     }
 
-    if let Some(sources) = &sources {
-        sources.report();
-    }
-
     ResultRetrack {
         path: path.as_str().to_owned(),
         version: hex(target),
         number,
         moved,
-        restored: restore_content,
+        switched: content.is_some(),
     }
     .into()
+}
+
+/// What a run is to do to the file on disk, once the reading says it may be acted on.
+enum Action {
+    /// Move the pointer and leave the file alone.
+    Pointer,
+    /// Write the version's content back over the file, the pointer moving with it.
+    Content,
+}
+
+/// Whether the store here already holds the content `recorded`.
+///
+/// A store that cannot answer is read as holding none of it, the way a fetch reads one: an asking
+/// that turns out to be unnecessary costs a look-up, while the other way round leaves content that
+/// is needed behind.
+fn holds(
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    runtime: &tokio::runtime::Runtime,
+    recorded: Blake3Hash,
+) -> bool {
+    let Some(store) = storage.get_ref().as_ref() else {
+        return false;
+    };
+
+    runtime
+        .block_on(store.contains_keys(&[Key::new(recorded)]))
+        .is_ok_and(|presence| presence.held(0))
+}
+
+/// The stored content the version `version` is of.
+fn content_of(
+    vcs: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    version: Blake3Hash,
+) -> Result<Blake3Hash, Next> {
+    let version = read_version(vcs, runtime, version)?;
+
+    stored_hash(vcs, runtime, &version)
+}
+
+/// Ends the merge waiting for `target`: the record goes, and the variant file with it.
+///
+/// The record is written out before the file is removed, since a record that outlived its variant
+/// file is a merge a reading reports as broken, while a variant file left by a write that failed is
+/// only a path the tree holds untagged — and the target's content is replaced by the caller.
+///
+/// # Errors
+///
+/// [`ErrorRetrackFailed`] when the merge in progress cannot be written back or the variant file
+/// cannot be removed.
+fn end_merge(
+    merging: &mut Merging,
+    layout: &Layout,
+    root: &Path,
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    untagged: &[LayoutPath],
+    target: Uuid,
+    pending: &Pending,
+) -> Result<(), Next> {
+    let disk = variant_disk(merging, layout, root, index, runtime, untagged, pending);
+
+    merging.remove(target);
+    if let Err(error) = merging.write(root) {
+        return Err(failed(error.to_string()));
+    }
+
+    // A variant file that is already gone is one the merge can still be ended from: what was checked
+    // in is the content the record names, and the file was only how it was shown.
+    if let Some(disk) = disk
+        && disk.is_file()
+        && let Err(error) = fs::remove_file(&disk)
+    {
+        return Err(failed(error.to_string()));
+    }
+
+    Ok(())
+}
+
+/// Where the variant file waiting for `pending` lies, when the tree still holds it.
+///
+/// The record names the place under the convention, but a run that moved the file with the
+/// filesystem rather than with `rola fs-ops mv` leaves it elsewhere; it is found again by the
+/// content it holds, the way a reading of the tree finds it.
+fn variant_disk(
+    merging: &Merging,
+    layout: &Layout,
+    root: &Path,
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    untagged: &[LayoutPath],
+    pending: &Pending,
+) -> Option<PathBuf> {
+    let from = merging.variant_path(layout, pending)?;
+    let disk = root.join(from.to_path_buf());
+    if disk.is_file() {
+        return Some(disk);
+    }
+
+    crate::merging::moves(merging, layout, root, Some(index), runtime, untagged)
+        .into_iter()
+        .find(|moved| moved.target == pending.target())
+        .map(|moved| root.join(moved.to.to_path_buf()))
 }
 
 /// What a run asked the pointer to be moved to, and what a refusal about it says.
@@ -504,24 +693,23 @@ fn upstream_version(
 
 /// Writes the version's content back over the file, and remembers that the two agree.
 ///
-/// The content is what the Layout names, and the store may not hold it: what is not here is brought
-/// from a Vault first, which is the one step of a retrack that may leave the machine.
+/// `recorded` is the content the version is of, which is what the store holds it under. The store
+/// may not hold it: what is not here is brought from a Vault first, which is the one step of a
+/// retrack that may leave the machine, and `sources` is the run that may do it — nothing when the
+/// content was already here and there is nothing to ask for.
 fn restore(
     storage: &mut LazyRes<ResRorolalaStorage>,
-    vcs: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     layout: &Layout,
     root: &Path,
     path: &LayoutPath,
-    version: Blake3Hash,
-    sources: &Sources<'_>,
+    recorded: Blake3Hash,
+    sources: Option<&Sources<'_>>,
 ) -> Result<(), Next> {
     let Some(store) = storage.get_ref().as_ref() else {
         return Err(failed(t!("retrack.err_no_store").trim().to_owned()));
     };
 
-    let version = read_version(vcs, runtime, version)?;
-    let recorded = stored_hash(vcs, runtime, &version)?;
     let disk = root.join(path.to_path_buf());
 
     if let Some(parent) = disk.parent()
@@ -530,7 +718,9 @@ fn restore(
         return Err(failed(error.to_string()));
     }
 
-    sources.bring(store, &[Key::new(recorded)]);
+    if let Some(sources) = sources {
+        sources.bring(store, &[Key::new(recorded)]);
+    }
 
     if let Err(error) = runtime.block_on(store.extract_file(&Key::new(recorded), &disk)) {
         return Err(failed(error.to_string()));
@@ -821,20 +1011,20 @@ pub struct ResultRetrack {
     /// Whether the pointer moved.
     moved: bool,
     /// Whether the version's content was written back over the file.
-    restored: bool,
+    switched: bool,
 }
 
 #[renderer(buffer)]
 pub fn render_result_retrack(result: ResultRetrack) {
     let version = named(&result.version, result.number);
-    let said = match (result.moved, result.restored) {
-        (true, false) => t!(
+    let said = match (result.moved, result.switched) {
+        (true, true) => t!(
             "retrack.result_retracked",
             path = result.path,
             version = version
         ),
-        (true, true) => t!(
-            "retrack.result_retracked_restored",
+        (true, false) => t!(
+            "retrack.result_retracked_index",
             path = result.path,
             version = version
         ),
@@ -844,7 +1034,7 @@ pub fn render_result_retrack(result: ResultRetrack) {
             version = version
         ),
         (false, true) => t!(
-            "retrack.result_unchanged_restored",
+            "retrack.result_unchanged_switched",
             path = result.path,
             version = version
         ),
@@ -901,6 +1091,29 @@ failure!(ErrorRetrackManyFiles);
 pub fn render_error_retrack_many_files(error: ErrorRetrackManyFiles, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("retrack.err_many_files_help").trim()));
+    ec.exit_code = EC_ERR_RETRACK_ARGUMENT;
+}
+
+/// Error: `--force` and `--only-index` were given together.
+#[derive(Grouped)]
+pub struct ErrorRetrackFlags;
+
+impl Failure for ErrorRetrackFlags {
+    fn name(&self) -> &'static str {
+        "error_retrack_flags"
+    }
+
+    fn reason(&self) -> String {
+        t!("retrack.err_flags").trim().to_string()
+    }
+}
+
+failure!(ErrorRetrackFlags);
+
+#[renderer(buffer)]
+pub fn render_error_retrack_flags(_: ErrorRetrackFlags, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("retrack.err_flags").trim()));
+    r_eprintln!("{}", help_line!(t!("retrack.err_flags_help").trim()));
     ec.exit_code = EC_ERR_RETRACK_ARGUMENT;
 }
 
@@ -1002,6 +1215,68 @@ pub fn render_error_retrack_nothing(error: ErrorRetrackNothing, ec: &mut ResExit
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("retrack.err_nothing_help").trim()));
     ec.exit_code = EC_ERR_RETRACK;
+}
+
+/// Error: the file has changes the Layout does not name.
+#[derive(Grouped)]
+pub struct ErrorRetrackModified {
+    /// Where the file sits in the Layout.
+    path: String,
+}
+
+impl Failure for ErrorRetrackModified {
+    fn name(&self) -> &'static str {
+        "error_retrack_modified"
+    }
+
+    fn reason(&self) -> String {
+        t!("retrack.err_modified", path = self.path)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorRetrackModified);
+
+#[renderer(buffer)]
+pub fn render_error_retrack_modified(error: ErrorRetrackModified, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("retrack.err_modified_help").trim()));
+    ec.exit_code = EC_ERR_RETRACK_DIRTY;
+}
+
+/// Error: a variant is waiting to be joined into the file.
+#[derive(Grouped)]
+pub struct ErrorRetrackMerging {
+    /// Where the file sits in the Layout.
+    path: String,
+    /// The variant that is waiting, as hex.
+    variant: String,
+}
+
+impl Failure for ErrorRetrackMerging {
+    fn name(&self) -> &'static str {
+        "error_retrack_merging"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "retrack.err_merging",
+            path = self.path,
+            variant = self.variant
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorRetrackMerging);
+
+#[renderer(buffer)]
+pub fn render_error_retrack_merging(error: ErrorRetrackMerging, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("retrack.err_merging_help").trim()));
+    ec.exit_code = EC_ERR_RETRACK_DIRTY;
 }
 
 /// Error: `--until` names nothing the entry can be moved to.

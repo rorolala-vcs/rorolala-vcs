@@ -1369,9 +1369,10 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    // `retrack` moves the entry's version pointer and nothing else. `--until -1` and `--until=-1`
-    // are the same level written two ways, and the file on disk is left alone either way, so the
-    // reading goes on saying the work is ahead of what the Layout names.
+    // `retrack` moves the entry's version pointer and writes the version's content back over the
+    // file with it, so the two agree again. `--only-index` moves the pointer and leaves the file
+    // alone, which is what a run that wants the work on disk untouched asks for. `--until -1` and
+    // `--until=-1` are the same level written two ways.
     //
     // The file is first put back to what the Layout was last known to agree with, so that what the
     // checks below see is the pointer moving and not the file: a file whose bytes never changed is
@@ -1394,7 +1395,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", "-1"],
+        &["retrack", "models/hero.psd", "--until", "-1", "--only-index"],
     ));
     checked.wants(
         "a retrack moves the pointer one version back",
@@ -1407,7 +1408,7 @@ async fn main() {
         ),
     );
     checked.wants(
-        "a retrack without --restore-content leaves the file alone",
+        "a retrack with `--only-index` leaves the file alone",
         fs::read(&model).unwrap() == b"third",
         &format!("the tree holds {:?}", fs::read(&model)),
     );
@@ -1423,19 +1424,39 @@ async fn main() {
         ),
     );
 
+    // A file with changes the Layout does not name is not something a retrack may write over: what
+    // it holds is the run's to record or to discard, and either way it is the run that says so.
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until=-1"],
+        &["retrack", "models/hero.psd", "--until", "-1"],
     ));
     checked.wants(
-        "`--until=-1` is the same level as `--until -1`",
-        said.success() && local_version_of(&workspace, id) == first_version,
+        "a retrack of a file with unrecorded changes is refused, and both ways on are offered",
+        said.code == Some(253)
+            && clean(&said.stderr).contains("--force")
+            && clean(&said.stderr).contains("--only-index"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // `--force` is the run that means to discard them, and `--until=-1` is the same level as
+    // `--until -1`.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until=-1", "--force"],
+    ));
+    checked.wants(
+        "`--force` switches the content over the changes, and `--until=-1` is the same level",
+        said.success()
+            && local_version_of(&workspace, id) == first_version
+            && fs::read(&model).unwrap() == b"first",
         &format!(
-            "it ended with {:?}, said {:?}, and the Layout names {:?}",
+            "it ended with {:?}, said {:?}, the Layout names {:?}, and the tree holds {:?}",
             said.code,
             said.stdout.trim(),
-            local_version_of(&workspace, id)
+            local_version_of(&workspace, id),
+            fs::read(&model)
         ),
     );
 
@@ -1503,13 +1524,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &[
-            "retrack",
-            "models/hero.psd",
-            "--until",
-            VAULT_NAME,
-            "--restore-content",
-        ],
+        &["retrack", "models/hero.psd", "--until", VAULT_NAME],
     ));
     checked.wants(
         "a Vault's name takes the version the Vault records, content and all",
@@ -1595,6 +1610,105 @@ async fn main() {
         said.code == Some(251),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
+
+    // A variant waiting to be joined is a merge that was never recorded, and a retrack may not
+    // write over the file or move the pointer under it: what the two sides hold is the run's to
+    // join or to discard. The variant of the version after the one the entry is at is joined, so
+    // its base is the version the entry names and the merge is one that could go on.
+    let second_hex: String = second_version.iter().map(|byte| format!("{byte:02x}")).collect();
+    let variants = clean(
+        &run(&mut client(&workspace, &data, &["vcs-index", "ls-variants"])).stdout,
+    );
+    let variant = variants
+        .lines()
+        .find_map(|line| {
+            let (variant, rest) = line.split_once(" -> ")?;
+            let (base, _) = rest.split_once(" (store:")?;
+
+            (base.trim() == second_hex).then(|| variant.trim().to_owned())
+        })
+        .expect("a variant based on the version the entry is at");
+
+    run(&mut client(
+        &workspace,
+        &data,
+        &["checkin", &variant, "--join", "models/hero.psd"],
+    ))
+    .expect_success();
+
+    let variant_file = workspace.join(format!("models/hero.{}.psd", &variant[..7]));
+    checked.wants(
+        "joining a variant puts its file beside the file it waits for",
+        variant_file.is_file(),
+        &format!("the variant file is at {}", variant_file.display()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until", "-1"],
+    ));
+    checked.wants(
+        "a retrack of a file a variant is waiting for is refused, and `--force` is offered",
+        said.code == Some(253) && clean(&said.stderr).contains("--force"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until", "-1", "--only-index"],
+    ));
+    checked.wants(
+        "`--only-index` cannot end a merge, and says as much",
+        said.code == Some(253) && clean(&said.stderr).contains("--only-index"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // `--force` ends the merge: the record goes, the variant file with it, and the content is
+    // switched to the version named.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", "--until", "-1", "--force"],
+    ));
+    checked.wants(
+        "`--force` ends the merge, removes the variant file and switches the content",
+        said.success()
+            && local_version_of(&workspace, id) == first_version
+            && fs::read(&model).unwrap() == b"first"
+            && !variant_file.exists()
+            && !workspace.join(".rola/MERGING").exists(),
+        &format!(
+            "it ended with {:?}, said {:?}, the Layout names {:?}, the tree holds {:?}, the \
+             variant file is {}, and MERGING is {}",
+            said.code,
+            said.stdout.trim(),
+            local_version_of(&workspace, id),
+            fs::read(&model),
+            if variant_file.exists() { "there" } else { "gone" },
+            if workspace.join(".rola/MERGING").exists() {
+                "there"
+            } else {
+                "gone"
+            }
+        ),
+    );
+
+    // Put the entry back where the Vault names it, so what the rest of the run reads is the tree it
+    // started from.
+    run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "retrack",
+            "models/hero.psd",
+            "--until",
+            &second_hex,
+            "--allow-jump",
+        ],
+    ))
+    .expect_success();
 
     // `--replace` redoes a file's version rather than adding one after it, the way an amend does:
     // the new version is built on what the replaced one was built on, so the chain is no longer

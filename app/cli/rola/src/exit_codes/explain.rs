@@ -101,6 +101,7 @@ pub const CODES: &[i32] = &[
     250,
     251,
     252,
+    253,
 ];
 
 /// Whether the program states the exit code `code`.
@@ -209,6 +210,7 @@ pub fn explain_ec(code: i32) -> String {
         250 => t!("exit_codes.retrack").to_string(),
         251 => t!("exit_codes.retrack_argument").to_string(),
         252 => t!("exit_codes.offline").to_string(),
+        253 => t!("exit_codes.retrack_dirty").to_string(),
         _ => String::new(),
     }
 }

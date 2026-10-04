@@ -5,9 +5,9 @@ retrack:
     until:
       en: "Where the version pointer goes: a level, a version, or a Vault"
       zh-CN: 版本指针指向哪里：层级、版本或保险库
-    restore_content:
-      en: Write the version's content back over the file as well
-      zh-CN: 同时把该版本的内容写回文件
+    only_index:
+      en: Move the pointer and leave the file on disk alone
+      zh-CN: 只移动指针，磁盘上的文件保持原样
     allow_jump:
       en: Allow a version that is not on the way back
       zh-CN: 允许跳到不在回退路径上的版本
@@ -15,12 +15,11 @@ retrack:
     en: |
         Move a file's recorded version back, in the Layout being worked in
 
-        **Usage**: `rola retrack <FILE> [--until <LEVEL>] [--restore-content] [--allow-jump]`
+        **Usage**: `rola retrack <FILE> [--until <LEVEL>] [--only-index] [--allow-jump] [--force]`
 
-        Only the entry's version pointer moves: its `Uuid`, its path and its description stay as
-        they are, and nothing is removed from the index. `FILE` is one local path in this
-        Workspace — a `Uuid`, a hash and a remote name are refused — and it has to be a path the
-        Layout records.
+        The entry's version pointer moves: its `Uuid`, its path and its description stay as they
+        are, and nothing is removed from the index. `FILE` is one local path in this Workspace — a
+        `Uuid`, a hash and a remote name are refused — and it has to be a path the Layout records.
 
         `--until` is where the pointer goes, and is one version back when it is not given:
         `-1` one version back, `~N` N versions back, `N` the version numbered N, a hash a version
@@ -28,15 +27,20 @@ retrack:
         own Layout records for the file. A hash that is not on the way back is refused unless
         `--allow-jump` is given; `~N` and `N` past either end of the chain are always refused.
 
-        Without `--restore-content` the file on disk is left alone, so it is then newer than the
-        version the Layout names and `rola status` reports it as changed. With it, the version's
-        content is written back over the file.
+        The version's content is written back over the file with the pointer, so the two agree
+        again. `--only-index` moves the pointer and leaves the file alone, so it is then newer than
+        the version the Layout names and `rola status` reports it as changed.
+
+        A file with changes that were never recorded is refused, and so is one a variant is waiting
+        to be joined into. `--force` goes ahead anyway: the changes are discarded and the content
+        switched, and a merge is ended, its variant file removed, and the content switched.
+        `--force` and `--only-index` say opposite things and cannot be given together.
     zh-CN: |
         回退某个文件在布局中记录的版本
 
-        **用法**：`rola retrack <FILE> [--until <LEVEL>] [--restore-content] [--allow-jump]`
+        **用法**：`rola retrack <FILE> [--until <LEVEL>] [--only-index] [--allow-jump] [--force]`
 
-        只移动条目的版本指针：其 `Uuid`、路径与说明保持原样，索引中的对象一个不删。`FILE` 是本
+        移动条目的版本指针：其 `Uuid`、路径与说明保持原样，索引中的对象一个不删。`FILE` 是本
         工作区内的一个本地路径 —— `Uuid`、哈希与远程名称都会被拒绝 —— 且必须是布局记录过的路径。
 
         `--until` 指定指针所到之处，不给时回退一个版本：
@@ -44,8 +48,12 @@ retrack:
         版本，保险库名表示该保险库自己的布局为该文件记录的版本。不在回退路径上的哈希会被拒绝，除非
         给出 `--allow-jump`；`~N` 与 `N` 超出版本链两端时会一律拒绝。
 
-        不加 `--restore-content` 时磁盘上的文件保持原样，于是它比布局所指的版本更新，`rola status`
-        会如实报告为有改动。加上时会把该版本的内容写回文件。
+        该版本的内容会随指针一起写回文件，使二者重新一致。`--only-index` 只移动指针、不碰磁盘上
+        的文件，于是它比布局所指的版本更新，`rola status` 会如实报告为有改动。
+
+        有从未记录的改动的文件会被拒绝；有变体等待合并进来的文件同样会被拒绝。`--force` 表示照做
+        不误：丢弃改动并切换内容；对合并则结束它、删除其变体文件并切换内容。`--force` 与
+        `--only-index` 语义相反，不能同时给出。
 
   description:
     en: Move a file's recorded version back
@@ -55,17 +63,17 @@ retrack:
     en: "retracked  %{path} -> %{version}"
     zh-CN: "已回退  %{path} -> %{version}"
 
-  result_retracked_restored:
-    en: "retracked  %{path} -> %{version} (content restored)"
-    zh-CN: "已回退  %{path} -> %{version}（内容已还原）"
+  result_retracked_index:
+    en: "retracked  %{path} -> %{version} (index only)"
+    zh-CN: "已回退  %{path} -> %{version}（仅索引）"
 
   result_unchanged:
     en: "%{path} is already at %{version}"
     zh-CN: "%{path} 已处于 %{version}"
 
-  result_unchanged_restored:
-    en: "%{path} is already at %{version} (content restored)"
-    zh-CN: "%{path} 已处于 %{version}（内容已还原）"
+  result_unchanged_switched:
+    en: "%{path} is already at %{version} (content switched)"
+    zh-CN: "%{path} 已处于 %{version}（内容已切换）"
 
   err_no_file:
     en: No file was named to retrack
@@ -86,6 +94,41 @@ retrack:
         Name exactly one file; run the command once for each file whose pointer is to move
     zh-CN: |
         请只指定一个文件；每个要移动指针的文件各运行一次
+
+  err_flags:
+    en: "`--force` and `--only-index` say opposite things"
+    zh-CN: "`--force` 与 `--only-index` 的要求相互矛盾"
+
+  err_flags_help:
+    en: |
+        Give `--force` to discard what the file holds and switch its content, or `--only-index`
+        to move the pointer and leave the file alone
+    zh-CN: |
+        用 `--force` 丢弃文件现有内容并切换，或用 `--only-index` 只移动指针、保持文件不变
+
+  err_modified:
+    en: "`%{path}` has changes that were never recorded"
+    zh-CN: "`%{path}` 有从未记录的改动"
+
+  err_modified_help:
+    en: |
+        Record them with `rola track`, or add `--force` to discard them and switch the content,
+        or `--only-index` to move the pointer and leave them where they are
+    zh-CN: |
+        可以用 `rola track` 记录它们；或加 `--force` 丢弃它们并切换内容；或加 `--only-index`
+        只移动指针、把它们留在原处
+
+  err_merging:
+    en: "`%{path}` has the variant `%{variant}` waiting to be joined into it"
+    zh-CN: "`%{path}` 有变体 `%{variant}` 等待合并进来"
+
+  err_merging_help:
+    en: |
+        Record the merge with `rola track`, or add `--force` to end it, remove the variant file
+        and switch the content; `--only-index` cannot end a merge
+    zh-CN: |
+        可以用 `rola track` 记录这次合并；或加 `--force` 结束合并、删除变体文件并切换内容；
+        `--only-index` 无法结束合并
 
   err_not_local:
     en: "`%{path}` is not a local path; retrack takes a file in this tree"
