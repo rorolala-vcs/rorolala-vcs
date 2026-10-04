@@ -5,6 +5,9 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -122,8 +125,20 @@ internal sealed class DirectoryControl : UserControl
     /// hidden — the entries then shown faded — and the dropdown is what is hidden in the first place. Both
     /// write the plugin's own settings rather than the dock's state, so one switch serves every dock and the
     /// choice outlives the dock it was made in.
+    /// <para>
+    /// The switch is a tool with a picture rather than a word: an open eye while the hidden entries are shown,
+    /// a struck-through one while they are not, and the primary — the colour the program says a thing chosen is
+    /// — behind it while it is on. Its word is the tooltip's, because a picture says what a picture says and
+    /// the name of the choice is still worth having.
+    /// </para>
     /// </remarks>
-    private readonly CheckBox _show = new();
+    private readonly Button _show = new();
+
+    /// <summary>The eye the show switch wears, which is turned on and off.</summary>
+    private Border? _showGlyph;
+
+    /// <summary>The two pictures the eye turns between, in the order they are turned.</summary>
+    private (Bitmap Shown, Bitmap Hidden)? _eyes;
 
     /// <summary>The dropdown that switches which providers hide what.</summary>
     private readonly Button _rules = new();
@@ -131,8 +146,21 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>One box per provider, so that the boxes follow the choice rather than leading it.</summary>
     private readonly List<(IEntryHideProvider Provider, CheckBox Box)> _hiders = [];
 
-    /// <summary>Whether this dock follows the whole, or looks at a directory of its own.</summary>
-    private readonly CheckBox _sync = new();
+    /// <summary>
+    /// Whether this dock follows the whole, or looks at a directory of its own.
+    /// </summary>
+    /// <remarks>
+    /// A tool with a picture for the same reason the switch above is: a closed link while this dock follows the
+    /// whole, a broken one while it looks at a directory of its own, and the primary behind it while it
+    /// follows.
+    /// </remarks>
+    private readonly Button _sync = new();
+
+    /// <summary>The link the sync switch wears, which is closed or broken.</summary>
+    private Border? _syncGlyph;
+
+    /// <summary>The two pictures the link turns between, in the order they are turned.</summary>
+    private (Bitmap Closed, Bitmap Broken)? _links;
 
     /// <summary>
     /// What the dock keeps beside the address, which is put at the far end of the toolbar.
@@ -226,8 +254,13 @@ internal sealed class DirectoryControl : UserControl
         FillZoom();
         FillHidden();
         FillSync();
-        _trailing.Children.Add(_show);
+
+        // What the toolbar keeps at its far end, in the order it reads: the rules first, then the switch that
+        // shows what they hide, then whether this dock follows the whole. The rules are to the left of the two
+        // switches because what is shown is read after what hides it, and the two switches are side by side
+        // because both are about this dock's own view.
         _trailing.Children.Add(_rules);
+        _trailing.Children.Add(_show);
         _trailing.Children.Add(_sync);
 
         // A dock is a place the keyboard can be put, which is how the shell hands it to the thing being read: what
@@ -293,7 +326,7 @@ internal sealed class DirectoryControl : UserControl
         // being drawn in step and switching under the first frame.
         if (bool.TryParse(state.Read(SyncKey), out var inStep))
         {
-            _sync.IsChecked = inStep;
+            Sync(inStep);
         }
 
         Draw();
@@ -309,19 +342,50 @@ internal sealed class DirectoryControl : UserControl
     /// </remarks>
     private void FillHidden()
     {
-        _show.Content = RolaI18N.Get("rorolala_file_system.hidden");
+        _eyes = (
+            Icons.Picture(Icons.Visibility),
+            Icons.Picture(Icons.VisibilityOff)
+        );
+
+        _show.Classes.Add("tool");
         _show.VerticalAlignment = VerticalAlignment.Center;
-        _show.IsChecked = _shared.ShowHidden;
+        ToolTip.SetTip(_show, RolaI18N.Get("rorolala_file_system.hidden"));
+        _showGlyph = Icons.Glyph(_eyes.Value.Shown, Icons.PlainInk, Icons.Tool);
+        _show.Content = _showGlyph;
 
         // Written rather than read here: a dock attached to the tree is the one that drew the rows, so it is
         // the one the shell tells to look again — a dock in a region nobody can see has no rows to redraw.
-        _show.IsCheckedChanged += (_, _) => _shared.ShowHidden = _show.IsChecked == true;
+        _show.Click += (_, _) => _shared.ShowHidden = !_shared.ShowHidden;
 
         _rules.VerticalAlignment = VerticalAlignment.Center;
         _rules.MinWidth = 120;
         _rules.Flyout = new Flyout { Content = HiddenBoxes() };
 
         RefreshHidden();
+    }
+
+    /// <summary>
+    /// Says on the switch what it shows: the eye that is open or struck through, the ink that goes with it, and
+    /// the fill the look gives a tool that is on.
+    /// </summary>
+    /// <param name="shown">Whether what the rules hide is being shown.</param>
+    private void Show(bool shown)
+    {
+        if (_showGlyph is null || _eyes is not { } eyes)
+        {
+            return;
+        }
+
+        _showGlyph.OpacityMask = new ImageBrush(shown ? eyes.Shown : eyes.Hidden)
+        {
+            Stretch = Stretch.Uniform,
+        };
+        _showGlyph[!Border.BackgroundProperty] = new DynamicResourceExtension(
+            shown ? Icons.OnInk : Icons.PlainInk
+        );
+
+        // The look's class for a tool that is on, which is the same word for every tool the program draws.
+        _show.Classes.Set("on", shown);
     }
 
     /// <summary>Builds the boxes the dropdown holds, one per provider.</summary>
@@ -380,7 +444,7 @@ internal sealed class DirectoryControl : UserControl
             box.IsChecked = chosen.Contains(provider.Id);
         }
 
-        _show.IsChecked = _shared.ShowHidden;
+        Show(_shared.ShowHidden);
 
         var named = HideRegistry
             .All.Where(provider => chosen.Contains(provider.Id))
@@ -405,15 +469,64 @@ internal sealed class DirectoryControl : UserControl
     /// </remarks>
     private void FillSync()
     {
-        _sync.Content = RolaI18N.Get("rorolala_file_system.sync");
+        _links = (
+            Icons.Picture(Icons.Link),
+            Icons.Picture(Icons.LinkOff)
+        );
+
+        _sync.Classes.Add("tool");
         _sync.VerticalAlignment = VerticalAlignment.Center;
+        ToolTip.SetTip(_sync, RolaI18N.Get("rorolala_file_system.sync"));
+        _syncGlyph = Icons.Glyph(_links.Value.Closed, Icons.PlainInk, Icons.Tool);
+        _sync.Content = _syncGlyph;
+
+        // Clicking turns it over: in step means looking where the whole looks, so a click out of step is a
+        // click back into it. What it follows is asked of where this dock is looking rather than remembered
+        // here, since that is where being in step is kept.
+        _sync.Click += (_, _) => Sync(_own is not null);
 
         // In step until it is said otherwise, which is what a dock opened fresh is: the whole is where a run
         // starts, and a dock that opened somewhere of its own would be a second place to find on the first
-        // frame.
-        _sync.IsChecked = true;
+        // frame. Only what the switch says is set here — the toolbar this would otherwise reach for is not
+        // made yet.
+        Follows(true);
+    }
 
-        _sync.IsCheckedChanged += (_, _) => InStep(_sync.IsChecked == true);
+    /// <summary>
+    /// Follows the whole or looks at a directory of this dock's own, and says so on the switch.
+    /// </summary>
+    /// <remarks>
+    /// The one way to change which it follows, so that the state and the switch cannot come apart: a click that
+    /// changed what the dock looks at and left the picture saying the other thing would be a switch that never
+    /// went out.
+    /// </remarks>
+    /// <param name="inStep">Whether this dock is to follow the whole.</param>
+    private void Sync(bool inStep)
+    {
+        InStep(inStep);
+        Follows(inStep);
+    }
+
+    /// <summary>
+    /// Says on the switch whether this dock follows the whole: the link that is closed or broken, the ink that
+    /// goes with it, and the fill the look gives a tool that is on.
+    /// </summary>
+    /// <param name="inStep">Whether this dock follows the whole.</param>
+    private void Follows(bool inStep)
+    {
+        if (_syncGlyph is null || _links is not { } links)
+        {
+            return;
+        }
+
+        _syncGlyph.OpacityMask = new ImageBrush(inStep ? links.Closed : links.Broken)
+        {
+            Stretch = Stretch.Uniform,
+        };
+        _syncGlyph[!Border.BackgroundProperty] = new DynamicResourceExtension(
+            inStep ? Icons.OnInk : Icons.PlainInk
+        );
+        _sync.Classes.Set("on", inStep);
     }
 
     /// <summary>

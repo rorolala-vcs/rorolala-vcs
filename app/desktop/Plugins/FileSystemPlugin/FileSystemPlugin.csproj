@@ -40,4 +40,13 @@
     <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The pictures this plugin contributes to the icon library, embedded so that they travel in the
+         one file the host lays beside the program: a plugin is discovered as an assembly, and a
+         picture read from beside it would be a second thing to keep in step with it. What is drawn is
+         `./run.sh icons`, from the manifest in `app/desktop/icons.toml`; the LICENSE and README.md
+         beside them are that run's too, and say where the artwork came from. -->
+    <EmbeddedResource Include="icons/*.png" />
+  </ItemGroup>
+
 </Project>

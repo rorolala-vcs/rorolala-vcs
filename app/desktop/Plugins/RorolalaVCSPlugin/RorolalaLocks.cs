@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-using Avalonia.Media.Imaging;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
@@ -22,12 +20,6 @@ namespace RorolalaVCSPlugin;
 /// </remarks>
 internal sealed class RorolalaLocks : IEntryLockProvider
 {
-    /// <summary>The key the picture of a lock is contributed under.</summary>
-    private const string Locked = "rorolala_vcs.lock";
-
-    /// <summary>The key the picture of a pencil is contributed under.</summary>
-    private const string Create = "rorolala_vcs.create";
-
     /// <summary>What a cell says when nothing holds the entry.</summary>
     private const string Nothing = "-";
 
@@ -77,7 +69,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
             // "you" is a name like any other and a column that shouted it would shout every row it holds.
             { Kind: EntryLockKind.Mine } => new EntryLockMark(
                 TextKey: Mine,
-                IconKey: Create,
+                IconKey: Icons.Create,
                 Ink: LockInk.Plain,
                 TextInk: LockInk.Plain
             ),
@@ -87,7 +79,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
             // state. The words name whoever holds it, in the same red.
             { Kind: EntryLockKind.Held, Holder: { Length: > 0 } holder } => new EntryLockMark(
                 Text: holder,
-                IconKey: Locked,
+                IconKey: Icons.Lock,
                 Ink: LockInk.Error,
                 TextInk: LockInk.Error,
                 Tagged: true
@@ -102,19 +94,11 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// Contributes this plugin's two pictures and its provider to the host.
     /// </summary>
     /// <param name="host">The host, for the icon library.</param>
-    // The pictures are handed to the library, which holds them for as long as the program runs: they
-    // are not lost at the end of this scope, so there is nothing here to dispose.
-    [SuppressMessage(
-        "Reliability",
-        "CA2000:Dispose objects before losing scope",
-        Justification = "the icon library holds each picture for the life of the program, so handing one over is not losing it"
-    )]
     public static void Declare(IPluginHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
 
-        host.Icons.Add(Locked, Picture("lock"));
-        host.Icons.Add(Create, Picture("create"));
+        Icons.Declare(host.Icons);
 
         EntryLockProviders.Register(new RorolalaLocks(host.Log));
 
@@ -206,19 +190,5 @@ internal sealed class RorolalaLocks : IEntryLockProvider
 
             return new EntryLock(EntryLockKind.Unnamed);
         }
-    }
-
-    /// <summary>The picture embedded under `name`.</summary>
-    /// <param name="name">The icon's name, without its suffix.</param>
-    /// <returns>What to contribute to the icon library.</returns>
-    private static Bitmap Picture(string name)
-    {
-        var resource = $"RorolalaVCSPlugin.icons.{name}.png";
-
-        using var stream =
-            typeof(RorolalaLocks).Assembly.GetManifestResourceStream(resource)
-            ?? throw new InvalidOperationException($"the icon `{resource}` is not embedded");
-
-        return new Bitmap(stream);
     }
 }

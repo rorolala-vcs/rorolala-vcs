@@ -10,25 +10,53 @@ using RorolalaDesktop.SysIcons;
 namespace FileSystemPlugin;
 
 /// <summary>
-/// The icons entries are shown with.
+/// The icons this plugin draws: what entries are shown with, and the marks its own toolbar wears.
 /// </summary>
 /// <remarks>
-/// Both come from the system: what a folder looks like is the desktop's business, and a browser that
-/// draws its own folder is a browser that looks wrong on every desktop but the one it was drawn for.
-/// What Section 9 calls the icon library is this, and what is left of it is a picture per kind of file,
+/// What an entry is drawn as comes from the system: what a folder looks like is the desktop's business, and a
+/// browser that draws its own folder is a browser that looks wrong on every desktop but the one it was drawn
+/// for. What Section 9 calls the icon library is this, and what is left of it is a picture per kind of file,
 /// which no system is asked about yet — a file is drawn as a file and not as a kind of one.
+/// <para>
+/// The toolbar's own pictures are the other way round, and are the program's: a switch that shows what the
+/// rules hide, and whether a dock follows the whole, are this program's own ideas, which no system has a
+/// picture for. They are drawn from the pinned Material Design set by <c>./run.sh icons</c> — the manifest is
+/// <c>app/desktop/icons.toml</c> — and embedded in this assembly, so that what the host loads is the one file
+/// it found the plugin in. The keys they are handed over under are generated from that manifest into the
+/// other half of this class, so that no one writes them twice.
+/// </para>
 /// <para>
 /// A system with no icon to give, or one this does not ask, falls back to a mark drawn here, which says
 /// which of the two kinds a row is: a listing with no pictures beside it is still a listing.
 /// </para>
 /// </remarks>
-internal static class Icons
+internal static partial class Icons
 {
     /// <summary>How wide and tall an icon is where no size is asked for.</summary>
     private const int Default = 16;
 
     /// <summary>The size a grid's icons are at the zoom it opens at.</summary>
     private const int Base = 64;
+
+    /// <summary>How many pixels wide and tall a toolbar's icon is.</summary>
+    /// <remarks>
+    /// A tool is a square hit area of its own — 28 pixels, which the look gives it — and the picture sits
+    /// inside it with room around it: a mark drawn to the edges of its target reads as a button with a picture
+    /// for a background rather than as a picture with a button around it.
+    /// </remarks>
+    public const int Tool = 18;
+
+    /// <summary>The theme resource an icon of a tool that is not on is drawn in.</summary>
+    /// <remarks>
+    /// Written as the literals the look publishes, because a plugin has nowhere else to read them from: the
+    /// shell's own constants live in the host, which a plugin may not reference. These two are what a tool
+    /// turns between when it is on and off, and the colour it is on in is the ink the look puts on anything
+    /// filled with the primary.
+    /// </remarks>
+    public const string PlainInk = "rorolala.fg";
+
+    /// <inheritdoc cref="PlainInk" />
+    public const string OnInk = "rorolala.primary.text";
 
     /// <summary>
     /// The step a zoom's icon size is rounded to.
@@ -146,7 +174,11 @@ internal static class Icons
     {
         var extent = Mark(size);
         var inset = Inset(extent);
-        var glyph = Glyph(mark, contributed.Ink, contributed.Tagged ? extent - (2 * inset) - 2 : extent);
+        var glyph = Glyph(
+            mark,
+            Ink(contributed.Ink),
+            contributed.Tagged ? extent - (2 * inset) - 2 : extent
+        );
 
         Control corner = glyph;
 
@@ -181,12 +213,19 @@ internal static class Icons
         return grid;
     }
 
-    /// <summary>The picture itself: a mask over the ink, which is what makes it take the theme's colour.</summary>
+    /// <summary>
+    /// The picture itself: a mask over the ink, which is what makes it take the theme's colour.
+    /// </summary>
+    /// <remarks>
+    /// The ink is the background rather than a colour written into the picture, so that a caller that keeps
+    /// what this hands back can turn the mark from one ink to another — which is what a tool that is on and off
+    /// does — without drawing it again.
+    /// </remarks>
     /// <param name="picture">The picture to stamp.</param>
-    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="ink">What it is drawn in, as the name of a theme resource.</param>
     /// <param name="extent">How many pixels wide and tall it is.</param>
-    /// <returns>What to draw.</returns>
-    private static Border Glyph(Bitmap picture, LockInk ink, double extent)
+    /// <returns>What to draw, whose background is the ink it was given.</returns>
+    public static Border Glyph(Bitmap picture, string ink, double extent)
     {
         var glyph = new Border
         {
@@ -196,7 +235,7 @@ internal static class Icons
             VerticalAlignment = VerticalAlignment.Center,
             OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
         };
-        glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(Ink(ink));
+        glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(ink);
 
         return glyph;
     }
@@ -234,4 +273,49 @@ internal static class Icons
             Background = new SolidColorBrush(directory ? Directory : File),
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+    /// <summary>Every picture read so far, so that one asked for twice is read once.</summary>
+    private static readonly Dictionary<string, Bitmap> Read = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// A picture this plugin draws, by the key the manifest gives it.
+    /// </summary>
+    /// <remarks>
+    /// Read from this plugin's own assembly rather than contributed to the host's library, because it is this
+    /// plugin's own furniture: what the library is for is a picture offered to somebody else — the lock a
+    /// provider stamps on a listing, say — and a toolbar's own marks are nobody else's to ask for. The keys are
+    /// this plugin's too, so a second plugin reading one would be reading something it has no business with.
+    /// <para>
+    /// Read when it is first wanted rather than at start-up, which is what keeps a program with no window in it
+    /// from needing a drawing surface only a window has. What is read is kept, since a toolbar asks for the same
+    /// picture whenever a dock is opened.
+    /// </para>
+    /// </remarks>
+    /// <param name="key">The key, which is one of the generated ones.</param>
+    /// <returns>The picture.</returns>
+    public static Bitmap Picture(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        if (Read.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
+        var name = Pictures
+            .Where(picture => string.Equals(picture.Key, key, StringComparison.Ordinal))
+            .Select(picture => picture.Name)
+            .SingleOrDefault()
+            ?? throw new InvalidOperationException($"the icon `{key}` is not one this plugin draws");
+        var resource = $"FileSystemPlugin.icons.{name}.png";
+
+        using var stream =
+            typeof(Icons).Assembly.GetManifestResourceStream(resource)
+            ?? throw new InvalidOperationException($"the icon `{resource}` is not embedded");
+
+        var picture = new Bitmap(stream);
+        Read[key] = picture;
+
+        return picture;
+    }
 }

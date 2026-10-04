@@ -7,6 +7,7 @@ members = [
     "app/ffi",
     "dev/bindgen",
     "dev/i18n-check",
+    "dev/icons",
     "dev/rsharp-bindgen",
     "modules/auth",
     "modules/daemon",
@@ -104,6 +105,12 @@ image = { version = "0.25.10", default-features = false, features = [
     "png",
     "ico",
 ] }
+
+# The renderer the icon tool draws the Desktop's own pictures with: a library inside the tool rather
+# than a program the machine has to have, so that what is drawn is the same wherever it is drawn —
+# and so that a machine without librsvg is a machine that can still draw an icon. Text is left out
+# because the artwork is paths: the set draws no words, so nothing here needs a font.
+resvg = { version = "0.48.1", default-features = false }
 
 # Windows resources. A program's own icon is a resource linked into the executable rather than
 # something the program draws, so the resource script beside the icon is compiled and linked in by a

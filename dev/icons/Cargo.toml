@@ -1,0 +1,13 @@
+[package]
+name = "rorolala-dev-icons"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The manifest the pictures are named in, which is the one file adding a picture means editing.
+serde.workspace = true
+toml.workspace = true
+# Drawing the pictures: a renderer inside the tool rather than a program the machine has to have, so
+# that what is drawn is the same wherever this runs, and so that the shell and the PowerShell twin
+# have nothing left to differ on.
+resvg.workspace = true

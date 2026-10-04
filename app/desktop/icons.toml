@@ -1,0 +1,51 @@
+# The pictures the Desktop draws, which is the one file adding one means editing.
+#
+# What is drawn is Google's Material Design icons, from the maintained mirror of the set. The set is not
+# vendored: it is a shallow clone under `THIRD-PARTY/`, which git ignores, and every picture is drawn from
+# that clone by `./run.sh icons` — so what is drawn is what the pinned commit holds, and another picture is
+# another name below rather than another file copied into a plugin.
+#
+# The pictures are committed, so a build needs neither the clone nor a renderer: only drawing them does, and
+# `export` draws them first, so what ships is always drawn from the pin. The license the set is under is
+# copied into each directory the pictures are drawn into, so that what travels with a plugin says where its
+# artwork came from.
+
+[material]
+url = "https://github.com/material-icons/material-icons"
+
+# The whole of what "the icon set" means here: there is no history to travel, so another set is another
+# clone, and the upstream is archived — this is expected to stay where it is.
+commit = "af0ed9c0e1276bad43c4d6ca8e8aaa283e425195"
+
+# One set per plugin, which is also where the pictures are drawn —
+# `app/desktop/Plugins/<plugin>/icons/` — and the namespace the keys are generated into.
+#
+# `key` is what a picture is handed over under, and the icon library is one namespace of them: a plugin's
+# keys are its own, so two plugins may each contribute a `lock` without either being the other's.
+
+[[set]]
+plugin = "FileSystemPlugin"
+key = "rorolala_file_system"
+
+# The toolbar's own pictures. `visibility` and `visibility_off` are the switch that shows what the rules
+# hide — an eye, and an eye struck through — and `link` and `link_off` are whether a dock follows the whole
+# or looks at a directory of its own; `arrow_back`, `arrow_forward`, `arrow_upward` and `refresh` are the
+# four ways a browser moves.
+icons = [
+    "visibility",
+    "visibility_off",
+    "link",
+    "link_off",
+    "arrow_back",
+    "arrow_forward",
+    "arrow_upward",
+    "refresh",
+]
+
+[[set]]
+plugin = "RorolalaVCSPlugin"
+key = "rorolala_vcs"
+
+# What an entry's lock is drawn with. `lock` is somebody else holding it, and `create` — the set's pencil —
+# is the reader holding it, since holding it is what makes it theirs to change.
+icons = ["lock", "create"]

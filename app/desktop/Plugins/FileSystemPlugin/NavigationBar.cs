@@ -87,10 +87,10 @@ internal sealed class NavigationBar : UserControl
         IsOpen = false,
     };
 
-    private readonly Button _back = Arrow("\u2190");
-    private readonly Button _forward = Arrow("\u2192");
-    private readonly Button _up = Arrow("\u2191");
-    private readonly Button _refresh = Arrow("\u27f3");
+    private readonly Button _back = Tool();
+    private readonly Button _forward = Tool();
+    private readonly Button _up = Tool();
+    private readonly Button _refresh = Tool();
 
     /// <summary>Makes the toolbar.</summary>
     /// <param name="host">The host, for logging what navigation cannot do.</param>
@@ -109,6 +109,8 @@ internal sealed class NavigationBar : UserControl
         _forward.Click += (_, _) => _browser.Forward();
         _up.Click += (_, _) => _browser.Up();
         _refresh.Click += (_, _) => _browser.Refresh();
+
+        FillTools();
 
         FillAddress();
 
@@ -217,18 +219,33 @@ internal sealed class NavigationBar : UserControl
         }
     }
 
-    /// <summary>The toolbar buttons: a glyph, since they are arrows and a cycle.</summary>
+    /// <summary>The toolbar buttons: a square of its own, which a picture is put in.</summary>
     /// <remarks>
-    /// Each is a square of its own, so the four read as one block of equal targets rather than as four
-    /// words of different lengths, and the glyph is centred in it.
+    /// Each is a square of its own, so the four read as one block of equal targets rather than as four words of
+    /// different lengths, and the picture is centred in it. What the pictures are is put on in the constructor,
+    /// which is where the library they come from is reachable from.
     /// </remarks>
-    private static Button Arrow(string glyph) =>
+    private static Button Tool() =>
         new()
         {
-            Content = glyph,
             Classes = { "tool" },
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+    /// <summary>Puts the four pictures on, which are the ways a browser moves.</summary>
+    private void FillTools()
+    {
+        _back.Content = Glyph(Icons.ArrowBack);
+        _forward.Content = Glyph(Icons.ArrowForward);
+        _up.Content = Glyph(Icons.ArrowUpward);
+        _refresh.Content = Glyph(Icons.Refresh);
+    }
+
+    /// <summary>A picture this plugin draws, drawn as a mask over the ordinary ink.</summary>
+    /// <param name="key">The key it is held under.</param>
+    /// <returns>What to draw.</returns>
+    private static Control Glyph(string key) =>
+        Icons.Glyph(Icons.Picture(key), Icons.PlainInk, Icons.Tool);
 
     /// <summary>Sets the field and the list of completions up, and what each of them does.</summary>
     private void FillAddress()

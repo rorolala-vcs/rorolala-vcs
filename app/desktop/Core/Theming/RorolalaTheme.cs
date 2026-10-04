@@ -231,6 +231,17 @@ internal sealed class RorolalaTheme
     /// </remarks>
     private const string PrimaryAction = "primary";
 
+    /// <summary>
+    /// The class a tool wears while it is on.
+    /// </summary>
+    /// <remarks>
+    /// A tool's state is the program's rather than the toolkit's — a toolbar's switch says whether the program
+    /// is showing what the rules hide, which is no control's own fact — so it is a class the program puts on
+    /// rather than the toolkit's checked state: the look draws it, and what it means stays where the meaning is
+    /// kept.
+    /// </remarks>
+    private const string OnClass = "on";
+
     /// <summary>The colour what is chosen is drawn in.</summary>
     private readonly Color _primary;
 
@@ -670,6 +681,20 @@ internal sealed class RorolalaTheme
                 selector => Pressable(selector).Class("ghost").Class(":pointerover"),
                 Brushed(TemplatedControl.BackgroundProperty, Sunken),
                 Brushed(TemplatedControl.BorderBrushProperty, BorderLine)
+            ),
+
+            // A tool that is on is filled with the primary, the way the one action a surface exists for is:
+            // what a toolbar's tool shows is a state, and a state takes the colour the program says a thing
+            // chosen is. Its own hover is named as well, because a fill and a hover are two answers to one
+            // property and the later rule is the one that is read: without it, a tool that is on would go back
+            // to the sunken hover whenever the pointer found it.
+            On(
+                selector => Pressable(selector).Class("tool").Class(OnClass),
+                Brushed(TemplatedControl.BackgroundProperty, Primary)
+            ),
+            On(
+                selector => Pressable(selector).Class("tool").Class(OnClass).Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, PrimaryBright)
             ),
 
             On(

@@ -1,6 +1,6 @@
-# The RorolalaVCSPlugin pictures
+# The FileSystemPlugin pictures
 
-The pictures the `RorolalaVCSPlugin` plugin draws: `lock`, `create`.
+The pictures the `FileSystemPlugin` plugin draws: `visibility`, `visibility_off`, `link`, `link_off`, `arrow_back`, `arrow_forward`, `arrow_upward`, `refresh`.
 
 They are Google's Material Design icons, taken from the maintained mirror of the set,
 [material-icons/material-icons](https://github.com/material-icons/material-icons) — the same artwork as
@@ -14,7 +14,7 @@ that what is drawn is what the pinned commit holds. The manifest is `app/desktop
 another picture is another name there rather than another file in this directory.
 
 - drawn from: `af0ed9c0e1276bad43c4d6ca8e8aaa283e425195`
-- handed over under: `rorolala_vcs.*`
+- handed over under: `rorolala_file_system.*`
 
 **Nothing here is edited by hand.** The pictures, this file and the license are what that run
 writes; a change made here is a change made nowhere.
