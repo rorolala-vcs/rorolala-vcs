@@ -6,11 +6,13 @@
 //! was itself run from: nothing is named, and nothing is looked up beyond that.
 //!
 //! What the two would otherwise each work out for themselves is handed over with the program:
-//! the language this run speaks, and the directory to open onto. The directory is the Workspace the
-//! run was made in rather than the run's own directory, since the work is the Workspace — the tree is
-//! rooted at its directory, and the Layouts and the ownership the browser shows are read against it —
-//! so a window opened onto a directory inside one would be a window onto part of the work. A run no
-//! Workspace holds opens onto the directory it was made in, which is all there is to open onto.
+//! the language this run speaks, the directory to open onto, and where this program itself is. The
+//! directory is the Workspace the run was made in rather than the run's own directory, since the work is
+//! the Workspace — the tree is rooted at its directory, and the Layouts and the ownership the browser
+//! shows are read against it — so a window opened onto a directory inside one would be a window onto part
+//! of the work. A run no Workspace holds opens onto the directory it was made in, which is all there is
+//! to open onto. And this program's own path is what the window's file operations run, which is what makes
+//! them the operations of the program that was asked for the window rather than of whatever a `PATH` holds.
 //!
 //! The program is run as a child and **waited for** rather than started and left behind: this command
 //! is a way to the window, and a way to it lasts as long as the window does. What the window ends with
@@ -58,6 +60,15 @@ const LANGUAGE_ARG: &str = "-Lang:";
 /// way the answer reaches it: a program that reads where it is reads the directory it was started in,
 /// and one that reads its command line reads this.
 const DIRECTORY_ARG: &str = "-CurrentDir:";
+
+/// What this program's own path is handed over under, as the environment holds it.
+///
+/// The Desktop carries its file operations out by running `rola`, and the command templates name the
+/// program through this rather than through the bare word: what is run beside this window is the program
+/// that was asked for the window, and a `PATH` is the machine's answer rather than this one's. It is the
+/// environment rather than an argument because a child of the window — the command itself — inherits it,
+/// which is what lets a template name a program it was never told about.
+const EXE_ENV: &str = "ROLA_EXE";
 
 #[help(buffer)]
 pub fn help_desktop(_: EntryDesktop, ec: &mut ResExitCode) {
@@ -137,6 +148,7 @@ pub fn handle_desktop(_state: StateDesktop, language: &ResLanguage, cwd: &ResCur
     // entitled to its answer.
     match Command::new(&program)
         .current_dir(&at)
+        .env(EXE_ENV, &here)
         .args([language_arg(language), directory_arg(&at)])
         .status()
     {

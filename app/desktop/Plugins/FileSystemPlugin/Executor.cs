@@ -105,6 +105,23 @@ internal static class Executor
     /// <summary>The word a command template puts a target path at.</summary>
     public const string To = "{{to}}";
 
+    /// <summary>What a command template names an environment variable with, closed by <c>}}</c>.</summary>
+    /// <remarks>
+    /// A variable is named rather than a path written out, because the path is not the same from one machine
+    /// to the next: whoever starts the Desktop says where <c>rola</c> is, and the template asks for it by name
+    /// rather than trusting a <c>PATH</c> that may hold another program of the same name.
+    /// <para>
+    /// A variable is a token of its own rather than something written into the middle of one, exactly as the
+    /// two paths are: what a variable holds is one argument, so a program under a directory with a space in it
+    /// stays one word. A template that wrote one into the middle of a word would be a template whose arguments
+    /// depend on what the machine happens to hold.
+    /// </para>
+    /// </remarks>
+    private const string VariablePrefix = "{{env:";
+
+    /// <summary>What a named environment variable is closed with.</summary>
+    private const string VariableSuffix = "}}";
+
     /// <summary>
     /// Why a command template cannot be run at all, or nothing when it can.
     /// </summary>
@@ -113,6 +130,10 @@ internal static class Executor
     /// than an item. A placeholder is never the program, so a template that opens with one names no
     /// program; a transfer must name both paths, and a removal names only a source — a target it named
     /// would have nothing to put there.
+    /// <para>
+    /// A variable the template names is read here rather than where the command runs, so that a machine
+    /// without it is a reason given before anything is planned rather than an argument that arrives empty.
+    /// </para>
     /// </remarks>
     /// <param name="operation">What is being done to every item.</param>
     /// <param name="template">The command template, with the placeholders in it.</param>
@@ -124,6 +145,14 @@ internal static class Executor
         if (tokens.Length == 0 || IsPlaceholder(tokens[0]))
         {
             return $"the command `{template}` names no program";
+        }
+
+        foreach (var token in tokens)
+        {
+            if (Named(token) is { } name && string.IsNullOrEmpty(Environment.GetEnvironmentVariable(name)))
+            {
+                return $"the command `{template}` names {token}, and no environment variable of that name is set";
+            }
         }
 
         if (tokens.Contains(From) is false)
@@ -226,16 +255,17 @@ internal static class Executor
             : Result.Failed(item.From, target, failure.Note, failure);
     }
 
-    /// <summary>The template's tokens with the placeholders replaced by the item's paths.</summary>
+    /// <summary>The template's tokens with the placeholders replaced by what they stand for.</summary>
     /// <remarks>
     /// A placeholder is a token of its own, never part of one, so a path with a space in it stays one
-    /// argument exactly as it would be handed over were it appended. An item with no target — every
-    /// removal — never reaches a <c>{{to}}</c>, which its template was refused for naming.
+    /// argument exactly as it would be handed over were it appended — and so does what an environment
+    /// variable holds. An item with no target — every removal — never reaches a <c>{{to}}</c>, which its
+    /// template was refused for naming.
     /// </remarks>
     /// <param name="tokens">The template, split into tokens.</param>
     /// <param name="from">The item's source path.</param>
     /// <param name="to">The item's target path, or empty when it has none.</param>
-    private static List<string> Arguments(IReadOnlyList<string> tokens, string from, string to)
+    internal static List<string> Arguments(IReadOnlyList<string> tokens, string from, string to)
     {
         var arguments = new List<string>(tokens.Count);
 
@@ -246,13 +276,29 @@ internal static class Executor
                 {
                     From => from,
                     To => to,
-                    _ => token,
+                    _ => Named(token) is { } name
+                        ? Environment.GetEnvironmentVariable(name) ?? string.Empty
+                        : token,
                 }
             );
         }
 
         return arguments;
     }
+
+    /// <summary>The environment variable a token names, or nothing when it names none.</summary>
+    /// <remarks>
+    /// A token names a variable or says nothing about one: a name that is empty is a variable named by
+    /// nothing rather than a word to keep, which is what <c>{{env:}}</c> being read here as the empty name
+    /// means — it is refused as unset, which says what is wrong with it.
+    /// </remarks>
+    /// <param name="token">The token to read.</param>
+    /// <returns>The variable's name, or nothing.</returns>
+    private static string? Named(string token) =>
+        token.StartsWith(VariablePrefix, StringComparison.Ordinal)
+        && token.EndsWith(VariableSuffix, StringComparison.Ordinal)
+            ? token[VariablePrefix.Length..^VariableSuffix.Length]
+            : null;
 
     /// <summary>A template split into tokens on whitespace, empty ones dropped.</summary>
     private static string[] Tokens(string template) =>
