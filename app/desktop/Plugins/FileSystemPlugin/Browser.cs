@@ -211,6 +211,30 @@ internal sealed class Browser : IDisposable
     public bool Hides(Entry entry) => _shared.Hides(entry);
 
     /// <summary>
+    /// Whether a provider in force hides an entry, read against a view's root.
+    /// </summary>
+    /// <remarks>
+    /// A view that reads more than the one directory — the tree — is rooted somewhere, and a rule about
+    /// a repository is read from there rather than from each directory it walks into (see
+    /// <see cref="IEntryHideProvider.Hides(Entry, string)"/>).
+    /// </remarks>
+    /// <param name="entry">The entry to consider.</param>
+    /// <param name="root">The directory the view reading the entry is rooted at.</param>
+    /// <returns>Whether it is hidden.</returns>
+    public bool Hides(Entry entry, string root) => _shared.Hides(entry, root);
+
+    /// <summary>
+    /// The providers in force, which a view that reads a whole tree watches to know when to read again.
+    /// </summary>
+    /// <remarks>
+    /// A tree's rows are read a step at a time and kept, so a change to what is hidden is not something
+    /// a repaint reaches: which rows there are changes with it. What a view compares is the selection
+    /// itself, since a location's <see cref="Changed"/> says that something about where it looks moved
+    /// and not what it was.
+    /// </remarks>
+    public HideRegistry HideRegistry => _shared.HideRegistry;
+
+    /// <summary>
     /// Whether the entries a provider hides are shown, which the address completions read too.
     /// </summary>
     /// <remarks>

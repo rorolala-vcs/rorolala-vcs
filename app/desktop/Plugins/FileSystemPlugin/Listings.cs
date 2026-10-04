@@ -61,9 +61,11 @@ internal abstract class EntryView : UserControl
     /// <summary>How faded an entry the platform hides is drawn, while hidden entries are shown.</summary>
     /// <remarks>
     /// Fainter rather than gone: what is hidden is still an entry of the directory, and it is dimmed so that
-    /// the eye passes over it rather than being left out of the listing.
+    /// the eye passes over it rather than being left out of the listing. It is the plugin's one answer for
+    /// how a hidden row is drawn, which the tree reads as well — a second number there would be one look
+    /// drawn two ways.
     /// </remarks>
-    private const double HiddenOpacity = 0.55;
+    internal const double HiddenOpacity = 0.55;
 
     /// <summary>How long a run of typed letters stays one run.</summary>
     private static readonly TimeSpan Typing = TimeSpan.FromSeconds(1);

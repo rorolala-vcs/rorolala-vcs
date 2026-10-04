@@ -73,8 +73,16 @@ internal sealed class TreeControl : UserControl
     /// <summary>The tree, and nothing else, in the one cell under the bar.</summary>
     private readonly ContentControl _content = new();
 
-    /// <summary>The base the tree was last rooted at, so that rooting it again can be skipped.</summary>
-    private string? _drawn;
+    /// <summary>
+    /// What the tree was last read against, so that a change to any of it is a tree to read again.
+    /// </summary>
+    /// <remarks>
+    /// The base, the switch that shows what is hidden, and the providers in force: the first is what the
+    /// tree is rooted at, and the other two decide which rows there are under it. A tree is read a step at
+    /// a time and keeps what it read, so a hiding that changed is not something a repaint reaches — the rows
+    /// themselves come and go — which is why it is compared here rather than faded where they are drawn.
+    /// </remarks>
+    private (string Base, bool Shown, IReadOnlySet<string> Rules)? _drawn;
 
     /// <summary>Makes the tree's control.</summary>
     /// <param name="host">The host, for what a drop cannot do.</param>
@@ -148,10 +156,15 @@ internal sealed class TreeControl : UserControl
         Draw();
     }
 
-    /// <summary>Roots the tree again when the base is not the one it is rooted at.</summary>
+    /// <summary>Roots the tree again when the base or the hiding is not what it was read against.</summary>
     private void Update()
     {
-        if (_drawn != _browser.BaseDir)
+        if (
+            _drawn is not { } drawn
+            || !string.Equals(drawn.Base, _browser.BaseDir, StringComparison.Ordinal)
+            || drawn.Shown != _browser.ShowHidden
+            || !drawn.Rules.SetEquals(_browser.HideRegistry.Selection())
+        )
         {
             Draw();
         }
@@ -214,7 +227,11 @@ internal sealed class TreeControl : UserControl
             Seated();
         }
 
-        _drawn = _browser.BaseDir;
+        _drawn = (
+            _browser.BaseDir,
+            _browser.ShowHidden,
+            _browser.HideRegistry.Selection()
+        );
     }
 
     /// <summary>
@@ -700,10 +717,38 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
-    /// <summary>Fades a row whose step is cut, so that it reads as on its way out.</summary>
+    /// <summary>
+    /// Fades a row whose step is hidden or cut, so that it reads as a listing would draw it.
+    /// </summary>
+    /// <remarks>
+    /// Cut wins, as it does in a listing: being on its way out is what the user just did. A hidden row is
+    /// only ever drawn while the switch that shows what is hidden is on, and it is drawn fainter so that
+    /// the eye passes over it rather than being left out of the tree.
+    /// </remarks>
     /// <param name="row">The row.</param>
     /// <param name="path">The step it stands for.</param>
-    private void Fade(Border row, string path) => row.Opacity = _clip.IsCut(path) ? _clip.Faded : 1.0;
+    private void Fade(Border row, string path) =>
+        row.Opacity = _clip.IsCut(path)
+            ? _clip.Faded
+            : Hides(path)
+                ? EntryView.HiddenOpacity
+                : 1.0;
+
+    /// <summary>Whether a provider in force hides a directory, read against the base the tree is rooted at.</summary>
+    /// <remarks>
+    /// Rooted at the base and not at the directory itself, which is what makes one tree read by one set of
+    /// rules: a repository nested inside the base is not one the tree asks on its own behalf (see
+    /// <see cref="IEntryHideProvider.Hides(Entry, string)"/>).
+    /// </remarks>
+    /// <param name="directory">The directory to consider.</param>
+    /// <returns>Whether a provider in force hides it.</returns>
+    private bool Hides(string directory) =>
+        _browser.Hides(new Entry(directory, EntryKind.Directory), _root);
+
+    /// <summary>Whether a directory is one the rules leave showing, or the switch shows what they hide.</summary>
+    /// <param name="directory">The directory to consider.</param>
+    /// <returns>Whether it belongs in the tree.</returns>
+    private bool Shown(string directory) => _browser.ShowHidden || !Hides(directory);
 
     /// <summary>Draws the cut state again on every row on screen.</summary>
     private void Repaint()
@@ -889,22 +934,25 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
-    /// <summary>Whether a directory holds any directory at all, or nothing when it cannot be read.</summary>
+    /// <summary>Whether a directory holds any directory the rules leave showing.</summary>
     /// <remarks>
     /// Read to the first entry rather than counted to the last: the whole of a large directory is not
-    /// worth reading to answer what one entry already answers. The computer is the exception, holding
-    /// nothing but the few drives, which are read outright.
+    /// worth reading to answer what one entry already answers. What is skipped is what a listing would
+    /// leave out, so a step whose only steps under it are hidden is a step without an expander rather than
+    /// one that opens onto nothing. The computer is the exception, holding nothing but the few drives,
+    /// which are read outright.
     /// </remarks>
-    private static bool HoldsAny(string path)
+    /// <param name="path">The directory the step stands for.</param>
+    private bool HoldsAny(string path)
     {
         if (Browser.IsComputer(path))
         {
-            return Browser.Read(path).Count > 0;
+            return Children(path).Count > 0;
         }
 
         try
         {
-            return System.IO.Directory.EnumerateDirectories(path).Any();
+            return System.IO.Directory.EnumerateDirectories(path).Any(Shown);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -912,19 +960,22 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
-    /// <summary>The directories directly under one, by name, or the drives when it is the computer.</summary>
-    private static IReadOnlyList<string> Children(string path) =>
+    /// <summary>The directories directly under one that are shown, or the drives when it is the computer.</summary>
+    /// <param name="path">The directory to read.</param>
+    private IReadOnlyList<string> Children(string path) =>
         Browser.IsComputer(path)
-            ? Browser.Read(path).Select(entry => entry.Path).ToArray()
+            ? [.. Browser.Read(path).Select(entry => entry.Path).Where(Shown)]
             : Subdirectories(path);
 
-    /// <summary>The directories directly under one, by name, or nothing when it cannot be read.</summary>
-    private static IReadOnlyList<string> Subdirectories(string path)
+    /// <summary>The directories directly under one that are shown, by name, or nothing when it cannot be read.</summary>
+    /// <param name="path">The directory to read.</param>
+    private IReadOnlyList<string> Subdirectories(string path)
     {
         try
         {
             return System.IO.Directory
                 .EnumerateDirectories(path)
+                .Where(Shown)
                 .OrderBy(directory => Path.GetFileName(directory), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }

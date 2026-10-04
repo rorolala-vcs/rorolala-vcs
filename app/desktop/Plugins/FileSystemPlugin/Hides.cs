@@ -43,6 +43,26 @@ public interface IEntryHideProvider
     /// <param name="entry">The entry to consider.</param>
     /// <returns>Whether the provider hides it.</returns>
     bool Hides(Entry entry);
+
+    /// <summary>
+    /// Whether this provider hides an entry, read against the place the view is rooted at.
+    /// </summary>
+    /// <remarks>
+    /// A rule that is about a repository — Git's — has to be read from somewhere, and the entry's own
+    /// directory is not always that somewhere: a tree is rooted at a base and reads the directories
+    /// under it, so a rule read from each directory in turn would let a repository nested inside the
+    /// base answer for itself. What is given is the place the view is rooted at, which is the base for
+    /// a tree and the directory being listed for a listing.
+    /// <para>
+    /// A provider with no such notion answers as it would without it, which is what the default does:
+    /// whether a name begins with a dot, or what the platform marks hidden, is not a question about a
+    /// repository.
+    /// </para>
+    /// </remarks>
+    /// <param name="entry">The entry to consider.</param>
+    /// <param name="root">The directory the view reading the entry is rooted at.</param>
+    /// <returns>Whether the provider hides it.</returns>
+    bool Hides(Entry entry, string root) => Hides(entry);
 }
 
 /// <summary>
@@ -171,10 +191,26 @@ public sealed class HideRegistry
     /// <remarks>
     /// Asked of the list rather than of a provider, because the answer is "at least one" and the list is
     /// what says which — an empty list is the answer "nothing hides it", which is not the same as no answer.
+    /// <para>
+    /// Read against the directory holding the entry, which is where a rule about one entry is stated: a
+    /// reader that is looking at a directory asks about what it holds. A view rooted elsewhere — a tree —
+    /// asks the other overload.
+    /// </para>
     /// </remarks>
     /// <param name="entry">The entry to consider.</param>
     /// <returns>Whether it is hidden.</returns>
-    public bool Hides(Entry entry) => Provider(entry).Count > 0;
+    public bool Hides(Entry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return Hides(entry, Holder(entry));
+    }
+
+    /// <summary>Whether any provider in force hides an entry, read against a view's root.</summary>
+    /// <param name="entry">The entry to consider.</param>
+    /// <param name="root">The directory the view reading the entry is rooted at.</param>
+    /// <returns>Whether it is hidden.</returns>
+    public bool Hides(Entry entry, string root) => Provider(entry, root).Count > 0;
 
     /// <summary>
     /// The providers in force that hide an entry, in the order they are offered.
@@ -183,12 +219,33 @@ public sealed class HideRegistry
     /// <returns>The providers that hide it.</returns>
     public IReadOnlyList<IEntryHideProvider> Provider(Entry entry)
     {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return Provider(entry, Holder(entry));
+    }
+
+    /// <summary>
+    /// The providers in force that hide an entry, read against a view's root.
+    /// </summary>
+    /// <param name="entry">The entry to consider.</param>
+    /// <param name="root">The directory the view reading the entry is rooted at.</param>
+    /// <returns>The providers that hide it.</returns>
+    public IReadOnlyList<IEntryHideProvider> Provider(Entry entry, string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
         var chosen = Selection();
 
         return Catalogue
-            .Where(provider => chosen.Contains(provider.Id) && provider.Hides(entry))
+            .Where(provider => chosen.Contains(provider.Id) && provider.Hides(entry, root))
             .ToArray();
     }
+
+    /// <summary>The directory a rule about an entry is read from when the caller names none.</summary>
+    /// <param name="entry">The entry to consider.</param>
+    /// <returns>The directory holding it, or its own path where it holds nothing under one.</returns>
+    private static string Holder(Entry entry) =>
+        Path.GetDirectoryName(entry.Path) is { Length: > 0 } parent ? parent : entry.Path;
 
     /// <summary>
     /// The providers in force, as the setting says.

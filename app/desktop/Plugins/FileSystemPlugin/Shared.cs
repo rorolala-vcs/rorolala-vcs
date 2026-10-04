@@ -176,6 +176,19 @@ internal sealed class Shared
     /// <returns>Whether it is hidden.</returns>
     public bool Hides(Entry entry) => HideRegistry.Hides(entry);
 
+    /// <summary>
+    /// Whether an entry is hidden by a provider in force, read against a view's root.
+    /// </summary>
+    /// <remarks>
+    /// The root is what a rule about a repository is read from, which is the place a view is rooted at
+    /// rather than the entry's own directory: a tree reads directories under one base, and a rule read
+    /// from each of them in turn would let a repository inside the base answer for itself.
+    /// </remarks>
+    /// <param name="entry">The entry to consider.</param>
+    /// <param name="root">The directory the view reading the entry is rooted at.</param>
+    /// <returns>Whether it is hidden.</returns>
+    public bool Hides(Entry entry, string root) => HideRegistry.Hides(entry, root);
+
     /// <summary>The registry itself, for the choice of which providers are in force.</summary>
     /// <remarks>
     /// The catalogue it reads is the run's rather than this instance's — see <see cref="HideRegistry.All"/> —
