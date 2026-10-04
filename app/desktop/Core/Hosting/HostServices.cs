@@ -81,6 +81,9 @@ internal sealed class HostServices
     /// <summary>The icon badge providers.</summary>
     public required IconBadgeRegistry IconBadges { get; init; }
 
+    /// <summary>The pictures plugins contribute, which is what an <c>IconKey</c> is answered from.</summary>
+    public required IconLibrary Icons { get; init; }
+
     /// <summary>When one of the host's windows is come back to.</summary>
     public required Refocus Refocus { get; init; }
 
@@ -162,6 +165,9 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public IIconBadgeRegistry IconBadges => this;
+
+    /// <inheritdoc />
+    public IIconLibrary Icons => _services.Icons;
 
     /// <inheritdoc />
     public IRefocus Refocus => _services.Refocus;

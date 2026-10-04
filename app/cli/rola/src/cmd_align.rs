@@ -18,7 +18,7 @@
 #![allow(clippy::too_many_lines, clippy::too_many_arguments)]
 
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
@@ -41,6 +41,7 @@ use rorolala_cli_setups::{
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_location::Locate as _;
+use rorolala_utils_location::normalize;
 use rust_i18n::t;
 use uuid::Uuid;
 
@@ -510,26 +511,6 @@ fn resolve(cwd: &Path, given: &str) -> PathBuf {
     } else {
         cwd.join(given)
     }
-}
-
-/// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
-///
-/// Working it out here, before the disk is asked anything, is what lets `.` name the directory the
-/// run was made in rather than a path with no components in it.
-fn normalize(path: &Path) -> PathBuf {
-    let mut components: Vec<Component<'_>> = Vec::new();
-
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
-                components.pop();
-            }
-            other => components.push(other),
-        }
-    }
-
-    components.into_iter().collect()
 }
 
 /// Answers one path put back as the only item of a result.

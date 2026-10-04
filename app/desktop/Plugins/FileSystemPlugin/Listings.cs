@@ -1482,6 +1482,12 @@ internal sealed class ListBrowser : EntryView
     /// <inheritdoc cref="PermissionsColumn" />
     private const double SizeColumn = 88;
 
+    /// <inheritdoc cref="PermissionsColumn" />
+    private const double OwnershipColumn = 96;
+
+    /// <summary>What a cell says when its provider has nothing to say about the entry.</summary>
+    private const string Placeholder = "-";
+
     /// <summary>
     /// Which column the name is in.
     /// </summary>
@@ -1492,7 +1498,10 @@ internal sealed class ListBrowser : EntryView
     private const int NameColumn = 1;
 
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
-    private readonly Column[] _values = Values();
+    private readonly Column[] _values;
+
+    /// <summary>The lock provider that speaks for this directory, or nothing when none does.</summary>
+    private readonly IEntryLockProvider? _locks;
 
     /// <summary>How wide every column is, the grabs between them included.</summary>
     private readonly GridLength[] _widths;
@@ -1520,6 +1529,11 @@ internal sealed class ListBrowser : EntryView
     public ListBrowser(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
         : base(host, browser, actions, clip)
     {
+        // The contributed column comes after the ones every table has, and is only there when a
+        // provider speaks for this directory: a column of placeholders would be a column of the
+        // listing saying what it does not know.
+        _locks = EntryLockProviders.For(Browser.Current);
+        _values = _locks is null ? Values() : [.. Values(), Lock(_locks)];
         _widths = Widths();
 
         // The card is the surface and its edge: the list's own border and inset are taken off so that a second
@@ -1574,11 +1588,16 @@ internal sealed class ListBrowser : EntryView
     /// <param name="Width">How wide the column starts.</param>
     /// <param name="Value">What the column says about one entry.</param>
     /// <param name="Align">Where the text sits in the column.</param>
+    /// <param name="Draw">
+    /// How the column draws one entry, where a value of its own is not enough — a contributed column
+    /// draws its own ink. Answered instead of <see cref="Value"/> when it is there.
+    /// </param>
     private sealed record Column(
         string Header,
         double Width,
         Func<Facts, string> Value,
-        TextAlignment Align = TextAlignment.Left
+        TextAlignment Align = TextAlignment.Left,
+        Func<Entry, Control>? Draw = null
     );
 
     /// <summary>One entry as a row: its icon, its name, and what each column of values says.</summary>
@@ -1609,6 +1628,46 @@ internal sealed class ListBrowser : EntryView
     /// <summary>The column that says how large an entry is, which is a number and so stands on the right.</summary>
     private static Column Size() =>
         new("rorolala_file_system.column_size", SizeColumn, facts => facts.Size, TextAlignment.Right);
+
+    /// <summary>
+    /// The Ownership column one lock provider contributes.
+    /// </summary>
+    /// <remarks>
+    /// The value in it is the provider's to write and is not read from the entry's metadata, which is
+    /// why the column draws its own cell: what a lock looks like — its words, and the ink they are
+    /// written in — is what the provider answered, and none of it is in <see cref="Facts"/>.
+    /// </remarks>
+    /// <param name="provider">The provider that speaks for the directory being listed.</param>
+    /// <returns>The column to add after the table's own.</returns>
+    private static Column Lock(IEntryLockProvider provider) =>
+        new(
+            provider.ColumnKey,
+            OwnershipColumn,
+            _ => Placeholder,
+            Draw: entry => Locked(provider, entry)
+        );
+
+    /// <summary>What one entry's lock is written as, in the words and ink the provider asked for.</summary>
+    /// <param name="provider">The provider that speaks for the directory being listed.</param>
+    /// <param name="entry">The entry to write about.</param>
+    /// <returns>The cell.</returns>
+    private static TextBlock Locked(IEntryLockProvider provider, Entry entry)
+    {
+        var mark = provider.Mark(entry);
+        var said = mark switch
+        {
+            // The literal first: an account's name is data, and a phrase is not what the provider
+            // meant to say by it.
+            { Text: { Length: > 0 } literal } => literal,
+            { TextKey: { Length: > 0 } key } => RolaI18N.Get(key),
+            _ => Placeholder,
+        };
+
+        var cell = Cell(said);
+        cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.TextInk));
+
+        return cell;
+    }
 
     /// <summary>How wide every column starts, in the order they are laid out.</summary>
     private GridLength[] Widths()
@@ -1694,7 +1753,9 @@ internal sealed class ListBrowser : EntryView
         {
             // The cell over the grab is nothing: a row has no grab, only the header does.
             cells.Add(null);
-            cells.Add(Cell(column.Value(facts), column.Align));
+            cells.Add(
+                column.Draw is { } draw ? draw(entry) : Cell(column.Value(facts), column.Align)
+            );
         }
 
         var grid = new Grid { ColumnDefinitions = Definitions() };
@@ -2011,6 +2072,9 @@ internal sealed class GridBrowser : EntryView
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
+    /// <summary>The lock provider that speaks for this directory, or nothing when none does.</summary>
+    private readonly IEntryLockProvider? _locks;
+
     /// <summary>Makes the grid layout over what the browser holds.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="browser">What is being shown.</param>
@@ -2021,6 +2085,7 @@ internal sealed class GridBrowser : EntryView
         : base(host, browser, actions, clip)
     {
         _icon = icon;
+        _locks = EntryLockProviders.For(Browser.Current);
 
         // The tiles of a wrapped line fill the width it is given, so that the grid's outer inset is the room
         // around it and stays put however wide the dock is — the room a line has to spare is spent between
@@ -2123,7 +2188,7 @@ internal sealed class GridBrowser : EntryView
                 Spacing = 8,
                 Children =
                 {
-                    Icons.For(entry, _icon),
+                    Marked(entry),
                     new TextBlock
                     {
                         Text = Names.Show(entry),
@@ -2136,5 +2201,28 @@ internal sealed class GridBrowser : EntryView
                 },
             },
         };
+    }
+
+    /// <summary>An entry's icon, with the lock its provider contributed stamped on the corner.</summary>
+    /// <remarks>
+    /// The picture is looked up rather than carried, and a key that names nothing draws nothing:
+    /// a provider that contributed a mark but no picture is a listing without a corner on it, not a
+    /// listing that fails to be drawn.
+    /// </remarks>
+    /// <param name="entry">The entry to draw.</param>
+    /// <returns>What to draw where the icon goes.</returns>
+    private Control Marked(Entry entry)
+    {
+        var icon = Icons.For(entry, _icon);
+
+        if (
+            _locks?.Mark(entry) is { IconKey: { Length: > 0 } key } mark
+            && Host.Icons.Find(key) is { } picture
+        )
+        {
+            return Icons.Badged(icon, picture, _icon, mark.Ink);
+        }
+
+        return icon;
     }
 }

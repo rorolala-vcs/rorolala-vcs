@@ -1,3 +1,4 @@
+using Avalonia.Media.Imaging;
 using RorolalaDesktop.Contract;
 
 namespace RorolalaDesktop.Hosting;
@@ -232,4 +233,32 @@ internal sealed class IconBadgeRegistry
         _providers.OrderBy(provider => provider.Position).Select(provider => provider.Value).ToArray();
 }
 
-/// <summary>The icon badge providers plugins contribute.</summary>
+/// <summary>The pictures plugins contribute, keyed by name.</summary>
+/// <remarks>
+/// A picture is held rather than made: what a plugin contributes is already the image, and a key is
+/// looked up every time an entry of a listing is drawn, so making one there would make it again for
+/// every row. What a reader does with the size — a badge is as large as the icon it sits on — is the
+/// reader's, since the same picture is read at more than one size.
+/// </remarks>
+internal sealed class IconLibrary : IIconLibrary
+{
+    /// <summary>Every picture, by key.</summary>
+    private readonly Dictionary<string, Bitmap> _pictures = new(StringComparer.Ordinal);
+
+    /// <inheritdoc />
+    public void Add(string key, Bitmap picture)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(picture);
+
+        _pictures[key] = picture;
+    }
+
+    /// <inheritdoc />
+    public Bitmap? Find(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        return _pictures.GetValueOrDefault(key);
+    }
+}

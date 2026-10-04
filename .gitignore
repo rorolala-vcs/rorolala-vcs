@@ -46,3 +46,7 @@ nul
 
 # Draft files (files or directories starting with __)
 __*
+
+# Third-party sources the build draws from rather than carries: cloned where a script needs them, and
+# ignored because what is drawn from them is what is committed. See `./run.sh icons`.
+/THIRD-PARTY/material-icons/

@@ -15,6 +15,10 @@ use rorolala_workspace::Workspace;
 
 use rorolala_auth::{Account, Accounts, KeyLocateRule, Member, Members};
 
+mod ownership;
+
+pub use ownership::*;
+
 /// Authentication
 pub use rorolala_auth as auth;
 

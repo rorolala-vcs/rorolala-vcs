@@ -6,36 +6,28 @@
 
 use std::path::PathBuf;
 
-/// The directory, under the user's local data directory, where Rorolala keeps its files.
-const DATA_DIR: &str = "rola";
-
-/// The file the addresses seen so far are kept in, one per line.
-const HISTORY_FILE: &str = "addr.hs";
-
-/// The file the account the work acts as is kept in.
-const ACCOUNT_FILE: &str = "user";
-
-/// The file the exit code of the last run is kept in.
-const LASTEC_FILE: &str = "lastec";
+use rorolala_utils_constants::{
+    USER_ACCOUNT_FILE, USER_DATA_DIR, USER_HISTORY_FILE, USER_LASTEC_FILE,
+};
 
 /// The directory Rorolala keeps its own files in, if the machine names one.
 ///
 /// On a machine that follows the XDG layout this is `~/.local/share/rola`.
 pub fn data_dir() -> Option<PathBuf> {
-    dirs::data_local_dir().map(|dir| dir.join(DATA_DIR))
+    dirs::data_local_dir().map(|dir| dir.join(USER_DATA_DIR))
 }
 
 /// The file the address history is kept in.
 pub fn history_path() -> Option<PathBuf> {
-    Some(data_dir()?.join(HISTORY_FILE))
+    Some(data_dir()?.join(USER_HISTORY_FILE))
 }
 
 /// The file the account the work acts as is kept in.
 pub fn account_path() -> Option<PathBuf> {
-    Some(data_dir()?.join(ACCOUNT_FILE))
+    Some(data_dir()?.join(USER_ACCOUNT_FILE))
 }
 
 /// The file the exit code of the last run is kept in.
 pub fn lastec_path() -> Option<PathBuf> {
-    Some(data_dir()?.join(LASTEC_FILE))
+    Some(data_dir()?.join(USER_LASTEC_FILE))
 }

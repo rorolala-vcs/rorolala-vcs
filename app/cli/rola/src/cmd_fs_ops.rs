@@ -17,7 +17,7 @@
 //! same words answer `rola fs-ops -h`.
 
 use std::io;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::workspace::{Workspace, locate_workspace};
@@ -31,6 +31,7 @@ use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
+use rorolala_utils_location::normalize;
 use rust_i18n::t;
 use uuid::Uuid;
 
@@ -355,23 +356,6 @@ fn resolve(cwd: &Path, given: &Path) -> PathBuf {
     } else {
         cwd.join(given)
     }
-}
-
-/// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
-fn normalize(path: &Path) -> PathBuf {
-    let mut components: Vec<Component<'_>> = Vec::new();
-
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
-                components.pop();
-            }
-            other => components.push(other),
-        }
-    }
-
-    components.into_iter().collect()
 }
 
 /// The prefix the paths under `relative` share, or `""` for the Workspace root itself.

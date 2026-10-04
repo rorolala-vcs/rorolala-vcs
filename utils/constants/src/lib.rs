@@ -181,6 +181,22 @@ pub const GLOBAL_KEYS_DIR: &str = ".rola/keys";
 #[lazyffi(export = ROLA_USER_KEYS_DIR)]
 pub const USER_KEYS_DIR: &str = "rola/keys";
 
+/// The directory, under the user's local data directory, Rorolala keeps its own files in
+///
+/// These belong to no Vault and no Workspace: they are the user's own, and they are small enough
+/// to be plain files rather than configurations. It is the parent of [`USER_KEYS_DIR`], which
+/// keeps the one thing here that is a directory rather than a file.
+pub const USER_DATA_DIR: &str = "rola";
+
+/// The file, under [`USER_DATA_DIR`], naming the account the work acts as
+pub const USER_ACCOUNT_FILE: &str = "user";
+
+/// The file, under [`USER_DATA_DIR`], the addresses seen so far are kept in, one per line
+pub const USER_HISTORY_FILE: &str = "addr.hs";
+
+/// The file, under [`USER_DATA_DIR`], the exit code of the last run is kept in
+pub const USER_LASTEC_FILE: &str = "lastec";
+
 /// Keys named by the environment, under [`HOME_ENV_VAR`]
 #[lazyffi(export = ROLA_ENV_KEYS_DIR)]
 pub const ENV_KEYS_DIR: &str = "keys";

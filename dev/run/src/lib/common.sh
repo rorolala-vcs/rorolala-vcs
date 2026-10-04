@@ -18,6 +18,10 @@ RUN=./run.sh
 CARGO="${CARGO:-cargo}"
 DOTNET="${DOTNET:-dotnet}"
 
+# The renderer the icon set is drawn with. It is librsvg's, and it is a build-time tool rather than a
+# runtime one: what it draws is committed, so a build needs neither it nor the set it draws from.
+RSVG="${RSVG:-rsvg-convert}"
+
 # Cargo's target directory, matching `.cargo/config.toml`.
 TARGET_DIR="${TARGET_DIR:-.cache/rs-target}"
 
@@ -116,12 +120,19 @@ publish_desktop() {
 	restore "$DESKTOP_PROJECT"
 	# shellcheck disable=SC2086
 	$DOTNET publish "$DESKTOP_PROJECT" -c Release --no-restore -o "$1"
+
+	# The native library the Desktop's own bindings reach for, beside the program that binds it: a
+	# plugin asks the C ABI through `RolaSharp`, which `DllImport`s `rorolala`, and the runtime looks
+	# for that in the program's own directory before anywhere else. Only the shared library is taken —
+	# the import library is for a C link, and the header for a C compile, and the Desktop does neither.
+	cp "$RELEASE_DIR/$CARGO_SHARED" "$1/"
 }
 
 # Builds each plugin that ships with the Desktop program and lays it where the program looks for it:
-# its assembly and its translations under `plugins/` beside the program. Only those are taken. The
+# its assembly, its translations and any private dependency under `plugins/` beside the program. The
 # contract and Avalonia the plugin was built against are the host's own copies, delegated to rather
-# than carried, so laying them down would be laying down a second of each.
+# than carried, so laying them down would be laying down a second of each — but a dependency the host
+# does not carry is the plugin's own and travels with it.
 publish_plugins() {
 	for project in $DESKTOP_PLUGINS; do
 		name=$(basename "$project")
@@ -136,6 +147,14 @@ publish_plugins() {
 
 		if [ -d "$output/i18n" ]; then
 			cp -r "$output/i18n" "$DESKTOP_DIR/plugins/"
+		fi
+
+		# A private dependency a plugin carries, laid beside it where its own load context probes: the
+		# host does not carry the RolaSharp bindings, so the one plugin that asks the C ABI — and only
+		# it — brings them. An assembly with no plugin in it is left alone by discovery, which is how
+		# a dependency laid beside a plugin is meant to be read.
+		if [ -f "$output/RolaSharp.dll" ]; then
+			cp "$output/RolaSharp.dll" "$DESKTOP_DIR/plugins/"
 		fi
 	done
 }

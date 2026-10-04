@@ -34,8 +34,7 @@ use mingling::{
 use rorolala_cli_setups::{ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line};
-use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_READONLY_LAYOUTS_DIR};
-use rorolala_utils_location::Locate as _;
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_workspace::Workspace;
 use rust_i18n::t;
 use uuid::Uuid;
@@ -579,16 +578,12 @@ pub fn render_result_layout_content(result: ResultLayoutContent) {
 ///
 /// The cache is a directory per Vault and a directory per Layout under it, both named by what the
 /// copy was fetched under, so a command that reads one reaches the same place a
-/// [`rola layout fetch`](crate::layout::cmd_layout_fetch) wrote — see
-/// [`WORKSPACE_READONLY_LAYOUTS_DIR`]. A Vault keeps one Layout, and what it is known by is
+/// [`rola layout fetch`](crate::layout::cmd_layout_fetch) wrote. Where that is is the Workspace's
+/// own answer ([`Workspace::readonly_layout_dir`]); what a Vault's Layout is known by is
 /// [`VAULT_LAYOUT_NAME`].
 #[must_use]
 pub fn readonly_layout_dir(workspace: &Workspace, vault: &str, layout: &str) -> std::path::PathBuf {
-    workspace
-        .get_root()
-        .join(WORKSPACE_READONLY_LAYOUTS_DIR)
-        .join(vault)
-        .join(layout)
+    workspace.readonly_layout_dir(vault, layout)
 }
 
 /// The Vault and the `Uuid` an ownership command was given, from the words it was given.

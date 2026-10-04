@@ -113,6 +113,7 @@ internal sealed class Desktop
             Refocus = new Refocus(),
             Dialogs = dialogs,
             IconBadges = new IconBadgeRegistry(),
+            Icons = new IconLibrary(),
         };
     }
 

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 
 namespace RorolalaDesktop.Plugins;
@@ -46,6 +47,71 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
         var file = Path.Combine(_directory, $"{name.Name}.dll");
 
         return File.Exists(file) ? LoadFromAssemblyPath(Path.GetFullPath(file)) : null;
+    }
+
+    /// <summary>
+    /// Resolves an unmanaged library, answering the program's own copy where the runtime would not.
+    /// </summary>
+    /// <remarks>
+    /// The runtime's probing for a context of its own looks in the calling assembly's directory — the
+    /// plugins' directory — and on the platform's search path, and the program's own directory is
+    /// neither. A plugin that binds the C ABI reaches for a library the program carries beside the
+    /// program, so without this it is found by nothing, and the binding fails at first use rather than
+    /// where it was written.
+    /// <para>
+    /// The program's directory comes first because that is where the host's own libraries are, and
+    /// then the plugins' for a library a plugin brought. Everything else is left to the runtime.
+    /// </para>
+    /// </remarks>
+    /// <param name="unmanagedDllName">The name the binding asked for.</param>
+    /// <returns>The library, or nothing to let the runtime go on looking.</returns>
+    protected override nint LoadUnmanagedDll(string unmanagedDllName)
+    {
+        foreach (var directory in new[] { AppContext.BaseDirectory, _directory })
+        {
+            foreach (var name in Names(unmanagedDllName))
+            {
+                var candidate = Path.Combine(directory, name);
+
+                if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var library))
+                {
+                    return library;
+                }
+            }
+        }
+
+        return base.LoadUnmanagedDll(unmanagedDllName);
+    }
+
+    /// <summary>
+    /// The file names a platform gives the shared library `name`.
+    /// </summary>
+    /// <remarks>
+    /// What a binding asks for is the bare name, and what a platform calls the file is a spelling of
+    /// it: the runtime knows the spellings, and asking it is not an option here — this is the probing
+    /// that happens before there is anything to ask. The bare name is tried first so that a path the
+    /// caller wrote itself is taken as it is.
+    /// </remarks>
+    /// <param name="name">The name the binding asked for.</param>
+    /// <returns>The names to look for, in the order they are worth trying.</returns>
+    private static IEnumerable<string> Names(string name)
+    {
+        yield return name;
+
+        if (OperatingSystem.IsWindows())
+        {
+            yield return $"{name}.dll";
+            yield break;
+        }
+
+        yield return $"lib{name}.so";
+        yield return $"{name}.so";
+
+        if (OperatingSystem.IsMacOS())
+        {
+            yield return $"lib{name}.dylib";
+            yield return $"{name}.dylib";
+        }
     }
 
     /// <summary>

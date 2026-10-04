@@ -12,22 +12,39 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The contract is the only thing the host and a plugin agree on; the translations are read by the
          same reader the host uses, so what this plugin says is said the way the host says it. -->
     <ProjectReference Include="../../Contract/RorolalaDesktop.Contract.csproj" />
     <ProjectReference Include="../../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
-    <!-- The File System plugin, whose extension point this one reaches into: the reference is what a
+    <!-- The File System plugin, whose extension points this one reaches into: the reference is what a
          dependent plugin is, and the manifest names the same plugin in its dependencies so that the host
          starts this one after it. Only this plugin's own assembly is laid beside the program; the
          File System plugin's is already there, and the load context hands this one that copy rather than
          a second. -->
     <ProjectReference Include="../FileSystemPlugin/FileSystemPlugin.csproj" />
+    <!-- The hand-written layer over the C ABI, which is how who holds an entry crosses: this plugin is
+         the one program that asks, so the bindings are its own dependency rather than the host's, and
+         what it reaches for is a `RolaOwnership` rather than a pointer. -->
+    <ProjectReference Include="../../../../modules/rola-sharp/RolaSharp.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- The plugin's own words, laid beside its assembly so that what it registers is found the moment
          the host starts it. -->
     <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The pictures this plugin contributes to the icon library, embedded so that they travel in the
+         one file the host lays beside the program: a plugin is discovered as an assembly, and a
+         picture read from beside it would be a second thing to keep in step with it. The SVG each was
+         rendered from is left in the tree rather than embedded, since it is the source and not what is
+         drawn. -->
+    <EmbeddedResource Include="icons/*.png" />
   </ItemGroup>
 
 </Project>

@@ -8,6 +8,7 @@
 
 mod account;
 mod channel;
+mod current;
 mod error;
 mod key;
 mod locate;
@@ -16,6 +17,7 @@ mod rule;
 
 pub use account::*;
 pub use channel::*;
+pub use current::*;
 pub use error::*;
 pub use key::*;
 pub use locate::*;

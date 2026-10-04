@@ -33,6 +33,11 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         host.I18n.RegisterDirectory(Translations());
         FileOperationPresets.Add(new RorolalaOperations());
+
+        // And what the work holds: the Ownership column of a directory listing, and the corner a
+        // locked tile wears. It is this plugin's to answer rather than the File System plugin's,
+        // because who holds an entry is Rorolala's question and the answer comes through the C ABI.
+        RorolalaLocks.Declare(host);
     }
 
     /// <summary>

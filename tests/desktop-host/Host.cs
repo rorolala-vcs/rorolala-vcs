@@ -59,6 +59,9 @@ internal static class Host
             Docks = new DockManager(new DockRegistry(), i18n, log, popups),
             OpenHooks = new OpenHookRegistry(),
             IconBadges = new IconBadgeRegistry(),
+            // Nothing contributes a picture here, and nothing draws one: the library is what the
+            // contract says a plugin may add to, and a headless test adds nothing.
+            Icons = new IconLibrary(),
             // Nothing activates a window in a headless test, so nothing is ever raised on it.
             Refocus = new Refocus(),
             // A dialog needs a window to be shown on, and a headless test has none: nothing is ever shown.

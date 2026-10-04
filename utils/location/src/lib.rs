@@ -13,6 +13,9 @@ use std::path::{Path, PathBuf};
 mod helper;
 pub use helper::*;
 
+mod normalize;
+pub use normalize::*;
+
 /// A trait for locating the file system
 ///
 /// # Examples

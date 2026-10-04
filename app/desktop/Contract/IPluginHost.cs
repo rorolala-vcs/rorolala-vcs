@@ -42,6 +42,9 @@ public interface IPluginHost
     /// <summary>Where the plugin adds icon badges.</summary>
     IIconBadgeRegistry IconBadges { get; }
 
+    /// <summary>Where the plugin adds the pictures the program draws, and reads them back.</summary>
+    IIconLibrary Icons { get; }
+
     /// <summary>When one of the host's windows is come back to.</summary>
     IRefocus Refocus { get; }
 

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use rorolala_layout::Layouts;
 use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage};
+use rorolala_utils_constants::WORKSPACE_READONLY_LAYOUTS_DIR;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
 
@@ -17,11 +18,13 @@ mod error;
 mod ffi;
 mod init;
 mod merging;
+mod ownership;
 
 pub use config::*;
 pub use error::*;
 pub use ffi::*;
 pub use merging::*;
+pub use ownership::*;
 
 /// Where the Workspace keeps its data, its configuration, its keys, its store and its index
 ///
@@ -131,6 +134,20 @@ impl Workspace {
     /// Where the Workspace's Layouts are rooted, with the layout's spelling walked back out of it.
     fn layouts_root(&self) -> PathBuf {
         self.current_dir.join(LAYOUTS_DIR).components().collect()
+    }
+
+    /// Where the read-only copy of a Vault's Layout is kept.
+    ///
+    /// The cache is a directory per Vault and a directory per Layout under it, both named by what
+    /// the copy was fetched under, so a reader reaches the place a fetch wrote. It answers a path
+    /// whether or not anything was ever fetched — opening a Layout makes one where none is there,
+    /// so a caller asks whether the directory is one before it opens it.
+    #[must_use]
+    pub fn readonly_layout_dir(&self, vault: &str, layout: &str) -> PathBuf {
+        self.current_dir
+            .join(WORKSPACE_READONLY_LAYOUTS_DIR)
+            .join(vault)
+            .join(layout)
     }
 
     /// Where the Workspace's store is rooted, with the layout's spelling walked back out of it.

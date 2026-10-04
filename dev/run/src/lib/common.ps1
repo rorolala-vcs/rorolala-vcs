@@ -29,6 +29,11 @@ if ($env:DOTNET) {
     if ($words.Count -gt 1) { $DotnetFlags = $words[1..($words.Count - 1)] }
 }
 
+# The renderer the icon set is drawn with. It is librsvg's, and it is a build-time tool rather than a
+# runtime one: what it draws is committed, so a build needs neither it nor the set it draws from.
+$Rsvg = 'rsvg-convert'
+if ($env:RSVG) { $Rsvg = $env:RSVG }
+
 # Cargo's target directory, matching `.cargo/config.toml`.
 $TargetDir = '.cache/rs-target'
 if ($env:TARGET_DIR) { $TargetDir = $env:TARGET_DIR }
@@ -124,12 +129,18 @@ function Publish-Desktop {
 
     & $DotnetProgram @DotnetFlags publish $DesktopProject -c Release -o $Into
     Assert-Exit
+
+    # The native library the Desktop's own bindings reach for, beside the program that binds it: a
+    # plugin asks the C ABI through `RolaSharp`, which `DllImport`s `rorolala`, and the runtime looks
+    # for that in the program's own directory before anywhere else.
+    Copy-Item -Force "$ReleaseDir/$CargoShared" "$Into/"
 }
 
 # Builds each plugin that ships with the Desktop program and lays it where the program looks for it:
-# its assembly and its translations under `plugins/` beside the program. Only those are taken. The
+# its assembly, its translations and any private dependency under `plugins/` beside the program. The
 # contract and Avalonia the plugin was built against are the host's own copies, delegated to rather
-# than carried, so laying them down would be laying down a second of each.
+# than carried, so laying them down would be laying down a second of each — but a dependency the host
+# does not carry is the plugin's own and travels with it.
 function Publish-Plugins {
     foreach ($project in $DesktopPlugins) {
         $name = Split-Path -Leaf $project
@@ -143,6 +154,10 @@ function Publish-Plugins {
 
         if (Test-Path "$output/i18n") {
             Copy-Item -Recurse -Force "$output/i18n" "$DesktopDir/plugins/"
+        }
+
+        if (Test-Path "$output/RolaSharp.dll") {
+            Copy-Item -Force "$output/RolaSharp.dll" "$DesktopDir/plugins/"
         }
     }
 }

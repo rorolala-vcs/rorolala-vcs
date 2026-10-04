@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.SysIcons;
 
@@ -83,6 +85,68 @@ internal static class Icons
 
         return Math.Max(Step, rounded);
     }
+
+    /// <summary>How much of an icon's width a lock mark takes, and the least it is drawn at.</summary>
+    /// <remarks>
+    /// A share of the icon rather than a size, because a tile's icon follows the zoom and a mark of
+    /// a fixed size would be lost on a large icon and cover a small one. The least is what keeps it
+    /// drawable at the smallest a list row ever is.
+    /// </remarks>
+    private const double MarkShare = 0.42;
+    private const double MarkLeast = 12;
+
+    /// <summary>The theme resource a lock mark is drawn in.</summary>
+    /// <remarks>
+    /// Written as the literals the look publishes, because a plugin has nowhere else to read them
+    /// from: the shell's own constants live in the host, which a plugin may not reference.
+    /// </remarks>
+    /// <param name="ink">The role the mark is drawn in.</param>
+    /// <returns>The name of the resource it is read from.</returns>
+    public static string Ink(LockInk ink) =>
+        ink switch
+        {
+            LockInk.Plain => "rorolala.fg",
+            LockInk.Accent => "rorolala.accent",
+            LockInk.Error => "rorolala.del",
+            _ => "rorolala.fg.faint",
+        };
+
+    /// <summary>
+    /// An entry's icon with a lock mark at its top-right corner.
+    /// </summary>
+    /// <remarks>
+    /// The picture is drawn as a mask over a coloured ground rather than as a picture, so that it
+    /// takes the ink the theme gives it: a picture carries whatever colours it was drawn with, and
+    /// a mark that had to be drawn once per colour would be a mark per theme.
+    /// </remarks>
+    /// <param name="icon">What the entry is drawn as.</param>
+    /// <param name="mark">The picture to stamp on it.</param>
+    /// <param name="size">How many pixels wide and tall the icon is.</param>
+    /// <param name="ink">What the mark is drawn in.</param>
+    /// <returns>The icon and its mark, as one thing to draw.</returns>
+    public static Control Badged(Control icon, Bitmap mark, int size, LockInk ink)
+    {
+        var spot = new Border
+        {
+            Width = Mark(size),
+            Height = Mark(size),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            OpacityMask = new ImageBrush(mark) { Stretch = Stretch.Uniform },
+        };
+        spot[!Border.BackgroundProperty] = new DynamicResourceExtension(Ink(ink));
+
+        var grid = new Grid { Width = size, Height = size };
+        grid.Children.Add(icon);
+        grid.Children.Add(spot);
+
+        return grid;
+    }
+
+    /// <summary>How many pixels a lock mark is at an icon of `size`.</summary>
+    /// <param name="size">How many pixels wide and tall the icon is.</param>
+    /// <returns>How many pixels wide and tall the mark is.</returns>
+    private static double Mark(int size) => Math.Max(MarkLeast, size * MarkShare);
 
     /// <summary>What an entry is drawn as where the system had nothing to give.</summary>
     /// <param name="directory">Whether the entry is a directory.</param>

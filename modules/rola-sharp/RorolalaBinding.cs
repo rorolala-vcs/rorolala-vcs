@@ -768,6 +768,50 @@ internal enum WorkspaceCreationError : int
     WorkspaceCreationError_UnknownError = 7,
 }
 
+internal enum RolaEntryLockTag : int
+{
+    /// <summary>
+    /// Nothing says: the Layout names no entry at the path, the Vault's copy was never fetched, or
+    /// </summary>
+    RolaEntryLock_Unnamed = 0,
+    /// <summary>
+    /// No account holds it.
+    /// </summary>
+    RolaEntryLock_Free = 1,
+    /// <summary>
+    /// The account reading it holds it.
+    /// </summary>
+    RolaEntryLock_Mine = 2,
+    /// <summary>
+    /// Another account holds it, named here.
+    /// </summary>
+    RolaEntryLock_Held = 3,
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaEntryLockPayload
+{
+    /// <summary>
+    /// Another account holds it, named here.
+    /// </summary>
+    [FieldOffset(0)]
+    public nint Held;
+}
+
+/// <summary>
+/// What holds one entry of a Workspace's tracked Vault.
+///
+/// One of the four outcomes, read by tag. `Held` carries the name of the account that holds the
+/// entry as an owned C string, which the caller reads and releases with `free_string`; the value
+/// itself is returned by value and holds nothing else.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaEntryLock
+{
+    public RolaEntryLockTag tag;
+    public RolaEntryLockPayload payload;
+}
+
 /// <summary>
 /// Why the filesystem refused, as far as this crate tells the reasons apart.
 /// </summary>
@@ -1269,6 +1313,12 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_workspace(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_entry_lock(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_ownership(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_configure_error_reason(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1301,6 +1351,26 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint rola_account_find(nint account_name, nint rule);
+
+    /// <summary>
+    /// Prepares a Workspace's ownership answers for the directory `directory` sits in.
+    ///
+    /// A `RolaOwnership` the caller releases with `free_rola_ownership`, or null when there is nothing
+    /// to answer with.
+    ///
+    /// Returns an owned `RolaOwnership *`, or `NULL` when there is nothing; release it with `free_rola_ownership`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint locate_rola_ownership(nint directory);
+
+    /// <summary>
+    /// The account the work acts as, as Rorolala's own file for the user names it.
+    ///
+    /// The account name, or an empty string when none is named. The caller owns the string and
+    /// releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_current_account();
 
     /// <summary>
     /// Runs the [`ActionHandshake`](crate::ActionHandshake) action, blocking until it has.
@@ -2020,6 +2090,24 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult create_workspace(nint dir);
+
+    /// <summary>
+    /// The account the work acts as, or an empty string when none is named.
+    ///
+    /// The account name, or an empty string. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_ownership_account(nint self);
+
+    /// <summary>
+    /// What holds the entry at `path`.
+    ///
+    /// A [`EntryLock`] read by tag; `Held` carries the holder's name as an owned C string, released
+    /// with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaEntryLock rola_ownership_lock_of(nint self, nint path);
 
     /// <summary>
     /// Whether the Vault is locked.

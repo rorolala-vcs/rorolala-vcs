@@ -1,8 +1,9 @@
 _version: 2
 
 # What the Rorolala plugin says. It carries no dock of its own: what it adds is one preset to the File
-# System plugin's settings, so its words are the plugin's name and that preset's name. Every key is
-# namespaced by the plugin's identity — the id with dots underscored.
+# System plugin's settings and one column to its listing, so its words are the plugin's name, that
+# preset's name, and what a lock reads as. Every key is namespaced by the plugin's identity — the id
+# with dots underscored.
 
 rorolala_vcs:
   name:
@@ -15,3 +16,15 @@ rorolala_vcs:
     preset:
       en: Rorolala file operations
       zh-CN: Rorolala 文件操作
+
+  # What the Ownership column is headed. The column is only there where Rorolala answers — a
+  # directory inside a Workspace whose Layout tracks a Vault — and what it says about one entry is
+  # below, a held entry's holder being a name rather than a phrase and so not translated at all.
+  column_ownership:
+    en: Ownership
+    zh-CN: 所有权
+
+  ownership:
+    mine:
+      en: You
+      zh-CN: 你

@@ -8,6 +8,7 @@
 use std::fs;
 use std::path::Path;
 
+use librorolala::auth::current_account;
 use mingling::{Grouped, LazyInit, ProgramCollect, setup::ProgramSetup};
 use rorolala_errors::Failure;
 use rust_i18n::t;
@@ -55,18 +56,13 @@ impl ResCurrentAccount {
         self.changed = true;
     }
 
-    /// Reads the name from `path`.
+    /// Reads the name from Rorolala's own file for the user.
     ///
     /// What cannot be read is not an error: a file that is missing, or one that cannot be
     /// read at all, comes back as no account having been named.
-    fn read(path: &Path) -> Self {
-        let name = fs::read_to_string(path)
-            .ok()
-            .map(|text| text.trim().to_string())
-            .filter(|name| !name.is_empty());
-
+    fn read() -> Self {
         Self {
-            name,
+            name: current_account(),
             changed: false,
         }
     }
@@ -122,23 +118,18 @@ where
     ThisProgram: ProgramCollect<Enum = ThisProgram>,
 {
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
-        let path = account_path();
-        let read_path = path.clone();
-        let write_path = path;
+        let write_path = account_path();
 
         program.with_resource(
-            ResCurrentAccount::lazy_init(move || {
-                read_path
-                    .as_deref()
-                    .map_or_else(ResCurrentAccount::default, ResCurrentAccount::read)
-            })
-            .with_on_drop(move |account: ResCurrentAccount| {
-                if account.changed
-                    && let Some(path) = write_path.as_deref()
-                {
-                    account.write(path);
-                }
-            }),
+            ResCurrentAccount::lazy_init(ResCurrentAccount::read).with_on_drop(
+                move |account: ResCurrentAccount| {
+                    if account.changed
+                        && let Some(path) = write_path.as_deref()
+                    {
+                        account.write(path);
+                    }
+                },
+            ),
         );
     }
 }

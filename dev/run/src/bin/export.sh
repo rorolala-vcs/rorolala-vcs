@@ -6,6 +6,11 @@ set -eu
 
 . "$(dirname "$0")/../lib/common.sh"
 
+# The plugin's own pictures first, and deliberately: they are drawn from the pinned icon set rather
+# than carried, so what is laid out below is what the pin holds rather than whatever was last in the
+# tree. It is the one step here that reaches outside the tree for its input.
+again icons
+
 again build
 
 rm -rf "$BUILD_DIR"
