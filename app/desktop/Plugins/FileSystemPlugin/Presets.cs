@@ -48,6 +48,26 @@ public static class FileOperationPresets
     /// <summary>The value of the option that writes nothing: the way to set each command by hand.</summary>
     public const string Custom = "custom";
 
+    /// <summary>
+    /// What Rorolala's own plugin offers as its preset, which is also what a file operation is done with until
+    /// the user says otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Written here rather than in the plugin that offers them, because the default and the preset have to be one
+    /// text: the panel reads the preset in force back from what the four settings are worth, so a copy of these
+    /// that drifted would leave the preset reading as one that had been changed by hand.
+    /// <para>
+    /// It is public because the plugin that offers them reads them, and it names Rorolala rather than the command
+    /// line it calls because that is what the option offering them is called.
+    /// </para>
+    /// </remarks>
+    public static readonly FileOperationCommands Rorolala = new(
+        "{{env:ROLA_EXE}} fs-ops cp {{from}} {{to}}",
+        "{{env:ROLA_EXE}} fs-ops mv {{from}} {{to}}",
+        "{{env:ROLA_EXE}} fs-ops rm {{from}}",
+        "{{env:ROLA_EXE}} fs-ops rm {{from}}"
+    );
+
     /// <summary>Every preset on offer, in the order they are shown, the custom one last.</summary>
     private static readonly List<SettingOption> Offer = [];
 

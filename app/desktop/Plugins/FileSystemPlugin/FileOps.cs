@@ -63,20 +63,25 @@ internal static class FileOps
         "rm {{from}}"
     );
 
-    /// <summary>The commands of the system the program is running on.</summary>
-    private static FileOperationCommands Native => OperatingSystem.IsWindows() ? Windows : Unix;
-
-    /// <summary>What the copy command is until the user says otherwise.</summary>
-    public static string DefaultCopy => Native.Copy;
+    /// <summary>
+    /// What the copy command is until the user says otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The set Rorolala's own plugin offers as its preset, because the plugin is part of what the program is
+    /// installed with: an operation run through it is one the work knows about, while one run through the
+    /// system's own tools is a change only the filesystem knows about. A user who would rather have the
+    /// system's tools chooses the preset for the platform they are on.
+    /// </remarks>
+    public static string DefaultCopy => FileOperationPresets.Rorolala.Copy;
 
     /// <inheritdoc cref="DefaultCopy" />
-    public static string DefaultMove => Native.Move;
+    public static string DefaultMove => FileOperationPresets.Rorolala.Move;
 
     /// <inheritdoc cref="DefaultCopy" />
-    public static string DefaultRemoveDirs => Native.RemoveDirs;
+    public static string DefaultRemoveDirs => FileOperationPresets.Rorolala.RemoveDirs;
 
     /// <inheritdoc cref="DefaultCopy" />
-    public static string DefaultRemoveFiles => Native.RemoveFiles;
+    public static string DefaultRemoveFiles => FileOperationPresets.Rorolala.RemoveFiles;
 
     /// <summary>
     /// The plugin's own settings, where the commands that carry the operations out are said.

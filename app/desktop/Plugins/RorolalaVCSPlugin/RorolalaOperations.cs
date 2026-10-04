@@ -21,12 +21,14 @@ internal sealed class RorolalaOperations : IFileOperationPreset
     /// <inheritdoc />
     public string LabelKey => "rorolala_vcs.setting.preset";
 
+    /// <summary>
+    /// The commands the preset writes, which are the ones the file system plugin does its work with by default.
+    /// </summary>
+    /// <remarks>
+    /// Read from there rather than written again here, so that the preset and the default are one text: the panel
+    /// reads the preset in force back from what the settings are worth, and a copy that drifted would leave the
+    /// preset reading as one that had been changed by hand.
+    /// </remarks>
     /// <inheritdoc />
-    public FileOperationCommands Commands { get; } =
-        new(
-            "{{env:ROLA_EXE}} fs-ops cp {{from}} {{to}}",
-            "{{env:ROLA_EXE}} fs-ops mv {{from}} {{to}}",
-            "{{env:ROLA_EXE}} fs-ops rm {{from}}",
-            "{{env:ROLA_EXE}} fs-ops rm {{from}}"
-        );
+    public FileOperationCommands Commands { get; } = FileOperationPresets.Rorolala;
 }

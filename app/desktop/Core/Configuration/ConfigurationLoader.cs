@@ -94,7 +94,6 @@ internal static class ConfigurationLoader
             {
                 Mode = ThemeConfiguration.DefaultMode,
                 Primary = ThemeConfiguration.DefaultPrimary,
-                PrimaryText = ThemeConfiguration.DefaultPrimaryText,
                 Accent = ThemeConfiguration.DefaultAccent,
             };
 

@@ -49,28 +49,31 @@ internal sealed class ThemeConfiguration
     /// The primary used when the file names none.
     /// </summary>
     /// <remarks>
-    /// A warm pink: a quiet brand colour that the dark ink on it can be read against.
+    /// A blue: the colour the program is known by, and one light enough that white on it can be read — which is
+    /// what the look works out for it, since this primary ships with no ink of its own named.
     /// </remarks>
-    public static readonly Color DefaultPrimary = Color.FromRgb(0xFF, 0x7E, 0xA2);
+    public static readonly Color DefaultPrimary = Color.FromRgb(0x44, 0x6D, 0xD6);
 
     /// <summary>
     /// The accent used when the file names none.
     /// </summary>
     /// <remarks>
-    /// A pale blue, and spent only on the marks a drag draws — never on a selection, so that a mark can
+    /// A warm pink, and spent only on the marks a drag draws — never on a selection, so that a mark can
     /// always be told from a choice.
     /// </remarks>
-    public static readonly Color DefaultAccent = Color.FromRgb(0x7E, 0xA2, 0xFF);
+    public static readonly Color DefaultAccent = Color.FromRgb(0xFF, 0x7E, 0xA2);
 
     /// <summary>
-    /// What is written on the primary when the file names none.
+    /// The ink the look used to ship with the primary it used to ship, which a file written then may hold.
     /// </summary>
     /// <remarks>
-    /// A dark tone of the primary's own hue, the way the design this look comes from names its own ink for
-    /// its own lime rather than working one out. A primary the user chooses has no such name, so the look
-    /// works one out by contrast when the file states none (Section 10).
+    /// The look names no ink for the primary it ships now: what stands on a filled surface is worked out from what
+    /// it stands on by contrast, which is what happens for every primary a file names no ink for (Section 10).
+    /// This value stays named because a file written before that change holds it beside whatever primary was in
+    /// force then, and the two are a pair the user never chose: an ink named for one colour is not an ink chosen
+    /// for another, so it is left out rather than written on.
     /// </remarks>
-    public static readonly Color DefaultPrimaryText = Color.FromRgb(0x42, 0x21, 0x2A);
+    public static readonly Color WasPrimaryText = Color.FromRgb(0x42, 0x21, 0x2A);
 
     /// <summary>The variant the program is drawn in, or nothing when the file names none.</summary>
     public ColorMode? Mode { get; set; }
@@ -99,16 +102,13 @@ internal sealed class ThemeConfiguration
     /// What is written on a surface filled with the primary, or nothing to work one out by contrast.
     /// </summary>
     /// <remarks>
-    /// The ink the look ships with is the ink <em>for the primary it ships with</em>: a dark tone of that
-    /// colour's own hue, named rather than worked out, the way the design it comes from names its own. A file
-    /// holding that ink beside another primary is one whose primary was changed after the program wrote the
-    /// pair, and the named ink was never chosen for the colour it would now be written on — dark words on a dark
-    /// fill, for a primary the user darkened. Such an ink is left out rather than written on, so that what
-    /// stands on a filled surface is worked out from what it stands on, which is what the look does for every
-    /// primary the file names no ink for.
+    /// An ink the look used to write into the file is not an ink the user chose, whatever primary stands beside
+    /// it: it was named for a colour that is no longer what fills the surface, and dark words on a dark fill is
+    /// what came of the last time that pair drifted apart. Such an ink is left out rather than written on, so
+    /// that what stands on a filled surface is worked out from what it stands on, which is what the look does for
+    /// every primary a file names no ink for.
     /// </remarks>
-    public Color? PrimaryTextOrDefault =>
-        PrimaryText == DefaultPrimaryText && PrimaryOrDefault != DefaultPrimary ? null : PrimaryText;
+    public Color? PrimaryTextOrDefault => PrimaryText == WasPrimaryText ? null : PrimaryText;
 }
 
 /// <summary>

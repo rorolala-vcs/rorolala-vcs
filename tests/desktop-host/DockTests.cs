@@ -15,6 +15,43 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class DockTests
 {
+    /// <summary>
+    /// A layout made from scratch is the arrangement a new user is given, and its sizes are whole pixels.
+    /// </summary>
+    /// <remarks>
+    /// The sizes are where a person put the splitters, and a region asked for at a fraction of a pixel is a
+    /// region the engine rounds again: what a file read by hand says should be what the file written beside it
+    /// says. The docks are the program's own beside the file system's, which is the arrangement the program is
+    /// developed against rather than one of the many it allows.
+    /// </remarks>
+    [Fact]
+    public void AFreshLayoutIsTheArrangementANewUserIsGiven()
+    {
+        var layout = DockLayout.Starting();
+
+        Assert.Equal(258, layout.LeftWidth);
+        Assert.Equal(219, layout.RightWidth);
+        Assert.Equal(253, layout.BottomHeight);
+        Assert.Equal(72, layout.TopHeight);
+
+        foreach (var size in new[] { layout.LeftWidth, layout.RightWidth, layout.BottomHeight, layout.TopHeight })
+        {
+            Assert.Equal(Math.Round(size), size);
+        }
+
+        Assert.Equal(
+            [
+                ("rorolala.core.plugin_manager", DockPlacement.Center),
+                ("rorolala.core.preference", DockPlacement.Center),
+                ("rorolala.file_system.browser", DockPlacement.Center),
+                ("rorolala.file_system.tree", DockPlacement.Right),
+            ],
+            layout.Docks.Select(dock => (dock.DockNameId, dock.Placement))
+        );
+
+        Assert.All(layout.Docks, dock => Assert.Equal(0, dock.Ordinal));
+    }
+
     /// <summary>A toggle dock has one instance, which is shown or hidden.</summary>
     [Fact]
     public void AToggleDockHasOneInstanceThatIsShownOrHidden()

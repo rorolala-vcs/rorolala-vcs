@@ -49,13 +49,18 @@ internal sealed class DockLayout
     public const int SchemaVersion = 1;
 
     /// <summary>The width the left region starts at, in pixels.</summary>
-    public const double DefaultLeftWidth = 240;
+    /// <remarks>
+    /// Whole pixels, because these are where a person put the splitters rather than what a layout engine worked
+    /// out: a region asked for at 258.4 is a region the engine rounds again, and a file read by hand should not
+    /// disagree with the file written beside it.
+    /// </remarks>
+    public const double DefaultLeftWidth = 258;
 
     /// <summary>The width the right region starts at, in pixels.</summary>
-    public const double DefaultRightWidth = 240;
+    public const double DefaultRightWidth = 219;
 
     /// <summary>The height the bottom region starts at, in pixels.</summary>
-    public const double DefaultBottomHeight = 180;
+    public const double DefaultBottomHeight = 253;
 
     /// <summary>The height the top region starts at, in pixels.</summary>
     public const double DefaultTopHeight = 72;
@@ -83,6 +88,33 @@ internal sealed class DockLayout
     /// <summary>The docks that were open, in the order they are restored in.</summary>
     [JsonPropertyName("docks")]
     public List<LayoutDock> Docks { get; set; } = [];
+
+    /// <summary>
+    /// The arrangement a user who has never moved a splitter, opened a dock, or closed one is given.
+    /// </summary>
+    /// <remarks>
+    /// What is being worked on in the middle, its tree down the right, and the program's own two docks beside
+    /// them. It is a starting point rather than a decision: every one of them can be closed, moved, or opened
+    /// again, and the layout is written with what there is from then on.
+    /// <para>
+    /// A layout of its own rather than what an empty one happens to hold, because a layout is built for what is
+    /// open as well as for what is started — one built empty and filled from the docks that are open would
+    /// otherwise carry this arrangement on top of them, and a dock that was closed would be written down again.
+    /// The instances are numbered from nothing, since a dock has one instance until somebody opens a second.
+    /// </para>
+    /// </remarks>
+    /// <returns>The layout to start from, with the region sizes at their defaults.</returns>
+    public static DockLayout Starting() =>
+        new()
+        {
+            Docks =
+            [
+                new() { DockNameId = "rorolala.core.plugin_manager", Placement = DockPlacement.Center },
+                new() { DockNameId = "rorolala.core.preference", Placement = DockPlacement.Center },
+                new() { DockNameId = "rorolala.file_system.browser", Placement = DockPlacement.Center },
+                new() { DockNameId = "rorolala.file_system.tree", Placement = DockPlacement.Right },
+            ],
+        };
 }
 
 /// <summary>
@@ -114,13 +146,13 @@ internal static class LayoutStore
 
         if (!File.Exists(path))
         {
-            return new DockLayout();
+            return DockLayout.Starting();
         }
 
         try
         {
             return JsonSerializer.Deserialize<DockLayout>(File.ReadAllText(path))
-                ?? new DockLayout();
+                ?? DockLayout.Starting();
         }
         catch (Exception error)
             when (error is IOException or JsonException or UnauthorizedAccessException)
@@ -131,7 +163,7 @@ internal static class LayoutStore
                 $"the dock layout could not be read and was started over: {error.Message}"
             );
 
-            return new DockLayout();
+            return DockLayout.Starting();
         }
     }
 

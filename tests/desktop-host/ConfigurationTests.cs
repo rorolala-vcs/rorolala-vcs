@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using FileSystemPlugin;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
@@ -49,9 +50,12 @@ public sealed class ConfigurationTests
         var written = File.ReadAllText(ConfigPaths.Theme);
         Assert.Contains("\"_version\": 1", written, StringComparison.Ordinal);
         Assert.Contains("\"mode\": \"system\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"primary\": \"#FF7EA2\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"primaryText\": \"#42212A\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"accent\": \"#7EA2FF\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"primary\": \"#446DD6\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"accent\": \"#FF7EA2\"", written, StringComparison.Ordinal);
+
+        // And no ink: what is written on the primary is worked out from it, so a file that names none is a file
+        // that is drawn correctly rather than one that is missing something.
+        Assert.DoesNotContain("primaryText", written, StringComparison.Ordinal);
     }
 
     /// <summary>A field the file does not name is a choice not made, which is not the same as the default.</summary>
@@ -81,23 +85,31 @@ public sealed class ConfigurationTests
     /// an ink the file names for a primary of its own is the user's and is kept.
     /// </remarks>
     [Fact]
-    public void TheInkTheLookShipsWithIsNotAnInkForAnotherPrimary()
+    public void TheInkTheLookUsedToWriteIsNotAnInkAnybodyChose()
     {
         var shipped = new ThemeConfiguration
         {
             Primary = ThemeConfiguration.DefaultPrimary,
-            PrimaryText = ThemeConfiguration.DefaultPrimaryText,
+            PrimaryText = ThemeConfiguration.WasPrimaryText,
         };
 
-        Assert.Equal(ThemeConfiguration.DefaultPrimaryText, shipped.PrimaryTextOrDefault);
+        Assert.Null(shipped.PrimaryTextOrDefault);
 
         var changed = new ThemeConfiguration
         {
             Primary = Colors.Black,
-            PrimaryText = ThemeConfiguration.DefaultPrimaryText,
+            PrimaryText = ThemeConfiguration.WasPrimaryText,
         };
 
         Assert.Null(changed.PrimaryTextOrDefault);
+
+        var chosen = new ThemeConfiguration
+        {
+            Primary = Colors.Black,
+            PrimaryText = Color.FromRgb(0x11, 0x22, 0x33),
+        };
+
+        Assert.Equal(Color.FromRgb(0x11, 0x22, 0x33), chosen.PrimaryTextOrDefault);
     }
 
     /// <summary>An ink the file names, for a primary of its own, is the user's and stands.</summary>
@@ -377,6 +389,67 @@ public sealed class ConfigurationTests
         Assert.False(settings.Chosen(owner, "Commands/move"));
         Assert.Equal("mv", config.ReadKeyAs("Commands/move", "nothing"));
     }
+
+    /// <summary>
+    /// A fresh install does its file operations with Rorolala's own tools, and reads them back as that preset.
+    /// </summary>
+    /// <remarks>
+    /// What the settings are worth by default is the preset Rorolala's plugin offers, because that plugin is part
+    /// of what the program is installed with. The panel reads the preset in force back from what those settings
+    /// are worth, so this is also what says the two are still one text: a default that drifted from the preset
+    /// would leave the panel showing the fallback, as if somebody had changed the commands by hand.
+    /// </remarks>
+    [Fact]
+    public void AFreshInstallDoesItsFileOperationsWithRorolalasOwnTools()
+    {
+        Given(ConfigPaths.Preference, """{"_version": 1, "language": "en"}""");
+
+        var settings = new SettingRegistry(ConfigurationLoader.LoadPreference());
+        var owner = new PluginId("rorolala.file_system");
+
+        settings.Declare(
+            owner,
+            new PluginSetting(
+                "Commands/preset",
+                SettingKind.Preset,
+                "operations",
+                null,
+                5,
+                false,
+                [
+                    new SettingOption("rorolala", "rorolala_vcs.setting.preset", Written(FileOperationPresets.Rorolala)),
+                    new SettingOption(FileOperationPresets.Custom, "rorolala_file_system.setting.preset.custom"),
+                ]
+            )
+        );
+
+        foreach (var (id, value, order) in new[]
+        {
+            ("Commands/copy", FileOps.DefaultCopy, 10),
+            ("Commands/move", FileOps.DefaultMove, 20),
+            ("Commands/remove_dirs", FileOps.DefaultRemoveDirs, 30),
+            ("Commands/remove_files", FileOps.DefaultRemoveFiles, 40),
+        })
+        {
+            settings.Declare(owner, new PluginSetting(id, SettingKind.Text, id, value, order));
+        }
+
+        var preset = settings.Of(owner).Single(setting => setting.Id == "Commands/preset");
+
+        Assert.Equal("rorolala", settings.Value(owner, preset));
+    }
+
+    /// <summary>What one preset's option writes: the four settings, under the names the file uses.</summary>
+    /// <param name="commands">The commands the preset carries.</param>
+    /// <returns>The settings it writes, by identity.</returns>
+    private static Dictionary<string, string> Written(FileOperationCommands commands) =>
+        new(StringComparer.Ordinal)
+        {
+            ["Commands/copy"] = commands.Copy,
+            ["Commands/move"] = commands.Move,
+            ["Commands/remove_dirs"] = commands.RemoveDirs,
+            ["Commands/remove_files"] = commands.RemoveFiles,
+        };
 
     /// <summary>
     /// A preset keeps no value of its own: it is shown as the option the settings it stands for agree with,
