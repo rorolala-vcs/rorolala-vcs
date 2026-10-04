@@ -6,8 +6,11 @@
 //! was itself run from: nothing is named, and nothing is looked up beyond that.
 //!
 //! What the two would otherwise each work out for themselves is handed over with the program:
-//! the language this run speaks, and the directory it was made in. A window is then opened onto
-//! the same work, in the same language, as the run that asked for it.
+//! the language this run speaks, and the directory to open onto. The directory is the Workspace the
+//! run was made in rather than the run's own directory, since the work is the Workspace — the tree is
+//! rooted at its directory, and the Layouts and the ownership the browser shows are read against it —
+//! so a window opened onto a directory inside one would be a window onto part of the work. A run no
+//! Workspace holds opens onto the directory it was made in, which is all there is to open onto.
 //!
 //! The program is run as a child and **waited for** rather than started and left behind: this command
 //! is a way to the window, and a way to it lasts as long as the window does. What the window ends with
@@ -27,6 +30,8 @@ use mingling::{
 use rorolala_cli_setups::ResLanguage;
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
+use rorolala_utils_location::Locate as _;
+use rorolala_workspace::Workspace;
 use rust_i18n::t;
 
 use crate::Next;
@@ -47,7 +52,11 @@ const DESKTOP_PROGRAM: &str = "RorolalaDesktop";
 /// says and where it was made are told apart by name and neither has to be counted for.
 const LANGUAGE_ARG: &str = "-Lang:";
 
-/// What the directory this run was made in is handed over under.
+/// What the directory a window is to open onto is handed over under.
+///
+/// The program is started in the same directory, so this is what the two agree on rather than the only
+/// way the answer reaches it: a program that reads where it is reads the directory it was started in,
+/// and one that reads its command line reads this.
 const DIRECTORY_ARG: &str = "-CurrentDir:";
 
 #[help(buffer)]
@@ -76,6 +85,10 @@ pub fn complete_desktop() -> Suggest {
 /// a way to it rather than a way to work: the program is started and the run ends, leaving it to
 /// the reader. It sits in a `desktop` directory beside the program that was run — the layout
 /// `./run.sh export` lays down — so a run reaches it without being told where it is.
+///
+/// The window opens onto the Workspace the run was made in, or onto the directory it was made in
+/// when no Workspace holds it. See [`opening_at`] for what a Workspace is the answer rather than the
+/// run's own directory.
 ///
 /// # Errors
 ///
@@ -113,12 +126,18 @@ pub fn handle_desktop(_state: StateDesktop, language: &ResLanguage, cwd: &ResCur
         return ErrorDesktopNotFound.into();
     }
 
+    // What the window is to open onto, which is what the program is both started in and told: started in,
+    // because that is what a program that reads where it is reads, and told, because the two programs
+    // state the same thing rather than each working it out.
+    let at = opening_at(cwd);
+
     // Run and waited for rather than started and left: the window is the whole of what this command does,
     // so the command lasts as long as the window does. What the program ended with is what this run ends
     // with — the two are one thing to whoever asked for a window, and a caller that waits for a program is
     // entitled to its answer.
     match Command::new(&program)
-        .args([language_arg(language), directory_arg(cwd)])
+        .current_dir(&at)
+        .args([language_arg(language), directory_arg(&at)])
         .status()
     {
         Ok(status) => ResultDesktopEnded {
@@ -132,14 +151,24 @@ pub fn handle_desktop(_state: StateDesktop, language: &ResLanguage, cwd: &ResCur
     }
 }
 
+/// The directory a window is to open onto: the Workspace holding `cwd`, or `cwd` itself.
+///
+/// The work is the Workspace, so opening onto a directory inside one would be opening onto part of the
+/// work: the tree is rooted at the Workspace's own directory, and the Layouts, the ownership and the
+/// hiding the browser reads are all read against it. A run in a Vault, or in no place the program
+/// knows, has nothing wider to open onto, and opens onto where it was made.
+fn opening_at(cwd: &Path) -> PathBuf {
+    Workspace::locate(cwd).map_or_else(|| cwd.to_path_buf(), |held| held.get_root().to_path_buf())
+}
+
 /// The argument that hands over the language this run speaks.
 fn language_arg(language: &ResLanguage) -> String {
     format!("{LANGUAGE_ARG}{}", language.as_str())
 }
 
-/// The argument that hands over the directory this run was made in.
-fn directory_arg(cwd: &ResCurrentDir) -> String {
-    format!("{DIRECTORY_ARG}{}", cwd.display())
+/// The argument that hands over the directory a window is to open onto.
+fn directory_arg(at: &Path) -> String {
+    format!("{DIRECTORY_ARG}{}", at.display())
 }
 
 /// Where the Desktop program sits, given where this program was run from.
@@ -220,4 +249,54 @@ pub fn render_error_desktop_failed(error: ErrorDesktopFailed, ec: &mut ResExitCo
         help_line!(t!("desktop.err_launch_failed_help").trim())
     );
     ec.exit_code = EC_ERR_DESKTOP_LAUNCH_FAILED;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::opening_at;
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-desktop-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn a_run_inside_a_workspace_opens_onto_its_root() {
+        let root = scratch("inside");
+        let under = root.join("art").join("scenes");
+
+        // The data directory is what makes a directory a Workspace, and one made here is enough to be
+        // found from under it: what is looked up is the Workspace, not what it holds.
+        fs::create_dir_all(root.join(".rola")).unwrap();
+        fs::create_dir_all(&under).unwrap();
+
+        assert_eq!(opening_at(&under), root);
+        assert_eq!(opening_at(&root), root);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_run_no_workspace_holds_opens_where_it_was_made() {
+        let dir = scratch("outside");
+
+        assert_eq!(opening_at(&dir), dir);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

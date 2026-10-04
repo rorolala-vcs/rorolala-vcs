@@ -18,8 +18,12 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class GitIgnoreTests
 {
-    /// <summary>Begins each test from no configuration at all.</summary>
-    public GitIgnoreTests() => DataHome.Clean();
+    /// <summary>Begins each test from no configuration at all, and from no provider registered.</summary>
+    public GitIgnoreTests()
+    {
+        DataHome.Clean();
+        HideRegistry.Clear();
+    }
 
     /// <summary>
     /// What <c>.gitignore</c> leaves out is ignored, what it does not is not, and a directory no repository

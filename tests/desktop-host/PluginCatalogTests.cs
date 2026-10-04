@@ -17,17 +17,21 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class PluginCatalogTests
 {
-    /// <summary>Begins each test from no configuration at all.</summary>
-    public PluginCatalogTests() => DataHome.Clean();
+    /// <summary>Begins each test from no configuration at all, and from no provider registered.</summary>
+    public PluginCatalogTests()
+    {
+        DataHome.Clean();
+        global::FileSystemPlugin.HideRegistry.Clear();
+    }
 
     /// <summary>
     /// The File System plugin offers its own three hide providers, and the Git plugin's is offered beside
     /// them even though the setting was declared before the Git plugin started.
     /// </summary>
     /// <remarks>
-    /// The catalogue is static and the two plugins are started in process, so it holds what every test in
-    /// this run registered; what is checked is that the three this plugin brings are there and in the order
-    /// it brings them, and that Git's is added after them rather than instead of one.
+    /// The catalogue is static and the two plugins are started in process, so it is emptied before this
+    /// starts — what is checked is the three this plugin brings, in the order it brings them, and Git's
+    /// added after them rather than instead of one.
     /// </remarks>
     [Fact]
     public void ADependentPluginAddsItsHideProviderToTheFileSystemsCatalogue()
@@ -51,6 +55,13 @@ public sealed class PluginCatalogTests
         // label key is what names it — the File System plugin knows nothing about Git.
         var git = Assert.Single(HideRegistry.Providers, option => option.Value == "git_ignored");
         Assert.Equal("rorolala_file_system.hides.git_ignored", git.LabelKey);
+
+        // Added after them rather than instead of one, which is what the options reading the live catalogue
+        // are for.
+        Assert.Equal(
+            ["dot_file", "dot_dir", "windows_hidden", "git_ignored"],
+            HideRegistry.Providers.Select(option => option.Value).ToArray()
+        );
     }
 
     /// <summary>

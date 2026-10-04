@@ -163,6 +163,20 @@ public sealed class HideRegistry
     }
 
     /// <summary>
+    /// Removes every provider, which the suite that drives this plugin needs.
+    /// </summary>
+    /// <remarks>
+    /// The catalogue is the run's rather than a registry's, so nothing else can put it back to the state
+    /// before any plugin started: a check of what one plugin adds to another's extension point would
+    /// otherwise be a check of what every check before it happened to add, in whatever order they ran in.
+    /// </remarks>
+    public static void Clear()
+    {
+        Catalogue.Clear();
+        Offer.Clear();
+    }
+
+    /// <summary>
     /// Declares the setting the providers are chosen with, and the providers this plugin brings itself.
     /// </summary>
     /// <remarks>

@@ -16,8 +16,12 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class ListingTests
 {
-    /// <summary>Begins each test from no configuration at all.</summary>
-    public ListingTests() => DataHome.Clean();
+    /// <summary>Begins each test from no configuration at all, and from no provider registered.</summary>
+    public ListingTests()
+    {
+        DataHome.Clean();
+        global::FileSystemPlugin.HideRegistry.Clear();
+    }
 
     /// <summary>
     /// A directory with a plain file, a dot-file and a dot-directory: every entry is listed to begin with,
