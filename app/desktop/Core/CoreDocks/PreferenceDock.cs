@@ -247,21 +247,34 @@ internal sealed class PreferenceView : UserControl
         });
     }
 
-    /// <summary>One colour as a swatch and its six digits, with the way back to the default.</summary>
+    /// <summary>
+    /// One colour as a swatch, its six digits, and the plate they are two ways of saying.
+    /// </summary>
+    /// <remarks>
+    /// The swatch is what the plate is opened from, so a colour is chosen by pointing at it rather than by
+    /// knowing what it is called, and the field is kept beside it because some colours are known by their
+    /// digits.
+    /// <para>
+    /// Dragging the plate applies what it is over at once and does not write the file: a colour is a resource
+    /// replaced in place, so the window recolours as the pointer moves, and a file written on every move would
+    /// be a file written for colours the user passed through. It is written when the plate says the choice is
+    /// settled, which is when the pointer comes up.
+    /// </para>
+    /// </remarks>
     /// <param name="label">The key naming the colour.</param>
     /// <param name="current">What it is now.</param>
     /// <param name="keep">What to set when a valid colour is typed, or nothing to go back to the default.</param>
     private Control ColourRow(string label, Color current, Action<Color?> keep)
     {
-        var swatch = new Border
+        var swatch = new Button
         {
-            Width = 22,
-            Height = 22,
+            Width = 24,
+            Height = 24,
+            Padding = new Thickness(0),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5),
-            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
             Background = new SolidColorBrush(current),
             VerticalAlignment = VerticalAlignment.Center,
+            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
         };
 
         var field = new TextBox
@@ -270,6 +283,23 @@ internal sealed class PreferenceView : UserControl
             MinWidth = 120,
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+        // What the plate says while it is dragged: the colour in force is changed and the look follows it,
+        // and the two things saying what the colour is are brought into step with it. The panel is not built
+        // again, because the plate being dragged is part of what that would take away.
+        var plate = new ColourPlate(current);
+        var flyout = new Flyout { Content = plate };
+
+        plate.Chosen += chosen =>
+        {
+            keep(chosen);
+            _theme.Apply();
+            swatch.Background = new SolidColorBrush(chosen);
+            field.Text = Hex(chosen);
+        };
+        plate.Settled += () => _theme.Save();
+
+        swatch.Click += (_, _) => flyout.ShowAt(swatch);
 
         // Written when the field is left or entered rather than on every letter, because the file is
         // written on every change and a colour is a word rather than a keystroke. What will not read as
