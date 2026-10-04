@@ -1,4 +1,5 @@
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
 
 namespace FileSystemPlugin;
 
@@ -60,14 +61,51 @@ public enum LockInk
 /// draws a state in — rather than bare on the tile. A corner that says something is wrong wants saying, and
 /// one that says an entry is the reader's own does not.
 /// </param>
+/// <param name="HoverKey">
+/// A key for what the corner says when the pointer rests on it, with the mark's own words as the one value it
+/// leaves a place for, or nothing to be hovered for the mark's own words as they stand.
+/// </param>
 public sealed record EntryLockMark(
     string? TextKey = null,
     string? Text = null,
     string? IconKey = null,
     LockInk Ink = LockInk.Quiet,
     LockInk TextInk = LockInk.Quiet,
-    bool Tagged = false
-);
+    bool Tagged = false,
+    string? HoverKey = null
+)
+{
+    /// <summary>
+    /// What the mark says in words: a holder's name, or what the column calls a state that has no name.
+    /// </summary>
+    /// <remarks>
+    /// Read by the column and by what the corner says when the pointer rests on it, because the two are one
+    /// answer: a mark that is a name in the column is that name on the corner as well. The literal comes first
+    /// because an account's name is data — a name that happens to read like a key is still what somebody is
+    /// called.
+    /// </remarks>
+    /// <returns>What to write, or nothing when the mark says nothing at all.</returns>
+    public string? Said() =>
+        Text is { Length: > 0 } literal ? literal
+        : TextKey is { Length: > 0 } key ? RolaI18N.Get(key)
+        : null;
+
+    /// <summary>
+    /// What the mark says when the pointer rests on its corner, which may be a phrase around its own words.
+    /// </summary>
+    /// <remarks>
+    /// A phrase of its own rather than the words the column is read for, because the two are read in different
+    /// places: a column beside a name says only the name, while a corner that is a picture of a lock says nothing
+    /// about who holds it until it is given the words. The mark's own words are the argument, so a phrase can be
+    /// written around a name without the renderer having to know which part of it is the name — and one place in
+    /// a phrase is all the translation formatter takes.
+    /// </remarks>
+    /// <returns>What to say, which is the mark's own words when it names no phrase of its own.</returns>
+    public string? Hover() =>
+        HoverKey is { Length: > 0 } key && Said() is { Length: > 0 } said
+            ? RolaI18N.Get(key, said)
+            : Said();
+}
 
 /// <summary>
 /// One plugin's answer to who holds an entry, and how it is shown.

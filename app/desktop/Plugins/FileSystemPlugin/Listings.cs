@@ -1733,16 +1733,7 @@ internal sealed class ListBrowser : EntryView
     private static TextBlock Locked(IEntryLockProvider provider, Entry entry)
     {
         var mark = provider.Mark(entry);
-        var said = mark switch
-        {
-            // The literal first: an account's name is data, and a phrase is not what the provider
-            // meant to say by it.
-            { Text: { Length: > 0 } literal } => literal,
-            { TextKey: { Length: > 0 } key } => RolaI18N.Get(key),
-            _ => Placeholder,
-        };
-
-        var cell = Cell(said);
+        var cell = Cell(mark.Said() ?? Placeholder);
         cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.TextInk));
 
         return cell;

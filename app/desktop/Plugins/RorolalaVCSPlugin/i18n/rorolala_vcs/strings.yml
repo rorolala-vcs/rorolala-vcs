@@ -29,6 +29,12 @@ rorolala_vcs:
       en: You
       zh-CN: 你
 
+    # What the corner of a lock says when the pointer rests on it. A corner is a picture, so the name goes
+    # in a phrase here rather than standing alone as it does in the column.
+    held_by:
+      en: Held by %{holder}
+      zh-CN: 由 %{holder} 持有
+
   # What an entry's menu offers about who holds it. What is claimed is one file, or everything under a
   # directory — the command line takes a directory recursively — so the two are said apart. The forced
   # pair is shown while Shift is held: what it does is past the checks the plain pair makes, which is

@@ -26,6 +26,9 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// <summary>The i18n key a held-by-you cell reads as.</summary>
     private const string Mine = "rorolala_vcs.ownership.mine";
 
+    /// <summary>The phrase the corner of a lock is hovered for, with the holder's name in it.</summary>
+    private const string HeldBy = "rorolala_vcs.ownership.held_by";
+
     /// <summary>What was read for each directory, so a listing costs one read rather than one per row.</summary>
     private readonly Dictionary<string, RolaOwnership?> _owned = new(StringComparer.Ordinal);
 
@@ -78,13 +81,15 @@ internal sealed class RorolalaLocks : IEntryLockProvider
 
             // Held by somebody else, which is the lock: the one answer on the card that is not the
             // reader's, so it is drawn in the error red and worn as a tag, the way the shell draws a
-            // state. The words name whoever holds it, in the same red.
+            // state. The words name whoever holds it, in the same red — and the corner, which is only a
+            // picture of a lock, is hovered for the phrase that name goes in.
             { Kind: EntryLockKind.Held, Holder: { Length: > 0 } holder } => new EntryLockMark(
                 Text: holder,
                 IconKey: Icons.Lock,
                 Ink: LockInk.Error,
                 TextInk: LockInk.Error,
-                Tagged: true
+                Tagged: true,
+                HoverKey: HeldBy
             ),
 
             // Nobody holds it, or nothing says: the same thing to a reader, and the same cell.

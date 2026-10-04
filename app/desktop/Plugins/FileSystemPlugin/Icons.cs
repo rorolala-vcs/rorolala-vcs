@@ -213,6 +213,14 @@ internal static partial class Icons
             glyph.VerticalAlignment = VerticalAlignment.Top;
         }
 
+        // What the corner stands for is said in words when the pointer rests on it: the corner is a picture of a
+        // lock, and who holds an entry is a name rather than a picture. Set on whatever was finally drawn — the
+        // tag when there is one — so that the whole of it answers rather than the glyph inside it.
+        if (contributed.Hover() is { Length: > 0 } hover)
+        {
+            ToolTip.SetTip(corner, hover);
+        }
+
         var grid = new Grid { Width = size, Height = size };
         grid.Children.Add(icon);
         grid.Children.Add(corner);

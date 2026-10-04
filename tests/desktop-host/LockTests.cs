@@ -18,6 +18,37 @@ public sealed class LockTests
     /// <summary>Begins each test from no provider at all.</summary>
     public LockTests() => EntryLockProviders.Clear();
 
+    /// <summary>
+    /// A mark says its literal first, and nothing at all when it has neither.
+    /// </summary>
+    /// <remarks>
+    /// What a mark says is what the corner is hovered for and what the column is read for, so it comes from one
+    /// place. The literal wins because it is data: the name somebody is called is not a key, however much it
+    /// looks like one.
+    /// </remarks>
+    [Fact]
+    public void AMarkSaysItsLiteralBeforeItsKey()
+    {
+        Assert.Equal("alice", new EntryLockMark(Text: "alice").Said());
+        Assert.Equal("alice", new EntryLockMark(TextKey: "it.lock.mine", Text: "alice").Said());
+        Assert.Null(new EntryLockMark().Said());
+        Assert.Null(new EntryLockMark(Text: "", TextKey: "").Said());
+    }
+
+    /// <summary>
+    /// A mark hovered for says its own words when it names no phrase, and nothing when it says nothing.
+    /// </summary>
+    /// <remarks>
+    /// What a phrase comes to is the translation formatter's own business, checked with the rest of it; what is
+    /// checked here is that a mark without one is not hovered for nothing.
+    /// </remarks>
+    [Fact]
+    public void AMarkWithoutAPhraseIsHoveredForWhatItSays()
+    {
+        Assert.Equal("alice", new EntryLockMark(Text: "alice").Hover());
+        Assert.Null(new EntryLockMark().Hover());
+    }
+
     /// <summary>A provider is the one a listing asks only for the directory it speaks for.</summary>
     [Fact]
     public void AProviderIsAskedOnlyForTheDirectoryItSpeaksFor()
