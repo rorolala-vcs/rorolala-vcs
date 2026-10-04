@@ -98,19 +98,25 @@ internal sealed class Shared
     }
 
     /// <summary>
-    /// What a touch comes to: what the lock providers answered is let go of, and every location is told to
-    /// read its directory again.
+    /// What a touch comes to: what the providers answered is let go of, and every location is told to read
+    /// its directory again.
     /// </summary>
     /// <remarks>
-    /// The letting go is why this is a step of its own rather than part of the raising. An answer about an
-    /// entry is read from the tree this says has changed — a Layout names each path by a `Uuid`, and a move
-    /// renames one — so a listing read from an answer that was already stale would be drawn wrong until the
-    /// next touch. What is read again and what is drawn from it are both later than this, which is what makes
-    /// the order the whole of the point.
+    /// The letting go is why this is a step of its own rather than part of the raising. What a provider
+    /// answered is read from the files this says may have changed — a lock is read from the Layout a file
+    /// operation renames a path in, and a hide rule is read from files a change may have rewritten — so a
+    /// listing read from an answer that was already stale would be drawn wrong until the next touch. What is
+    /// read again and what is drawn from it are both later than this, which is what makes the order the whole
+    /// of the point.
     /// </remarks>
     public void FilesChanged()
     {
+        // Said to the catalogue rather than to this reading of the settings: what a provider answered is worth
+        // letting go of whether or not it is in force, and what is in force is not what decides it. The name is
+        // the class's, since the property of the same name is what answers the rest.
+        global::FileSystemPlugin.HideRegistry.Forget();
         EntryLockProviders.Forget();
+
         Touched?.Invoke();
     }
 

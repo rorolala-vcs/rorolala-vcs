@@ -1,5 +1,9 @@
 using System.Diagnostics;
+using FileSystemPlugin;
 using GitVCSPlugin;
+using RorolalaDesktop.Contract;
+using RorolalaDesktop.Hosting;
+using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -106,6 +110,50 @@ public sealed class GitIgnoreTests
         // a repository with no rules of its own and nothing is hidden.
         Assert.True(GitIgnores.Hides(inner, outer));
         Assert.False(GitIgnores.Hides(inner, inner));
+    }
+
+    /// <summary>
+    /// A rule written after an answer was asked for is not seen until what was asked is let go of, which is
+    /// what a listing does when the files may have changed.
+    /// </summary>
+    /// <remarks>
+    /// The rules are Git's and are asked of the program once per directory and kept, so the keeping is what
+    /// makes asking worthwhile and also what goes stale: a <c>.gitignore</c> is a file, and editing one is a
+    /// change no answer read before it can know about. What is checked is the whole of the way back — the
+    /// listing's own `Shared` is what says the files may have changed, and the provider in force is what has
+    /// to let go of its answer.
+    /// </remarks>
+    [Fact]
+    public void AChangedIgnoreFileIsSeenOnceTheFilesMayHaveChanged()
+    {
+        var repository = Scratch.New("git-changed");
+        Given(repository, "git", ["init", "--quiet"]);
+        File.WriteAllText(Path.Combine(repository, ".gitignore"), "*.tmp\n");
+
+        var kept = Path.Combine(repository, "kept.txt");
+        File.WriteAllText(kept, "x");
+
+        var services = Host.Services();
+        var host = services.For(new PluginId(FileSystem.Identity), 1);
+
+        // The real provider, registered the way the Git plugin registers it. Registering one already in the
+        // catalogue adds nothing, so a test that ran before is no reason for this one to fail.
+        HideRegistry.Register(new GitIgnored());
+
+        var shared = new Shared(repository, new HideRegistry(host.Config), host.Config);
+        var entry = new Entry(kept, EntryKind.File);
+
+        Assert.False(shared.Hides(entry));
+
+        // The rule now covers the file: what was asked is kept, so the listing goes on saying it is not
+        // ignored — which is the staleness, stated.
+        File.WriteAllText(Path.Combine(repository, ".gitignore"), "*.txt\n");
+        Assert.False(shared.Hides(entry));
+
+        // Saying the files may have changed is what a file operation and coming back to the window both say.
+        shared.FilesChanged();
+
+        Assert.True(shared.Hides(entry));
     }
 
     /// <summary>Runs one command in a directory, failing the test when it does.</summary>

@@ -54,6 +54,9 @@ public sealed class GitIgnored : IEntryHideProvider
 
         return GitIgnores.Hides(entry.Path, root);
     }
+
+    /// <inheritdoc />
+    public void Forget() => GitIgnores.Forget();
 }
 
 /// <summary>
@@ -93,6 +96,21 @@ public static class GitIgnores
     /// every one is read by, so the walk is worth making once rather than per directory walked into.
     /// </remarks>
     private static readonly Dictionary<string, string?> Repositories = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Lets go of every answer, so the next one is asked of the program again.
+    /// </summary>
+    /// <remarks>
+    /// Said when the files may have changed, and the rules are files: a <c>.gitignore</c> edited, a
+    /// repository set up in a directory that had none, a copy of one fetched. A kept answer outliving that
+    /// is a listing hiding by rules nobody states any more — and the cache is what makes asking once per
+    /// directory worth it, so it is cleared rather than never kept.
+    /// </remarks>
+    public static void Forget()
+    {
+        Asked.Clear();
+        Repositories.Clear();
+    }
 
     /// <summary>
     /// Whether a path is one Git ignores.

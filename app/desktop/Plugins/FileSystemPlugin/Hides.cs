@@ -63,6 +63,18 @@ public interface IEntryHideProvider
     /// <param name="root">The directory the view reading the entry is rooted at.</param>
     /// <returns>Whether the provider hides it.</returns>
     bool Hides(Entry entry, string root) => Hides(entry);
+
+    /// <summary>
+    /// Says that what this provider answered may have changed.
+    /// </summary>
+    /// <remarks>
+    /// A rule that is about a repository is asked of a program once per directory and kept, since asking it
+    /// per entry would be a process per entry. The rules themselves are files, though — a <c>.gitignore</c>
+    /// is edited, a repository is set up in a directory that had none — so a kept answer can outlive what it
+    /// was read from. A provider that keeps anything lets go of it here; one that reads afresh each time has
+    /// nothing to do, which is what the default does.
+    /// </remarks>
+    void Forget() { }
 }
 
 /// <summary>
@@ -246,6 +258,28 @@ public sealed class HideRegistry
     /// <returns>The directory holding it, or its own path where it holds nothing under one.</returns>
     private static string Holder(Entry entry) =>
         Path.GetDirectoryName(entry.Path) is { Length: > 0 } parent ? parent : entry.Path;
+
+    /// <summary>
+    /// Says to every provider that what it answered may have changed.
+    /// </summary>
+    /// <remarks>
+    /// Said to every provider and not only to the ones in force: whether one is in force is the user's to
+    /// change at any moment, and a provider put back into force would otherwise answer from what it read
+    /// before it was taken out. What a provider is holding is its own business, and one with nothing to let
+    /// go of answers nothing to this.
+    /// <para>
+    /// Static because the catalogue is, and because the answer is the same whatever the settings say: it is
+    /// said to the class rather than to a reading of them. The callers inside this class reach it through the
+    /// class name, since the registry they hold also has a say in what is asked.
+    /// </para>
+    /// </remarks>
+    public static void Forget()
+    {
+        foreach (var provider in Catalogue)
+        {
+            provider.Forget();
+        }
+    }
 
     /// <summary>
     /// The providers in force, as the setting says.
