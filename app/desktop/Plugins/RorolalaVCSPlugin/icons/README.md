@@ -1,6 +1,6 @@
 # The RorolalaVCSPlugin pictures
 
-The pictures the `RorolalaVCSPlugin` plugin draws: `lock`, `create`, `lock_open`.
+The pictures the `RorolalaVCSPlugin` plugin draws: `lock`, `create`, `lock_open`, `error`, `warning`, `live_help`.
 
 They are Google's Material Design icons, taken from the maintained mirror of the set,
 [material-icons/material-icons](https://github.com/material-icons/material-icons) — the same artwork as

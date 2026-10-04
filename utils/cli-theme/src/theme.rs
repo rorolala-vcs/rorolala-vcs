@@ -4,10 +4,12 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use mingling::picker::Pickable;
 
-/// How much a style may ask of the terminal it is drawn on
+/// What the output is drawn for
 ///
-/// The three are ordered by how much that is, so a program picks the highest one it
-/// knows both ends can render.
+/// Three of these are about the terminal the output is drawn on, ordered by how much a
+/// style may ask of it, so a program picks the highest one it knows both ends can
+/// render. The fourth is not a terminal at all — see
+/// [`DesktopFriendly`](Self::DesktopFriendly) — and is never arrived at by choosing.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Pickable)]
 pub enum ThemeChoice {
@@ -29,6 +31,17 @@ pub enum ThemeChoice {
     /// Asks for a font whose glyphs are not ASCII, and for 24-bit color. Neither can be
     /// asked of a terminal, so this is only ever chosen by hand.
     Pretty = 2,
+    /// Marked lines for a program to read rather than a terminal to draw
+    ///
+    /// What reports something says which it is in a word at the head of the line — `err: `,
+    /// `warn: `, `help: ` — and what it says follows as it was written, its marks and all, because
+    /// what draws it on the other end reads the same language this program writes in. What is not a
+    /// line of one of those is written exactly as it was: a result is a result, and the other end
+    /// shows it as text.
+    ///
+    /// It is not a fourth step in what a terminal carries but the one choice about a reader that is
+    /// not a terminal, which is why [`auto_select`](Self::auto_select) never answers it.
+    DesktopFriendly = 3,
 }
 
 impl ThemeChoice {
@@ -63,6 +76,7 @@ impl ThemeChoice {
         match value {
             0 => Self::Text,
             2 => Self::Pretty,
+            3 => Self::DesktopFriendly,
             _ => Self::Simple,
         }
     }

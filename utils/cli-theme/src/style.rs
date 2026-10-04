@@ -163,6 +163,19 @@ impl Level {
             Self::Help => '\u{f02fc}',
         }
     }
+
+    /// What the line is called where what reads it is a program rather than a person
+    ///
+    /// A word rather than the name the line was reported under, because a program that draws a
+    /// report says which of the three a line is in the shape it draws it with, and the name is for
+    /// whoever is looking something up in the source.
+    const fn word(self) -> &'static str {
+        match self {
+            Self::Error => "err",
+            Self::Warning => "warn",
+            Self::Help => "help",
+        }
+    }
 }
 
 /// Draws a line of `level`, for the theme the program is drawn with.
@@ -176,6 +189,14 @@ fn drawn(level: Level, prefix: &str, content: &str) -> String {
 /// is made out of letters, and where they are there it is made out of a mark on a
 /// background. So the shape is chosen here, and how it is drawn is left to the engine.
 fn source(level: Level, prefix: &str, content: &str, theme: ThemeChoice) -> String {
+    // What a program reads: the level as a word, and the message as it was written. Nothing is marked
+    // and nothing is trimmed away, because the other end reads the same language — a message trimmed
+    // here would lose the blank line that separates it from the next one, and one marked here would be
+    // drawn twice.
+    if theme == ThemeChoice::DesktopFriendly {
+        return format!("{}: {content}", level.word());
+    }
+
     let content = marked(content);
 
     if theme == ThemeChoice::Pretty {
@@ -219,6 +240,44 @@ mod tests {
 
     /// What they say.
     const CONTENT: &str = "Fail to load vault!";
+
+    /// What a line for a window says: which it is, in a word, and then the message as it was written.
+    ///
+    /// The name the line was reported under is left out, and so are the italics: a window says which line
+    /// is what with the shape it draws it in, and a mark around the message would be a mark the window
+    /// reads as another thing to draw.
+    #[test]
+    fn a_line_for_a_window_is_a_word_and_the_message() {
+        assert_eq!(
+            source(Level::Error, PREFIX, CONTENT, ThemeChoice::DesktopFriendly),
+            "err: Fail to load vault!"
+        );
+        assert_eq!(
+            source(
+                Level::Warning,
+                "WARNING",
+                CONTENT,
+                ThemeChoice::DesktopFriendly
+            ),
+            "warn: Fail to load vault!"
+        );
+        assert_eq!(
+            source(Level::Help, "HELP", CONTENT, ThemeChoice::DesktopFriendly),
+            "help: Fail to load vault!"
+        );
+
+        // A message of several lines comes as it was written, blank line and all: the window reads the
+        // lines as it goes, and a line that was joined here would be two things said as one.
+        assert_eq!(
+            source(
+                Level::Error,
+                PREFIX,
+                "**First** line\n\nSecond line",
+                ThemeChoice::DesktopFriendly
+            ),
+            "err: **First** line\n\nSecond line"
+        );
+    }
 
     #[test]
     fn a_line_without_the_glyphs_is_letters() {

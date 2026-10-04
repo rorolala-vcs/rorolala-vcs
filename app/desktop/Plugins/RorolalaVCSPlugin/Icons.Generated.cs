@@ -17,11 +17,23 @@ internal static partial class Icons
     /// <summary>The key the `lock_open` picture is held under.</summary>
     public const string LockOpen = "rorolala_vcs.lock_open";
 
+    /// <summary>The key the `error` picture is held under.</summary>
+    public const string Error = "rorolala_vcs.error";
+
+    /// <summary>The key the `warning` picture is held under.</summary>
+    public const string Warning = "rorolala_vcs.warning";
+
+    /// <summary>The key the `live_help` picture is held under.</summary>
+    public const string LiveHelp = "rorolala_vcs.live_help";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
         (Lock, "lock"),
         (Create, "create"),
         (LockOpen, "lock_open"),
+        (Error, "error"),
+        (Warning, "warning"),
+        (LiveHelp, "live_help"),
     ];
 }

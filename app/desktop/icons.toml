@@ -60,4 +60,7 @@ key = "rorolala_vcs"
 # What an entry's lock is drawn with, and what taking and letting go of one is: `lock` is somebody else
 # holding it and is also what claiming it wears, `lock_open` is letting go of it, and `create` — the set's
 # pencil — is the reader holding it, since holding it is what makes it theirs to change.
-icons = ["lock", "create", "lock_open"]
+# `lock` and `lock_open` are what taking ownership and letting it go wear in an entry's menu, `create` is
+# the pencil that marks the reader's own, and the last three are how a command's own report is read: what it
+# said went wrong, what it said to be careful of, and what it said could be done about it.
+icons = ["lock", "create", "lock_open", "error", "warning", "live_help"]

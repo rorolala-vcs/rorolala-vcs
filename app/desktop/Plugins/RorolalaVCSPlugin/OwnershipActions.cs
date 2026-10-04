@@ -22,6 +22,14 @@ namespace RorolalaVCSPlugin;
 /// </remarks>
 internal static class OwnershipActions
 {
+    /// <summary>The theme the output is asked for, which is the one this window reads.</summary>
+    /// <remarks>
+    /// Stated on every run rather than left to the command line's own choice, because what is being read is not a
+    /// terminal: the level of every reported line is a word at the head of it, and what it says follows as it was
+    /// written, so that this window draws the marks rather than the escapes a terminal would have been given.
+    /// </remarks>
+    private const string Theme = "desktop-friendly";
+
     /// <summary>The environment variable naming the program the window was opened by.</summary>
     /// <remarks>
     /// The same name <c>rola desktop</c> hands over, which is where it is set: see the command line's own
@@ -140,7 +148,7 @@ internal static class OwnershipActions
             return;
         }
 
-        var arguments = new List<string> { verb };
+        var arguments = new List<string> { "--theme-choice=" + Theme, verb };
 
         if (force)
         {
@@ -168,10 +176,40 @@ internal static class OwnershipActions
 
             if (!done)
             {
-                host.Dialogs.Report(new Report(RolaI18N.Get("rorolala_vcs.ownership_failed"), said));
+                host.Dialogs.Present(
+                RolaI18N.Get("rorolala_vcs.ownership_failed"),
+                () =>
+                    ReportView.Of(
+                        ReportLines.Parse(said),
+                        key => host.Icons.Find(key),
+                        colour => Ink(colour)
+                    )
+            );
             }
         });
     }
+
+    /// <summary>
+    /// What a colour named inside a message stands for.
+    /// </summary>
+    /// <remarks>
+    /// The three a level is reported in are answered with the look's own resources rather than with the terminal's
+    /// palette, so that a message says the same thing in a window as it says in a terminal while being drawn in
+    /// the colours the window is drawn in. A colour written as six digits is the colour it says, and a name
+    /// nothing answers to is left as it stands.
+    /// </remarks>
+    /// <param name="colour">The colour the message named.</param>
+    /// <returns>The colour or theme resource to draw it in, or nothing.</returns>
+    private static string? Ink(string colour) =>
+        colour.StartsWith('#')
+            ? colour
+            : colour.ToLowerInvariant() switch
+            {
+                "red" => "rorolala.del",
+                "yellow" => "rorolala.warn",
+                "green" => "rorolala.add",
+                _ => null,
+            };
 
     /// <summary>Runs it and waits, answering whether it ended well and what it said.</summary>
     /// <remarks>

@@ -157,6 +157,85 @@ internal sealed class Dialogs : IDialogs
         }
     }
 
+    /// <inheritdoc />
+    public void Present(string title, Func<Control> content)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Presented(title, content);
+
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => Presented(title, content));
+    }
+
+    /// <summary>
+    /// Shows what a plugin built, in the window a report is shown in.
+    /// </summary>
+    /// <remarks>
+    /// The content is scrolled rather than the window grown to fit it, because what a command says can be as long
+    /// as it likes and a window taller than the screen has nowhere to put its own button.
+    /// </remarks>
+    /// <param name="title">What the window is called.</param>
+    /// <param name="content">How to build what to show in it.</param>
+    private async void Presented(string title, Func<Control> content)
+    {
+        if (_shell.Window is not { IsVisible: true } owner)
+        {
+            return;
+        }
+
+        var close = new Button
+        {
+            Content = _i18n.Get("window.dialog.confirm"),
+            Classes = { "primary" },
+            IsDefault = true,
+            IsCancel = true,
+            MinWidth = 88,
+        };
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(16, 8, 16, 16),
+            Children = { close },
+        };
+
+        // Built here, on the thread the window belongs to: what a plugin has to say was usually worked out on
+        // another one, and a tree built there is not this thread's to put anywhere.
+        var body = new ScrollViewer
+        {
+            Content = content(),
+            MaxHeight = 460,
+            Padding = new Thickness(16, 16, 16, 8),
+        };
+
+        var panel = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        panel.Children.Add(buttons);
+        panel.Children.Add(body);
+
+        var window = new Window
+        {
+            Title = title,
+            Icon = _icon,
+            Width = 560,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel,
+        };
+
+        window[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+
+        close.Click += (_, _) => window.Close();
+
+        await window.ShowDialog(owner);
+    }
+
     /// <summary>Puts something that has happened, which is read and closed.</summary>
     /// <remarks>
     /// The same window as a question with one button rather than two: there is nothing to agree to, so there

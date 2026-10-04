@@ -108,7 +108,7 @@ internal sealed class RorolalaTheme
 
             // The mark a warning is raised with. It is the one amber, fixed rather than chosen, and it
             // is picked to carry on either ground: what a warning is coloured is not a preference.
-            [Warn] = Fill(Color.FromRgb(0xD4, 0xA0, 0x17)),
+            [Warn] = Fill(WarnColour),
 
             ThemeDictionaries =
             {
@@ -210,6 +210,15 @@ internal sealed class RorolalaTheme
     private const string Accent = "rorolala.accent";
     private const string Selection = "rorolala.selection";
     private const string Warn = "rorolala.warn";
+
+    /// <summary>
+    /// The one amber, which is what a warning is drawn in on either ground.
+    /// </summary>
+    /// <remarks>
+    /// Fixed rather than chosen: it is picked to carry on both the light ground and the dark one, and what a
+    /// warning is coloured is not a preference. A named constant because its wash is the same colour laid thin.
+    /// </remarks>
+    private static readonly Color WarnColour = Color.FromRgb(0xD4, 0xA0, 0x17);
     private const string Shadow = "rorolala.shadow";
     private const string Ring = "rorolala.ring";
 
@@ -533,6 +542,9 @@ internal sealed class RorolalaTheme
             [Ring] = _ring,
             ["rorolala.add"] = Fill(grounds.Add),
             ["rorolala.add.bg"] = Fill(grounds.AddBg),
+            // The wash a warning stands on, which is its own amber laid thin rather than a second colour: what
+            // a warning is coloured is not a preference, and neither is the ground it is read against.
+            ["rorolala.warn.bg"] = Fill(WithAlpha(WarnColour, 30)),
             [DelInk] = Fill(grounds.Del),
             [DelBackground] = Fill(grounds.DelBg),
             [DelWash] = Fill(WithAlpha(grounds.Del, 0x2E)),

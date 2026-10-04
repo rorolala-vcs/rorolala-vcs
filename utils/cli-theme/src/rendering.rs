@@ -49,6 +49,13 @@ impl TextRendering {
 
 /// Draws the color language, for the options passed rather than the program's.
 fn render_with(source: &str, options: RenderOptions) -> String {
+    // The choice about a reader that is not a terminal: what is written is what comes out, because what
+    // draws it on the other end reads the same language. Reading it here would draw escapes into it, which
+    // in a window are not escapes but characters.
+    if options.theme == ThemeChoice::DesktopFriendly {
+        return source.trim().to_string();
+    }
+
     let lines: Vec<&str> = source.lines().collect();
     let mut output: Vec<Line> = Vec::new();
     let mut owed_blank = false;
@@ -544,6 +551,21 @@ mod tests {
             assert_eq!(crate::trd!(&held), "Hello, {name}!");
             assert_eq!(crate::trd!(held), "Hello, {name}!");
         });
+    }
+
+    #[test]
+    fn the_window_form_is_the_message_as_it_was_written() {
+        // Nothing is read here, because what draws it on the other end reads the same language: a mark has
+        // to arrive as a mark, and a colour as a colour, or the window would draw the characters a terminal
+        // would have drawn for them. What is left at the ends is not part of the message.
+        assert_eq!(
+            render_with("Hello, **world**!", options(ThemeChoice::DesktopFriendly)),
+            "Hello, **world**!"
+        );
+        assert_eq!(
+            render_with("  [[red]]red[[/]]  ", options(ThemeChoice::DesktopFriendly)),
+            "[[red]]red[[/]]"
+        );
     }
 
     #[test]

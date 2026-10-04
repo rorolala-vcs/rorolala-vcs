@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 namespace RorolalaDesktop.Contract;
 
 /// <summary>
@@ -291,4 +292,21 @@ public interface IDialogs
     /// </summary>
     /// <param name="report">What to say.</param>
     void Report(Report report);
+
+    /// <summary>
+    /// Shows what a plugin has to say, in a window of the host's.
+    /// </summary>
+    /// <remarks>
+    /// For what a line of text cannot say: a command's own report, read into the shapes its lines mean. The
+    /// window, its chrome, and where it stands are the host's, so a plugin brings only the content — which is
+    /// the same division as everywhere else, a plugin saying what and the host saying how.
+    /// <para>
+    /// The content is made where it is shown rather than handed over ready-made, because a control belongs to the
+    /// thread that made it: what a plugin has to say usually comes from work it did off the window's thread, and
+    /// a tree built there cannot be put on a window. What is handed over is therefore how to build it.
+    /// </para>
+    /// </remarks>
+    /// <param name="title">What the window is called.</param>
+    /// <param name="content">How to build what to show in it, which is called on the window's own thread.</param>
+    void Present(string title, Func<Control> content);
 }
