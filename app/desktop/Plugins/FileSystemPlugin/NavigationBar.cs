@@ -245,7 +245,7 @@ internal sealed class NavigationBar : UserControl
     /// <param name="key">The key it is held under.</param>
     /// <returns>What to draw.</returns>
     private static Control Glyph(string key) =>
-        Icons.Glyph(Icons.Picture(key), Icons.PlainInk, Icons.Tool);
+        Icons.Inked(Icons.Picture(key), Icons.Tool);
 
     /// <summary>Sets the field and the list of completions up, and what each of them does.</summary>
     private void FillAddress()

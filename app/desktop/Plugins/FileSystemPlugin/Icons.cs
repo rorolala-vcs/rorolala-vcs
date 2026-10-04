@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -45,18 +46,6 @@ internal static partial class Icons
     /// for a background rather than as a picture with a button around it.
     /// </remarks>
     public const int Tool = 18;
-
-    /// <summary>The theme resource an icon of a tool that is not on is drawn in.</summary>
-    /// <remarks>
-    /// Written as the literals the look publishes, because a plugin has nowhere else to read them from: the
-    /// shell's own constants live in the host, which a plugin may not reference. These two are what a tool
-    /// turns between when it is on and off, and the colour it is on in is the ink the look puts on anything
-    /// filled with the primary.
-    /// </remarks>
-    public const string PlainInk = "rorolala.fg";
-
-    /// <inheritdoc cref="PlainInk" />
-    public const string OnInk = "rorolala.primary.text";
 
     /// <summary>
     /// The step a zoom's icon size is rounded to.
@@ -217,9 +206,10 @@ internal static partial class Icons
     /// The picture itself: a mask over the ink, which is what makes it take the theme's colour.
     /// </summary>
     /// <remarks>
-    /// The ink is the background rather than a colour written into the picture, so that a caller that keeps
-    /// what this hands back can turn the mark from one ink to another — which is what a tool that is on and off
-    /// does — without drawing it again.
+    /// The ink is named rather than written into the picture, so that a mark takes the colour the user is
+    /// looking at: a picture carries whatever it was drawn with, and one drawn once per colour would be one per
+    /// theme. What is named here is a theme resource, which is what a mark that is not a button's — an entry's
+    /// lock, say — is drawn in; a mark that <em>is</em> a button's is [`Inked`], which takes the button's own.
     /// </remarks>
     /// <param name="picture">The picture to stamp.</param>
     /// <param name="ink">What it is drawn in, as the name of a theme resource.</param>
@@ -236,6 +226,48 @@ internal static partial class Icons
             OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
         };
         glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(ink);
+
+        return glyph;
+    }
+
+    /// <summary>
+    /// A picture drawn as a mask over the ink of the button it is in.
+    /// </summary>
+    /// <remarks>
+    /// The ink is the button's own <c>Foreground</c> rather than a colour picked here, because what a button is
+    /// filled with is not this plugin's to know: a tool that is on is filled with the primary, one under the
+    /// pointer with the sunken ground, and what is written on either is the look's answer — the ink the user
+    /// chose, or black or white decided by how bright the fill turned out to be. A picture that picked its own
+    /// ink would be a mark that vanished into the fill the day the primary was a colour it could not be read
+    /// on.
+    /// </remarks>
+    /// <param name="picture">The picture to stamp.</param>
+    /// <param name="extent">How many pixels wide and tall it is.</param>
+    /// <returns>What to draw, which is drawn in the ink of the button it was put in.</returns>
+    public static Border Inked(Bitmap picture, double extent)
+    {
+        var glyph = new Border
+        {
+            Width = extent,
+            Height = extent,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
+        };
+
+        // The button rather than whatever is nearest: a picture sits in a grid in a presenter in the button, and
+        // the ink is the button's to state.
+        glyph.Bind(
+            Border.BackgroundProperty,
+            new Binding("Foreground")
+            {
+                RelativeSource = new RelativeSource
+                {
+                    Mode = RelativeSourceMode.FindAncestor,
+                    AncestorType = typeof(Button),
+                },
+            }
+        );
 
         return glyph;
     }

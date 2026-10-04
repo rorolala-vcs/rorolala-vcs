@@ -70,6 +70,45 @@ public sealed class ConfigurationTests
         Assert.Equal(ThemeConfiguration.DefaultAccent, theme.AccentOrDefault);
     }
 
+    /// <summary>
+    /// The ink the look ships with belongs to the primary it ships with, and is not an ink for another colour.
+    /// </summary>
+    /// <remarks>
+    /// What the file the program writes holds is a pair. A file holding that ink beside another primary is one
+    /// whose primary was changed after the program wrote it, and the ink was never chosen for the colour it
+    /// would now be written on: the reported fault was a black primary drawing its words in the shipped dark
+    /// maroon, which is dark on dark. Such an ink is left out so that the look works one out by contrast, while
+    /// an ink the file names for a primary of its own is the user's and is kept.
+    /// </remarks>
+    [Fact]
+    public void TheInkTheLookShipsWithIsNotAnInkForAnotherPrimary()
+    {
+        var shipped = new ThemeConfiguration
+        {
+            Primary = ThemeConfiguration.DefaultPrimary,
+            PrimaryText = ThemeConfiguration.DefaultPrimaryText,
+        };
+
+        Assert.Equal(ThemeConfiguration.DefaultPrimaryText, shipped.PrimaryTextOrDefault);
+
+        var changed = new ThemeConfiguration
+        {
+            Primary = Colors.Black,
+            PrimaryText = ThemeConfiguration.DefaultPrimaryText,
+        };
+
+        Assert.Null(changed.PrimaryTextOrDefault);
+    }
+
+    /// <summary>An ink the file names, for a primary of its own, is the user's and stands.</summary>
+    [Fact]
+    public void AnInkNamedForAPrimaryOfItsOwnStands()
+    {
+        var named = new ThemeConfiguration { Primary = Colors.Black, PrimaryText = Colors.White };
+
+        Assert.Equal(Colors.White, named.PrimaryTextOrDefault);
+    }
+
     /// <summary>A choice taken back is removed from the file rather than written down as the default.</summary>
     [Fact]
     public void AChoiceTakenBackIsWrittenAsItsAbsence()

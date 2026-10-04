@@ -350,7 +350,7 @@ internal sealed class DirectoryControl : UserControl
         _show.Classes.Add("tool");
         _show.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(_show, RolaI18N.Get("rorolala_file_system.hidden"));
-        _showGlyph = Icons.Glyph(_eyes.Value.Shown, Icons.PlainInk, Icons.Tool);
+        _showGlyph = Icons.Inked(_eyes.Value.Shown, Icons.Tool);
         _show.Content = _showGlyph;
 
         // Written rather than read here: a dock attached to the tree is the one that drew the rows, so it is
@@ -380,9 +380,6 @@ internal sealed class DirectoryControl : UserControl
         {
             Stretch = Stretch.Uniform,
         };
-        _showGlyph[!Border.BackgroundProperty] = new DynamicResourceExtension(
-            shown ? Icons.OnInk : Icons.PlainInk
-        );
 
         // The look's class for a tool that is on, which is the same word for every tool the program draws.
         _show.Classes.Set("on", shown);
@@ -477,7 +474,7 @@ internal sealed class DirectoryControl : UserControl
         _sync.Classes.Add("tool");
         _sync.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(_sync, RolaI18N.Get("rorolala_file_system.sync"));
-        _syncGlyph = Icons.Glyph(_links.Value.Closed, Icons.PlainInk, Icons.Tool);
+        _syncGlyph = Icons.Inked(_links.Value.Closed, Icons.Tool);
         _sync.Content = _syncGlyph;
 
         // Clicking turns it over: in step means looking where the whole looks, so a click out of step is a
@@ -523,9 +520,6 @@ internal sealed class DirectoryControl : UserControl
         {
             Stretch = Stretch.Uniform,
         };
-        _syncGlyph[!Border.BackgroundProperty] = new DynamicResourceExtension(
-            inStep ? Icons.OnInk : Icons.PlainInk
-        );
         _sync.Classes.Set("on", inStep);
     }
 

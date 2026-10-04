@@ -94,6 +94,21 @@ internal sealed class ThemeConfiguration
 
     /// <summary>The accent in force, which is the default when the file names none.</summary>
     public Color AccentOrDefault => Accent ?? DefaultAccent;
+
+    /// <summary>
+    /// What is written on a surface filled with the primary, or nothing to work one out by contrast.
+    /// </summary>
+    /// <remarks>
+    /// The ink the look ships with is the ink <em>for the primary it ships with</em>: a dark tone of that
+    /// colour's own hue, named rather than worked out, the way the design it comes from names its own. A file
+    /// holding that ink beside another primary is one whose primary was changed after the program wrote the
+    /// pair, and the named ink was never chosen for the colour it would now be written on — dark words on a dark
+    /// fill, for a primary the user darkened. Such an ink is left out rather than written on, so that what
+    /// stands on a filled surface is worked out from what it stands on, which is what the look does for every
+    /// primary the file names no ink for.
+    /// </remarks>
+    public Color? PrimaryTextOrDefault =>
+        PrimaryText == DefaultPrimaryText && PrimaryOrDefault != DefaultPrimary ? null : PrimaryText;
 }
 
 /// <summary>

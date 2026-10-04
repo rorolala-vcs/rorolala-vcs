@@ -207,7 +207,9 @@ internal static class ConfigurationLoader
             dto.Primary = Hex(primary);
         }
 
-        if (config.PrimaryText is { } ink)
+        // What is in force rather than what the file said: an ink that belongs to the primary the look ships
+        // with, held beside another primary, is written out of the file rather than carried along in it.
+        if (config.PrimaryTextOrDefault is { } ink)
         {
             dto.PrimaryText = Hex(ink);
         }

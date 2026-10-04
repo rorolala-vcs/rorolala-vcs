@@ -708,7 +708,8 @@ internal sealed class RorolalaTheme
             // to the sunken hover whenever the pointer found it.
             On(
                 selector => Pressable(selector).Class("tool").Class(OnClass),
-                Brushed(TemplatedControl.BackgroundProperty, Primary)
+                Brushed(TemplatedControl.BackgroundProperty, Primary),
+                Brushed(TemplatedControl.ForegroundProperty, PrimaryText)
             ),
             On(
                 selector => Pressable(selector).Class("tool").Class(OnClass).Class(":pointerover"),
