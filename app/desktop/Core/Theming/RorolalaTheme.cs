@@ -183,6 +183,22 @@ internal sealed class RorolalaTheme
     private const string Bg = "rorolala.bg";
     private const string Elevated = "rorolala.bg.elevated";
     private const string Sunken = "rorolala.bg.sunken";
+
+    /// <summary>
+    /// The sunken ground at no alpha: what a fill that hides until the pointer is on it fades in from.
+    /// </summary>
+    /// <remarks>
+    /// A fade is between two colours, and "no colour" is <em>white</em> at no alpha: fading from it into a
+    /// dark fill passes through a light grey — at the middle of the fade, a grey lighter than either end —
+    /// which reads as a flash of light on the way in. Avalonia interpolates a colour' channels one by one and
+    /// leaves the alpha to its own, so what it fades is the <em>colour</em> whether or not either end can be
+    /// seen. A clear fill is therefore the colour it fades to at no alpha, and the only thing that changes
+    /// over the fade is the alpha. See [`Variant`], where the two are made.
+    /// </remarks>
+    private const string SunkenClear = "rorolala.bg.sunken.clear";
+
+    /// <inheritdoc cref="SunkenClear" />
+    private const string BorderClear = "rorolala.border.clear";
     private const string Foreground = "rorolala.fg";
     private const string Muted = "rorolala.fg.muted";
     private const string Faint = "rorolala.fg.faint";
@@ -489,6 +505,8 @@ internal sealed class RorolalaTheme
             [Bg] = Fill(grounds.Bg),
             [Elevated] = Fill(grounds.Elevated),
             [Sunken] = Fill(grounds.Sunken),
+            [SunkenClear] = Fill(WithAlpha(grounds.Sunken, 0)),
+            [BorderClear] = Fill(WithAlpha(grounds.Border, 0)),
             [Foreground] = Fill(grounds.Fg),
             [Muted] = Fill(grounds.Muted),
             [Faint] = Fill(grounds.Faint),
@@ -659,8 +677,8 @@ internal sealed class RorolalaTheme
             // where a row of raised cards would read as a row of things to do rather than to press.
             On(
                 selector => Pressable(selector).Class("tool"),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                Brushed(TemplatedControl.BackgroundProperty, SunkenClear),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderClear),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
                 new Setter(ContentControl.HorizontalContentAlignmentProperty, HorizontalAlignment.Center),
                 new Setter(ContentControl.VerticalContentAlignmentProperty, VerticalAlignment.Center),
@@ -669,8 +687,8 @@ internal sealed class RorolalaTheme
             ),
             On(
                 selector => Pressable(selector).Class("ghost"),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
-                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent)
+                Brushed(TemplatedControl.BackgroundProperty, SunkenClear),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderClear)
             ),
             On(
                 selector => Pressable(selector).Class("tool").Class(":pointerover"),
@@ -1000,7 +1018,7 @@ internal sealed class RorolalaTheme
             ),
             On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                Brushed(TemplatedControl.BackgroundProperty, SunkenClear),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
                 new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
                 Brushed(TemplatedControl.ForegroundProperty, Muted),
@@ -1059,9 +1077,14 @@ internal sealed class RorolalaTheme
 
             // A splitter draws nothing until the pointer is on it, and then the accent hairline through
             // its middle: the grab stays wide enough to hit, and a line that wide would be a bar.
+            //
+            // What it fades in from is the accent at no alpha rather than nothing: the hairline is a gradient
+            // with hard stops, and a fade out of a colour that is not in it would pass through a grey the
+            // design has no part in. The resting state is a colour rather than a gradient for the same reason
+            // a tool's is — what fades is the colour, and the hairline's own shape arrives with the alpha.
             On(
                 selector => selector.OfType<GridSplitter>().Class(DockArea.SplitterClass),
-                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BackgroundProperty, Fill(WithAlpha(_accent, 0))),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
             On(
