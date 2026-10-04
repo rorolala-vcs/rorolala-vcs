@@ -7,6 +7,54 @@ use rorolala_utils_lazyffi::lazyffi;
 
 use crate::{CONFIG_PATH, CreationError, DATA_DIR, INDEX_DIR, STORAGE_DIR, Workspace};
 
+/// Marking the data directory hidden the way Windows says a directory is hidden.
+///
+/// A name beginning with a dot is the whole of the convention where the rest of this was written, and
+/// Windows is not one of those platforms: it shows such a directory like any other, and has an attribute
+/// for the answer instead. What is set here is that attribute, which is what Explorer and everything else
+/// on the platform reads — so a Workspace's own things look like the program's rather than like the work's.
+#[cfg(windows)]
+mod hidden {
+    use std::os::windows::ffi::OsStrExt as _;
+    use std::path::Path;
+
+    /// What Windows calls a file or directory that is not shown.
+    pub(super) const FILE_ATTRIBUTE_HIDDEN: u32 = 0x0000_0002;
+
+    /// What a call that answers with a path's attributes answers when it could not read them.
+    const INVALID: u32 = u32::MAX;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        /// Reads what a path's attributes are.
+        fn GetFileAttributesW(name: *const u16) -> u32;
+
+        /// Says what a path's attributes are.
+        fn SetFileAttributesW(name: *const u16, attributes: u32) -> i32;
+    }
+
+    /// Tries to mark `directory` hidden, answering whether Windows took it.
+    ///
+    /// The read is there because the write is told the whole of what a path's attributes are rather than
+    /// the one bit that is wanted: setting that bit alone would take away everything else the directory
+    /// carries.
+    pub fn marked(directory: &Path) -> bool {
+        let mut name: Vec<u16> = directory.as_os_str().encode_wide().collect();
+        name.push(0);
+
+        // SAFETY: `name` is the NUL-terminated wide string both calls are documented to take, and it
+        // outlives them both.
+        let attributes = unsafe { GetFileAttributesW(name.as_ptr()) };
+
+        if attributes == INVALID {
+            return false;
+        }
+
+        // SAFETY: as above, and the attributes are this call's own answer with one bit added.
+        unsafe { SetFileAttributesW(name.as_ptr(), attributes | FILE_ATTRIBUTE_HIDDEN) != 0 }
+    }
+}
+
 #[lazyffi(export = rola_workspace_)]
 impl Workspace {
     /// Creates a Workspace in the specified directory
@@ -24,6 +72,9 @@ impl Workspace {
     /// No Layout is made: a Workspace that has just been created has none, and one is added —
     /// and becomes the one worked in — by whoever chooses its name.
     ///
+    /// On Windows the data directory is marked hidden, which is how that platform says what the name
+    /// beginning with a dot says everywhere else.
+    ///
     /// # Errors
     ///
     /// Returns [`CreationError`] if the data directory
@@ -31,7 +82,16 @@ impl Workspace {
     /// file cannot be created inside it.
     #[lazyffi(export = create_workspace)]
     pub fn create(dir: &Path) -> Result<(), CreationError> {
-        fs::create_dir_all(dir.join(DATA_DIR)).map_err(|_| CreationError::DataDirCreateFailed)?;
+        let data = dir.join(DATA_DIR);
+
+        fs::create_dir_all(&data).map_err(|_| CreationError::DataDirCreateFailed)?;
+
+        // Nothing is done about a refusal: a directory that could not be marked is a Workspace that shows
+        // rather than one that cannot be made, and what the name says is only read by a program that reads
+        // what the name says.
+        #[cfg(windows)]
+        hidden::marked(&data);
+
         fs::create_dir_all(dir.join(INDEX_DIR)).map_err(|_| CreationError::DataDirCreateFailed)?;
 
         let config = Config::<crate::config::Config>::new(dir.join(CONFIG_PATH)).map_err(
@@ -141,6 +201,35 @@ mod tests {
                 .as_path()
         );
         assert!(storage.config_path().is_file());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The data directory is hidden the way Windows says a directory is hidden, and only there: it is a
+    /// platform's own notion rather than a second way of saying what the name says.
+    #[cfg(windows)]
+    #[test]
+    fn creating_a_workspace_hides_its_data_directory() {
+        use std::os::windows::fs::MetadataExt as _;
+
+        let dir = scratch("hidden");
+
+        Workspace::create(&dir).unwrap();
+
+        // Asking again is what says the call itself is taken rather than refused: a directory that was
+        // never marked and one that could not be are the same to read back.
+        assert!(super::hidden::marked(&dir.join(DATA_DIR)));
+
+        // And what the platform reports is what Explorer reads: the directory is there either way, and
+        // the attribute is the whole of the difference.
+        let attributes = fs::metadata(dir.join(DATA_DIR)).unwrap().file_attributes();
+
+        assert_ne!(
+            attributes & super::hidden::FILE_ATTRIBUTE_HIDDEN,
+            0,
+            "{:?}",
+            dir.join(DATA_DIR)
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
