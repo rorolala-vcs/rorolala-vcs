@@ -21,6 +21,15 @@ public enum LockInk
 
     /// <summary>The error red, which marks what is somebody else's.</summary>
     Error,
+
+    /// <summary>
+    /// The green the look uses for what is coming in, which marks what has been taken for the reader.
+    /// </summary>
+    /// <remarks>
+    /// Beside the accent rather than instead of it: the accent is the colour the user chose, and this is the
+    /// look's own answer for "this is yours to change", which reads the same whatever that choice was.
+    /// </remarks>
+    Add,
 }
 
 /// <summary>

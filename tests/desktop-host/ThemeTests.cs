@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Styling;
+using FileSystemPlugin;
 using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -33,6 +34,34 @@ public sealed class ThemeTests
     [InlineData("#8B0000")]
     public void WhatIsWrittenOnADarkAccentIsWhite(string accent) =>
         Assert.Equal(Colors.White, RorolalaTheme.InkOn(Color.Parse(accent)));
+
+    /// <summary>
+    /// Every ink a mark is drawn in, and every ground it stands on, is a colour the look holds.
+    /// </summary>
+    /// <remarks>
+    /// The names are written as literals in the plugin that draws the mark, because a plugin has nowhere else
+    /// to read them from: a look that renamed one would leave the mark painted with nothing, which is a mark
+    /// that is simply not on the card. Both variants are asked, because a look is two palettes and one of them
+    /// could be missing what the other has.
+    /// </remarks>
+    [Fact]
+    public void EveryInkAMarkIsDrawnInIsOneTheLookHolds()
+    {
+        var look = new RorolalaTheme(Color.Parse("#BFFF00"), Color.Parse("#FF6D00"), null);
+
+        foreach (var variant in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+        {
+            var palette = Assert.IsAssignableFrom<ResourceDictionary>(
+                look.Palette.ThemeDictionaries[variant]
+            );
+
+            foreach (var ink in Enum.GetValues<LockInk>())
+            {
+                Assert.IsAssignableFrom<IBrush>(palette[Icons.Ink(ink)]);
+                Assert.IsAssignableFrom<IBrush>(palette[Icons.Wash(ink)]);
+            }
+        }
+    }
 
     /// <summary>
     /// What a fill fades in from is that fill at no alpha, never "no colour".

@@ -154,6 +154,7 @@ internal static partial class Icons
             LockInk.Plain => "rorolala.fg",
             LockInk.Accent => "rorolala.accent",
             LockInk.Error => "rorolala.del",
+            LockInk.Add => "rorolala.add",
             _ => "rorolala.fg.faint",
         };
 
@@ -314,14 +315,21 @@ internal static partial class Icons
     /// <returns>How many pixels of inset it wears.</returns>
     private static double Inset(double extent) => Math.Max(TagLeast, extent * TagInset);
 
-    /// <summary>The resource a tag's ground is drawn from: the wash of the ink it is edged in.</summary>
+    /// <summary>
+    /// The resource a tag's ground is drawn from: the wash of the ink it is edged in.
+    /// </summary>
+    /// <remarks>
+    /// Read beside [`Ink`] because the two are one answer: a tag is the ink and its wash, and a look that
+    /// renamed one of them would leave a mark painted with nothing, which is a mark that is not there.
+    /// </remarks>
     /// <param name="ink">The role the mark is drawn in.</param>
     /// <returns>The name of the resource the ground is read from.</returns>
-    private static string Wash(LockInk ink) =>
+    public static string Wash(LockInk ink) =>
         ink switch
         {
             LockInk.Accent => "rorolala.accent.wash",
             LockInk.Error => "rorolala.del.bg",
+            LockInk.Add => "rorolala.add.bg",
             _ => "rorolala.bg.sunken",
         };
 

@@ -63,15 +63,17 @@ internal sealed class RorolalaLocks : IEntryLockProvider
 
         return LockOf(ownership, entry.Path) switch
         {
-            // Held by the reader, which is the pencil: holding it is what makes it theirs to change, and
-            // the corner says so in the ordinary foreground rather than in a colour of its own — an entry
-            // that is yours is not something to be told about. The words say the same in the column, since
-            // "you" is a name like any other and a column that shouted it would shout every row it holds.
+            // Held by the reader, which is the pencil: holding it is what makes it theirs to change, and the
+            // corner says so in the green the look uses for what has come in, worn as a tag the way another
+            // account's lock is — the two are the two answers to the same question, so they are drawn the same
+            // way round. The words stay in the ordinary ink, since "you" is a name like any other and a column
+            // that shouted it would shout every row it holds.
             { Kind: EntryLockKind.Mine } => new EntryLockMark(
                 TextKey: Mine,
                 IconKey: Icons.Create,
-                Ink: LockInk.Plain,
-                TextInk: LockInk.Plain
+                Ink: LockInk.Add,
+                TextInk: LockInk.Plain,
+                Tagged: true
             ),
 
             // Held by somebody else, which is the lock: the one answer on the card that is not the
