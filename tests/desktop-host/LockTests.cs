@@ -1,10 +1,12 @@
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
+using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// The lock extension point: which provider a listing asks, and what one contributes to it.
+/// The lock extension point: which provider a listing asks, what one contributes to it, and when what it
+/// answered is let go of.
 /// </summary>
 /// <remarks>
 /// Nothing here draws — that needs a running Avalonia, and the column and the mark are built out of
@@ -70,6 +72,32 @@ public sealed class LockTests
         Assert.Null(EntryLockProviders.For("/work"));
     }
 
+    /// <summary>What the providers answered is let go of when the files may have changed.</summary>
+    /// <remarks>
+    /// What a provider answers is read from a tree a file operation changes — a Layout names each path by
+    /// a `Uuid`, and a move renames one — and a listing is read again for the same change. A listing read
+    /// from an answer that was not let go of is drawn from a tree that is gone, which is what this says
+    /// cannot happen again.
+    /// </remarks>
+    [Fact]
+    public void WhatTheProvidersAnsweredIsLetGoOfWhenTheFilesMayHaveChanged()
+    {
+        var provider = new FakeLockProvider("it.lock.forget", "/work");
+        EntryLockProviders.Register(provider);
+
+        var services = Host.Services();
+        var host = services.For(new PluginId(FileSystem.Identity), 1);
+        var shared = new Shared("/work", new HideRegistry(host.Config), host.Config);
+
+        var readAgain = 0;
+        shared.Touched += () => readAgain++;
+
+        shared.FilesChanged();
+
+        Assert.Equal(1, provider.Forgotten);
+        Assert.Equal(1, readAgain);
+    }
+
     /// <summary>A provider that speaks for one directory and says one thing about an entry.</summary>
     /// <param name="id">The identity it is offered under.</param>
     /// <param name="directory">The directory it answers for.</param>
@@ -81,10 +109,16 @@ public sealed class LockTests
         /// <inheritdoc />
         public string ColumnKey => "it.lock.column";
 
+        /// <summary>How many times it was told what it answered may have changed.</summary>
+        public int Forgotten { get; private set; }
+
         /// <inheritdoc />
         public bool Applies(string at) => string.Equals(at, directory, StringComparison.Ordinal);
 
         /// <inheritdoc />
         public EntryLockMark Mark(Entry entry) => new(TextKey: "it.lock.mine", Ink: LockInk.Accent);
+
+        /// <inheritdoc />
+        public void Forget() => Forgotten++;
     }
 }

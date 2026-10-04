@@ -93,8 +93,25 @@ internal sealed class Shared
         Dispatcher.UIThread.Post(() =>
         {
             _asked = false;
-            Touched?.Invoke();
+            FilesChanged();
         });
+    }
+
+    /// <summary>
+    /// What a touch comes to: what the lock providers answered is let go of, and every location is told to
+    /// read its directory again.
+    /// </summary>
+    /// <remarks>
+    /// The letting go is why this is a step of its own rather than part of the raising. An answer about an
+    /// entry is read from the tree this says has changed — a Layout names each path by a `Uuid`, and a move
+    /// renames one — so a listing read from an answer that was already stale would be drawn wrong until the
+    /// next touch. What is read again and what is drawn from it are both later than this, which is what makes
+    /// the order the whole of the point.
+    /// </remarks>
+    public void FilesChanged()
+    {
+        EntryLockProviders.Forget();
+        Touched?.Invoke();
     }
 
     /// <summary>

@@ -107,6 +107,22 @@ public interface IEntryLockProvider
     /// <param name="entry">The entry to consider.</param>
     /// <returns>The mark to draw.</returns>
     EntryLockMark Mark(Entry entry);
+
+    /// <summary>
+    /// Says that what this provider answered about entries may have changed.
+    /// </summary>
+    /// <remarks>
+    /// A listing is read again when the files may have changed, and what a lock provider answered about
+    /// them is read from somewhere such a change reaches: a Workspace's Layout names each path by a
+    /// `Uuid`, and a move or a removal renames one of them, so an answer about a path that was moved is
+    /// an answer about nothing. A provider that keeps anything is told to let go of it here; one that
+    /// reads afresh each time has nothing to do, which is what the default does.
+    /// <para>
+    /// It is said before the entries are read rather than after, since a listing built from an answer
+    /// that was already stale would be drawn wrong until the next one.
+    /// </para>
+    /// </remarks>
+    void Forget() { }
 }
 
 /// <summary>
@@ -156,6 +172,22 @@ public static class EntryLockProviders
         ArgumentNullException.ThrowIfNull(directory);
 
         return Catalogue.FirstOrDefault(provider => provider.Applies(directory));
+    }
+
+    /// <summary>
+    /// Says to every provider that what it answered may have changed.
+    /// </summary>
+    /// <remarks>
+    /// Said to all of them rather than to the one a directory is answered by: what is read again is not
+    /// known here, and what a provider is holding is its own business — one with nothing to let go of
+    /// answers nothing to it.
+    /// </remarks>
+    public static void Forget()
+    {
+        foreach (var provider in Catalogue)
+        {
+            provider.Forget();
+        }
     }
 
     /// <summary>

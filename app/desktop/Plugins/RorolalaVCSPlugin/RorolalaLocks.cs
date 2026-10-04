@@ -101,7 +101,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// <summary>
     /// Contributes this plugin's two pictures and its provider to the host.
     /// </summary>
-    /// <param name="host">The host, for the icon library and the refocus event.</param>
+    /// <param name="host">The host, for the icon library.</param>
     // The pictures are handed to the library, which holds them for as long as the program runs: they
     // are not lost at the end of this scope, so there is nothing here to dispose.
     [SuppressMessage(
@@ -116,12 +116,11 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         host.Icons.Add(Locked, Picture("lock"));
         host.Icons.Add(Create, Picture("create"));
 
-        var locks = new RorolalaLocks(host.Log);
-        EntryLockProviders.Register(locks);
+        EntryLockProviders.Register(new RorolalaLocks(host.Log));
 
-        // What a lock says is read from the Vault's fetched copy, and a fetch is what another run
-        // does while this one is in front: coming back to the window is when to read it again.
-        host.Refocus.Regained += locks.Forget;
+        // Nothing is subscribed to here for letting go of what was read: the File System plugin says
+        // when the files may have changed — after an operation of its own, and when the window is come
+        // back to — and that is the one thing an answer about a lock can go stale from.
     }
 
     /// <summary>The ownership answers for a directory, read once and kept.</summary>
@@ -150,8 +149,16 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         return ownership;
     }
 
-    /// <summary>Forgets what was read, so the next listing reads the copy again.</summary>
-    private void Forget()
+    /// <summary>
+    /// Lets go of what was read, so the next answer is read from the tree as it is now.
+    /// </summary>
+    /// <remarks>
+    /// What was read is a `RolaOwnership` — two Layouts opened once — and a Layout is a snapshot: what
+    /// another run writes after it was opened is not in it. A move or a removal renames a path in the
+    /// Layout the Workspace works in, so the answers kept here are about a tree that no longer exists,
+    /// and the handles are given back rather than only forgotten.
+    /// </remarks>
+    public void Forget()
     {
         foreach (var ownership in _owned.Values)
         {
