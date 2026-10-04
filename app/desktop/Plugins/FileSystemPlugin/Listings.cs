@@ -2222,7 +2222,7 @@ internal sealed class GridBrowser : EntryView
             && Host.Icons.Find(key) is { } picture
         )
         {
-            return Icons.Badged(icon, picture, _icon, mark.Ink);
+            return Icons.Marked(icon, picture, _icon, mark);
         }
 
         return icon;

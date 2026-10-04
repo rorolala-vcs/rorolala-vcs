@@ -46,12 +46,18 @@ public enum LockInk
 /// <param name="IconKey">A key naming the picture in the icon library, or nothing for no picture.</param>
 /// <param name="Ink">What the picture is drawn in.</param>
 /// <param name="TextInk">What the words are drawn in.</param>
+/// <param name="Tagged">
+/// Whether the picture is drawn in a tag — a wash of the ink with the ink's own edge, the shape the shell
+/// draws a state in — rather than bare on the tile. A corner that says something is wrong wants saying, and
+/// one that says an entry is the reader's own does not.
+/// </param>
 public sealed record EntryLockMark(
     string? TextKey = null,
     string? Text = null,
     string? IconKey = null,
     LockInk Ink = LockInk.Quiet,
-    LockInk TextInk = LockInk.Quiet
+    LockInk TextInk = LockInk.Quiet,
+    bool Tagged = false
 );
 
 /// <summary>

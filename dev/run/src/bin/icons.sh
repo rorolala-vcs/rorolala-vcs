@@ -28,9 +28,10 @@ ICONS_PICTURES="app/desktop/Plugins/RorolalaVCSPlugin/icons"
 
 # The pictures to draw, by the name the set knows each icon by.
 #
-# `lock` is what an entry somebody else holds is drawn with, and `lock_open` what one the reader holds
-# is drawn with. Each is the `baseline` family, which is the set's own shape for the icon.
-ICONS="lock lock_open"
+# `lock` is what an entry somebody else holds is drawn with, and `create` — the set's pencil — what one
+# the reader holds is drawn with, since holding it is what makes it theirs to change. Each is the
+# `baseline` family, which is the set's own shape for the icon.
+ICONS="lock create"
 
 # What a picture is drawn in, and how many pixels wide and tall it is.
 #

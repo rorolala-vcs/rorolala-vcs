@@ -1,8 +1,7 @@
 # Lock pictures
 
-The two pictures the Ownership column and a locked tile are drawn with: `lock`, which says an entry
-is held by somebody else, and `lock_open`, which says it is held by the reader — whose it is to let
-go of.
+The two pictures a lock is drawn with: `lock`, which says an entry is held by somebody else, and
+`create` — the set's pencil — which says it is held by the reader, and so is the reader's to change.
 
 They are Google's Material Design icons, taken from the maintained mirror of the set,
 [material-icons/material-icons](https://github.com/material-icons/material-icons) — the same artwork

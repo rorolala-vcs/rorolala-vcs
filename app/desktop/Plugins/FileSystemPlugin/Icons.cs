@@ -86,7 +86,7 @@ internal static class Icons
         return Math.Max(Step, rounded);
     }
 
-    /// <summary>How much of an icon's width a lock mark takes, and the least it is drawn at.</summary>
+    /// <summary>How much of an icon's width a mark takes, and the least it is drawn at.</summary>
     /// <remarks>
     /// A share of the icon rather than a size, because a tile's icon follows the zoom and a mark of
     /// a fixed size would be lost on a large icon and cover a small one. The least is what keeps it
@@ -94,6 +94,18 @@ internal static class Icons
     /// </remarks>
     private const double MarkShare = 0.42;
     private const double MarkLeast = 12;
+
+    /// <summary>How much of a tag's width is left around the mark drawn inside it, and the least of it.</summary>
+    /// <remarks>
+    /// The mark is a glyph with nothing around it, so a tag holding it at its own size would have the
+    /// glyph running into the tag's edge — which reads as a picture with a border drawn over it rather
+    /// than as a state.
+    /// </remarks>
+    private const double TagInset = 0.16;
+    private const double TagLeast = 3;
+
+    /// <summary>The rounding a tag wears, which is the design's radius for a small control.</summary>
+    private static readonly CornerRadius TagCorners = new(5);
 
     /// <summary>The theme resource a lock mark is drawn in.</summary>
     /// <remarks>
@@ -112,41 +124,103 @@ internal static class Icons
         };
 
     /// <summary>
-    /// An entry's icon with a lock mark at its top-right corner.
+    /// An entry's icon with the lock its provider contributed at the top-right corner.
     /// </summary>
     /// <remarks>
     /// The picture is drawn as a mask over a coloured ground rather than as a picture, so that it
-    /// takes the ink the theme gives it: a picture carries whatever colours it was drawn with, and
-    /// a mark that had to be drawn once per colour would be a mark per theme.
+    /// takes the ink the theme gives it: a picture carries whatever colours it was drawn with, and a
+    /// mark that had to be drawn once per colour would be a mark per theme.
+    /// <para>
+    /// A mark the contribution asked to have tagged is drawn the way the shell draws a state — a wash
+    /// of the ink with the ink's own edge, which is how the plugin manager draws a plugin that failed —
+    /// so that a corner saying an entry is somebody else's reads as an answer rather than as another
+    /// icon beside the file's own.
+    /// </para>
     /// </remarks>
     /// <param name="icon">What the entry is drawn as.</param>
     /// <param name="mark">The picture to stamp on it.</param>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
-    /// <param name="ink">What the mark is drawn in.</param>
+    /// <param name="contributed">What the provider said about the entry.</param>
     /// <returns>The icon and its mark, as one thing to draw.</returns>
-    public static Control Badged(Control icon, Bitmap mark, int size, LockInk ink)
+    public static Control Marked(Control icon, Bitmap mark, int size, EntryLockMark contributed)
     {
-        var spot = new Border
+        var extent = Mark(size);
+        var inset = Inset(extent);
+        var glyph = Glyph(mark, contributed.Ink, contributed.Tagged ? extent - (2 * inset) - 2 : extent);
+
+        Control corner = glyph;
+
+        if (contributed.Tagged)
         {
-            Width = Mark(size),
-            Height = Mark(size),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-            OpacityMask = new ImageBrush(mark) { Stretch = Stretch.Uniform },
-        };
-        spot[!Border.BackgroundProperty] = new DynamicResourceExtension(Ink(ink));
+            var tag = new Border
+            {
+                Width = extent,
+                Height = extent,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                BorderThickness = new Thickness(1),
+                CornerRadius = TagCorners,
+                Padding = new Thickness(inset),
+                Child = glyph,
+            };
+            tag[!Border.BackgroundProperty] = new DynamicResourceExtension(Wash(contributed.Ink));
+            tag[!Border.BorderBrushProperty] = new DynamicResourceExtension(Ink(contributed.Ink));
+
+            corner = tag;
+        }
+        else
+        {
+            glyph.HorizontalAlignment = HorizontalAlignment.Right;
+            glyph.VerticalAlignment = VerticalAlignment.Top;
+        }
 
         var grid = new Grid { Width = size, Height = size };
         grid.Children.Add(icon);
-        grid.Children.Add(spot);
+        grid.Children.Add(corner);
 
         return grid;
+    }
+
+    /// <summary>The picture itself: a mask over the ink, which is what makes it take the theme's colour.</summary>
+    /// <param name="picture">The picture to stamp.</param>
+    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="extent">How many pixels wide and tall it is.</param>
+    /// <returns>What to draw.</returns>
+    private static Border Glyph(Bitmap picture, LockInk ink, double extent)
+    {
+        var glyph = new Border
+        {
+            Width = extent,
+            Height = extent,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
+        };
+        glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(Ink(ink));
+
+        return glyph;
     }
 
     /// <summary>How many pixels a lock mark is at an icon of `size`.</summary>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
     /// <returns>How many pixels wide and tall the mark is.</returns>
     private static double Mark(int size) => Math.Max(MarkLeast, size * MarkShare);
+
+    /// <summary>How many pixels a tag leaves around the mark drawn inside it.</summary>
+    /// <param name="extent">How many pixels wide and tall the tag is.</param>
+    /// <returns>How many pixels of inset it wears.</returns>
+    private static double Inset(double extent) => Math.Max(TagLeast, extent * TagInset);
+
+    /// <summary>The resource a tag's ground is drawn from: the wash of the ink it is edged in.</summary>
+    /// <param name="ink">The role the mark is drawn in.</param>
+    /// <returns>The name of the resource the ground is read from.</returns>
+    private static string Wash(LockInk ink) =>
+        ink switch
+        {
+            LockInk.Accent => "rorolala.accent.wash",
+            LockInk.Error => "rorolala.del.bg",
+            _ => "rorolala.bg.sunken",
+        };
 
     /// <summary>What an entry is drawn as where the system had nothing to give.</summary>
     /// <param name="directory">Whether the entry is a directory.</param>

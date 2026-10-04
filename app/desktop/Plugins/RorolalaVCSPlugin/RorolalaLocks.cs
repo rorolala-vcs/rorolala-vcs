@@ -25,8 +25,8 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// <summary>The key the picture of a lock is contributed under.</summary>
     private const string Locked = "rorolala_vcs.lock";
 
-    /// <summary>The key the picture of an open lock is contributed under.</summary>
-    private const string Unlocked = "rorolala_vcs.lock_open";
+    /// <summary>The key the picture of a pencil is contributed under.</summary>
+    private const string Create = "rorolala_vcs.create";
 
     /// <summary>What a cell says when nothing holds the entry.</summary>
     private const string Nothing = "-";
@@ -71,23 +71,26 @@ internal sealed class RorolalaLocks : IEntryLockProvider
 
         return LockOf(ownership, entry.Path) switch
         {
-            // Held by the reader. The picture says so in the accent, which is the mark that must not
-            // be mistaken for a selection; the words do not, since "you" is a name like any other and
-            // a column that shouted it would shout every row the reader holds.
+            // Held by the reader, which is the pencil: holding it is what makes it theirs to change, and
+            // the corner says so in the ordinary foreground rather than in a colour of its own — an entry
+            // that is yours is not something to be told about. The words say the same in the column, since
+            // "you" is a name like any other and a column that shouted it would shout every row it holds.
             { Kind: EntryLockKind.Mine } => new EntryLockMark(
                 TextKey: Mine,
-                IconKey: Unlocked,
-                Ink: LockInk.Accent,
+                IconKey: Create,
+                Ink: LockInk.Plain,
                 TextInk: LockInk.Plain
             ),
 
-            // Held by somebody else, which is worth naming them in the error red: whose it is is the
-            // whole question, and it is the one answer on the card that is not the reader's.
+            // Held by somebody else, which is the lock: the one answer on the card that is not the
+            // reader's, so it is drawn in the error red and worn as a tag, the way the shell draws a
+            // state. The words name whoever holds it, in the same red.
             { Kind: EntryLockKind.Held, Holder: { Length: > 0 } holder } => new EntryLockMark(
                 Text: holder,
                 IconKey: Locked,
                 Ink: LockInk.Error,
-                TextInk: LockInk.Error
+                TextInk: LockInk.Error,
+                Tagged: true
             ),
 
             // Nobody holds it, or nothing says: the same thing to a reader, and the same cell.
@@ -111,7 +114,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         ArgumentNullException.ThrowIfNull(host);
 
         host.Icons.Add(Locked, Picture("lock"));
-        host.Icons.Add(Unlocked, Picture("lock_open"));
+        host.Icons.Add(Create, Picture("create"));
 
         var locks = new RorolalaLocks(host.Log);
         EntryLockProviders.Register(locks);
