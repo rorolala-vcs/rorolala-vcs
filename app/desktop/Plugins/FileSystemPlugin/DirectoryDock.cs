@@ -58,22 +58,19 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>The zoom the dock opens at, as a percentage of the size an icon is at its own.</summary>
     private const double Opening = 100.0;
 
-    /// <summary>How little and how much a dock may be zoomed, so that the slider stops somewhere.</summary>
+    /// <summary>How little and how much a dock may be zoomed, which is where a turn of the wheel stops.</summary>
     private const double Least = 50.0;
     private const double Most = 200.0;
 
-    /// <summary>How far one step of the slider moves the zoom, which is also what it snaps to.</summary>
-    private const double Step = 10.0;
-
     /// <summary>
-    /// How far one turn of the wheel moves the zoom, which is further than one step of the slider.
+    /// How far one notch of the wheel moves the zoom.
     /// </summary>
     /// <remarks>
-    /// The wheel is the gesture a hand sweeps the whole range with, and the slider is the one it aims with, so a
-    /// notch is worth two steps rather than one: a wheel that moved by the step would be a hand turning it five
-    /// times to cross the range, where the slider it sits beside crosses in two.
+    /// A step coarse on purpose: an icon is read from the desktop once per size it is asked for, so a wheel that
+    /// crept would be a zoom that asked for a picture nearly every notch and kept one for each. At this step a
+    /// notch is worth several sizes, which is also what makes a hand cross the range in a few turns of it.
     /// </remarks>
-    private const double Wheel = Step * 2;
+    private const double Wheel = 20.0;
 
     /// <summary>Above this zoom the entries are tiles; at it or below they are rows.</summary>
     private const double GridAbove = 60.0;
@@ -114,8 +111,16 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>What the views do, so that every view of the location behaves alike.</summary>
     private BrowserActions _actions;
 
-    /// <summary>The zoom the entries are read at, as a percentage.</summary>
-    private readonly Slider _zoom = new();
+    /// <summary>
+    /// The zoom the entries are read at, as a percentage.
+    /// </summary>
+    /// <remarks>
+    /// A number rather than the slider that used to hold it: the slider was what the band at the foot was
+    /// for, and the one way of turning the zoom that is left is the wheel, which had to read and write the
+    /// slider to move it. What the zoom is, is a step of the range the constants below state, and it is kept
+    /// under the dock's own state like the rest of what a dock remembers.
+    /// </remarks>
+    private double _zoom = Opening;
 
     /// <summary>
     /// The switch that shows what the rules hide, and the dropdown that chooses the rules.
@@ -177,7 +182,14 @@ internal sealed class DirectoryControl : UserControl
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    /// <summary>The toolbar, kept so that being taken out of step hands it the other location.</summary>
+    /// <summary>
+    /// The toolbar, kept so that being taken out of step hands it the other location.
+    /// </summary>
+    /// <remarks>
+    /// The one row this dock draws above its entries. There is none below them: the zoom is the dock's own
+    /// state, turned with the wheel and kept, and a band at the foot holding a slider for it was a band the
+    /// entries could not be read in — the listing is what a dock is for, so it takes the whole of it.
+    /// </remarks>
     private readonly NavigationBar _bar;
 
     /// <summary>Whichever arrangement the zoom amounts to.</summary>
@@ -251,7 +263,6 @@ internal sealed class DirectoryControl : UserControl
         // a listing that happened to have the keyboard would not be the only place it worked.
         AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
 
-        FillZoom();
         FillHidden();
         FillSync();
 
@@ -281,21 +292,12 @@ internal sealed class DirectoryControl : UserControl
         // beside them is handed in, so that the toolbar does not have to know what a dock remembers.
         _bar = new NavigationBar(_host, Location, _trailing) { Left = Seated };
 
-        // What is left at the foot is the zoom alone, which is the one thing about reading a directory that has
-        // nothing to do with where it is.
-        var foot = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(12, 0, 12, 8),
-            Children = { _zoom },
-        };
-
+        // The entries take everything under the toolbar. What is left at the foot is nothing, which is what
+        // this is: a dock is a view of a directory, and the room a band at the bottom would take is room the
+        // listing is read in.
         var panel = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(_bar, Dock.Top);
-        DockPanel.SetDock(foot, Dock.Bottom);
         panel.Children.Add(_bar);
-        panel.Children.Add(foot);
         panel.Children.Add(_content);
 
         Content = panel;
@@ -318,7 +320,7 @@ internal sealed class DirectoryControl : UserControl
 
         if (Kept(state) is { } zoom)
         {
-            _zoom.Value = zoom;
+            Zoom = zoom;
         }
 
         // And for the same reason again: a dock left out of step comes back out of step, at a directory of its
@@ -589,29 +591,32 @@ internal sealed class DirectoryControl : UserControl
         }
     }
 
-    /// <summary>Sets the slider up, and what moving it does.</summary>
-    private void FillZoom()
+    /// <summary>
+    /// The zoom the entries are read at, kept within the range the constants state.
+    /// </summary>
+    /// <remarks>
+    /// Set rather than assigned where anything wants another zoom, and written down as soon as it is: what a
+    /// dock kept is the host's to save, and a zoom turned with the wheel is the dock keeping something. The
+    /// redraw is here for the same reason it was on the slider — the arrangement is what the zoom amounts to,
+    /// so a step across the line between rows and tiles is a listing drawn again. A zoom that is already the
+    /// one asked for draws nothing, which is what keeps a dock being restored from drawing its listing twice.
+    /// </remarks>
+    private double Zoom
     {
-        _zoom.Minimum = Least;
-        _zoom.Maximum = Most;
-        _zoom.Value = Opening;
-        _zoom.Width = 144;
-        _zoom.TickPlacement = TickPlacement.None;
-        _zoom.VerticalAlignment = VerticalAlignment.Center;
-
-        // Snapped, so that a zoom is one of a handful of sizes rather than wherever a drag let go: an icon is
-        // read from the desktop once per size it is asked for, and a slider that never stopped between two
-        // sizes would ask for one nearly every time it moved.
-        _zoom.IsSnapToTickEnabled = true;
-        _zoom.TickFrequency = Step;
-
-        _zoom.ValueChanged += (_, _) =>
+        get => _zoom;
+        set
         {
-            // Written rather than saved: the dock keeps what it was and the host writes the layout, which is
-            // the same division as everything else about where a dock is.
-            _state?.Write(ZoomKey, _zoom.Value.ToString(CultureInfo.InvariantCulture));
+            var zoom = Math.Clamp(value, Least, Most);
+
+            if (zoom == _zoom)
+            {
+                return;
+            }
+
+            _zoom = zoom;
+            _state?.Write(ZoomKey, _zoom.ToString(CultureInfo.InvariantCulture));
             Draw();
-        };
+        }
     }
 
     /// <summary>
@@ -632,7 +637,7 @@ internal sealed class DirectoryControl : UserControl
     /// <remarks>
     /// Read again on <c>F5</c>, which is the dock's own key, and the three the clipboard answers, which are
     /// taken here rather than by the listing so that they are answered wherever the keyboard is in the dock —
-    /// after a zoom was dragged as much as after an entry was clicked (Section 7.7).
+    /// after the zoom was turned as much as after an entry was clicked (Section 7.7).
     /// </remarks>
     /// <param name="sender">The dock.</param>
     /// <param name="e">The key.</param>
@@ -677,7 +682,7 @@ internal sealed class DirectoryControl : UserControl
             return;
         }
 
-        _zoom.Value = Math.Clamp(_zoom.Value + Math.Sign(e.Delta.Y) * Wheel, Least, Most);
+        Zoom += Math.Sign(e.Delta.Y) * Wheel;
         e.Handled = true;
     }
 
@@ -720,8 +725,8 @@ internal sealed class DirectoryControl : UserControl
         // directory — stepping elsewhere is a different listing, and its choice starts empty.
         var chosen = _drawnAt == Location.Current ? _view?.Chosen() ?? [] : [];
 
-        EntryView drawn = _zoom.Value > GridAbove
-            ? new GridBrowser(_host, Location, _actions, _clip, Icons.SizeAt(_zoom.Value))
+        EntryView drawn = Zoom > GridAbove
+            ? new GridBrowser(_host, Location, _actions, _clip, Icons.SizeAt(Zoom))
             : new ListBrowser(_host, Location, _actions, _clip);
         _view = drawn;
 

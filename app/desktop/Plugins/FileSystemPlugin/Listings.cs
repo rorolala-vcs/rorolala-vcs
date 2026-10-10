@@ -221,9 +221,9 @@ internal abstract class EntryView : UserControl
         );
 
         // The pointer is taken for the whole view rather than for the list alone, so that a frame can begin in
-        // the room the view leaves around the card as much as in the room left between the rows: the list is hit
-        // nowhere in that outer room, and a press there reaching nothing would be a frame that cannot be started
-        // where the room to start one is widest. Taken on the way down like the keys, since what a press begins
+        // the room left between the rows as much as on the list's own edges: the list is hit nowhere in the
+        // room between two rows, and a press there reaching nothing would be a frame that cannot be started
+        // where the room to start one is. Taken on the way down like the keys, since what a press begins
         // — a step, a drag or a frame — is settled before the list acts on it.
         AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
@@ -293,15 +293,6 @@ internal abstract class EntryView : UserControl
     protected Entry? Lead => _lead >= 0 && _lead < Browser.Shown.Count ? Browser.Shown[_lead] : null;
 
     /// <summary>
-    /// How much room a view leaves around what it draws.
-    /// </summary>
-    /// <remarks>
-    /// Tight, because a listing is a card with its own edge and a wide frame around it only pushes the
-    /// entries away from the dock they are read in.
-    /// </remarks>
-    protected virtual Thickness PanelPadding => new(12, 8, 12, 16);
-
-    /// <summary>
     /// Whether a press begins a resize of something the view draws, which the view then drives.
     /// </summary>
     /// <remarks>
@@ -332,27 +323,28 @@ internal abstract class EntryView : UserControl
     protected virtual void Hovered(Point at) { }
 
     /// <summary>
-    /// Puts what the view is made of on screen, on the panel and with the frame's band drawn over it.
+    /// Puts what the view is made of on screen, on nothing but the view itself and with the frame's band over it.
     /// </summary>
     /// <remarks>
     /// The band is drawn over the view rather than into it, so that a frame can go where a row is: drawn
     /// among the entries it would be laid out as one of them, or clipped to the one it sat in. It is laid
-    /// over the whole view and not over the panel, because the frame is measured in this control's own
-    /// coordinates and a band offset by the panel's padding would not land where the pointer is.
+    /// over the whole view and not over the content, because the frame is measured in this control's own
+    /// coordinates and a band inset by a container would not land where the pointer is.
+    /// <para>
+    /// There is no container around the content, and that is the point rather than tidy: what a listing is
+    /// fills the dock, so the room a frame is begun in has to be the listing's own — the gaps between its rows
+    /// or its tiles — rather than a margin belonging to something the listing sits in.
+    /// </para>
     /// </remarks>
     /// <param name="content">The card, or the tiles, the list at the heart of it.</param>
     protected void Present(Control content)
     {
         _over.Children.Add(_band);
 
-        var panel = new Border { Padding = PanelPadding, Child = content };
-
-        // A ground of nothing rather than none at all: the room the padding leaves around the card is nothing
-        // any control is hit in, so a press there would reach the view at all only where the view itself is hit.
-        // It takes no pointer of its own beyond that — the entries and their own rows are over it — and it is
-        // what lets a frame be started in the room around the entries (Section 7.7).
+        // A ground of nothing rather than none at all, so that a press on the room between the entries reaches
+        // this view at all: what a frame is begun from is a press that landed on no entry (Section 7.7).
         var grid = new Grid { Background = Brushes.Transparent };
-        grid.Children.Add(panel);
+        grid.Children.Add(content);
 
         // The word is drawn over the empty space rather than in place of the list, so that the menu and the
         // frame the space still answers keep answering.
@@ -1615,8 +1607,8 @@ internal sealed class ListBrowser : EntryView
         _values = _locks is null ? Values() : [.. Values(), Lock(_locks)];
         _widths = Widths();
 
-        // The card is the surface and its edge: the list's own border and inset are taken off so that a second
-        // edge is not drawn inside the first, and so that the rows reach the card's own edge.
+        // The list's own border and inset are taken off: what draws the table is the view, and a border and a
+        // padding of the list's own would be a second edge and a second inset inside it.
         List.Padding = new Thickness(0);
         List.BorderThickness = new Thickness(0);
 
@@ -1648,18 +1640,10 @@ internal sealed class ListBrowser : EntryView
         panel.Children.Add(header);
         panel.Children.Add(List);
 
-        // The listing is a card: one border, rounded, on the elevated ground, with the rows clipped to it.
-        var card = new Border
-        {
-            Child = panel,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            ClipToBounds = true,
-        };
-        card[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-        card[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
-
-        Present(card);
+        // The table is the dock's own surface rather than a card on it: it used to be a bordered, rounded,
+        // raised surface with the room around it left by the view, and the entries were read in less of the
+        // dock than there was because of it.
+        Present(panel);
     }
 
     /// <summary>One column of values, after the icon and the name.</summary>
@@ -1831,8 +1815,8 @@ internal sealed class ListBrowser : EntryView
         var grid = new Grid { ColumnDefinitions = Definitions() };
         Place(grid, cells);
 
-        // Every row but the last wears the line that tells it from the next; the card's own edge closes the
-        // table, so the last row would be drawing a line against nothing.
+        // Every row but the last wears the line that tells it from the next, so that the table ends in the
+        // listing's own edge rather than in a line drawn against nothing.
         var last = Browser.Shown.Count > 0 &&
             string.Equals(entry.Path, Browser.Shown[Browser.Shown.Count - 1].Path, StringComparison.Ordinal);
 
@@ -2196,9 +2180,6 @@ internal sealed class GridBrowser : EntryView
 
         Present(List);
     }
-
-    /// <inheritdoc />
-    protected override Thickness PanelPadding => new(12);
 
     /// <summary>One entry as a tile: its icon above its name, on one line and cut off when it is too long.</summary>
     /// <remarks>

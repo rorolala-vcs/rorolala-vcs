@@ -210,6 +210,24 @@ internal sealed class RorolalaTheme
     private const double RowHeight = 30.0;
 
     /// <summary>
+    /// The height a step of a tree is held at, and the room left under the line it draws.
+    /// </summary>
+    /// <remarks>
+    /// A step draws a band of twenty-one pixels — an icon and a line of text with the row's own padding — and
+    /// these two put three more under it: the row is twenty-four, and the three are left below the presenter
+    /// rather than being the difference between the row and what it draws. That difference is what the base
+    /// theme leaves, and it is dead: a row of thirty draws twenty-one and keeps nine, all of them under the
+    /// band, so two steps of one directory stand nine pixels apart and a step and the first of its children
+    /// stand nine too — except that the nine under a parent is *inside* the parent's own row, which puts its
+    /// children three pixels closer to it than they are to each other. Stating the room below the line makes
+    /// every pair of consecutive steps the same distance apart, whichever of them is the other's parent.
+    /// </remarks>
+    private const double TreeRowHeight = 24.0;
+
+    /// <inheritdoc cref="TreeRowHeight" />
+    private const double TreeRowRoom = 3.0;
+
+    /// <summary>
     /// The height of the menu bar, which is a fifth shorter than the other bands.
     /// </summary>
     /// <remarks>
@@ -869,8 +887,21 @@ internal sealed class RorolalaTheme
             On(
                 selector => selector.OfType<TreeViewItem>(),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(2, 1)),
-                new Setter(Layoutable.MinHeightProperty, RowHeight),
+                // A step of a tree is a row of its own height rather than a listing's, and the room between two
+                // steps is stated below rather than being the difference between that height and what a step
+                // draws. See the two constants named here for why each is what it is.
+                new Setter(Layoutable.MinHeightProperty, TreeRowHeight),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small)
+            ),
+            // The room under a step, which is also the room between a step and whatever it holds: the presenter
+            // is what the row's own line is drawn in, and the steps under it are laid out directly below it, so
+            // the room left here is what the first of them stands off by. Left to the difference between the
+            // row's height and the band it draws, that room lands under the row's cell instead of under the
+            // line — which is where nothing is ever drawn — and a step reads as being further from the line of
+            // its parent than from the step beside it.
+            On(
+                selector => selector.OfType<TreeViewItem>().Template().Name("PART_HeaderPresenter"),
+                new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 0, TreeRowRoom))
             ),
             On(
                 selector => selector.OfType<MenuItem>(),
