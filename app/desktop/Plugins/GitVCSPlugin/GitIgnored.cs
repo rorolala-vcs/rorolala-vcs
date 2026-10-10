@@ -191,6 +191,7 @@ public static class GitIgnores
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
+                CreateNoWindow = true,
                 StandardOutputEncoding = Encoding.UTF8,
             };
 
