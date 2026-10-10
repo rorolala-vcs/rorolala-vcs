@@ -1,15 +1,21 @@
 using Avalonia;
 using Avalonia.Animation;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
+using Avalonia.Controls.Templates;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Styling;
 using RorolalaDesktop.CoreDocks;
 using RorolalaDesktop.Docking;
+using RorolalaDesktop.Hosting;
+using Path = Avalonia.Controls.Shapes.Path;
 
 namespace RorolalaDesktop.Theming;
 
@@ -121,6 +127,81 @@ internal sealed class RorolalaTheme
 
         Styles = [palette, .. Type(), .. Roles(), .. Content(), .. Parts(), .. Chrome(), .. Cards()];
     }
+
+    /// <summary>
+    /// The class a window's own button wears: minimize, maximize and close.
+    /// </summary>
+    /// <remarks>
+    /// A window's buttons are chrome, not a thing to press, so they are drawn by their own rules rather
+    /// than by the rule every button in the program shares — and being excluded from that rule is also
+    /// what keeps a press on them from being styled as though it were an ordinary action.
+    /// </remarks>
+    public const string CaptionClass = "caption";
+
+    /// <summary>
+    /// The class the button that closes a window wears, beside <see cref="CaptionClass"/>.
+    /// </summary>
+    /// <remarks>
+    /// Closing is the one of the three that takes work away rather than changing how it is shown, so it
+    /// is the one drawn as the design draws a thing that removes something: the failure's red, as a wash
+    /// under the pointer rather than as a fill, the way the button that closes a dock is drawn.
+    /// </remarks>
+    public const string CaptionCloseClass = "close";
+
+    /// <summary>
+    /// The class a window button's picture wears.
+    /// </summary>
+    /// <remarks>
+    /// Nothing draws a picture through this class: a picture is read out of the icon library while the
+    /// window's decorations are built, and what the look gives it is the ink of the button it was put in
+    /// rather than a rule of its own. It is here so that a rule for it can be written where the buttons'
+    /// own rules are, which is where anyone looking for one would look.
+    /// </remarks>
+    public const string CaptionGlyphClass = "caption-glyph";
+
+    /// <summary>How wide one of a window's buttons is.</summary>
+    /// <remarks>
+    /// Wide enough to be hit without aiming and no wider, since three of them share a row with the menu
+    /// and every pixel they take is a menu item's. It is stated as a width rather than left to the glyph
+    /// so that the menu bar can reserve exactly this much on its own right, which is what keeps a long
+    /// menu from being drawn under the buttons.
+    /// </remarks>
+    private const double CaptionButtonWidth = 44.0;
+
+    /// <summary>How many of them there are, which is what the menu bar reserves room for.</summary>
+    private const int CaptionButtonCount = 3;
+
+    /// <summary>
+    /// The class the menu bar carries, for a theme to address it by.
+    /// </summary>
+    /// <remarks>
+    /// The shell marks the surfaces it owns so that a theme can style them without knowing what is in
+    /// them. The name is part of Section 10, since a plugin's theme writes it as a literal.
+    /// </remarks>
+    public const string MenuBarClass = "menu-bar";
+
+    /// <summary>What the menu bar leaves free on its right, which is where the buttons are.</summary>
+    /// <remarks>
+    /// A menu bar that reached the right edge would draw its last menu under the buttons, which are a
+    /// sibling of it rather than a part of it: the row is shared by laying it out, and this is the part
+    /// of it the menu may not have.
+    /// </remarks>
+    private static readonly Thickness MenuBarPadding = new(
+        8,
+        0,
+        (CaptionButtonWidth * CaptionButtonCount) + 8,
+        0
+    );
+
+    /// <summary>
+    /// The class the row a window's menu and its own buttons share wears.
+    /// </summary>
+    /// <remarks>
+    /// Marked rather than matched by the name the markup gives it, for the reason the menu bar is: the
+    /// name a theme addresses a surface by is part of Section 10, and a plugin's theme writes it as a
+    /// literal.
+    /// </remarks>
+    public const string TitleBarClass = "title-bar";
 
     /// <summary>The size every word is set at.</summary>
     private const double BodySize = 14.0;
@@ -1012,23 +1093,64 @@ internal sealed class RorolalaTheme
         ];
 
     /// <summary>
-    /// The surfaces the shell owns: the menu bar, the dock strips, and the grabs between regions.
+    /// The surfaces the shell owns: the row the menu and the window's buttons share, the dock strips, and
+    /// the grabs between regions.
     /// </summary>
     /// <remarks>
     /// Chrome is the elevated ground with one border under it, so the window reads as a stack of cards:
-    /// the menu bar, each strip, and the content between them. A dock's tabs are a segmented control —
-    /// one bordered rounded container, the tab being shown filled with the primary — which is the
-    /// design's own answer to a tab strip and the reason there is no underline anywhere.
+    /// the row at the top, each strip, and the content between them. A dock's tabs are a segmented
+    /// control — one bordered rounded container, the tab being shown filled with the primary — which is
+    /// the design's own answer to a tab strip and the reason there is no underline anywhere.
     /// </remarks>
     private Style[] Chrome() =>
         [
+            // The row a window's menu and its own buttons share. Its ground is the window's, because the
+            // menu bar is transparent on purpose: a bar painted with its own fill would take every pixel
+            // of itself out of the toolkit's hands, and the press that moves a window would then work
+            // everywhere in the row except the empty space of the bar, which is where it is aimed. What
+            // is set here is what a press cannot do without — the room a menu needs and the room on the
+            // right the buttons are in.
             On(
-                selector => selector.OfType<Menu>().Class(MainWindow.MenuBarClass),
-                Brushed(TemplatedControl.BackgroundProperty, Elevated),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
-                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
-                new Setter(Layoutable.MinHeightProperty, MenuBarHeight),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 0))
+                selector => selector.OfType<Border>().Class(TitleBarClass),
+                Brushed(Border.BackgroundProperty, Elevated),
+                new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
+                Brushed(Border.BorderBrushProperty, BorderLine),
+                new Setter(Layoutable.MinHeightProperty, MenuBarHeight)
+            ),
+            On(
+                selector => selector.OfType<Menu>().Class(MenuBarClass),
+                new Setter(TemplatedControl.PaddingProperty, MenuBarPadding)
+            ),
+
+            // A window's own buttons: nothing of their own until the pointer is on them, then the sunken
+            // ground the design gives every hover, and the failure's red wash for the one that closes.
+            // The picture is stroked in the ink of the button it is on, so it follows a hover without
+            // being told to.
+            On(
+                selector => selector.OfType<Button>().Class(CaptionClass),
+                Brushed(TemplatedControl.BackgroundProperty, SunkenClear),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                new Setter(Layoutable.WidthProperty, CaptionButtonWidth),
+                Brushed(TemplatedControl.ForegroundProperty, Muted),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector => selector.OfType<Button>().Class(CaptionClass).Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.ForegroundProperty, Foreground)
+            ),
+            On(
+                selector =>
+                    selector.OfType<Button>().Class(CaptionClass).Class(":pressed"),
+                Brushed(TemplatedControl.BackgroundProperty, Strong)
+            ),
+            On(
+                selector =>
+                    selector.OfType<Button>().Class(CaptionClass).Class(CaptionCloseClass).Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, DelBackground),
+                Brushed(TemplatedControl.ForegroundProperty, DelInk)
             ),
             On(
                 selector => selector.OfType<Border>().Class(DockArea.HeadersClass),
@@ -1253,16 +1375,185 @@ internal sealed class RorolalaTheme
     /// The selector for a button that is a thing to press rather than part of the shell's chrome.
     /// </summary>
     /// <remarks>
-    /// The dock's own buttons are excluded: a tab and a close are chrome, not a thing to press, and a
-    /// rule that is always on cannot be relied on to beat one that turns on with a state. Written so
-    /// that it does not match, the question does not arise.
+    /// The shell's own buttons are excluded: a dock's tab, a dock's close, and a window's minimize,
+    /// maximize and close are chrome, not a thing to press, and a rule that is always on cannot be relied
+    /// on to beat one that turns on with a state. Written so that it does not match, the question does
+    /// not arise.
     /// </remarks>
     /// <param name="selector">Where the rule starts.</param>
     private static Selector Pressable(Selector? selector) =>
         selector!
             .OfType<Button>()
             .Not(previous => previous.Class(DockArea.TitleClass))
-            .Not(previous => previous.Class(DockArea.CloseClass));
+            .Not(previous => previous.Class(DockArea.CloseClass))
+            .Not(previous => previous.Class(CaptionClass));
+
+    /// <summary>
+    /// The frame a window draws for itself, over the one the desktop would have drawn.
+    /// </summary>
+    /// <remarks>
+    /// The desktop's title bar is not wanted and neither is a second one: what this states is a frame the
+    /// window's own row shows through, carrying the two things the toolkit is still needed for — the area a
+    /// press on the row moves the window by, and the window's own buttons. Everything the frame is drawn
+    /// with is the window's own content, so the row and the frame are one thing.
+    /// <para>
+    /// It is made for the window it is put on rather than named as a resource, because an implicit theme
+    /// is found by type and every window of the program would then be given it: a plugin's question and a
+    /// notice are cards of their own with a title bar of the desktop's, which is what a card should have.
+    /// </para>
+    /// <para>
+    /// The buttons come back with the theme because they are made while it is, and the window that puts the
+    /// theme on is the only thing that can say what they are named and what they are drawn as.
+    /// </para>
+    /// </remarks>
+    /// <returns>The theme to put on one window, and the buttons it draws.</returns>
+    public static Frame DecorationsTheme()
+    {
+        var scope = new NameScope();
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Height = MainWindow.TitleBarHeight,
+        };
+
+        var minimize = Caption(scope, row, "PART_MinimizeButton", WindowDecorationsElementRole.MinimizeButton);
+        var maximize = Caption(scope, row, "PART_MaximizeButton", WindowDecorationsElementRole.MaximizeButton);
+        var close = Caption(scope, row, "PART_CloseButton", WindowDecorationsElementRole.CloseButton, closes: true);
+
+        var theme = new ControlTheme(typeof(WindowDrawnDecorations));
+
+        // The height the toolkit believes the bar is, which is the height the row is drawn at and the
+        // height the window's own hint is given. The frame and the shadow are none: the one-pixel frame
+        // is the desktop's own where the desktop draws edges, and on a display server that leaves the
+        // frame to the program a line around the whole window would be the design's only one.
+        theme.Setters.Add(new Setter(WindowDrawnDecorations.DefaultTitleBarHeightProperty, MainWindow.TitleBarHeight));
+        theme.Setters.Add(new Setter(WindowDrawnDecorations.DefaultFrameThicknessProperty, default(Thickness)));
+        theme.Setters.Add(new Setter(WindowDrawnDecorations.DefaultShadowThicknessProperty, default(Thickness)));
+        theme.Setters.Add(
+            new Setter(
+                WindowDrawnDecorations.TemplateProperty,
+                new DecorationsTemplate(new TemplateResult<WindowDrawnDecorationsContent>(
+                    new WindowDrawnDecorationsContent
+                    {
+                        Underlay = new Panel { Children = { DragArea() } },
+
+                        // The buttons are in the overlay rather than in the window's own content, because
+                        // that is what puts them above the menu: the menu is the window's, and a row whose
+                        // buttons could be covered by it would be covered by it the moment a plugin added
+                        // one menu too many.
+                        Overlay = new Panel { Children = { row } },
+                    },
+                    scope))
+            )
+        );
+
+        return new Frame(theme, minimize, maximize, close);
+    }
+
+    /// <summary>
+    /// One of the window's own buttons.
+    /// </summary>
+    /// <remarks>
+    /// What each does is the toolkit's, from the role it carries, and it is the toolkit that reads them out
+    /// of the template's names and wires them up. What is left here is what a window button is made of: a
+    /// part the toolkit looks for, a role, and the class the look draws it by.
+    /// </remarks>
+    /// <param name="scope">The names the toolkit reads the parts out of.</param>
+    /// <param name="row">The row to add it to.</param>
+    /// <param name="name">The part name the toolkit looks for.</param>
+    /// <param name="role">What the toolkit makes a press on it do.</param>
+    /// <param name="closes">Whether it is the one that closes the window.</param>
+    /// <returns>The button, which the window names and draws.</returns>
+    private static Button Caption(
+        NameScope scope,
+        StackPanel row,
+        string name,
+        WindowDecorationsElementRole role,
+        bool closes = false
+    )
+    {
+        var button = new Button
+        {
+            Name = name,
+            Classes = { CaptionClass },
+            VerticalAlignment = VerticalAlignment.Stretch,
+            [WindowDecorationProperties.ElementRoleProperty] = role,
+        };
+
+        if (closes)
+        {
+            button.Classes.Add(CaptionCloseClass);
+        }
+
+        scope.Register(name, button);
+        row.Children.Add(button);
+
+        return button;
+    }
+
+    /// <summary>The area a press on the row moves the window by.</summary>
+    /// <remarks>
+    /// Transparent and under everything: it is what a press finds where no menu and no button claimed it.
+    /// The role is what a display server that draws its own decorations reads to move the window — the
+    /// desktop moves it through the window's own code instead, which is why the role is here and the call
+    /// is in the window's.
+    /// </remarks>
+    private static Control DragArea() =>
+        new Panel
+        {
+            Background = Brushes.Transparent,
+            Height = MainWindow.TitleBarHeight,
+            VerticalAlignment = VerticalAlignment.Top,
+            [WindowDecorationProperties.ElementRoleProperty] = WindowDecorationsElementRole.TitleBar,
+        };
+
+    /// <summary>
+    /// The parts of a window's own frame: the theme that states it, and the buttons it draws.
+    /// </summary>
+    /// <remarks>
+    /// They travel together because they are made together, and the window that puts the theme on is the
+    /// only thing that can say what the buttons are named and what they are drawn as.
+    /// </remarks>
+    /// <param name="Theme">The theme to put on the window.</param>
+    /// <param name="Minimize">The button that minimizes it.</param>
+    /// <param name="Maximize">The button that maximizes it, or puts it back.</param>
+    /// <param name="Close">The button that closes it.</param>
+    public readonly record struct Frame(
+        ControlTheme Theme,
+        Button Minimize,
+        Button Maximize,
+        Button Close
+    );
+
+    /// <summary>
+    /// The two halves of a window's own frame: the area a press moves it by, and its buttons.
+    /// </summary>
+    /// <remarks>
+    /// The parts are built rather than written as markup because what is wanted here is two panels and
+    /// three buttons, and a file for that would be a second place the shape of the window is written down.
+    /// Nothing in them binds to the decorations they belong to, since a built template is given no templated
+    /// parent to bind against: the height the buttons are is the row's height, and that is the one number
+    /// the window, the look and the markup all name (<see cref="MainWindow.TitleBarHeight"/>).
+    /// </remarks>
+    /// <param name="content">What the template hands the toolkit, built once while the window was made.</param>
+    private sealed class DecorationsTemplate(TemplateResult<WindowDrawnDecorationsContent> content)
+        : IWindowDrawnDecorationsTemplate
+    {
+        /// <inheritdoc />
+        public TemplateResult<WindowDrawnDecorationsContent> Build() => content;
+
+        /// <summary>
+        /// The interface a template is held as, which is what the toolkit reads it through.
+        /// </summary>
+        /// <remarks>
+        /// Written out because one type cannot answer one method with two return types: the toolkit's
+        /// template interface is the one that carries the content and the names, and what a caller of the
+        /// other would get is that same content.
+        /// </remarks>
+        object? ITemplate.Build() => content.Result;
+    }
 
     /// <summary>A style over a selector, carrying the setters it was given.</summary>
     private static Style On(Func<Selector?, Selector> selector, params SetterBase[] setters)

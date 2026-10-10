@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -7,6 +9,7 @@ using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Logging;
+using RorolalaDesktop.Theming;
 using ContractMenuItem = RorolalaDesktop.Contract.MenuItem;
 using DockOpenMode = RorolalaDesktop.Contract.DockOpenMode;
 using DockRegistration = RorolalaDesktop.Contract.DockRegistration;
@@ -14,29 +17,48 @@ using DockRegistration = RorolalaDesktop.Contract.DockRegistration;
 namespace RorolalaDesktop;
 
 /// <summary>
-/// The window: the always-present top menu bar, and the dock area below it.
+/// The window: the row its menu and its own buttons share, and the dock area below it.
 /// </summary>
 /// <remarks>
 /// Both are filled from what was registered — the kernel's own entries and the plugins' — and a
 /// plugin registers during initialization, which is before this window is made, so the menu is built
 /// once here and the area is kept in step by the dock manager.
+/// <para>
+/// No title bar of the desktop's is drawn: the row above the dock area is the window's whole frame for
+/// as much of it as is seen, and what the toolkit takes from it is said in the markup. What is left
+/// here is the part of it the host owns — the buttons' words and their pictures — which is why the
+/// window is the one that says them.
+/// </para>
 /// </remarks>
 public partial class MainWindow : Window
 {
     /// <summary>
-    /// The class the menu bar carries, for a theme to address it by.
+    /// The height of the row the menu and the window's own buttons share.
     /// </summary>
     /// <remarks>
-    /// The shell marks the surfaces it owns so that a theme can style them without knowing what is in
-    /// them. The name is part of Section 10, since a plugin's theme writes it as a literal.
+    /// One number rather than three that have to agree: the row is this tall, the decorations are told
+    /// to reserve this much for a title bar, and the window is told the same, because a title bar the
+    /// framework believes is a different height from the one that is drawn leaves a strip at the top
+    /// that drags nothing and a strip under it that drags the window. It is a field rather than a
+    /// property because the markup reads it with <c>x:Static</c>.
     /// </remarks>
-    public const string MenuBarClass = "menu-bar";
+    public const double TitleBarHeight = 29.0;
 
     /// <summary>The label key of the menu the registered docks appear under.</summary>
     private const string WindowMenu = "menu.window";
 
     /// <summary>Everything the host holds.</summary>
     private readonly HostServices _services;
+
+    /// <summary>
+    /// This window's frame, which is what draws its own buttons.
+    /// </summary>
+    /// <remarks>
+    /// Made by the window rather than named as a resource, because every other window of the program — a
+    /// plugin's question, a notice — is a card with a title bar of the desktop's. It is held because the
+    /// buttons it builds are the ones this window has to say the words and the pictures of.
+    /// </remarks>
+    private readonly RorolalaTheme.Frame _frame = RorolalaTheme.DecorationsTheme();
 
     /// <summary>The docks as they appear in the Window menu, so their checks can be kept in step.</summary>
     private readonly List<(DockRegistration Registration, MenuItem Entry)> _docks = [];
@@ -61,6 +83,49 @@ public partial class MainWindow : Window
             Title = _services.I18n.Get("window.title");
         }
 
+        // The height the toolkit reserves for the title bar is the height the row above the dock area
+        // is drawn at, and both are the one number the markup names (Section 10).
+        ExtendClientAreaTitleBarHeightHint = TitleBarHeight;
+
+        // There is no title bar of the desktop's left to move the window, so the row this program draws
+        // in its place does it: a press on the row that no menu and no button claimed is a press on the
+        // window, and the second click of a double click is what maximizes or restores it — the two
+        // gestures a title bar of the desktop's would have answered by itself.
+        //
+        // Asked here rather than left to the role in the markup, which moves the window only on a display
+        // server that draws its own decorations: a desktop that draws none is the one this is written
+        // for, and it reads no role. Both are asked, so a press moves the window either way.
+        TitleBar.PointerPressed += (_, press) => MoveOrMaximize(press);
+        MainMenu.PointerPressed += (_, press) => MoveOrMaximize(press);
+
+        // What each of the window's buttons says and what it is drawn as. The buttons are the frame's —
+        // see the look, which builds them out of the program's own pictures — and what is said here is the
+        // part of them the host owns: the words a reader hears them by, which are translated, and the
+        // picture that says what the one that maximizes will do next.
+        WindowControls.Describe(_frame.Minimize, "window.minimize", _services.I18n);
+        WindowControls.Describe(_frame.Close, "window.close", _services.I18n);
+        WindowControls.Picture(_frame.Minimize, Glyph(WindowControls.MinimizeKey));
+        WindowControls.Picture(_frame.Close, Glyph(WindowControls.CloseKey));
+        MaximizePicture();
+
+        // The button that maximizes says what it will do next rather than what it did, so what it carries
+        // follows the state the window is in: a press leaves the window maximized, and the same button then
+        // has to offer the way back. The state is watched rather than the click answered to, because a
+        // window can be maximized without this button at all — a double click on the row, the window
+        // manager's own key — and a button still offering to maximize an already maximized window lies.
+        PropertyChanged += (_, change) =>
+        {
+            if (change.Property == WindowStateProperty)
+            {
+                MaximizePicture();
+            }
+        };
+
+        // The frame: no title bar of the desktop's, and the row above the dock area to stand in for it. It
+        // is put on the window rather than in the look's own resources because a dialog of a plugin's has a
+        // title bar of its own, and this would take it away.
+        WindowDecorationsTheme = _frame.Theme;
+
         BuildMenu();
         DockAreaHost.Content = new DockArea(
             _services.Docks,
@@ -68,10 +133,6 @@ public partial class MainWindow : Window
             _services.Refocus,
             _services.ProgramIcon
         );
-
-        // Marked here rather than in the markup, so that the name a theme matches on is written once
-        // and read by both.
-        MainMenu.Classes.Add(MenuBarClass);
 
         // A dock can be closed, opened, or dragged to another region by hand as well as from the
         // menu, so the checks are refreshed and the layout written whenever the docks change — a
@@ -85,6 +146,79 @@ public partial class MainWindow : Window
         Opened += (_, _) => ShowPopups();
         Closing += (_, _) => LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
     }
+
+    /// <summary>
+    /// Moves the window for a press on the row, or maximizes it for the second click of a double click.
+    /// </summary>
+    /// <remarks>
+    /// The move is asked of the toolkit rather than done by hand, because on a desktop it is the window
+    /// manager's own move and dragging it out by arithmetic would lose the snap to a screen edge and the
+    /// bounds a maximized window restores to. A press the menu itself took never reaches here, which is
+    /// what keeps opening a menu from moving the window.
+    /// <para>
+    /// The press is left unhandled, because the menu bar is above where this is listened for and a menu
+    /// still has to open under a press that landed on one of its menus.
+    /// </para>
+    /// </remarks>
+    /// <param name="press">What was pressed.</param>
+    private void MoveOrMaximize(PointerPressedEventArgs press)
+    {
+        // A press something inside the row has already taken means a menu or a button, and the window
+        // must not move out from under the thing that was aimed at.
+        if (press.Handled || !press.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (press.ClickCount == 2)
+        {
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            return;
+        }
+
+        if (press.ClickCount == 1)
+        {
+            BeginMoveDrag(press);
+        }
+    }
+
+    /// <summary>
+    /// Draws the maximize button as what pressing it would do to the window as it stands.
+    /// </summary>
+    /// <remarks>
+    /// The picture follows the window's state rather than the press, because a window can be maximized
+    /// without this button — a double click on the row, the window manager's own shortcut — and a button
+    /// still offering to maximize a maximized window is a button that lies. The words follow it for the
+    /// same reason: what a reader is told the button does has to be what pressing it does.
+    /// </remarks>
+    private void MaximizePicture()
+    {
+        var maximized = WindowState == WindowState.Maximized;
+
+        WindowControls.Picture(
+            _frame.Maximize,
+            Glyph(maximized ? WindowControls.RestoreKey : WindowControls.MaximizeKey)
+        );
+        AutomationProperties.SetName(
+            _frame.Maximize,
+            _services.I18n.Get(maximized ? "window.restore" : "window.maximize")
+        );
+    }
+
+    /// <summary>
+    /// The picture a button carries, or nothing when the program was not drawn with one.
+    /// </summary>
+    /// <remarks>
+    /// Nothing rather than a failure: a button without a picture is still a button, and the window it
+    /// closes or minimizes is the same window. What must not happen is a window that does not open because
+    /// a picture it was drawn from was not beside the program.
+    /// </remarks>
+    /// <param name="key">The key the picture is held under.</param>
+    /// <returns>What to put in the button, or nothing.</returns>
+    private Control? Glyph(string key) =>
+        WindowControls.Find(_services.Icons, key) is { } picture
+            ? WindowControls.Glyph(picture, WindowControls.GlyphSize)
+            : null;
 
     /// <summary>Builds the menu bar from what was registered.</summary>
     private void BuildMenu()

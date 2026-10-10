@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -24,9 +24,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The pictures the window's own buttons are drawn as, embedded so that they travel in the program
+         itself and not beside it: the program is what they belong to, and a picture in a directory is one
+         more thing that can be left behind by a copy of it. They are drawn from the pinned Material Design
+         set by `./run.sh icons`, and the keys they are read by are generated from the same manifest. -->
+    <EmbeddedResource Include="icons/*.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.3" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
     <PackageReference Include="Avalonia.Themes.Simple" Version="12.1.3" />
+    <!-- The window draws its own frame, and on Wayland that is the client's job: the compositor is asked
+         for none, and the toolkit draws the bar and the edges it would otherwise have taken. The backend
+         is the one Linux talks Wayland with; `Avalonia.Desktop` reaches for X11 and nothing else. -->
+    <PackageReference Include="Avalonia.Wayland" Version="12.1.3" />
   </ItemGroup>
 
   <ItemGroup>

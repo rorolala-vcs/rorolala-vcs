@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.I18n;
 
@@ -67,10 +67,23 @@ class Program
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.
-    public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
+    //
+    // The two options below are what make the window's own frame work on a Linux desktop. Neither
+    // backend draws decorations unless it is asked to: X11 hides the window manager's and draws its own
+    // only for a window that extended into them *and* only when this option is on, and Wayland lets the
+    // compositor decide until it is told otherwise — a compositor that would draw a server-side title bar
+    // would then draw one over a window that has its own. Both are experimental in the toolkit and both
+    // are wanted here: a compositor's title bar is the thing this program does not have.
+    public static AppBuilder BuildAvaloniaApp() =>
+#pragma warning disable AVALONIA_X11_CSD, AVALONIA_WAYLAND_FORCE_CSD
+        AppBuilder
+            .Configure<App>()
+            .With(() => new X11PlatformOptions { EnableDrawnDecorations = true })
+            .With(() => new WaylandPlatformOptions { ForceDrawnDecorations = true })
             .UsePlatformDetect()
+            .UseWaylandWithFallback()
             .LogToTrace();
+#pragma warning restore AVALONIA_X11_CSD, AVALONIA_WAYLAND_FORCE_CSD
 
     /// Records what the run handed over: each argument this program answers to, and nothing else.
     ///

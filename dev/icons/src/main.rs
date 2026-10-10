@@ -1,9 +1,10 @@
 //! Draws the Desktop's own pictures from the pinned Material Design icon set.
 //!
 //! What is drawn is what `app/desktop/icons.toml` names: the commit to draw from, and the pictures each
-//! plugin wears. What is written beside them is what a directory of pictures has to say for itself — the
-//! license the artwork is under, where it came from, and how to draw it again — and the C# keys the plugin
-//! reads them by. Adding a picture is therefore a line in the manifest rather than an edit in four places.
+//! project wears — a plugin of the program's, and the host itself. What is written beside them is what a
+//! directory of pictures has to say for itself — the license the artwork is under, where it came from, and
+//! how to draw it again — and the C# keys the project reads them by. Adding a picture is therefore a line
+//! in the manifest rather than an edit in four places.
 //!
 //! This is a development tool: it is crude on purpose, and it is what runs, not the interface.
 
@@ -28,6 +29,12 @@ const CLONE: &str = "THIRD-PARTY/material-icons";
 /// Where the plugins are, from the root of the tree.
 const PLUGINS: &str = "app/desktop/Plugins";
 
+/// Where a project is looked for when the manifest does not say, from the root of the tree.
+///
+/// A set is named by its `source`, and what the manifest was written for — the plugins — is what it means
+/// when nothing is said. The host is not a plugin, so its set says where it is.
+const SOURCES: &str = PLUGINS;
+
 /// What a picture is drawn in, and how many pixels wide and tall it is.
 ///
 /// The ink is white and the ground transparent, because a plugin draws a picture as a mask over a colour it
@@ -48,15 +55,36 @@ const fn wide() -> f32 {
     wide
 }
 
-/// What every picture of one plugin is drawn for.
+/// What every picture of one project is drawn for.
 #[derive(Deserialize)]
 struct Set {
-    /// The plugin, as its directory under `app/desktop/Plugins` and as the namespace of its keys.
+    /// The project, as the directory holding it and as the namespace of its keys.
+    ///
+    /// A plugin's is the same name twice — its directory under `app/desktop/Plugins` and its C# namespace
+    /// are one word — and the host's is its own namespace, `RorolalaDesktop`.
     plugin: String,
+    /// Where the project sits, from the root of the tree, when it is not a plugin.
+    ///
+    /// The plugins are what the manifest was written for, so their sets leave it out and the project is
+    /// found under `app/desktop/Plugins` by its name; the host is not a plugin and is the set that says
+    /// where it is.
+    source: Option<String>,
     /// What the pictures are handed over under.
     key: String,
     /// The pictures, by the name the set knows each by.
     icons: Vec<String>,
+}
+
+impl Set {
+    /// Where the project's pictures live, from the root of the tree.
+    ///
+    /// A set that names where its project sits is at that path; one that does not is a plugin, and the
+    /// plugins are one directory of them.
+    fn home(&self) -> PathBuf {
+        self.source
+            .as_ref()
+            .map_or_else(|| Path::new(SOURCES).join(&self.plugin), PathBuf::from)
+    }
 }
 
 /// The set to draw from.
@@ -104,7 +132,7 @@ fn draw(root: &Path) -> Result<(), String> {
         .map_err(|error| format!("the set's license could not be read: {error}"))?;
 
     for set in &manifest.set {
-        let pictures = root.join(PLUGINS).join(&set.plugin).join("icons");
+        let pictures = root.join(set.home()).join("icons");
         fs::create_dir_all(&pictures)
             .map_err(|error| format!("`{}` could not be made: {error}", pictures.display()))?;
 
@@ -120,10 +148,7 @@ fn draw(root: &Path) -> Result<(), String> {
             .map_err(|error| format!("`{}` could not be written: {error}", notice.display()))?;
         println!("==> {}", notice.display());
 
-        let keys = root
-            .join(PLUGINS)
-            .join(&set.plugin)
-            .join("Icons.Generated.cs");
+        let keys = root.join(set.home()).join("Icons.Generated.cs");
         fs::write(&keys, keys_of(set))
             .map_err(|error| format!("`{}` could not be written: {error}", keys.display()))?;
         println!("==> {}", keys.display());
@@ -246,7 +271,7 @@ fn said(material: &Material, set: &Set) -> String {
     format!(
         "# The {} pictures\n\
          \n\
-         The pictures the `{}` plugin draws: {}.\n\
+         The pictures the `{}` project draws: {}.\n\
          \n\
          They are Google's Material Design icons, taken from the maintained mirror of the set,\n\
          [material-icons/material-icons]({}) — the same artwork as\n\
@@ -265,20 +290,20 @@ fn said(material: &Material, set: &Set) -> String {
          **Nothing here is edited by hand.** The pictures, this file and the license are what that run\n\
          writes; a change made here is a change made nowhere.\n\
          \n\
-         **Why white.** A picture is not drawn as a picture: a plugin draws it as an opacity mask over a\n\
+         **Why white.** A picture is not drawn as a picture: what wears it draws it as an opacity mask over a\n\
          ground it colours from the theme, so the mark takes the ink the user is looking at rather than a\n\
          colour baked into the file. White is opaque under either reading of a mask — its alpha, and its\n\
          luminance — so the picture works whichever one the toolkit does.\n\
          \n\
          **Why raster rather than linked.** Nothing at runtime draws an SVG: the toolkit would need another\n\
          package for it, and a plugin is discovered as a single assembly. The pictures are drawn at {SIZE}\n\
-         pixels, which is four times the 24-unit viewBox the artwork is drawn at — as large as a tile's icon\n\
-         ever gets at the top of the zoom, so the mask is scaled down rather than up.\n",
+         pixels, which is four times the 24-unit viewBox the artwork is drawn at, so the mask is scaled down\n\
+         rather than up.\n",
         set.plugin, set.plugin, list, material.url, material.commit, set.key
     )
 }
 
-/// The C# keys a plugin reads its pictures by, generated so that no one writes them twice.
+/// The C# keys a project reads its pictures by, generated so that no one writes them twice.
 fn keys_of(set: &Set) -> String {
     let mut keys = String::new();
     let mut table = String::new();
@@ -305,7 +330,7 @@ fn keys_of(set: &Set) -> String {
          \n\
          namespace {};\n\
          \n\
-         /// <summary>The pictures this plugin contributes, and the key each is handed over under.</summary>\n\
+         /// <summary>The keys the pictures of this project are held under.</summary>\n\
          internal static partial class Icons\n\
          {{\n\
          {keys}\

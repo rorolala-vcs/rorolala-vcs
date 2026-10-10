@@ -2,14 +2,46 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:RorolalaDesktop"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
         x:Class="RorolalaDesktop.MainWindow"
         Width="1100" Height="720"
-        Title="Rorolala Desktop">
-    <!-- The menu bar is always present, and the rest of the window is the dock area. Both are filled
-         from what the plugins registered, so this file names the shape and the code names the rest. -->
+        Title="Rorolala Desktop"
+        ExtendClientAreaToDecorationsHint="True"
+        WindowDecorations="BorderOnly">
+    <!-- The frame is the program's own rather than the desktop's, and `BorderOnly` is how the desktop is
+         told so: the toolkit asks for a window with no title bar of the desktop's, keeps the resize
+         border, and leaves the whole of the top to this program. `Full` would ask the desktop for a
+         title bar instead — and then draw its own close, maximize and minimize over this program's,
+         which is the one thing a window that draws its own row must not have.
+
+         The hint is what hides the title bar on a display server that leaves the choice to the program:
+         X11 and Wayland both draw one unless they are told not to, and the request only takes effect on
+         a window that extended into its decorations.
+
+         The top row is one line: the menu, then the window's own buttons. Its height is the height the
+         decorations are told to reserve, and the look is what draws the row and the buttons. -->
     <DockPanel>
-        <Menu x:Name="MainMenu" DockPanel.Dock="Top" />
+        <DockPanel DockPanel.Dock="Top" Height="{x:Static local:MainWindow.TitleBarHeight}">
+            <!-- The row's own surface, under everything in it: what it is filled with is the look's, and
+                 the row is drawn whether or not a menu or a button reaches any given pixel of it. It is
+                 what a press finds where no menu and no button claims it, and it carries the code that
+                 moves the window, because the window has no title bar of the desktop's to do it. -->
+            <Border x:Name="TitleBar"
+                    Classes="title-bar"
+                    WindowDecorationProperties.ElementRole="TitleBar" />
+            <!-- Right first, so that what is left is what the menu may use, and empty: the buttons that go
+                 here are the window's frame's, which the look builds and the toolkit wires up from the role
+                 each carries. What is reserved is the room they take, and the look is told the same
+                 number, so that a long menu is never drawn under them. -->
+            <StackPanel x:Name="WindowButtons"
+                        DockPanel.Dock="Right"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Stretch" />
+            <!-- Painted with nothing of its own, so that the surface under it is what a press on the bar
+                 between its items finds. -->
+            <Menu x:Name="MainMenu" Background="Transparent" />
+        </DockPanel>
         <ContentControl x:Name="DockAreaHost" />
     </DockPanel>
 </Window>

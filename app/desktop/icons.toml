@@ -17,11 +17,14 @@ url = "https://github.com/material-icons/material-icons"
 # clone, and the upstream is archived — this is expected to stay where it is.
 commit = "af0ed9c0e1276bad43c4d6ca8e8aaa283e425195"
 
-# One set per plugin, which is also where the pictures are drawn —
-# `app/desktop/Plugins/<plugin>/icons/` — and the namespace the keys are generated into.
+# One set per project, which is also where the pictures are drawn — the project's own `icons/` — and the
+# namespace the keys are generated into.
 #
 # `key` is what a picture is handed over under, and the icon library is one namespace of them: a plugin's
 # keys are its own, so two plugins may each contribute a `lock` without either being the other's.
+#
+# A project is a plugin unless it says otherwise, which is the word below: `source` is where it sits from
+# the root of the tree. The host is not a plugin, so its set names where it is.
 
 [[set]]
 plugin = "FileSystemPlugin"
@@ -64,3 +67,17 @@ key = "rorolala_vcs"
 # the pencil that marks the reader's own, and the last three are how a command's own report is read: what it
 # said went wrong, what it said to be careful of, and what it said could be done about it.
 icons = ["lock", "create", "lock_open", "error", "warning", "live_help"]
+
+[[set]]
+plugin = "RorolalaDesktop"
+source = "app/desktop/Core"
+key = "rorolala"
+
+# The window's own buttons: the row at the top of the window wears them, and they are the program's
+# pictures rather than the desktop's, because the title bar they sit in is the program's too.
+#
+# `minimize` is the set's bar, `close` its cross, `crop_square` the hollow square a window is drawn as
+# while it is not maximized, and `filter_none` the two squares — one behind the other — that say pressing
+# it puts the window back the size it was. Nothing here is `fullscreen` or `open_in_full`: this window
+# has no full-screen button, and a picture for one would be a picture nothing wears.
+icons = ["minimize", "crop_square", "filter_none", "close"]

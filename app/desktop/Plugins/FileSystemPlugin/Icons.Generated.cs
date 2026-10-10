@@ -5,7 +5,7 @@
 
 namespace FileSystemPlugin;
 
-/// <summary>The pictures this plugin contributes, and the key each is handed over under.</summary>
+/// <summary>The keys the pictures of this project are held under.</summary>
 internal static partial class Icons
 {
     /// <summary>The key the `visibility` picture is held under.</summary>

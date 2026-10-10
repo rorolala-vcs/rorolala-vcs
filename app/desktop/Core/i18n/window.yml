@@ -7,3 +7,15 @@ window:
   title:
     en: Rorolala Desktop
     zh-CN: Rorolala 桌面
+  minimize:
+    en: Minimize
+    zh-CN: 最小化
+  maximize:
+    en: Maximize
+    zh-CN: 最大化
+  restore:
+    en: Restore
+    zh-CN: 还原
+  close:
+    en: Close
+    zh-CN: 关闭

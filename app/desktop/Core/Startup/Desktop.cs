@@ -125,6 +125,10 @@ internal sealed class Desktop
     {
         var plugins = _state.Plugins;
 
+        // The host's own pictures are contributed before anything reads them: a window's buttons are drawn
+        // from the library when the window is made, which is after this.
+        Icons.Declare(services.Icons);
+
         services.Docks.Register(
             new DockRegistration(
                 Kernel,

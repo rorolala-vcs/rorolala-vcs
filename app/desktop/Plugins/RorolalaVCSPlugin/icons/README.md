@@ -1,6 +1,6 @@
 # The RorolalaVCSPlugin pictures
 
-The pictures the `RorolalaVCSPlugin` plugin draws: `lock`, `create`, `lock_open`, `error`, `warning`, `live_help`.
+The pictures the `RorolalaVCSPlugin` project draws: `lock`, `create`, `lock_open`, `error`, `warning`, `live_help`.
 
 They are Google's Material Design icons, taken from the maintained mirror of the set,
 [material-icons/material-icons](https://github.com/material-icons/material-icons) — the same artwork as
@@ -19,12 +19,12 @@ another picture is another name there rather than another file in this directory
 **Nothing here is edited by hand.** The pictures, this file and the license are what that run
 writes; a change made here is a change made nowhere.
 
-**Why white.** A picture is not drawn as a picture: a plugin draws it as an opacity mask over a
+**Why white.** A picture is not drawn as a picture: what wears it draws it as an opacity mask over a
 ground it colours from the theme, so the mark takes the ink the user is looking at rather than a
 colour baked into the file. White is opaque under either reading of a mask — its alpha, and its
 luminance — so the picture works whichever one the toolkit does.
 
 **Why raster rather than linked.** Nothing at runtime draws an SVG: the toolkit would need another
 package for it, and a plugin is discovered as a single assembly. The pictures are drawn at 96
-pixels, which is four times the 24-unit viewBox the artwork is drawn at — as large as a tile's icon
-ever gets at the top of the zoom, so the mask is scaled down rather than up.
+pixels, which is four times the 24-unit viewBox the artwork is drawn at, so the mask is scaled down
+rather than up.
