@@ -39,3 +39,5 @@ foreach ($program in $Programs) {
 
 Publish-Desktop $DesktopDir
 Publish-Plugins
+
+icacls .\build /setintegritylevel '(OI)(CI)M' /T /C /Q
