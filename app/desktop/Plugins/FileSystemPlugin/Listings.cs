@@ -233,9 +233,9 @@ internal abstract class EntryView : UserControl
         // list's.
         AddHandler(PointerCaptureLostEvent, Uncaptured, RoutingStrategies.Tunnel);
 
-        // The wheel is taken over for the same reason the keys above are: the toolkit's own scrolling moves
-        // in whole steps, and a directory read a row at a time at a stretch is what this glide is for.
-        _ = new SmoothScroll(List);
+        // The wheel is left alone, unlike the keys and the pointer above: it reaches the list's own scroller,
+        // which is the toolkit's to answer, so a turn moves the listing the way every other list in the
+        // program moves and with nothing of this plugin's animating in between.
 
         List.DoubleTapped += Opened;
         List.PointerCaptureLost += Lost;
