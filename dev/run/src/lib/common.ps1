@@ -95,7 +95,11 @@ $DesktopDir = "$BuildDir/bin/desktop"
 # The source tree spells the directory `Plugins` and the program spells the directory it scans
 # `plugins`; the two are deliberately not made to match. What a program looks in is its own business,
 # and the tree's spelling is the tree's.
-$DesktopPlugins = @('app/desktop/Plugins/FileSystemPlugin')
+$DesktopPlugins = @(
+    'app/desktop/Plugins/FileSystemPlugin'
+    'app/desktop/Plugins/RorolalaVCSPlugin'
+    'app/desktop/Plugins/GitVCSPlugin'
+)
 
 # PowerShell carries on after a native command that failed, which is the opposite of what a gate
 # wants: `set -e` stops the shell scripts, and this is what stops a script here. It is called after
