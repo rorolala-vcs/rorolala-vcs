@@ -879,10 +879,12 @@ internal sealed class RorolalaTheme
                 new Setter(Layoutable.MinHeightProperty, RowHeight),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small)
             ),
+            // A tree is a pane rather than a card: one edge down the side it stands against the dock beside it,
+            // and no corner rounded off. It used to be drawn with a radius, which read as a surface laid on the
+            // dock rather than as the part of the window the steps are read in.
             On(
                 selector => selector.OfType<TreeView>(),
-                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
-                new Setter(TemplatedControl.CornerRadiusProperty, Radius)
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine)
             ),
             On(
                 selector => selector.OfType<TreeViewItem>(),
@@ -890,8 +892,7 @@ internal sealed class RorolalaTheme
                 // A step of a tree is a row of its own height rather than a listing's, and the room between two
                 // steps is stated below rather than being the difference between that height and what a step
                 // draws. See the two constants named here for why each is what it is.
-                new Setter(Layoutable.MinHeightProperty, TreeRowHeight),
-                new Setter(TemplatedControl.CornerRadiusProperty, Small)
+                new Setter(Layoutable.MinHeightProperty, TreeRowHeight)
             ),
             // The room under a step, which is also the room between a step and whatever it holds: the presenter
             // is what the row's own line is drawn in, and the steps under it are laid out directly below it, so

@@ -32,6 +32,9 @@ internal static partial class Icons
     /// <summary>The key the `refresh` picture is held under.</summary>
     public const string Refresh = "rorolala_file_system.refresh";
 
+    /// <summary>The key the `home` picture is held under.</summary>
+    public const string Home = "rorolala_file_system.home";
+
     /// <summary>The key the `launch` picture is held under.</summary>
     public const string Launch = "rorolala_file_system.launch";
 
@@ -64,6 +67,7 @@ internal static partial class Icons
         (ArrowForward, "arrow_forward"),
         (ArrowUpward, "arrow_upward"),
         (Refresh, "refresh"),
+        (Home, "home"),
         (Launch, "launch"),
         (FileCopy, "file_copy"),
         (ContentCut, "content_cut"),

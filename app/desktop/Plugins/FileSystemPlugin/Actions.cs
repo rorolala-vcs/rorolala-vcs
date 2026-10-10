@@ -162,14 +162,38 @@ internal sealed class BrowserActions
     }
 
     /// <summary>
-    /// The entry whose name is to be typed as soon as the listing that draws it is made.
+    /// Raised with the entry whose name is to be typed as soon as a view drawing it is made.
     /// </summary>
     /// <remarks>
     /// Making a folder reads the directory again, and reading it again makes a new view: a row belongs to the
-    /// view that draws it, so the name to be typed is handed to the view about to be made rather than put in
-    /// a row of the one about to go.
+    /// view that draws it, so the name to be typed is handed to the view about to be made rather than put in a
+    /// row of the one about to go. It is raised rather than kept in a field because more than one view draws
+    /// the same directories — a dock beside this one may be showing the directory the folder went into — and a
+    /// field would be read by whichever of them was made first, which is how a name comes to be typed in the
+    /// wrong dock. A view that is not drawing that directory has nothing to type and does nothing.
     /// </remarks>
-    public Entry? Naming { get; set; }
+    public event Action<Entry>? Naming;
+
+    /// <summary>
+    /// The entry a view has begun renaming, which its editor reads the kind of.
+    /// </summary>
+    /// <remarks>
+    /// Set by whatever put a box in a row and cleared by whatever took it out, because what the name may be
+    /// chosen up to — the last dot or the whole of it — is decided by whether the entry is a directory, and a
+    /// row holds a name and not a kind.
+    /// </remarks>
+    public Entry? Renaming { get; set; }
+
+    /// <summary>
+    /// What a view does when a directory has been made in one it draws, or nothing when it does not care.
+    /// </summary>
+    /// <remarks>
+    /// A view that has to show the new row takes this: a listing is read again whole, so the row is there
+    /// whether or not anything is told, but a tree reads a step when it is opened and holds what it read, so a
+    /// step that was already open would go on showing what it held before the folder was made. What is handed
+    /// over is the directory the folder was made in, which is the step that has to be read again.
+    /// </remarks>
+    public Action<string>? OnMade { get; set; }
 
     /// <summary>Makes a directory in `into`, named so that the name is free.</summary>
     /// <remarks>
@@ -203,11 +227,15 @@ internal sealed class BrowserActions
 
         _host.Log.Info($"new folder: `{made}`");
 
-        // Written down before the reading, because the reading is what makes the view that will ask for it:
-        // a hand-off made after the reading would be a hand-off to a view already made.
-        Naming = new Entry(made, EntryKind.Directory);
+        // Said before the reading, because the reading is what makes the views that draw it: a hand-off made
+        // after the reading would be a hand-off to a row that is already drawn without a box in it.
+        Naming?.Invoke(new Entry(made, EntryKind.Directory));
 
         _browser.Touch();
+
+        // Told after the reading, for the other half of the same reason: a view that keeps what it read has
+        // nothing to show until it has read again, and this is the reading to keep in step with.
+        OnMade?.Invoke(into);
 
         return made;
     }
@@ -374,15 +402,34 @@ internal sealed class BrowserActions
         }
 
         // Renaming is one entry at a time, because a name is what one thing has; the way up is not a thing
-        // to name, so it is left out.
-        if (from is EntryView view && entries.Count == 1 && !Browser.IsUp(entries[0].Path))
+        // to name, so it is left out. What is asked of the view is not asked of a listing alone: a step of the
+        // tree is a directory with a name like any other, and it is renamed the same way.
+        if (entries.Count == 1 && !Browser.IsUp(entries[0].Path))
         {
             var only = entries[0];
-            menu.Items.Add(Item("rorolala_file_system.rename", () => view.Rename(only)));
+
+            switch (from)
+            {
+                case EntryView view:
+                    menu.Items.Add(Item("rorolala_file_system.rename", () => view.Rename(only)));
+
+                    break;
+
+                case TreeBrowser branch:
+                    menu.Items.Add(Item("rorolala_file_system.rename", () => branch.Rename(only)));
+
+                    break;
+            }
         }
 
-        // A new folder lands in the directory being looked at, wherever the menu was opened.
-        if (from is EntryView maker)
+        // A new folder lands where the menu was opened, which for the tree is the directory the row names
+        // rather than the directory a dock beside it is looking at.
+        if (entries.Count == 1 && from is TreeBrowser grower)
+        {
+            var step = entries[0].Path;
+            menu.Items.Add(Item("rorolala_file_system.new_folder", () => grower.NewFolder(step)));
+        }
+        else if (from is EntryView maker)
         {
             menu.Items.Add(Item("rorolala_file_system.new_folder", maker.NewFolder));
         }
@@ -527,6 +574,11 @@ internal sealed class BrowserActions
     }
 
     /// <summary>The menu opened on the space around the entries.</summary>
+    /// <remarks>
+    /// The space belongs to the location being read, so what is offered here is what is about the place
+    /// rather than about an entry: pasting into it, making a directory in it, going back to the top of the
+    /// platform, and reading it again.
+    /// </remarks>
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
     public ContextMenu Empty(Control from)
     {
@@ -539,12 +591,21 @@ internal sealed class BrowserActions
         {
             menu.Items.Add(Item("rorolala_file_system.paste", () => Paste(from, here)));
 
-            // A listing's own space is the one place a folder is made: the tree is rooted at the base and
-            // draws no single directory to make one in, so it is left out of this rather than given a
-            // folder somewhere the user was not pointing.
+            // A listing's own space is the one place a folder is made without a row to say where: the tree
+            // is rooted at the base and draws no single directory to make one in, so it is left out of this
+            // rather than given a folder somewhere the user was not pointing. The tree offers it on every
+            // step instead (see `Fill`).
             if (from is EntryView)
             {
                 menu.Items.Add(Item("rorolala_file_system.new_folder", () => NewFolder(here)));
+            }
+
+            // The top of the platform, which is where the tree is rooted by its own button as well: a tree
+            // that was rooted deep can be taken back to the drives without going up a step at a time. It is
+            // left out where the base is the top already, since choosing it would do nothing at all.
+            if (!string.Equals(_browser.BaseDir, Browser.Root(), StringComparison.Ordinal))
+            {
+                menu.Items.Add(Item("rorolala_file_system.root", () => _browser.SetBase(Browser.Root())));
             }
 
             menu.Items.Add(Item("rorolala_file_system.reveal", () => Openers.Reveal(new Entry(here, EntryKind.Directory), _host.Log.Error)));
@@ -639,5 +700,6 @@ internal sealed class BrowserActions
         ["rorolala_file_system.new_folder"] = Icons.CreateNewFolder,
         ["rorolala_file_system.reveal"] = Icons.Launch,
         ["rorolala_file_system.copy_path"] = Icons.FileCopy,
+        ["rorolala_file_system.root"] = Icons.Home,
     };
 }

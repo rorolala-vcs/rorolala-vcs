@@ -67,10 +67,13 @@ internal sealed class TreeControl : UserControl
     /// <summary>What a copy or a cut has put within reach of a paste, which a cut step is drawn faded from.</summary>
     private readonly Clip _clip;
 
-    /// <summary>The button that roots the tree at the top of the platform.</summary>
-    private readonly Button _root = new() { Classes = { "ghost" } };
-
-    /// <summary>The tree, and nothing else, in the one cell under the bar.</summary>
+    /// <summary>
+    /// The tree, and nothing else, which is the whole of the dock.
+    /// </summary>
+    /// <remarks>
+    /// Held apart from the ground it is drawn on so that what the dock draws is one thing: what is put here is
+    /// the tree, and a change to how the dock is dressed does not have to know that.
+    /// </remarks>
     private readonly ContentControl _content = new();
 
     /// <summary>
@@ -124,28 +127,14 @@ internal sealed class TreeControl : UserControl
             }
         };
 
-        _root.Content = RolaI18N.Get("rorolala_file_system.root");
-        _root.Padding = new Thickness(7, 2);
-        _root.Click += (_, _) => _browser.SetBase(Browser.Root());
-
-        var bar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(8, 8, 8, 4),
-        };
-        bar.Children.Add(_root);
-
-        var panel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(bar, Dock.Top);
-        panel.Children.Add(bar);
-        panel.Children.Add(_content);
-
+        // The tree is the whole dock: no row above it, because what a row there held is offered where the
+        // tree is read instead — the empty space's own menu carries the way back to the top of the platform
+        // (see `Actions.Empty`) — and a row that only holds one button is a row the steps are not drawn in.
         // The sidebar ground: the tree sits on the elevated surface with one edge against the dock beside
         // it, which is what reads as the card the entries are on rather than as a bare pane.
         var ground = new Border
         {
-            Child = panel,
+            Child = _content,
             BorderThickness = new Thickness(0, 0, 1, 0),
         };
         ground[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
@@ -310,6 +299,49 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>The press a drag of a step would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _pressed;
 
+    /// <summary>
+    /// The steps that are to be read again when they are next opened.
+    /// </summary>
+    /// <remarks>
+    /// A step reads the directories under it once and holds them, which is what keeps a tree over a deep
+    /// directory cheap. A directory made under a step is the one thing that makes what it holds wrong, so the
+    /// step is named here and reads again the next time it is opened. Steps are named by path rather than by
+    /// row because the row may not exist yet when the change is made — a step that was never opened has no row.
+    /// </remarks>
+    private readonly HashSet<string> _stale = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The box a step's name is being typed in, while one is, and nothing otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than looked up, because whether a name is being edited is a state of the view: a box found
+    /// in the tree would be as likely to be the search field of something else, and the row it is in is what
+    /// has to be replaced when the editing ends.
+    /// </remarks>
+    private TextBox? _editor;
+
+    /// <summary>The name the box was put in place of, so that cancelling puts it back.</summary>
+    private TextBlock? _label;
+
+    /// <summary>
+    /// How many turns a box is asked for before it is given up on.
+    /// </summary>
+    /// <remarks>
+    /// A handful, because the turns it waits for are the reading of a directory and the lay-out of the row it
+    /// makes: a few more than those are needed costs nothing, and asking forever would be a loop that never
+    /// ends for a directory this view is not drawing at all — one made in another dock's location, say.
+    /// </remarks>
+    private const int Tries = 6;
+
+    /// <summary>
+    /// The class a step's name wears, which is the one a listing's name wears.
+    /// </summary>
+    /// <remarks>
+    /// The same word in both views because it is the same thing: what a rename edits is the label a row draws
+    /// its name in, and the two views are two drawings of the same directories.
+    /// </remarks>
+    private const string EntryName = "entry-name";
+
     /// <summary>Where that press landed and which step it was on, while it may still become a drag.</summary>
     private Point _slip;
     private string? _slipped;
@@ -351,6 +383,11 @@ internal sealed class TreeBrowser : UserControl
         AddHandler(DragDrop.DragLeaveEvent, DraggedOff);
         AddHandler(DragDrop.DropEvent, Dropped);
 
+        // A step is read once and holds what it read, so a folder made in one this view is showing has to be
+        // asked for by this view: the browser reading every directory again is what a listing turns into rows
+        // and what a tree does not, since a tree only reads the steps a user opened.
+        _actions.OnMade = Made;
+
         // Taken on the way down, before the row reads them, so that a drag can begin from the press that would
         // otherwise only choose the step: nothing here is marked handled, so choosing still happens as well.
         AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
@@ -358,9 +395,18 @@ internal sealed class TreeBrowser : UserControl
         AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
 
         // Redrawn while on screen, like the listing beside it: a dock that was closed is not a view of anything
-        // to keep in step.
-        AttachedToVisualTree += (_, _) => _clip.Changed += Repaint;
-        DetachedFromVisualTree += (_, _) => _clip.Changed -= Repaint;
+        // to keep in step. The box a new directory's name is typed in is heard for the same reason and only
+        // while on screen: a dock that was closed is not a view of anything to name either.
+        AttachedToVisualTree += (_, _) =>
+        {
+            _clip.Changed += Repaint;
+            _actions.Naming += Named;
+        };
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _clip.Changed -= Repaint;
+            _actions.Naming -= Named;
+        };
 
         var over = new Canvas { IsHitTestVisible = false };
         _ghost = new Ghost(over);
@@ -545,6 +591,89 @@ internal sealed class TreeBrowser : UserControl
     public string? Chosen() => _chosen;
 
     /// <summary>
+    /// Shows a directory that has just been made.
+    /// </summary>
+    /// <remarks>
+    /// A step holds what it read when it was opened, so one that is already open goes on showing the steps it
+    /// held before the folder was made: the step it was made in is named as stale, which is what makes opening
+    /// it read the directories under it again. The name to be typed is handed over by the actions rather than
+    /// here (see <see cref="Named"/>), because opening the step is what reads it and the reading is what has
+    /// to type the name.
+    /// </remarks>
+    /// <param name="into">The directory it was made in.</param>
+    private void Made(string into)
+    {
+        _stale.Add(into);
+
+        if (Find(_tree.Items, into) is not { } step)
+        {
+            // Not on screen, so there is nothing to show and nothing to type in: the step was never opened,
+            // and opening it later reads the directory as it is then, which is with the folder in it.
+            return;
+        }
+
+        // Closed and opened again, which is two turns of the loop rather than one: the step has to be told it
+        // is closed before it can be told it is open, or a step that is already open is not opened at all. A
+        // step that was never opened is opened the once, and one that is empty — which a step with only a
+        // placeholder in it is — is not opened onto nothing.
+        var holds = HoldsAny(into);
+
+        step.IsExpanded = false;
+
+        if (holds)
+        {
+            step.IsExpanded = true;
+        }
+    }
+
+    /// <summary>
+    /// Puts a box in the row of a directory that has just been made, once that row is drawn.
+    /// </summary>
+    /// <remarks>
+    /// The row of a directory just made arrives a turn or so after it is made: the tree is read again when the
+    /// files change, that reading is itself deferred, and the row is only built once the step holding it is
+    /// opened. So the box is asked for again on each of a few turns until the row is there — a box asked for
+    /// once, now, would be a box asked for before there is anything to put it in, which is exactly what a tree
+    /// did when this was not retried.
+    /// </remarks>
+    /// <param name="entry">The directory whose name is to be typed.</param>
+    private void Named(Entry entry)
+    {
+        Try(entry, Tries);
+    }
+
+    /// <summary>Asks for a box in a row, and asks again on the next turn while the row is not drawn.</summary>
+    /// <param name="entry">The directory whose name is to be typed.</param>
+    /// <param name="left">How many turns are left to ask on.</param>
+    private void Try(Entry entry, int left)
+    {
+        if (left <= 0)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                // A box already open is a box this is not to take the place of: the user may have begun typing
+                // in it, and the step a folder was made in is not always the step that was asked about.
+                if (_editor is not null)
+                {
+                    return;
+                }
+
+                if (Beginning(entry))
+                {
+                    return;
+                }
+
+                Try(entry, left - 1);
+            },
+            DispatcherPriority.Background
+        );
+    }
+
+    /// <summary>
     /// Opens the steps that were open, in the order they are given, and chooses what was chosen.
     /// </summary>
     /// <remarks>
@@ -718,6 +847,140 @@ internal sealed class TreeBrowser : UserControl
     }
 
     /// <summary>
+    /// Makes a directory inside a step of the tree, and opens the step so that it can be seen.
+    /// </summary>
+    /// <remarks>
+    /// Into the step the menu was opened on, which is what a step is: a directory. A menu opened on the space
+    /// beside the steps has no such directory, which is why this is offered on a row and not on the tree's own
+    /// space — the tree draws the steps under a base rather than one directory, and a folder is made in a
+    /// directory.
+    /// </remarks>
+    /// <param name="into">The directory to make it in.</param>
+    public void NewFolder(string into) => _actions.NewFolder(into);
+
+    /// <summary>
+    /// Puts the name of a step into a box, where the tree draws it.
+    /// </summary>
+    /// <remarks>
+    /// The row is found by the path in its own tag rather than by what is chosen, because a rename is asked
+    /// for about one entry and the choice is not always that entry — a folder just made is renamed without
+    /// ever being clicked.
+    /// </remarks>
+    /// <param name="entry">The directory whose name is being edited.</param>
+    public void Rename(Entry entry) => Named(entry);
+
+    /// <summary>Puts the name of a step into a box, where its row and its label are already drawn.</summary>
+    /// <param name="entry">The directory whose name is being edited.</param>
+    /// <returns>Whether the box was made.</returns>
+    private bool Beginning(Entry entry)
+    {
+        var label = _rows
+            .Where(row => string.Equals(row.Path, entry.Path, StringComparison.Ordinal))
+            .Select(row => row.Row)
+            .SelectMany(row => row.GetVisualDescendants())
+            .OfType<TextBlock>()
+            .FirstOrDefault(text => text.Classes.Contains(EntryName));
+
+        if (label?.Parent is not Panel parent)
+        {
+            return false;
+        }
+
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(entry.Path)) ?? string.Empty;
+        var box = new TextBox
+        {
+            Text = name,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        // The box takes the place the name had, in the panel the name sat in, rather than the row being built
+        // again around it: the row is the one the tree holds, and swapping it would take the step with it.
+        var at = parent.Children.IndexOf(label);
+        parent.Children[at] = box;
+
+        _editor = box;
+        _label = label;
+        _actions.Renaming = entry;
+
+        // Taken on the way down, so that Enter and Escape are read before the box's own reading of them: a
+        // field that took Enter for itself would be a name nobody could finish.
+        box.AddHandler(KeyDownEvent, (_, args) => Edited(args), RoutingStrategies.Tunnel);
+        box.LostFocus += (_, _) => Committed();
+
+        box.Focus();
+        box.SelectionStart = 0;
+        box.SelectionEnd = Names.Chosen(entry.Kind, name);
+
+        return true;
+    }
+
+    /// <summary>Reads a key in the box a name is being typed in.</summary>
+    /// <param name="e">The key.</param>
+    private void Edited(KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            Committed();
+
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Cancelled();
+        }
+    }
+
+    /// <summary>Takes the name that was typed as the step's new name.</summary>
+    /// <remarks>
+    /// The keyboard goes back to the tree with it, as it does in a listing: the box was where it was, and the
+    /// keys a dock answers are answered from the rows, so a keyboard left in a box that is gone is a dock whose
+    /// keys do nothing (Section 7.7).
+    /// </remarks>
+    private void Committed()
+    {
+        if (_editor is not { } box || _actions.Renaming is not { } entry)
+        {
+            return;
+        }
+
+        var name = box.Text ?? string.Empty;
+        Stop();
+
+        _actions.Rename(entry, name);
+        Listen();
+    }
+
+    /// <summary>Leaves the name as it was.</summary>
+    /// <remarks>
+    /// The label the box was put in place of is put back, because taking it out is what made room for the box:
+    /// leaving the box there with the old name in it would leave a field where a name is drawn.
+    /// </remarks>
+    private void Cancelled()
+    {
+        if (_editor is { } box)
+        {
+            if (box.Parent is Panel panel && _label is { } label && panel.Children.IndexOf(box) is var at && at >= 0)
+            {
+                panel.Children[at] = label;
+            }
+
+            Stop();
+            Listen();
+        }
+    }
+
+    /// <summary>Takes the box out of the row and forgets what was being renamed.</summary>
+    private void Stop()
+    {
+        _editor = null;
+        _label = null;
+        _actions.Renaming = null;
+    }
+
+    /// <summary>
     /// Fades a row whose step is hidden or cut, so that it reads as a listing would draw it.
     /// </summary>
     /// <remarks>
@@ -816,7 +1079,9 @@ internal sealed class TreeBrowser : UserControl
 
         item.Expanded += (_, _) =>
         {
-            if (read)
+            // Read the first time it is opened, and again only when something under the step has changed on
+            // disk: a step holds what it read, and a reading of it is what the steps it holds are made from.
+            if (read && !_stale.Remove(path))
             {
                 return;
             }
@@ -887,6 +1152,7 @@ internal sealed class TreeBrowser : UserControl
                     new TextBlock
                     {
                         Text = name.Length > 0 ? name : path,
+                        Classes = { EntryName },
                         VerticalAlignment = VerticalAlignment.Center,
                     },
                 },
@@ -906,8 +1172,17 @@ internal sealed class TreeBrowser : UserControl
             _browser.Go(path);
         };
 
-        row.DoubleTapped += (_, e) => e.Handled = true;
+        // A double click opens a step in the base theme, and a tree here is walked by choosing one: the gesture
+        // is taken from it, and taken from the row rather than from the tree, because the theme's handler is on
+        // the row's own presenter and a gesture taken by a handler on the row is already taken by the time the
+        // presenter is reached. A double click in the box a name is being typed in is the box's, though, since
+        // that is how a word of a name is chosen.
+        row.DoubleTapped += (_, e) => e.Handled = e.Source is not TextBox;
 
+        // A step's header is made again when what it holds changes — the way to close it is offered once it has
+        // something to close — and the row it had is then no longer the row it is drawn with: keeping both would
+        // leave the search for a row a name is edited in finding a row nothing is drawn in.
+        _rows.RemoveAll(one => string.Equals(one.Path, path, StringComparison.Ordinal));
         _rows.Add((path, row));
         Fade(row, path);
 

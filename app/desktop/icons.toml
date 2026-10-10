@@ -33,7 +33,9 @@ key = "rorolala_file_system"
 # The toolbar's own pictures. `visibility` and `visibility_off` are the switch that shows what the rules
 # hide — an eye, and an eye struck through — and `link` and `link_off` are whether a dock follows the whole
 # or looks at a directory of its own; `arrow_back`, `arrow_forward`, `arrow_upward` and `refresh` are the
-# four ways a browser moves.
+# four ways a browser moves, and `home` is the way back to the top of the platform, which is a place and
+# not a direction: it is offered by the menu rather than by the toolbar, and a house is what the set draws
+# a place a user starts from with.
 #
 # The rest are what an entry's menu is read by: `launch` opens it or shows it where the system keeps it,
 # `file_copy` copies it or its path, `content_cut` cuts it, `content_paste` pastes onto it, `delete` removes
@@ -47,6 +49,7 @@ icons = [
     "arrow_forward",
     "arrow_upward",
     "refresh",
+    "home",
     "launch",
     "file_copy",
     "content_cut",

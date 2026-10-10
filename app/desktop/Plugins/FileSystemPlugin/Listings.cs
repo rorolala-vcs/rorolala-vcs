@@ -254,18 +254,36 @@ internal abstract class EntryView : UserControl
 
         // Repainting only while on screen, like the browser itself: a dock that was closed is not a view
         // of anything to keep in step.
-        AttachedToVisualTree += (_, _) => Clipboard.Changed += Repaint;
-        DetachedFromVisualTree += (_, _) => Clipboard.Changed -= Repaint;
-
-        // A name waiting to be typed, if one was made while this view was being made — which is what a new
-        // folder is: its row is this view's, and this view is not laid out yet, so the box goes in a moment
-        // later rather than at a row that does not exist.
-        if (actions.Naming is { } naming)
+        AttachedToVisualTree += (_, _) =>
         {
-            actions.Naming = null;
+            Clipboard.Changed += Repaint;
+            actions.Naming += Named;
+        };
+        DetachedFromVisualTree += (_, _) =>
+        {
+            Clipboard.Changed -= Repaint;
+            actions.Naming -= Named;
+        };
+    }
 
-            Dispatcher.UIThread.Post(() => Rename(naming), DispatcherPriority.Background);
+    /// <summary>Puts a box in the row of an entry that has just been made, if this view draws it.</summary>
+    /// <remarks>
+    /// Heard rather than read from the actions because the view showing the directory the folder went into is
+    /// not always this one — a dock beside this one may be looking at it — and a hand-off read where it is
+    /// kept would be taken by whichever view was made first. A directory this view is not showing is not this
+    /// view's to name: a box put in the row of the wrong listing is a name typed where the user is not looking.
+    /// </remarks>
+    /// <param name="entry">The entry whose name is to be typed.</param>
+    private void Named(Entry entry)
+    {
+        if (!string.Equals(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(entry.Path)), Browser.Current, StringComparison.Ordinal))
+        {
+            return;
         }
+
+        // A moment later rather than now, because the row is drawn by the reading that is about to happen: the
+        // view is not laid out yet, and a box asked for at a row that does not exist is a box that never is.
+        Dispatcher.UIThread.Post(() => Rename(entry), DispatcherPriority.Background);
     }
 
     /// <summary>The host, for what cannot be done.</summary>
