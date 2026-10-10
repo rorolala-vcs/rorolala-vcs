@@ -311,6 +311,27 @@ internal sealed class TreeBrowser : UserControl
     private readonly HashSet<string> _stale = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The newest reading claimed for each step, so that a reading another has superseded does not land.
+    /// </summary>
+    /// <remarks>
+    /// A step read again — one a directory was made in is closed and opened again — may have a reading on its
+    /// way from before, and both would draw rows: the one that lands is the newest claim, and the older is
+    /// dropped rather than left to rebuild what it found.
+    /// </remarks>
+    private readonly Dictionary<string, int> _readings = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The steps still to be opened and the step still to be chosen, while what holds them is being read.
+    /// </summary>
+    /// <remarks>
+    /// Kept rather than given up on, because a reading made while the rules are being read is made a moment
+    /// after it is asked for: a tree built again would otherwise come back with nothing open whenever the
+    /// repository it is rooted in had not been read yet (see <see cref="Resume"/>).
+    /// </remarks>
+    private readonly List<string> _opening = [];
+    private string? _choosing;
+
+    /// <summary>
     /// The box a step's name is being typed in, while one is, and nothing otherwise.
     /// </summary>
     /// <remarks>
@@ -678,7 +699,9 @@ internal sealed class TreeBrowser : UserControl
     /// </summary>
     /// <remarks>
     /// One at a time and outermost first, because opening a step is what reads the steps under it: a step asked
-    /// for before its parent is open is a step with no row to find yet.
+    /// for before its parent is open is a step with no row to find yet. What is not drawn yet is kept rather
+    /// than given up on, because a reading of a step whose rules have not been read is made a moment after
+    /// this asks for it (<see cref="Resume"/>).
     /// <para>
     /// The choice is restored with them because it is what the clipboard's keys act on (Section 7.7): a tree that
     /// came back from being read again with nothing chosen would answer <c>Ctrl+C</c>, <c>Ctrl+X</c> and
@@ -689,18 +712,63 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="chosen">The step to choose, or nothing where none was.</param>
     public void Reopen(IReadOnlyList<string> opened, string? chosen)
     {
-        foreach (var path in opened)
+        _opening.Clear();
+        _opening.AddRange(opened);
+        _choosing = chosen;
+
+        Resume(landed: false);
+    }
+
+    /// <summary>
+    /// Opens what can be opened of the steps a rebuilt tree is to bring back, and chooses what was chosen.
+    /// </summary>
+    /// <remarks>
+    /// A step whose row is not drawn is either one the reading holding it has not reached — which is what this
+    /// waits for, and why the reading calls this again when it lands — or one that is not there at all, which
+    /// is dropped. <paramref name="landed"/> is what tells the two apart: it is said by the reading that has
+    /// just finished, since the tree cannot answer whether a row is missing or merely not made yet.
+    /// <para>
+    /// This is called by the reading as well as by the rebuild, so it is re-entered as each step is opened in
+    /// turn: what each call opens is taken off the list before it is opened, and the whole of the list is
+    /// looked at again by whichever call is left holding it.
+    /// </para>
+    /// </remarks>
+    /// <param name="landed">Whether a reading has just finished, so that a step still missing is gone.</param>
+    private void Resume(bool landed)
+    {
+        while (_opening.Count > 0)
         {
-            if (Find(_tree.Items, path) is { } item)
+            if (Find(_tree.Items, _opening[0]) is not { } item)
+            {
+                if (!landed)
+                {
+                    return;
+                }
+
+                _opening.RemoveAt(0);
+
+                continue;
+            }
+
+            var path = _opening[0];
+            _opening.RemoveAt(0);
+
+            // Whatever this opened, the step after it has no row until the reading of this one has landed:
+            // the reading says when it has, and this is called again by it.
+            landed = false;
+
+            if (!item.IsExpanded)
             {
                 item.IsExpanded = true;
             }
         }
 
-        if (chosen is not null && Find(_tree.Items, chosen) is { } pick)
+        // The choice is put back once its row is drawn, which is after the reading holding it has landed.
+        if (_choosing is { } choose && Find(_tree.Items, choose) is { } pick)
         {
-            _chosen = chosen;
+            _chosen = choose;
             pick.IsSelected = true;
+            _choosing = null;
         }
     }
 
@@ -1055,6 +1123,12 @@ internal sealed class TreeBrowser : UserControl
         };
 
     /// <summary>One directory as a step of the tree, reading its children when first opened.</summary>
+    /// <remarks>
+    /// Whether a step may be opened is a question for the filesystem, and the rules that answer it are a
+    /// repository's to read — which is a program run. It is asked where it can be answered without one: a
+    /// step is drawn with the mark that says it may be opened and corrected a moment later, rather than a
+    /// window that stops drawing until a program has answered (see <see cref="Settle"/>).
+    /// </remarks>
     /// <param name="path">The directory the step stands for.</param>
     private TreeViewItem Node(string path)
     {
@@ -1066,16 +1140,31 @@ internal sealed class TreeBrowser : UserControl
         // has something under it gets a child that is never shown, so that it can be opened at all;
         // it is replaced the first time the step is. What it holds is also what says whether there is
         // anything worth offering to close under it (see Header).
-        var holds = HoldsAny(path);
-
-        if (holds)
+        if (HideRegistry.Ready(_root))
         {
-            item.Items.Add(
-                new TreeViewItem { Header = new TextBlock { Text = "\u2026", Classes = { "faint" } } }
-            );
+            Settle(item, path, HoldsAny(path));
         }
+        else
+        {
+            // The mark is worn until the rules have been read, and what the rows are is not said before then:
+            // a step holding nothing loses it again when the answer is in. A step that is opened in the
+            // meantime is left alone, because what its rows are is the reading's to say.
+            Waiting(item);
+            item.Header = Header(path, () => Collapse(item));
 
-        item.Header = Header(path, holds ? () => Collapse(item) : null);
+            _ = Task.Run(() =>
+            {
+                HideRegistry.Prepare(_root);
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!read)
+                    {
+                        Settle(item, path, HoldsAny(path));
+                    }
+                });
+            });
+        }
 
         item.Expanded += (_, _) =>
         {
@@ -1087,16 +1176,110 @@ internal sealed class TreeBrowser : UserControl
             }
 
             read = true;
-            item.Items.Clear();
 
-            foreach (var child in Children(path))
+            var token = Claim(path);
+
+            if (HideRegistry.Ready(_root))
             {
-                item.Items.Add(Node(child));
+                Read(item, path);
+
+                return;
             }
+
+            // The rules a reading is made by are a repository's, and reading them is a program run: it is made
+            // off the thread the rows are drawn on, and the rows are made when it is done.
+            Waiting(item);
+
+            _ = Task.Run(() =>
+            {
+                HideRegistry.Prepare(_root);
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (Current(path, token))
+                    {
+                        Read(item, path);
+                    }
+                });
+            });
         };
 
         return item;
     }
+
+    /// <summary>
+    /// Says what a step holds: the child that makes it something to open, and what choosing it offers.
+    /// </summary>
+    /// <param name="item">The step's own row.</param>
+    /// <param name="path">The directory the step stands for.</param>
+    /// <param name="holds">Whether the rules leave anything under it.</param>
+    private void Settle(TreeViewItem item, string path, bool holds)
+    {
+        if (holds)
+        {
+            if (item.Items.Count == 0)
+            {
+                Waiting(item);
+            }
+        }
+        else
+        {
+            item.Items.Clear();
+        }
+
+        // Faded here rather than where the row is made, because what a row is faded by is the rules, and the
+        // rules are read by a provider that may have to reach for the filesystem: a row made before they are
+        // in hand is drawn plain and faded the moment they are (see `Node`).
+        var row = Header(path, holds ? () => Collapse(item) : null);
+        Fade(row, path);
+        item.Header = row;
+    }
+
+    /// <summary>
+    /// Gives a step the child that is never shown, which is what makes it something that can be opened.
+    /// </summary>
+    /// <param name="item">The step's own row.</param>
+    private static void Waiting(TreeViewItem item)
+    {
+        item.Items.Clear();
+        item.Items.Add(new TreeViewItem { Header = new TextBlock { Text = "\u2026", Classes = { "faint" } } });
+    }
+
+    /// <summary>Reads the directories under a step and draws them as the steps they are.</summary>
+    /// <param name="item">The step's own row.</param>
+    /// <param name="path">The directory to read.</param>
+    private void Read(TreeViewItem item, string path)
+    {
+        item.Items.Clear();
+
+        foreach (var child in Children(path))
+        {
+            item.Items.Add(Node(child));
+        }
+
+        // What a rebuild is to bring back is opened as the reading holding it lands: what is under a step is
+        // not known until it has been read, and a step asked for before then has no row to find.
+        Resume(landed: true);
+    }
+
+    /// <summary>
+    /// Claims the reading of a step, so that a reading already on its way is not the one that lands.
+    /// </summary>
+    /// <param name="path">The step being read.</param>
+    /// <returns>The claim, which <see cref="Current"/> is asked about when a reading lands.</returns>
+    private int Claim(string path)
+    {
+        var token = _readings.GetValueOrDefault(path) + 1;
+        _readings[path] = token;
+
+        return token;
+    }
+
+    /// <summary>Whether a claim is still the newest one made for a step.</summary>
+    /// <param name="path">The step being read.</param>
+    /// <param name="token">The claim the reading was made under.</param>
+    /// <returns>Whether the reading it belongs to is the one to land.</returns>
+    private bool Current(string path, int token) => _readings.GetValueOrDefault(path) == token;
 
     /// <summary>
     /// One directory's header: its icon and its name, and what choosing it does.
@@ -1125,16 +1308,26 @@ internal sealed class TreeBrowser : UserControl
     {
         var entry = new Entry(path, EntryKind.Directory);
         var name = Names.Show(entry);
-        var menu = _actions.Menu(this, [entry], deletable: !string.Equals(path, _root, StringComparison.Ordinal));
+        var deletable = !string.Equals(path, _root, StringComparison.Ordinal);
 
-        // Offered by every row with steps under it, which is the same row that is given an expander, since
-        // closing them all is worth offering where there is more than one to close. What is not offered is
-        // the other half — opening them all — since that would read every directory under the row, which is
-        // what a tree read a step at a time is for avoiding.
-        if (collapse is not null)
+        // Filled when it opens rather than when the row is made, which is how a listing's menu is made as
+        // well (see `EntryView.Prepared`). What a menu holds is asked of the plugins, and what they answer
+        // — the ownership commands among them — is read from the filesystem: a tree builds a row for every
+        // step under an opened one, so a menu made here is a menu paid for on every row nobody opened.
+        var menu = new ContextMenu();
+        menu.Opening += (_, _) =>
         {
-            menu.Items.Add(BrowserActions.Item("rorolala_file_system.collapse_all", collapse));
-        }
+            _actions.Fill(menu, this, [entry], deletable);
+
+            // Offered by every row with steps under it, which is the same row that is given an expander, since
+            // closing them all is worth offering where there is more than one to close. What is not offered is
+            // the other half — opening them all — since that would read every directory under the row, which is
+            // what a tree read a step at a time is for avoiding.
+            if (collapse is not null)
+            {
+                menu.Items.Add(BrowserActions.Item("rorolala_file_system.collapse_all", collapse));
+            }
+        };
 
         // The menu is opened by the control the row is in rather than by the row, since one of the
         // things it does — putting a path on the clipboard — is reached through a control on screen.
@@ -1184,7 +1377,6 @@ internal sealed class TreeBrowser : UserControl
         // leave the search for a row a name is edited in finding a row nothing is drawn in.
         _rows.RemoveAll(one => string.Equals(one.Path, path, StringComparison.Ordinal));
         _rows.Add((path, row));
-        Fade(row, path);
 
         return row;
     }

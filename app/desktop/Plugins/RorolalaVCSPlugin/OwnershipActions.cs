@@ -67,6 +67,13 @@ internal static class OwnershipActions
     /// could only fail is not worth offering. What cannot be read is answered as nothing to say rather than
     /// raised — a menu that will not open because ownership could not be read is a worse answer than a menu
     /// without these four lines in it, which is the same judgement the column makes.
+    /// <para>
+    /// What is read is given back at once, because the only question here is whether there is anything to
+    /// say: an ownership not released holds two opened Layouts for the life of the run, and this is asked
+    /// once per contributed item every time a menu is offered. What a listing draws its column from is the
+    /// provider's own reading, which is kept per directory and let go of when the files may have changed
+    /// (see <see cref="RorolalaLocks"/>).
+    /// </para>
     /// </remarks>
     /// <param name="was">What the menu was opened on.</param>
     /// <returns>Whether the entry is one this plugin can act on.</returns>
@@ -81,9 +88,14 @@ internal static class OwnershipActions
 
         try
         {
-            var directory = Path.GetDirectoryName(entry.Path);
+            if (Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory)
+            {
+                return false;
+            }
 
-            return !string.IsNullOrEmpty(directory) && RolaOwnership.Locate(directory) is not null;
+            using var ownership = RolaOwnership.Locate(directory);
+
+            return ownership is not null;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {

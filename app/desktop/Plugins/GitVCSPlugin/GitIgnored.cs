@@ -12,9 +12,9 @@ namespace GitVCSPlugin;
 /// The rules are Git's to read and are not reimplemented here: <c>.gitignore</c> is a small language with
 /// a history of its own (negations, directory-only rules, the repository's own exclusion file, the
 /// global one), and a second implementation would be a second answer to what Git does. So the answer is
-/// asked of the <c>git</c> program, once per directory rather than once per entry — the listing stages
-/// every entry of a directory together, and a process per entry would be a listing that took a second
-/// per file.
+/// asked of the <c>git</c> program, once per repository rather than once per directory: the rules are the
+/// repository's, and a view that reads a tree a step at a time asks about one directory per step — which,
+/// asked per directory, is one program run per directory walked into.
 /// </remarks>
 public sealed class GitIgnored : IEntryHideProvider
 {
@@ -56,24 +56,44 @@ public sealed class GitIgnored : IEntryHideProvider
     }
 
     /// <inheritdoc />
+    public bool Ready(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        return GitIgnores.Ready(root);
+    }
+
+    /// <inheritdoc />
+    public void Prepare(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        GitIgnores.Prepare(root);
+    }
+
+    /// <inheritdoc />
     public void Forget() => GitIgnores.Forget();
 }
 
 /// <summary>
-/// What Git ignores, asked of the program and remembered per directory.
+/// What Git ignores in a repository, asked of the program once and kept.
 /// </summary>
 /// <remarks>
-/// The answers are kept by the directory asked about and the root it was asked from, because what a
-/// listing stages is one directory's entries and what a tree reads is one directory's directories: the
-/// ones being looked at are asked about together, however many there are, and moving away and back is a
-/// second ask rather than a second process per entry. The cache lives for the run because a rule changed
-/// in a file is a change the next run picks up — this is a browser, not a monitor of the repository, and
-/// asking again on every frame would be a process per frame.
+/// One answer per repository rather than one per directory, because the rules are the repository's:
+/// <c>git ls-files --others --ignored --exclude-standard --directory</c> names every path they leave out,
+/// with a whole ignored directory named once instead of walked into, and one program answers for the whole
+/// of what any view is showing. The listing that used to ask per directory cost one program per directory —
+/// which a directory's own listing paid once, and a tree paid once per step under the one being opened.
 /// <para>
-/// A path is asked about as one entry of the directory holding it, which is what Git answers about a
-/// list of paths at once — and a directory is not asked about its own contents. Whether a directory is
-/// ignored is its parent's list to answer, and reading the directory itself to find that out would both
-/// read a directory nobody asked about and answer the wrong question.
+/// The answer is read when a repository is first asked about and kept until the files may have changed
+/// (<see cref="Forget"/>), because reading it walks the working tree: what is not a file of the repository
+/// is asked about once for a run, not once per row.
+/// </para>
+/// <para>
+/// What the answer says is what the program says about an entry that is not in the index. A file that is
+/// both tracked and matched by a rule is not named by <c>ls-files --others</c> and is therefore shown, where
+/// <c>check-ignore</c> would have said it is ignored: being in the repository is the better answer of the two
+/// for a browser to give.
 /// </para>
 /// </remarks>
 public static class GitIgnores
@@ -86,8 +106,17 @@ public static class GitIgnores
     /// </remarks>
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(5);
 
-    /// <summary>The ignored paths of each directory already asked about, by the root it was asked from.</summary>
-    private static readonly Dictionary<(string Root, string Directory), HashSet<string>> Asked = [];
+    /// <summary>
+    /// The ignored paths of each repository already asked about, by the repository's own directory.
+    /// </summary>
+    /// <remarks>
+    /// Kept as a <see cref="Lazy{T}"/> rather than as the set itself, because the read is a program run and
+    /// two threads may ask at once — a view priming a repository off the window's thread while the window's
+    /// thread asks about a row. One of them reads and the other waits for that reading rather than starting a
+    /// second program of its own, and the lock is held for the lookup alone so that the waiting is on the
+    /// answer rather than on this class.
+    /// </remarks>
+    private static readonly Dictionary<string, Lazy<HashSet<string>>> Ignored = new(StringComparer.Ordinal);
 
     /// <summary>The repository each root was found to be in, so the walk up is made once per root.</summary>
     /// <remarks>
@@ -97,6 +126,21 @@ public static class GitIgnores
     /// </remarks>
     private static readonly Dictionary<string, string?> Repositories = new(StringComparer.Ordinal);
 
+    /// <summary>What both dictionaries are guarded by, and nothing else.</summary>
+    private static readonly object Gate = new();
+
+    /// <summary>
+    /// How a path is spelled for comparison.
+    /// </summary>
+    /// <remarks>
+    /// Windows does not tell two paths differing only in case apart, and one of the two sides of a
+    /// comparison here is written by the program rather than read from the directory the entry came from:
+    /// comparing them case-sensitively there would be a rule that hides nothing on one machine and
+    /// everything on another.
+    /// </remarks>
+    private static readonly StringComparer Spelling =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     /// <summary>
     /// Lets go of every answer, so the next one is asked of the program again.
     /// </summary>
@@ -104,12 +148,52 @@ public static class GitIgnores
     /// Said when the files may have changed, and the rules are files: a <c>.gitignore</c> edited, a
     /// repository set up in a directory that had none, a copy of one fetched. A kept answer outliving that
     /// is a listing hiding by rules nobody states any more — and the cache is what makes asking once per
-    /// directory worth it, so it is cleared rather than never kept.
+    /// repository worth it, so it is cleared rather than never kept.
     /// </remarks>
     public static void Forget()
     {
-        Asked.Clear();
-        Repositories.Clear();
+        lock (Gate)
+        {
+            Ignored.Clear();
+            Repositories.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Whether what this provider answers with is already at hand for a root.
+    /// </summary>
+    /// <remarks>
+    /// Asked by a view that reads a whole level of a tree before deciding whether that reading can be made
+    /// on the thread its rows are drawn on: a repository that has not been read is one worth reading off
+    /// that thread first (<see cref="Prepare"/>).
+    /// </remarks>
+    /// <param name="root">The directory the view reading the entries is rooted at.</param>
+    /// <returns>Whether an answer about the root's repository is held.</returns>
+    public static bool Ready(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        lock (Gate)
+        {
+            return Repository(root) is not { } repository
+                || (Ignored.TryGetValue(repository, out var read) && read.IsValueCreated);
+        }
+    }
+
+    /// <summary>
+    /// Reads what this provider answers with for a root, unless it has been read already.
+    /// </summary>
+    /// <remarks>
+    /// For a caller that is about to ask about a whole level and would rather the walk happened off the
+    /// thread the rows are drawn on: what is asked next finds the answer here, so a step that would have
+    /// waited for a program does not.
+    /// </remarks>
+    /// <param name="root">The directory the view reading the entries is rooted at.</param>
+    public static void Prepare(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        _ = Answer(root);
     }
 
     /// <summary>
@@ -133,10 +217,14 @@ public static class GitIgnores
     /// Whether a path is one Git ignores, read against the place a view is rooted at.
     /// </summary>
     /// <remarks>
-    /// The repository is looked for upwards from `root` and not from the path: a tree is rooted at a
+    /// The repository is looked for upwards from <c>root</c> and not from the path: a tree is rooted at a
     /// base, and a base no repository holds is a view under which nothing is ignored — whatever the
     /// directories under it happen to hold. The other way, a repository a directory under the base is
     /// inside would answer for itself, and one tree would be read by two sets of rules.
+    /// <para>
+    /// This reads the repository if it has not been read, so a caller that is about to ask about many paths
+    /// wants <see cref="Prepare"/> first: the reading is a program run, and this waits for it.
+    /// </para>
     /// </remarks>
     /// <param name="path">The path to ask about, which may be a file or a directory.</param>
     /// <param name="root">The directory the view reading the path is rooted at.</param>
@@ -146,57 +234,107 @@ public static class GitIgnores
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(root);
 
-        if (Path.GetDirectoryName(path) is not { Length: > 0 } directory)
-        {
-            return false;
-        }
-
-        var key = (root, directory);
-
-        if (!Asked.TryGetValue(key, out var ignored))
-        {
-            ignored = Read(directory, root);
-            Asked[key] = ignored;
-        }
-
-        return ignored.Contains(path);
+        return Answer(root) is { } ignored && Hidden(ignored, path);
     }
 
-    /// <summary>Asks Git what of a directory it ignores, from the repository a root is inside.</summary>
-    /// <param name="directory">The directory whose entries are asked about.</param>
-    /// <param name="root">The directory the view reading them is rooted at.</param>
-    /// <returns>The paths Git named, which may be none.</returns>
-    private static HashSet<string> Read(string directory, string root)
+    /// <summary>
+    /// Whether a path is one the rules leave out, or is inside a directory they do.
+    /// </summary>
+    /// <remarks>
+    /// The directories holding it are asked about as well, because the program is asked for whole ignored
+    /// directories rather than for every file under them: what is inside one is not named on its own, and a
+    /// path that was typed rather than listed — or one drawn while the hidden entries are shown — is still
+    /// inside a directory the rules leave out.
+    /// </remarks>
+    /// <param name="ignored">What the repository's rules leave out.</param>
+    /// <param name="path">The path to ask about.</param>
+    /// <returns>Whether it is hidden.</returns>
+    private static bool Hidden(HashSet<string> ignored, string path)
     {
-        var ignored = new HashSet<string>(StringComparer.Ordinal);
-        var repository = Repository(root);
-
-        if (repository is null)
+        for (var at = Path.TrimEndingDirectorySeparator(path); at.Length > 0; at = Above(at))
         {
-            return ignored;
+            if (ignored.Contains(at))
+            {
+                return true;
+            }
         }
 
-        var entries = Entries(directory);
+        return false;
+    }
 
-        if (entries.Count == 0)
+    /// <summary>The directory holding a path, or nothing when there is nowhere further up.</summary>
+    /// <param name="path">The path to step out of.</param>
+    /// <returns>The directory holding it, or an empty path at the top.</returns>
+    private static string Above(string path) =>
+        Path.GetDirectoryName(path) is { Length: > 0 } parent
+        && !string.Equals(parent, path, StringComparison.Ordinal)
+            ? Path.TrimEndingDirectorySeparator(parent)
+            : string.Empty;
+
+    /// <summary>
+    /// What a root's repository ignores, reading it if it has not been read.
+    /// </summary>
+    /// <param name="root">The directory the view reading the entries is rooted at.</param>
+    /// <returns>The ignored paths, or nothing when the root is inside no repository.</returns>
+    private static HashSet<string>? Answer(string root)
+    {
+        Lazy<HashSet<string>> reading;
+
+        lock (Gate)
         {
-            return ignored;
+            if (Repository(root) is not { } repository)
+            {
+                return null;
+            }
+
+            if (!Ignored.TryGetValue(repository, out var kept))
+            {
+                kept = new Lazy<HashSet<string>>(
+                    () => Read(repository),
+                    LazyThreadSafetyMode.ExecutionAndPublication
+                );
+                Ignored[repository] = kept;
+            }
+
+            reading = kept;
         }
+
+        // The reading is waited for outside the lock: it is a program run, and a view asking about a row
+        // while another is reading must not hold this class against everything else that asks.
+        return reading.Value;
+    }
+
+    /// <summary>Asks Git what of a repository it ignores.</summary>
+    /// <param name="repository">The repository's own directory, which is where the program is run from.</param>
+    /// <returns>The paths the rules leave out, which may be none.</returns>
+    private static HashSet<string> Read(string repository)
+    {
+        var ignored = new HashSet<string>(Spelling);
 
         try
         {
             var asking = new ProcessStartInfo("git")
             {
                 WorkingDirectory = repository,
-                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 StandardOutputEncoding = Encoding.UTF8,
             };
 
-            asking.ArgumentList.Add("check-ignore");
-            asking.ArgumentList.Add("--stdin");
+            asking.ArgumentList.Add("ls-files");
+            asking.ArgumentList.Add("--others");
+            asking.ArgumentList.Add("--ignored");
+            asking.ArgumentList.Add("--exclude-standard");
+
+            // A whole ignored directory is named once rather than every file under it: one word hides the
+            // directory, and a build directory of a hundred thousand objects is a walk this does not make.
+            asking.ArgumentList.Add("--directory");
+
+            // NUL-terminated rather than one path per line, because a name that is not plain ASCII is
+            // escaped and quoted in the line-separated form — which would be a set of paths that match
+            // nothing, and a rule that silently hides nothing at all in a work named in another script.
+            asking.ArgumentList.Add("-z");
 
             using var git = Process.Start(asking);
 
@@ -205,23 +343,8 @@ public static class GitIgnores
                 return ignored;
             }
 
-            foreach (var entry in entries)
-            {
-                // Asked about as the repository names it, and only when it is the repository's to name:
-                // a path beside the repository rather than under it is not one its rules are about, and
-                // a program handed one answers nothing at all rather than nothing about that path.
-                if (Relative(repository, entry) is not { } relative)
-                {
-                    continue;
-                }
-
-                git.StandardInput.WriteLine(relative);
-            }
-
-            git.StandardInput.Close();
-
-            // Read before waiting rather than after: a program that filled the pipe would be waiting for
-            // this side to read it while this side waited for the program to finish.
+            // Read before waiting rather than after: a repository with many ignored paths would fill the pipe
+            // and wait for this side to read it while this side waited for the program to finish.
             var said = git.StandardOutput.ReadToEnd();
 
             if (!git.WaitForExit((int)Patience.TotalMilliseconds))
@@ -233,19 +356,24 @@ public static class GitIgnores
                 return ignored;
             }
 
-            // A program that failed answers nothing: what it said first is a partial list, and hiding by that
-            // would hide by rules nobody stated. A repository the program cannot read is one whose whole
-            // listing is shown, which is the same answer as no program at all.
+            // A program that failed answers nothing: hiding by what it said first would hide by rules nobody
+            // stated. A repository the program cannot read is one whose whole listing is shown, which is the
+            // same answer as no program at all.
             if (git.ExitCode != 0)
             {
                 return ignored;
             }
 
-            foreach (var line in said.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            foreach (var name in said.Split('\0', StringSplitOptions.RemoveEmptyEntries))
             {
-                // An answer is the path it was asked about, relative to the repository root — which is where
-                // it was written from and what it is read back against.
-                ignored.Add(Path.GetFullPath(Path.Combine(repository, line.Trim())));
+                // A path is answered as the repository names it, which is where the program was run from and
+                // what it is read back against; the separator a directory is named with is not part of what
+                // the path is.
+                ignored.Add(
+                    Path.TrimEndingDirectorySeparator(
+                        Path.GetFullPath(Path.Combine(repository, name))
+                    )
+                );
             }
         }
         catch (Exception error)
@@ -260,21 +388,6 @@ public static class GitIgnores
     }
 
     /// <summary>
-    /// How the repository names a path, or nothing when the path is not under it.
-    /// </summary>
-    /// <param name="repository">The repository root.</param>
-    /// <param name="path">The path to name.</param>
-    /// <returns>The relative path Git is asked about, or nothing.</returns>
-    private static string? Relative(string repository, string path)
-    {
-        var relative = Path.GetRelativePath(repository, path);
-
-        return relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            ? null
-            : relative;
-    }
-
-    /// <summary>
     /// The repository a directory belongs to, or nothing when it belongs to none.
     /// </summary>
     /// <remarks>
@@ -283,13 +396,13 @@ public static class GitIgnores
     /// process. The step that finds a repository is the directory that holds one, which is where the
     /// program is run from, so what it says is relative to a known place.
     /// <para>
-    /// What this finds is where to start looking, not the final word: <c>git check-ignore</c> is what
-    /// answers, and a directory this takes for a repository that the program does not is a directory
-    /// whose entries are all shown.
+    /// What this finds is where to start looking, not the final word: what the program answers is what
+    /// hides anything, and a directory this takes for a repository that the program does not is a
+    /// directory whose entries are all shown.
     /// </para>
     /// </remarks>
     /// <param name="root">The directory to start from.</param>
-    /// <returns>The repository's own directory, or nothing.</returns>
+    /// <returns>The repository's own directory, or nothing when it belongs to none.</returns>
     private static string? Repository(string root)
     {
         if (Repositories.TryGetValue(root, out var known))
@@ -314,19 +427,5 @@ public static class GitIgnores
         Repositories[root] = null;
 
         return null;
-    }
-
-    /// <summary>What a directory holds, which is nothing when it cannot be read.</summary>
-    /// <param name="directory">The directory to read.</param>
-    private static List<string> Entries(string directory)
-    {
-        try
-        {
-            return [.. Directory.EnumerateFileSystemEntries(directory)];
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
     }
 }

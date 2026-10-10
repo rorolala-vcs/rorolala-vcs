@@ -65,10 +65,41 @@ public interface IEntryHideProvider
     bool Hides(Entry entry, string root) => Hides(entry);
 
     /// <summary>
+    /// Whether this provider can answer about a place without reading anything first.
+    /// </summary>
+    /// <remarks>
+    /// Asked by a view that is about to read a whole level of a tree, which can be read on the thread its
+    /// rows are drawn on only while every answer is at hand: a provider that would run a program, or walk a
+    /// directory, is one to <see cref="Prepare"/> off that thread first.
+    /// <para>
+    /// A provider whose answer is read per entry answers from what it was given and has nothing to prepare,
+    /// which is what the default does.
+    /// </para>
+    /// </remarks>
+    /// <param name="root">The directory the view reading the entries is rooted at.</param>
+    /// <returns>Whether this provider's answers are at hand.</returns>
+    bool Ready(string root) => true;
+
+    /// <summary>
+    /// Reads what this provider answers from, so that what is asked next need not wait for it.
+    /// </summary>
+    /// <remarks>
+    /// The one thing a caller may do off the thread a view is drawn on: what is read here is not a row, and
+    /// every question asked afterwards finds the answer waiting. It is said to a root rather than to an
+    /// entry because what a provider keeps is about a place — a repository, a Vault — and not about one of
+    /// the things in it.
+    /// <para>
+    /// A provider with nothing to read answers nothing to this, which is what the default does.
+    /// </para>
+    /// </remarks>
+    /// <param name="root">The directory the view reading the entries is rooted at.</param>
+    void Prepare(string root) { }
+
+    /// <summary>
     /// Says that what this provider answered may have changed.
     /// </summary>
     /// <remarks>
-    /// A rule that is about a repository is asked of a program once per directory and kept, since asking it
+    /// A rule that is about a repository is asked of a program once per repository and kept, since asking it
     /// per entry would be a process per entry. The rules themselves are files, though — a <c>.gitignore</c>
     /// is edited, a repository is set up in a directory that had none — so a kept answer can outlive what it
     /// was read from. A provider that keeps anything lets go of it here; one that reads afresh each time has
@@ -292,6 +323,47 @@ public sealed class HideRegistry
         foreach (var provider in Catalogue)
         {
             provider.Forget();
+        }
+    }
+
+    /// <summary>
+    /// Whether every provider can answer about a place without reading anything first.
+    /// </summary>
+    /// <remarks>
+    /// Static, and read against no settings, for the reason <see cref="Forget"/> is: what it answers is
+    /// whether a reading of a whole level has to wait for a provider, and that does not depend on which
+    /// providers the user has switched on.
+    /// </remarks>
+    /// <param name="root">The directory the view reading the entries is rooted at.</param>
+    /// <returns>Whether every provider's answers are at hand.</returns>
+    public static bool Ready(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        return Catalogue.All(provider => provider.Ready(root));
+    }
+
+    /// <summary>
+    /// Has every provider read what it answers from, so that what is asked next need not wait for it.
+    /// </summary>
+    /// <remarks>
+    /// Every provider rather than the ones in force, since which those are is a setting this is not to read:
+    /// a reading of the settings from a thread other than the one the views are drawn on is a reading of the
+    /// settings at the same time as they may be written, which is not a thing this class may do. What a
+    /// provider has read is worth having whichever way the user turns the switch afterwards.
+    /// <para>
+    /// The catalogue is read here and is added to only while the plugins are being started, which is before
+    /// any view is drawn: this may be called from another thread without a lock.
+    /// </para>
+    /// </remarks>
+    /// <param name="root">The directory the view reading the entries is rooted at.</param>
+    public static void Prepare(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        foreach (var provider in Catalogue)
+        {
+            provider.Prepare(root);
         }
     }
 

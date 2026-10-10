@@ -321,22 +321,6 @@ internal sealed class BrowserActions
         _browser.Touch();
     }
 
-    /// <summary>Makes the menu opened on a set of entries.</summary>
-    /// <param name="from">A control in the tree the clipboard is reached through.</param>
-    /// <param name="entries">What the menu is about.</param>
-    /// <param name="deletable">
-    /// Whether the entries may be removed. The tree nods when the row is its own root: that row is a
-    /// directory like any other, but it is also the view's root, and removing a view's own root leaves the
-    /// view standing on nothing.
-    /// </param>
-    public ContextMenu Menu(Control from, IReadOnlyList<Entry> entries, bool deletable = true)
-    {
-        var menu = new ContextMenu();
-        Fill(menu, from, entries, deletable);
-
-        return menu;
-    }
-
     /// <summary>
     /// Puts the items of the menu for a set of entries into a menu.
     /// </summary>
