@@ -90,7 +90,8 @@ public partial class MainWindow : Window
         // There is no title bar of the desktop's left to move the window, so the row this program draws
         // in its place does it: a press on the row that no menu and no button claimed is a press on the
         // window, and the second click of a double click is what maximizes or restores it — the two
-        // gestures a title bar of the desktop's would have answered by itself.
+        // gestures a title bar of the desktop's would have answered by itself. A press on a menu's own row
+        // is the menu's and is left to it (see `MoveOrMaximize`).
         //
         // Asked here rather than left to the role in the markup, which moves the window only on a display
         // server that draws its own decorations: a desktop that draws none is the one this is written
@@ -153,11 +154,12 @@ public partial class MainWindow : Window
     /// <remarks>
     /// The move is asked of the toolkit rather than done by hand, because on a desktop it is the window
     /// manager's own move and dragging it out by arithmetic would lose the snap to a screen edge and the
-    /// bounds a maximized window restores to. A press the menu itself took never reaches here, which is
-    /// what keeps opening a menu from moving the window.
+    /// bounds a maximized window restores to. A press that landed on a menu is left alone rather than
+    /// moved, because a menu answers the release of a press and a window moving under one is a menu that
+    /// cannot be used — see the body, which asks it of the row's own shape.
     /// <para>
-    /// The press is left unhandled, because the menu bar is above where this is listened for and a menu
-    /// still has to open under a press that landed on one of its menus.
+    /// The press is left unhandled, because a menu still has to open under a press that landed on one of
+    /// its menus, and what is answered here is the moving of the window rather than the press.
     /// </para>
     /// </remarks>
     /// <param name="press">What was pressed.</param>
@@ -166,6 +168,16 @@ public partial class MainWindow : Window
         // A press something inside the row has already taken means a menu or a button, and the window
         // must not move out from under the thing that was aimed at.
         if (press.Handled || !press.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        // Nothing has taken a press on a menu's row yet, though, and nothing will before this: a menu
+        // answers the *release*, and the handler that opens it is subscribed when the menu is attached to
+        // the visual tree — which is after this window was built, and so after this handler. Moving the
+        // window here takes that release away with it: the submenu opens under a window being moved, the
+        // items in it cannot be clicked, and the second click of a double click maximizes the window.
+        if (ItemUnder(press.Source) is not null)
         {
             return;
         }
@@ -180,6 +192,29 @@ public partial class MainWindow : Window
         {
             BeginMoveDrag(press);
         }
+    }
+
+    /// <summary>
+    /// The menu item a press landed in, or nothing when it landed elsewhere on the row.
+    /// </summary>
+    /// <remarks>
+    /// The same question the toolkit asks itself about a press it handles — its
+    /// <c>DefaultMenuInteractionHandler</c> walks the parents the same way — and answered the same way,
+    /// because what the pointer hit is a part of the item's own template rather than the item.
+    /// </remarks>
+    /// <param name="pressed">What the press landed on.</param>
+    /// <returns>The menu item holding it, or nothing.</returns>
+    private static MenuItem? ItemUnder(object? pressed)
+    {
+        for (var at = pressed as StyledElement; at is not null; at = at.Parent)
+        {
+            if (at is MenuItem item)
+            {
+                return item;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
