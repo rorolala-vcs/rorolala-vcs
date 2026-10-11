@@ -72,6 +72,182 @@ internal static class Names
 }
 
 /// <summary>
+/// What a gesture on a listing leaves chosen: the choice it was made from, the entries it was made on, and the
+/// modifiers it was made with.
+/// </summary>
+/// <remarks>
+/// Clicking and framing are two gestures and do not mean the same thing, so what a modifier means is read by the
+/// gesture that was made and not by the modifier alone: a frame over a run of entries reads it as a rule over the
+/// whole run, and a click reads it as a rule over the one entry under the pointer (Section 7.7).
+/// <para>
+/// Both are read from the choice as it stood when the pointer went down rather than from the choice on screen, so
+/// that a frame dragged back and forth settles on the answer the rule gives rather than on its own last preview —
+/// which is also what lets a gesture begin without dropping the choice it was made beside.
+/// </para>
+/// </remarks>
+internal static class Choice
+{
+    /// <summary>
+    /// The choice a frame leaves: a rule read over every entry the frame covers.
+    /// </summary>
+    /// <remarks>
+    /// With nothing held the frame is a choice of what it covers and of nothing else, which is what makes a frame
+    /// over nothing a gesture that chooses nothing. <c>Shift</c> toggles each entry it covers, <c>Ctrl</c> takes
+    /// each away, and the two together put each back.
+    /// </remarks>
+    /// <param name="from">The choice as it stood when the pointer went down.</param>
+    /// <param name="acted">The entries the frame covers.</param>
+    /// <param name="modifiers">What was held while it was drawn.</param>
+    /// <returns>The places to choose, in the order the listing shows them.</returns>
+    public static IReadOnlyList<int> Framed(
+        IReadOnlyCollection<int> from,
+        IReadOnlyCollection<int> acted,
+        KeyModifiers modifiers
+    )
+    {
+        var shift = modifiers.HasFlag(KeyModifiers.Shift);
+        var control = modifiers.HasFlag(KeyModifiers.Control);
+
+        if (!shift && !control)
+        {
+            return [.. acted.Order()];
+        }
+
+        var chosen = new HashSet<int>(from);
+
+        foreach (var at in acted)
+        {
+            if (shift && control)
+            {
+                chosen.Add(at);
+            }
+            else if (control)
+            {
+                chosen.Remove(at);
+            }
+            else if (!chosen.Remove(at))
+            {
+                // Shift alone toggles, and what was not there to be taken away is put there instead.
+                chosen.Add(at);
+            }
+        }
+
+        return [.. chosen.Order()];
+    }
+
+    /// <summary>
+    /// The choice a click leaves: a rule read over the one entry the pointer landed on.
+    /// </summary>
+    /// <remarks>
+    /// Nothing held chooses that entry and lets go of the rest; <c>Ctrl</c> toggles the one entry. <c>Shift</c>
+    /// is the range, and it is read against the two ends the choice has where it is one unbroken run: the end the
+    /// click is nearer to is moved to the click and the end further off stays, so that a click beyond the run
+    /// grows it and a click inside it takes the run back on the side it was made from — a run made too long is
+    /// shortened by shift clicking the entry it is to end at, which adding a range could never do. A choice that
+    /// is empty or has a gap in it has no such pair of ends, so <c>Shift</c> over it is what it always was: the
+    /// run from where the last click or step landed, added to what is chosen.
+    /// <para>
+    /// There is no <c>Ctrl</c> with <c>Shift</c> here: a click is on one entry and has no run for the two to
+    /// divide, so <c>Ctrl</c> is read and <c>Shift</c> beside it is not.
+    /// </para>
+    /// </remarks>
+    /// <param name="from">The choice as it stood when the pointer went down.</param>
+    /// <param name="at">The entry the click landed on, or nothing where it landed on the space around them.</param>
+    /// <param name="anchor">Where the last click or step landed, which a run is added from; nothing where none has.</param>
+    /// <param name="modifiers">What was held while it was made.</param>
+    /// <returns>The places to choose, in the order the listing shows them.</returns>
+    public static IReadOnlyList<int> Clicked(
+        IReadOnlyCollection<int> from,
+        int at,
+        int anchor,
+        KeyModifiers modifiers
+    )
+    {
+        var shift = modifiers.HasFlag(KeyModifiers.Shift);
+        var control = modifiers.HasFlag(KeyModifiers.Control);
+
+        // The space around the entries is a click on nothing: with nothing held that is the choice let go of, and
+        // a modifier over nothing has nothing to toggle, to add or to take away.
+        if (at < 0)
+        {
+            return !shift && !control ? [] : [.. from.Order()];
+        }
+
+        if (control)
+        {
+            var toggled = new HashSet<int>(from);
+
+            if (!toggled.Remove(at))
+            {
+                toggled.Add(at);
+            }
+
+            return [.. toggled.Order()];
+        }
+
+        if (shift && Run(from) is { } run)
+        {
+            // The end the click is nearer to becomes the click; the other one stays. A click exactly between the
+            // two is the same distance from both and is read as the back end's, so that a run is never shortened
+            // on a side the user gave no sign of meaning.
+            var far = at <= run.First
+                ? run.Last
+                : at >= run.Last
+                    ? run.First
+                    : at - run.First < run.Last - at
+                        ? run.Last
+                        : run.First;
+
+            var moved = new List<int>();
+
+            for (var place = Math.Min(far, at); place <= Math.Max(far, at); place++)
+            {
+                moved.Add(place);
+            }
+
+            return moved;
+        }
+
+        if (shift && anchor >= 0 && anchor != at)
+        {
+            var added = new HashSet<int>(from);
+
+            for (var place = Math.Min(anchor, at); place <= Math.Max(anchor, at); place++)
+            {
+                added.Add(place);
+            }
+
+            return [.. added.Order()];
+        }
+
+        return [at];
+    }
+
+    /// <summary>
+    /// The ends of a choice that is one unbroken run, or nothing where it is empty or has a gap in it.
+    /// </summary>
+    /// <remarks>
+    /// A run is what a click can take hold of an end of: a choice with a gap in it has no one end at either side
+    /// for a click to move, which is what leaves the fallback in <see cref="Clicked"/> to say what a
+    /// <c>Shift</c> click over one means.
+    /// </remarks>
+    /// <param name="places">The places chosen.</param>
+    /// <returns>The first and last place of the run, or nothing where the choice is not one.</returns>
+    private static (int First, int Last)? Run(IReadOnlyCollection<int> places)
+    {
+        if (places.Count == 0)
+        {
+            return null;
+        }
+
+        var first = places.Min();
+        var last = places.Max();
+
+        return last - first + 1 == places.Count ? (first, last) : null;
+    }
+}
+
+/// <summary>
 /// What both ways of reading a directory have in common: the choice, the keyboard, and the menus.
 /// </summary>
 /// <remarks>
@@ -81,10 +257,15 @@ internal static class Names
 /// the menu on a choice offers. A view supplies the arrangement and a face for one entry, and inherits
 /// the rest.
 /// <para>
-/// The choice is the toolkit's own list selection, because it is exactly the one asked for — a click
-/// chooses, <c>Ctrl</c> adds or removes, <c>Shift</c> takes a range — and because the look already fills
-/// a chosen row with the accent (§10). What is added here is only what the toolkit does not have: the
-/// arrows within a wrapped grid, the typed letters, and a menu that knows about a set.
+/// The choice is the toolkit's own list selection, because the look already fills a chosen row with the accent
+/// (§10) — but not the toolkit's own rules for what a press means. Here a click chooses the one entry it landed
+/// on, <c>Shift</c> with it moves the nearer end of the run already chosen to the entry it landed on, and
+/// <c>Ctrl</c> with it toggles that one entry; a frame over a run of entries reads its modifiers as rules over
+/// the whole run instead, which is a different rule set for a different gesture (see <see cref="Choice"/>). The
+/// press is therefore read on the way down (<see cref="Pressed"/>) and the toolkit is never left to decide a
+/// choice of its own: its <c>Shift</c> takes a range from a fixed anchor and replaces the choice with it, where
+/// this one moves an end of the choice and has no frame at all. What else is added here is what the toolkit does
+/// not have: the frame, the arrows within a wrapped grid, the typed letters, and a menu that knows about a set.
 /// </para>
 /// </remarks>
 internal abstract class EntryView : UserControl
@@ -170,8 +351,42 @@ internal abstract class EntryView : UserControl
     private Point _slip;
     private int _slippedAt = -1;
 
-    /// <summary>The choice as it stood when the pointer went down, before the toolkit collapsed it to one.</summary>
+    /// <summary>
+    /// The choice as it stood when the pointer went down, as the entries it held.
+    /// </summary>
+    /// <remarks>
+    /// As entries and not as places, because this is what a drag carries: what is handed over is what was
+    /// chosen when the hand went down, and not whatever a rebuilt listing would number those places as.
+    /// </remarks>
     private IReadOnlyList<Entry> _atPress = [];
+
+    /// <summary>
+    /// The same choice as places in the listing, which is what a click and a frame are both read against.
+    /// </summary>
+    /// <remarks>
+    /// Places, because what a frame covers is read in places — it asks each row where it is — and the rule the
+    /// gesture means is then read over the two sets by the listing's own numbering. The choice read from is the
+    /// one that stood when the pointer went down and not the one on screen while a frame is drawn: a frame that
+    /// grew and shrank would otherwise read its rule against its own last preview, and a range toggled back and
+    /// forth would never come back to what it started as (see <see cref="Choice"/>).
+    /// </remarks>
+    private IReadOnlyList<int> _base = [];
+
+    /// <summary>Where the press landed, as a place in the listing, or nothing where it landed on the space around them.</summary>
+    private int _pressedAt = -1;
+
+    /// <summary>The modifiers the press was made with, which say what a click and a frame both mean.</summary>
+    private KeyModifiers _pressedWith = KeyModifiers.None;
+
+    /// <summary>
+    /// Where the last click or step landed before this press, which a <c>Shift</c> click takes a range from.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="_lead"/> because the press moves that one to where it landed: a range is taken
+    /// from where the gesture before this one landed, and reading the lead after the press would make every such
+    /// range a range of the one entry it was taken to.
+    /// </remarks>
+    private int _anchor = -1;
 
     /// <summary>The press a drag would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _from;
@@ -1091,17 +1306,34 @@ internal abstract class EntryView : UserControl
     }
 
     /// <summary>
-    /// Remembers where the pointer went down, since a menu, a step and a frame all begin there.
+    /// Remembers where the pointer went down, and what that press may become.
     /// </summary>
     /// <remarks>
-    /// A press on an entry is a step; a press on the space around the entries is how a choice is dropped and
-    /// maybe the start of a frame. Which of the two it is is settled here, because only the press knows whether
-    /// it landed on something.
+    /// A press on an entry of the choice — or on any entry at all where nothing is chosen — may become a drag of
+    /// what is chosen. Anywhere else it may become a frame, and that is what keeps a frame begun beside a choice
+    /// from carrying the entries it was drawn to add to (Section 7.7). A press with <c>Shift</c> or <c>Ctrl</c>
+    /// held is a hand that is choosing rather than moving, so it may become a frame wherever it lands and never a
+    /// drag; whether it became a click or a frame is what says what the modifier meant, since the two gestures
+    /// have their own rules (see <see cref="Choice"/>).
+    /// <para>
+    /// The toolkit is not left to decide what a left press means, because its rules are not these: it takes a
+    /// range with <c>Shift</c> and replaces the choice with it, where this adds it, and it has no frame at all.
+    /// The press is therefore marked handled, and only where it is read here: a right press is still the toolkit's
+    /// and still opens the menu it did. A press in a name being edited is not this view's either, since in a field
+    /// it moves a caret.
+    /// </para>
     /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The press.</param>
     private void Pressed(object? sender, PointerPressedEventArgs e)
     {
+        // A name being edited is the box's own: a press in it moves the caret, and one outside it is what ends
+        // the edit by taking the keyboard away. Either way the press is not this view's to read.
+        if (_editor is not null || e.Source is TextBox)
+        {
+            return;
+        }
+
         var at = IndexAt(e.Source);
 
         _mayFrame = false;
@@ -1121,35 +1353,62 @@ internal abstract class EntryView : UserControl
             return;
         }
 
-        if (at >= 0)
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            _lead = at;
-
-            if (e.GetCurrentPoint(List).Properties.IsLeftButtonPressed)
+            if (at >= 0)
             {
-                _slip = e.GetPosition(List);
-                _slippedAt = at;
-
-                // Read now rather than when the drag starts, because pressing an entry that is part of a choice
-                // collapses that choice to the one entry before a drag could be noticed — the toolkit's own
-                // behaviour, and the wrong one to carry a set by.
-                _atPress = Chosen();
-                _from = e;
+                _lead = at;
             }
 
             return;
         }
 
-        // The space around the entries: a click there drops the choice, and a drag there frames a new one. The
-        // choice goes at once, so that a click that never becomes a frame has done what it looked like it would.
-        if (e.GetCurrentPoint(List).Properties.IsLeftButtonPressed)
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+
+        // Whatever a press left waiting is done with, so that a gesture whose release was never seen — one whose
+        // capture another control took — cannot be finished by the next press instead.
+        _slippedAt = -1;
+        _from = null;
+
+        // Read before the choice can move, and read against the listing this view was handed: what a click and a
+        // frame both mean is a change to the choice as it stood, not to whatever the preview last showed. The
+        // anchor is read first of all, since the press is about to move the lead it is taken from.
+        _base = [.. List.Selection.SelectedIndexes];
+        _atPress = Chosen();
+        _anchor = _lead;
+        _lead = at;
+        _pressedAt = at;
+        _pressedWith = e.KeyModifiers;
+
+        e.Handled = true;
+
+        // The keyboard goes to the row the press landed on, which is what the toolkit would have done with the
+        // press, or to the listing itself where the press was not on a row. A dock answers its keys at the top of
+        // itself and passes them down, so either way they reach the listing.
+        (at >= 0 ? List.ContainerFromIndex(at) : List)?.Focus();
+
+        if (at >= 0 && !shift && !control && (_base.Count == 0 || _base.Contains(at)))
         {
-            _lead = -1;
-            _mayFrame = true;
-            _framedAt = e.GetPosition(this);
-            List.Selection.Clear();
-            List.Focus();
+            // Where nothing is chosen the entry is chosen at once, so that what a drag takes hold of is what the
+            // pointer is on. A choice already standing is left whole, and the pointer coming up without a drag is
+            // what narrows it to the one entry (see `Released`).
+            if (_base.Count == 0)
+            {
+                Select([at]);
+            }
+
+            _slip = e.GetPosition(List);
+            _slippedAt = at;
+            _from = e;
+
+            return;
         }
+
+        // Anything else may become a frame, and a press that never moves far enough is read as the click it was
+        // when the pointer comes up.
+        _mayFrame = true;
+        _framedAt = e.GetPosition(this);
     }
 
     /// <summary>
@@ -1213,12 +1472,20 @@ internal abstract class EntryView : UserControl
     }
 
     /// <summary>
-    /// Draws the frame from where the press was to where the pointer is, and chooses what it covers.
+    /// Draws the frame from where the press was to where the pointer is, and previews what it comes to.
     /// </summary>
     /// <remarks>
     /// The frame is drawn in this view's own coordinates, and a row is asked where it is in the same space, so
     /// the two meet however the list is scrolled. Only the rows the toolkit has made count: one never drawn is
     /// one the user cannot see, and a frame is a gesture on what is on screen.
+    /// <para>
+    /// What the frame comes to is written into the listing as it is drawn rather than kept to one side, because
+    /// that is what the user has to see: the accent on the entries the pointer has taken is the whole of the
+    /// feedback a frame has. It is read from the choice the press was made from and not from what the last frame
+    /// drew, so that a frame dragged back and forth arrives at the answer it would have had (see
+    /// <see cref="Choice"/>), which is also why a frame left over nothing does not undo the choice it was drawn
+    /// beside until the pointer comes up to say that is what it meant.
+    /// </para>
     /// </remarks>
     /// <param name="e">The move.</param>
     private void Stretch(PointerEventArgs e)
@@ -1231,7 +1498,7 @@ internal abstract class EntryView : UserControl
         _band.Width = frame.Width;
         _band.Height = frame.Height;
 
-        var chosen = new List<int>();
+        var covered = new List<int>();
 
         for (var at = 0; at < Browser.Shown.Count; at++)
         {
@@ -1243,26 +1510,25 @@ internal abstract class EntryView : UserControl
 
             if (frame.Intersects(new Rect(origin, row.Bounds.Size)))
             {
-                chosen.Add(at);
+                covered.Add(at);
             }
         }
 
-        var selection = List.Selection;
+        Select(Choice.Framed(_base, covered, _pressedWith));
 
-        using (selection.BatchUpdate())
-        {
-            selection.Clear();
-
-            foreach (var at in chosen)
-            {
-                selection.Select(at);
-            }
-        }
-
-        _lead = chosen.Count > 0 ? chosen[^1] : -1;
+        _lead = covered.Count > 0 ? covered[^1] : -1;
     }
 
-    /// <summary>Ends a frame, leaving what it chose chosen.</summary>
+    /// <summary>
+    /// Settles what a press turned out to be, once the pointer is up.
+    /// </summary>
+    /// <remarks>
+    /// A frame settles itself as it is drawn, since its preview is the choice it leaves; what is left for the
+    /// pointer coming up is a press that never became one. A press that never slipped far enough to mean a drag
+    /// is the click it was, and a press that could only ever have become a frame and never moved is a click that
+    /// happened to begin in the space around the entries. Nothing is decided while the pointer is down, so that a
+    /// press on an entry of the choice may still become the drag of that whole choice.
+    /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The release.</param>
     private void Released(object? sender, PointerReleasedEventArgs e)
@@ -1276,9 +1542,62 @@ internal abstract class EntryView : UserControl
             return;
         }
 
-        if (_mayFrame)
+        if (_slippedAt >= 0)
         {
-            Stop();
+            _slippedAt = -1;
+            _from = null;
+            _atPress = [];
+
+            Clicked();
+
+            return;
+        }
+
+        if (!_mayFrame)
+        {
+            return;
+        }
+
+        var framed = _framing;
+
+        Stop();
+
+        if (!framed)
+        {
+            Clicked();
+        }
+    }
+
+    /// <summary>
+    /// Reads a press that never became a drag or a frame as the click it was.
+    /// </summary>
+    /// <remarks>
+    /// A click is read over the one entry the pointer landed on, which is not what a frame over a run of the same
+    /// entries means: the two gestures have their own rules (see <see cref="Choice"/>). The space around the
+    /// entries is the click on nothing, which with nothing held clears the choice and with a modifier leaves it
+    /// standing.
+    /// </remarks>
+    private void Clicked()
+    {
+        Select(Choice.Clicked(_base, _pressedAt, _anchor, _pressedWith));
+
+        _lead = _pressedAt;
+    }
+
+    /// <summary>Puts a choice into the listing, which is what draws it.</summary>
+    /// <param name="chosen">The places to choose, in the order the listing shows them.</param>
+    private void Select(IReadOnlyList<int> chosen)
+    {
+        var selection = List.Selection;
+
+        using (selection.BatchUpdate())
+        {
+            selection.Clear();
+
+            foreach (var at in chosen)
+            {
+                selection.Select(at);
+            }
         }
     }
 
@@ -1333,9 +1652,10 @@ internal abstract class EntryView : UserControl
     /// Starts a drag of the choice as it stood when the pointer went down.
     /// </summary>
     /// <remarks>
-    /// What is left to decide here is what a drag of a listing carries: the whole choice when the press landed
-    /// on a chosen entry, and that entry alone when it did not. Everything after that is the same for every view
-    /// that can be dragged from (<see cref="Drag.Away"/>).
+    /// What is carried is the whole choice, or — where there was no choice to carry — the one entry the press
+    /// landed on. Anywhere else the press begins a frame rather than a drag, which is what keeps a frame drawn
+    /// beside a choice from carrying the entries it was drawn to add to (see <see cref="Pressed"/>). Everything
+    /// after that is the same for every view that can be dragged from (<see cref="Drag.Away"/>).
     /// </remarks>
     private void Started()
     {
@@ -1353,9 +1673,7 @@ internal abstract class EntryView : UserControl
         }
 
         var dragged = Browser.Shown[pressed];
-        IReadOnlyList<Entry> carrying = chosen.Any(item => string.Equals(item.Path, dragged.Path, StringComparison.Ordinal))
-            ? chosen
-            : [dragged];
+        IReadOnlyList<Entry> carrying = chosen.Count > 0 ? chosen : [dragged];
 
         // Places rather than things: nothing about the way up or the computer is a file to hand over.
         carrying = [.. carrying.Where(entry => !Browser.IsUp(entry.Path) && !Browser.IsComputer(entry.Path))];

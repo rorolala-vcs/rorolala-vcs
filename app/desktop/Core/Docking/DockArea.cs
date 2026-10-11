@@ -110,6 +110,18 @@ internal sealed class DockArea : UserControl
     /// <summary>The shortest a row region is allowed to become.</summary>
     private const double MinRow = 56;
 
+    /// <summary>
+    /// How large the box for a region that is not there is drawn.
+    /// </summary>
+    /// <remarks>
+    /// A region holding nothing is hidden and takes no room, and a box of no room is nothing to aim at. What is
+    /// drawn in its place is a band along the edge of the area, and it is a mark rather than a target: the edge
+    /// of a window is reached by pushing the pointer at it rather than by aiming, so the band can be narrow. The
+    /// room the region will take once a dock arrives is deliberately not drawn, since that is room taken from
+    /// the docks beside it before the drop is even aimed.
+    /// </remarks>
+    private const double EmptyBand = 5;
+
     /// <summary>How wide a splitter is.</summary>
     /// <remarks>
     /// Published, because a theme draws a line through the middle of one: the width it is drawn in is
@@ -471,21 +483,21 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// A box is a band of the area: the top and the bottom are as wide as the whole of it, and the left,
-    /// the middle and the right share the band left between them. What a band is worth is the size the
-    /// layout remembers for that region, never less than the least a region may become — which is what
-    /// gives a region that is empty and taking no space a box to aim at, drawn at the size it will have
-    /// when a dock arrives. The five tile the area, so no point in it is over none of them.
+    /// the middle and the right share the band left between them. What a band is worth is the room the region
+    /// takes on screen — the row or the column it is drawn in — so that what is picked out is the size the dock
+    /// will be given when it lands. A region that holds nothing has no room, and is drawn at the band an empty
+    /// one is aimed at instead (see <see cref="Band"/>). The five tile the area, so no point in it is over none
+    /// of them.
     /// </remarks>
     private Dictionary<DockPlacement, Rect> Boxes()
     {
         var width = Bounds.Width;
         var height = Bounds.Height;
-        var layout = _manager.Layout;
 
-        var top = Math.Clamp(Math.Max(MinRow, layout.TopHeight), 0, height);
-        var bottom = Math.Clamp(height - Math.Max(MinRow, layout.BottomHeight), top, height);
-        var left = Math.Clamp(Math.Max(MinColumn, layout.LeftWidth), 0, width);
-        var right = Math.Clamp(width - Math.Max(MinColumn, layout.RightWidth), left, width);
+        var top = Math.Clamp(Band(_top.Panel.IsVisible, _root.RowDefinitions[0].ActualHeight), 0, height);
+        var bottom = Math.Clamp(height - Band(_bottom.Panel.IsVisible, _root.RowDefinitions[4].ActualHeight), top, height);
+        var left = Math.Clamp(Band(_left.Panel.IsVisible, _middle.ColumnDefinitions[0].ActualWidth), 0, width);
+        var right = Math.Clamp(width - Band(_right.Panel.IsVisible, _middle.ColumnDefinitions[4].ActualWidth), left, width);
 
         return new Dictionary<DockPlacement, Rect>
         {
@@ -496,6 +508,20 @@ internal sealed class DockArea : UserControl
             [DockPlacement.Center] = new(left, top, right - left, bottom - top),
         };
     }
+
+    /// <summary>
+    /// The room a region's box is drawn in: what the region takes, or the band an empty one is aimed at.
+    /// </summary>
+    /// <remarks>
+    /// A region that is not on screen takes no room, and neither does one that has not been measured yet: both
+    /// are nothing to aim at, and both are drawn at the empty band. Nothing else is added to what a region
+    /// takes — the least a region may become is the least it is given when a dock lands in it, and a box drawn
+    /// at that size while the region is smaller would be a box promising room the drop does not get.
+    /// </remarks>
+    /// <param name="shown">Whether the region is on screen at all.</param>
+    /// <param name="room">How much of the area the region takes.</param>
+    /// <returns>How much of the area its box takes.</returns>
+    private static double Band(bool shown, double room) => shown && room > 0 ? room : EmptyBand;
 
     /// <summary>The margin that puts a box where its rectangle is, in an area this size.</summary>
     private Thickness Inset(Rect box) =>
