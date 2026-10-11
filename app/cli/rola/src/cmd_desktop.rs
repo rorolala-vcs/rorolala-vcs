@@ -22,11 +22,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use mingling::{
-    Grouped, Suggest,
+    Grouped, ShellContext, Suggest,
     macros::{
-        buffer, chain, command, completion, help, metadata, r_eprintln, renderer, routeify, suggest,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, renderer, routeify,
+        suggest,
     },
     metadata::Description,
+    picker::{EntryPicker, PickerArg},
     res::{ResCurrentDir, ResExitCode},
 };
 use rorolala_cli_setups::ResLanguage;
@@ -37,8 +39,10 @@ use rorolala_workspace::Workspace;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::complete::{filling_flag, offer, strip_written, typing_flag};
 use crate::exit_codes::{
-    EC_ERR_DESKTOP_ENDED, EC_ERR_DESKTOP_LAUNCH_FAILED, EC_ERR_DESKTOP_NOT_FOUND, EC_HELP,
+    EC_ERR_DESKTOP_ENDED, EC_ERR_DESKTOP_LAUNCH_FAILED, EC_ERR_DESKTOP_NOT_FOUND,
+    EC_ERR_DESKTOP_WINDOW_STYLE, EC_HELP,
 };
 use crate::failure::failure;
 
@@ -70,6 +74,61 @@ const DIRECTORY_ARG: &str = "-CurrentDir:";
 /// which is what lets a template name a program it was never told about.
 const EXE_ENV: &str = "ROLA_EXE";
 
+/// What the style the window's own frame is drawn in is handed over under.
+///
+/// The three names are the Desktop program's own — `Windows`, `Mac`, `TillingWM` — and what a run writes is
+/// one of the three lower-case ones: what a person types and what two programs agree on need not be spelled
+/// the same way, and the one that is handed over is the one the program's own code names.
+const STYLE_ARG: &str = "-WindowStyle:";
+
+/// How the Desktop program is to draw a window's own frame.
+///
+/// The three are the three ways a frame is drawn there, and a run naming one is asking for that way rather
+/// than for the machine's own answer (see [`ARG_WINDOW_STYLE`]).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WindowStyle {
+    /// Three buttons at the right: minimize, maximize and close.
+    Windows,
+    /// Three coloured lights at the left.
+    Mac,
+    /// No buttons: the window manager outside is the frame.
+    TillingWm,
+}
+
+impl WindowStyle {
+    /// The style a written name is, or nothing when it names none of the three.
+    ///
+    /// Read without regard to case, because the two spellings one name has — this one and the Desktop
+    /// program's — are one name to whoever wrote it.
+    fn named(name: &str) -> Option<Self> {
+        match name.to_ascii_lowercase().as_str() {
+            "windows" => Some(Self::Windows),
+            "mac" => Some(Self::Mac),
+            "tillingwm" => Some(Self::TillingWm),
+            _ => None,
+        }
+    }
+
+    /// The name the Desktop program reads this style by.
+    fn argument(self) -> &'static str {
+        match self {
+            Self::Windows => "Windows",
+            Self::Mac => "Mac",
+            Self::TillingWm => "TillingWM",
+        }
+    }
+}
+
+/// The styles a run may ask for, as it writes them.
+const WINDOW_STYLES: [&str; 3] = ["windows", "mac", "tillingwm"];
+
+/// The style the window's own frame is to be drawn in.
+///
+/// Absent, the Desktop program draws the frame its own machine asks for, which is what a run that says
+/// nothing about it gets: the window is opened where it is opened from, and how a frame is drawn there is
+/// the machine's answer rather than a caller's.
+const ARG_WINDOW_STYLE: PickerArg<'static, Option<String>> = arg![window_style: Option<String>];
+
 #[help(buffer)]
 pub fn help_desktop(_: EntryDesktop, ec: &mut ResExitCode) {
     r_eprintln!("{}", trd!(t!("desktop.help")).trim());
@@ -83,10 +142,23 @@ pub fn desc_desktop() -> Description {
 
 /// Completes what `rola desktop` can be given next.
 ///
-/// The command names nothing at all, so there is nothing to offer rather than a filename that
-/// would not be accepted.
+/// The command names nothing at all, so there is no filename to offer; what it can be told is how to draw
+/// the window's frame, and there are three answers to that.
 #[completion(EntryDesktop)]
-pub fn complete_desktop() -> Suggest {
+pub fn complete_desktop(ctx: ShellContext) -> Suggest {
+    if filling_flag(&ctx, &ARG_WINDOW_STYLE) {
+        return offer(&ctx, WINDOW_STYLES);
+    }
+
+    if typing_flag(&ctx) {
+        return strip_written(
+            &ctx,
+            suggest! {
+                ARG_WINDOW_STYLE: t!("desktop.complete.window_style"),
+            },
+        );
+    }
+
     suggest!()
 }
 
@@ -101,24 +173,49 @@ pub fn complete_desktop() -> Suggest {
 /// when no Workspace holds it. See [`opening_at`] for what a Workspace is the answer rather than the
 /// run's own directory.
 ///
+/// `--window-style` chooses how the window's own frame is drawn — `windows` for the three buttons at the
+/// right, `mac` for the three lights at the left, `tillingwm` for no buttons at all. Absent, the Desktop
+/// program draws the frame the machine it is opened on asks for.
+///
 /// # Errors
 ///
-/// Renders [`ErrorDesktopNotFound`] when there is no Desktop program beside this one, and
-/// [`ErrorDesktopFailed`] when there is one but it would not start.
-#[command(node = "desktop")]
-pub fn desktop() -> StateDesktop {
-    StateDesktop
+/// Renders [`ErrorDesktopWindowStyle`] when `--window-style` names none of the three, [`ErrorDesktopNotFound`]
+/// when there is no Desktop program beside this one, and [`ErrorDesktopFailed`] when there is one but it
+/// would not start.
+#[command(node = "desktop", entry = EntryDesktop)]
+pub fn desktop(args: EntryDesktop) -> Next {
+    let written: Option<String> = match args.pick(&ARG_WINDOW_STYLE).to_result() {
+        Ok(written) => written,
+        Err(next) => return next,
+    };
+
+    // A style the run does not know is refused here rather than handed over: the Desktop program leaves a
+    // name it does not know to the machine, so a run that wrote one wrong would open a window drawn one way
+    // while being asked for another.
+    let style = match written {
+        None => None,
+        Some(name) => match WindowStyle::named(&name) {
+            Some(style) => Some(style),
+            None => return ErrorDesktopWindowStyle { written: name }.into(),
+        },
+    };
+
+    StateDesktop { style }.into()
 }
 
 /// The state a run that opens the Desktop program starts in.
 ///
-/// It names nothing: where the program sits is where this one was run from, so the whole of
-/// what the run is told is already in where that is.
-#[derive(Grouped)]
-pub struct StateDesktop;
+/// It names nothing of where the program is: that is where this one was run from, so the whole of what is
+/// told of the place is already in where that is. What is left is how the window is to be drawn, which is
+/// the machine's own answer until a run says otherwise.
+#[derive(Grouped, Clone, Copy)]
+pub struct StateDesktop {
+    /// The style the frame is to be drawn in, or nothing for the machine's own.
+    style: Option<WindowStyle>,
+}
 
 #[chain(routeify)]
-pub fn handle_desktop(_state: StateDesktop, language: &ResLanguage, cwd: &ResCurrentDir) -> Next {
+pub fn handle_desktop(state: StateDesktop, language: &ResLanguage, cwd: &ResCurrentDir) -> Next {
     // Where this program was run from is what the Desktop program sits beside, so a run that
     // cannot say where it is cannot find it either.
     let here = match std::env::current_exe() {
@@ -146,10 +243,16 @@ pub fn handle_desktop(_state: StateDesktop, language: &ResLanguage, cwd: &ResCur
     // so the command lasts as long as the window does. What the program ended with is what this run ends
     // with — the two are one thing to whoever asked for a window, and a caller that waits for a program is
     // entitled to its answer.
+    let mut told = vec![language_arg(language), directory_arg(&at)];
+
+    if let Some(style) = state.style {
+        told.push(style_arg(style));
+    }
+
     match Command::new(&program)
         .current_dir(&at)
         .env(EXE_ENV, &here)
-        .args([language_arg(language), directory_arg(&at)])
+        .args(told)
         .status()
     {
         Ok(status) => ResultDesktopEnded {
@@ -183,6 +286,11 @@ fn directory_arg(at: &Path) -> String {
     format!("{DIRECTORY_ARG}{}", at.display())
 }
 
+/// The argument that hands over the style the window's own frame is to be drawn in.
+fn style_arg(style: WindowStyle) -> String {
+    format!("{STYLE_ARG}{}", style.argument())
+}
+
 /// Where the Desktop program sits, given where this program was run from.
 ///
 /// A platform names a program with a suffix or without, so the name is put together rather than
@@ -207,6 +315,34 @@ pub fn render_result_desktop_ended(result: ResultDesktopEnded, ec: &mut ResExitC
     // What the program ended with is what this run ends with. A program a signal ended has no code of its
     // own, and is one that did not end well, which is what this run says in its place.
     ec.exit_code = result.code.unwrap_or(EC_ERR_DESKTOP_ENDED);
+}
+
+/// Error: the style a run asked for is not one of the three.
+#[derive(Grouped)]
+pub struct ErrorDesktopWindowStyle {
+    /// What was written after the flag.
+    written: String,
+}
+
+impl Failure for ErrorDesktopWindowStyle {
+    fn name(&self) -> &'static str {
+        "error_desktop_window_style"
+    }
+
+    fn reason(&self) -> String {
+        t!("desktop.err_window_style", written = self.written)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorDesktopWindowStyle);
+
+#[renderer(buffer)]
+pub fn render_error_desktop_window_style(error: ErrorDesktopWindowStyle, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("desktop.err_window_style_help").trim()));
+    ec.exit_code = EC_ERR_DESKTOP_WINDOW_STYLE;
 }
 
 /// Error: there is no Desktop program beside this one.
@@ -269,7 +405,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use super::opening_at;
+    use super::{WindowStyle, opening_at};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -310,5 +446,30 @@ mod tests {
         assert_eq!(opening_at(&dir), dir);
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_style_is_read_by_the_name_a_run_writes() {
+        assert_eq!(WindowStyle::named("windows"), Some(WindowStyle::Windows));
+        assert_eq!(WindowStyle::named("mac"), Some(WindowStyle::Mac));
+        assert_eq!(WindowStyle::named("tillingwm"), Some(WindowStyle::TillingWm));
+
+        // The two programs spell the names their own way, and one name is what both of them mean.
+        assert_eq!(WindowStyle::named("TillingWM"), Some(WindowStyle::TillingWm));
+        assert_eq!(WindowStyle::named("MAC"), Some(WindowStyle::Mac));
+    }
+
+    #[test]
+    fn a_name_that_is_not_one_of_the_three_names_no_style() {
+        assert_eq!(WindowStyle::named(""), None);
+        assert_eq!(WindowStyle::named("gnome"), None);
+        assert_eq!(WindowStyle::named("tiling"), None);
+    }
+
+    #[test]
+    fn a_style_is_handed_over_by_the_name_the_program_reads() {
+        assert_eq!(WindowStyle::Windows.argument(), "Windows");
+        assert_eq!(WindowStyle::Mac.argument(), "Mac");
+        assert_eq!(WindowStyle::TillingWm.argument(), "TillingWM");
     }
 }

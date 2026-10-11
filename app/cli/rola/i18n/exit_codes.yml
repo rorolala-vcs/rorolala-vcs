@@ -261,6 +261,10 @@ exit_codes:
     en: The Desktop program ended without an exit code of its own
     zh-CN: 桌面程序未给出自己的退出码就结束了
 
+  desktop_window_style:
+    en: The window style a run asked for is not one of the three
+    zh-CN: 本次运行要求的窗口样式不是三种之一
+
   fs_ops_argument:
     en: A file operation was named without the paths it works on
     zh-CN: 文件操作缺少它所作用的路径

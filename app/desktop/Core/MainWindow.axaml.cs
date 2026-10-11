@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -58,7 +59,7 @@ public partial class MainWindow : Window
     /// plugin's question, a notice — is a card with a title bar of the desktop's. It is held because the
     /// buttons it builds are the ones this window has to say the words and the pictures of.
     /// </remarks>
-    private readonly RorolalaTheme.Frame _frame = RorolalaTheme.DecorationsTheme();
+    private readonly RorolalaTheme.Frame _frame = RorolalaTheme.DecorationsTheme(Program.WindowStyle);
 
     /// <summary>The docks as they appear in the Window menu, so their checks can be kept in step.</summary>
     private readonly List<(DockRegistration Registration, MenuItem Entry)> _docks = [];
@@ -93,18 +94,30 @@ public partial class MainWindow : Window
         // gestures a title bar of the desktop's would have answered by itself. A press on a menu's own row
         // is the menu's and is left to it (see `MoveOrMaximize`).
         //
-        // Asked here rather than left to the role in the markup, which moves the window only on a display
-        // server that draws its own decorations: a desktop that draws none is the one this is written
-        // for, and it reads no role. Both are asked, so a press moves the window either way.
-        TitleBar.PointerPressed += (_, press) => MoveOrMaximize(press);
-        MainMenu.PointerPressed += (_, press) => MoveOrMaximize(press);
+        // One press, one listener, and it is the row's own surface rather than the menu bar over it: the
+        // menu is inside the row, so a press on the one passes through the other, and two listeners would
+        // answer the same double click twice — maximizing the window and restoring it again. Taken on the
+        // way down so that the window is asked to move before the menu reads the press, which is the order
+        // the paragraph above is about; the press is left unhandled, so a menu still opens under it.
+        //
+        // Asked here rather than left to the role, which moves the window only on a display server that
+        // draws its own decorations: a desktop that draws none is the one this is written for, and it
+        // reads no role. Both are asked, so a press moves the window either way.
+        TitleBar.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, press) => MoveOrMaximize(press),
+            RoutingStrategies.Tunnel
+        );
 
         // What each of the window's buttons says and what it is drawn as. The buttons are the frame's —
         // see the look, which builds them out of the program's own pictures — and what is said here is the
         // part of them the host owns: the words a reader hears them by, which are translated, and the
         // picture that says what the one that maximizes will do next.
-        WindowControls.Describe(_frame.Minimize, "window.minimize", _services.I18n);
-        WindowControls.Describe(_frame.Close, "window.close", _services.I18n);
+        //
+        // A frame drawn for a tiling window manager has none of them, which is why each is asked for rather
+        // than assumed: what the window says about a button it was not given is nothing.
+        Describe(_frame.Minimize, "window.minimize");
+        Describe(_frame.Close, "window.close");
         WindowControls.Picture(_frame.Minimize, Glyph(WindowControls.MinimizeKey));
         WindowControls.Picture(_frame.Close, Glyph(WindowControls.CloseKey));
         MaximizePicture();
@@ -228,16 +241,36 @@ public partial class MainWindow : Window
     /// </remarks>
     private void MaximizePicture()
     {
+        // A frame drawn for a tiling window manager has no such button, and a window with none has nothing
+        // to say about it.
+        if (_frame.Maximize is not { } button)
+        {
+            return;
+        }
+
         var maximized = WindowState == WindowState.Maximized;
 
         WindowControls.Picture(
-            _frame.Maximize,
+            button,
             Glyph(maximized ? WindowControls.RestoreKey : WindowControls.MaximizeKey)
         );
         AutomationProperties.SetName(
-            _frame.Maximize,
+            button,
             _services.I18n.Get(maximized ? "window.restore" : "window.maximize")
         );
+    }
+
+    /// <summary>
+    /// Gives one of the window's buttons the words it is read and reached by, where it has one.
+    /// </summary>
+    /// <param name="button">The button, or nothing where the frame has none.</param>
+    /// <param name="key">The translated key the name is read from.</param>
+    private void Describe(Button? button, string key)
+    {
+        if (button is not null)
+        {
+            WindowControls.Describe(button, key, _services.I18n);
+        }
     }
 
     /// <summary>
@@ -247,12 +280,21 @@ public partial class MainWindow : Window
     /// Nothing rather than a failure: a button without a picture is still a button, and the window it
     /// closes or minimizes is the same window. What must not happen is a window that does not open because
     /// a picture it was drawn from was not beside the program.
+    /// <para>
+    /// Drawn smaller where the frame is the three lights of a macOS one, because a light is smaller than a
+    /// button: see <see cref="WindowControls.LightGlyphSize"/>.
+    /// </para>
     /// </remarks>
     /// <param name="key">The key the picture is held under.</param>
     /// <returns>What to put in the button, or nothing.</returns>
     private Control? Glyph(string key) =>
         WindowControls.Find(_services.Icons, key) is { } picture
-            ? WindowControls.Glyph(picture, WindowControls.GlyphSize)
+            ? WindowControls.Glyph(
+                picture,
+                Program.WindowStyle == Theming.WindowStyle.Mac
+                    ? WindowControls.LightGlyphSize
+                    : WindowControls.GlyphSize
+            )
             : null;
 
     /// <summary>Builds the menu bar from what was registered.</summary>

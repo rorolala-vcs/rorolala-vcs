@@ -1,6 +1,7 @@
 using Avalonia;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktop;
 
@@ -26,6 +27,13 @@ class Program
     /// Recorded the way the language is: Avalonia makes the window itself, so the window's side of
     /// the program asks for what was worked out rather than being handed it.
     public static DesktopState? State { get; private set; }
+
+    /// The style the window's own frame is drawn in.
+    ///
+    /// What the command line asked for, or — started on its own, where there is nobody to ask — the style
+    /// the machine's own desktop is drawn in, which is worked out before Avalonia starts because the window
+    /// and its look are both built from it.
+    public static WindowStyle WindowStyle { get; private set; } = WindowStyles.Here();
 
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
@@ -101,6 +109,16 @@ class Program
             {
                 CurrentDirectory = arg[DirectoryPrefix.Length..];
             }
+            else if (arg.StartsWith(StylePrefix, StringComparison.Ordinal))
+            {
+                // A name that is none of the three leaves the machine's own answer standing. The command
+                // line refuses a name it does not know before it gets this far, so what is left here is a
+                // run started by hand with one written wrong, and a window is a poor place to report it.
+                if (WindowStyles.Named(arg[StylePrefix.Length..]) is { } asked)
+                {
+                    WindowStyle = asked;
+                }
+            }
         }
     }
 
@@ -109,4 +127,7 @@ class Program
 
     /// What the directory is handed over as, matching `rola desktop`.
     private const string DirectoryPrefix = "-CurrentDir:";
+
+    /// What the window style is handed over as, matching `rola desktop`.
+    private const string StylePrefix = "-WindowStyle:";
 }

@@ -249,6 +249,9 @@ pub const EC_ERR_DESKTOP_LAUNCH_FAILED: i32 = 171;
 /// `exit_codes.desktop_ended`
 pub const EC_ERR_DESKTOP_ENDED: i32 = 172;
 
+/// `exit_codes.desktop_window_style`
+pub const EC_ERR_DESKTOP_WINDOW_STYLE: i32 = 173;
+
 // Output — how a result is drawn when it is written
 
 /// `exit_codes.format`

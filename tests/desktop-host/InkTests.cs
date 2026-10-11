@@ -59,16 +59,13 @@ public sealed class InkTests
         "CheckBox:checked /template/ #border",
         "CheckBox:indeterminate /template/ #border",
         "RadioButton:checked /template/ #border",
-
-        // A tab being held down while it is the one shown: the fill and the ink are both the selected tab's.
-        "Button.dock-title.selected:pressed",
     ];
 
     /// <summary>A state that fills with the primary names the ink that goes on it, or is one of the named few.</summary>
     [Fact]
     public void EveryStateFilledWithThePrimarySaysWhatIsWrittenOnIt()
     {
-        var look = new RorolalaTheme(Color.Parse("#BFFF00"), Color.Parse("#FF6D00"), null);
+        var look = new RorolalaTheme(Color.Parse("#BFFF00"), Color.Parse("#FF6D00"), null, WindowStyle.Windows);
         var unnamed = new List<string>();
 
         foreach (var style in look.Styles.OfType<Style>())

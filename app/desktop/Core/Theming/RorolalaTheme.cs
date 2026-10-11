@@ -74,11 +74,13 @@ internal sealed class RorolalaTheme
     /// <param name="primary">The colour what is chosen is drawn in.</param>
     /// <param name="accent">The colour the drag marks are drawn in.</param>
     /// <param name="primaryText">What is written on the primary, or nothing to work it out.</param>
-    public RorolalaTheme(Color primary, Color accent, Color? primaryText)
+    /// <param name="style">Which of the three ways a window's own frame is drawn this window is drawn in.</param>
+    public RorolalaTheme(Color primary, Color accent, Color? primaryText, WindowStyle style)
     {
         _primary = primary;
         _accent = accent;
         _primaryText = primaryText ?? InkOn(primary);
+        _style = style;
 
         // What the design hovers a filled action with: its own colour mixed a little of the way towards
         // white, which lifts a lime without washing it out. It is derived before the palette is written
@@ -172,6 +174,26 @@ internal sealed class RorolalaTheme
     private const int CaptionButtonCount = 3;
 
     /// <summary>
+    /// How wide one of the three lights of a macOS frame is.
+    /// </summary>
+    /// <remarks>
+    /// A light is a mark rather than a button: it is as wide as it is tall, it is round, and the pointer is
+    /// on it within a few pixels. This is macOS' own size for them, which is what makes the three read as
+    /// one row of beads rather than as three buttons that happen to be small.
+    /// </remarks>
+    private const double MacLight = 12.0;
+
+    /// <summary>How far one light stands from the next.</summary>
+    private const double MacGap = 8.0;
+
+    /// <summary>How far the first light stands from the window's own edge.</summary>
+    private const double MacEdge = 12.0;
+
+    /// <summary>What the three lights and their room take on the left of the row.</summary>
+    private const double MacRoom =
+        MacEdge + (MacLight * CaptionButtonCount) + (MacGap * (CaptionButtonCount - 1)) + 8;
+
+    /// <summary>
     /// The class the menu bar carries, for a theme to address it by.
     /// </summary>
     /// <remarks>
@@ -180,18 +202,20 @@ internal sealed class RorolalaTheme
     /// </remarks>
     public const string MenuBarClass = "menu-bar";
 
-    /// <summary>What the menu bar leaves free on its right, which is where the buttons are.</summary>
+    /// <summary>What the menu bar leaves free for the window's own buttons.</summary>
     /// <remarks>
-    /// A menu bar that reached the right edge would draw its last menu under the buttons, which are a
-    /// sibling of it rather than a part of it: the row is shared by laying it out, and this is the part
-    /// of it the menu may not have.
+    /// A menu bar that reached the buttons would draw its last menu under them: the row is shared by laying
+    /// it out, and this is the part of it the menu may not have. Which side they are on is the style's — the
+    /// three marks are on the right and the three lights on the left — and a window under a tiling window
+    /// manager has none of them, so its menu bar has the whole of the row.
     /// </remarks>
-    private static readonly Thickness MenuBarPadding = new(
-        8,
-        0,
-        (CaptionButtonWidth * CaptionButtonCount) + 8,
-        0
-    );
+    private Thickness MenuBarPadding =>
+        _style switch
+        {
+            WindowStyle.Mac => new Thickness(MacRoom, 0, 8, 0),
+            WindowStyle.TillingWm => new Thickness(8, 0, 8, 0),
+            _ => new Thickness(8, 0, (CaptionButtonWidth * CaptionButtonCount) + 8, 0),
+        };
 
     /// <summary>
     /// The class the row a window's menu and its own buttons share wears.
@@ -342,6 +366,28 @@ internal sealed class RorolalaTheme
     /// warning is coloured is not a preference. A named constant because its wash is the same colour laid thin.
     /// </remarks>
     private static readonly Color WarnColour = Color.FromRgb(0xD4, 0xA0, 0x17);
+
+    /// <summary>
+    /// The three lights of a macOS frame, in the order they are drawn from the window's edge.
+    /// </summary>
+    /// <remarks>
+    /// Fixed rather than chosen, like the amber above, and for the reason that makes them worth having: a
+    /// window asking to be drawn the way macOS draws one is asking for these three colours, and a red, a
+    /// yellow and a green of the program's own choosing would be three beads that mean nothing.
+    /// </remarks>
+    private static readonly Color MacClose = Color.FromRgb(0xFF, 0x5F, 0x57);
+    private static readonly Color MacMinimize = Color.FromRgb(0xFE, 0xBC, 0x2E);
+    private static readonly Color MacMaximize = Color.FromRgb(0x28, 0xC8, 0x40);
+
+    /// <summary>
+    /// What the mark on a light is drawn in.
+    /// </summary>
+    /// <remarks>
+    /// A dark ink laid thin, which is what macOS draws on all three of its lights: the fill is the colour
+    /// that says which of them it is, and a mark in the window's own ink would be white on two of the three
+    /// on the dark ground — where a mark that cannot be read is a bead with nothing to say.
+    /// </remarks>
+    private static readonly Color MacInk = Color.FromArgb(0x66, 0x00, 0x00, 0x00);
     private const string Shadow = "rorolala.shadow";
     private const string Ring = "rorolala.ring";
 
@@ -411,6 +457,9 @@ internal sealed class RorolalaTheme
 
     /// <summary>What is written on a surface filled with the primary.</summary>
     private readonly Color _primaryText;
+
+    /// <summary>Which of the three ways a window's own frame is drawn this look draws.</summary>
+    private readonly WindowStyle _style;
 
     /// <summary>The wash a chosen row is filled with, on the light ground.</summary>
     private readonly Color _selectionLight;
@@ -1239,12 +1288,13 @@ internal sealed class RorolalaTheme
     /// </remarks>
     private Style[] Chrome() =>
         [
-            // The row a window's menu and its own buttons share. Its ground is the window's, because the
-            // menu bar is transparent on purpose: a bar painted with its own fill would take every pixel
-            // of itself out of the toolkit's hands, and the press that moves a window would then work
-            // everywhere in the row except the empty space of the bar, which is where it is aimed. What
-            // is set here is what a press cannot do without — the room a menu needs and the room on the
-            // right the buttons are in.
+            // The row a window's menu and its own buttons share: the elevated ground with the one line along
+            // its foot that separates it from the dock area, which stands on the window's own ground. The menu
+            // bar inside the row is transparent on purpose: a bar painted with its own fill would take every
+            // pixel of itself out of the toolkit's hands, and the press that moves a window would then work
+            // everywhere in the row except the empty space of the bar, which is where it is aimed. What is set
+            // here is what a press cannot do without — the room a menu needs and the room on the right the
+            // buttons are in.
             On(
                 selector => selector.OfType<Border>().Class(TitleBarClass),
                 Brushed(Border.BackgroundProperty, Elevated),
@@ -1257,36 +1307,9 @@ internal sealed class RorolalaTheme
                 new Setter(TemplatedControl.PaddingProperty, MenuBarPadding)
             ),
 
-            // A window's own buttons: nothing of their own until the pointer is on them, then the sunken
-            // ground the design gives every hover, and the failure's red wash for the one that closes.
-            // The picture is stroked in the ink of the button it is on, so it follows a hover without
-            // being told to.
-            On(
-                selector => selector.OfType<Button>().Class(CaptionClass),
-                Brushed(TemplatedControl.BackgroundProperty, SunkenClear),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
-                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                new Setter(Layoutable.WidthProperty, CaptionButtonWidth),
-                Brushed(TemplatedControl.ForegroundProperty, Muted),
-                new Setter(TemplatedControl.TransitionsProperty, Fading())
-            ),
-            On(
-                selector => selector.OfType<Button>().Class(CaptionClass).Class(":pointerover"),
-                Brushed(TemplatedControl.BackgroundProperty, Sunken),
-                Brushed(TemplatedControl.ForegroundProperty, Foreground)
-            ),
-            On(
-                selector =>
-                    selector.OfType<Button>().Class(CaptionClass).Class(":pressed"),
-                Brushed(TemplatedControl.BackgroundProperty, Strong)
-            ),
-            On(
-                selector =>
-                    selector.OfType<Button>().Class(CaptionClass).Class(CaptionCloseClass).Class(":pointerover"),
-                Brushed(TemplatedControl.BackgroundProperty, DelBackground),
-                Brushed(TemplatedControl.ForegroundProperty, DelInk)
-            ),
+            // A window's own buttons, which are the one thing about this row the three styles disagree on.
+            .. Captions(),
+
             // The strip a region's headers sit in: the sunken ground, so that the tab being read — which is
             // drawn on the elevated one — is the one thing in the row that lifts out of it.
             //
@@ -1475,6 +1498,82 @@ internal sealed class RorolalaTheme
         ];
 
     /// <summary>
+    /// How a window's own buttons are drawn, which is where the three styles part company.
+    /// </summary>
+    /// <remarks>
+    /// One button is a mark on the right on Windows, a light on the left on macOS, and nothing at all under
+    /// a tiling window manager — which keeps its window by a frame of its own, so buttons drawn here would
+    /// be a second frame inside the first.
+    /// <para>
+    /// The marks are drawn the way the design draws a tool: nothing of their own until the pointer is on
+    /// them, the sunken ground while it is, and the failure's red wash for the one that closes. A light is
+    /// filled instead, because the colour is what says which of the three it is, and what it does is the
+    /// mark macOS draws on it while the pointer is over it.
+    /// </para>
+    /// </remarks>
+    private Style[] Captions() =>
+        _style switch
+        {
+            WindowStyle.Mac =>
+            [
+                On(
+                    selector => selector.OfType<Button>().Class(CaptionClass),
+                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                    new Setter(TemplatedControl.CornerRadiusProperty, Pill),
+                    new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                    new Setter(Layoutable.WidthProperty, MacLight),
+                    new Setter(Layoutable.HeightProperty, MacLight),
+                    new Setter(TemplatedControl.TransitionsProperty, Fading())
+                ),
+                On(
+                    selector => selector.OfType<Border>().Class(CaptionGlyphClass),
+                    new Setter(Visual.OpacityProperty, 0.0)
+                ),
+                On(
+                    selector =>
+                        selector
+                            .OfType<Button>()
+                            .Class(CaptionClass)
+                            .Class(":pointerover")
+                            .Descendant()
+                            .OfType<Border>()
+                            .Class(CaptionGlyphClass),
+                    new Setter(Visual.OpacityProperty, 1.0)
+                ),
+            ],
+            WindowStyle.TillingWm => [],
+            _ =>
+            [
+                On(
+                    selector => selector.OfType<Button>().Class(CaptionClass),
+                    Brushed(TemplatedControl.BackgroundProperty, SunkenClear),
+                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                    new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
+                    new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                    new Setter(Layoutable.WidthProperty, CaptionButtonWidth),
+                    Brushed(TemplatedControl.ForegroundProperty, Muted),
+                    new Setter(TemplatedControl.TransitionsProperty, Fading())
+                ),
+                On(
+                    selector => selector.OfType<Button>().Class(CaptionClass).Class(":pointerover"),
+                    Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                    Brushed(TemplatedControl.ForegroundProperty, Foreground)
+                ),
+                On(
+                    selector =>
+                        selector.OfType<Button>().Class(CaptionClass).Class(":pressed"),
+                    Brushed(TemplatedControl.BackgroundProperty, Strong)
+                ),
+                On(
+                    selector =>
+                        selector.OfType<Button>().Class(CaptionClass).Class(CaptionCloseClass).Class(":pointerover"),
+                    Brushed(TemplatedControl.BackgroundProperty, DelBackground),
+                    Brushed(TemplatedControl.ForegroundProperty, DelInk)
+                ),
+            ],
+        };
+
+    /// <summary>
     /// The cards the plugin manager arranges: one raised surface per plugin, and its wash.
     /// </summary>
     /// <remarks>
@@ -1600,21 +1699,50 @@ internal sealed class RorolalaTheme
     /// theme on is the only thing that can say what they are named and what they are drawn as.
     /// </para>
     /// </remarks>
+    /// <param name="style">Which of the three ways a window's frame is drawn this window is drawn in.</param>
     /// <returns>The theme to put on one window, and the buttons it draws.</returns>
-    public static Frame DecorationsTheme()
+    public static Frame DecorationsTheme(WindowStyle style)
     {
         var scope = new NameScope();
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalAlignment = style == WindowStyle.Mac ? HorizontalAlignment.Left : HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
             Height = MainWindow.TitleBarHeight,
+
+            // The lights stand off the window's own edge and off one another, where the three marks are a
+            // row of one control each: room left between two of them is room the menu bar would otherwise be
+            // drawn in.
+            Spacing = style == WindowStyle.Mac ? MacGap : 0,
+            Margin = style == WindowStyle.Mac ? new Thickness(MacEdge, 0, 0, 0) : default,
         };
 
-        var minimize = Caption(scope, row, "PART_MinimizeButton", WindowDecorationsElementRole.MinimizeButton);
-        var maximize = Caption(scope, row, "PART_MaximizeButton", WindowDecorationsElementRole.MaximizeButton);
-        var close = Caption(scope, row, "PART_CloseButton", WindowDecorationsElementRole.CloseButton, closes: true);
+        // A tiling window manager's window has none: the manager outside keeps the window, and buttons drawn
+        // here would be a frame inside the frame it already has (Section 10).
+        Button? minimize = null;
+        Button? maximize = null;
+        Button? close = null;
+
+        if (style != WindowStyle.TillingWm)
+        {
+            // Made in the order they are drawn, which is the style's own: Windows puts its three marks in the
+            // order they read — minimize, maximize, close — and macOS puts the one that closes the window at
+            // the window's own corner, then the light that puts it away, then the one that makes it fill the
+            // screen.
+            if (style == WindowStyle.Mac)
+            {
+                close = Caption(scope, row, "PART_CloseButton", WindowDecorationsElementRole.CloseButton, style, MacClose, closes: true);
+                minimize = Caption(scope, row, "PART_MinimizeButton", WindowDecorationsElementRole.MinimizeButton, style, MacMinimize);
+                maximize = Caption(scope, row, "PART_MaximizeButton", WindowDecorationsElementRole.MaximizeButton, style, MacMaximize);
+            }
+            else
+            {
+                minimize = Caption(scope, row, "PART_MinimizeButton", WindowDecorationsElementRole.MinimizeButton, style, MacMinimize);
+                maximize = Caption(scope, row, "PART_MaximizeButton", WindowDecorationsElementRole.MaximizeButton, style, MacMaximize);
+                close = Caption(scope, row, "PART_CloseButton", WindowDecorationsElementRole.CloseButton, style, MacClose, closes: true);
+            }
+        }
 
         var theme = new ControlTheme(typeof(WindowDrawnDecorations));
 
@@ -1652,12 +1780,16 @@ internal sealed class RorolalaTheme
     /// <remarks>
     /// What each does is the toolkit's, from the role it carries, and it is the toolkit that reads them out
     /// of the template's names and wires them up. What is left here is what a window button is made of: a
-    /// part the toolkit looks for, a role, and the class the look draws it by.
+    /// part the toolkit looks for, a role, and the class the look draws it by — and, where the frame is
+    /// drawn the way macOS draws one, the light's own colour, which is the one thing about it the look
+    /// cannot say in a rule, three buttons of one class being three different colours.
     /// </remarks>
     /// <param name="scope">The names the toolkit reads the parts out of.</param>
     /// <param name="row">The row to add it to.</param>
     /// <param name="name">The part name the toolkit looks for.</param>
     /// <param name="role">What the toolkit makes a press on it do.</param>
+    /// <param name="style">Which way the window's frame is being drawn.</param>
+    /// <param name="light">The colour of the light, where the frame is drawn the way macOS draws one.</param>
     /// <param name="closes">Whether it is the one that closes the window.</param>
     /// <returns>The button, which the window names and draws.</returns>
     private static Button Caption(
@@ -1665,6 +1797,8 @@ internal sealed class RorolalaTheme
         StackPanel row,
         string name,
         WindowDecorationsElementRole role,
+        WindowStyle style,
+        Color light,
         bool closes = false
     )
     {
@@ -1672,13 +1806,24 @@ internal sealed class RorolalaTheme
         {
             Name = name,
             Classes = { CaptionClass },
-            VerticalAlignment = VerticalAlignment.Stretch,
+            VerticalAlignment = style == WindowStyle.Mac
+                ? VerticalAlignment.Center
+                : VerticalAlignment.Stretch,
             [WindowDecorationProperties.ElementRoleProperty] = role,
         };
 
         if (closes)
         {
             button.Classes.Add(CaptionCloseClass);
+        }
+
+        if (style == WindowStyle.Mac)
+        {
+            button.Width = MacLight;
+            button.Height = MacLight;
+            button.CornerRadius = Pill;
+            button.Background = new SolidColorBrush(light);
+            button.Foreground = new SolidColorBrush(MacInk);
         }
 
         scope.Register(name, button);
@@ -1709,16 +1854,21 @@ internal sealed class RorolalaTheme
     /// <remarks>
     /// They travel together because they are made together, and the window that puts the theme on is the
     /// only thing that can say what the buttons are named and what they are drawn as.
+    /// <para>
+    /// A button is nothing where the frame is drawn for a tiling window manager, which has none of them: what
+    /// the window does with a button it was not given is nothing, which is why they are asked for by name
+    /// rather than assumed.
+    /// </para>
     /// </remarks>
     /// <param name="Theme">The theme to put on the window.</param>
-    /// <param name="Minimize">The button that minimizes it.</param>
-    /// <param name="Maximize">The button that maximizes it, or puts it back.</param>
-    /// <param name="Close">The button that closes it.</param>
+    /// <param name="Minimize">The button that minimizes it, or nothing where the frame has none.</param>
+    /// <param name="Maximize">The button that maximizes it, or puts it back, or nothing.</param>
+    /// <param name="Close">The button that closes it, or nothing.</param>
     public readonly record struct Frame(
         ControlTheme Theme,
-        Button Minimize,
-        Button Maximize,
-        Button Close
+        Button? Minimize,
+        Button? Maximize,
+        Button? Close
     );
 
     /// <summary>

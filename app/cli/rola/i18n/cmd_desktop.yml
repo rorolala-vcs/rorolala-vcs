@@ -5,7 +5,7 @@ desktop:
     en: |
         Open the Desktop program that sits beside this one
 
-        **Usage**: `rola desktop`
+        **Usage**: `rola desktop [--window-style=<windows|mac|tillingwm>]`
 
         The command line is a way to work without a window; the Desktop program is the window
         for the same work. The two are exported together — this program at `bin/rola` and the
@@ -15,12 +15,17 @@ desktop:
         The language the run speaks and the directory it was made in are handed over with the
         program, so the window opens on the same work in the same language.
 
+        `--window-style` chooses how the window's own frame is drawn: `windows` for the three
+        buttons at the right, `mac` for the three lights at the left, `tillingwm` for no buttons
+        at all. Left out, the window is drawn the way the machine it is opened on draws one —
+        a tiling window manager being recognized by the environment it leaves behind.
+
         The program is waited for: this run lasts as long as the window does, and ends with what
         the window ended with, so a script that opens it reads the window's own answer.
     zh-CN: |
         打开与 rola 并排的桌面程序
 
-        **用法**：`rola desktop`
+        **用法**：`rola desktop [--window-style=<windows|mac|tillingwm>]`
 
         命令行是不开窗口的工作方式，桌面程序则是同一件事的窗口。两者一起导出——rola 在
         `bin/rola`，桌面程序在 `bin/desktop/`——因此本命令打开的是所运行的 rola 旁边那一个，
@@ -29,12 +34,31 @@ desktop:
         本次运行所用的语言、以及运行所在目录会随程序一并交给它，窗口因此开在同样的工作、
         同样的语言上。
 
+        `--window-style` 选择窗口自身的边框怎么画：`windows` 是右侧三个按钮，`mac` 是左侧三
+        个圆灯，`tillingwm` 是完全没有按钮。不写则按窗口所在机器的方式画——平铺窗口管理器
+        以它留在环境里的信息识别。
+
         程序会被等待：本次运行持续到窗口关闭为止，并以窗口自己的退出码结束，因此打开它的
         脚本读到的就是窗口给出的答复。
 
   cmd_desktop_description:
     en: Open the Desktop program that sits beside this one
     zh-CN: 打开与 rola 并排的桌面程序
+
+  complete:
+    window_style:
+      en: How the window's own frame is drawn
+      zh-CN: 窗口自身的边框怎么画
+
+  err_window_style:
+    en: "No window style is named `%{written}`"
+    zh-CN: "没有名为 `%{written}` 的窗口样式"
+
+  err_window_style_help:
+    en: |
+        Please write one of `windows`, `mac` or `tillingwm`, or leave `--window-style` out
+    zh-CN: |
+        请写 `windows`、`mac` 或 `tillingwm` 之一，或者不写 `--window-style`
 
   err_not_found:
     en: There is no Desktop program beside this one

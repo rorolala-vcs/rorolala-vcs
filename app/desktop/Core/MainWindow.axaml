@@ -22,26 +22,40 @@
          The top row is one line: the menu, then the window's own buttons. Its height is the height the
          decorations are told to reserve, and the look is what draws the row and the buttons. -->
     <DockPanel>
-        <DockPanel DockPanel.Dock="Top" Height="{x:Static local:MainWindow.TitleBarHeight}">
-            <!-- The row's own surface, under everything in it: what it is filled with is the look's, and
-                 the row is drawn whether or not a menu or a button reaches any given pixel of it. It is
-                 what a press finds where no menu and no button claims it, and it carries the code that
-                 moves the window, because the window has no title bar of the desktop's to do it. -->
-            <Border x:Name="TitleBar"
-                    Classes="title-bar"
-                    WindowDecorationProperties.ElementRole="TitleBar" />
-            <!-- Right first, so that what is left is what the menu may use, and empty: the buttons that go
-                 here are the window's frame's, which the look builds and the toolkit wires up from the role
-                 each carries. What is reserved is the room they take, and the look is told the same
-                 number, so that a long menu is never drawn under them. -->
-            <StackPanel x:Name="WindowButtons"
-                        DockPanel.Dock="Right"
-                        Orientation="Horizontal"
-                        VerticalAlignment="Stretch" />
-            <!-- Painted with nothing of its own, so that the surface under it is what a press on the bar
-                 between its items finds. -->
-            <Menu x:Name="MainMenu" Background="Transparent" />
-        </DockPanel>
+        <!-- The row's own surface, and what the row is made of: the look fills it with the elevated ground and
+             draws the one line along its foot that separates the row from the dock area below (Section 10). It
+             is the container rather than a layer beside the menu, because a sibling of the menu has no width to
+             be drawn in — the menu takes what is left of the row, and a border next to it would be a surface of
+             no pixels, which is a line nobody can see.
+
+             It carries no element role, and that is deliberate rather than left out: `ElementRole.TitleBar` is
+             not a name for the row but a non-client hit test — the whole of the element's bounds is taken as the
+             window's drag area, whatever is drawn inside it — so a row carrying it would answer for its own
+             menu, and a press on a menu item would move the window instead of opening the menu. What a press
+             here reaches is the window's own handler, and the drag area the framework reads is the one the
+             decorations theme draws. -->
+        <Border x:Name="TitleBar"
+                Classes="title-bar"
+                DockPanel.Dock="Top"
+                Height="{x:Static local:MainWindow.TitleBarHeight}">
+            <DockPanel>
+                <!-- Right first, so that what is left is what the menu may use, and empty: the buttons that go
+                     here are the window's frame's, which the look builds and the toolkit wires up from the role
+                     each carries. What is reserved is the room they take, and the look is told the same
+                     number, so that a long menu is never drawn under them. -->
+                <StackPanel x:Name="WindowButtons"
+                            DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Stretch" />
+                <!-- Painted with nothing of its own, so that the surface under it is what a press on the bar
+                     between its items finds. It carries the menu bar's class, which is what the look reads to
+                     leave room for the window's own buttons: they are drawn over this row rather than laid out
+                     in it, so the room they take is room the menu has to keep for itself. -->
+                <Menu x:Name="MainMenu"
+                      Classes="menu-bar"
+                      Background="Transparent" />
+            </DockPanel>
+        </Border>
         <ContentControl x:Name="DockAreaHost" />
     </DockPanel>
 </Window>

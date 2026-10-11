@@ -47,7 +47,7 @@ public sealed class ThemeTests
     [Fact]
     public void EveryInkAMarkIsDrawnInIsOneTheLookHolds()
     {
-        var look = new RorolalaTheme(Color.Parse("#BFFF00"), Color.Parse("#FF6D00"), null);
+        var look = new RorolalaTheme(Color.Parse("#BFFF00"), Color.Parse("#FF6D00"), null, WindowStyle.Windows);
 
         foreach (var variant in new[] { ThemeVariant.Light, ThemeVariant.Dark })
         {
@@ -80,7 +80,7 @@ public sealed class ThemeTests
     [InlineData("rorolala.border.clear", "rorolala.border")]
     public void WhatAFadeStartsFromIsTheColourItFadesTo(string clear, string solid)
     {
-        var look = new RorolalaTheme(Color.Parse("#BFFF00"), Color.Parse("#FF6D00"), null);
+        var look = new RorolalaTheme(Color.Parse("#BFFF00"), Color.Parse("#FF6D00"), null, WindowStyle.Windows);
 
         foreach (var variant in new[] { ThemeVariant.Light, ThemeVariant.Dark })
         {

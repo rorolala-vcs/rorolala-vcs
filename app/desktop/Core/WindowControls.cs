@@ -45,6 +45,16 @@ internal static class WindowControls
     /// </remarks>
     public const double GlyphSize = 12.0;
 
+    /// <summary>
+    /// How many pixels wide and tall a button's picture is where the frame is drawn the way macOS draws one.
+    /// </summary>
+    /// <remarks>
+    /// Smaller than the mark on a button of the design's, because the light it is drawn on is smaller than a
+    /// button: a mark the size of the design's would fill a light to its edge, where what macOS draws on one
+    /// is a mark that leaves the colour around it to be read.
+    /// </remarks>
+    public const double LightGlyphSize = 8.0;
+
     /// <summary>The key the minimize button's picture is held under.</summary>
     public const string MinimizeKey = Icons.Minimize;
 
@@ -101,6 +111,15 @@ internal static class WindowControls
             OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
         };
 
+        // A picture is drawn at several times the size it is shown at — see `Icons.Picture` — so what is
+        // scaled here is a large bitmap being reduced rather than a small one being enlarged, and a filter
+        // that samples a few of its pixels leaves a glyph's thin strokes broken. The high one takes the
+        // whole of what it covers.
+        Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
+            glyph,
+            Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
+        );
+
         // The holder is named rather than guessed at: what states the ink is the button, and what is
         // between the two — the presenter a button puts its content in — states nothing of its own. A
         // button is named rather than a content control, which is what everything that holds anything is.
@@ -126,12 +145,19 @@ internal static class WindowControls
     /// Written as a method rather than left to the caller setting <c>Content</c>, because the picture is
     /// the button's and nothing else is: a caption button has no text, and what says what it does is the
     /// word it is named by, which a reader hears and a window never draws.
+    /// <para>
+    /// A button that is nothing is left alone rather than refused, because a frame drawn for a tiling window
+    /// manager has none of them and gives the window nothing to draw on.
+    /// </para>
     /// </remarks>
-    /// <param name="button">The button to draw on.</param>
+    /// <param name="button">The button to draw on, or nothing where the frame has none.</param>
     /// <param name="picture">What to draw, or nothing to draw none.</param>
-    public static void Picture(Button button, Control? picture)
+    public static void Picture(Button? button, Control? picture)
     {
-        ArgumentNullException.ThrowIfNull(button);
+        if (button is null)
+        {
+            return;
+        }
 
         button.Content = picture;
     }

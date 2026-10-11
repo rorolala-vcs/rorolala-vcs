@@ -71,7 +71,12 @@ internal sealed class ThemeService
         // the desktop as the desktop changes.
         _application.RequestedThemeVariant = Variant(_theme.ModeOrDefault);
 
-        var look = new RorolalaTheme(_theme.PrimaryOrDefault, _theme.AccentOrDefault, _theme.PrimaryTextOrDefault);
+        var look = new RorolalaTheme(
+            _theme.PrimaryOrDefault,
+            _theme.AccentOrDefault,
+            _theme.PrimaryTextOrDefault,
+            Program.WindowStyle
+        );
 
         if (_look is null)
         {
