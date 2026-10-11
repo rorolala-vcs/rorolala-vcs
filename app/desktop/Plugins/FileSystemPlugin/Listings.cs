@@ -2171,15 +2171,17 @@ internal sealed class GridBrowser : EntryView
         // horizontal scroll is taken off here, which is what makes the panel wrap.
         ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
 
-        // The tile's own card is the surface and its edge, and the panel's padding is the room around the
-        // grid: the list's own border and inset would draw a second edge and add room of their own.
+        // The panel's padding is the room around the grid, and the surface a tile wears is the item's: the list's
+        // own border and inset would draw a second edge and add room of their own.
         List.Padding = new Thickness(0);
         List.BorderThickness = new Thickness(0);
 
-        // Every tile is the card itself: the item carries the surface, so that a hovered or chosen tile is the
-        // theme's own wash rather than a colour this view sets under it. Only the room above and below a tile
-        // is left on the item; the room across is the panel's, which is what makes the outermost room the
-        // grid's own padding and nothing else (see JustifiedPanel).
+        // A tile at rest is its icon and its name on the dock's own ground: the surface a tile wears is what the
+        // choice draws, so it arrives with the selection and leaves with it (Section 10). What is left on the
+        // item is the room above and below a tile — the room across is the panel's, which is what makes the
+        // outermost room the grid's own padding and nothing else (see JustifiedPanel) — and the corner the
+        // surface is rounded by, which is kept for every state so that a choice does not change the shape of
+        // what it is drawn on.
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
@@ -2190,8 +2192,24 @@ internal sealed class GridBrowser : EntryView
                     new Setter(Layoutable.MinHeightProperty, 0.0),
                     new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1)),
                     new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(8)),
-                    new Setter(TemplatedControl.BackgroundProperty, new DynamicResourceExtension("rorolala.bg.elevated")),
-                    new Setter(TemplatedControl.BorderBrushProperty, new DynamicResourceExtension("rorolala.border")),
+                },
+            }
+        );
+
+        // The card a chosen tile is drawn as: the fill is the theme's own wash over a chosen row — the same
+        // colour a chosen row of the table is filled with — and the edge is the one this view draws around it.
+        // The fill is the toolkit's and cannot be set from here: what a chosen item is filled with is written
+        // into the theme's own template for it, which reaches the surface the tile is drawn on rather than the
+        // item, so setting a background here would be a colour nothing is drawn with.
+        List.Styles.Add(
+            new Style(selector => selector.OfType<ListBoxItem>().Class(":selected"))
+            {
+                Setters =
+                {
+                    new Setter(
+                        TemplatedControl.BorderBrushProperty,
+                        new DynamicResourceExtension("rorolala.border")
+                    ),
                 },
             }
         );
@@ -2248,7 +2266,7 @@ internal sealed class GridBrowser : EntryView
     /// <param name="entry">The entry to draw.</param>
     private Control Tile(Entry entry)
     {
-        // The card's surface is the item's; what is here is the content and the room around it.
+        // The surface a chosen tile wears is the item's; what is here is the content and the room around it.
         return new Border
         {
             Padding = new Thickness(Around),

@@ -383,6 +383,13 @@ internal sealed class DirectoryControl : UserControl
             Stretch = Stretch.Uniform,
         };
 
+        // Read much larger than it is shown, so the mask is reducing the picture: the high filter is what
+        // keeps the eye's stroke whole on the way down.
+        Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
+            _showGlyph,
+            Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
+        );
+
         // The look's class for a tool that is on, which is the same word for every tool the program draws.
         _show.Classes.Set("on", shown);
     }
@@ -522,6 +529,14 @@ internal sealed class DirectoryControl : UserControl
         {
             Stretch = Stretch.Uniform,
         };
+
+        // Read much larger than it is shown, so the mask is reducing the picture: the high filter is what
+        // keeps the link's stroke whole on the way down.
+        Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
+            _syncGlyph,
+            Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
+        );
+
         _sync.Classes.Set("on", inStep);
     }
 

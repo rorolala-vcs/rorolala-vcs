@@ -53,9 +53,9 @@ namespace RorolalaDesktop.Theming;
 /// The shell marks the surfaces it owns with classes, which is how a rule here addresses a dock without
 /// knowing what one is: <see cref="MainWindow.MenuBarClass"/> on the menu bar,
 /// <see cref="DockArea.HeadersClass"/> on a region's header strip,
-/// <see cref="DockArea.TabsClass"/> on the segmented control the tabs sit in,
 /// <see cref="DockArea.TitleClass"/> on a dock's own tab — with <see cref="DockArea.SelectedClass"/> on
-/// the one being shown — <see cref="DockArea.CloseClass"/> on the button that closes it,
+/// the one being shown and <see cref="DockArea.LeadingClass"/> on the first of them — and
+/// <see cref="DockArea.CloseClass"/> on the close it carries, with
 /// <see cref="DockArea.SplitterClass"/> on the grab between regions, and
 /// <see cref="DockArea.DropZoneClass"/> on where a dragged dock would land.
 /// </para>
@@ -303,11 +303,35 @@ internal sealed class RorolalaTheme
     private const string Faint = "rorolala.fg.faint";
     private const string BorderLine = "rorolala.border";
     private const string Strong = "rorolala.border.strong";
+
+    /// <summary>What a tab the pointer is on, and that is not the one being read, is filled with.</summary>
+    private const string TabHover = "rorolala.tab.hover";
+
+    /// <summary>The same fill at no alpha, which is what a tab that is not pointed at is filled with.</summary>
+    /// <inheritdoc cref="SunkenClear" />
+    private const string TabClear = "rorolala.tab.clear";
     private const string Primary = "rorolala.primary";
     private const string PrimaryBright = "rorolala.primary.bright";
     private const string PrimaryText = "rorolala.primary.text";
     private const string Accent = "rorolala.accent";
     private const string Selection = "rorolala.selection";
+
+    /// <summary>
+    /// The line between two docks, down a column splitter and across a row one.
+    /// </summary>
+    /// <remarks>
+    /// Two names rather than one because the line is a gradient with hard stops and its axis is the
+    /// splitter's: a brush drawn down a column splitter and the same brush drawn across a row one are two
+    /// brushes. They are the border's own colour, so a divider and the edge of the surface it divides
+    /// read as one drawing rather than two greys.
+    /// </remarks>
+    private const string SplitterDown = "rorolala.splitter";
+    private const string SplitterAcross = "rorolala.splitter.across";
+
+    /// <inheritdoc cref="SplitterDown" />
+    private const string SplitterDownHover = "rorolala.splitter.hover";
+    private const string SplitterAcrossHover = "rorolala.splitter.across.hover";
+
     private const string Warn = "rorolala.warn";
 
     /// <summary>
@@ -630,12 +654,31 @@ internal sealed class RorolalaTheme
             [Faint] = Fill(grounds.Faint),
             [BorderLine] = Fill(grounds.Border),
             [Strong] = Fill(grounds.Strong),
+
+            // What a tab that is not the one being read is filled with when the pointer is on it, and the same
+            // colour at no alpha for the rest of the time. The two are one pair rather than a fill and
+            // "nothing", because a tab at rest is not filled with nothing — it is filled with the strip's own
+            // ground, which is what a clear fill has to be if the fade is to change the alpha alone
+            // (see `SunkenClear`).
+            [TabHover] = Fill(TabFill(grounds)),
+            [TabClear] = Fill(WithAlpha(TabFill(grounds), 0)),
+
             [Primary] = Fill(_primary),
             [PrimaryBright] = Fill(_primaryBright),
             [PrimaryText] = Fill(_primaryText),
             [Accent] = Fill(_accent),
             [AccentWash] = Fill(WithAlpha(_accent, 0x2E)),
             [AccentBrightWash] = Fill(WithAlpha(Mix(_accent, Colors.White, 0.18), 0x59)),
+
+            // The line between two docks, and the same line under the pointer. Both are made here rather
+            // than where the splitter is styled, because a hairline is a gradient with hard stops and a
+            // gradient cannot be told to take a colour from a resource: made in the look they are entries
+            // of it, so a variant switched or a colour recoloured draws the line it names now.
+            [SplitterDown] = Hairline(vertical: true, grounds.Border),
+            [SplitterAcross] = Hairline(vertical: false, grounds.Border),
+            [SplitterDownHover] = Hairline(vertical: true, _accent),
+            [SplitterAcrossHover] = Hairline(vertical: false, _accent),
+
             [Selection] = Fill(selection),
             [Shadow] = grounds.Raised,
             [Ring] = _ring,
@@ -650,16 +693,35 @@ internal sealed class RorolalaTheme
         };
 
     /// <summary>
-    /// The accent-only marks, which do not differ by variant and so are stated once.
+    /// What a tab the pointer is on is filled with, which is also what a tab at rest is filled with at no
+    /// alpha.
     /// </summary>
     /// <remarks>
-    /// A hairline through the middle of a splitter is a gradient with hard stops rather than a colour,
-    /// because there is nothing to put a line in: a splitter is one surface with no template part a
-    /// theme may address, so the only way to draw one pixel of line inside four pixels of grip is to
-    /// paint the grip clear and the middle of it not.
+    /// Halfway back to the ground the lit tab is drawn on, because a tab that is already the sunken ground
+    /// has no sunken state left to take.
+    /// </remarks>
+    /// <param name="grounds">The variant's own neutrals.</param>
+    /// <returns>The colour.</returns>
+    private static Color TabFill(Grounds grounds) => Mix(grounds.Sunken, grounds.Elevated, 0.5);
+
+    /// <summary>
+    /// One pixel of line through the middle of a splitter, in the colour it is given.
+    /// </summary>
+    /// <remarks>
+    /// A gradient with hard stops rather than a colour, because there is nothing to put a line in: a
+    /// splitter is one surface with no template part a theme may address, so painting the grip clear and
+    /// the middle of it not is the only way to draw one pixel of line inside the grip's own width. The
+    /// stops are placed from that width rather than from the pixel, so the line is a line whatever the
+    /// grip is widened to.
+    /// <para>
+    /// The colour is a parameter rather than the accent the two hover brushes happen to use, because the
+    /// line drawn at rest is the border's own and that one differs by variant — which is also why these
+    /// are made here, where the variant's neutrals are, rather than where a splitter is styled.
+    /// </para>
     /// </remarks>
     /// <param name="vertical">Whether the line runs down the splitter rather than across it.</param>
-    private IBrush Hairline(bool vertical)
+    /// <param name="colour">What the line is drawn in.</param>
+    private static IBrush Hairline(bool vertical, Color colour)
     {
         var half = 0.5 / DockArea.SplitterSize;
         var clear = Colors.Transparent;
@@ -676,8 +738,8 @@ internal sealed class RorolalaTheme
             {
                 new GradientStop(clear, 0),
                 new GradientStop(clear, 0.5 - half),
-                new GradientStop(_accent, 0.5 - half),
-                new GradientStop(_accent, 0.5 + half),
+                new GradientStop(colour, 0.5 - half),
+                new GradientStop(colour, 0.5 + half),
                 new GradientStop(clear, 0.5 + half),
                 new GradientStop(clear, 1),
             },
@@ -868,10 +930,14 @@ internal sealed class RorolalaTheme
                 new Setter(Layoutable.MinHeightProperty, RowHeight),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small)
             ),
+            // A list is a pane rather than a card, for the reason a tree is: what it is drawn in is the
+            // ground of whatever holds it, and a card of its own inside a dock — with an edge and a corner
+            // of its own, boxed in by the dock's own edges — reads as a surface laid on the dock rather than
+            // as the part of the window the entries are read in. Nothing is drawn around it here, which is
+            // said because the base theme does draw something: its border would be that card.
             On(
                 selector => selector.OfType<ListBox>(),
-                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
-                new Setter(TemplatedControl.CornerRadiusProperty, Radius)
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0))
             ),
             On(
                 selector => selector.OfType<ListBoxItem>(),
@@ -879,12 +945,16 @@ internal sealed class RorolalaTheme
                 new Setter(Layoutable.MinHeightProperty, RowHeight),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small)
             ),
-            // A tree is a pane rather than a card: one edge down the side it stands against the dock beside it,
-            // and no corner rounded off. It used to be drawn with a radius, which read as a surface laid on the
-            // dock rather than as the part of the window the steps are read in.
+            // A tree is a pane rather than a card: the one edge it is read by is the ground the dock that
+            // holds it draws, and no corner is rounded off. It used to be drawn with a radius, which read as a
+            // surface laid on the dock rather than as the part of the window the steps are read in.
+            //
+            // Nothing is drawn around it here, which is stated only because the base theme draws something: its
+            // border would draw that one edge a second time, beside the ground's own and twice as thick, and
+            // would box in the three sides that are the window's edge and belong to no surface of this program.
             On(
                 selector => selector.OfType<TreeView>(),
-                Brushed(TemplatedControl.BorderBrushProperty, BorderLine)
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0))
             ),
             On(
                 selector => selector.OfType<TreeViewItem>(),
@@ -1042,6 +1112,39 @@ internal sealed class RorolalaTheme
                 Brushed(ContentPresenter.BorderBrushProperty, Primary)
             ),
 
+            // A tab and the cross it carries are buttons this look draws itself, so the rule above leaves
+            // them out — and what it leaves out is exactly what has to be said for them, since a hover there
+            // would otherwise firm the part's border with the base theme's brush, at once, while the fill
+            // behind it fades: the two arriving at different times is what a flicker is. Both are said again
+            // here, against the part, because a button's template is what paints its own background, border
+            // and the fill a held one is given.
+            //
+            // What is deliberately *not* said for them is the part's own transition. The look gives one to
+            // every other button; here it is left out, because a button that is already fading its own
+            // background hands the part a new brush on each frame of that fade — so a transition on the part
+            // has nothing to animate but a value that is itself moving, is begun again by every frame of the
+            // first, and arrives nowhere. A fade that never arrives is a highlight that flickers.
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(DockArea.TitleClass)
+                        .Class(":pointerover")
+                        .Template()
+                        .Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BorderBrushProperty, BorderLine)
+            ),
+            On(
+                selector =>
+                    selector.OfType<Button>().Class(DockArea.TitleClass).Class(":pressed").Template().Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BackgroundProperty, Strong)
+            ),
+            On(
+                selector =>
+                    selector.OfType<Button>().Class(DockArea.CloseClass).Class(":pressed").Template().Name("PART_ContentPresenter"),
+                new Setter(ContentPresenter.BackgroundProperty, Brushes.Transparent)
+            ),
+
             // A chosen box and a chosen radio are filled with the primary and marked in the ink the
             // design names for it.
             On(
@@ -1184,45 +1287,82 @@ internal sealed class RorolalaTheme
                 Brushed(TemplatedControl.BackgroundProperty, DelBackground),
                 Brushed(TemplatedControl.ForegroundProperty, DelInk)
             ),
+            // The strip a region's headers sit in: the sunken ground, so that the tab being read — which is
+            // drawn on the elevated one — is the one thing in the row that lifts out of it.
+            //
+            // The line along its foot is what separates the row from the dock below, and it is the row's own
+            // rather than each tab's: one line under everything is one line, where a foot drawn by each tab
+            // would be a line broken wherever two tabs meet. The tab being read covers it — see the rule for
+            // one that is chosen — so the line stops where that tab starts and the two surfaces join there.
             On(
                 selector => selector.OfType<Border>().Class(DockArea.HeadersClass),
-                Brushed(Border.BackgroundProperty, Elevated),
+                Brushed(Border.BackgroundProperty, Sunken),
                 Brushed(Border.BorderBrushProperty, BorderLine),
                 new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 1))
             ),
 
-            // The container the tabs sit in: one border, one radius, and the overflow clipped so that
-            // the corners of the tab being shown are the container's.
-            On(
-                selector => selector.OfType<Border>().Class(DockArea.TabsClass),
-                new Setter(Border.BorderThicknessProperty, Edge),
-                Brushed(Border.BorderBrushProperty, BorderLine),
-                new Setter(Border.CornerRadiusProperty, Small),
-                new Setter(Border.ClipToBoundsProperty, true)
-            ),
+            // A tab is a piece of the strip rather than a control laid in it: no margin, as tall as the
+            // strip, and square, because the tabs *are* the strip. What a tab is, is its fill — the one
+            // being read is drawn on the elevated ground and lifts out of the sunken one the strip is, which
+            // is what makes a row of them read as one strip with the current one lit. A tab that is not the
+            // one being read draws nothing of its own, so that the strip it is part of shows through and the
+            // divider beside it is what marks where it ends.
+            //
+            // The one edge drawn is the one between two tabs: each tab carries it on its left, so a shared
+            // edge is drawn once rather than twice. What ends the row carries one on its right as well,
+            // because that is the edge between the tabs and the room the strip keeps beside them — and the
+            // tab that is both ends of a strip of one is closed on its right and open on its left, where the
+            // strip's own edge already is. Nothing is drawn on the top or the bottom, which are the strip's.
             On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass),
-                Brushed(TemplatedControl.BackgroundProperty, SunkenClear),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                Brushed(TemplatedControl.BackgroundProperty, TabClear),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1, 0, 0, 0)),
+                Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
                 new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
                 Brushed(TemplatedControl.ForegroundProperty, Muted),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
             On(
+                selector =>
+                    selector.OfType<Button>().Class(DockArea.TitleClass).Class(DockArea.LeadingClass),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0))
+            ),
+            On(
+                selector =>
+                    selector.OfType<Button>().Class(DockArea.TitleClass).Class(DockArea.TrailingClass),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(1, 0, 1, 0))
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(DockArea.TitleClass)
+                        .Class(DockArea.LeadingClass)
+                        .Class(DockArea.TrailingClass),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0, 0, 1, 0))
+            ),
+            On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(":pointerover"),
-                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.BackgroundProperty, TabHover),
                 Brushed(TemplatedControl.ForegroundProperty, Foreground)
             ),
             On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(DockArea.SelectedClass),
-                Brushed(TemplatedControl.BackgroundProperty, Primary),
-                Brushed(TemplatedControl.ForegroundProperty, PrimaryText),
-                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold)
+                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                Brushed(TemplatedControl.ForegroundProperty, Foreground),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold),
+                // Down by the line the strip draws along its foot, so that this tab is drawn over it: a tab
+                // that is read is joined to what it is a tab of, and the line is the row's rather than the
+                // tab's, so covering it is what leaves the join (see the strip's own rule). One pixel of
+                // margin is the whole of it: the row is one pixel shorter than the strip, and this is the
+                // pixel the line is drawn in.
+                new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 0, -1))
             ),
-            // A held tab keeps the fill it has, whether it is the one shown or not.
+            // A held tab is the one thing darker than the sunken ground it already sits on, whether or not
+            // it is the one being read: a press that changed nothing would read as a press that went nowhere.
             On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(":pressed"),
-                Brushed(TemplatedControl.BackgroundProperty, Sunken)
+                Brushed(TemplatedControl.BackgroundProperty, Strong)
             ),
             On(
                 selector =>
@@ -1231,44 +1371,66 @@ internal sealed class RorolalaTheme
                         .Class(DockArea.TitleClass)
                         .Class(DockArea.SelectedClass)
                         .Class(":pressed"),
-                Brushed(TemplatedControl.BackgroundProperty, Primary)
+                Brushed(TemplatedControl.BackgroundProperty, Elevated)
             ),
 
-            // The button that closes a region's shown dock: nothing until the pointer is on it, and then
-            // the design's own red wash rather than a filled red, because nothing here is filled red.
+            // The close a tab carries: nothing of its own — no ground behind it, no border, no ink, so that it
+            // is written in the tab's and reads as the end of the title rather than as a button that found its
+            // way into one. Its room is the tab's to give (see `DockArea.Make`), which is why nothing about how
+            // wide or how tall it is is said here: it is a strip of the tab's own right side, and a strip is
+            // what the tab is shaped around rather than a box dropped into it.
+            //
+            // It is drawn while the pointer is on the tab rather than always, because a row of crosses is a row
+            // of things to avoid pressing, and one that arrives under the pointer is one the eye finds when it
+            // is wanted. Being on the cross *is* being on the tab — the toolkit marks every ancestor of what it
+            // is over, and not only what it hit — so nothing has to hold it drawn under a pointer that has come
+            // to rest on it.
             On(
                 selector => selector.OfType<Button>().Class(DockArea.CloseClass),
                 new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
-                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                new Setter(Layoutable.WidthProperty, 26.0),
-                new Setter(Layoutable.HeightProperty, 26.0),
-                Brushed(TemplatedControl.ForegroundProperty, Faint),
+                new Setter(Visual.OpacityProperty, 0.0),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
             On(
                 selector =>
                     selector
                         .OfType<Button>()
-                        .Class(DockArea.CloseClass)
+                        .Class(DockArea.TitleClass)
                         .Class(":pointerover")
-                        .Template()
-                        .Name("PART_ContentPresenter"),
-                Brushed(ContentPresenter.BackgroundProperty, DelBackground),
-                Brushed(ContentPresenter.ForegroundProperty, DelInk)
+                        .Descendant()
+                        .OfType<Button>()
+                        .Class(DockArea.CloseClass),
+                new Setter(Visual.OpacityProperty, 1.0)
             ),
 
-            // A splitter draws nothing until the pointer is on it, and then the accent hairline through
-            // its middle: the grab stays wide enough to hit, and a line that wide would be a bar.
+            // A splitter is the line between two docks: one row of the drawing, drawn at rest rather than
+            // only under the pointer, because the space between two docks is a divider and a gap that showed
+            // only the ground read as two docks that did not meet. What it is drawn in is the border's own
+            // colour, so every divider is the same one wherever two docks meet.
             //
-            // What it fades in from is the accent at no alpha rather than nothing: the hairline is a gradient
-            // with hard stops, and a fade out of a colour that is not in it would pass through a grey the
-            // design has no part in. The resting state is a colour rather than a gradient for the same reason
-            // a tool's is — what fades is the colour, and the hairline's own shape arrives with the alpha.
+            // The grab is wider than the line — see `DockArea.SplitterSize` — and the line is drawn through
+            // the middle of it by a gradient rather than by a border, because a splitter is one surface with
+            // no template part a theme may address: painting the grip clear and the middle of it not is the
+            // only way to put one pixel of line inside five pixels of grip.
             On(
-                selector => selector.OfType<GridSplitter>().Class(DockArea.SplitterClass),
-                new Setter(TemplatedControl.BackgroundProperty, Fill(WithAlpha(_accent, 0))),
+                selector =>
+                    selector
+                        .OfType<GridSplitter>()
+                        .Class(DockArea.SplitterClass)
+                        .Class(DockArea.SplitterColumnsClass),
+                Brushed(TemplatedControl.BackgroundProperty, SplitterDown),
+                new Setter(TemplatedControl.TransitionsProperty, Fading())
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<GridSplitter>()
+                        .Class(DockArea.SplitterClass)
+                        .Class(DockArea.SplitterRowsClass),
+                Brushed(TemplatedControl.BackgroundProperty, SplitterAcross),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
             On(
@@ -1278,7 +1440,7 @@ internal sealed class RorolalaTheme
                         .Class(DockArea.SplitterClass)
                         .Class(DockArea.SplitterColumnsClass)
                         .Class(":pointerover"),
-                new Setter(TemplatedControl.BackgroundProperty, Hairline(vertical: true))
+                Brushed(TemplatedControl.BackgroundProperty, SplitterDownHover)
             ),
             On(
                 selector =>
@@ -1287,7 +1449,7 @@ internal sealed class RorolalaTheme
                         .Class(DockArea.SplitterClass)
                         .Class(DockArea.SplitterRowsClass)
                         .Class(":pointerover"),
-                new Setter(TemplatedControl.BackgroundProperty, Hairline(vertical: false))
+                Brushed(TemplatedControl.BackgroundProperty, SplitterAcrossHover)
             ),
 
             // Where a dragged dock could land. All of them are up while a drag is on, because they are

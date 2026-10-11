@@ -91,6 +91,13 @@ internal static class ReportView
                 VerticalAlignment = VerticalAlignment.Top,
                 OpacityMask = new ImageBrush(bitmap) { Stretch = Stretch.Uniform },
             };
+
+            // The picture is drawn much larger than the mark it is shown as, so it is reduced here: the
+            // high filter is what keeps a thin stroke whole on the way down.
+            Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
+                mark,
+                Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
+            );
             mark[!Border.BackgroundProperty] = new DynamicResourceExtension(inkKey);
 
             row.Children.Add(mark);

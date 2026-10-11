@@ -253,6 +253,14 @@ internal static partial class Icons
         };
         glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(ink);
 
+        // Every picture this plugin draws is read at many times the size it is shown at, so what the mask
+        // does is a reduction: the high filter is what keeps a thin stroke whole through it, where a cheaper
+        // one samples a few of the picture's pixels and leaves the stroke broken.
+        Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
+            glyph,
+            Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
+        );
+
         return glyph;
     }
 
@@ -308,6 +316,11 @@ internal static partial class Icons
                     AncestorType = holder,
                 },
             }
+        );
+
+        Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
+            glyph,
+            Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
         );
 
         return glyph;

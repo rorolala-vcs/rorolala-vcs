@@ -52,14 +52,27 @@ internal sealed class DockArea : UserControl
     public const string TitleClass = "dock-title";
 
     /// <summary>
-    /// The class the segmented control a region's tabs sit in carries.
+    /// The class the first header a region is showing carries.
     /// </summary>
     /// <remarks>
-    /// A tab strip is one bordered rounded container with the tab being shown filled, rather than tabs
-    /// each wearing an edge of their own: the container is a surface the look draws, so the tabs
-    /// themselves are flat and the corners clipped by their parent.
+    /// The edge a tab strip is drawn with is the one between two tabs, so the first tab has none on its
+    /// left — and which that is is the first the region is <em>showing</em>, not the first it was given: a
+    /// dock whose header is hidden by being closed is not one a strip starts with. A class rather than a
+    /// weight, because what a leading tab looks like is the theme's to decide.
     /// </remarks>
-    public const string TabsClass = "dock-tabs";
+    public const string LeadingClass = "dock-title-leading";
+
+    /// <summary>
+    /// The class the last header a region is showing carries.
+    /// </summary>
+    /// <remarks>
+    /// The other end of the same row, and marked for the same reason in reverse: the row of tabs is a
+    /// surface of its own, and the edge that ends it is the one between it and the room the strip keeps
+    /// beside it. What is between two tabs is one tab's left edge, so the last of them carries nothing on
+    /// its right unless it is the last — and a strip of one tab is a row with no edge on its left and this
+    /// one on its right.
+    /// </remarks>
+    public const string TrailingClass = "dock-title-trailing";
 
     /// <summary>The class the header of the dock a region is showing carries.</summary>
     public const string SelectedClass = "selected";
@@ -100,9 +113,11 @@ internal sealed class DockArea : UserControl
     /// <summary>How wide a splitter is.</summary>
     /// <remarks>
     /// Published, because a theme draws a line through the middle of one: the width it is drawn in is
-    /// this, and a line of another width would not be centred in it.
+    /// this, and a line of another width would not be centred in it. It is the room a hand has to take
+    /// hold of rather than the room the line takes — the line is one pixel of it, and the rest is the
+    /// ground either side — so two docks read as one divider apart and still resize from five.
     /// </remarks>
-    public const double SplitterSize = 4;
+    public const double SplitterSize = 5;
 
     /// <summary>How far a pointer moves before a press becomes a drag rather than a click.</summary>
     private const double DragThreshold = 4;
@@ -243,11 +258,12 @@ internal sealed class DockArea : UserControl
     /// Every dock the region was given stays in <see cref="Content"/>, and the one being shown is
     /// the only one that is visible. <see cref="Selected"/> is which that is.
     /// <para>
-    /// The strip is one row of four: the docks' headers as tabs, then the area the shown dock is
-    /// dragged by, then what the shown dock brought in its own header, then the button that closes it.
-    /// The commands and the close belong to the region rather than to each dock because there is one
-    /// strip and the tabs are as narrow as their words: a title that filled the strip could not leave
-    /// room for a tab beside it, and one close per dock would sit in the middle of the row.
+    /// The strip is one row of three: the docks' headers as tabs, then the area the shown dock is
+    /// dragged by, then what the shown dock brought in its own header. The commands belong to the region
+    /// rather than to each dock because there is one strip and the tabs are as narrow as their words: a
+    /// title that filled the strip could not leave room for a tab beside it. What closes a dock is the
+    /// dock's own tab rather than a button of the region's, so that it is the tab under the pointer that
+    /// is closed and not whichever one happens to be shown.
     /// </para>
     /// </remarks>
     private sealed class Region
@@ -258,24 +274,17 @@ internal sealed class DockArea : UserControl
         {
             Name = name;
 
-            Close = new Button { Classes = { CloseClass }, Content = "\u2715" };
-
-            Tabs.Child = Headers;
-
             Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            Bar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
 
-            Grid.SetColumn(Tabs, 0);
+            Grid.SetColumn(Headers, 0);
             Grid.SetColumn(Drag, 1);
             Grid.SetColumn(Commands, 2);
-            Grid.SetColumn(Close, 3);
 
-            Bar.Children.Add(Tabs);
+            Bar.Children.Add(Headers);
             Bar.Children.Add(Drag);
             Bar.Children.Add(Commands);
-            Bar.Children.Add(Close);
 
             Strip.Child = Bar;
             DockPanel.SetDock(Strip, Dock.Top);
@@ -295,36 +304,20 @@ internal sealed class DockArea : UserControl
         /// <remarks>
         /// A border around the headers rather than a background on them, because a theme's chrome is a
         /// surface with an edge under it, and a <see cref="StackPanel"/> has a background but no border.
-        /// The padding is the strip's own, since what is inside it is a tab strip and a button rather
-        /// than a row of things that bring their own margins.
+        /// The padding is none: the first tab is flush with the edge of the strip it starts, which is
+        /// what makes a row of tabs read as the strip rather than as a row laid in it.
         /// </remarks>
         public Border Strip { get; } = new()
         {
             Classes = { HeadersClass },
-            Padding = new Thickness(8, 0),
+            Padding = new Thickness(0),
             MinHeight = StripHeight,
         };
 
-        /// <summary>The strip's one row: the tabs, the drag area, the commands, and the close.</summary>
+        /// <summary>The strip's one row: the tabs, the drag area, and the commands.</summary>
         public Grid Bar { get; } = new();
 
-        /// <summary>
-        /// The segmented control the tabs sit in: one border, one radius, and the corners clipped so
-        /// that the tab being shown takes the container's own shape.
-        /// </summary>
-        /// <remarks>
-        /// It is a container rather than a rule per tab because the design draws a tab strip as one
-        /// bordered surface with the shown tab filled, and a tab that drew its own corners would show a
-        /// square inside a rounded edge.
-        /// </remarks>
-        public Border Tabs { get; } = new()
-        {
-            Classes = { TabsClass },
-            ClipToBounds = true,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        /// <summary>The headers, one per dock the region was given.</summary>
+        /// <summary>The headers, one per dock the region was given, side by side and flush.</summary>
         public StackPanel Headers { get; } =
             new()
             {
@@ -349,16 +342,19 @@ internal sealed class DockArea : UserControl
             };
 
         /// <summary>The header commands of the dock being shown.</summary>
+        /// <remarks>
+        /// What the strip keeps to the right of its tabs, which is why the room is a margin here rather
+        /// than padding on the strip: the tabs are flush with the edge the strip starts at, and these are
+        /// not flush with the one it ends at.
+        /// </remarks>
         public StackPanel Commands { get; } =
             new()
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 2,
-                Margin = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
             };
-
-        /// <summary>The button that closes the dock being shown.</summary>
-        public Button Close { get; }
 
         /// <summary>The dock whose commands the strip is showing, which is what <see cref="Commands"/> was built for.</summary>
         public DockInstance? Shown { get; set; }
@@ -373,10 +369,13 @@ internal sealed class DockArea : UserControl
     /// <summary>Lays the regions, the splitters, and the drop zones out once.</summary>
     private void Build()
     {
+        // The tracks the splitters sit in take no room of their own: what separates two docks is the line the
+        // splitter draws, and the grip it draws it in hangs over both of them (see `ConfigureSplitter`). A
+        // track of the grip's own width would be a band of the window's ground between the two.
         _middle.ColumnDefinitions.Add(new ColumnDefinition(ColumnLength(_manager.Layout.LeftWidth)));
-        _middle.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        _middle.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(0)));
         _middle.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-        _middle.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        _middle.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(0)));
         _middle.ColumnDefinitions.Add(new ColumnDefinition(ColumnLength(_manager.Layout.RightWidth)));
 
         Grid.SetColumn(_left.Panel, 0);
@@ -390,16 +389,18 @@ internal sealed class DockArea : UserControl
         ConfigureSplitter(_rightSplitter, GridResizeDirection.Columns, _right);
         ConfigureSplitter(_bottomSplitter, GridResizeDirection.Rows, _bottom);
 
+        // The docks first and the splitters last: a grip hangs over both of the docks it separates, so it has
+        // to be drawn — and hit — above them rather than under the one that follows it in the grid.
         _middle.Children.Add(_left.Panel);
-        _middle.Children.Add(_leftSplitter);
         _middle.Children.Add(_center.Panel);
-        _middle.Children.Add(_rightSplitter);
         _middle.Children.Add(_right.Panel);
+        _middle.Children.Add(_leftSplitter);
+        _middle.Children.Add(_rightSplitter);
 
         _root.RowDefinitions.Add(new RowDefinition(RowLength(_manager.Layout.TopHeight)));
-        _root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        _root.RowDefinitions.Add(new RowDefinition(new GridLength(0)));
         _root.RowDefinitions.Add(new RowDefinition(GridLength.Star));
-        _root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        _root.RowDefinitions.Add(new RowDefinition(new GridLength(0)));
         _root.RowDefinitions.Add(new RowDefinition(RowLength(_manager.Layout.BottomHeight)));
 
         Grid.SetRow(_top.Panel, 0);
@@ -408,21 +409,21 @@ internal sealed class DockArea : UserControl
         Grid.SetRow(_bottomSplitter, 3);
         Grid.SetRow(_bottom.Panel, 4);
 
+        // The same, with the splitters last: the middle is one dock's worth of the grid, and the grips that
+        // separate the rows hang over it as much as over the docks they divide.
         _root.Children.Add(_top.Panel);
-        _root.Children.Add(_topSplitter);
         _root.Children.Add(_middle);
-        _root.Children.Add(_bottomSplitter);
         _root.Children.Add(_bottom.Panel);
+        _root.Children.Add(_topSplitter);
+        _root.Children.Add(_bottomSplitter);
 
         foreach (var region in Regions())
         {
             region.Panel.Background = Brushes.Transparent;
 
-            // The drag area and the close belong to whatever the region is showing at the time they
-            // are used rather than to a dock, since the two outlive every dock that passes through
-            // the region.
+            // The drag area belongs to whatever the region is showing at the time it is used rather than
+            // to a dock, since it outlives every dock that passes through the region.
             region.Drag.PointerPressed += (_, e) => Take(region.Selected, e);
-            region.Close.Click += (_, _) => CloseShown(region);
         }
 
         Zones();
@@ -509,13 +510,22 @@ internal sealed class DockArea : UserControl
             direction == GridResizeDirection.Columns ? SplitterColumnsClass : SplitterRowsClass
         );
 
+        // The grip is wider than the room the layout gives it, and hangs over the seam it resizes: what two
+        // docks are separated by is the one pixel the theme draws through the middle of this, and the rest of
+        // the grip is drawn over the docks themselves rather than as a band of the window's ground between
+        // them — a band is what a five-pixel column of nothing looks like, and it reads as a black gap with a
+        // line inside it rather than as a join. Half hangs either side, so the line lands on the seam.
+        var overhang = (SplitterSize - 1) / 2;
+
         if (direction == GridResizeDirection.Columns)
         {
             splitter.Width = SplitterSize;
+            splitter.Margin = new Thickness(-overhang, 0, 0, 0);
         }
         else
         {
             splitter.Height = SplitterSize;
+            splitter.Margin = new Thickness(0, -overhang, 0, 0);
         }
 
         splitter.DragCompleted += (_, _) => Remember(region);
@@ -609,23 +619,86 @@ internal sealed class DockArea : UserControl
     /// <summary>Makes a dock's view and its header, which it keeps for as long as it lives.</summary>
     private Placed Make(DockInstance instance)
     {
-        var title = Header(instance.Title);
+        // The room the tab keeps either side of its name, which is the width the close is given at its end as
+        // well: one number, because the close is a strip of the tab's own right side — that room wide and as
+        // tall as the tab — and the name keeps as much again on its left so that it stays in the middle of
+        // the tab rather than in the middle of what the close left of it. It has to be room enough for the
+        // cross and the room the cross keeps from the tab's end both, or the cross is pressed against the
+        // name it is drawn beside.
+        const double Room = 26.0;
+
+        var name = new TextBlock
+        {
+            Text = instance.Title,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var close = new Button
+        {
+            Content = "\u2715",
+            Classes = { CloseClass },
+            Width = Room,
+            // The cross keeps a little room at the tab's own end rather than standing on it: it is a mark
+            // inside a strip and not the strip's own edge, and one drawn hard against the edge reads as
+            // part of the border rather than as something to press.
+            Padding = new Thickness(0, 0, 10, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+        };
+
+        // Stopped here rather than left to bubble: a button's click is a bubbling event, and the tab the
+        // close sits in answers one of its own by selecting the dock — so closing a dock would also select
+        // it, and the manager would be asked to show what it has just been asked to close.
+        close.Click += (_, e) =>
+        {
+            e.Handled = true;
+            _manager.Close(instance);
+        };
+
+        // Three columns: the room the close takes, the name, and the close itself. The first holds nothing
+        // and is there for the name's sake — a box of two would centre the name in what is left of the close
+        // instead of in the tab, which moves the title every time the pointer crosses it.
+        var box = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions($"{Room},*,{Room}"),
+            RowDefinitions = new RowDefinitions("*"),
+        };
+
+        Grid.SetColumn(name, 1);
+        Grid.SetColumn(close, 2);
+
+        box.Children.Add(name);
+        box.Children.Add(close);
+
+        // The tab's own geometry, where the generic header's is for a command: a tab fills the strip it sits
+        // in — no padding, no margin, as tall as the strip — because the tabs *are* the strip. What it holds
+        // is stretched rather than centred, so that the close reaches the tab's own ends, and the name is
+        // kept in the middle by the column it was put in.
+        var title = new Button
+        {
+            Content = box,
+            Padding = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Stretch,
+        };
 
         title.Classes.Add(TitleClass);
-
-        // The tab's own geometry, where the generic header's is for a command: a tab sits inside the
-        // segmented control rather than filling the strip, because the fill is what marks the one being
-        // shown (Section 10).
-        title.Padding = new Thickness(12, 4);
-
         title.Click += (_, _) => Select(instance);
 
         // Taken on the way down. A button answers for its own press, and marks it handled while
         // doing so, so an ordinary handler here would never be called: the press is over before it
-        // reaches one. A tunnelling handler is reached first, which is the only way in.
+        // reaches one. A tunnelling handler is reached first, which is the only way in — and a press on
+        // the close is the close's rather than the tab's, or closing a dock would drag it instead.
         title.AddHandler(
             InputElement.PointerPressedEvent,
-            (_, e) => Take(instance, e),
+            (_, e) =>
+            {
+                if (!Closing(e.Source))
+                {
+                    Take(instance, e);
+                }
+            },
             RoutingStrategies.Tunnel
         );
 
@@ -636,6 +709,26 @@ internal sealed class DockArea : UserControl
             View = instance.View.View,
             Title = title,
         };
+    }
+
+    /// <summary>Whether a press landed on the close a header carries.</summary>
+    /// <remarks>
+    /// Walked rather than compared, because what the pointer hits is a part of the button's own template
+    /// rather than the button — the same reason the tab's own press is taken on the way down.
+    /// </remarks>
+    /// <param name="pressed">What the press landed on.</param>
+    /// <returns>Whether it is the header's close.</returns>
+    private static bool Closing(object? pressed)
+    {
+        for (var at = pressed as StyledElement; at is not null; at = at.Parent)
+        {
+            if (at is Button button && button.Classes.Contains(CloseClass))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Puts a dock into a region, and makes it the one the region is showing.</summary>
@@ -690,7 +783,32 @@ internal sealed class DockArea : UserControl
 
         foreach (var region in Regions())
         {
+            Ends(region);
             BindCommands(region);
+        }
+    }
+
+    /// <summary>
+    /// Marks the two ends of a region's strip, which are the headers that draw an edge of their own.
+    /// </summary>
+    /// <remarks>
+    /// The ends of what the region is <em>showing</em> rather than of what it was given: a header hidden
+    /// by its dock being closed is not one a strip starts or ends with, and the ones after it take the
+    /// marks instead. Both are asked of the same list so that a strip of one header is the first and the
+    /// last of it at once.
+    /// </remarks>
+    /// <param name="region">The region whose headers to mark.</param>
+    private static void Ends(Region region)
+    {
+        var headers = region
+            .Headers.Children.OfType<Control>()
+            .Where(header => header.IsVisible)
+            .ToArray();
+
+        for (var at = 0; at < headers.Length; at++)
+        {
+            headers[at].Classes.Set(LeadingClass, at == 0);
+            headers[at].Classes.Set(TrailingClass, at == headers.Length - 1);
         }
     }
 
@@ -727,15 +845,6 @@ internal sealed class DockArea : UserControl
             button.Classes.Add("ghost");
             button.Click += (_, _) => command.Command();
             region.Commands.Children.Add(button);
-        }
-    }
-
-    /// <summary>Closes the dock a region is showing, which is what its close button does.</summary>
-    private void CloseShown(Region region)
-    {
-        if (region.Selected is { } shown)
-        {
-            _manager.Close(shown);
         }
     }
 
@@ -1027,10 +1136,21 @@ internal sealed class DockArea : UserControl
     }
 
     /// <summary>A header: a small button that names, commands, or closes a dock.</summary>
+    /// <remarks>
+    /// What it names is centred in it. A tab is built where a tab is made rather than here, because what a
+    /// tab holds is more than a name and its geometry is the strip's rather than a header's.
+    /// </remarks>
+    /// <param name="text">What the header names.</param>
+    /// <returns>The button.</returns>
     private static Button Header(string text) =>
         new()
         {
-            Content = text,
+            Content = new TextBlock
+            {
+                Text = text,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
             Padding = new Thickness(7, 1),
             VerticalAlignment = VerticalAlignment.Center,
         };

@@ -130,15 +130,13 @@ internal sealed class TreeControl : UserControl
         // The tree is the whole dock: no row above it, because what a row there held is offered where the
         // tree is read instead — the empty space's own menu carries the way back to the top of the platform
         // (see `Actions.Empty`) — and a row that only holds one button is a row the steps are not drawn in.
-        // The sidebar ground: the tree sits on the elevated surface with one edge against the dock beside
-        // it, which is what reads as the card the entries are on rather than as a bare pane.
-        var ground = new Border
-        {
-            Child = _content,
-            BorderThickness = new Thickness(0, 0, 1, 0),
-        };
+        //
+        // The sidebar ground: the tree sits on the elevated surface, which is what reads as a pane of the
+        // window rather than as a bare stretch of its ground. The edge against the dock beside it is not
+        // drawn here, because the dock area draws the line between two docks itself and draws it the same
+        // wherever two meet: one drawn here as well would stand a pixel inside that one and read as two.
+        var ground = new Border { Child = _content };
         ground[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-        ground[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
 
         Content = ground;
 

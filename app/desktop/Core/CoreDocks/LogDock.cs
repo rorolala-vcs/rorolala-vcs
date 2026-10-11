@@ -98,19 +98,14 @@ internal sealed class LogView : UserControl
 
         DockPanel.SetDock(head, Dock.Top);
 
-        Content = new Border
-        {
-            Margin = new Thickness(16, 8, 16, 16),
-            CornerRadius = new CornerRadius(8),
-            ClipToBounds = true,
-            BorderThickness = new Thickness(1),
-            [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
-            [!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated"),
-            Child = new DockPanel { LastChildFill = true, Children = { head, body } },
-        };
+        // No card: the rows are read in the dock the way a listing's entries are read in one — the head over
+        // the body, both of them the dock's own surface, with no second edge and no second pair of corners
+        // drawn inside it. What fills a dock is the look's business, and a card here would be this file's
+        // answer to a question the look already answers for every other list.
+        Content = new DockPanel { LastChildFill = true, Children = { head, body } };
     }
 
-    /// <summary>The card's head: the four captions over the columns of the rows below.</summary>
+    /// <summary>The head over the rows: the four captions over their columns.</summary>
     private static Border Head() =>
         new()
         {
