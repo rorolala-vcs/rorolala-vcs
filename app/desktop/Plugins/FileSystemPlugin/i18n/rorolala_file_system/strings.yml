@@ -14,6 +14,14 @@ rorolala_file_system:
     en: Folder Tree
     zh-CN: 文件导览
 
+  # What the plugin's own menu in the menu bar is called. Its items are stated under keys of their own
+  # elsewhere in this file, since a key that is a step on the way to an item cannot also be the leaf the menu
+  # is named by. The item under it now is the switch a listing's corner carries.
+  menu:
+    operations:
+      en: Operations
+      zh-CN: 操作
+
   # What the table's columns are headed. The permissions column is not shown where the system carries
   # no such thing, so its key is only ever asked for on a system that has one.
   column_icon:

@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Platform.Storage;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.CoreDocks;
@@ -173,14 +172,7 @@ internal sealed class Desktop
             )
         );
 
-        services.Menu.AddTopLevel(Kernel, Core.Position, "menu.file", 0);
         services.Menu.AddTopLevel(Kernel, Core.Position, "menu.window", 100);
-        services.Menu.AddItem(
-            Kernel,
-            Core.Position,
-            "menu.file",
-            new MenuItem("item.open_directory", 0, () => OpenDirectory(services))
-        );
     }
 
     /// <summary>
@@ -204,51 +196,6 @@ internal sealed class Desktop
                 LogLevel.Warn,
                 Core.Source,
                 $"{problem.Subject}: {problem.Description}"
-            );
-        }
-    }
-
-    /// <summary>
-    /// Asks the user for a directory and makes it the one being browsed.
-    /// </summary>
-    /// <remarks>
-    /// Until the File System plugin is loaded there is no browser to show it in, so the directory is
-    /// recorded in the log; the browser reads it once that plugin arrives.
-    /// </remarks>
-    private static async void OpenDirectory(HostServices services)
-    {
-        var window = services.Shell.Window;
-
-        if (window is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var folders = await window.StorageProvider.OpenFolderPickerAsync(
-                new FolderPickerOpenOptions
-                {
-                    Title = services.I18n.Get("item.open_directory"),
-                    AllowMultiple = false,
-                }
-            );
-
-            if (folders.Count == 0)
-            {
-                return;
-            }
-
-            var chosen = folders[0].TryGetLocalPath() ?? folders[0].Path.LocalPath;
-
-            services.Log.Record(LogLevel.Info, Core.Source, $"opened directory {chosen}");
-        }
-        catch (Exception error) when (error is not OutOfMemoryException)
-        {
-            services.Log.Record(
-                LogLevel.Error,
-                Core.Source,
-                $"the directory could not be chosen: {error.Message}"
             );
         }
     }

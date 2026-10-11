@@ -117,6 +117,15 @@ public sealed class FileSystemPlugin : IRolaPlugin
         var browser = new Browser(host.Log, shared, at);
         var clip = new Clip(host.Log);
 
+        // A menu of its own, because what is under it is about the File System as one thing rather than about
+        // a location: the switch that shows what the hide rules hide is the plugin's own answer, and it is the
+        // same one a listing's corner carries — so the two places it can be turned are one answer (Section 7.5).
+        host.Menu.AddTopLevel("rorolala_file_system.menu.operations", 50);
+        host.Menu.AddItem(
+            "rorolala_file_system.menu.operations",
+            new MenuItem("rorolala_file_system.hidden", 0, () => shared.ShowHidden = !shared.ShowHidden)
+        );
+
         // Either setting changes what is shown rather than what is there: every location stages its listing
         // again out of what was read, and no directory is read a second time.
         host.Config.Changed += setting =>

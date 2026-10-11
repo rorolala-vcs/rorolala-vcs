@@ -5,7 +5,9 @@ _version: 2
 #
 # A key that is a leaf and a key that is a step on the way to another cannot both exist under one
 # name, so a menu's label key is a leaf of its own and the items under that menu are stated under a
-# separate branch. The menu path a plugin adds to is the label key, `menu.file` and `menu.window`.
+# separate branch. The top-level menus a plugin adds to are declared by whichever of the two owns
+# them: `menu.window` here, and the File System's own under its keys, since a menu nothing holds is a
+# menu that should not be drawn.
 
 window:
   notice:
@@ -23,17 +25,9 @@ window:
       zh-CN: 取消
 
 menu:
-  file:
-    en: File
-    zh-CN: 文件
   window:
     en: Window
     zh-CN: 窗口
-
-item:
-  open_directory:
-    en: Open Directory…
-    zh-CN: 打开目录…
 
 dock:
   plugin_manager:
