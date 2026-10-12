@@ -1,15 +1,16 @@
 //! A shard's log: one file, appended to and read back.
 //!
 //! A log is written by appending and read by taking bytes off the front from where the reader last
-//! stopped. Appending is a single write of a whole record to a file opened to append, which is what
-//! lets several processes write the same log at once: the kernel puts each write at the end as one,
-//! so two writers cannot interleave inside a record.
+//! stopped. A record is appended as one write to a file opened to append, so what a write puts in
+//! the log is whole — a reader is never met part of the way through a record.
 //!
-//! An append and a compact are told apart by a lock on the file, taken for as long as each runs:
-//! appending and reading hold it shared, so they are one another's company, and compacting holds it
-//! exclusive, so a log is never emptied while a writer is part of the way through appending to it.
-//! The lock is the operating system's, so it holds across processes as well as threads — which is
-//! what makes a compaction safe while other processes are writing.
+//! A write — an append or a compaction — holds a lock on the file exclusively for as long as it
+//! runs, and a read holds it shared, so a log is never emptied while a writer is part of the way
+//! through appending to it, nor read while it is being rewritten. Appends are one at a time rather
+//! than concurrent: a shared lock would keep several going, but a writer may not hold one and still
+//! write — Windows denies a write to the range a shared lock covers, its own holder's included. The
+//! lock is the operating system's, so it holds across processes as well as threads — which is what
+//! makes a compaction safe while other processes are writing.
 //!
 //! A compaction empties the log, which leaves every reader that had read up to some point of the old
 //! log holding an offset into a file that is no longer there — the bytes it counts are gone, and
@@ -31,7 +32,9 @@ use crate::error::LayoutError;
 
 /// One shard's log.
 pub struct ShardLog {
-    /// The handle writes are appended through, and the file a compaction locks exclusively.
+    /// The file the log is kept in, kept so a compaction can open it to empty it.
+    path: PathBuf,
+    /// The handle writes are appended through, and the file a write locks exclusively.
     write: File,
     /// The handle reads are taken through.
     read: File,
@@ -50,13 +53,24 @@ impl ShardLog {
     ///
     /// Returns why the file could not be opened, or why the age beside it could not be read.
     pub fn open(path: &Path) -> io::Result<Self> {
-        let write = OpenOptions::new().create(true).append(true).open(path)?;
+        // The write handle is opened for reading too, and reading is not for this program: on
+        // Windows a handle opened to append alone cannot be locked — `LockFileEx`, which every
+        // write and every compaction is taken under, wants `GENERIC_READ` or `GENERIC_WRITE`
+        // access, and `append` grants neither — so an append-only log could be read but never
+        // written to. Asking for reading as well is what makes the lock possible, and appending
+        // is still what the writes below do.
+        let write = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .append(true)
+            .open(path)?;
         let read = File::open(path)?;
 
         let epoch_path = path.with_extension(EPOCH_EXTENSION);
         let generation = read_generation(&epoch_path)?;
 
         Ok(Self {
+            path: path.to_path_buf(),
             write,
             read,
             epoch_path,
@@ -67,14 +81,15 @@ impl ShardLog {
 
     /// Appends `bytes`, and waits until they are on disk.
     ///
-    /// A shared lock is held for as long as this runs, so a compaction — which holds the lock
-    /// exclusively — cannot empty the log part of the way through the append.
+    /// The lock is held exclusively for as long as this runs, as a compaction's is, so the two
+    /// cannot overlap — and on Windows an exclusive lock is also what lets the one holding it write,
+    /// a shared lock there denying writes even to its own holder.
     ///
     /// # Errors
     ///
     /// Returns why the write, the flush or the lock failed.
     pub fn append(&mut self, bytes: &[u8]) -> io::Result<()> {
-        self.write.lock_shared()?;
+        self.write.lock()?;
         let result = self
             .write
             .write_all(bytes)
@@ -86,10 +101,11 @@ impl ShardLog {
 
     /// The bytes appended since the last read, without moving past them.
     ///
-    /// A shared lock is held for as long as this runs, so what is read is not emptied under it by a
-    /// compaction — and, under that same lock, the age of the log is read: a reader that meets an
-    /// age it has not read under has been compacted away from its offset, and starts again from the
-    /// beginning rather than reading on into the middle of a record.
+    /// A shared lock is held for as long as this runs, so what is read is not written over under it
+    /// — a compaction, which holds the lock exclusively, cannot empty the log mid-read — and, under
+    /// that same lock, the age of the log is read: a reader that meets an age it has not read under
+    /// has been compacted away from its offset, and starts again from the beginning rather than
+    /// reading on into the middle of a record.
     ///
     /// A log that has not grown costs one length check and no copy.
     ///
@@ -193,8 +209,12 @@ impl ShardLog {
 
     /// Empties the log, so what comes next starts at the beginning.
     fn empty_locked(&mut self) -> io::Result<()> {
-        self.write.set_len(0)?;
-        self.write.sync_all()?;
+        // The log is emptied through a handle of its own, opened for writing and nothing else: a
+        // handle opened to append cannot shorten a file — on Windows `SetEndOfFile` refuses one —
+        // so the handle this reader appends through is not the one that can empty it.
+        let truncate = OpenOptions::new().write(true).open(&self.path)?;
+        truncate.set_len(0)?;
+        truncate.sync_all()?;
 
         self.consumed = 0;
         self.read.seek(SeekFrom::Start(0))?;
