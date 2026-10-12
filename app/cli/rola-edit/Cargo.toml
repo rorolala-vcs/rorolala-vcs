@@ -1,0 +1,20 @@
+[package]
+name = "rola-edit"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The argument parser, used on its own rather than through mingling: this program is one word of
+# `rola`'s — `rola edit` is `rola-edit` — and answers one position and one flag, which is not a
+# command tree worth a framework. The version has to be the one mingling resolves to, so that the
+# `SinglePickable` behind a positional `PathBuf` is the trait this crate picks against.
+arg-picker.workspace = true
+rust-i18n.workspace = true
+
+# The terminal the editor draws in and reads keys from.
+crossterm.workspace = true
+
+# A line's width on screen, which is not its length in characters: what a terminal shows a
+# character with is its own to say, and the CJK material this editor is opened on is two columns
+# wide per character.
+unicode-width.workspace = true

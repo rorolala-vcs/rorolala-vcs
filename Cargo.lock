@@ -3544,6 +3544,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rola-edit"
+version = "0.1.0"
+dependencies = [
+ "arg-picker",
+ "crossterm",
+ "rust-i18n",
+ "unicode-width 0.2.2",
+]
+
+[[package]]
 name = "rola-jj"
 version = "0.1.0"
 dependencies = [

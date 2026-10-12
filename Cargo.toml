@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "app/cli/rola",
     "app/cli/rola-daemon",
+    "app/cli/rola-edit",
     "app/cli/rola-jj",
     "app/cli/setups",
     "app/ffi",
@@ -57,6 +58,7 @@ jj-lib = { version = "0.46.0", default-features = false }
 librorolala = { path = "." }
 rola = { path = "app/cli/rola" }
 rola-daemon = { path = "app/cli/rola-daemon" }
+rola-edit = { path = "app/cli/rola-edit" }
 rola-jj = { path = "app/cli/rola-jj" }
 rorolala-auth = { path = "modules/auth" }
 rorolala-cli-setups = { path = "app/cli/setups" }
@@ -148,6 +150,10 @@ zstd = "0.13.3"
 # CLI Rendering
 bat = { version = "0.26.1", default-features = false, features = ["regex-fancy"] }
 colored = "3.1.1"
+# The terminal `rola-edit` draws its editor in: raw mode, the alternate screen, and the keys a
+# terminal sends. Already in the graph through the pager, so this pins the version rather than
+# bringing a second one.
+crossterm = "0.29.0"
 console = "0.16.6"
 indicatif = "0.18.4"
 prettytable-rs = { version = "0.10.0", default-features = false }

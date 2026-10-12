@@ -1,0 +1,41 @@
+_version: 2
+
+edit:
+  status:
+    lines:
+      en: lines
+      zh-CN: 行
+
+  messages:
+    modified:
+      en: " [modified]"
+      zh-CN: " [已修改]"
+
+    file_saved:
+      en: The file was saved
+      zh-CN: 文件已保存
+
+    unsaved_changes:
+      en: There are unsaved changes; press Esc again to leave without saving
+      zh-CN: 有未保存的更改；再按一次 Esc 将不保存离开
+
+  hints:
+    en: "Ctrl+S save  ·  Esc exit"
+    zh-CN: "Ctrl+S 保存  ·  Esc 退出"
+
+  errors:
+    no_file:
+      en: No file to edit was named
+      zh-CN: 没有指定要编辑的文件
+
+    file:
+      en: "`%{error}` could not be opened"
+      zh-CN: "无法打开 `%{error}`"
+
+    editor:
+      en: "the editor could not run: %{error}"
+      zh-CN: "编辑器无法运行：%{error}"
+
+    save:
+      en: "the file could not be saved: %{error}"
+      zh-CN: "无法保存文件：%{error}"
