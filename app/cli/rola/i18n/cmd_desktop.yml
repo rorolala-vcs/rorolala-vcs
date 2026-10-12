@@ -50,6 +50,12 @@ desktop:
       en: How the window's own frame is drawn
       zh-CN: 窗口自身的边框怎么画
 
+  called:
+    en: |
+        The Desktop program is already running, and was asked to come forward
+    zh-CN: |
+        桌面程序已在运行，已请求它切到前台
+
   err_window_style:
     en: "No window style is named `%{written}`"
     zh-CN: "没有名为 `%{written}` 的窗口样式"

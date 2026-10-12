@@ -252,6 +252,9 @@ pub const EC_ERR_DESKTOP_ENDED: i32 = 172;
 /// `exit_codes.desktop_window_style`
 pub const EC_ERR_DESKTOP_WINDOW_STYLE: i32 = 173;
 
+/// `exit_codes.desktop_called`
+pub const EC_DESKTOP_CALLED: i32 = 174;
+
 // Output — how a result is drawn when it is written
 
 /// `exit_codes.format`

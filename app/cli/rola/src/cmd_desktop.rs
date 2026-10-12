@@ -41,8 +41,8 @@ use rust_i18n::t;
 use crate::Next;
 use crate::complete::{filling_flag, offer, strip_written, typing_flag};
 use crate::exit_codes::{
-    EC_ERR_DESKTOP_ENDED, EC_ERR_DESKTOP_LAUNCH_FAILED, EC_ERR_DESKTOP_NOT_FOUND,
-    EC_ERR_DESKTOP_WINDOW_STYLE, EC_HELP,
+    EC_DESKTOP_CALLED, EC_ERR_DESKTOP_ENDED, EC_ERR_DESKTOP_LAUNCH_FAILED,
+    EC_ERR_DESKTOP_NOT_FOUND, EC_ERR_DESKTOP_WINDOW_STYLE, EC_HELP,
 };
 use crate::failure::failure;
 
@@ -168,6 +168,11 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
 /// a way to it rather than a way to work: the program is started and the run ends, leaving it to
 /// the reader. It sits in a `desktop` directory beside the program that was run — the layout
 /// `./run.sh export` lays down — so a run reaches it without being told where it is.
+///
+/// There is one Desktop program per user, not one per run: a run that finds one already going does not
+/// open a second, it asks the one that is there to come forward and ends with `EC_DESKTOP_CALLED` (174).
+/// A caller that waits for this command therefore reads whether a window was opened or one was asked
+/// for, and the two are the same thing to the person who ran it either way.
 ///
 /// The window opens onto the Workspace the run was made in, or onto the directory it was made in
 /// when no Workspace holds it. See [`opening_at`] for what a Workspace is the answer rather than the
@@ -310,11 +315,26 @@ pub struct ResultDesktopEnded {
     code: Option<i32>,
 }
 
+/// `exit_codes.desktop_called`, and what a run that was a call says about itself.
+///
+/// A start that finds the program already going does not open a second window: it asks the one that is
+/// there to come forward and ends with `EC_DESKTOP_CALLED` (174). That is the one ending here that is not a
+/// failure and not a window either, so it is said rather than passed over in silence — a caller that waits
+/// for this command reads the code, and the person who ran it reads this line.
+const CALLED_NOTE: &str = "desktop.called";
+
 #[renderer(buffer)]
 pub fn render_result_desktop_ended(result: ResultDesktopEnded, ec: &mut ResExitCode) {
     // What the program ended with is what this run ends with. A program a signal ended has no code of its
     // own, and is one that did not end well, which is what this run says in its place.
     ec.exit_code = result.code.unwrap_or(EC_ERR_DESKTOP_ENDED);
+
+    // The one ending that is neither a failure nor a window: the program was already going, and this run
+    // asked it to come forward. It is said rather than passed over, because a run that ended at once and
+    // said nothing would read as a run that did nothing.
+    if ec.exit_code == EC_DESKTOP_CALLED {
+        r_eprintln!("{}", trd!(t!(CALLED_NOTE)).trim());
+    }
 }
 
 /// Error: the style a run asked for is not one of the three.
@@ -452,10 +472,16 @@ mod tests {
     fn every_style_is_read_by_the_name_a_run_writes() {
         assert_eq!(WindowStyle::named("windows"), Some(WindowStyle::Windows));
         assert_eq!(WindowStyle::named("mac"), Some(WindowStyle::Mac));
-        assert_eq!(WindowStyle::named("tillingwm"), Some(WindowStyle::TillingWm));
+        assert_eq!(
+            WindowStyle::named("tillingwm"),
+            Some(WindowStyle::TillingWm)
+        );
 
         // The two programs spell the names their own way, and one name is what both of them mean.
-        assert_eq!(WindowStyle::named("TillingWM"), Some(WindowStyle::TillingWm));
+        assert_eq!(
+            WindowStyle::named("TillingWM"),
+            Some(WindowStyle::TillingWm)
+        );
         assert_eq!(WindowStyle::named("MAC"), Some(WindowStyle::Mac));
     }
 

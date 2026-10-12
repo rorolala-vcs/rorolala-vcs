@@ -265,6 +265,10 @@ exit_codes:
     en: The window style a run asked for is not one of the three
     zh-CN: 本次运行要求的窗口样式不是三种之一
 
+  desktop_called:
+    en: The Desktop program was already running and was asked to come forward
+    zh-CN: 桌面程序已在运行，已被请求切到前台
+
   fs_ops_argument:
     en: A file operation was named without the paths it works on
     zh-CN: 文件操作缺少它所作用的路径
