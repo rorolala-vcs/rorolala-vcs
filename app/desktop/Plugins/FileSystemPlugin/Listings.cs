@@ -2621,8 +2621,12 @@ internal sealed class GridBrowser : EntryView
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
-    /// <summary>How much room is left between a mark and what stands beside it.</summary>
-    private const double MarkGap = 4;
+    /// <summary>How far a mark stands from what it is beside, as a share of the mark's own size.</summary>
+    /// <remarks>
+    /// A share rather than a size, because the mark follows the zoom: a gap of a fixed few pixels is a wide one
+    /// at the smallest zoom and barely a gap at the largest.
+    /// </remarks>
+    private const double MarkGapShare = 1.25;
 
     /// <summary>The lock provider that speaks for this directory, or nothing when none does.</summary>
     private readonly IEntryLockProvider? _locks;
@@ -2787,7 +2791,11 @@ internal sealed class GridBrowser : EntryView
     /// <returns>What to draw where the name goes.</returns>
     private Control Caption(Entry entry)
     {
-        var marks = new StackPanel { Orientation = Orientation.Horizontal, Spacing = MarkGap };
+        // How far a mark stands from the name is the mark's own measure rather than a few pixels: the two are
+        // read as one thing, and how far apart they want to be is the same question at every zoom.
+        var extent = Icons.DotExtent(_icon);
+        var gap = extent * MarkGapShare;
+        var marks = new StackPanel { Orientation = Orientation.Horizontal, Spacing = gap };
         var taken = 0.0;
 
         foreach (var provider in _marks)
@@ -2797,7 +2805,7 @@ internal sealed class GridBrowser : EntryView
             if (contributed.Dot)
             {
                 marks.Children.Add(Icons.Dot(contributed, _icon));
-                taken += Icons.DotExtent(_icon) + MarkGap;
+                taken += extent + gap;
             }
         }
 
