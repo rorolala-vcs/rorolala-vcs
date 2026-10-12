@@ -32,7 +32,7 @@ internal static class Keys
     /// <remarks>
     /// Taken at the top of a dock and not by the listing, so that it is answered wherever the keyboard is inside
     /// the dock — the zoom, the toolbar, or an entry — rather than only after an entry was clicked. A field is
-    /// left alone, because in the address <c>Ctrl+C</c> copies the words written in it (Section 7.7).
+    /// left alone, because in the address <c>Ctrl+C</c> copies the words written in it.
     /// <para>
     /// Every press is said out loud, whether or not it is taken. What a dock answers is answered at the top of
     /// itself, so a key that was pressed while the keyboard was outside the dock is a key nothing here ever saw —
@@ -165,8 +165,7 @@ internal static class Keys
     /// <remarks>
     /// What a dock asks before it swaps the view being read for another one: a view replaced from under the
     /// keyboard takes the keyboard with it, because the control that had it is no longer in the tree — and a dock
-    /// answers its keys at the top of itself, so a keyboard that is nowhere is a dock whose keys do nothing
-    /// (Section 7.7).
+    /// answers its keys at the top of itself, so a keyboard that is nowhere is a dock whose keys do nothing.
     /// </remarks>
     /// <param name="on">What the keyboard is on, or nothing.</param>
     /// <param name="view">The control to ask about.</param>
@@ -202,7 +201,7 @@ internal static class Keys
     /// <c>F5</c> is what a file browser is refreshed with, and it is a dock's own key rather than the shell's:
     /// the shell has nothing of the filesystem to read, and what it would refresh is a different question. It is
     /// taken at the top of the dock and not by the listing, so that it is reached wherever in the dock the
-    /// keyboard is — the address, the zoom, or an entry (Section 7.7).
+    /// keyboard is — the address, the zoom, or an entry.
     /// </remarks>
     /// <param name="e">The key.</param>
     /// <param name="browser">A location of the plugin, which is what a read is said through.</param>

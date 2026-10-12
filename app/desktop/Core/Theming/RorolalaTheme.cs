@@ -24,7 +24,7 @@ namespace RorolalaDesktop.Theming;
 /// </summary>
 /// <remarks>
 /// It is the program's own and there is only one of it. What a run chooses is the variant it is drawn
-/// in and the colours, read before the window is made (Section 10). Everything else here is stated
+/// in and the colours, read before the window is made. Everything else here is stated
 /// rather than configured, which is what makes the program look like one thing.
 /// <para>
 /// The design is the one the sibling project <c>gattipage</c> uses, and the tokens below are that
@@ -198,7 +198,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// The shell marks the surfaces it owns so that a theme can style them without knowing what is in
-    /// them. The name is part of Section 10, since a plugin's theme writes it as a literal.
+    /// them. The name is fixed, since a plugin's theme writes it as a literal.
     /// </remarks>
     public const string MenuBarClass = "menu-bar";
 
@@ -222,7 +222,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// Marked rather than matched by the name the markup gives it, for the reason the menu bar is: the
-    /// name a theme addresses a surface by is part of Section 10, and a plugin's theme writes it as a
+    /// name a theme addresses a surface by is fixed, and a plugin's theme writes it as a
     /// literal.
     /// </remarks>
     public const string TitleBarClass = "title-bar";
@@ -1829,7 +1829,7 @@ internal sealed class RorolalaTheme
         };
 
         // A tiling window manager's window has none: the manager outside keeps the window, and buttons drawn
-        // here would be a frame inside the frame it already has (Section 10).
+        // here would be a frame inside the frame it already has.
         Button? minimize = null;
         Button? maximize = null;
         Button? close = null;

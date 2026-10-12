@@ -7,7 +7,7 @@ namespace FileSystemPlugin;
 /// </summary>
 /// <remarks>
 /// The plugin has one of these and every dock is a view onto it — unless the dock has been taken out of
-/// step, in which case it is given one of its own and looks at a directory of its own (Section 7.5). How the
+/// step, in which case it is given one of its own and looks at a directory of its own. How the
 /// entries are laid out differs from dock to dock, and so may the directory; what every one of them agrees
 /// on — where the tree is rooted, and whether hidden entries are shown — is not here but in
 /// <see cref="Shared"/>.
@@ -318,7 +318,7 @@ internal sealed class Browser : IDisposable
 
         // Setting the base moves this location as well, because the two are one act to whoever asked: a user
         // who roots the tree at a directory is working in it. A dock that has been taken out of step roots the
-        // tree for everybody and moves only itself (Section 7.5), so the base and where the whole is looking
+        // tree for everybody and moves only itself, so the base and where the whole is looking
         // may then come apart — which is what being out of step means.
         _shared.BaseDir = _current;
 

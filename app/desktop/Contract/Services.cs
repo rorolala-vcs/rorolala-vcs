@@ -102,7 +102,7 @@ public interface IPluginConfig
     /// </summary>
     /// <remarks>
     /// Called during initialization, with the rest of what a plugin registers. A setting declared
-    /// after the window is shown is not supported, the same as any other registration (§6.1).
+    /// after the window is shown is not supported, the same as any other registration.
     /// </remarks>
     /// <param name="setting">The setting to declare.</param>
     void Add(PluginSetting setting);

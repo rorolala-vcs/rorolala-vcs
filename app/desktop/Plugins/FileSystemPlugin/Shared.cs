@@ -14,7 +14,7 @@ namespace FileSystemPlugin;
 /// at.
 /// <para>
 /// They live here rather than on a <see cref="Browser"/> because a dock may be taken out of step and given a
-/// location of its own (Section 7.5). The location is then that dock's alone, while these stay everybody's —
+/// location of its own. The location is then that dock's alone, while these stay everybody's —
 /// which is what a location reads when it stages a listing, and this is what tells every one of them that
 /// something they read has moved on.
 /// </para>
@@ -196,7 +196,7 @@ internal sealed class Shared
     /// It is the plugin's rather than a view's, because the listing is what it changes: two docks looking at
     /// one directory — and a dock out of step still looks at directories — must not list different things.
     /// What a dock shows is the one setting every dock reads, so a switch turned in one of them is turned
-    /// in all (Section 7.5).
+    /// in all.
     /// <para>
     /// Asked of the registry rather than kept here, so that turning a provider off takes effect without a
     /// second read of any directory: what the directory holds is unchanged, and only what is shown of it is.

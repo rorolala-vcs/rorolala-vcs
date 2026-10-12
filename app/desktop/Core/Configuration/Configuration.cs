@@ -24,10 +24,10 @@ internal enum ColorMode
 /// The look itself is not one of them. It is the program's own — rectangles, one-pixel edges, hover in
 /// the variant's ink and the two colours spent on what is selected and what asks for attention — and it
 /// is what makes the program look like one thing rather than like whatever it was assembled out of. What
-/// is left to choose is the variant it is drawn in and the two colours it is drawn with (Section 10).
+/// is left to choose is the variant it is drawn in and the two colours it is drawn with.
 /// <para>
 /// Every field is optional, and a field that is not there is the default: the file holds only what the
-/// user chose, so taking a choice back is removing it rather than writing the default down (Section 5.4).
+/// user chose, so taking a choice back is removing it rather than writing the default down.
 /// That is why the fields are nullable rather than defaulted — <c>null</c> is "the file says nothing",
 /// which is not the same as "the file chose the default".
 /// </para>
@@ -68,7 +68,7 @@ internal sealed class ThemeConfiguration
     /// </summary>
     /// <remarks>
     /// The look names no ink for the primary it ships now: what stands on a filled surface is worked out from what
-    /// it stands on by contrast, which is what happens for every primary a file names no ink for (Section 10).
+    /// it stands on by contrast, which is what happens for every primary a file names no ink for.
     /// This value stays named because a file written before that change holds it beside whatever primary was in
     /// force then, and the two are a pair the user never chose: an ink named for one colour is not an ink chosen
     /// for another, so it is left out rather than written on.

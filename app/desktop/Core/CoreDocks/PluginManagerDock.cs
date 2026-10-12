@@ -54,7 +54,7 @@ internal sealed class PluginManagerDock : IDockView
 /// anywhere in the column; the cards around it step aside as the pointer nears a gap, and the card
 /// settles where it was let go of. Nothing is decided for the user behind their back, so an order
 /// that leaves a plugin unable to load is shown red on the cards it affects — while the card is
-/// still in hand, and after it is dropped — rather than being silently rearranged (Section 14.2).
+/// still in hand, and after it is dropped — rather than being silently rearranged.
 /// <para>
 /// A press is not a drag: what separates the two is how far the pointer travels first, the way the
 /// shell treats a dock's header. Only the vertical travel matters, because a card has one column to

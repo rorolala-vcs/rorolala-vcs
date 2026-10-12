@@ -16,7 +16,7 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// What an entry is drawn as comes from the system: what a folder looks like is the desktop's business, and a
 /// browser that draws its own folder is a browser that looks wrong on every desktop but the one it was drawn
-/// for. What Section 9 calls the icon library is this, and what is left of it is a picture per kind of file,
+/// for. The icon library is this, and what is left of it is a picture per kind of file,
 /// which no system is asked about yet — a file is drawn as a file and not as a kind of one.
 /// <para>
 /// The toolbar's own pictures are the other way round, and are the program's: a switch that shows what the

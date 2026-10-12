@@ -10,7 +10,7 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// It is a plugin like any other — the host discovers it, checks its contract and Avalonia versions,
 /// and starts it — but it ships with the program and is enabled by default, because a browser is
-/// what the shell is for (Section 7.5).
+/// what the shell is for.
 /// <para>
 /// What it owns is deliberately more than a dock: the location every dock looks at until one is taken out of
 /// step, the answers that stay everybody's either way — where the tree is rooted, and whether hidden entries
@@ -34,7 +34,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
     /// </summary>
     /// <remarks>
     /// Written into dock layout, so it must not change once shipped. It says <c>browser</c> because
-    /// that is what the dock was called before the tree was taken out of it (Section 7.5), and a name
+    /// that is what the dock was called before the tree was taken out of it, and a name
     /// written into a user's layout is not a name to correct.
     /// </remarks>
     public const string DirectoryDockNameId = "rorolala.file_system.browser";
@@ -110,7 +110,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // One location for the whole plugin, and one set of answers every location shares. Every dock is a
         // view onto the location — the browser docks differ in layout and in nothing else, and the navigation
         // dock has one address and one history to show — unless a dock has been taken out of step, in which
-        // case it is given a location of its own (Section 7.5) and only the answers stay everybody's. The
+        // case it is given a location of its own and only the answers stay everybody's. The
         // clipboard is shared the same way: a copy made in one directory dock is a copy the other can paste.
         var at = Start();
         var shared = new Shared(at, hides, host.Config);
@@ -119,7 +119,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
 
         // A menu of its own, because what is under it is about the File System as one thing rather than about
         // a location: the switch that shows what the hide rules hide is the plugin's own answer, and it is the
-        // same one a listing's corner carries — so the two places it can be turned are one answer (Section 7.5).
+        // same one a listing's corner carries — so the two places it can be turned are one answer.
         host.Menu.AddTopLevel("rorolala_file_system.menu.operations", 50);
         host.Menu.AddItem(
             "rorolala_file_system.menu.operations",

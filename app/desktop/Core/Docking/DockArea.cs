@@ -47,7 +47,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// The shell marks the surfaces it owns so that a theme — this host's, or a plugin's — can style
-    /// them without knowing what a dock is. The names are part of Section 10, since a plugin's theme
+    /// them without knowing what a dock is. The names are fixed, since a plugin's theme
     /// has to write them as literals.
     /// </remarks>
     public const string HeadersClass = "dock-headers";
@@ -113,7 +113,7 @@ internal sealed class DockArea : UserControl
     /// The height of a region's header strip, which its tabs sit in.
     /// </summary>
     /// <remarks>
-    /// Part of Section 10: the strip, the menu bar and a toolbar are one height, so that the window
+    /// The strip, the menu bar and a toolbar are one height, so that the window
     /// reads as a stack of bands of the same weight. A window of one dock has no strip at all — what it draws
     /// is the dock itself, under the window's own row — so its row is the menu bar's height and this one
     /// (<see cref="MainWindow.TitleBarHeight"/>) is not drawn there.
@@ -622,7 +622,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// Nothing here says where a box is or what it looks like. Where is worked out as a drag is shown,
-    /// because a region moves when the user moves a splitter; what it looks like is Section 10's.
+    /// because a region moves when the user moves a splitter; what it looks like is its own.
     /// </remarks>
     private void Zones()
     {
@@ -1230,7 +1230,7 @@ internal sealed class DockArea : UserControl
 
         // Choosing a dock gives it the keyboard: the keyboard was on the tab that was clicked, and that tab belongs
         // to this strip rather than to the dock — while a dock answers its own keys inside itself, so choosing one
-        // and then typing would otherwise say nothing at all (Section 7.6).
+        // and then typing would otherwise say nothing at all.
         instance.View.View.Focus();
     }
 

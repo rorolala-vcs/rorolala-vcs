@@ -10,7 +10,7 @@ namespace RorolalaDesktop.Hosting;
 /// bindings are written the interface states nothing, and this is what implements it, so a plugin is
 /// always handed a host whose <c>Rola</c> is present even when there is nothing to call on it yet.
 /// A plugin calls this rather than invoking the command line: shelling out is not a substitute for
-/// an export, and is not permitted (Section 13).
+/// an export, and is not permitted.
 /// </remarks>
 internal sealed class RolaCapability : IRola
 {

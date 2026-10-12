@@ -24,7 +24,7 @@ public static class BaseDirectory
     /// </summary>
     /// <remarks>
     /// The whole plugin's answer and not a location's: a dock taken out of step looks at a directory
-    /// of its own (Section 7.5), and the tree is still rooted where the user rooted it.
+    /// of its own, and the tree is still rooted where the user rooted it.
     /// </remarks>
     public static string? Current { get; private set; }
 

@@ -193,7 +193,7 @@ rorolala_file_system:
     zh-CN: "`%{path}` 不是目录"
 
   # What the conflict window says when a name is already taken. The window is shown over the host's main
-  # window (Section 7.5), so the words are the plugin's while the window is the host's.
+  # window, so the words are the plugin's while the window is the host's.
   conflict:
     title:
       en: File conflict

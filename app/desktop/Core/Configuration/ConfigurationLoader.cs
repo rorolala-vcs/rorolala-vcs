@@ -11,12 +11,12 @@ namespace RorolalaDesktop.Configuration;
 /// <remarks>
 /// A file that is not there is not a mistake: the program uses the defaults and writes a file, so
 /// that the next run has something to edit. A file that is there but unreadable, malformed, or names
-/// something this program does not support stops the program with a reason on standard error
-/// (Section 14.1), because a silently ignored configuration error is worse than a loud stop.
+/// something this program does not support stops the program with a reason on standard error,
+/// because a silently ignored configuration error is worse than a loud stop.
 /// <para>
 /// Every file's <c>_version</c> is fixed at the lowest one and the host reads no other, because
 /// nothing is kept compatible at this stage: a shape that changes is a shape the one writer of these
-/// files writes, and there is no older shape left to read (Section 19.4).
+/// files writes, and there is no older shape left to read.
 /// </para>
 /// <para>
 /// The JSON is read a property at a time rather than deserialized into a type, so that a repeated
@@ -81,7 +81,7 @@ internal static class ConfigurationLoader
     /// A file that was not there is written with the defaults spelled out rather than left empty, so
     /// that the colours the program is drawn in are there for a person to find and edit. A field taken
     /// back afterwards is removed, and stays removed: what is in force is then the default, which is not
-    /// the same as the file saying it (Section 5.4).
+    /// the same as the file saying it.
     /// </remarks>
     /// <exception cref="ConfigurationFailure">The file is unreadable, malformed, or unsupported.</exception>
     public static ThemeConfiguration LoadTheme()
@@ -189,7 +189,7 @@ internal static class ConfigurationLoader
     /// <remarks>
     /// Only the fields that are set are written. A field that is not there is a choice not made, and
     /// omitting it is what makes taking a choice back possible: writing the default down instead would
-    /// be a copy of a default the program may later change (Section 5.4).
+    /// be a copy of a default the program may later change.
     /// </remarks>
     /// <param name="config">What to write.</param>
     public static void WriteTheme(ThemeConfiguration config)
@@ -616,7 +616,7 @@ internal static class ConfigurationLoader
             new(StringComparer.Ordinal);
     }
 
-    /// <summary>How <c>theme.json</c> is written: only the fields that are set (Section 5.4).</summary>
+    /// <summary>How <c>theme.json</c> is written: only the fields that are set.</summary>
     private sealed class ThemeDto
     {
         [JsonPropertyName("_version")]

@@ -53,7 +53,7 @@ internal sealed class LogService
     /// What has been counted stays counted: the table distinctness is decided from is shared with
     /// popups, and emptying it would make a notification the user has already been shown appear again. A
     /// line said again after a clear therefore reads with the count it had, which is the price of one
-    /// table rather than two (Section 14.3).
+    /// table rather than two.
     /// </remarks>
     public void Clear()
     {

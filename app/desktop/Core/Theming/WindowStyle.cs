@@ -5,7 +5,7 @@ namespace RorolalaDesktop.Theming;
 /// </summary>
 /// <remarks>
 /// The window is the program's own on every platform — it draws the row the menu sits in, and the row's
-/// buttons with it (Section 10) — and the three ways of drawing those buttons are the three a user meets:
+/// buttons with it — and the three ways of drawing those buttons are the three a user meets:
 /// the marks at the right that Windows puts there, the three lights at the left that macOS puts there, and
 /// none at all, which is what a window under a tiling window manager should draw, the window manager
 /// outside being the frame already.

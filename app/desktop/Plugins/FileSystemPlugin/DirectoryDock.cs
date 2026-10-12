@@ -60,7 +60,7 @@ internal sealed class DirectoryDock : IDockView, IDockOpened
 /// </summary>
 /// <remarks>
 /// Neither navigation nor the tree is here: back, forward, up, refresh and the address are a dock of
-/// their own, and so is the tree (Section 7.5). What is here is one directory, read at a size, and the size
+/// their own, and so is the tree. What is here is one directory, read at a size, and the size
 /// is the one thing about this dock that is its own by default — the directory is every dock's, until this
 /// one is taken out of step and given a location of its own.
 /// <para>
@@ -306,7 +306,7 @@ internal sealed class DirectoryControl : UserControl
         // A dock is a place the keyboard can be put, which is how the shell hands it to the thing being read: what
         // this dock answers is answered at the top of itself, so the shell putting the keyboard here is what makes
         // the keys work after this dock is chosen — the keyboard was on the tab that was clicked, and that tab
-        // belongs to the shell's strip rather than to the dock (Section 7.6).
+        // belongs to the shell's strip rather than to the dock.
         Focusable = true;
         GotFocus += (_, e) =>
         {
@@ -317,7 +317,7 @@ internal sealed class DirectoryControl : UserControl
         };
 
         // The toolbar is the dock's own rather than a dock beside it: the arrows and the address act on the
-        // location being read, and they belong over the entries they act on (Section 7.5). What the dock keeps
+        // location being read, and they belong over the entries they act on. What the dock keeps
         // beside them is handed in, so that the toolbar does not have to know what a dock remembers.
         _bar = new NavigationBar(_host, Location, _trailing) { Left = Seated };
 
@@ -390,7 +390,7 @@ internal sealed class DirectoryControl : UserControl
         }
 
         // And for the same reason again: a dock left out of step comes back out of step, at a directory of its
-        // own that nothing keeps — the location is not written into the layout (Section 7.3) — rather than
+        // own that nothing keeps — the location is not written into the layout — rather than
         // being drawn in step and switching under the first frame.
         if (bool.TryParse(state.Read(SyncKey), out var inStep))
         {
@@ -708,7 +708,7 @@ internal sealed class DirectoryControl : UserControl
     /// read, so a view that is not focused is a view that never receives one. Deferred to the next turn of the
     /// loop, because the listing it goes into has just been made and has not been laid out yet — a keyboard asked
     /// of a control that is not arranged yet is a keyboard it forgets, the same reason the address defers its own
-    /// selection (Section 7.7).
+    /// selection.
     /// </remarks>
     private void Seated() => Dispatcher.UIThread.Post(() => _view?.Listen());
 
@@ -718,7 +718,7 @@ internal sealed class DirectoryControl : UserControl
     /// <remarks>
     /// Read again on <c>F5</c>, which is the dock's own key, and the three the clipboard answers, which are
     /// taken here rather than by the listing so that they are answered wherever the keyboard is in the dock —
-    /// after the zoom was turned as much as after an entry was clicked (Section 7.7).
+    /// after the zoom was turned as much as after an entry was clicked.
     /// </remarks>
     /// <param name="sender">The dock.</param>
     /// <param name="e">The key.</param>
@@ -802,7 +802,7 @@ internal sealed class DirectoryControl : UserControl
         var seating = _view is { } was && Keys.Holds(on, was);
 
         // What was chosen goes with it, for the same reason the tree keeps what was open: a read that found the
-        // files it found before is not a reason to stop working with them (Section 7.7). Only within one
+        // files it found before is not a reason to stop working with them. Only within one
         // directory — stepping elsewhere is a different listing, and its choice starts empty.
         var chosen = _drawnAt == Location.Current ? _view?.Chosen() ?? [] : [];
 

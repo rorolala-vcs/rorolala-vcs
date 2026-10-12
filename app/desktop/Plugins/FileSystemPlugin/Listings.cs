@@ -78,7 +78,7 @@ internal static class Names
 /// <remarks>
 /// Clicking and framing are two gestures and do not mean the same thing, so what a modifier means is read by the
 /// gesture that was made and not by the modifier alone: a frame over a run of entries reads it as a rule over the
-/// whole run, and a click reads it as a rule over the one entry under the pointer (Section 7.7).
+/// whole run, and a click reads it as a rule over the one entry under the pointer.
 /// <para>
 /// Both are read from the choice as it stood when the pointer went down rather than from the choice on screen, so
 /// that a frame dragged back and forth settles on the answer the rule gives rather than on its own last preview —
@@ -258,7 +258,7 @@ internal static class Choice
 /// the rest.
 /// <para>
 /// The choice is the toolkit's own list selection, because the look already fills a chosen row with the accent
-/// (§10) — but not the toolkit's own rules for what a press means. Here a click chooses the one entry it landed
+/// — but not the toolkit's own rules for what a press means. Here a click chooses the one entry it landed
 /// on, <c>Shift</c> with it moves the nearer end of the run already chosen to the entry it landed on, and
 /// <c>Ctrl</c> with it toggles that one entry; a frame over a run of entries reads its modifiers as rules over
 /// the whole run instead, which is a different rule set for a different gesture (see <see cref="Choice"/>). The
@@ -575,7 +575,7 @@ internal abstract class EntryView : UserControl
         _over.Children.Add(_band);
 
         // A ground of nothing rather than none at all, so that a press on the room between the entries reaches
-        // this view at all: what a frame is begun from is a press that landed on no entry (Section 7.7).
+        // this view at all: what a frame is begun from is a press that landed on no entry.
         var grid = new Grid { Background = Brushes.Transparent };
         grid.Children.Add(content);
 
@@ -909,8 +909,7 @@ internal abstract class EntryView : UserControl
     /// <remarks>
     /// The listing is where a dock answers its keys from: they are taken at the top of the dock and passed to the
     /// view being read, so a keyboard that is nowhere in the dock is a dock whose keys do nothing. That is what
-    /// happens when the address — which hides itself when an edit ends — was where the keyboard was
-    /// (Section 7.7).
+    /// happens when the address — which hides itself when an edit ends — was where the keyboard was.
     /// </remarks>
     public void Listen() => List.Focus();
 
@@ -1074,7 +1073,7 @@ internal abstract class EntryView : UserControl
     /// The arrows step, <c>Home</c>, <c>End</c>, <c>PageUp</c> and <c>PageDown</c> go further,
     /// <c>Shift</c> extends from where the last step landed, and <c>Enter</c> opens. Everything else — the
     /// toolkit's own select-all among it — is left to the list, and the clipboard is the dock's and answered
-    /// there (Section 7.7).
+    /// there.
     /// </remarks>
     /// <param name="sender">The list.</param>
     /// <param name="e">The key.</param>
@@ -1311,7 +1310,7 @@ internal abstract class EntryView : UserControl
     /// <remarks>
     /// A press on an entry of the choice — or on any entry at all where nothing is chosen — may become a drag of
     /// what is chosen. Anywhere else it may become a frame, and that is what keeps a frame begun beside a choice
-    /// from carrying the entries it was drawn to add to (Section 7.7). A press with <c>Shift</c> or <c>Ctrl</c>
+    /// from carrying the entries it was drawn to add to. A press with <c>Shift</c> or <c>Ctrl</c>
     /// held is a hand that is choosing rather than moving, so it may become a frame wherever it lands and never a
     /// drag; whether it became a click or a frame is what says what the modifier meant, since the two gestures
     /// have their own rules (see <see cref="Choice"/>).
@@ -1416,7 +1415,7 @@ internal abstract class EntryView : UserControl
     /// </summary>
     /// <remarks>
     /// A drag is begun through the toolkit, whose X11 backend carries XDND in Avalonia 12, so that a drag can
-    /// leave the program and another program's drag can arrive (Section 19.6). A frame is this plugin's own,
+    /// leave the program and another program's drag can arrive. A frame is this plugin's own,
     /// because it is a selection gesture the toolkit has none of.
     /// </remarks>
     /// <param name="sender">The list.</param>
@@ -1638,8 +1637,8 @@ internal abstract class EntryView : UserControl
     /// The wash a row is framed with, and a stand-in where the look names no tint of its own.
     /// </summary>
     /// <remarks>
-    /// Asked of the theme through this view, because a plugin has no other way to read the palette (Section
-    /// 10); a program wearing no theme answers with nothing and the stand-in is used.
+    /// Asked of the theme through this view, because a plugin has no other way to read the palette; a
+    /// program wearing no theme answers with nothing and the stand-in is used.
     /// </remarks>
     /// <param name="key">The resource key.</param>
     /// <param name="fallback">What to draw with where the look defines nothing under the key.</param>
@@ -1851,7 +1850,7 @@ internal sealed class ListBrowser : EntryView
     /// How wide the grab between two columns is, and the marks it wears.
     /// </summary>
     /// <remarks>
-    /// The marks are Section 10's, written as the literals that section publishes, because a plugin has
+    /// The marks are the theme's, written as the literals it publishes, because a plugin has
     /// nowhere else to read them from: the shell's own constants live in the host, which a plugin may not
     /// reference. The width is the width those rules draw a line through the middle of, so a band of another
     /// width would be a grab wearing a line that is not centred in it.
@@ -1951,7 +1950,7 @@ internal sealed class ListBrowser : EntryView
         // The item keeps the design's row height, and its own inset is taken off so that the header and the
         // rows share one edge. The four pixels left between two rows are the line's room and the frame's: the
         // rows are told apart by the line under each, and the room around it is the only place a press can
-        // land that is not on an entry — which is where a frame is begun from (Section 7.7).
+        // land that is not on an entry — which is where a frame is begun from.
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
@@ -2451,7 +2450,7 @@ internal sealed class GridBrowser : EntryView
     /// How much room is left around each tile, and so between one and the next.
     /// </summary>
     /// <remarks>
-    /// The room is not only looks: a frame (§7.7) is begun where no entry is, so a grid whose tiles met
+    /// The room is not only looks: a frame is begun where no entry is, so a grid whose tiles met
     /// edge to edge would be a grid a frame could never start in — every point would be on a tile. It is left
     /// on the **item** rather than on the tile drawn inside it, because it is the item's own area that answers
     /// the pointer: room left on what the item holds is room the item still covers, and a frame begun there
@@ -2495,7 +2494,7 @@ internal sealed class GridBrowser : EntryView
         List.BorderThickness = new Thickness(0);
 
         // A tile at rest is its icon and its name on the dock's own ground: the surface a tile wears is what the
-        // choice draws, so it arrives with the selection and leaves with it (Section 10). What is left on the
+        // choice draws, so it arrives with the selection and leaves with it. What is left on the
         // item is the room above and below a tile — the room across is the panel's, which is what makes the
         // outermost room the grid's own padding and nothing else (see JustifiedPanel) — and the corner the
         // surface is rounded by, which is kept for every state so that a choice does not change the shape of

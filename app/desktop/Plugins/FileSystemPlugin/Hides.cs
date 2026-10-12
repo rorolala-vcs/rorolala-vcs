@@ -226,7 +226,7 @@ public sealed class HideRegistry
         Register(new WindowsHiddenFileHide());
 
         // The options are the live list, mutable by `Register` until the window is shown, which is when a
-        // dependent plugin adds its provider (Section 6.1).
+        // dependent plugin adds its provider.
         host.Config.Add(new PluginSetting(Setting, SettingKind.MultiChoice, Key + "providers", Options: Offer));
 
         // Whether what is hidden is shown is declared beside the choice of what hides it, because it is the

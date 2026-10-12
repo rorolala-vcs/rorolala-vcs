@@ -77,7 +77,7 @@ public interface IDockState
 /// <remarks>
 /// A plugin may build the view out of Avalonia controls directly, which is the deliberate trade
 /// that keeps the contract small: the host inserts <see cref="View"/> into its own visual tree, so
-/// the control must come from the host's Avalonia copy (Section 3.4).
+/// the control must come from the host's Avalonia copy.
 /// </remarks>
 public interface IDockView
 {

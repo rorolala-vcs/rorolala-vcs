@@ -237,7 +237,7 @@ public partial class MainWindow : Window
         _services.Docks.Changed += DocksChanged;
 
         // Coming back to the window is when something outside the program is most likely to have changed what
-        // a plugin reads, so what the host is told about it is said on to the plugins here (Section 16).
+        // a plugin reads, so what the host is told about it is said on to the plugins here.
         Activated += (_, _) => _services.Refocus.Regain();
 
         Opened += (_, _) => ShowPopups();
@@ -580,8 +580,7 @@ public partial class MainWindow : Window
             entry.Click += (_, _) =>
             {
                 // The dock opened is given the keyboard, for the reason choosing one is: a dock answers its own
-                // keys inside itself, and what was just asked for from this menu is what a user is about to use
-                // (Section 7.6).
+                // keys inside itself, and what was just asked for from this menu is what a user is about to use.
                 if (_services.Docks.Activate(dock) is { } opened)
                 {
                     opened.View.View.Focus();

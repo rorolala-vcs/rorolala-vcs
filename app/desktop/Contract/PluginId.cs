@@ -35,7 +35,7 @@ public readonly record struct PluginId(string Value)
     /// </summary>
     /// <remarks>
     /// The prefix is a writing convention that keeps two plugins' keys apart; it is not the merge
-    /// mechanism, which is first-registration-wins (Section 11).
+    /// mechanism, which is first-registration-wins.
     /// </remarks>
     public string KeyPrefix => Value.Replace('.', '_');
 

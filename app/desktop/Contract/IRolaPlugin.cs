@@ -18,8 +18,8 @@ public interface IRolaPlugin
     /// Registers everything the plugin contributes, through the host services it is handed.
     /// </summary>
     /// <remarks>
-    /// A plugin that throws here is not loaded, and neither are the plugins that depend on it
-    /// (Section 14.2). It is safe to fail: a broken plugin does not stop the program.
+    /// A plugin that throws here is not loaded, and neither are the plugins that depend on it.
+    /// It is safe to fail: a broken plugin does not stop the program.
     /// </remarks>
     /// <param name="host">The host, as this plugin sees it.</param>
     void Initialize(IPluginHost host);

@@ -8,7 +8,7 @@ namespace RorolalaDesktop.Theming;
 /// Applies how the program looks: the one look it has, in the three things the user chooses about it.
 /// </summary>
 /// <remarks>
-/// There is one look and it is the program's own (Section 10). What a run chooses is the variant it is
+/// There is one look and it is the program's own. What a run chooses is the variant it is
 /// drawn in and the two colours it is drawn with, all read from <c>theme.json</c> before there is a
 /// window.
 /// <para>
@@ -21,7 +21,7 @@ namespace RorolalaDesktop.Theming;
 /// styled when the list grows, and on that second pass the base theme's setters win over the overlay's:
 /// a style added after the window exists silently stops applying to what is already on screen. Nothing
 /// may therefore be added to <c>Application.Styles</c> after this has run — which is why a colour
-/// changed while the program runs replaces a <em>resource</em> rather than a style (Section 10).
+/// changed while the program runs replaces a <em>resource</em> rather than a style.
 /// </para>
 /// </remarks>
 internal sealed class ThemeService
@@ -57,7 +57,7 @@ internal sealed class ThemeService
     /// <remarks>
     /// The first call attaches the look; every call after it replaces the colours of the palette already
     /// attached, so that a colour changed while the program runs reaches every control at once and no
-    /// style is added after the window (Section 10).
+    /// style is added after the window.
     /// </remarks>
     public void Apply()
     {

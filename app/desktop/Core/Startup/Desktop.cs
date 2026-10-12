@@ -15,7 +15,7 @@ namespace RorolalaDesktop;
 /// program is drawn.
 /// </summary>
 /// <remarks>
-/// The order here is the one Section 4.6 lays down. The kernel's docks and menus are registered
+/// The order here is the order the steps must run in. The kernel's docks and menus are registered
 /// first, then the plugins are initialized and register theirs, and then the look is applied — the run
 /// is assembled in one direction, and how it is drawn comes after what it is made of. The window is
 /// made last, because the look has to be applied before anything is drawn.

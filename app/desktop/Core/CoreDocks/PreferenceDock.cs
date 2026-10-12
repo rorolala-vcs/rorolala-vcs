@@ -22,8 +22,8 @@ namespace RorolalaDesktop.CoreDocks;
 /// needs no UI of its own to be settable.
 /// <para>
 /// Editing here writes <c>preference.json</c> at once, and the three things the look is drawn in, which
-/// live in <c>theme.json</c> (Section 5.4), under the kernel's own entry. A colour takes effect there
-/// and then; a plugin's setting says where it is shown whether it does (Section 6.1).
+/// live in <c>theme.json</c>, under the kernel's own entry. A colour takes effect there
+/// and then; a plugin's setting says where it is shown whether it does.
 /// </para>
 /// </remarks>
 internal sealed class PreferenceDock : IDockView
@@ -190,7 +190,7 @@ internal sealed class PreferenceView : UserControl
     /// They are the kernel's own rather than a plugin's, and they are kept in <c>theme.json</c> rather
     /// than in the panel's own file, so they are drawn here rather than declared like a setting. What a
     /// change does is applied at once: a colour is a resource replaced in place, which reaches every
-    /// control without adding a style to a window that already has one (Section 10).
+    /// control without adding a style to a window that already has one.
     /// </remarks>
     private Control ThemeGroup()
     {

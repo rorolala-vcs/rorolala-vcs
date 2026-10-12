@@ -131,7 +131,7 @@ internal sealed class Clip
             var copying = paths.Where(path => !IsCut(path)).ToArray();
 
             // Said before anything is done with them, so that a paste that does nothing reads as a paste that
-            // had nothing to do rather than as a key that was never pressed (Section 7.7).
+            // had nothing to do rather than as a key that was never pressed.
             _log.Info($"paste into `{into}`: {moving.Length} to move, {copying.Length} to copy");
 
             // One call each, so that a question about a taken name is asked once for the batch rather than

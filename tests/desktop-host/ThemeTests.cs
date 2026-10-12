@@ -11,7 +11,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// Nothing here applies the look — that needs a running Avalonia, and the order it is applied in is
-/// what Section 10 requires rather than anything a test can watch — so what is checked is the rule the
+/// what the theme requires rather than anything a test can watch — so what is checked is the rule the
 /// accent is read by, which is the part of the look that depends on a colour this program did not pick, and
 /// the colours a fade runs between, which is the part a flash comes from.
 /// </remarks>

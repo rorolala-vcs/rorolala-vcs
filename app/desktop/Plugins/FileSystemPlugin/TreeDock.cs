@@ -16,7 +16,7 @@ namespace FileSystemPlugin;
 /// The File Navigation dock: the directories under the base, as a tree.
 /// </summary>
 /// <remarks>
-/// It is a dock of its own rather than a layout the directory's dock can be put into (Section 7.5).
+/// It is a dock of its own rather than a layout the directory's dock can be put into.
 /// A tree is not another way of reading one directory; it is a way of walking the ones under a place,
 /// and it is the only view that is rooted somewhere the location is not — so it is not rearranged by
 /// stepping through directories, and it is worth having on screen beside one that is.
@@ -117,7 +117,7 @@ internal sealed class TreeControl : UserControl
 
         // A dock is a place the keyboard can be put, which is how the shell hands it to the tree being read: what
         // this dock answers is answered at the top of itself, so the shell putting the keyboard here is what makes
-        // the keys work after this dock is chosen (Section 7.6).
+        // the keys work after this dock is chosen.
         Focusable = true;
         GotFocus += (_, e) =>
         {
@@ -163,7 +163,7 @@ internal sealed class TreeControl : UserControl
     /// <remarks>
     /// Read again on <c>F5</c>, and the three the clipboard answers, over the step that is chosen: a tree is a
     /// view of directories, and a directory is what a copy, a cut and a paste are about as much as an entry of a
-    /// listing is (Section 7.7).
+    /// listing is.
     /// </remarks>
     /// <param name="sender">The dock.</param>
     /// <param name="e">The key.</param>
@@ -226,7 +226,7 @@ internal sealed class TreeControl : UserControl
     /// </summary>
     /// <remarks>
     /// Deferred to the next turn of the loop, because the tree it goes into has just been made and is not laid out
-    /// yet — a keyboard asked of a control that is not arranged yet is a keyboard it forgets (Section 7.7). Not the
+    /// yet — a keyboard asked of a control that is not arranged yet is a keyboard it forgets. Not the
     /// tree itself but the row that is chosen, when there is one: what a keyboard on the tree reaches is that row.
     /// </remarks>
     private void Seated() =>
@@ -290,7 +290,7 @@ internal sealed class TreeBrowser : UserControl
     /// Kept here rather than read back from the toolkit's selection, because what choosing a row does here is go
     /// there: a row is a step, and whether the toolkit also calls it selected is not something the clipboard's
     /// keys can act on. It is remembered across a rebuild along with the open steps, since being read again is
-    /// what a rebuilt tree is (Section 7.7).
+    /// what a rebuilt tree is.
     /// </remarks>
     private string? _chosen;
 
@@ -586,7 +586,7 @@ internal sealed class TreeBrowser : UserControl
     /// <remarks>
     /// The tree itself and not a row: a row is built into it, and what a keyboard on the tree reaches is the step
     /// that is chosen under it — and being built again is exactly what a tree that lost the keyboard looks like
-    /// from here (Section 7.7).
+    /// from here.
     /// </remarks>
     public void Listen() => _tree.Focus();
 
@@ -701,7 +701,7 @@ internal sealed class TreeBrowser : UserControl
     /// than given up on, because a reading of a step whose rules have not been read is made a moment after
     /// this asks for it (<see cref="Resume"/>).
     /// <para>
-    /// The choice is restored with them because it is what the clipboard's keys act on (Section 7.7): a tree that
+    /// The choice is restored with them because it is what the clipboard's keys act on: a tree that
     /// came back from being read again with nothing chosen would answer <c>Ctrl+C</c>, <c>Ctrl+X</c> and
     /// <c>Ctrl+V</c> by doing nothing at all, which reads as the keys being broken.
     /// </para>
@@ -1003,7 +1003,7 @@ internal sealed class TreeBrowser : UserControl
     /// <remarks>
     /// The keyboard goes back to the tree with it, as it does in a listing: the box was where it was, and the
     /// keys a dock answers are answered from the rows, so a keyboard left in a box that is gone is a dock whose
-    /// keys do nothing (Section 7.7).
+    /// keys do nothing.
     /// </remarks>
     private void Committed()
     {

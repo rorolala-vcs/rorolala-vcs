@@ -22,7 +22,7 @@ namespace FileSystemPlugin;
 /// It is a control rather than a dock, because navigation is not a place of its own: the arrows and the
 /// address act on the one browser, and they belong at the top of the view whose entries they act on. A dock
 /// that could be put anywhere is the wrong home for them — and the dock reading them hands in whatever else
-/// it keeps, so the toolbar does not have to know what a dock remembers (Section 7.5).
+/// it keeps, so the toolbar does not have to know what a dock remembers.
 /// <para>
 /// The address is two things in one place, the way an address bar is: a line of crumbs that says where the
 /// browser is, and — once the crumb of the place being looked at is clicked — a field with the whole path in
@@ -185,7 +185,7 @@ internal sealed class NavigationBar : UserControl
     /// Set by the dock that makes the bar, because the bar does not know what is being read under it. It matters
     /// because a dock answers its keys at the top of itself, which is only reached while the keyboard is
     /// somewhere inside it — and this bar hides its field when an edit ends, so a keyboard left in that field
-    /// would be a keyboard in nothing, with every key after it going unanswered (Section 7.7).
+    /// would be a keyboard in nothing, with every key after it going unanswered.
     /// </remarks>
     public Action? Left { get; set; }
 
@@ -725,8 +725,8 @@ internal sealed class NavigationBar : UserControl
     /// </summary>
     /// <remarks>
     /// A path that is not a directory leaves the location where it was: the address is the one thing a user
-    /// can get wrong, so it is the one that says so, rather than the browser going somewhere unreadable
-    /// (Section 7.5). Either way the field gives way to the crumbs, which say where the browser now is.
+    /// can get wrong, so it is the one that says so, rather than the browser going somewhere unreadable.
+    /// Either way the field gives way to the crumbs, which say where the browser now is.
     /// </remarks>
     /// <param name="path">What was typed.</param>
     private void Go(string? path)

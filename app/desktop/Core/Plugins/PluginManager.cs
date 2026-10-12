@@ -11,14 +11,14 @@ namespace RorolalaDesktop.Plugins;
 /// starts them.
 /// </summary>
 /// <remarks>
-/// The order of the steps is the one Section 4.6 lays down: discover, reconcile with the file, check
+/// The order of the steps is the order they must run in: discover, reconcile with the file, check
 /// the versions, check the dependencies, order, and initialize. A version check that fails, or an
 /// <c>Initialize</c> that throws, leaves that plugin and the plugins depending on it out and is
 /// reported but is not fatal; a cycle is fatal, since no order honors one at all.
 /// <para>
 /// The load order is the user's own sequence, subject to nothing: a plugin whose dependency is
 /// disabled, absent, or placed after it is left out rather than moved, and the fault is shown on
-/// the card that belongs to it (Section 14.2). Nothing is reordered behind the user's back, which is
+/// the card that belongs to it. Nothing is reordered behind the user's back, which is
 /// what makes the arrangement in the plugin manager the arrangement that is started.
 /// </para>
 /// </remarks>

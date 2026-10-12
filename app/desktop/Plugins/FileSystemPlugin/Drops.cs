@@ -31,7 +31,7 @@ internal sealed class Drops
     /// It is what tells a moved-out drag from a moved-in one: a drop answered here has already moved the files,
     /// so the source must not take the originals away as well. Held for the whole program rather than by a view,
     /// because the drop is answered by the view it landed on and the removal is the source's — which is a view of
-    /// its own, and may be another dock's (Section 7.7).
+    /// its own, and may be another dock's.
     /// </remarks>
     public static bool Answered { get; set; }
 
@@ -204,7 +204,7 @@ internal static class Drag
     /// <remarks>
     /// The files are offered themselves as well as their paths written out, so that a file manager receives them
     /// as files and a text field as text. What the platform does with the drag is its own business: this hands
-    /// over the data and waits to be told what became of it (Section 19.6). A move another program made is a
+    /// over the data and waits to be told what became of it. A move another program made is a
     /// move this program has to finish, the other program having only copied the files it was handed; a move one
     /// of this program's own docks answered has already moved them, which is what <see cref="Drops.Answered"/>
     /// records — taking them away again would delete what was just carried.

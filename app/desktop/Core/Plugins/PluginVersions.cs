@@ -8,7 +8,7 @@ namespace RorolalaDesktop.Plugins;
 /// </summary>
 /// <remarks>
 /// A mismatch is not fatal to the program: the plugin is not loaded, and neither are the plugins
-/// that depend on it, and both are reported (Section 14.2). Refusing to load it is deliberate — a
+/// that depend on it, and both are reported. Refusing to load it is deliberate — a
 /// plugin built against another contract or another Avalonia would fail later, at first use, where
 /// the failure is harder to explain.
 /// </remarks>

@@ -24,7 +24,7 @@
          look is what draws the row and the buttons. -->
     <DockPanel>
         <!-- The row's own surface, and what the row is made of: the look fills it with the elevated ground and
-             draws the one line along its foot that separates the row from the dock area below (Section 10). It
+             draws the one line along its foot that separates the row from the dock area below. It
              is the container rather than a layer beside the menu, because a sibling of the menu has no width to
              be drawn in — the menu takes what is left of the row, and a border next to it would be a surface of
              no pixels, which is a line nobody can see.

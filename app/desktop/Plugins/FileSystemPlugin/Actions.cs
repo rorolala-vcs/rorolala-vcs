@@ -76,7 +76,7 @@ internal sealed class BrowserActions
         }
 
         // Said as well, so that a copy that did nothing says why rather than looking like a key that never
-        // arrived (Section 7.7).
+        // arrived.
         _host.Log.Info("copy: nothing chosen");
     }
 
@@ -269,7 +269,7 @@ internal sealed class BrowserActions
     /// <para>
     /// The work is the file operations', like every other one, and what it removed is what leaves the
     /// question unanswered: a dialog the user dismissed runs nothing, because a consequence handed over is
-    /// run only on a <em>yes</em> (§16).
+    /// run only on a <em>yes</em>.
     /// </para>
     /// </remarks>
     /// <param name="entries">What is chosen.</param>

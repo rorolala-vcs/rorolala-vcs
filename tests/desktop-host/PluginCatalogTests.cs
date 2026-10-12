@@ -13,7 +13,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The two real plugins are started here, in process, rather than through the load context the program
 /// uses. What that leaves out is the loading; what it checks is the part the load context exists to make
 /// work — that a plugin reaching into another's static catalogue reaches the same one, and that what it
-/// adds is offered by the setting the other declared (Section 6.2).
+/// adds is offered by the setting the other declared.
 /// </remarks>
 public sealed class PluginCatalogTests
 {
