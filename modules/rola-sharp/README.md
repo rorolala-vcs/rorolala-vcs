@@ -12,8 +12,8 @@ build. It lists every export the header declares as a `[DllImport]` on
 `internal`.
 
 The public shape — the more OOP layer a caller is meant to use, which owns the marshalling and the
-releases the raw surface leaves open — is hand-written over these bindings and is not written yet.
-The assembly therefore has no public API at all.
+releases the raw surface leaves open — is hand-written over these bindings, one file per thing it is
+about: `RolaWorkspace`, `RolaOwnership`, `RolaUser`.
 
 ## What it needs
 

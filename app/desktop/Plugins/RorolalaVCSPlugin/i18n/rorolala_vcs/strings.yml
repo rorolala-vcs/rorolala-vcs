@@ -1,14 +1,35 @@
 _version: 2
 
-# What the Rorolala plugin says. It carries no dock of its own: what it adds is one preset to the File
-# System plugin's settings and one column to its listing, so its words are the plugin's name, that
-# preset's name, and what a lock reads as. Every key is namespaced by the plugin's identity — the id
-# with dots underscored.
+# What the Rorolala plugin says. What it adds to the browser is one preset to the File System
+# plugin's settings and one column to its listing, and what it shows of its own is its three docks;
+# its words are the plugin's name, that preset's name, what a lock reads as, and what each of the
+# docks is called. Every key is namespaced by the plugin's identity — the id with dots underscored.
 
 rorolala_vcs:
   name:
     en: Rorolala VCS
     zh-CN: Rorolala 版本管理
+
+  # What the plugin's three docks are called where the Window menu lists them. They are the views of
+  # the work, each named for what it will show rather than for what it shows today.
+  dock:
+    overview:
+      en: Overview
+      zh-CN: 总览
+    workspace:
+      en: Workspace
+      zh-CN: 工作区
+    version_graph:
+      en: Version Graph
+      zh-CN: 版本图
+
+  # What each of the three says while the directory the tree is rooted at is not one a Workspace
+  # holds: there is nothing under such a place for them to show, and a blank view of the work would
+  # read as a work with nothing in it. The base is the File System plugin's, which is why the words
+  # name a base directory rather than the work.
+  not_a_workspace:
+    en: The current base directory is not a Rorolala Workspace
+    zh-CN: 当前基础目录并非 Rorolala Workspace
 
   # What the preset is called where the File System plugin's settings offer it: Rorolala's own file
   # operations, the commands of `rola fs-ops`.

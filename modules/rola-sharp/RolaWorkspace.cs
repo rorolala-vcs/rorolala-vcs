@@ -69,6 +69,25 @@ public sealed class RolaWorkspace : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether a Workspace holds a directory.
+    /// </summary>
+    /// <remarks>
+    /// The question most callers have, asked without a handle to keep: <see cref="Locate"/> answers
+    /// where the Workspace is, and one that only wants to know whether there is any would take a
+    /// resource and give it straight back. What is asked is whether the directory is inside a
+    /// Workspace rather than whether it is one: the search walks up from what is given, so a directory
+    /// anywhere under a Workspace is held by it.
+    /// </remarks>
+    /// <param name="directory">The directory to ask about.</param>
+    /// <returns>Whether a Workspace holds the directory.</returns>
+    public static bool IsWorkspace(string directory)
+    {
+        using var workspace = Locate(directory);
+
+        return workspace is not null;
+    }
+
     /// <summary>Gives the native workspace back.</summary>
     public void Dispose()
     {

@@ -49,6 +49,12 @@ internal sealed class Shared
         _hides = hides;
         _config = config;
         _shown = config.ReadKeyAs(ShowSetting, false);
+
+        // Said here as well as where the base moves, because a dependent plugin reads it before
+        // anything moves: the directory a run starts on is as worth publishing as one it is rooted
+        // at later, and a view of the work that was blank until the first move would be wrong about
+        // the run it was opened in.
+        BaseDirectory.Publish(_base);
     }
 
     /// <summary>
@@ -148,6 +154,7 @@ internal sealed class Shared
             }
 
             _base = value;
+            BaseDirectory.Publish(_base);
             Changed?.Invoke();
         }
     }

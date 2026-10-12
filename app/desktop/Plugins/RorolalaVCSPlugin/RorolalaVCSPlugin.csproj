@@ -12,6 +12,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The Desktop host's suite, which starts this plugin against a scratch directory and reads what
+         one of its docks says about where the work is: what is checked is the judgement a dock draws
+         from, which is not visible from outside the plugin. -->
+    <InternalsVisibleTo Include="RorolalaDesktopHost.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.3" />
   </ItemGroup>
 

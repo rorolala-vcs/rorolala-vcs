@@ -5,15 +5,16 @@ using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// The Rorolala plugin: it offers Rorolala's own file operations to the File System plugin.
+/// The Rorolala plugin: it offers Rorolala's own file operations to the File System plugin, and shows
+/// the work through three docks of its own.
 /// </summary>
 /// <remarks>
-/// It carries no dock and no window of its own. What it does is contribute a preset — the
-/// <c>rola fs-ops</c> commands — through the File System plugin's extension point, which it reaches by
-/// depending on that plugin: the reference is what lets it name <see cref="FileOperationPresets"/>, and
-/// the manifest's dependency is what has the host start this one after it. A plugin of its own rather
-/// than a part of the browser, because Rorolala's operations are the version control system's to offer,
-/// not the file manager's.
+/// What it contributes to the browser is a preset — the <c>rola fs-ops</c> commands — and what it adds
+/// beside it is the three views of the work: Overview, Workspace and Version Graph. Both are reached by
+/// depending on the File System plugin: the reference is what lets it name
+/// <see cref="FileOperationPresets"/>, and the manifest's dependency is what has the host start this one
+/// after it. A plugin of its own rather than a part of the browser, because Rorolala's operations and
+/// what Rorolala works on are the version control system's to offer, not the file manager's.
 /// </remarks>
 public sealed class RorolalaVCSPlugin : IRolaPlugin
 {
@@ -41,6 +42,12 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         // What an entry's menu offers about who holds it: the two ownership commands, plain and forced.
         OwnershipActions.Declare(host);
+
+        // And what the work is looked at through: the three docks, which are this plugin's own windows
+        // rather than anything the File System plugin is asked for. What they will hold is Rorolala's,
+        // while the base directory they are read against is that plugin's — which is why the two are one
+        // plugin depending on another (see RorolalaDocks).
+        RorolalaDocks.Declare(host, Manifest.Id);
     }
 
     /// <summary>

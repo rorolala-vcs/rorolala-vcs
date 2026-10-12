@@ -30,11 +30,14 @@
     <!-- The host itself. This suite drives its own types — the configuration, the plugin manager,
          the registries, the log — rather than only the contract it publishes. -->
     <ProjectReference Include="../../app/desktop/Core/RorolalaDesktop.csproj" />
-    <!-- The two plugins that ship with the program, so that one plugin's contribution to another's
+    <!-- The plugins that ship with the program, so that one plugin's contribution to another's
          extension point is checked in process: what is exercised is the catalogue the two share, which
          the load context is only there to make one copy of. -->
     <ProjectReference Include="../../app/desktop/Plugins/FileSystemPlugin/FileSystemPlugin.csproj" />
     <ProjectReference Include="../../app/desktop/Plugins/GitVCSPlugin/GitVCSPlugin.csproj" />
+    <!-- And the one that shows docks of its own, which are read against where the File System plugin
+         is rooted: the two are one plugin depending on another, which is what this checks. -->
+    <ProjectReference Include="../../app/desktop/Plugins/RorolalaVCSPlugin/RorolalaVCSPlugin.csproj" />
   </ItemGroup>
 
   <ItemGroup>
