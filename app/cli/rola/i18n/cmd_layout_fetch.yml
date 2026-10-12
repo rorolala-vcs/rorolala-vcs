@@ -5,7 +5,7 @@ cmd_layout_fetch:
     en: |
         Bring a Vault's Layout here as a read-only copy
 
-        **Usage**: `rola layout fetch [VAULT]`
+        **Usage**: `rola layout fetch [VAULT] [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`,
         and not an address, since what is fetched is kept under the Vault's name. Naming none
@@ -19,7 +19,7 @@ cmd_layout_fetch:
     zh-CN: |
         将某个保险库的布局取回为只读副本
 
-        **用法**：`rola layout fetch [VAULT]`
+        **用法**：`rola layout fetch [VAULT] [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` 指要连接的保险库：必须是工作区用 `rola vault bind` 绑定的名字，而不是地址，
         因为取回的内容会按该保险库的名字存放。不指定时，使用工作区选定的默认保险库。

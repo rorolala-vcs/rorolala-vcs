@@ -5,7 +5,7 @@ storage_ls_manifests:
     en: |
         List every content the store keeps cut, as a manifest
 
-        **Usage**: `rola storage ls-manifests`
+        **Usage**: `rola storage ls-manifests [--vault] [--offline] [--force] [--no-pager]`
 
         A manifest is what a cut content has and a whole one has none, so what is printed is the
         contents the store was told to cut. Each is named `manifest:<digest>` — the way
@@ -18,7 +18,7 @@ storage_ls_manifests:
     zh-CN: |
         列出仓库以 manifest 保存（即被分块）的全部内容
 
-        **用法**：`rola storage ls-manifests`
+        **用法**：`rola storage ls-manifests [--vault] [--offline] [--force] [--no-pager]`
 
         分块内容有一份 manifest，整份内容则没有，因此这里列出的是仓库被告知要分块的那些内容。每行以
         `manifest:<摘要>` 命名——与 `rola storage write-file` 对分块内容的命名一致——而同一个名字

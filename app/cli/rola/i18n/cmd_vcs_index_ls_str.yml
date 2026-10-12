@@ -5,7 +5,7 @@ vcs_index_ls_str:
     en: |
         List the hashes of the text objects the index holds
 
-        **Usage**: `rola vcs-index ls-str [--json]`
+        **Usage**: `rola vcs-index ls-str [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         A Creator and a Message are the index's text: a name and a message, held as objects so that
         a Version can say who made it and what was done by carrying their hashes. What is listed is
@@ -15,7 +15,7 @@ vcs_index_ls_str:
     zh-CN: |
         列出索引中文本对象的哈希
 
-        **用法**：`rola vcs-index ls-str [--json]`
+        **用法**：`rola vcs-index ls-str [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         Creator 与 Message 是索引里的文本：一个是名字、一个是消息，作为对象保存，好让 Version 携带
         它们的哈希说明是谁做的、做了什么。这里列出的是这些哈希，每行一个，十六进制。文本本身用

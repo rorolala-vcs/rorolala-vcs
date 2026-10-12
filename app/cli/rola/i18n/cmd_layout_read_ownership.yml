@@ -5,7 +5,7 @@ cmd_layout_read_ownership:
     en: |
         Read who holds an entry, from the Vault's fetched copy
 
-        **Usage**: `rola layout read-ownership [VAULT] <UUID>`
+        **Usage**: `rola layout read-ownership [VAULT] <UUID> [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` names the Vault whose copy is read: a name the Workspace has bound with `rola vault
         bind`. Naming none reads the copy of the one the Workspace reaches for by default. `UUID`
@@ -18,7 +18,7 @@ cmd_layout_read_ownership:
     zh-CN: |
         从取回的副本中读取某个条目的持有者
 
-        **用法**：`rola layout read-ownership [VAULT] <UUID>`
+        **用法**：`rola layout read-ownership [VAULT] <UUID> [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` 指要读取其副本的保险库：必须是工作区用 `rola vault bind` 绑定的名字。不指定时，
         读取工作区选定默认保险库的副本。`UUID` 是要读取的条目的 `Uuid`。

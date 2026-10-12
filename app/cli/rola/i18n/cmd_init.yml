@@ -5,14 +5,14 @@ init:
     en: |
         Create a workspace or vault in the current directory
 
-        **Usage**: `rola init`
+        **Usage**: `rola init [--vault] [--offline] [--force] [--no-pager]`
 
         This is `rola create <current directory>`: the path does not have to be written
         out. With `--vault`, a Vault is created instead of a Workspace.
     zh-CN: |
         将当前目录创建为工作区或保险库
 
-        **用法**：`rola init`
+        **用法**：`rola init [--vault] [--offline] [--force] [--no-pager]`
 
         等价于 `rola create <当前目录>`，只是不用手写路径。
         加上 `--vault` 时创建的是保险库而不是工作区。

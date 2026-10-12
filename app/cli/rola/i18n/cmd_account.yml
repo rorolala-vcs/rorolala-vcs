@@ -5,7 +5,7 @@ account:
     en: |
         Name the account the work acts as, or list the accounts it can act as
 
-        **Usage**: `rola account <ACCOUNT>`
+        **Usage**: `rola account <ACCOUNT> [--vault] [--offline] [--force] [--no-pager]`
 
         **Commands**
             ls                   List the accounts the work can act as
@@ -21,7 +21,7 @@ account:
     zh-CN: |
         指定当前工作以哪个账户行事，或列出可用的账户
 
-        **用法**：`rola account <ACCOUNT>`
+        **用法**：`rola account <ACCOUNT> [--vault] [--offline] [--force] [--no-pager]`
 
         **命令**
             ls                   列出当前工作可以使用的账户
@@ -76,7 +76,7 @@ account_ls:
     en: |
         List the accounts the work can act as
 
-        **Usage**: `rola account ls`
+        **Usage**: `rola account ls [--vault] [--offline] [--force] [--no-pager]`
 
         Every account any scope holds, deduplicated and in name order, one per line. Each one
         carries whether it is the account the work acts as, which `--json` and `--format` read
@@ -84,7 +84,7 @@ account_ls:
     zh-CN: |
         列出当前工作可以使用的账户
 
-        **用法**：`rola account ls`
+        **用法**：`rola account ls [--vault] [--offline] [--force] [--no-pager]`
 
         列出所有作用域中能找到的账户，去重并按名字排序，每行一个。每个账户带有它是否就是
         当前工作行事所用的那一个，`--json` 与 `--format` 中以 `is_current` 读取。
@@ -97,14 +97,14 @@ account_current:
     en: |
         Print the account the work acts as
 
-        **Usage**: `rola account current`
+        **Usage**: `rola account current [--vault] [--offline] [--force] [--no-pager]`
 
         The name alone, so a run can read it without a sentence around it. Nothing is printed
         when the work acts as no account.
     zh-CN: |
         输出当前工作行事所用的账户
 
-        **用法**：`rola account current`
+        **用法**：`rola account current [--vault] [--offline] [--force] [--no-pager]`
 
         只输出名字，便于直接读取。尚未指定账户时不输出任何内容。
   description:

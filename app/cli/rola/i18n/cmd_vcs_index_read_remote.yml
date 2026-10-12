@@ -5,7 +5,7 @@ vcs_index_read_remote:
     en: |
         Read one index object from the other end
 
-        **Usage**: `rola vcs-index read-remote <HASH> [VAULT] [--json]`
+        **Usage**: `rola vcs-index read-remote <HASH> [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         It is `rola vcs-index read` asked of the other end: where that reads the index the run is
         inside, this reaches the Vault and reads what *its* index holds. A Creator or a Message is
@@ -18,7 +18,7 @@ vcs_index_read_remote:
     zh-CN: |
         从对端读取一个索引对象
 
-        **用法**：`rola vcs-index read-remote <HASH> [VAULT] [--json]`
+        **用法**：`rola vcs-index read-remote <HASH> [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         即 `rola vcs-index read` 问向对端：那条命令读取本次运行所在索引，而这条连上保险库、读取**它**的
         索引持有的对象。Creator 与 Message 直接打印其文本；Variant 按 `ls-variants` 的格式打印，

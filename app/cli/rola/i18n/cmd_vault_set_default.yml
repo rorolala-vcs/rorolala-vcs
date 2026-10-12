@@ -5,7 +5,7 @@ vault_set_default:
     en: |
         Choose the Vault the Workspace reaches for
 
-        **Usage**: `rola vault set-default <NAME>`
+        **Usage**: `rola vault set-default <NAME> [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` has to be one the Workspace has bound with `rola vault bind`. It becomes what a
         command that would otherwise ask which Vault to reach for falls back on — `rola
@@ -14,7 +14,7 @@ vault_set_default:
     zh-CN: |
         选择工作区默认使用的保险库
 
-        **用法**：`rola vault set-default <NAME>`
+        **用法**：`rola vault set-default <NAME> [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` 必须是工作区已用 `rola vault bind` 绑定的名字。它将成为那些本会询问
         “要连哪个保险库”的命令的默认选择（例如不带参数的 `rola vault handshake`）。

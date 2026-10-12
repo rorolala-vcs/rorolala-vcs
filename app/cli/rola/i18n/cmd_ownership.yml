@@ -9,7 +9,7 @@ hold:
     en: |
         Claim entries for your account
 
-        **Usage**: `rola hold <PATH>... [--force] [--allow-partial]`
+        **Usage**: `rola hold <PATH>... [--force] [--allow-partial] [--vault] [--offline] [--no-pager]`
 
         Each `PATH` is where a file sits in the Layout being worked in; ownership is about the
         `Uuid` that Layout names the path by, in the Vault the Layout tracks. A `PATH` that is a
@@ -34,7 +34,7 @@ hold:
     zh-CN: |
         为当前账户占有条目
 
-        **用法**：`rola hold <PATH>... [--force] [--allow-partial]`
+        **用法**：`rola hold <PATH>... [--force] [--allow-partial] [--vault] [--offline] [--no-pager]`
 
         每个 `PATH` 是文件在当前布局中的位置；所有权针对的是布局用它命名的那个 `Uuid`，位于布局
         追踪的保险库中。`PATH` 是目录时会递归取目录下的每个文件，`.` 就是运行所在目录，因此
@@ -61,7 +61,7 @@ giveup:
     en: |
         Let go of entries your account holds
 
-        **Usage**: `rola giveup <PATH>... [--force] [--allow-partial]`
+        **Usage**: `rola giveup <PATH>... [--force] [--allow-partial] [--vault] [--offline] [--no-pager]`
 
         Each `PATH` is where a file sits in the Layout being worked in; ownership is about the
         `Uuid` that Layout names the path by, in the Vault the Layout tracks. A `PATH` that is a
@@ -85,7 +85,7 @@ giveup:
     zh-CN: |
         放弃当前账户持有的条目
 
-        **用法**：`rola giveup <PATH>... [--force] [--allow-partial]`
+        **用法**：`rola giveup <PATH>... [--force] [--allow-partial] [--vault] [--offline] [--no-pager]`
 
         每个 `PATH` 是文件在当前布局中的位置；所有权针对的是布局用它命名的那个 `Uuid`，位于布局
         追踪的保险库中。`PATH` 是目录时会递归取目录下的每个文件，`.` 就是运行所在目录，因此

@@ -9,7 +9,7 @@ key_generate:
     en: |
         Generate an Ed25519 key pair under a name
 
-        **Usage**: `rola key generate <NAME> [--install]`
+        **Usage**: `rola key generate <NAME> [--install] [--vault] [--offline] [--force] [--no-pager]`
 
         `<NAME>.pem` — the private key, a PKCS#8 PEM, which is what an account is — and
         `<NAME>.pub` — the public key derived from it, an SPKI PEM, which is what a member is —
@@ -25,7 +25,7 @@ key_generate:
     zh-CN: |
         按名字生成一对 Ed25519 密钥
 
-        **用法**：`rola key generate <NAME> [--install]`
+        **用法**：`rola key generate <NAME> [--install] [--vault] [--offline] [--force] [--no-pager]`
 
         在当前目录写出 `<NAME>.pem`（私钥，PKCS#8 PEM，即账户）与 `<NAME>.pub`（由它导出的
         公钥，SPKI PEM，即成员）。`NAME` 是“这一对”的名字而不是单个文件，因此名字上的扩展名

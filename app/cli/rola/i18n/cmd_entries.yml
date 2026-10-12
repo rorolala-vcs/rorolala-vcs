@@ -9,7 +9,7 @@ entries:
     en: |
         List the paths a Layout names, one a line
 
-        **Usage**: `rola entries [--remote]`
+        **Usage**: `rola entries [--remote] [--vault] [--offline] [--force] [--no-pager]`
 
         The Layout being worked in is what is read. `--remote` reads the Vault's own Layout
         instead — the one that Layout tracks — as the copy `rola layout fetch` left in the
@@ -22,7 +22,7 @@ entries:
     zh-CN: |
         列出一个布局命名的路径，一行一个
 
-        **用法**：`rola entries [--remote]`
+        **用法**：`rola entries [--remote] [--vault] [--offline] [--force] [--no-pager]`
 
         默认读当前使用的布局。`--remote` 改读保险库自己的布局 —— 也就是该布局追踪的那个 ——
         取自 `rola layout fetch` 留在工作区里的副本；它不会替你取回，没有取回过就会被告知没有

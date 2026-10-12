@@ -5,7 +5,7 @@ bind:
     en: |
         Bind a Vault address under a name and start a Layout on it
 
-        **Usage**: `rola bind <LINK> [NAME] [--no-set-default-vault] [--no-set-layout]`
+        **Usage**: `rola bind <LINK> [NAME] [--no-set-default-vault] [--no-set-layout] [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` is used for both halves of what this does, and is `origin` when none is given: the
         Vault is bound under it, and a Layout of that name is made to track that Vault. The name is
@@ -23,7 +23,7 @@ bind:
     zh-CN: |
         将保险库地址绑定到一个名字，并以该名字建立布局
 
-        **用法**：`rola bind <LINK> [NAME] [--no-set-default-vault] [--no-set-layout]`
+        **用法**：`rola bind <LINK> [NAME] [--no-set-default-vault] [--no-set-layout] [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` 同时用于这一步所做的两件事，未指定时为 `origin`：保险库以它绑定，
         并建立一个同名布局来追踪该保险库。名字会被规格化为 kebab-case，

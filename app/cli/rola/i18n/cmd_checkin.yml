@@ -5,7 +5,7 @@ checkin:
     en: |
         Bring what the Vault holds but this Layout does not into it
 
-        **Usage**: `rola checkin <FROM>... [TO]` — or `rola checkin <VARIANT> --join <FILE> [PLACE]`
+        **Usage**: `rola checkin <FROM>... [TO]` — or `rola checkin <VARIANT> --join <FILE> [PLACE] [--vault] [--offline] [--force] [--no-pager]`
 
         The operands read the way `mv`'s do: every word but the last is what is to come in — a path
         in the Vault's Layout, a glob over those paths, or a `Uuid` — and the last, when there is
@@ -38,7 +38,7 @@ checkin:
     zh-CN: |
         把保险库持有、而当前布局没有的内容带入当前布局
 
-        **用法**：`rola checkin <FROM>... [TO]`——或 `rola checkin <变体HASH> --join <文件> [位置]`
+        **用法**：`rola checkin <FROM>... [TO]`——或 `rola checkin <变体HASH> --join <文件> [位置] [--vault] [--offline] [--force] [--no-pager]`
 
         位置参数按 `mv` 的方式读：最后一个是落点，前面的都是要带入的内容——保险库布局中的路径、
         对这些路径的通配，或一个 `Uuid`；只有一个词时它就是要带入的内容，没有落点。

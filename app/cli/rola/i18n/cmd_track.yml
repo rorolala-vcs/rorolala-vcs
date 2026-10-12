@@ -18,7 +18,7 @@ track:
     en: |
         Record files in the Layout being worked in
 
-        **Usage**: `rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--no-editor] [--replace] [--force]`
+        **Usage**: `rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--no-editor] [--replace] [--force] [--vault] [--offline] [--no-pager]`
 
         Each file's content goes into the store, a version is made of it, and the Layout is made to
         name that version. A file whose content is what the Layout already names is skipped: it is
@@ -41,7 +41,7 @@ track:
     zh-CN: |
         将文件记入当前正在使用的布局
 
-        **用法**：`rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--no-editor] [--replace] [--force]`
+        **用法**：`rola track <FILE>... [--message <MESSAGE>] [--file-message <MESSAGE>]... [--no-editor] [--replace] [--force] [--vault] [--offline] [--no-pager]`
 
         每个文件的内容写入仓库，为其建立版本，并让布局指向该版本。内容与布局已记录一致的
         文件会被跳过：既不记录，也不需要为它撰写提交信息。`FILE` 为目录时会递归处理，其下

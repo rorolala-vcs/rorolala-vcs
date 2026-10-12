@@ -87,7 +87,7 @@ rorolala-vcs = { path = "modules/vcs" }
 rorolala-workspace = { path = "modules/workspace" }
 
 # CLI Framework
-mingling = { git = "https://github.com/mingling-rs/mingling", rev = "0cc2ad9b6b76cff1af896393ed333cd52d286a14", features = [
+mingling = { git = "https://github.com/mingling-rs/mingling", rev = "3972930a83c1e7b998da60c5bd4cda93e666b020", features = [
     "picker",
     "comp",
     "pathf",
@@ -152,6 +152,12 @@ console = "0.16.6"
 indicatif = "0.18.4"
 prettytable-rs = { version = "0.10.0", default-features = false }
 unicode-width = "0.2.2"
+
+# Paging. The pager `rola` falls back to when the machine names none, carried inside the program
+# rather than reached for, so a long answer is readable on a machine that has no pager installed.
+# Only the plain output is wanted: what is being paged is text this program has already drawn, not
+# a stream being searched through or highlighted, so `search` and `regex` stay out.
+minus = { version = "5.8.0", default-features = false, features = ["static_output"] }
 
 # Internationalization
 rust-i18n = "4.2.2"

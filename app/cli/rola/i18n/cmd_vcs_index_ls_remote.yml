@@ -5,7 +5,7 @@ vcs_index_ls_remote:
     en: |
         List the variants the index at the other end holds
 
-        **Usage**: `rola vcs-index ls-remote-variants [VAULT] [--json]`
+        **Usage**: `rola vcs-index ls-remote-variants [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         It is `rola vcs-index ls-variants` asked of the other end: where that lists the index the run
         is inside, this reaches the Vault and lists what *its* index holds. What is printed is the
@@ -18,7 +18,7 @@ vcs_index_ls_remote:
     zh-CN: |
         列出对端索引持有的 variant
 
-        **用法**：`rola vcs-index ls-remote-variants [VAULT] [--json]`
+        **用法**：`rola vcs-index ls-remote-variants [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         即 `rola vcs-index ls-variants` 问向对端：那条命令列出本次运行所在索引持有的内容，而这条连上
         保险库、列出**它**的索引持有的内容。打印出来的是 variant 的哈希，每行一个——不计算号，因为号
@@ -36,7 +36,7 @@ vcs_index_ls_remote:
     en: |
         List the versions the index at the other end holds
 
-        **Usage**: `rola vcs-index ls-remote-versions [VAULT] [--json]`
+        **Usage**: `rola vcs-index ls-remote-versions [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         It is `rola vcs-index ls-versions` asked of the other end: where that lists the index the run
         is inside, this reaches the Vault and lists what *its* index holds. What is printed is the
@@ -49,7 +49,7 @@ vcs_index_ls_remote:
     zh-CN: |
         列出对端索引持有的 version
 
-        **用法**：`rola vcs-index ls-remote-versions [VAULT] [--json]`
+        **用法**：`rola vcs-index ls-remote-versions [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         即 `rola vcs-index ls-versions` 问向对端：那条命令列出本次运行所在索引持有的内容，而这条连上
         保险库、列出**它**的索引持有的内容。打印出来的是 version 的哈希，每行一个——不计算号，因为号
@@ -67,7 +67,7 @@ vcs_index_ls_remote:
     en: |
         List the hashes of the text objects the index at the other end holds
 
-        **Usage**: `rola vcs-index ls-remote-str [VAULT] [--json]`
+        **Usage**: `rola vcs-index ls-remote-str [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         It is `rola vcs-index ls-str` asked of the other end: where that lists the text objects the
         index the run is inside holds, this reaches the Vault and lists what *its* index holds. What
@@ -79,7 +79,7 @@ vcs_index_ls_remote:
     zh-CN: |
         列出对端索引中文本对象的哈希
 
-        **用法**：`rola vcs-index ls-remote-str [VAULT] [--json]`
+        **用法**：`rola vcs-index ls-remote-str [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         即 `rola vcs-index ls-str` 问向对端：那条命令列出本次运行所在索引持有的文本对象，而这条连上
         保险库、列出**它**的索引持有的内容。打印出来的是这些哈希，每行一个，因此这里读到的一行可以直接

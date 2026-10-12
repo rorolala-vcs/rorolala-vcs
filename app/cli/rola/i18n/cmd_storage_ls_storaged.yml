@@ -5,7 +5,7 @@ storage_ls_storaged:
     en: |
         List every object the store holds
 
-        **Usage**: `rola storage ls-storaged`
+        **Usage**: `rola storage ls-storaged [--vault] [--offline] [--force] [--no-pager]`
 
         What is printed is one key per line: the same keys `rola storage extract-file` takes, so a line
         read here is a hash to hand to that command. Only what the store holds is listed — a
@@ -17,7 +17,7 @@ storage_ls_storaged:
     zh-CN: |
         列出仓库持有的全部对象
 
-        **用法**：`rola storage ls-storaged`
+        **用法**：`rola storage ls-storaged [--vault] [--offline] [--force] [--no-pager]`
 
         每行打印一个哈希，与 `rola storage extract-file` 接受的是同一种，因此这里读到的一行可以直接交给
         那条命令。只列出仓库确实持有的对象——块已丢失的 manifest 不会出现，因为那并没有内容可读。

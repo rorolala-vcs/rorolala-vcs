@@ -5,7 +5,7 @@ explain:
     en: |
         Say what a number or a name the program left behind means
 
-        **Usage**: `rola explain <COMMAND>`
+        **Usage**: `rola explain <COMMAND> [--vault] [--offline] [--force] [--no-pager]`
 
         **Commands**
             exit-code [N]   Explain exit code N, or the one the last run ended with
@@ -17,7 +17,7 @@ explain:
     zh-CN: |
         解释程序留下的某个数字或名字的含义
 
-        **用法**：`rola explain <命令>`
+        **用法**：`rola explain <命令> [--vault] [--offline] [--force] [--no-pager]`
 
         **命令**
             exit-code [N]   解释退出码 N，或不带 N 时解释上一次运行结束时的退出码
@@ -35,7 +35,7 @@ explain_exit_code:
     en: |
         Explain an exit code
 
-        **Usage**: `rola explain exit-code [N]`
+        **Usage**: `rola explain exit-code [N] [--vault] [--offline] [--force] [--no-pager]`
 
         `N` is the exit code to explain, and it has to be one the program states — they
         are listed below. Naming none explains the code the last run that failed ended
@@ -50,7 +50,7 @@ explain_exit_code:
     zh-CN: |
         解释一个退出码
 
-        **用法**：`rola explain exit-code [N]`
+        **用法**：`rola explain exit-code [N] [--vault] [--offline] [--force] [--no-pager]`
 
         `N` 是要解释的退出码，必须是本程序声明过的码 —— 它们列在下方。
         不加 `N` 时解释上一次失败运行结束时的退出码，它保存在用户的本地数据目录下

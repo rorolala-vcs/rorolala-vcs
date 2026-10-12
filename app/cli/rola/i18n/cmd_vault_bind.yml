@@ -9,7 +9,7 @@ vault_bind:
     en: |
         Bind a name to a Vault address
 
-        **Usage**: `rola vault bind [--set-default] <NAME> <ADDR>`
+        **Usage**: `rola vault bind [--set-default] <NAME> <ADDR> [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` is the Workspace's own shorthand for a Vault, and naming one that is already
         bound changes what it means. `ADDR` is a host and a port, such as `127.0.0.1:7000`,
@@ -23,7 +23,7 @@ vault_bind:
     zh-CN: |
         将名字绑定到保险库地址
 
-        **用法**：`rola vault bind [--set-default] <NAME> <ADDR>`
+        **用法**：`rola vault bind [--set-default] <NAME> <ADDR> [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` 是工作区为保险库起的简称；名字已存在时，再次绑定即为修改其含义。
         `ADDR` 是主机与端口，例如 `127.0.0.1:7000`；主机可以是 ip，也可以是名字（如 `localhost`），

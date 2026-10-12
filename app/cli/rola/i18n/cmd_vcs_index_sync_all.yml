@@ -5,7 +5,7 @@ vcs_index_sync_all:
     en: |
         Make the indexes at both ends hold the same keys
 
-        **Usage**: `rola vcs-index sync-all [VAULT]`
+        **Usage**: `rola vcs-index sync-all [VAULT] [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`, or
         an ip, with the port a Vault listens on by default when none is written. Naming none reaches
@@ -20,7 +20,7 @@ vcs_index_sync_all:
     zh-CN: |
         让两端的索引持有相同的对象
 
-        **用法**：`rola vcs-index sync-all [VAULT]`
+        **用法**：`rola vcs-index sync-all [VAULT] [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` 指定要连接的保险库：工作区已用 `rola vault bind` 绑定的名字，或一个 ip（不写端口时用
         保险库默认监听的端口）。不指定则连接工作区默认使用的那个。

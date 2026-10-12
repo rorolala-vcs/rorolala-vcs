@@ -5,7 +5,7 @@ storage_write_file:
     en: |
         Store a file's content, and print the hash it is kept under
 
-        **Usage**: `rola storage write-file <FILE>`
+        **Usage**: `rola storage write-file <FILE> [--vault] [--offline] [--force] [--no-pager]`
 
         `FILE` names a file, not a directory. How the content is kept — whether it is
         compressed, whether it is cut into chunks — is the store's own decision, made from the
@@ -22,7 +22,7 @@ storage_write_file:
     zh-CN: |
         将文件内容存入仓库，并打印它所用的哈希
 
-        **用法**：`rola storage write-file <FILE>`
+        **用法**：`rola storage write-file <FILE> [--vault] [--offline] [--force] [--no-pager]`
 
         `FILE` 是文件，不是目录。内容如何保存——是否压缩、是否分块——由仓库根据内容自行决定，
         所以这里给的只是一个路径。

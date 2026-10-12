@@ -12,7 +12,7 @@ pack:
     en: |
         Lay the objects a store and an index hold out in packs
 
-        **Usage**: `rola pack [--no-index] [--no-storage]`
+        **Usage**: `rola pack [--no-index] [--no-storage] [--vault] [--offline] [--force] [--no-pager]`
 
         Everything the store holds is written again: the entries of every pack are gathered up with
         the loose objects, and the whole of it is laid down as one pack — or as several, once one
@@ -35,7 +35,7 @@ pack:
     zh-CN: |
         将仓库与索引中的对象整理进 pack
 
-        **用法**：`rola pack [--no-index] [--no-storage]`
+        **用法**：`rola pack [--no-index] [--no-storage] [--vault] [--offline] [--force] [--no-pager]`
 
         仓库持有的全部内容都会被重新写出：各 pack 的条目与松散对象一并收集，整体落成一个 pack——若某个
         pack 将超过仓库的 `max_pack_size`，则落成多个。`max_pack_size` 来自仓库配置中的

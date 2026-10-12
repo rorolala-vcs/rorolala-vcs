@@ -33,7 +33,7 @@ align:
     en: |
         Bring the tree and the Layout back into agreement
 
-        **Usage**: `rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore) [--completely]`
+        **Usage**: `rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore) [--completely] [--vault] [--offline] [--force] [--no-pager]`
 
         `PATH` is read where the run was made, as a shell would read it. `.` is the directory the run
         is in and everything under it, and a name that lands on a directory selects everything under
@@ -55,7 +55,7 @@ align:
     zh-CN: |
         让工作树与布局重新一致
 
-        **用法**：`rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore) [--completely]`
+        **用法**：`rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore) [--completely] [--vault] [--offline] [--force] [--no-pager]`
 
         `PATH` 按运行所在目录解析，与 shell 一致。`.` 就是运行所在目录及其下全部；落在目录上的名字会选中其下全部。模式必须且只能给出一个：
 

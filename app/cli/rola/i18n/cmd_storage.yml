@@ -5,7 +5,7 @@ storage:
     en: |
         Read and write the content a store holds, by hand
 
-        **Usage**: `rola storage <COMMAND>`
+        **Usage**: `rola storage <COMMAND> [--vault] [--offline] [--force] [--no-pager]`
 
         **Commands**
             write-file <FILE>          Store a file's content, and print the hash it is kept under
@@ -27,7 +27,7 @@ storage:
     zh-CN: |
         手工读写仓库持有的内容
 
-        **用法**：`rola storage <命令>`
+        **用法**：`rola storage <命令> [--vault] [--offline] [--force] [--no-pager]`
 
         **命令**
             write-file <FILE>          存储文件内容，并打印它所用的哈希

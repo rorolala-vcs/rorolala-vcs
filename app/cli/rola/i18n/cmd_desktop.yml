@@ -5,7 +5,7 @@ desktop:
     en: |
         Open the Desktop program that sits beside this one
 
-        **Usage**: `rola desktop [--window-style=<windows|mac|tillingwm>]`
+        **Usage**: `rola desktop [--window-style=<windows|mac|tillingwm>] [--vault] [--offline] [--force] [--no-pager]`
 
         The command line is a way to work without a window; the Desktop program is the window
         for the same work. The two are exported together — this program at `bin/rola` and the
@@ -25,7 +25,7 @@ desktop:
     zh-CN: |
         打开与 rola 并排的桌面程序
 
-        **用法**：`rola desktop [--window-style=<windows|mac|tillingwm>]`
+        **用法**：`rola desktop [--window-style=<windows|mac|tillingwm>] [--vault] [--offline] [--force] [--no-pager]`
 
         命令行是不开窗口的工作方式，桌面程序则是同一件事的窗口。两者一起导出——rola 在
         `bin/rola`，桌面程序在 `bin/desktop/`——因此本命令打开的是所运行的 rola 旁边那一个，

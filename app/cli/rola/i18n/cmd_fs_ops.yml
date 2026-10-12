@@ -10,7 +10,7 @@ fs_ops:
     en: |
         Move, copy or remove a path
 
-        **Usage**: `rola fs-ops mv FROM TO`, `rola fs-ops cp FROM TO`, `rola fs-ops rm PATH`
+        **Usage**: `rola fs-ops mv FROM TO`, `rola fs-ops cp FROM TO`, `rola fs-ops rm PATH [--vault] [--offline] [--force] [--no-pager]`
 
         These are the file operations themselves, and nothing besides: `TO` is the path the thing is
         to have rather than the directory it is to go in, what a name already taken there means is
@@ -21,7 +21,7 @@ fs_ops:
     zh-CN: |
         移动、复制或删除一个路径
 
-        **用法**：`rola fs-ops mv FROM TO`、`rola fs-ops cp FROM TO`、`rola fs-ops rm PATH`
+        **用法**：`rola fs-ops mv FROM TO`、`rola fs-ops cp FROM TO`、`rola fs-ops rm PATH [--vault] [--offline] [--force] [--no-pager]`
 
         这些就是文件操作本身，别无其他：`TO` 是目标应有的路径而不是要放进哪个目录；那里已有同名时意味
         着什么，由调用方先行确定；每个操作运行前都不再发问。
@@ -37,7 +37,7 @@ fs_ops:
     en: |
         Put a path at another
 
-        **Usage**: `rola fs-ops mv FROM TO`
+        **Usage**: `rola fs-ops mv FROM TO [--vault] [--offline] [--force] [--no-pager]`
 
         `TO` is the path the thing is to have. Either path may name a file or a directory, and moving
         a directory moves everything under it. A rename the filesystem refuses — across two devices,
@@ -53,7 +53,7 @@ fs_ops:
     zh-CN: |
         把一个路径放到另一个位置
 
-        **用法**：`rola fs-ops mv FROM TO`
+        **用法**：`rola fs-ops mv FROM TO [--vault] [--offline] [--force] [--no-pager]`
 
         `TO` 是该东西应有的路径。两侧都可以是文件或目录，移动目录即移动其下的一切。文件系统拒绝的
         改名（最常见的是跨设备）改为绕道完成：先复制，再删除。
@@ -72,7 +72,7 @@ fs_ops:
     en: |
         Put a copy of a path at another
 
-        **Usage**: `rola fs-ops cp FROM TO`
+        **Usage**: `rola fs-ops cp FROM TO [--vault] [--offline] [--force] [--no-pager]`
 
         `TO` is the path the copy is to have, and `FROM` is left where it is. Either path may name a
         file or a directory, and copying a directory copies everything under it — content and
@@ -81,7 +81,7 @@ fs_ops:
     zh-CN: |
         把一个路径的副本放到另一个位置
 
-        **用法**：`rola fs-ops cp FROM TO`
+        **用法**：`rola fs-ops cp FROM TO [--vault] [--offline] [--force] [--no-pager]`
 
         `TO` 是副本应有的路径，`FROM` 留在原处。两侧都可以是文件或目录；复制目录即复制其下的一切——
         也就是内容与结构，这是它仅有的承诺：权限、属主与时间由目标处自己决定，如同系统对待任何新写出的
@@ -95,7 +95,7 @@ fs_ops:
     en: |
         Take a path away
 
-        **Usage**: `rola fs-ops rm PATH`
+        **Usage**: `rola fs-ops rm PATH [--vault] [--offline] [--force] [--no-pager]`
 
         One word for both kinds: whether the path is a file or a directory is read from the path
         itself, so a caller need not keep a fact the filesystem already has. A directory is removed
@@ -112,7 +112,7 @@ fs_ops:
     zh-CN: |
         移除一个路径
 
-        **用法**：`rola fs-ops rm PATH`
+        **用法**：`rola fs-ops rm PATH [--vault] [--offline] [--force] [--no-pager]`
 
         两种类型共用同一个词：该路径是文件还是目录，从路径本身读取，因此调用方无需再保存一个文件系统
         早已掌握的事实。删除目录会连同其下的一切，符号链接被解除而不是被跟随。

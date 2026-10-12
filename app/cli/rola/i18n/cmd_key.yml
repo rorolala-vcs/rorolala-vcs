@@ -5,7 +5,7 @@ key:
     en: |
         List the keys Rorolala can reach
 
-        **Usage**: `rola key [--pem]`
+        **Usage**: `rola key [--pem] [--vault] [--offline] [--force] [--no-pager]`
 
         **Commands**
             generate <NAME>   Generate an Ed25519 key pair under a name
@@ -21,7 +21,7 @@ key:
     zh-CN: |
         列出 Rorolala 能找到的密钥
 
-        **用法**：`rola key [--pem]`
+        **用法**：`rola key [--pem] [--vault] [--offline] [--force] [--no-pager]`
 
         **命令**
             generate <NAME>   按名字生成一对 Ed25519 密钥

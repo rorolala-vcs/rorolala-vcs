@@ -15,7 +15,7 @@ retrack:
     en: |
         Move a file's recorded version back, in the Layout being worked in
 
-        **Usage**: `rola retrack <FILE> [--until <LEVEL>] [--only-index] [--allow-jump] [--force]`
+        **Usage**: `rola retrack <FILE> [--until <LEVEL>] [--only-index] [--allow-jump] [--force] [--vault] [--offline] [--no-pager]`
 
         The entry's version pointer moves: its `Uuid`, its path and its description stay as they
         are, and nothing is removed from the index. `FILE` is one local path in this Workspace — a
@@ -38,7 +38,7 @@ retrack:
     zh-CN: |
         回退某个文件在布局中记录的版本
 
-        **用法**：`rola retrack <FILE> [--until <LEVEL>] [--only-index] [--allow-jump] [--force]`
+        **用法**：`rola retrack <FILE> [--until <LEVEL>] [--only-index] [--allow-jump] [--force] [--vault] [--offline] [--no-pager]`
 
         移动条目的版本指针：其 `Uuid`、路径与说明保持原样，索引中的对象一个不删。`FILE` 是本
         工作区内的一个本地路径 —— `Uuid`、哈希与远程名称都会被拒绝 —— 且必须是布局记录过的路径。

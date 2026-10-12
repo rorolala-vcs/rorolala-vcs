@@ -28,7 +28,7 @@ sync:
         Bring the Layout being worked in together with the Vault it tracks
 
         **Usage**: `rola sync [--up-only | --down-only | --both] [--force] [--dry-run]
-        [--no-index] [--no-storage] [--no-layout]`
+        [--no-index] [--no-storage] [--no-layout] [--vault] [--offline] [--no-pager]`
 
         The Vault is the one the Layout's `TRACK` names, which the Workspace has bound with
         `rola vault bind`. What the Vault holds now is fetched first, and the plan says what is to
@@ -54,7 +54,7 @@ sync:
         让当前使用的布局与它所追踪的保险库同步
 
         **用法**：`rola sync [--up-only | --down-only | --both] [--force] [--dry-run]
-        [--no-index] [--no-storage] [--no-layout]`
+        [--no-index] [--no-storage] [--no-layout] [--vault] [--offline] [--no-pager]`
 
         保险库由布局的 `TRACK` 指定，并且必须已被工作区用 `rola vault bind` 绑定。先取回保险库
         当前的内容，再由计划说明要移动什么：

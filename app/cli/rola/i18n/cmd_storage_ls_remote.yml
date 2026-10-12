@@ -5,7 +5,7 @@ storage_ls_remote_storaged:
     en: |
         List the objects the store at the other end holds
 
-        **Usage**: `rola storage ls-remote-storaged [VAULT] [--json]`
+        **Usage**: `rola storage ls-remote-storaged [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         It is `rola storage ls-storaged` asked of the other end: where that lists the store the run
         is inside, this reaches the Vault and lists what *its* store holds, one key per line. Nothing
@@ -16,7 +16,7 @@ storage_ls_remote_storaged:
     zh-CN: |
         列出对端仓库持有的对象
 
-        **用法**：`rola storage ls-remote-storaged [VAULT] [--json]`
+        **用法**：`rola storage ls-remote-storaged [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         即 `rola storage ls-storaged` 问向对端：那条命令列出本次运行所在仓库持有的对象，而这条连上保险库、
         列出**它**的仓库持有的对象，每行一个哈希。什么都不改变——只是询问保险库并得到回答。
@@ -32,7 +32,7 @@ storage_ls_remote_manifests:
     en: |
         List the content the store at the other end keeps cut
 
-        **Usage**: `rola storage ls-remote-manifests [VAULT] [--json]`
+        **Usage**: `rola storage ls-remote-manifests [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         It is `rola storage ls-manifests` asked of the other end: what is printed is named
         `manifest:<digest>`, the same as there, so a line read here can be handed straight to
@@ -43,7 +43,7 @@ storage_ls_remote_manifests:
     zh-CN: |
         列出对端仓库切分保存的内容
 
-        **用法**：`rola storage ls-remote-manifests [VAULT] [--json]`
+        **用法**：`rola storage ls-remote-manifests [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         即 `rola storage ls-manifests` 问向对端：打印出来的是 `manifest:<digest>` 形式，与那边一样，
         因此这里读到的一行可以直接交给 `rola storage extract-file`。什么都不改变——只是询问保险库并得到回答。
@@ -59,7 +59,7 @@ storage_sync_hashes:
     en: |
         Make the stores at both ends hold the keys named
 
-        **Usage**: `rola storage sync-hashes <HASH>... [VAULT] [--json]`
+        **Usage**: `rola storage sync-hashes <HASH>... [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         Where `rola storage sync-all` carries everything either end holds, this carries only the keys
         it is given — a full sync narrowed to a list. Each argument is a hash, read as hex or with
@@ -72,7 +72,7 @@ storage_sync_hashes:
     zh-CN: |
         让两端的仓库持有指定的哈希
 
-        **用法**：`rola storage sync-hashes <HASH>... [VAULT] [--json]`
+        **用法**：`rola storage sync-hashes <HASH>... [VAULT] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         `rola storage sync-all` 搬运两端各自持有的全部内容，而这条只搬运给定的哈希——即缩小到一份清单的
         全量同步。每个参数是一个哈希，可以是十六进制，也可以带 `blake3:` 或 `manifest:` 前缀；只有某一端持有

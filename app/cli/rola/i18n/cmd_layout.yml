@@ -5,14 +5,14 @@ cmd_layout:
     en: |
         Work with the Layouts a run keeps
 
-        **Usage**: `rola layout <COMMAND>`
+        **Usage**: `rola layout <COMMAND> [--vault] [--offline] [--force] [--no-pager]`
 
         A Workspace holds many Layouts and works in one at a time; a Vault holds one. Naming no
         command lists them, the same as `rola layout ls`.
     zh-CN: |
         操作本运行所持有的布局
 
-        **用法**：`rola layout <COMMAND>`
+        **用法**：`rola layout <COMMAND> [--vault] [--offline] [--force] [--no-pager]`
 
         工作区持有多个布局，且一次只使用其中一个；保险库只持有一个。不指定子命令即列出它们，
         与 `rola layout ls` 相同。
@@ -180,14 +180,14 @@ cmd_layout_ls:
     en: |
         List the Layouts a run works in
 
-        **Usage**: `rola layout ls`
+        **Usage**: `rola layout ls [--vault] [--offline] [--force] [--no-pager]`
 
         A Workspace's Layouts are listed, each with its name and the Vault it tracks; a Vault's one
         is listed as `truth`. The one that is checked out is marked.
     zh-CN: |
         列出本运行所使用的布局
 
-        **用法**：`rola layout ls`
+        **用法**：`rola layout ls [--vault] [--offline] [--force] [--no-pager]`
 
         工作区的各个布局会被列出，各带其名字与所追踪的保险库；保险库的那一个列为 `truth`。
         当前已签出的那个会被标记。
@@ -212,7 +212,7 @@ cmd_layout_new:
     en: |
         Make an empty Layout
 
-        **Usage**: `rola layout new <NAME> [--track <VAULT>] [--no-set-layout]`
+        **Usage**: `rola layout new <NAME> [--track <VAULT>] [--no-set-layout] [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` is the name of a directory, so it is words of letters and digits joined by `-`.
         `--track` names a Vault the Workspace has bound, which the new Layout is to track.
@@ -223,7 +223,7 @@ cmd_layout_new:
     zh-CN: |
         新建一个空布局
 
-        **用法**：`rola layout new <NAME> [--track <VAULT>] [--no-set-layout]`
+        **用法**：`rola layout new <NAME> [--track <VAULT>] [--no-set-layout] [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` 是目录名，因此由字母数字组成的词以 `-` 相连。`--track` 指定工作区已绑定的保险库，
         新布局将追踪它。
@@ -252,7 +252,7 @@ cmd_layout_cp:
     en: |
         Copy a Layout to a new name
 
-        **Usage**: `rola layout cp <LAYOUT> <NAME> [--track <VAULT>] [--no-set-layout]`
+        **Usage**: `rola layout cp <LAYOUT> <NAME> [--track <VAULT>] [--no-set-layout] [--vault] [--offline] [--force] [--no-pager]`
 
         What the Layout tracked is not copied: a copy tracks only what `--track` names.
 
@@ -262,7 +262,7 @@ cmd_layout_cp:
     zh-CN: |
         复制布局为新名字
 
-        **用法**：`rola layout cp <LAYOUT> <NAME> [--track <VAULT>] [--no-set-layout]`
+        **用法**：`rola layout cp <LAYOUT> <NAME> [--track <VAULT>] [--no-set-layout] [--vault] [--offline] [--force] [--no-pager]`
 
         原布局所追踪的东西不会被复制：副本只追踪 `--track` 指定的内容。
 
@@ -282,14 +282,14 @@ cmd_layout_force_switch:
     en: |
         Work in another Layout
 
-        **Usage**: `rola layout force-switch <NAME>`
+        **Usage**: `rola layout force-switch <NAME> [--vault] [--offline] [--force] [--no-pager]`
 
         Only which Layout is worked in changes. No file is touched: the tree is left as it is,
         whether or not it is what the Layout names.
     zh-CN: |
         切换到另一个布局
 
-        **用法**：`rola layout force-switch <NAME>`
+        **用法**：`rola layout force-switch <NAME> [--vault] [--offline] [--force] [--no-pager]`
 
         只改变工作区所使用的布局。不会改动任何文件：工作树原样保留，无论它是否与该布局相符。
 
@@ -306,13 +306,13 @@ cmd_layout_set_track:
     en: |
         Name the Vault upstream a Layout tracks
 
-        **Usage**: `rola layout set-track <LAYOUT> <VAULT>`
+        **Usage**: `rola layout set-track <LAYOUT> <VAULT> [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` has to be one the Workspace has bound with `rola vault bind`.
     zh-CN: |
         指定布局所追踪的上游保险库
 
-        **用法**：`rola layout set-track <LAYOUT> <VAULT>`
+        **用法**：`rola layout set-track <LAYOUT> <VAULT> [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` 必须是工作区已用 `rola vault bind` 绑定的名字。
 
@@ -329,11 +329,11 @@ cmd_layout_un_track:
     en: |
         Make a Layout track no Vault
 
-        **Usage**: `rola layout un-track <LAYOUT>`
+        **Usage**: `rola layout un-track <LAYOUT> [--vault] [--offline] [--force] [--no-pager]`
     zh-CN: |
         让布局不再追踪任何保险库
 
-        **用法**：`rola layout un-track <LAYOUT>`
+        **用法**：`rola layout un-track <LAYOUT> [--vault] [--offline] [--force] [--no-pager]`
 
   description:
     en: Make a Layout track no Vault
@@ -348,7 +348,7 @@ cmd_layout_rm:
     en: |
         Take a Layout away, or empty the one a Vault keeps
 
-        **Usage**: `rola layout rm [NAME]`
+        **Usage**: `rola layout rm [NAME] [--vault] [--offline] [--force] [--no-pager]`
 
         In a Workspace the named Layout is taken away; the one being worked in is not, so choose
         another first. In a Vault, `NAME` is left empty or is `truth`, and the Layout is emptied
@@ -356,7 +356,7 @@ cmd_layout_rm:
     zh-CN: |
         移除布局，或清空保险库唯一的布局
 
-        **用法**：`rola layout rm [NAME]`
+        **用法**：`rola layout rm [NAME] [--vault] [--offline] [--force] [--no-pager]`
 
         在工作区中，指定的布局会被移除；当前正在使用的不会被移除，请先切换。在保险库中，
         `NAME` 留空或写 `truth`，布局会被清空而非移除。
@@ -404,7 +404,7 @@ cmd_layout_tree_diff:
     en: |
         Show what the working tree holds beside a Layout
 
-        **Usage**: `rola layout tree-diff [LAYOUT] [--alike <0.0-1.0>]`
+        **Usage**: `rola layout tree-diff [LAYOUT] [--alike <0.0-1.0>] [--vault] [--offline] [--force] [--no-pager]`
 
         Each line is a mode and a path: `lost`, `untagged`, `modified`, `rename <FROM> -> <TO>`,
         or `failed`. `--alike` is how alike two text files have to be to count as moved, and is
@@ -412,7 +412,7 @@ cmd_layout_tree_diff:
     zh-CN: |
         展示工作树相对于某个布局的内容
 
-        **用法**：`rola layout tree-diff [LAYOUT] [--alike <0.0-1.0>]`
+        **用法**：`rola layout tree-diff [LAYOUT] [--alike <0.0-1.0>] [--vault] [--offline] [--force] [--no-pager]`
 
         每行为一个模式加一个路径：`lost`、`untagged`、`modified`、`rename <FROM> -> <TO>`
         或 `failed`。`--alike` 是两个文本文件算作移动的相似度门槛，默认 `0.6`。
@@ -426,7 +426,7 @@ cmd_layout_shot:
     en: |
         Write a Layout down as a `.rolayout` file
 
-        **Usage**: `rola layout shot <OUTPUT> [LAYOUT]`
+        **Usage**: `rola layout shot <OUTPUT> [LAYOUT] [--vault] [--offline] [--force] [--no-pager]`
 
         The Layout is the one being worked in, or the one named. Written beside the index and the
         store, it names every key a checkout needs, so a Layout that cannot be checked out whole is
@@ -434,7 +434,7 @@ cmd_layout_shot:
     zh-CN: |
         把布局写成 `.rolayout` 文件
 
-        **用法**：`rola layout shot <OUTPUT> [LAYOUT]`
+        **用法**：`rola layout shot <OUTPUT> [LAYOUT] [--vault] [--offline] [--force] [--no-pager]`
 
         布局是当前正在使用的那个，或指定的那个。连同索引与仓库一起书写时，它会记下签出所需的
         全部键，因此无法整体签出的布局不会写出。
@@ -470,7 +470,7 @@ cmd_layout_import:
         Make a Layout from a `.rolayout` file
 
         **Usage**: `rola layout import <INPUT> [--name <NAME>] [--track <VAULT>] [--no-check]
-        [--no-set-layout]`
+        [--no-set-layout] [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` is the file's own name when none is given. What the file says it was tracking is
         tracked again, unless `--track` names a Vault to track instead.
@@ -484,7 +484,7 @@ cmd_layout_import:
         从 `.rolayout` 文件建立布局
 
         **用法**：`rola layout import <INPUT> [--name <NAME>] [--track <VAULT>] [--no-check]
-        [--no-set-layout]`
+        [--no-set-layout] [--vault] [--offline] [--force] [--no-pager]`
 
         `NAME` 缺省时取文件自身的名字。文件记录的追踪保险库会被继续追踪，除非用 `--track`
         指定另一个。
@@ -531,14 +531,14 @@ cmd_layout_entry:
     en: |
         Make an entry hold data
 
-        **Usage**: `rola layout entry create <UUID> <VERSION> [--owner <ACCOUNT>] [--description <TEXT>]`
+        **Usage**: `rola layout entry create <UUID> <VERSION> [--owner <ACCOUNT>] [--description <TEXT>] [--vault] [--offline] [--force] [--no-pager]`
 
         `VERSION` is `blake3:<hex>` or the digest alone. Nothing beyond what the Layout checks is
         checked: this is the layer for writing content by hand.
     zh-CN: |
         让某个条目持有数据
 
-        **用法**：`rola layout entry create <UUID> <VERSION> [--owner <ACCOUNT>] [--description <TEXT>]`
+        **用法**：`rola layout entry create <UUID> <VERSION> [--owner <ACCOUNT>] [--description <TEXT>] [--vault] [--offline] [--force] [--no-pager]`
 
         `VERSION` 为 `blake3:<hex>` 或裸摘要。除了布局自身的检查之外不做别的检查：这一层就是用来手写内容的。
 
@@ -550,14 +550,14 @@ cmd_layout_entry:
     en: |
         Change what an entry holds
 
-        **Usage**: `rola layout entry update <UUID> <VERSION> [--owner <ACCOUNT>] [--description <TEXT>]`
+        **Usage**: `rola layout entry update <UUID> <VERSION> [--owner <ACCOUNT>] [--description <TEXT>] [--vault] [--offline] [--force] [--no-pager]`
 
         The data is replaced whole: an option left out means the entry holds no account and says
         nothing.
     zh-CN: |
         修改某个条目所持有的数据
 
-        **用法**：`rola layout entry update <UUID> <VERSION> [--owner <ACCOUNT>] [--description <TEXT>]`
+        **用法**：`rola layout entry update <UUID> <VERSION> [--owner <ACCOUNT>] [--description <TEXT>] [--vault] [--offline] [--force] [--no-pager]`
 
         数据整体替换：省略选项意味着条目无持有者且无描述。
 
@@ -569,11 +569,11 @@ cmd_layout_entry:
     en: |
         Drop an entry, and the path that named it
 
-        **Usage**: `rola layout entry remove <UUID>`
+        **Usage**: `rola layout entry remove <UUID> [--vault] [--offline] [--force] [--no-pager]`
     zh-CN: |
         删除某个条目，以及命名它的路径
 
-        **用法**：`rola layout entry remove <UUID>`
+        **用法**：`rola layout entry remove <UUID> [--vault] [--offline] [--force] [--no-pager]`
 
   remove_description:
     en: Drop an entry, and the path that named it
@@ -600,14 +600,14 @@ cmd_layout_path:
     en: |
         Make a path name an entry
 
-        **Usage**: `rola layout path create <PATH> <UUID>`
+        **Usage**: `rola layout path create <PATH> <UUID> [--vault] [--offline] [--force] [--no-pager]`
 
         An entry is at one path, so naming it elsewhere moves it. The entry need not hold anything
         yet.
     zh-CN: |
         让某个路径指向某个条目
 
-        **用法**：`rola layout path create <PATH> <UUID>`
+        **用法**：`rola layout path create <PATH> <UUID> [--vault] [--offline] [--force] [--no-pager]`
 
         一个条目只位于一个路径，因此在别处命名它等于移动它。该条目可以尚未持有数据。
 
@@ -619,11 +619,11 @@ cmd_layout_path:
     en: |
         Make a path name nothing
 
-        **Usage**: `rola layout path remove <PATH>`
+        **Usage**: `rola layout path remove <PATH> [--vault] [--offline] [--force] [--no-pager]`
     zh-CN: |
         让某个路径不再指向任何条目
 
-        **用法**：`rola layout path remove <PATH>`
+        **用法**：`rola layout path remove <PATH> [--vault] [--offline] [--force] [--no-pager]`
 
   remove_description:
     en: Make a path name nothing
@@ -633,11 +633,11 @@ cmd_layout_path:
     en: |
         Move the entry at one path to another
 
-        **Usage**: `rola layout path move <FROM> <TO>`
+        **Usage**: `rola layout path move <FROM> <TO> [--vault] [--offline] [--force] [--no-pager]`
     zh-CN: |
         把某个路径上的条目移到另一个路径
 
-        **用法**：`rola layout path move <FROM> <TO>`
+        **用法**：`rola layout path move <FROM> <TO> [--vault] [--offline] [--force] [--no-pager]`
 
   move_description:
     en: Move the entry at one path to another
@@ -667,7 +667,7 @@ cmd_layout_entries:
     en: |
         List what a Layout's entries hold
 
-        **Usage**: `rola layout entries [--layout <NAME>] [--uuid <UUID>]`
+        **Usage**: `rola layout entries [--layout <NAME>] [--uuid <UUID>] [--vault] [--offline] [--force] [--no-pager]`
 
         One entry a line: its path, the `Uuid` it is known by, and the version it is at. What it is
         held by, what it says, and whether the Vault has deprecated it are in the data a template or
@@ -684,7 +684,7 @@ cmd_layout_entries:
     zh-CN: |
         列出布局中各条目所持有的内容
 
-        **用法**：`rola layout entries [--layout <NAME>] [--uuid <UUID>]`
+        **用法**：`rola layout entries [--layout <NAME>] [--uuid <UUID>] [--vault] [--offline] [--force] [--no-pager]`
 
         每行一个条目：它的路径、标识它的 `Uuid`、以及它所在的版本。持有者、描述以及保险库是否已将
         其废弃，在模板或 `--json` 所读取的数据中 —— `entries[].deprecated`，当保险库把该文件移到

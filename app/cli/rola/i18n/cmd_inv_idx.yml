@@ -5,7 +5,7 @@ inv_idx:
     en: |
         Build and ask the inverse index, by hand
 
-        **Usage**: `rola inv-idx <COMMAND>`
+        **Usage**: `rola inv-idx <COMMAND> [--vault] [--offline] [--force] [--no-pager]`
 
         **Commands**
             rebuild                  Build the inverse index from the index's objects
@@ -26,7 +26,7 @@ inv_idx:
     zh-CN: |
         手工建立并查询反向索引
 
-        **用法**：`rola inv-idx <命令>`
+        **用法**：`rola inv-idx <命令> [--vault] [--offline] [--force] [--no-pager]`
 
         **命令**
             rebuild                  由索引中的对象建立反向索引
@@ -102,7 +102,7 @@ inv_idx_rebuild:
     en: |
         Build the inverse index from the index's objects
 
-        **Usage**: `rola inv-idx rebuild [--json]`
+        **Usage**: `rola inv-idx rebuild [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         Every object is read once and what each points at is written down, so the records afterwards
         describe exactly the index they were built from. Nothing is printed on stdout: what was
@@ -110,7 +110,7 @@ inv_idx_rebuild:
     zh-CN: |
         由索引中的对象建立反向索引
 
-        **用法**：`rola inv-idx rebuild [--json]`
+        **用法**：`rola inv-idx rebuild [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         每个对象只读一次，记录下它指向谁，因此建立之后的记录精确描述它据以建立的那个索引。stdout 不打
         印任何内容：产物是一个文件，`--json` 则以报告作答。
@@ -124,14 +124,14 @@ inv_idx_store_dep:
     en: |
         List the variants made from a stored entry
 
-        **Usage**: `rola inv-idx store-dep <STORE> [--json]`
+        **Usage**: `rola inv-idx store-dep <STORE> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         A variant names the content it was made of by its hash, so this lists the variants that name
         the given one. One hash a line.
     zh-CN: |
         列出基于某存储条目建立的 variant
 
-        **用法**：`rola inv-idx store-dep <STORE> [--json]`
+        **用法**：`rola inv-idx store-dep <STORE> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         variant 以哈希指明它所依据的内容，因此这里列出指明该哈希的 variant。每行一个哈希。
 
@@ -144,14 +144,14 @@ inv_idx_variant_dep:
     en: |
         List the versions that fix a variant
 
-        **Usage**: `rola inv-idx variant-dep <HASH> [--json]`
+        **Usage**: `rola inv-idx variant-dep <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         A version fixes a variant by pointing at it, so this lists the versions that point at the
         given variant. One hash a line.
     zh-CN: |
         列出固定某 variant 的 version
 
-        **用法**：`rola inv-idx variant-dep <HASH> [--json]`
+        **用法**：`rola inv-idx variant-dep <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         version 通过指向 variant 来固定它，因此这里列出指向该 variant 的 version。每行一个哈希。
 
@@ -164,14 +164,14 @@ inv_idx_version_dep:
     en: |
         List the variants based on a version
 
-        **Usage**: `rola inv-idx version-dep <HASH> [--json]`
+        **Usage**: `rola inv-idx version-dep <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         A variant is based on a version by naming it, so this lists the variants that name the given
         version. One hash a line.
     zh-CN: |
         列出基于某 version 的 variant
 
-        **用法**：`rola inv-idx version-dep <HASH> [--json]`
+        **用法**：`rola inv-idx version-dep <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         variant 以命名的方式基于某个 version，因此这里列出命名该 version 的 variant。每行一个哈希。
 
@@ -184,14 +184,14 @@ inv_idx_creator_dep:
     en: |
         List the variants made by a creator
 
-        **Usage**: `rola inv-idx creator-dep <HASH> [--json]`
+        **Usage**: `rola inv-idx creator-dep <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         Who made a change belongs to the variant, so this lists the variants that carry the given
         creator. One hash a line.
     zh-CN: |
         列出某 creator 创建的 variant
 
-        **用法**：`rola inv-idx creator-dep <HASH> [--json]`
+        **用法**：`rola inv-idx creator-dep <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         「谁做的」属于 variant，因此这里列出携带该 creator 的 variant。每行一个哈希。
 
@@ -204,14 +204,14 @@ inv_idx_msg_dep:
     en: |
         List the variants that carry a message
 
-        **Usage**: `rola inv-idx msg-dep <HASH> [--json]`
+        **Usage**: `rola inv-idx msg-dep <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         What was done belongs to the variant, so this lists the variants that carry the given
         message. One hash a line.
     zh-CN: |
         列出携带某 message 的 variant
 
-        **用法**：`rola inv-idx msg-dep <HASH> [--json]`
+        **用法**：`rola inv-idx msg-dep <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         「做了什么」属于 variant，因此这里列出携带该 message 的 variant。每行一个哈希。
 
@@ -224,7 +224,7 @@ inv_idx_version_num:
     en: |
         Print a version's number
 
-        **Usage**: `rola inv-idx version-num <HASH> [--json]`
+        **Usage**: `rola inv-idx version-num <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         The number is derived rather than stored, so what answers is the records when they hold it
         and a walk of the chain otherwise. The root version is numbered `u64::MAX`, one before the
@@ -232,7 +232,7 @@ inv_idx_version_num:
     zh-CN: |
         输出某 version 的号
 
-        **用法**：`rola inv-idx version-num <HASH> [--json]`
+        **用法**：`rola inv-idx version-num <HASH> [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         号是推导出来的而非存储的，因此记录里有时由记录作答，否则沿链回溯求得。root version 的号是
         `u64::MAX`，即第一个版本之前。

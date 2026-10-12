@@ -5,7 +5,7 @@ cmd_layout_req_ownership:
     en: |
         Ask the Vault to name this run's account as entries' holders
 
-        **Usage**: `rola layout req-ownership [VAULT] <UUID>...`
+        **Usage**: `rola layout req-ownership [VAULT] <UUID>... [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`.
         Naming none reaches for the one the Workspace reaches for by default. Each `UUID` is the
@@ -19,7 +19,7 @@ cmd_layout_req_ownership:
     zh-CN: |
         请求保险库将某些条目的持有者记为本次运行所用的账户
 
-        **用法**：`rola layout req-ownership [VAULT] <UUID>...`
+        **用法**：`rola layout req-ownership [VAULT] <UUID>... [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` 指要连接的保险库：必须是工作区用 `rola vault bind` 绑定的名字。不指定时，
         使用工作区选定的默认保险库。每个 `UUID` 是要取得的条目的 `Uuid`，按给出的顺序依次取得。

@@ -5,7 +5,7 @@ vault:
     en: |
         List the Vaults this Workspace knows
 
-        **Usage**: `rola vault`
+        **Usage**: `rola vault [--vault] [--offline] [--force] [--no-pager]`
 
         **Commands**
             bind <NAME> <ADDR>   Bind a name to a Vault address, or change what it means
@@ -21,7 +21,7 @@ vault:
     zh-CN: |
         列出当前工作区已知的保险库
 
-        **用法**：`rola vault`
+        **用法**：`rola vault [--vault] [--offline] [--force] [--no-pager]`
 
         **命令**
             bind <NAME> <ADDR>   将名字绑定到保险库地址，或修改其含义
@@ -51,7 +51,7 @@ vault_ls:
     en: |
         List the Vaults this Workspace knows
 
-        **Usage**: `rola vault ls`
+        **Usage**: `rola vault ls [--vault] [--offline] [--force] [--no-pager]`
 
         The same names `rola vault` lists, one name and address a line, in name order. Each one
         carries whether it is the Vault the Workspace reaches for, which `--json` and `--format`
@@ -59,7 +59,7 @@ vault_ls:
     zh-CN: |
         列出当前工作区已知的保险库
 
-        **用法**：`rola vault ls`
+        **用法**：`rola vault ls [--vault] [--offline] [--force] [--no-pager]`
 
         与 `rola vault` 同一批名字，每行一个名字及其地址，按名字排序。每个绑定带有它是否为
         工作区默认使用的那个，`--json` 与 `--format` 中以 `is_default` 读取。
@@ -72,14 +72,14 @@ vault_default:
     en: |
         Print the Vault the Workspace reaches for
 
-        **Usage**: `rola vault default`
+        **Usage**: `rola vault default [--vault] [--offline] [--force] [--no-pager]`
 
         The name alone, so a run can read it without a sentence around it. Nothing is printed
         when no Vault has been chosen.
     zh-CN: |
         输出工作区默认使用的保险库
 
-        **用法**：`rola vault default`
+        **用法**：`rola vault default [--vault] [--offline] [--force] [--no-pager]`
 
         只输出名字，便于直接读取。尚未选择任何保险库时不输出任何内容。
   description:

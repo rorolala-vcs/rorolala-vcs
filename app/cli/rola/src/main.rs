@@ -57,6 +57,7 @@ mod lastec;
 mod layout;
 mod merging;
 mod ownership;
+mod pager;
 mod progress;
 mod rebuild;
 mod storage;
@@ -72,6 +73,7 @@ use crate::editor::EditorSetup;
 use crate::exit_codes::{EC_HELP, EC_UNKNOWN_COMMAND};
 use crate::format::FormatSetup;
 use crate::lastec::LastExitCodeRecordSetup;
+use crate::pager::PagerSetup;
 use crate::rebuild::RebuildSetup;
 use crate::vcs_index::cmd_vcs_index_lookback::LookbackSetup;
 
@@ -94,6 +96,7 @@ fn main() {
     let mut program = ThisProgram::new();
     program.with_setup(DefaultSetup);
     program.with_setup(RorolalaSetup);
+    program.with_setup(PagerSetup);
     program.with_setup(RebuildSetup);
     program.with_setup(AddressHistorySetup);
     program.with_setup(CurrentAccountSetup);

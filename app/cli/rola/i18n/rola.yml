@@ -6,6 +6,7 @@ rola:
         **Usage**: rola [-v | --vault] [--rebuild] [--no-color] [--no-progress]
                     [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
                     [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
+                    [--offline] [--force] [--no-pager]
                     [-V | --version] [-h | --help] <COMMAND> <ARGS>
 
         **Initialization**
@@ -44,6 +45,7 @@ rola:
         **用法**：rola [-v | --vault] [--rebuild] [--no-color] [--no-progress]
                    [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
                    [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
+                   [--offline] [--force] [--no-pager]
                    [-V | --version] [-h | --help] <命令> <参数>
 
         **初始化**

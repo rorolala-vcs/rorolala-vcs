@@ -5,7 +5,7 @@ storage_sync_all:
     en: |
         Make the stores at both ends hold the same keys
 
-        **Usage**: `rola storage sync-all [VAULT]`
+        **Usage**: `rola storage sync-all [VAULT] [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`, or
         an ip, with the port a Vault listens on by default when none is written. Naming none reaches
@@ -21,7 +21,7 @@ storage_sync_all:
     zh-CN: |
         让两端的仓库持有相同的 key
 
-        **用法**：`rola storage sync-all [VAULT]`
+        **用法**：`rola storage sync-all [VAULT] [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` 指定要连接的保险库：工作区已用 `rola vault bind` 绑定的名字，或一个 ip（不写端口时用
         保险库默认监听的端口）。不指定则连接工作区默认使用的那个。

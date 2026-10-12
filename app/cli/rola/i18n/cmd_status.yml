@@ -25,7 +25,7 @@ status:
         Show how the working tree stands beside the Layout, or look back from one thing in it
 
         **Usage**: `rola status [<TARGET>] [--compact] [--no-creator] [--no-message]
-        [--max-message-length <N>] [--no-graph] [--no-hint] [--json]`
+        [--max-message-length <N>] [--no-graph] [--no-hint] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         With nothing named, a line beginning with `>` is a path that moved, `-` one the Layout names
         and the tree does not hold, `+` one the tree holds and the Layout does not name; a line with
@@ -62,7 +62,7 @@ status:
         展示工作树相对于布局的状态，或从其中某样东西往回看
 
         **用法**：`rola status [<TARGET>] [--compact] [--no-creator] [--no-message]
-        [--max-message-length <N>] [--no-graph] [--no-hint] [--json]`
+        [--max-message-length <N>] [--no-graph] [--no-hint] [--json] [--vault] [--offline] [--force] [--no-pager]`
 
         不指定目标时：以 `>` 开头的行是移动的路径，`-` 是布局命名而工作树缺失的路径，`+` 是工作树有
         而布局未命名的路径；没有什么开头的行是原地发生内容变化的路径。`(*)` 表示该行同时也有内容变化。

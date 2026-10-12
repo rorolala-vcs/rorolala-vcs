@@ -5,7 +5,7 @@ cmd_layout_ls_ownership:
     en: |
         List who holds each entry, from the Vault's fetched copy
 
-        **Usage**: `rola layout ls-ownership [VAULT]`
+        **Usage**: `rola layout ls-ownership [VAULT] [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` names the Vault whose copy is read: a name the Workspace has bound with `rola vault
         bind`. Naming none reads the copy of the one the Workspace reaches for by default.
@@ -17,7 +17,7 @@ cmd_layout_ls_ownership:
     zh-CN: |
         从取回的副本中列出每个条目的持有者
 
-        **用法**：`rola layout ls-ownership [VAULT]`
+        **用法**：`rola layout ls-ownership [VAULT] [--vault] [--offline] [--force] [--no-pager]`
 
         `VAULT` 指要读取其副本的保险库：必须是工作区用 `rola vault bind` 绑定的名字。不指定时，
         读取工作区选定默认保险库的副本。
