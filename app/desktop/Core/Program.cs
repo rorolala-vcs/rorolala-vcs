@@ -35,6 +35,28 @@ class Program
     /// and its look are both built from it.
     public static WindowStyle WindowStyle { get; private set; } = WindowStyles.Here();
 
+    /// <summary>
+    /// Raised when a later start of the program asks this one to come forward.
+    /// </summary>
+    /// <remarks>
+    /// A second start of the program does not open a window of its own: what it says is where it was made,
+    /// and what that comes to is this run's to work out — a dock opened onto that directory in the main
+    /// window, which is not something a channel can decide. Raised on the window's thread.
+    /// </remarks>
+    public static event Action<string?>? Called;
+
+    /// <summary>
+    /// Says that a later start asked this one to come forward.
+    /// </summary>
+    /// <remarks>
+    /// What a run that was called says is raised through this rather than written to a property, because the
+    /// thing that answers a call is the host — a dock opened onto the directory, in a window — and the host
+    /// does not exist when the call is received. A run that nobody is listening to yet has nobody to tell,
+    /// which cannot happen: listening begins with the host, and the host is what answers.
+    /// </remarks>
+    /// <param name="directory">Where the run that called was made.</param>
+    public static void CalledFrom(string? directory) => Called?.Invoke(directory);
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -48,6 +70,18 @@ class Program
         // The host's own directory is named before any plugin's: merging is first-registration-wins,
         // so a plugin cannot overwrite a word the host says.
         RolaI18N.SetTranslationDirectory(Path.Combine(AppContext.BaseDirectory, "i18n"));
+
+        // Before anything else, because what a second start is may not be a start at all: one program per
+        // user means a start that finds one running is a caller rather than a window, and it ends here with
+        // the answer that says which of the two it was.
+        var start = SingleInstance.Acquire(CurrentDirectory);
+
+        if (!start.IsFirst)
+        {
+            Environment.Exit((int)(start.Called ? ExitCode.Called : ExitCode.Clean));
+
+            return;
+        }
 
         DesktopState state;
 

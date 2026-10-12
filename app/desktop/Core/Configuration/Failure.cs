@@ -19,6 +19,17 @@ internal enum ExitCode
 
     /// <summary><c>theme.json</c> failed to load or validate.</summary>
     Theme = 4,
+
+    /// <summary>
+    /// This start was a call to the run that was already going, and not a window of its own.
+    /// </summary>
+    /// <remarks>
+    /// The one code here that is not a refusal: what it says is that the program is running and this start
+    /// asked it to come forward, which is what a caller that waits for a program needs to know to tell one
+    /// start from another. It is the first code of the Desktop's that a caller branches on, and the number
+    /// is the command line's own for the same thing, so that the two programs state one fact once.
+    /// </remarks>
+    Called = 174,
 }
 
 /// <summary>
