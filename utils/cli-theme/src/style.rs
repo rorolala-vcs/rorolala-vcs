@@ -14,8 +14,8 @@ use crate::{TextRendering, ThemeChoice, theme_choice};
 
 /// The line an error is reported on.
 ///
-/// `prefix` is what the line is called — `ERROR`, in Rorolala's own messages — and
-/// everything drawn around it is fixed: the `::` and the `=>` in the level's colour
+/// `prefix` is what the line is called — `Error`, in Rorolala's own messages — and
+/// everything drawn around it is fixed: the `:` after the name, in the level's colour,
 /// where the glyphs are missing, and the mark, the background and the bold where they
 /// are there.
 ///
@@ -27,7 +27,7 @@ use crate::{TextRendering, ThemeChoice, theme_choice};
 ///
 /// set_enabled(false);
 /// set_theme_choice(ThemeChoice::Simple);
-/// assert_eq!(err_line("ERROR", "Fail to load vault!"), "::ERROR=> Fail to load vault!");
+/// assert_eq!(err_line("Error", "Fail to load vault!"), "Error: Fail to load vault!");
 /// ```
 #[must_use]
 pub fn err_line(prefix: &str, content: &str) -> String {
@@ -54,17 +54,17 @@ pub fn help_line(prefix: &str, content: &str) -> String {
 ///
 /// The message is a [`format!`] string and a color-language one at once, so a value is
 /// put into it and a style is written around it. Written without a name for the line,
-/// it is reported as an `ERROR`; the name is written before a `=>` where it is not:
+/// it is reported as an `Error`; the name is given before a `=>` where it is another:
 ///
 /// ```rust
 /// use rorolala_utils_cli_theme::{ThemeChoice, err_line, set_enabled, set_theme_choice};
 ///
 /// set_enabled(false);
 /// set_theme_choice(ThemeChoice::Simple);
-/// assert_eq!(err_line!("Fail to load **{}**!", "vault"), "::ERROR=> Fail to load vault!");
+/// assert_eq!(err_line!("Fail to load **{}**!", "vault"), "Error: Fail to load vault!");
 ///
 /// const LOAD: &str = "LOAD";
-/// assert_eq!(err_line!(LOAD => "Fail to load {}!", "vault"), "::LOAD=> Fail to load vault!");
+/// assert_eq!(err_line!(LOAD => "Fail to load {}!", "vault"), "LOAD: Fail to load vault!");
 /// ```
 #[macro_export]
 macro_rules! err_line {
@@ -74,7 +74,7 @@ macro_rules! err_line {
     };
     // What it says, under the name it is usually reported with.
     ($($message:tt)+) => {
-        $crate::err_line("ERROR", &$crate::__message!($($message)+))
+        $crate::err_line("Error", &$crate::__message!($($message)+))
     };
 }
 
@@ -88,7 +88,7 @@ macro_rules! warn_line {
         $crate::warn_line(&$prefix, &$crate::__message!($($message)+))
     };
     ($($message:tt)+) => {
-        $crate::warn_line("WARNING", &$crate::__message!($($message)+))
+        $crate::warn_line("Warning", &$crate::__message!($($message)+))
     };
 }
 
@@ -101,7 +101,7 @@ macro_rules! help_line {
         $crate::help_line(&$prefix, &$crate::__message!($($message)+))
     };
     ($($message:tt)+) => {
-        $crate::help_line("HELP", &$crate::__message!($($message)+))
+        $crate::help_line("Help", &$crate::__message!($($message)+))
     };
 }
 
@@ -205,7 +205,7 @@ fn source(level: Level, prefix: &str, content: &str, theme: ThemeChoice) -> Stri
         format!("[[{background}]][[{foreground}]]** {mark} {prefix} **[[/]][[/]] {content}")
     } else {
         let colour = level.colour();
-        format!("[[{colour}]]::{prefix}=>[[/]] {content}")
+        format!("[[{colour}]]{prefix}:[[/]] {content}")
     }
 }
 
@@ -236,7 +236,7 @@ mod tests {
     use super::{Level, err_line, source};
 
     /// What Rorolala's own messages are called.
-    const PREFIX: &str = "ERROR";
+    const PREFIX: &str = "Error";
 
     /// What they say.
     const CONTENT: &str = "Fail to load vault!";
@@ -283,19 +283,19 @@ mod tests {
     fn a_line_without_the_glyphs_is_letters() {
         assert_eq!(
             source(Level::Error, PREFIX, CONTENT, ThemeChoice::Simple),
-            "[[RED]]::ERROR=>[[/]] *Fail to load vault!*"
+            "[[RED]]Error:[[/]] *Fail to load vault!*"
         );
         assert_eq!(
             source(Level::Error, PREFIX, CONTENT, ThemeChoice::Text),
-            "[[RED]]::ERROR=>[[/]] *Fail to load vault!*"
+            "[[RED]]Error:[[/]] *Fail to load vault!*"
         );
         assert_eq!(
-            source(Level::Warning, "WARNING", CONTENT, ThemeChoice::Simple),
-            "[[YELLOW]]::WARNING=>[[/]] *Fail to load vault!*"
+            source(Level::Warning, "Warning", CONTENT, ThemeChoice::Simple),
+            "[[YELLOW]]Warning:[[/]] *Fail to load vault!*"
         );
         assert_eq!(
-            source(Level::Help, "HELP", CONTENT, ThemeChoice::Simple),
-            "[[green]]::HELP=>[[/]] *Fail to load vault!*"
+            source(Level::Help, "Help", CONTENT, ThemeChoice::Simple),
+            "[[green]]Help:[[/]] *Fail to load vault!*"
         );
     }
 
@@ -303,15 +303,15 @@ mod tests {
     fn a_line_with_the_glyphs_is_a_badge() {
         assert_eq!(
             source(Level::Error, PREFIX, CONTENT, ThemeChoice::Pretty),
-            "[[~RED]][[#ffffff]]** \u{f071} ERROR **[[/]][[/]] *Fail to load vault!*"
+            "[[~RED]][[#ffffff]]** \u{f071} Error **[[/]][[/]] *Fail to load vault!*"
         );
         assert_eq!(
-            source(Level::Warning, "WARNING", CONTENT, ThemeChoice::Pretty),
-            "[[~YELLOW]][[black]]** \u{f071} WARNING **[[/]][[/]] *Fail to load vault!*"
+            source(Level::Warning, "Warning", CONTENT, ThemeChoice::Pretty),
+            "[[~YELLOW]][[black]]** \u{f071} Warning **[[/]][[/]] *Fail to load vault!*"
         );
         assert_eq!(
-            source(Level::Help, "HELP", CONTENT, ThemeChoice::Pretty),
-            "[[~green]][[#ffffff]]** \u{f02fc} HELP **[[/]][[/]] *Fail to load vault!*"
+            source(Level::Help, "Help", CONTENT, ThemeChoice::Pretty),
+            "[[~green]][[#ffffff]]** \u{f02fc} Help **[[/]][[/]] *Fail to load vault!*"
         );
     }
 
@@ -320,8 +320,8 @@ mod tests {
         without_color(|| {
             for line in [
                 err_line(PREFIX, CONTENT),
-                super::warn_line("WARNING", CONTENT),
-                super::help_line("HELP", CONTENT),
+                super::warn_line("Warning", CONTENT),
+                super::help_line("Help", CONTENT),
             ] {
                 assert!(line.contains(CONTENT), "{line:?}");
                 assert!(!line.contains("[[") && !line.contains('*'), "{line:?}");
@@ -336,7 +336,7 @@ mod tests {
         without_color(|| {
             assert_eq!(
                 crate::err_line!("Fail to load **{}**!", "vault"),
-                err_line("ERROR", "Fail to load **vault**!")
+                err_line("Error", "Fail to load **vault**!")
             );
             assert_eq!(
                 crate::err_line!(LOAD => "Fail to load {}!", "vault"),
@@ -344,11 +344,11 @@ mod tests {
             );
             assert_eq!(
                 crate::warn_line!("Fail to load vault!"),
-                super::warn_line("WARNING", "Fail to load vault!")
+                super::warn_line("Warning", "Fail to load vault!")
             );
             assert_eq!(
                 crate::help_line!("Fail to load vault!"),
-                super::help_line("HELP", "Fail to load vault!")
+                super::help_line("Help", "Fail to load vault!")
             );
         });
     }
@@ -357,7 +357,7 @@ mod tests {
     fn a_written_line_takes_a_message_the_program_holds() {
         let held = String::from("Fail to load **vault**!");
 
-        without_color(|| assert_eq!(crate::err_line!(held), err_line("ERROR", &held)));
+        without_color(|| assert_eq!(crate::err_line!(held), err_line("Error", &held)));
     }
 
     #[test]
@@ -366,8 +366,8 @@ mod tests {
         // newline, and the markers around it are on the far side of that newline.
         without_color(|| {
             assert_eq!(
-                super::help_line("HELP", "Please try again\n"),
-                "::HELP=> Please try again"
+                super::help_line("Help", "Please try again\n"),
+                "Help: Please try again"
             );
         });
     }
@@ -376,7 +376,7 @@ mod tests {
     fn the_content_is_written_in_the_color_language_too() {
         without_color(|| {
             let line = err_line(PREFIX, "the `vault.json` is missing");
-            assert_eq!(line, "::ERROR=> the `vault.json` is missing");
+            assert_eq!(line, "Error: the `vault.json` is missing");
         });
     }
 }

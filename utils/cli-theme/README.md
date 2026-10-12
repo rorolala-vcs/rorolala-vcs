@@ -69,14 +69,14 @@ stands, braces and all.
 
 The blocks are the ones a person already knows from Markdown:
 
-| Written | Drawn |
-| --- | --- |
-| `# Title` | a title, in bold up to the third level, with a blank line either side |
-| `> quoted` | `\| quoted`, grey |
-| `> [!Warning]` | an alert, headed by its name |
-| `----` | a rule, see below |
-| `\| a \| b \|` | a table |
-| a ` ```rust ` fence | code, highlighted by [`bat`](https://github.com/sharkdp/bat) |
+| Written             | Drawn                                                                 |
+| ------------------- | --------------------------------------------------------------------- |
+| `# Title`           | a title, in bold up to the third level, with a blank line either side |
+| `> quoted`          | `\| quoted`, grey                                                     |
+| `> [!Warning]`      | an alert, headed by its name                                          |
+| `----`              | a rule, see below                                                     |
+| `\| a \| b \|`      | a table                                                               |
+| a ` ```rust ` fence | code, highlighted by [`bat`](https://github.com/sharkdp/bat)          |
 
 A rule is drawn in the alphabet of the theme that draws it: plain `-` across the width
 of the message on most themes, and the box-drawing `─` across the whole terminal on a
@@ -114,7 +114,7 @@ use rorolala_utils_cli_theme::{ThemeChoice, err_line, set_enabled, set_theme_cho
 
 set_enabled(false);
 set_theme_choice(ThemeChoice::Simple);
-assert_eq!(err_line("ERROR", "Fail to load vault!"), "::ERROR=> Fail to load vault!");
+assert_eq!(err_line("Error", "Fail to load vault!"), "Error: Fail to load vault!");
 ```
 
 The same call on a theme that carries the glyphs puts the mark and the name on a
@@ -131,15 +131,15 @@ use rorolala_utils_cli_theme::{ThemeChoice, err_line, set_enabled, set_theme_cho
 
 set_enabled(false);
 set_theme_choice(ThemeChoice::Simple);
-assert_eq!(err_line!("Fail to load **{}**!", "vault"), "::ERROR=> Fail to load vault!");
+assert_eq!(err_line!("Fail to load **{}**!", "vault"), "Error: Fail to load vault!");
 
 const LOAD: &str = "LOAD";
-assert_eq!(err_line!(LOAD => "Fail to load {}!", "vault"), "::LOAD=> Fail to load vault!");
+assert_eq!(err_line!(LOAD => "Fail to load {}!", "vault"), "LOAD: Fail to load vault!");
 ```
 
 A message written out is read by `format!` and drawn by the line in one pass, so a
 style inside it is drawn as it would be anywhere else. `warn_line!` and `help_line!`
-are the same, under `WARNING` and `HELP`.
+are the same, under `Warning` and `Help`.
 
 Lines come back without the newline that ends them, so that they are joined by the
 caller rather than arriving with a blank line after each.
@@ -150,19 +150,19 @@ Styles inside a line are marked with a smaller, deliberately non-Markdown set, b
 a message is not a document: a `[[red]]` stays on until its `[[/]]`, and directives
 nest, where Markdown's emphasis only ever pairs up.
 
-| Written | Drawn |
-| --- | --- |
-| `[[red]]` … `[[/]]` | red, `[[RED]]` being the bright one |
-| `[[~red]]` … `[[/]]` | red behind the text |
-| `[[#FF0000]]` … `[[/]]` | an exact colour |
-| `[[?https://example.com]]` … `[[/]]` | a link a terminal can follow |
-| `**bold**` | bold |
-| `*italic*` | italic |
-| `***both***` | bold and italic |
-| `__underlined__` | underlined |
-| `~~struck~~` | struck through |
-| `` `code` `` | bold and bright cyan, markers kept |
-| `<flag>` | italic and bright cyan, markers kept |
+| Written                              | Drawn                                |
+| ------------------------------------ | ------------------------------------ |
+| `[[red]]` … `[[/]]`                  | red, `[[RED]]` being the bright one  |
+| `[[~red]]` … `[[/]]`                 | red behind the text                  |
+| `[[#FF0000]]` … `[[/]]`              | an exact colour                      |
+| `[[?https://example.com]]` … `[[/]]` | a link a terminal can follow         |
+| `**bold**`                           | bold                                 |
+| `*italic*`                           | italic                               |
+| `***both***`                         | bold and italic                      |
+| `__underlined__`                     | underlined                           |
+| `~~struck~~`                         | struck through                       |
+| `` `code` ``                         | bold and bright cyan, markers kept   |
+| `<flag>`                             | italic and bright cyan, markers kept |
 
 A link is an escape sequence of its own — `ESC ] 8 ; ; address` around the text — so it
 is drawn only where escape sequences are being drawn at all: where there are none, and
