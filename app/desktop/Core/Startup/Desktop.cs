@@ -19,52 +19,79 @@ namespace RorolalaDesktop;
 /// first, then the plugins are initialized and register theirs, and then the look is applied — the run
 /// is assembled in one direction, and how it is drawn comes after what it is made of. The window is
 /// made last, because the look has to be applied before anything is drawn.
+/// <para>
+/// The services outlive the window, and are made once for the whole run: the main window can be closed and
+/// opened again while the program goes on, and what it is built over is the same host either way. What is
+/// assembled once is the arrangement of docks, and what a window is made from is that.
+/// </para>
 /// </remarks>
 internal sealed class Desktop
 {
     /// <summary>The identity the kernel's own dock and menu entries are attributed to.</summary>
     private static readonly PluginId Kernel = Core.Id;
 
+    /// <summary>The label key of the menu the docks and the way back to the main window appear under.</summary>
+    private const string WindowMenu = "menu.window";
+
     /// <summary>What the run worked out before Avalonia started.</summary>
     private readonly DesktopState _state;
 
+    /// <summary>Everything the host holds, made once and kept.</summary>
+    private readonly HostServices _services;
+
+    /// <summary>Whether the one-time half of the assembly has been done.</summary>
+    private bool _assembled;
+
     /// <summary>Makes the host over what the run worked out.</summary>
     /// <param name="state">What the run worked out before Avalonia started.</param>
-    public Desktop(DesktopState state) => _state = state;
+    public Desktop(DesktopState state)
+    {
+        _state = state;
+        _services = Services();
+    }
+
+    /// <summary>Everything the host holds, which a window is made over.</summary>
+    public HostServices Host => _services;
 
     /// <summary>
-    /// Builds the services, starts the plugins, applies the look, and makes the window.
+    /// Starts the plugins, applies the look, and opens the main window.
     /// </summary>
-    /// <returns>The window, which the caller shows.</returns>
+    /// <returns>The main window.</returns>
     public MainWindow Start()
     {
-        var services = Services();
+        if (_assembled)
+        {
+            // A second Start is not assembling anything: what the run is made of was decided the first time
+            // and every window is made over the same host, so what is left is opening the window.
+            _services.Windows.OpenMain();
 
-        RegisterKernel(services);
-        _state.Plugins.InitializeAll(services);
+            return _services.Windows.Main;
+        }
+
+        _assembled = true;
+
+        RegisterKernel(_services);
+        _state.Plugins.InitializeAll(_services);
 
         // What a dock keeps about itself is written down as soon as it is kept, so that a run that
         // ends badly is not the thing that loses it. Subscribed here rather than on the window, and
         // before the restore rather than after it, because restoring a dock is itself a dock keeping
         // something: a dock that keeps anything while it is being restored would be keeping it before
         // there was a window to hear about it.
-        services.Docks.StateChanged += () =>
-            LayoutStore.Save(services.Log, services.Docks.Snapshot());
+        _services.Docks.StateChanged += () =>
+            LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
 
         // The layout is restored once every dock is registered, since a saved layout addresses docks
         // by name and a name nothing answers to is dropped. On a first run there is no layout and no
         // dock is opened: which docks should start open is not something this program decides yet.
-        services.Docks.Restore(LayoutStore.Load(services.Log));
+        _services.Docks.Restore(LayoutStore.Load(_services.Log));
 
-        Report(services);
+        Report(_services);
 
-        services.Theme.Apply();
+        _services.Theme.Apply();
+        _services.Windows.OpenMain();
 
-        var window = new MainWindow(services);
-
-        services.Shell.Window = window;
-
-        return window;
+        return _services.Windows.Main;
     }
 
     /// <summary>Makes the shared services, all over one deduplication service.</summary>
@@ -93,7 +120,13 @@ internal sealed class Desktop
             _state.Theme
         );
 
-        return new HostServices
+        var docks = new DockManager(new DockRegistry(), i18n, log, popups);
+        var menus = new MenuRegistry();
+        var dockMenus = new DockMenuRegistry();
+        var icons = new IconLibrary();
+        var refocus = new Refocus();
+
+        var services = new HostServices
         {
             Log = log,
             Popups = popups,
@@ -104,17 +137,41 @@ internal sealed class Desktop
             Preference = _state.Preference,
             Settings = new SettingRegistry(_state.Preference),
             Shell = shell,
-            Menu = new MenuRegistry(),
+            Menu = menus,
             ContextMenus = new ContextMenuRegistry(),
+            DockMenus = dockMenus,
             Navigation = new NavigationRegistry(),
-            Docks = new DockManager(new DockRegistry(), i18n, log, popups),
+            Docks = docks,
             OpenHooks = new OpenHookRegistry(),
-            Refocus = new Refocus(),
+            Refocus = refocus,
             FileChanges = new FileChanges(),
             Dialogs = dialogs,
             IconBadges = new IconBadgeRegistry(),
-            Icons = new IconLibrary(),
+            Icons = icons,
+            // The set of windows is made over the services rather than handed them, and how one is made is
+            // written onto it here: what a window is drawn from is this object, which does not exist until
+            // this line is done.
+            Windows = new DockWindows(docks, i18n, refocus, log, icons, dockMenus, icon),
         };
+
+        services.Windows.Make = (key, dock) =>
+        {
+            var window = new MainWindow(services, key, dock);
+
+            // The shell names the window the host's own commands act on, which is the one that is up: a
+            // plugin's question is put over the window the run is being used in, and a window that is made
+            // is the one that is.
+            shell.Window = window;
+
+            // Every window of the host's, and not only the main one: a dock in a window of its own is come
+            // back to as much as the main window is, and a plugin's reading of the world outside is the same
+            // question either way.
+            window.Activated += (_, _) => refocus.Regain();
+
+            return window;
+        };
+
+        return services;
     }
 
     /// <summary>
@@ -172,7 +229,63 @@ internal sealed class Desktop
             )
         );
 
-        services.Menu.AddTopLevel(Kernel, Core.Position, "menu.window", 100);
+        services.Menu.AddTopLevel(Kernel, Core.Position, WindowMenu, 100);
+
+        // Where a window that was closed is asked for again. It is an item of the Window menu rather than one
+        // of its own, because what it is about is the window the docks are in: a dock's own window carries
+        // the same menu, so the way back is in every window there is.
+        services.Menu.AddItem(
+            Kernel,
+            Core.Position,
+            WindowMenu,
+            new MenuItem("menu.window_items.open_main", 0, services.Windows.OpenMain)
+        );
+
+        // The two things the host itself says about a dock's tab, offered for every dock: moving one into a
+        // window of its own is the host's answer about windows and not a plugin's, and closing one is what
+        // the close on the tab does — which a menu that has no close of its own would leave unsaid.
+        services.DockMenus.Add(
+            Kernel,
+            Core.Position,
+            DockMenuTarget.Tab,
+            new DockMenuItem(
+                null,
+                new ContextMenuItem(
+                    "menu.dock.own_window",
+                    10,
+                    was => OpenInWindow(services, was)
+                )
+            )
+        );
+
+        services.DockMenus.Add(
+            Kernel,
+            Core.Position,
+            DockMenuTarget.Tab,
+            new DockMenuItem(
+                null,
+                new ContextMenuItem("menu.dock.close", 20, was => services.Windows.CloseDock(was.Directory))
+            )
+        );
+    }
+
+    /// <summary>
+    /// Moves the dock a menu was opened on into a window of its own.
+    /// </summary>
+    /// <remarks>
+    /// The dock is named by the one contextual shape the program has, which for a tab states the dock's
+    /// stable name id as the directory: what is being looked up is the instance that name is open as.
+    /// </remarks>
+    /// <param name="services">Everything the host holds.</param>
+    /// <param name="was">What the menu was opened on.</param>
+    private static void OpenInWindow(HostServices services, ContextTarget was)
+    {
+        ArgumentNullException.ThrowIfNull(was);
+
+        if (services.Docks.InstanceOf(was.Directory) is { } instance)
+        {
+            services.Windows.ToOwnWindow(instance);
+        }
     }
 
     /// <summary>

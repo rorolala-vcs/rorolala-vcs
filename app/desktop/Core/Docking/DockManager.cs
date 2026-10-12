@@ -105,7 +105,7 @@ internal sealed class DockManager
             return Toggle(registration);
         }
 
-        return Create(registration, registration.DefaultPlacement);
+        return Create(registration, registration.DefaultPlacement, Request(registration, null));
     }
 
     /// <summary>
@@ -127,21 +127,61 @@ internal sealed class DockManager
             return existing;
         }
 
-        return Create(registration, registration.DefaultPlacement);
+        return Create(registration, registration.DefaultPlacement, Request(registration, null));
     }
 
-    /// <summary>Makes a new dock instance at a placement.</summary>
+    /// <summary>
+    /// Makes a new dock instance at a placement, over what a caller asked for.
+    /// </summary>
+    /// <remarks>
+    /// The window is not set here: which window a new dock opens in is the host's answer rather than the
+    /// dock's, and the one place that knows it is the window the dock was asked for.
+    /// </remarks>
     /// <param name="registration">The dock.</param>
     /// <param name="placement">Where to place the new instance.</param>
+    /// <param name="request">What the dock is being opened with.</param>
     /// <returns>The new instance, or nothing when its view could not be made.</returns>
-    public DockInstance? Create(DockRegistration registration, DockPlacement placement) =>
-        Create(registration, placement, Nothing);
+    public DockInstance? Create(
+        DockRegistration registration,
+        DockPlacement placement,
+        DockRequest request
+    ) => Create(registration, placement, Nothing, request, null);
+
+    /// <summary>
+    /// Makes a new dock instance in a window of its own, over what a caller asked for.
+    /// </summary>
+    /// <remarks>
+    /// The window is stated here rather than assigned afterwards, because there is no moment at which a dock
+    /// opened in a window of its own is in the main one: a dock made at the centre and then moved would be
+    /// drawn in a region of the main window for as long as that took, and the point of opening it in a
+    /// window of its own is that it never is.
+    /// </remarks>
+    /// <param name="registration">The dock.</param>
+    /// <param name="placement">Where to place the new instance.</param>
+    /// <param name="request">What the dock is being opened with.</param>
+    /// <param name="window">The window it is opened in.</param>
+    /// <returns>The new instance, or nothing when its view could not be made.</returns>
+    public DockInstance? Create(
+        DockRegistration registration,
+        DockPlacement placement,
+        DockRequest request,
+        string window
+    ) => Create(registration, placement, Nothing, request, window);
 
     /// <summary>Makes a new dock instance, told what that dock remembered last time.</summary>
     private DockInstance? Create(
         DockRegistration registration,
         DockPlacement placement,
         IReadOnlyDictionary<string, string> kept
+    ) => Create(registration, placement, kept, Request(registration, null), null);
+
+    /// <summary>Makes a new dock instance, told what it was opened with and what it remembered.</summary>
+    private DockInstance? Create(
+        DockRegistration registration,
+        DockPlacement placement,
+        IReadOnlyDictionary<string, string> kept,
+        DockRequest request,
+        string? window
     )
     {
         IDockView view;
@@ -172,6 +212,8 @@ internal sealed class DockManager
             View = view,
             Ordinal = NextOrdinal(registration.DockNameId),
             Title = _i18n.Get(registration.DisplayNameKey),
+            Request = request,
+            Window = window,
             Placement = placement,
             IsOpen = true,
         };
@@ -199,10 +241,43 @@ internal sealed class DockManager
             );
         }
 
+        // And what it was opened with comes after, so that a dock which was asked for at a directory of
+        // the caller's choosing is drawn there rather than being restored somewhere else and moved under
+        // the first frame. A dock with nothing to do about it is one that does not implement this.
+        if (view is IDockOpened told)
+        {
+            try
+            {
+                told.Opened(request);
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                _log.Record(
+                    LogLevel.Error,
+                    Core.Source,
+                    $"`{registration.DockNameId}` could not take what it was opened with: {error.Message}"
+                );
+            }
+        }
+
         Raise();
 
         return instance;
     }
+
+    /// <summary>
+    /// An instance of a dock that is already open, or nothing.
+    /// </summary>
+    /// <remarks>
+    /// One instance of every name, which is what a dock with a single instance is: what a caller asking for
+    /// one of those wants is the one it already has rather than a second one beside it.
+    /// </remarks>
+    /// <param name="dockNameId">The dock's stable name id.</param>
+    /// <returns>The instance, or nothing when none is open.</returns>
+    public DockInstance? InstanceOf(string dockNameId) =>
+        _instances.FirstOrDefault(instance =>
+            string.Equals(instance.DockNameId, dockNameId, StringComparison.Ordinal)
+        );
 
     /// <summary>
     /// Closes a dock: a toggle is hidden and kept, so showing it again is showing the same instance;
@@ -220,6 +295,31 @@ internal sealed class DockManager
             _instances.Remove(instance);
         }
 
+        // A view is let go of here, which is the moment a dock stops being a dock: it is held apart from
+        // every window it was drawn in — a dock closed from a window of its own is one whose control has
+        // already left the tree — and what it holds of the plugin's would otherwise outlive it.
+        (instance.View as IDisposable)?.Dispose();
+
+        Raise();
+    }
+
+    /// <summary>
+    /// Shows a dock that was hidden.
+    /// </summary>
+    /// <remarks>
+    /// A hidden dock is one that is still there, so showing it again is showing the same instance rather
+    /// than making another — which is what a dock with a single instance of its own is, and why asking for
+    /// one of those to be shown where it is already open gives back the one there is.
+    /// </remarks>
+    /// <param name="instance">The dock to show.</param>
+    public void Show(DockInstance instance)
+    {
+        if (instance.IsOpen)
+        {
+            return;
+        }
+
+        instance.IsOpen = true;
         Raise();
     }
 
@@ -232,14 +332,30 @@ internal sealed class DockManager
     /// </remarks>
     /// <param name="instance">The dock to move.</param>
     /// <param name="placement">The region to move it to.</param>
-    public void Move(DockInstance instance, DockPlacement placement)
+    public void Move(DockInstance instance, DockPlacement placement) =>
+        Move(instance, placement, instance.Window);
+
+    /// <summary>
+    /// Puts a dock in a region of a window, which is where it is now.
+    /// </summary>
+    /// <remarks>
+    /// The one place a dock's window is ever written, so that being moved is one change and not two: the
+    /// window it is leaving and the one it is arriving in would otherwise both draw it for as long as it
+    /// took to say both, and a view belongs to one parent at a time. Nothing is said when neither the
+    /// region nor the window changed, because a drag that ended where it started is not a move.
+    /// </remarks>
+    /// <param name="instance">The dock to move.</param>
+    /// <param name="placement">The region to move it to.</param>
+    /// <param name="window">The window to move it into, or nothing for the main one.</param>
+    public void Move(DockInstance instance, DockPlacement placement, string? window)
     {
-        if (instance.Placement == placement)
+        if (instance.Placement == placement && string.Equals(instance.Window, window, StringComparison.Ordinal))
         {
             return;
         }
 
         instance.Placement = placement;
+        instance.Window = window;
         Raise();
     }
 
@@ -290,7 +406,16 @@ internal sealed class DockManager
         }
     }
 
-    /// <summary>Everything that is open, as it is written back to the layout file.</summary>
+    /// <summary>
+    /// Everything open in the main window, as it is written back to the layout file.
+    /// </summary>
+    /// <remarks>
+    /// The docks in windows of their own are left out, and not because they matter less: the layout states
+    /// where in the main window each dock sits, and a dock that is somewhere else has no region to state.
+    /// Writing one down would be a region it is not in, and reading it back would pull it out of the window
+    /// it was left in. Which docks are in windows of their own is this run's arrangement, and a run that
+    /// starts opens the arrangement the main window was left in.
+    /// </remarks>
     /// <returns>What to save, with the region sizes as they stand.</returns>
     public DockLayout Snapshot()
     {
@@ -304,7 +429,7 @@ internal sealed class DockManager
 
         foreach (
             var instance in _instances
-                .Where(instance => instance.IsOpen)
+                .Where(instance => instance.IsOpen && instance.Window is null)
                 .OrderBy(instance => instance.DockNameId, StringComparer.Ordinal)
                 .ThenBy(instance => instance.Ordinal)
         )
@@ -322,6 +447,20 @@ internal sealed class DockManager
 
         return layout;
     }
+
+    /// <summary>
+    /// What a dock is opened with when nothing asked for anything in particular.
+    /// </summary>
+    /// <remarks>
+    /// The name is the registration's rather than a caller's, so that a dock opened from the Window menu
+    /// and one restored from the layout are the same request: what a dock reads of it is what it was told,
+    /// and a dock that was told nothing reads its own name back.
+    /// </remarks>
+    /// <param name="registration">The dock being opened.</param>
+    /// <param name="startAt">Where it is to look, or nothing.</param>
+    /// <returns>What to open it with.</returns>
+    private static DockRequest Request(DockRegistration registration, string? startAt) =>
+        new(registration.DockNameId, startAt);
 
     /// <summary>The next instance number for a dock name.</summary>
     private int NextOrdinal(string nameId)

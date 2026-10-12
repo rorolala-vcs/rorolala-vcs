@@ -35,7 +35,7 @@ public enum DockPlacement
     Center,
 
     /// <summary>A window of its own.</summary>
-    Float,
+    Window,
 }
 
 /// <summary>One dock command shown in a dock's header.</summary>

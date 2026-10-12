@@ -69,6 +69,18 @@ internal sealed class HostServices
     /// <summary>The context-menu items.</summary>
     public required ContextMenuRegistry ContextMenus { get; init; }
 
+    /// <summary>The items added to the menus a dock's own chrome opens.</summary>
+    public required DockMenuRegistry DockMenus { get; init; }
+
+    /// <summary>
+    /// The host's windows: the main one, and the ones docks were moved into.
+    /// </summary>
+    /// <remarks>
+    /// The windows are the host's rather than a control's because they outlive every control that draws
+    /// in them, the main window included: it can be closed and opened again while the program goes on.
+    /// </remarks>
+    public required DockWindows Windows { get; init; }
+
     /// <summary>The navigation buttons.</summary>
     public required NavigationRegistry Navigation { get; init; }
 
@@ -112,6 +124,7 @@ internal sealed class PluginHost
     : IPluginHost,
         IMenuRegistry,
         IContextMenuRegistry,
+        IDockMenuRegistry,
         INavigationRegistry,
         IDockRegistry,
         IOpenHookRegistry,
@@ -164,6 +177,12 @@ internal sealed class PluginHost
     public IDockRegistry Docks => this;
 
     /// <inheritdoc />
+    public IDockMenuRegistry DockMenus => this;
+
+    /// <inheritdoc />
+    public IWindows Windows => _services.Windows;
+
+    /// <inheritdoc />
     public IOpenHookRegistry OpenHooks => this;
 
     /// <inheritdoc />
@@ -207,6 +226,16 @@ internal sealed class PluginHost
     /// <inheritdoc />
     void IDockRegistry.Register(DockRegistration registration) =>
         _services.Docks.Register(registration);
+
+    /// <inheritdoc />
+    void IDockMenuRegistry.Add(DockMenuTarget target, DockMenuItem item) =>
+        _services.DockMenus.Add(_id, _position, target, item);
+
+    /// <inheritdoc />
+    IReadOnlyList<ContextMenuItem> IDockMenuRegistry.Items(
+        DockMenuTarget target,
+        string dockNameId
+    ) => _services.DockMenus.Items(target, dockNameId);
 
     /// <inheritdoc />
     void IOpenHookRegistry.Add(IOpenHook hook) => _services.OpenHooks.Add(_id, _position, hook);

@@ -28,6 +28,19 @@ menu:
   window:
     en: Window
     zh-CN: 窗口
+  # What the Window menu holds besides the docks, which the window is built with rather than registered
+  # under a key of its own: the way back to the main window, and what a dock's own tab offers.
+  window_items:
+    open_main:
+      en: Open Main Window
+      zh-CN: 打开主窗口
+  dock:
+    own_window:
+      en: Move to Own Window
+      zh-CN: 切换到独立窗口
+    close:
+      en: Close
+      zh-CN: 关闭
 
 dock:
   plugin_manager:

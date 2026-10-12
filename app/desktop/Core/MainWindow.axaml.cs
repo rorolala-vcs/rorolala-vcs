@@ -14,16 +14,25 @@ using RorolalaDesktop.Theming;
 using ContractMenuItem = RorolalaDesktop.Contract.MenuItem;
 using DockOpenMode = RorolalaDesktop.Contract.DockOpenMode;
 using DockRegistration = RorolalaDesktop.Contract.DockRegistration;
+using PluginId = RorolalaDesktop.Contract.PluginId;
 
 namespace RorolalaDesktop;
 
 /// <summary>
-/// The window: the row its menu and its own buttons share, and the dock area below it.
+/// A window of the program: the row its menu and its own buttons share, and the dock area below it.
 /// </summary>
 /// <remarks>
 /// Both are filled from what was registered — the kernel's own entries and the plugins' — and a
 /// plugin registers during initialization, which is before this window is made, so the menu is built
 /// once here and the area is kept in step by the dock manager.
+/// <para>
+/// There is one window class for the whole program, because the main window and a window a dock was moved
+/// into are the same window: the same row, the same frame, the same buttons. What tells them apart is the
+/// dock the window is for, and nothing else — a window with no such dock is the main one, and shows
+/// everything; a window that is for a dock belongs to that dock's plugin, and shows that plugin's own
+/// menus. What follows from that is the dock area, which draws the docks that are in this window whichever
+/// window it is.
+/// </para>
 /// <para>
 /// No title bar of the desktop's is drawn: the row above the dock area is the window's whole frame for
 /// as much of it as is seen, and what the toolkit takes from it is said in the markup. What is left
@@ -52,6 +61,35 @@ public partial class MainWindow : Window
     private readonly HostServices _services;
 
     /// <summary>
+    /// This window's key, or nothing for the main one.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the window itself as well as here, because the one that hears a window closed is the
+    /// window: what a closed window has to say about itself is which window it was.
+    /// </remarks>
+    private readonly string? _key;
+
+    /// <summary>
+    /// The plugin whose menus this window shows, or nothing for every one of them.
+    /// </summary>
+    /// <remarks>
+    /// A window that is for a dock belongs to that dock's plugin, and its row is that plugin's own: what a
+    /// window of one dock is for is that dock, and a menu about a tree has nothing to say in a window that
+    /// holds a browser. The kernel's own menus are shown either way — the Window menu is where the docks and
+    /// the way back to the main window are, in every window there is.
+    /// </remarks>
+    private readonly PluginId? _scope;
+
+    /// <summary>
+    /// The dock this window is for, or nothing for the main one.
+    /// </summary>
+    /// <remarks>
+    /// Held because a window of one dock is that dock's window: what the dock says about itself is said in
+    /// this window's own row, which is read long after the window was made.
+    /// </remarks>
+    private readonly Docking.DockInstance? _dock;
+
+    /// <summary>
     /// This window's frame, which is what draws its own buttons.
     /// </summary>
     /// <remarks>
@@ -67,10 +105,27 @@ public partial class MainWindow : Window
     /// <summary>Makes the window over what was registered.</summary>
     /// <param name="services">Everything the host holds.</param>
     internal MainWindow(HostServices services)
+        : this(services, null, null) { }
+
+    /// <summary>Makes the window, either the main one or one a dock of its own is shown in.</summary>
+    /// <param name="services">Everything the host holds.</param>
+    /// <param name="key">
+    /// This window's key, or nothing for the main one. Written on the window, because the window is what is
+    /// heard from when it closes and the one thing it has to say is which window it was.
+    /// </param>
+    /// <param name="dock">The dock this window is for, or nothing for the main one.</param>
+    internal MainWindow(HostServices services, string? key, Docking.DockInstance? dock)
     {
         InitializeComponent();
 
         _services = services;
+        _key = key;
+        _dock = dock;
+        _scope = dock?.Registration.Owner;
+
+        // The key travels with the window, since the window outlives the list it is in: what it is closes
+        // over nothing, and the set of windows remembers it by what it says about itself.
+        Tag = key;
 
         // The host's own picture, and the one every other window of the program is drawn with; the
         // dialogs this window shows take it from the same place rather than making one of their own.
@@ -144,8 +199,8 @@ public partial class MainWindow : Window
         DockAreaHost.Content = new DockArea(
             _services.Docks,
             _services.I18n,
-            _services.Refocus,
-            _services.ProgramIcon
+            _services.Windows,
+            _key
         );
 
         // A dock can be closed, opened, or dragged to another region by hand as well as from the
@@ -158,7 +213,17 @@ public partial class MainWindow : Window
         Activated += (_, _) => _services.Refocus.Regain();
 
         Opened += (_, _) => ShowPopups();
-        Closing += (_, _) => LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
+
+        // The layout is what the main window's regions were, so it is written when the main window is the one
+        // going: a window of a dock's own has no regions to remember, and writing the layout from it would be
+        // writing the main window's arrangement from a window that is not the main one.
+        Closing += (_, _) =>
+        {
+            if (_key is null)
+            {
+                LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
+            }
+        };
     }
 
     /// <summary>
@@ -297,13 +362,31 @@ public partial class MainWindow : Window
             )
             : null;
 
-    /// <summary>Builds the menu bar from what was registered.</summary>
+    /// <summary>
+    /// Builds the menu bar from what was registered, for the window this is.
+    /// </summary>
+    /// <remarks>
+    /// A window that is for a dock shows that dock's plugin's menus and the kernel's own, and a window that
+    /// is for nothing — the main one — shows every menu there is. What a window of one dock is for is that
+    /// dock, so a menu about a tree has nothing to say in a window that holds a browser; what the program
+    /// itself has to say, which is the Window menu and the way back to the main window, is said everywhere.
+    /// <para>
+    /// The dock's own header commands are added under the Window menu rather than as menus of their own:
+    /// they are what the dock says about the thing it is showing, and there is no other place in a window
+    /// that is one dock for them to be.
+    /// </para>
+    /// </remarks>
     private void BuildMenu()
     {
         MainMenu.Items.Clear();
 
         foreach (var top in _services.Menu.TopLevels)
         {
+            if (_scope is { } mine && top.Owner != mine && top.Owner != Core.Id)
+            {
+                continue;
+            }
+
             var menu = new MenuItem { Header = _services.I18n.Get(top.LabelKey) };
 
             foreach (var item in _services.Menu.Items(top.LabelKey))
@@ -316,6 +399,7 @@ public partial class MainWindow : Window
             if (top.LabelKey == WindowMenu)
             {
                 AddDocks(menu);
+                AddCommands(menu);
             }
 
             MainMenu.Items.Add(menu);
@@ -331,13 +415,50 @@ public partial class MainWindow : Window
         return made;
     }
 
-    /// <summary>Adds an entry for each registered dock.</summary>
+    /// <summary>
+    /// Adds what the dock this window is for says about itself.
+    /// </summary>
+    /// <remarks>
+    /// A dock's header commands are the ones its own strip would carry, and a window that is that dock has
+    /// no strip but the menu bar: what the dock offers about the thing it is showing belongs there, or a
+    /// window of one dock would be a window with less in it than the region it came from.
+    /// </remarks>
+    /// <param name="menu">The Window menu to add them under.</param>
+    private void AddCommands(MenuItem menu)
+    {
+        if (_dock is not { } instance || instance.View.HeaderCommands.Count == 0)
+        {
+            return;
+        }
+
+        menu.Items.Add(new Separator());
+
+        foreach (var command in instance.View.HeaderCommands)
+        {
+            var entry = new MenuItem { Header = _services.I18n.Get(command.LabelKey) };
+
+            entry.Click += (_, _) => command.Command();
+            menu.Items.Add(entry);
+        }
+    }
+
+    /// <summary>Adds an entry for each registered dock, in the main window.</summary>
     /// <remarks>
     /// A toggle appears as a toggle, checked while its dock is shown; a dock with open mode New
     /// appears as a plain entry, since choosing it makes another instance rather than switching one.
+    /// <para>
+    /// A window that is for a dock has no list of docks and no regions to put one in: what its Window menu
+    /// holds is the way back to the main window, where the docks are, and what the dock it is for says about
+    /// itself.
+    /// </para>
     /// </remarks>
     private void AddDocks(MenuItem menu)
     {
+        if (_key is not null)
+        {
+            return;
+        }
+
         var registrations = _services.Docks.Registrations;
 
         if (registrations.Count > 0)
@@ -375,11 +496,21 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Keeps the menu in step with the docks, and writes the layout they came to.</summary>
+    /// <summary>
+    /// Keeps the menu in step with the docks, and writes the layout they came to.
+    /// </summary>
+    /// <remarks>
+    /// The layout is written by the main window alone: what it holds is where the main window's regions are
+    /// and which docks are in them, and a window of a dock's own has neither to say.
+    /// </remarks>
     private void DocksChanged()
     {
         RefreshDocks();
-        LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
+
+        if (_key is null)
+        {
+            LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
+        }
     }
 
     /// <summary>Keeps the toggle checks in step with which docks are shown.</summary>

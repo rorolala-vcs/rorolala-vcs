@@ -36,6 +36,12 @@ public interface IPluginHost
     /// <summary>Where the plugin registers docks.</summary>
     IDockRegistry Docks { get; }
 
+    /// <summary>Where the plugin adds items to the menus a dock's own chrome opens.</summary>
+    IDockMenuRegistry DockMenus { get; }
+
+    /// <summary>Where the plugin asks for a dock to be shown in a window of its own.</summary>
+    IWindows Windows { get; }
+
     /// <summary>Where the plugin adds open hooks.</summary>
     IOpenHookRegistry OpenHooks { get; }
 

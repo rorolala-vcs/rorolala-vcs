@@ -1,12 +1,15 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
+using MenuItem = Avalonia.Controls.MenuItem;
 
 namespace RorolalaDesktop.Docking;
 
@@ -134,14 +137,32 @@ internal sealed class DockArea : UserControl
     /// <summary>How far a pointer moves before a press becomes a drag rather than a click.</summary>
     private const double DragThreshold = 4;
 
-    /// <summary>How large a floating dock's window opens.</summary>
-    private static readonly Size FloatSize = new(560, 400);
+    /// <summary>How many pixels wide and tall a contributed mark is drawn in a menu item.</summary>
+    /// <remarks>
+    /// The size a menu item reserves for a mark of its own, so that an item with a picture and one without
+    /// keep their words in the same column rather than stepping sideways when a picture appears.
+    /// </remarks>
+    private const double MenuMark = 16.0;
 
     /// <summary>The docks and where they are.</summary>
     private readonly DockManager _manager;
 
     /// <summary>The host's translations, for dock titles and header commands.</summary>
     private readonly I18nService _i18n;
+
+    /// <summary>
+    /// The window this area draws.
+    /// </summary>
+    /// <remarks>
+    /// Nothing for the main window, and a key for a window of its own. Every window has an area of its own,
+    /// and each draws the docks that are in it: a dock that has been moved into a window of its own is in
+    /// that window's area and in nothing else, which is what keeps one view from being asked to be in two
+    /// places at once.
+    /// </remarks>
+    private readonly string? _window;
+
+    /// <summary>Where a dock's own tab menu is registered, and where a move into a window is asked for.</summary>
+    private readonly DockWindows _windows;
 
     /// <summary>The area, with the drop zones drawn over it.</summary>
     private readonly Grid _surface = new();
@@ -185,9 +206,6 @@ internal sealed class DockArea : UserControl
     /// <summary>What each dock that is placed in a region was given, by the dock.</summary>
     private readonly Dictionary<DockInstance, Placed> _placed = [];
 
-    /// <summary>The window each floating dock lives in, by the dock.</summary>
-    private readonly Dictionary<DockInstance, Window> _floats = [];
-
     /// <summary>The zone each placement is drawn by.</summary>
     private readonly Dictionary<DockPlacement, Border> _lit = [];
 
@@ -200,26 +218,20 @@ internal sealed class DockArea : UserControl
     /// <summary>Whether the pointer has moved far enough to be dragging rather than clicking.</summary>
     private bool _moved;
 
-    /// <summary>Whether a float is being closed by this area rather than by the user.</summary>
-    private bool _closingFloat;
-
-    /// <summary>What the host tells the plugins when one of its windows is come back to.</summary>
-    private readonly Refocus _refocus;
-
-    /// <summary>The picture the program is known by, or nothing when the platform has none.</summary>
-    private readonly WindowIcon? _icon;
-
     /// <summary>Makes the area over the manager it shows.</summary>
     /// <param name="manager">The docks and where they are.</param>
     /// <param name="i18n">The host's translations.</param>
-    /// <param name="refocus">What a window being come back to is said through.</param>
-    /// <param name="icon">The picture the program is known by, for a dock floated into its own window.</param>
-    public DockArea(DockManager manager, I18nService i18n, Refocus refocus, WindowIcon? icon)
+    /// <param name="windows">The host's windows, for the tab menu and for moving a dock into one.</param>
+    /// <param name="window">
+    /// The window this area is in, or nothing for the main one: it draws the docks that are in that window
+    /// and no others.
+    /// </param>
+    public DockArea(DockManager manager, I18nService i18n, DockWindows windows, string? window)
     {
         _manager = manager;
         _i18n = i18n;
-        _refocus = refocus;
-        _icon = icon;
+        _windows = windows;
+        _window = window;
 
         Build();
 
@@ -591,15 +603,20 @@ internal sealed class DockArea : UserControl
         Settle();
         Show();
         Arrange();
-        Floats();
     }
 
     /// <summary>Takes away the docks that are no longer open at all.</summary>
+    /// <remarks>
+    /// A dock that is still there but has moved to another window is let go of here as well, and that is
+    /// what makes a move one change: the window it left takes it off its own tree, and the window it went
+    /// to puts it on its own. A view that stayed on the tree of the window it left would be one control in
+    /// two parents, which no control can be.
+    /// </remarks>
     private void Forget()
     {
         foreach (var (instance, placed) in _placed.ToArray())
         {
-            if (_manager.Instances.Contains(instance))
+            if (_manager.Instances.Contains(instance) && Mine(instance))
             {
                 continue;
             }
@@ -609,12 +626,12 @@ internal sealed class DockArea : UserControl
         }
     }
 
-    /// <summary>Puts every dock where it says it is, moving the ones that have been dragged.</summary>
+    /// <summary>Puts every dock of this window where it says it is, moving the ones dragged.</summary>
     private void Place()
     {
         foreach (var instance in _manager.Instances)
         {
-            if (instance.Placement == DockPlacement.Float)
+            if (!Mine(instance) || instance.Placement == DockPlacement.Window)
             {
                 continue;
             }
@@ -641,6 +658,18 @@ internal sealed class DockArea : UserControl
             Attach(placed, region);
         }
     }
+
+    /// <summary>
+    /// Whether a dock is one of this window's.
+    /// </summary>
+    /// <remarks>
+    /// One question, asked everywhere an instance is looked at, because a window is what a dock belongs to
+    /// and two windows that both counted one would both draw it.
+    /// </remarks>
+    /// <param name="instance">The dock.</param>
+    /// <returns>Whether it is in this window.</returns>
+    private bool Mine(DockInstance instance) =>
+        string.Equals(instance.Window, _window, StringComparison.Ordinal);
 
     /// <summary>Makes a dock's view and its header, which it keeps for as long as it lives.</summary>
     private Placed Make(DockInstance instance)
@@ -712,6 +741,11 @@ internal sealed class DockArea : UserControl
         title.Classes.Add(TitleClass);
         title.Click += (_, _) => Select(instance);
 
+        // The menu a tab opens, made once here rather than per right-click: what a dock's tab offers is
+        // about the dock rather than about what the pointer happens to be over, so nothing about it is
+        // stale when the menu is opened again.
+        title.ContextMenu = TabMenu(instance);
+
         // Taken on the way down. A button answers for its own press, and marks it handled while
         // doing so, so an ordinary handler here would never be called: the press is over before it
         // reaches one. A tunnelling handler is reached first, which is the only way in — and a press on
@@ -735,6 +769,97 @@ internal sealed class DockArea : UserControl
             View = instance.View.View,
             Title = title,
         };
+    }
+
+    /// <summary>
+    /// The menu a dock's tab opens: what was registered for its place, and what the dock says about itself.
+    /// </summary>
+    /// <remarks>
+    /// The registered items come first, because they are what the host and the plugins have to say about a
+    /// dock, and the dock's own header commands follow them under a rule: a command of the dock's is about
+    /// the thing being shown rather than about the dock as a container, and the two read as one list only
+    /// if the seam between them is drawn.
+    /// <para>
+    /// A registered item is handed the one contextual shape the program has, with the dock's stable name id
+    /// standing where a directory stands for a file menu and no entries at all: a tab is a dock, and stating
+    /// the dock in the shape an item already takes is what lets one registration serve both without a second
+    /// contract type to keep in step.
+    /// </para>
+    /// </remarks>
+    /// <param name="instance">The dock whose tab this is.</param>
+    /// <returns>The menu, which a tab always has: a close of the dock is always offered.</returns>
+    private ContextMenu TabMenu(DockInstance instance)
+    {
+        var menu = new ContextMenu();
+        var was = new ContextTarget(instance.DockNameId, []);
+
+        foreach (var item in _windows.DockMenuItems(DockMenuTarget.Tab, instance.DockNameId))
+        {
+            var entry = new MenuItem { Header = _i18n.Get(item.LabelKey) };
+
+            if (item.IconKey is { } key && _windows.Pictures.Find(key) is { } picture)
+            {
+                entry.Icon = MenuPicture(picture);
+            }
+
+            entry.Click += (_, _) => item.Command(was);
+            menu.Items.Add(entry);
+        }
+
+        var commands = instance.View.HeaderCommands;
+
+        if (commands.Count > 0 && menu.Items.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+        }
+
+        foreach (var command in commands)
+        {
+            var entry = new MenuItem { Header = _i18n.Get(command.LabelKey) };
+
+            entry.Click += (_, _) => command.Command();
+            menu.Items.Add(entry);
+        }
+
+        return menu;
+    }
+
+    /// <summary>
+    /// A contributed picture, drawn as a menu item's own mark.
+    /// </summary>
+    /// <remarks>
+    /// A border whose fill is the picture rather than the picture itself, so that the mark takes the ink of
+    /// the item it sits in: what a menu item is filled with is the look's answer, and a picture that carried
+    /// its own colours would be a mark that vanished into the fill the day the look changed.
+    /// </remarks>
+    /// <param name="picture">The picture to stamp.</param>
+    /// <returns>What to put in the item.</returns>
+    private static Control MenuPicture(Bitmap picture)
+    {
+        var mark = new Border
+        {
+            Width = MenuMark,
+            Height = MenuMark,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
+        };
+
+        // What states the ink is the item, and what is between the two — the presenter an item puts its
+        // content in — states nothing of its own, so the nearest item is named rather than guessed at.
+        mark.Bind(
+            Border.BackgroundProperty,
+            new Binding("Foreground")
+            {
+                RelativeSource = new RelativeSource
+                {
+                    Mode = RelativeSourceMode.FindAncestor,
+                    AncestorType = typeof(MenuItem),
+                },
+            }
+        );
+
+        return mark;
     }
 
     /// <summary>Whether a press landed on the close a header carries.</summary>
@@ -907,78 +1032,6 @@ internal sealed class DockArea : UserControl
             : new GridLength(0);
     }
 
-    /// <summary>Opens a window for each floating dock, and shows or hides it with the dock.</summary>
-    private void Floats()
-    {
-        foreach (var instance in _manager.Instances)
-        {
-            if (instance.Placement != DockPlacement.Float)
-            {
-                continue;
-            }
-
-            if (!_floats.TryGetValue(instance, out var window))
-            {
-                window = Float(instance);
-                _floats[instance] = window;
-                window.Show();
-
-                continue;
-            }
-
-            if (instance.IsOpen && !window.IsVisible)
-            {
-                window.Show();
-            }
-            else if (!instance.IsOpen && window.IsVisible)
-            {
-                window.Hide();
-            }
-        }
-
-        foreach (var (instance, window) in _floats.ToArray())
-        {
-            if (_manager.Instances.Contains(instance))
-            {
-                continue;
-            }
-
-            _closingFloat = true;
-            window.Close();
-            _closingFloat = false;
-            _floats.Remove(instance);
-        }
-    }
-
-    /// <summary>Shows one dock in a window of its own.</summary>
-    private Window Float(DockInstance instance)
-    {
-        var window = new Window
-        {
-            Title = instance.Title,
-            Icon = _icon,
-            Width = FloatSize.Width,
-            Height = FloatSize.Height,
-            Content = instance.View.View,
-        };
-
-        // A dock floated into a window of its own is come back to as much as the main window is, and the dock's
-        // view reads the same things either way: the activation of either is the same occasion.
-        window.Activated += (_, _) => _refocus.Regain();
-
-        window.Closed += (_, _) =>
-        {
-            if (_closingFloat)
-            {
-                return;
-            }
-
-            _manager.Close(instance);
-        };
-
-        return window;
-    }
-
     /// <summary>Shows one dock of its region rather than the one that was shown.</summary>
     private void Select(DockInstance instance)
     {
@@ -1128,12 +1181,13 @@ internal sealed class DockArea : UserControl
         }
     }
 
-    /// <summary>The docks open in one region, in the order they were made.</summary>
+    /// <summary>The docks open in one region of this window, in the order they were made.</summary>
     private List<DockInstance> Open(Region region) =>
         _manager
             .Instances.Where(instance =>
                 instance.IsOpen
-                && instance.Placement != DockPlacement.Float
+                && Mine(instance)
+                && instance.Placement != DockPlacement.Window
                 && ReferenceEquals(RegionFor(instance.Placement), region)
             )
             .ToList();

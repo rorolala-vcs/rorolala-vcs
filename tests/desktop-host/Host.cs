@@ -40,6 +40,11 @@ internal static class Host
         var shell = new Shell();
         var dialogs = new Dialogs(shell, i18n, icon);
 
+        var docks = new DockManager(new DockRegistry(), i18n, log, popups);
+        var dockMenus = new DockMenuRegistry();
+        var icons = new IconLibrary();
+        var refocus = new Refocus();
+
         return new HostServices
         {
             Log = log,
@@ -55,19 +60,24 @@ internal static class Host
             Shell = shell,
             Menu = new MenuRegistry(),
             ContextMenus = new ContextMenuRegistry(),
+            DockMenus = dockMenus,
             Navigation = new NavigationRegistry(),
-            Docks = new DockManager(new DockRegistry(), i18n, log, popups),
+            Docks = docks,
             OpenHooks = new OpenHookRegistry(),
             IconBadges = new IconBadgeRegistry(),
             // Nothing contributes a picture here, and nothing draws one: the library is what the
             // contract says a plugin may add to, and a headless test adds nothing.
-            Icons = new IconLibrary(),
+            Icons = icons,
             // Nothing activates a window in a headless test, so nothing is ever raised on it.
-            Refocus = new Refocus(),
+            Refocus = refocus,
             // A dialog needs a window to be shown on, and a headless test has none: nothing is ever shown.
             Dialogs = dialogs,
             // What a plugin says when the files may have changed: nothing changes them, so nothing is said.
             FileChanges = new FileChanges(),
+            // A headless test has no platform and no window, so nothing here makes one: a request to open a
+            // window is answered as nothing having been asked for, which is what the bookkeeping under it is
+            // checked through.
+            Windows = new DockWindows(docks, i18n, refocus, log, icons, dockMenus, icon),
         };
     }
 }

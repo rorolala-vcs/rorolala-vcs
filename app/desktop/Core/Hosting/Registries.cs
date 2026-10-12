@@ -116,7 +116,16 @@ internal sealed class ContextMenuRegistry
     public void Add(PluginId owner, int position, ContextMenuTarget target, ContextMenuItem item) =>
         _items.Add(new OwnedContextItem(owner, position, target, item));
 
-    /// <inheritdoc />
+    /// <summary>
+    /// The items of one context, in the order they are shown.
+    /// </summary>
+    /// <remarks>
+    /// Every plugin's, and deliberately not one plugin's: the menu a context is drawn in is another plugin's
+    /// — the File System's is what folds these in — so what is asked for is what there is rather than what
+    /// one of the plugins that contributed it has to say.
+    /// </remarks>
+    /// <param name="target">The context.</param>
+    /// <returns>The items, or nothing when that context has none.</returns>
     public IReadOnlyList<ContextMenuItem> Items(ContextMenuTarget target) =>
         _items
             .Where(entry => entry.Target == target)
@@ -124,6 +133,53 @@ internal sealed class ContextMenuRegistry
             .ThenBy(entry => entry.Item.Order)
             .ThenBy(entry => entry.Item.LabelKey, StringComparer.Ordinal)
             .Select(entry => entry.Item)
+            .ToArray();
+}
+
+/// <summary>One dock-menu item, with who registered it.</summary>
+internal sealed record OwnedDockItem(
+    PluginId Owner,
+    int Position,
+    DockMenuTarget Target,
+    DockMenuItem Item
+);
+
+/// <summary>
+/// The items plugins add to the menus a dock's own chrome opens.
+/// </summary>
+/// <remarks>
+/// Kept apart from <see cref="ContextMenuRegistry"/> rather than folded into its three contexts, because
+/// the two are asked for different things: a file menu is built for a choice inside a listing, and this one
+/// for a dock's own tab, which no listing knows about. What an item of either is, is the same shape.
+/// </remarks>
+internal sealed class DockMenuRegistry
+{
+    /// <summary>Every item, in registration order.</summary>
+    private readonly List<OwnedDockItem> _items = [];
+
+    /// <summary>Adds an item to one of a dock's own menus.</summary>
+    /// <param name="owner">The plugin registering it.</param>
+    /// <param name="position">The plugin's place in the load order.</param>
+    /// <param name="target">The place the item belongs to.</param>
+    /// <param name="item">The item to add.</param>
+    public void Add(PluginId owner, int position, DockMenuTarget target, DockMenuItem item) =>
+        _items.Add(new OwnedDockItem(owner, position, target, item));
+
+    /// <summary>Every item offered for one place and one dock, in the order they are shown.</summary>
+    /// <param name="target">The place.</param>
+    /// <param name="dockNameId">The dock the menu belongs to.</param>
+    /// <returns>The items, or nothing when that place has none for that dock.</returns>
+    public IReadOnlyList<ContextMenuItem> Items(DockMenuTarget target, string dockNameId) =>
+        _items
+            .Where(entry =>
+                entry.Target == target
+                && (entry.Item.DockNameId is null
+                    || string.Equals(entry.Item.DockNameId, dockNameId, StringComparison.Ordinal))
+            )
+            .OrderBy(entry => entry.Position)
+            .ThenBy(entry => entry.Item.Item.Order)
+            .ThenBy(entry => entry.Item.Item.LabelKey, StringComparer.Ordinal)
+            .Select(entry => entry.Item.Item)
             .ToArray();
 }
 

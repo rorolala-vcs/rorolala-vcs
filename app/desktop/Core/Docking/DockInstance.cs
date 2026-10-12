@@ -24,6 +24,26 @@ internal sealed class DockInstance
     /// <summary>The dock's title, resolved from its display-name key.</summary>
     public required string Title { get; init; }
 
+    /// <summary>
+    /// What the dock was opened with.
+    /// </summary>
+    /// <remarks>
+    /// Kept as it was asked for rather than unpacked into fields here, because it is the same value the
+    /// view is handed and a second reading of it would be a second answer to what the dock was told.
+    /// </remarks>
+    public required DockRequest Request { get; init; }
+
+    /// <summary>
+    /// The window this dock is in, or nothing for the main one.
+    /// </summary>
+    /// <remarks>
+    /// A key rather than a window, because a dock outlives any window that is closed and opened again, and
+    /// because what is written down is what can be read back: a handle is this run's and the key is the
+    /// program's. It is set by <see cref="DockManager.Move"/> before anything is told the dock moved, so
+    /// that the window it is leaving and the one it is arriving in never both claim it.
+    /// </remarks>
+    public string? Window { get; set; }
+
     /// <summary>Where the dock currently sits.</summary>
     public DockPlacement Placement { get; set; }
 
