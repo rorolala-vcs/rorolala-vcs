@@ -631,7 +631,7 @@ internal sealed class DockArea : UserControl
     {
         foreach (var instance in _manager.Instances)
         {
-            if (!Mine(instance) || instance.Placement == DockPlacement.Window)
+            if (!Mine(instance))
             {
                 continue;
             }
@@ -1187,7 +1187,6 @@ internal sealed class DockArea : UserControl
             .Instances.Where(instance =>
                 instance.IsOpen
                 && Mine(instance)
-                && instance.Placement != DockPlacement.Window
                 && ReferenceEquals(RegionFor(instance.Placement), region)
             )
             .ToList();

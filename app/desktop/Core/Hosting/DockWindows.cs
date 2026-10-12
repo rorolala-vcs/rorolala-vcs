@@ -250,7 +250,7 @@ internal sealed class DockWindows : IWindows
         }
 
         var key = $"dock-{++_made}";
-        var made = _docks.Create(registration, DockPlacement.Window, request, key);
+        var made = _docks.Create(registration, DockPlacement.Center, request, key);
 
         if (made is null)
         {
@@ -287,7 +287,11 @@ internal sealed class DockWindows : IWindows
         var key = $"dock-{++_made}";
 
         _held[key] = instance;
-        _docks.Move(instance, DockPlacement.Window, key);
+
+        // The region is the one it already had rather than the centre of its new window: pulling a dock out
+        // of a region is about where it is shown, and being in a window of its own is a change of window and
+        // not a change of region — a dock dragged out of the bottom band comes back to it when it returns.
+        _docks.Move(instance, instance.Placement, key);
         LeaveMain();
 
         if (Add(key, instance) is { } opened)

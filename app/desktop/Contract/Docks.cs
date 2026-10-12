@@ -16,7 +16,12 @@ public enum DockOpenMode
     New,
 }
 
-/// <summary>Where a dock view is placed in the dock area.</summary>
+/// <summary>Where a dock view is placed in the dock area of the window it is in.</summary>
+/// <remarks>
+/// A region of one window, and never a window: which window a dock is in is the host's own answer rather
+/// than a placement, and a placement that could also be a window would be one name meaning two things —
+/// which the two must not be, since they are read apart.
+/// </remarks>
 public enum DockPlacement
 {
     /// <summary>The top region.</summary>
@@ -33,9 +38,6 @@ public enum DockPlacement
 
     /// <summary>The central region.</summary>
     Center,
-
-    /// <summary>A window of its own.</summary>
-    Window,
 }
 
 /// <summary>One dock command shown in a dock's header.</summary>

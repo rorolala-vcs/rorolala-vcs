@@ -104,7 +104,7 @@ internal sealed class Desktop
 
         // Made here and not by a window, because the windows it is for are not all the host's: a plugin
         // reaches it through the contract, so the one picture is decoded once and every window — the
-        // host's, a dock floated into one of its own, a question — is drawn with the same one.
+        // host's, a dock's own, a question — is drawn with the same one.
         var icon = AppIcon.Load(log);
 
         // Made before the object they are put in, because a dialog is shown on the window and the window is

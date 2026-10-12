@@ -363,7 +363,7 @@ public partial class MainWindow : Window
             : null;
 
     /// <summary>
-    /// Builds the menu bar from what was registered, for the window this is.
+    /// The top-level menus a window shows, given the plugin whose window it is.
     /// </summary>
     /// <remarks>
     /// A window that is for a dock shows that dock's plugin's menus and the kernel's own, and a window that
@@ -371,22 +371,38 @@ public partial class MainWindow : Window
     /// dock, so a menu about a tree has nothing to say in a window that holds a browser; what the program
     /// itself has to say, which is the Window menu and the way back to the main window, is said everywhere.
     /// <para>
+    /// A question about what was registered and nothing about a window, so that what a window's row is made
+    /// of can be asked without making one — and answered here rather than in the loop below, so that the
+    /// answer and what is drawn cannot come apart.
+    /// </para>
+    /// </remarks>
+    /// <param name="menu">What was registered.</param>
+    /// <param name="scope">The plugin whose window this is, or nothing for every one of them.</param>
+    /// <returns>The menus to show, in the order they are shown.</returns>
+    internal static IReadOnlyList<TopLevelMenu> Visible(MenuRegistry menu, PluginId? scope)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+
+        return
+        [
+            .. menu.TopLevels.Where(top => scope is not { } mine || top.Owner == mine || top.Owner == Core.Id),
+        ];
+    }
+
+    /// <summary>
+    /// Builds the menu bar from what was registered, for the window this is.
+    /// </summary>
+    /// <remarks>
     /// The dock's own header commands are added under the Window menu rather than as menus of their own:
     /// they are what the dock says about the thing it is showing, and there is no other place in a window
     /// that is one dock for them to be.
-    /// </para>
     /// </remarks>
     private void BuildMenu()
     {
         MainMenu.Items.Clear();
 
-        foreach (var top in _services.Menu.TopLevels)
+        foreach (var top in Visible(_services.Menu, _scope))
         {
-            if (_scope is { } mine && top.Owner != mine && top.Owner != Core.Id)
-            {
-                continue;
-            }
-
             var menu = new MenuItem { Header = _services.I18n.Get(top.LabelKey) };
 
             foreach (var item in _services.Menu.Items(top.LabelKey))

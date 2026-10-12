@@ -19,8 +19,8 @@ internal sealed class Refocus : IRefocus
     /// Says that a window of the host's has been come back to.
     /// </summary>
     /// <remarks>
-    /// Raised by whoever is told of the activation: the main window, and each window a dock was floated in — a
-    /// dock in a window of its own is come back to as much as the main one is.
+    /// Raised by whoever is told of the activation: the main window, and each window a dock was moved into —
+    /// a dock in a window of its own is come back to as much as the main one is.
     /// </remarks>
     public void Regain() => Regained?.Invoke();
 }
