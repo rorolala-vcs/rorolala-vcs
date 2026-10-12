@@ -1,0 +1,8 @@
+[package]
+name = "it-cli-external"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rorolala-utils-sandbox = { path = "../../utils/sandbox" }

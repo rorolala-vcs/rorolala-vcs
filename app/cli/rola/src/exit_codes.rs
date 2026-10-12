@@ -35,6 +35,9 @@ pub const EC_NOT_EXIST: i32 = 11;
 /// `exit_codes.unknown_command`
 pub const EC_UNKNOWN_COMMAND: i32 = 12;
 
+/// `exit_codes.external_failed`
+pub const EC_ERR_EXTERNAL_FAILED: i32 = 13;
+
 // Creation
 
 /// `exit_codes.creation_workspace`

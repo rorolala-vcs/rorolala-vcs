@@ -1,0 +1,17 @@
+_version: 2
+
+# What a run says when a word names a program beside this one and that program will not start.
+# Nothing else is here: what the program itself says is its own, and a run that is handed over
+# says nothing of its own on the way — what is spoken here is the one ending that never reaches a
+# renderer, because the word never became a command.
+
+external:
+  err_launch_failed:
+    en: "The program `%{program}` beside this one could not be started - %{reason}"
+    zh-CN: "本程序旁边的 `%{program}` 无法启动 —— %{reason}"
+
+  err_launch_failed_help:
+    en: |
+        Please check that the program can be run where it sits, then try again
+    zh-CN: |
+        请确认该程序在其所在位置可以运行，然后重试

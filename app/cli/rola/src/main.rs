@@ -45,6 +45,7 @@ mod complete;
 mod editor;
 mod error;
 mod exit_codes;
+mod external;
 mod failure;
 mod fetch;
 mod format;
@@ -118,6 +119,13 @@ fn main() {
         }
     }));
 
+    // A word that names no command of this program may name a program beside it — `rola daemon` is
+    // `rola-daemon` — and the run is that program's from there. Registered after the version
+    // request is rewritten, so what this reads is the words a run is matched by; it is the last
+    // thing asked before the words are matched, which is where a word no command answers to is
+    // still the run's to change.
+    program.with_hook(external::hook());
+
     program.exec_and_exit();
 }
 
@@ -152,10 +160,18 @@ fn asks_for_version(word: &str) -> bool {
 /// A run whose arguments name no command — `rola`, or `rola -h` — reaches no entry of its
 /// own, so it lands on the fallback. What it is shown there is this: the whole of what the
 /// program can do.
+///
+/// A run that named a program beside this one is the exception: `rola daemon --help` is a question
+/// about the daemon, which is the only thing that can answer it, so the question is handed over and
+/// this program says nothing (see [`external::tell_help`]).
 #[help(buffer)]
-pub(crate) fn help_rola(_: EntryFallback, ec: &mut ResExitCode) {
-    r_eprintln!("{}", trd!(t!("rola.help")).trim());
-    ec.exit_code = EC_HELP;
+pub(crate) fn help_rola(args: EntryFallback, ec: &mut ResExitCode) {
+    // The program's help is the program's to give, so a run that named one is answered by it and
+    // this program's own help is not written over the top of it.
+    if !external::tell_help(&args.0, ec) {
+        r_eprintln!("{}", trd!(t!("rola.help")).trim());
+        ec.exit_code = EC_HELP;
+    }
 }
 
 /// Reports a run whose arguments named no command the program has.
@@ -204,7 +220,11 @@ pub(crate) fn render_fallback(args: EntryFallback, ec: &mut ResExitCode) {
 /// The names are the program's own, so they are what could have been typed: a node the
 /// program keeps to itself is not read at all, and a command with subcommands is reached by
 /// the first word of its path, which is the word that has to match.
-fn commands() -> Vec<String> {
+///
+/// Read by what guesses at a mistyped command, and by the handing over of a word to a program
+/// beside this one, which is what tells a word that is a mistake from one that is another
+/// program's name (see [`external`]).
+pub(crate) fn commands() -> Vec<String> {
     ThisProgram::this()
         .get_nodes()
         .into_iter()
