@@ -51,20 +51,14 @@ public partial class MainWindow : Window
     /// framework believes is a different height from the one that is drawn leaves a strip at the top
     /// that drags nothing and a strip under it that drags the window. It is a field rather than a
     /// property because the markup reads it with <c>x:Static</c>.
+    /// <para>
+    /// Every window of the host has this row at this height, the main one and a window that is one dock
+    /// alike: a window of one dock has no strip of tabs to stand in for, so there is nothing for its row to
+    /// be taller than the menu bar the two share, and two rows of one program that stood at two heights
+    /// would step as the eye moved between them.
+    /// </para>
     /// </remarks>
     public const double TitleBarHeight = 29.0;
-
-    /// <summary>
-    /// The height of the row of a window that is one dock.
-    /// </summary>
-    /// <remarks>
-    /// A little taller than the row of a window with docks in it, because it is that row and the strip the
-    /// tabs would have sat in: a window of one dock has no tabs and no strip — what it draws is the dock
-    /// itself — while the line the strip drew along its foot is still the edge between the row and the view
-    /// under it. The menu is laid out in the whole of it, so what the row is drawn as is one band of this
-    /// height rather than two.
-    /// </remarks>
-    public const double DockHeaderHeight = 40.0;
 
     /// <summary>The label key of the menu the registered docks appear under.</summary>
     private const string WindowMenu = "menu.window";
@@ -114,6 +108,16 @@ public partial class MainWindow : Window
     /// <summary>The docks as they appear in the Window menu, so their checks can be kept in step.</summary>
     private readonly List<(DockRegistration Registration, MenuItem Entry)> _docks = [];
 
+    /// <summary>
+    /// The drag the name of the one dock this window holds has begun, if it has begun one.
+    /// </summary>
+    /// <remarks>
+    /// The name in the row is the handle a dock of its own is brought back to the main window by, and what
+    /// the pointer did with it is this gesture: held only while a press may still become a drag, which is
+    /// what <see cref="DockDrag"/> is.
+    /// </remarks>
+    private DockDrag? _drag;
+
     /// <summary>Makes the window over what was registered.</summary>
     /// <param name="services">Everything the host holds.</param>
     internal MainWindow(HostServices services)
@@ -158,13 +162,13 @@ public partial class MainWindow : Window
         }
 
         // The height the toolkit reserves for the title bar is the height the row above the dock area is drawn
-        // at, and both are one number: the row is a window's own, and a window that is one dock gives it the
-        // height the tabs would have needed (Section 10). The frame is told the same number, because what it
-        // keeps for that row is where its own buttons are drawn: a frame that kept room for a shorter row
-        // than this window draws would draw its buttons where the row is not.
-        TitleBar.Height = RowHeight;
-        ExtendClientAreaTitleBarHeightHint = RowHeight;
-        _frame = RorolalaTheme.DecorationsTheme(Program.WindowStyle, RowHeight);
+        // at, and both are one number: the row is a window's own, and every window of the host draws it at the
+        // menu bar's height. The frame is told the same number, because what it keeps for that row is where its
+        // own buttons are drawn: a frame that kept room for a shorter row than this window draws would draw its
+        // buttons where the row is not.
+        TitleBar.Height = TitleBarHeight;
+        ExtendClientAreaTitleBarHeightHint = TitleBarHeight;
+        _frame = RorolalaTheme.DecorationsTheme(Program.WindowStyle, TitleBarHeight);
 
         // There is no title bar of the desktop's left to move the window, so the row this program draws
         // in its place does it: a press on the row that no menu and no button claimed is a press on the
@@ -219,6 +223,7 @@ public partial class MainWindow : Window
         WindowDecorationsTheme = _frame.Theme;
 
         BuildMenu();
+        Caption();
         DockAreaHost.Content = new DockArea(
             _services.Docks,
             _services.I18n,
@@ -255,14 +260,47 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The height this window's row is drawn at.
+    /// Puts the name of the one dock this window holds in the window's own row, and makes it the handle it
+    /// is dragged back to the main window by.
     /// </summary>
     /// <remarks>
-    /// The one number a window has for its own row, since the row and what the toolkit reserves for a title
-    /// bar have to agree: a window of one dock has no strip for tabs, and its row takes the height that strip
-    /// would have given the menu somewhere to sit.
+    /// A window of one dock has no strip of tabs, so the name the dock's tab would have carried has nowhere
+    /// to be but the row the desktop's title bar would have drawn — and the row is the only part of the
+    /// window that is not the dock itself. The drag begins on that name rather than on the row, because the
+    /// row is also what moves the window: what a press landed on is what tells the two gestures apart, and a
+    /// row that did both would do one of them by accident.
+    /// <para>
+    /// The press is taken here as well as in <see cref="MoveOrMaximize"/>, which reads the same class off the
+    /// thing that was pressed: a press that tunnels to the row arrives before the one that reaches this name,
+    /// so what tells the window not to move is the name rather than the taking of the press.
+    /// </para>
     /// </remarks>
-    private double RowHeight => _key is null ? TitleBarHeight : DockHeaderHeight;
+    private void Caption()
+    {
+        if (_dock is not { } instance)
+        {
+            return;
+        }
+
+        var caption = RorolalaTheme.Caption(Program.WindowStyle, instance.Title);
+
+        caption.PointerPressed += (_, press) =>
+        {
+            press.Handled = true;
+            _drag = new DockDrag(_services.Windows, instance, _key);
+            _drag.Take(press, caption);
+
+            // The pointer is kept until it is let go of, so that a hand that leaves the name before it has
+            // moved far enough is still a drag of the dock: what is being followed is the gesture and not
+            // the pixels the name happens to cover.
+            press.Pointer.Capture(caption);
+        };
+
+        caption.PointerMoved += (_, moved) => _drag?.Follow(moved, caption);
+        caption.PointerCaptureLost += (_, _) => _drag = null;
+
+        TitleRow.Children.Add(caption);
+    }
 
     /// <summary>
     /// Moves the window for a press on the row, or maximizes it for the second click of a double click.
@@ -270,9 +308,10 @@ public partial class MainWindow : Window
     /// <remarks>
     /// The move is asked of the toolkit rather than done by hand, because on a desktop it is the window
     /// manager's own move and dragging it out by arithmetic would lose the snap to a screen edge and the
-    /// bounds a maximized window restores to. A press that landed on a menu is left alone rather than
-    /// moved, because a menu answers the release of a press and a window moving under one is a menu that
-    /// cannot be used — see the body, which asks it of the row's own shape.
+    /// bounds a maximized window restores to. A press that landed on a menu, on one of the window's own
+    /// buttons, or on the name of the dock this window holds is left alone rather than moved, because each
+    /// of the three is a part of the row that answers a press itself — a menu answers the release of one, a
+    /// button is the toolkit's, and the name begins a drag of the dock.
     /// <para>
     /// The press is left unhandled, because a menu still has to open under a press that landed on one of
     /// its menus, and what is answered here is the moving of the window rather than the press.
@@ -292,8 +331,10 @@ public partial class MainWindow : Window
         // answers the *release*, and the handler that opens it is subscribed when the menu is attached to
         // the visual tree — which is after this window was built, and so after this handler. Moving the
         // window here takes that release away with it: the submenu opens under a window being moved, the
-        // items in it cannot be clicked, and the second click of a double click maximizes the window.
-        if (ItemUnder(press.Source) is not null)
+        // items in it cannot be clicked, and the second click of a double click maximizes the window. The
+        // name of the dock this window holds is the same question asked of the other part of the row: it
+        // begins a drag of that dock, and the window must not be moved by the same press.
+        if (ItemUnder(press.Source) is not null || RorolalaTheme.TitleUnder(press.Source))
         {
             return;
         }
@@ -510,6 +551,8 @@ public partial class MainWindow : Window
     {
         if (_key is not null)
         {
+            AddReturn(menu);
+
             return;
         }
 
@@ -548,6 +591,36 @@ public partial class MainWindow : Window
             _docks.Add((registration, entry));
             menu.Items.Add(entry);
         }
+    }
+
+    /// <summary>
+    /// Adds the item that brings the dock a window of its own holds back to the main window.
+    /// </summary>
+    /// <remarks>
+    /// A window of one dock is not the main window and has no list of docks in its Window menu, so what it
+    /// offers there is the one move its dock can make: back where it came from. The move is a move of the
+    /// dock rather than a window being opened, which is why it is not beside the kernel's own
+    /// <c>Open Main Window</c>: that one asks for a window that may be up already, and this one puts a dock
+    /// into it.
+    /// <para>
+    /// Built here rather than registered, because what it acts on is the dock this window is for and a
+    /// registered item is handed nothing that says which window it was chosen from.
+    /// </para>
+    /// </remarks>
+    /// <param name="menu">The Window menu to add it to.</param>
+    private void AddReturn(MenuItem menu)
+    {
+        if (_dock is not { } instance)
+        {
+            return;
+        }
+
+        menu.Items.Add(new Separator());
+
+        var entry = new MenuItem { Header = _services.I18n.Get("menu.window_items.move_to_main") };
+
+        entry.Click += (_, _) => _services.Windows.MoveToMain(instance);
+        menu.Items.Add(entry);
     }
 
     /// <summary>

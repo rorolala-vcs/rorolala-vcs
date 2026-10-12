@@ -1,10 +1,14 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.VisualTree;
 using RorolalaDesktop;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
+using RorolalaDesktop.Theming;
 using ContractMenuItem = RorolalaDesktop.Contract.MenuItem;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -83,6 +87,374 @@ public sealed class WindowTests
         // counts the main window too and that moves with the docks in it.
         Assert.Equal(window, instance.Window);
         Assert.Single(services.Docks.Instances, one => one.DockNameId == registration.DockNameId);
+    }
+
+    /// <summary>
+    /// A dock brought back to the main window leaves the window it was in behind.
+    /// </summary>
+    /// <remarks>
+    /// What the option a window of one dock offers does: the dock goes back where it came from, to the region
+    /// it was in, and the window that held it — which is a window of that dock and of nothing else — goes with
+    /// it. A window left standing would be a frame around a dock that is drawn in another window.
+    /// </remarks>
+    [Fact]
+    public void ADockBroughtBackToTheMainWindowLeavesItsWindowBehind()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.browser");
+        var kept = New("it.dock.kept");
+        services.Docks.Register(registration);
+        services.Docks.Register(kept);
+
+        var stays = services.Docks.Activate(kept);
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(stays);
+        Assert.NotNull(instance);
+
+        services.Windows.OpenMain();
+        services.Docks.Move(instance, DockPlacement.Bottom);
+        services.Windows.ToOwnWindow(instance);
+
+        Assert.NotNull(instance.Window);
+        Assert.Equal(2, services.Windows.Count);
+
+        services.Windows.MoveToMain(instance);
+
+        // Back in the main window, in the region it was in, and still open: what was moved is where the dock
+        // is drawn, and not whether it is.
+        Assert.Null(instance.Window);
+        Assert.True(instance.IsOpen);
+        Assert.Equal(DockPlacement.Bottom, instance.Placement);
+        Assert.Contains(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.browser");
+
+        // And the window it was in is gone, since a window of one dock holds that dock and nothing else.
+        Assert.Equal(1, services.Windows.Count);
+    }
+
+    /// <summary>
+    /// A dock that keeps one instance of its own is not moved in beside the one the main window shows.
+    /// </summary>
+    /// <remarks>
+    /// A dock may be asked for anew even where it keeps one instance — which is what a plugin asking for a
+    /// window of its own does — and the main window can then be showing one while a window of its own holds
+    /// another. Bringing the second one back would leave two of a name that may have one, so what is let go of
+    /// is the second: the dock is already in the main window, and what the move leaves behind is the window.
+    /// </remarks>
+    [Fact]
+    public void ADockTheMainWindowAlreadyShowsIsNotMovedInTwice()
+    {
+        var (services, _) = Windows();
+        var registration = new DockRegistration(
+            Core.Id,
+            "it.dock.toggle",
+            "it_dock.title",
+            DockOpenMode.Toggle,
+            DockPlacement.Bottom,
+            _ => new FakeDockView { Control = new Border() }
+        );
+        services.Docks.Register(registration);
+
+        var mine = services.Docks.Activate(registration);
+
+        Assert.NotNull(mine);
+        Assert.True(mine.Window is null);
+
+        services.Windows.OpenMain();
+
+        // The second one, asked for the way a plugin asks for a window of its own: a window of its own holds
+        // an instance of its own, and the one in the main window is left where it is.
+        services.Windows.Open(new DockRequest(registration.DockNameId, null, DockOpenMode.New));
+
+        var theirs = services.Docks.Instances.Single(one => !ReferenceEquals(one, mine));
+
+        Assert.NotNull(theirs.Window);
+        Assert.Equal(2, services.Windows.Count);
+
+        services.Windows.MoveToMain(theirs);
+
+        // The one the main window shows is the one that is left, and it is where it was.
+        Assert.Same(mine, services.Docks.InstanceOf(registration.DockNameId));
+        Assert.Single(services.Docks.Instances, one => one.DockNameId == registration.DockNameId);
+        Assert.True(mine.IsOpen);
+        Assert.Null(mine.Window);
+
+        // And the window of the duplicate, and the duplicate with it, are gone.
+        Assert.Equal(1, services.Windows.Count);
+        Assert.Null(services.Docks.InstanceOf(registration.DockNameId, theirs.Ordinal));
+    }
+
+    /// <summary>
+    /// A header dragged away from every region becomes a window of its own.
+    /// </summary>
+    /// <remarks>
+    /// The whole of what letting go of a header away from a region means: the dock is pulled out of the
+    /// window it was in and lands nowhere, so it is given a window of its own rather than being left where it
+    /// was. The gesture before it is the host's — a press is not a drag until the pointer has moved — and what
+    /// the press becomes is the toolkit's own drag, which is what can carry a dock out of a window.
+    /// </remarks>
+    [Fact]
+    public void ADockDraggedAwayFromEveryRegionBecomesAWindowOfItsOwn()
+    {
+        var (services, _) = Windows();
+        var dragged = new DockRegistration(
+            Core.Id,
+            "it.dock.dragged",
+            "it.dock.dragged.title",
+            DockOpenMode.New,
+            DockPlacement.Center,
+            _ => new FakeDockView { Control = new Border() }
+        );
+        var kept = New("it.dock.kept");
+        services.Docks.Register(dragged);
+        services.Docks.Register(kept);
+
+        // Both are opened before there is a window, so that the one window there is draws both of them: what
+        // a test cannot do is ask the toolkit for the layout pass a dock opened later would wait for.
+        services.Docks.Activate(kept);
+
+        var instance = services.Docks.Activate(dragged);
+
+        Assert.NotNull(instance);
+
+        services.Windows.OpenMain();
+
+        var main = (MainWindow)services.Shell.Window!;
+
+        // The tab that names this dock, which is the one its header would be dragged by.
+        var header = main
+            .GetVisualDescendants()
+            .OfType<Button>()
+            .First(button =>
+                button.Classes.Contains(DockArea.TitleClass)
+                && button.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == "it.dock.dragged.title")
+            );
+        var from = header.TranslatePoint(
+            new Point(header.Bounds.Width / 2, header.Bounds.Height / 2),
+            main
+        );
+
+        Assert.NotNull(from);
+
+        // A press, a pointer that has moved further than the slack a press is given, and the button let go of.
+        main.MouseDown(from.Value, MouseButton.Left);
+        main.MouseMove(from.Value + new Point(0, 60), RawInputModifiers.LeftMouseButton);
+        main.MouseUp(from.Value + new Point(0, 60), MouseButton.Left);
+
+        // In a window of its own, and out of the arrangement the main window's layout keeps.
+        Assert.NotNull(instance.Window);
+        Assert.Equal(2, services.Windows.Count);
+        Assert.DoesNotContain(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.dragged");
+        Assert.Contains(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.kept");
+    }
+
+    /// <summary>
+    /// A dock in flight is the instance that was picked up, and not its namesake.
+    /// </summary>
+    /// <remarks>
+    /// What a drag carries is the pair the layout addresses an instance by — the dock's name and which
+    /// instance of it this is — because a dock that may be made again has one name and several instances, and
+    /// a drop that landed the wrong one of them would move a dock the user never took hold of.
+    /// </remarks>
+    [Fact]
+    public void ADockInFlightIsTheInstanceThatWasPickedUp()
+    {
+        var services = Host.Services();
+        var registration = New("it.dock.browser");
+        services.Docks.Register(registration);
+
+        var first = services.Docks.Activate(registration);
+        var second = services.Docks.Activate(registration);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.NotEqual(first.Ordinal, second.Ordinal);
+
+        using var carrying = DockDrag.Carrying(second);
+
+        Assert.Same(second, DockDrag.Carried(services.Docks, carrying));
+
+        // A drag that is not this host's says nothing about any dock.
+        using var other = new DataTransfer();
+
+        Assert.Null(DockDrag.Carried(services.Docks, other));
+    }
+
+    /// <summary>
+    /// A window of one dock names that dock in a row as tall as the main window's.
+    /// </summary>
+    /// <remarks>
+    /// What a window of one dock is: the dock, under the row the desktop's title bar would have drawn. The row
+    /// is the menu bar's height in every window of the host — a window of one dock has no strip of tabs for it
+    /// to stand in for — and the dock's name is drawn in it, which is what the desktop would have said and what
+    /// the dock is dragged back to the main window by.
+    /// </remarks>
+    [Fact]
+    public void AWindowOfOneDockNamesItInARowAsTallAsTheMainWindows()
+    {
+        var (services, _) = Windows();
+        var registration = new DockRegistration(
+            Core.Id,
+            "it.dock.titled",
+            "it.dock.titled.title",
+            DockOpenMode.New,
+            DockPlacement.Center,
+            _ => new FakeDockView { Control = new Border() }
+        );
+        var kept = New("it.dock.kept");
+        services.Docks.Register(registration);
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
+
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        services.Windows.ToOwnWindow(instance);
+
+        var own = (MainWindow)services.Shell.Window!;
+        var caption = own
+            .GetVisualDescendants()
+            .OfType<TextBlock>()
+            .First(text => text.Classes.Contains(RorolalaTheme.WindowTitleClass));
+        var row = own
+            .GetVisualDescendants()
+            .OfType<Border>()
+            .First(border => border.Classes.Contains(RorolalaTheme.TitleBarClass));
+
+        Assert.Equal("it.dock.titled.title", caption.Text);
+        Assert.Equal(MainWindow.TitleBarHeight, row.Bounds.Height);
+
+        // Drawn in the row and not spilling under it: what is below the row is the dock itself.
+        var at = caption.TranslatePoint(new Point(0, 0), own);
+
+        Assert.NotNull(at);
+        Assert.True(at.Value.Y >= 0, "the name is drawn in the window");
+        Assert.True(
+            at.Value.Y + caption.Bounds.Height <= MainWindow.TitleBarHeight,
+            "the name is drawn in the row and not over the dock"
+        );
+    }
+
+    /// <summary>
+    /// A dock dropped over a region of the main window is placed in it.
+    /// </summary>
+    /// <remarks>
+    /// The half of a drag that a window answers: what arrives is the payload of a drag, and what is drawn from
+    /// it is the dock landing where the pointer was. Asked of a real window, with the toolkit's own drag event,
+    /// because what is being checked is that the area is a place a drag can land at all — the payload and the
+    /// lookup are checked without one.
+    /// </remarks>
+    [Fact]
+    public void ADockDroppedOverARegionLandsInIt()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.dropped");
+        var kept = New("it.dock.kept");
+        services.Docks.Register(registration);
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
+        services.Windows.OpenMain();
+
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        var main = (MainWindow)services.Shell.Window!;
+
+        Drop(main, OverTheLeftBand(main), instance);
+
+        // The left band of the area, which is where the pointer was: the region a drop lands in is the region
+        // the pointer was over, and one that is empty is still a place a dock can be put.
+        Assert.Equal(DockPlacement.Left, instance.Placement);
+        Assert.Null(instance.Window);
+        Assert.Contains(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.dropped");
+    }
+
+    /// <summary>
+    /// A dock dragged out of a window of its own and dropped on the main window is moved back into it.
+    /// </summary>
+    /// <remarks>
+    /// The other direction of the same gesture, and the one a window of one dock is brought back by: what is
+    /// dragged is the dock, and the window it is drawn in is where the drag began — so landing in the main
+    /// window is a change of window, and the window that held it is left with nothing to draw and closes.
+    /// The region the drop was over is the region it arrives in, and not the one it left.
+    /// </remarks>
+    [Fact]
+    public void ADockDroppedOnTheMainWindowComesBackFromAWindowOfItsOwn()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.brought");
+        var kept = New("it.dock.kept");
+        services.Docks.Register(registration);
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
+        services.Windows.OpenMain();
+
+        var main = (MainWindow)services.Shell.Window!;
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        services.Windows.ToOwnWindow(instance);
+
+        Assert.NotNull(instance.Window);
+        Assert.Equal(2, services.Windows.Count);
+
+        Drop(main, OverTheLeftBand(main), instance);
+
+        Assert.Null(instance.Window);
+        Assert.Equal(DockPlacement.Left, instance.Placement);
+        Assert.Equal(1, services.Windows.Count);
+    }
+
+    /// <summary>
+    /// Drops a dock at a point in a window, the way the platform delivers a drag.
+    /// </summary>
+    /// <remarks>
+    /// A drag arrives in the order the platform delivers it, and what it takes to land in a region is the whole
+    /// of it: a target that says nothing as the drag enters it is a target the platform gives up on.
+    /// </remarks>
+    /// <param name="main">The window whose area the dock is dropped on.</param>
+    /// <param name="at">Where in it.</param>
+    /// <param name="instance">The dock that is being dragged.</param>
+    private static void Drop(MainWindow main, Point at, DockInstance instance)
+    {
+        using var carrying = DockDrag.Carrying(instance);
+
+        foreach (
+            var arrival in new[]
+            {
+                RawDragEventType.DragEnter,
+                RawDragEventType.DragOver,
+                RawDragEventType.Drop,
+            }
+        )
+        {
+            main.DragDrop(at, arrival, carrying, DragDropEffects.Move, RawInputModifiers.LeftMouseButton);
+        }
+    }
+
+    /// <summary>A point over the left band of a window's dock area.</summary>
+    /// <remarks>
+    /// The band is the edge of the area, which is the region a drop there means: what a drag lands in is the
+    /// band the region is drawn in, and a region holding nothing is drawn as the narrow band it is aimed at.
+    /// The area has to have been laid out for any of that to mean anything, which is why it is asked of the
+    /// window that was shown.
+    /// </remarks>
+    /// <param name="main">The window to find the point in.</param>
+    /// <returns>The point, in that window's own coordinates.</returns>
+    private static Point OverTheLeftBand(MainWindow main)
+    {
+        var area = main.GetVisualDescendants().OfType<DockArea>().First();
+
+        Assert.True(area.Bounds.Height > 0, "the window was shown, so its area was laid out");
+
+        var at = area.TranslatePoint(new Point(2, area.Bounds.Height / 2), main);
+
+        Assert.NotNull(at);
+
+        return at.Value;
     }
 
     /// <summary>

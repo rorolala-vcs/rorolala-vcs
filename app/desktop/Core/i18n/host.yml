@@ -34,6 +34,11 @@ menu:
     open_main:
       en: Open Main Window
       zh-CN: 打开主窗口
+    # Offered by a window that is one dock, and only there: what it moves is the dock that window holds,
+    # which is the one thing about a window of a dock's own that the main window does not already have.
+    move_to_main:
+      en: Move Back to Main Window
+      zh-CN: 移动回主窗口
   dock:
     own_window:
       en: Move to Own Window

@@ -19,8 +19,8 @@
          a window that extended into its decorations.
 
          The top row is one line: the menu, then the window's own buttons. Its height is the height the
-         decorations are told to reserve, which the window says in code rather than here — a window that is
-         one dock gives its row the height the strip of tabs would have taken, since it has none — and the
+         decorations are told to reserve, which the window says in code rather than here — one number for
+         every window, so that the row of a window that is one dock is the row of the main window — and the
          look is what draws the row and the buttons. -->
     <DockPanel>
         <!-- The row's own surface, and what the row is made of: the look fills it with the elevated ground and
@@ -40,10 +40,16 @@
                 DockPanel.Dock="Top">
             <!-- The room the window's own buttons take is reserved by the row's own padding, which the look
                  states, rather than by laying them out here: the frame draws them over the row, so a button
-                 that was a child of it would be a second one. What is left is the menu's. -->
-            <Menu x:Name="MainMenu"
-                  Classes="menu-bar"
-                  Background="Transparent" />
+                 that was a child of it would be a second one. What is left is the menu's.
+
+                 The name of the one dock a window holds is added to this panel in code, because only the
+                 window knows whether it is one — and it is put over the menu rather than beside it, since a
+                 dock's name belongs in the room the row keeps clear of its menus. -->
+            <Grid x:Name="TitleRow">
+                <Menu x:Name="MainMenu"
+                      Classes="menu-bar"
+                      Background="Transparent" />
+            </Grid>
         </Border>
         <ContentControl x:Name="DockAreaHost" />
     </DockPanel>

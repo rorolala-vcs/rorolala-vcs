@@ -227,6 +227,16 @@ internal sealed class RorolalaTheme
     /// </remarks>
     public const string TitleBarClass = "title-bar";
 
+    /// <summary>
+    /// The class the name of the one dock a window holds wears, in that window's own row.
+    /// </summary>
+    /// <remarks>
+    /// Marked for the same reason the row and the menu bar are, and read by more than the look: a press that
+    /// lands on it begins a drag of the dock rather than a move of the window, and what tells the two apart
+    /// is this class (<see cref="MainWindow.MoveOrMaximize"/>).
+    /// </remarks>
+    public const string WindowTitleClass = "window-title";
+
     /// <summary>The size every word is set at.</summary>
     private const double BodySize = 14.0;
 
@@ -1307,6 +1317,22 @@ internal sealed class RorolalaTheme
                 new Setter(TemplatedControl.PaddingProperty, MenuBarPadding)
             ),
 
+            // The name of the one dock a window holds, which is drawn in the same row and is what a drag of
+            // that dock is taken from. It is drawn as a surface that is there rather than as a word on the
+            // row's own ground, because what it is for is being taken hold of; what it holds still is the
+            // row's ink, since a name is a name and not an action.
+            On(
+                selector => selector.OfType<TextBlock>().Class(WindowTitleClass),
+                Brushed(TextBlock.BackgroundProperty, SunkenClear),
+                Brushed(TextBlock.ForegroundProperty, Muted),
+                new Setter(TextBlock.PaddingProperty, new Thickness(8, 3)),
+                new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Center)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class(WindowTitleClass).Class(":pointerover"),
+                Brushed(TextBlock.BackgroundProperty, Sunken)
+            ),
+
             // A window's own buttons, which are the one thing about this row the three styles disagree on.
             .. Captions(),
 
@@ -1680,6 +1706,81 @@ internal sealed class RorolalaTheme
             .Not(previous => previous.Class(DockArea.TitleClass))
             .Not(previous => previous.Class(DockArea.CloseClass))
             .Not(previous => previous.Class(CaptionClass));
+
+    /// <summary>
+    /// The name of the one dock a window of its own holds, drawn in that window's own row.
+    /// </summary>
+    /// <remarks>
+    /// A window of one dock draws no strip of tabs, so the name its tab would have carried has nowhere to be
+    /// but the row — which is what the desktop's title bar would have said, and the one part of the window
+    /// that is not the dock itself. It is the handle the dock is dragged back to the main window by
+    /// (<see cref="MainWindow"/>), which is why it is a control of its own rather than a word laid on the
+    /// row.
+    /// <para>
+    /// It stands where the frame's own buttons are not, and clear of the room they take: the row is shared by
+    /// laying it out, and a name drawn under a button would be a name that cannot be pressed. Which side that
+    /// is is the one thing the three styles disagree about, so it is read here rather than said by the
+    /// window.
+    /// </para>
+    /// </remarks>
+    /// <param name="style">Which of the three ways a window's frame is drawn this window is drawn in.</param>
+    /// <param name="text">What the dock is called.</param>
+    /// <returns>The name, for the window to put in its row and to take a drag from.</returns>
+    public static TextBlock Caption(WindowStyle style, string text)
+    {
+        var (side, margin) = style switch
+        {
+            // The three lights are at the window's own left corner, so the name starts after them.
+            WindowStyle.Mac => (HorizontalAlignment.Left, new Thickness(MacRoom, 0, 8, 0)),
+
+            // A tiling window manager draws no buttons of its own, so the row's right end is free of them.
+            WindowStyle.TillingWm => (HorizontalAlignment.Right, new Thickness(8, 0, 12, 0)),
+
+            _ => (
+                HorizontalAlignment.Right,
+                new Thickness(8, 0, (CaptionButtonWidth * CaptionButtonCount) + 12, 0)
+            ),
+        };
+
+        return new TextBlock
+        {
+            Text = text,
+            Classes = { WindowTitleClass },
+            HorizontalAlignment = side,
+            Margin = margin,
+
+            // The pointer says what the name is for before it is pressed: a hand over a word that begins a
+            // drag is told so, and a word that could only be read would be a drag nobody finds.
+            Cursor = new Cursor(StandardCursorType.SizeAll),
+
+            // Cut off rather than drawn over the menu it shares the row with: a dock with a long name is a
+            // name that would otherwise reach the menus, and what a name is worth is less than what a menu
+            // is.
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+    }
+
+    /// <summary>
+    /// Whether what a press landed on is the name of the dock a window of its own holds.
+    /// </summary>
+    /// <remarks>
+    /// Walked rather than compared, because what the pointer hits is a part of the name's own template
+    /// rather than the name — the same reason what landed on a menu is walked to the item.
+    /// </remarks>
+    /// <param name="pressed">What the press landed on.</param>
+    /// <returns>Whether it is that name.</returns>
+    public static bool TitleUnder(object? pressed)
+    {
+        for (var at = pressed as StyledElement; at is not null; at = at.Parent)
+        {
+            if (at is TextBlock title && title.Classes.Contains(WindowTitleClass))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// The frame a window draws for itself, over the one the desktop would have drawn.
