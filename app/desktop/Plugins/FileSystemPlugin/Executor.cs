@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace FileSystemPlugin;
 
@@ -375,6 +376,11 @@ internal static class Executor
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
+            // A template's default commands are `rola`, which writes UTF-8 — as every stream this
+            // project's programs write is, and as `git`'s is read elsewhere. Left unstated, a redirected
+            // stream is decoded in the machine's codepage, and on a Chinese Windows that is GBK.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
 
         for (var index = 1; index < arguments.Count; index++)

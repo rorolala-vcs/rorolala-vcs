@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
@@ -247,6 +248,11 @@ internal static class OwnershipActions
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
+            // The words are `rola`'s own, and `rola` writes UTF-8 — as every stream this project's
+            // programs write is. Left unstated, a redirected stream is decoded in the machine's codepage,
+            // which on a Chinese Windows is GBK, and every word of the message comes out as mojibake.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
 
         foreach (var argument in arguments)
