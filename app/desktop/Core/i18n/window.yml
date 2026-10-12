@@ -7,6 +7,12 @@ window:
   title:
     en: Rorolala Desktop
     zh-CN: Rorolala 桌面
+  # What a window that is one dock is called: the dock, and which program it is a window of. The dock's own
+  # name is the one its tab would have carried, and the program's is beside it so that a window of a dock's
+  # own is still recognisably this program's.
+  titled:
+    en: "%{dock} — Rorolala Desktop"
+    zh-CN: "%{dock} — Rorolala 桌面"
   minimize:
     en: Minimize
     zh-CN: 最小化

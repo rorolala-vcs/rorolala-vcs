@@ -1700,16 +1700,25 @@ internal sealed class RorolalaTheme
     /// </para>
     /// </remarks>
     /// <param name="style">Which of the three ways a window's frame is drawn this window is drawn in.</param>
+    /// <param name="row">
+    /// The height the window draws its own row at, which is the room the frame keeps for it. It is the
+    /// window's rather than one number for every window, because the row and what the toolkit reserves for a
+    /// title bar have to be the same height or the frame's buttons are drawn where the row is not.
+    /// </param>
     /// <returns>The theme to put on one window, and the buttons it draws.</returns>
-    public static Frame DecorationsTheme(WindowStyle style)
+    public static Frame DecorationsTheme(WindowStyle style, double row)
     {
         var scope = new NameScope();
-        var row = new StackPanel
+        var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = style == WindowStyle.Mac ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+
+            // At the top, because what this is laid out in is the whole of the window's client area rather
+            // than the row: the frame draws its buttons over everything, and a row centred in that would put
+            // them in the middle of the window. The height is one row's, so where they are is where the row is.
             VerticalAlignment = VerticalAlignment.Top,
-            Height = MainWindow.TitleBarHeight,
+            Height = row,
 
             // The lights stand off the window's own edge and off one another, where the three marks are a
             // row of one control each: room left between two of them is room the menu bar would otherwise be
@@ -1732,15 +1741,15 @@ internal sealed class RorolalaTheme
             // screen.
             if (style == WindowStyle.Mac)
             {
-                close = Caption(scope, row, "PART_CloseButton", WindowDecorationsElementRole.CloseButton, style, MacClose, closes: true);
-                minimize = Caption(scope, row, "PART_MinimizeButton", WindowDecorationsElementRole.MinimizeButton, style, MacMinimize);
-                maximize = Caption(scope, row, "PART_MaximizeButton", WindowDecorationsElementRole.MaximizeButton, style, MacMaximize);
+                close = Caption(scope, buttons, "PART_CloseButton", WindowDecorationsElementRole.CloseButton, style, MacClose, closes: true);
+                minimize = Caption(scope, buttons, "PART_MinimizeButton", WindowDecorationsElementRole.MinimizeButton, style, MacMinimize);
+                maximize = Caption(scope, buttons, "PART_MaximizeButton", WindowDecorationsElementRole.MaximizeButton, style, MacMaximize);
             }
             else
             {
-                minimize = Caption(scope, row, "PART_MinimizeButton", WindowDecorationsElementRole.MinimizeButton, style, MacMinimize);
-                maximize = Caption(scope, row, "PART_MaximizeButton", WindowDecorationsElementRole.MaximizeButton, style, MacMaximize);
-                close = Caption(scope, row, "PART_CloseButton", WindowDecorationsElementRole.CloseButton, style, MacClose, closes: true);
+                minimize = Caption(scope, buttons, "PART_MinimizeButton", WindowDecorationsElementRole.MinimizeButton, style, MacMinimize);
+                maximize = Caption(scope, buttons, "PART_MaximizeButton", WindowDecorationsElementRole.MaximizeButton, style, MacMaximize);
+                close = Caption(scope, buttons, "PART_CloseButton", WindowDecorationsElementRole.CloseButton, style, MacClose, closes: true);
             }
         }
 
@@ -1750,7 +1759,7 @@ internal sealed class RorolalaTheme
         // height the window's own hint is given. The frame and the shadow are none: the one-pixel frame
         // is the desktop's own where the desktop draws edges, and on a display server that leaves the
         // frame to the program a line around the whole window would be the design's only one.
-        theme.Setters.Add(new Setter(WindowDrawnDecorations.DefaultTitleBarHeightProperty, MainWindow.TitleBarHeight));
+        theme.Setters.Add(new Setter(WindowDrawnDecorations.DefaultTitleBarHeightProperty, row));
         theme.Setters.Add(new Setter(WindowDrawnDecorations.DefaultFrameThicknessProperty, default(Thickness)));
         theme.Setters.Add(new Setter(WindowDrawnDecorations.DefaultShadowThicknessProperty, default(Thickness)));
         theme.Setters.Add(
@@ -1759,13 +1768,13 @@ internal sealed class RorolalaTheme
                 new DecorationsTemplate(new TemplateResult<WindowDrawnDecorationsContent>(
                     new WindowDrawnDecorationsContent
                     {
-                        Underlay = new Panel { Children = { DragArea() } },
+                        Underlay = new Panel { Children = { DragArea(row) } },
 
                         // The buttons are in the overlay rather than in the window's own content, because
                         // that is what puts them above the menu: the menu is the window's, and a row whose
                         // buttons could be covered by it would be covered by it the moment a plugin added
                         // one menu too many.
-                        Overlay = new Panel { Children = { row } },
+                        Overlay = new Panel { Children = { buttons } },
                     },
                     scope))
             )
@@ -1839,11 +1848,12 @@ internal sealed class RorolalaTheme
     /// desktop moves it through the window's own code instead, which is why the role is here and the call
     /// is in the window's.
     /// </remarks>
-    private static Control DragArea() =>
+    /// <param name="row">How tall the window's own row is, which is the band a press there moves it by.</param>
+    private static Control DragArea(double row) =>
         new Panel
         {
             Background = Brushes.Transparent,
-            Height = MainWindow.TitleBarHeight,
+            Height = row,
             VerticalAlignment = VerticalAlignment.Top,
             [WindowDecorationProperties.ElementRoleProperty] = WindowDecorationsElementRole.TitleBar,
         };
@@ -2023,3 +2033,4 @@ internal sealed class RorolalaTheme
     private static Color WithAlpha(Color colour, byte alpha) =>
         Color.FromArgb(alpha, colour.R, colour.G, colour.B);
 }
+

@@ -54,6 +54,18 @@ public partial class MainWindow : Window
     /// </remarks>
     public const double TitleBarHeight = 29.0;
 
+    /// <summary>
+    /// The height of the row of a window that is one dock.
+    /// </summary>
+    /// <remarks>
+    /// A little taller than the row of a window with docks in it, because it is that row and the strip the
+    /// tabs would have sat in: a window of one dock has no tabs and no strip — what it draws is the dock
+    /// itself — while the line the strip drew along its foot is still the edge between the row and the view
+    /// under it. The menu is laid out in the whole of it, so what the row is drawn as is one band of this
+    /// height rather than two.
+    /// </remarks>
+    public const double DockHeaderHeight = 40.0;
+
     /// <summary>The label key of the menu the registered docks appear under.</summary>
     private const string WindowMenu = "menu.window";
 
@@ -97,7 +109,7 @@ public partial class MainWindow : Window
     /// plugin's question, a notice — is a card with a title bar of the desktop's. It is held because the
     /// buttons it builds are the ones this window has to say the words and the pictures of.
     /// </remarks>
-    private readonly RorolalaTheme.Frame _frame = RorolalaTheme.DecorationsTheme(Program.WindowStyle);
+    private readonly RorolalaTheme.Frame _frame;
 
     /// <summary>The docks as they appear in the Window menu, so their checks can be kept in step.</summary>
     private readonly List<(DockRegistration Registration, MenuItem Entry)> _docks = [];
@@ -136,12 +148,23 @@ public partial class MainWindow : Window
         // which is what the designer builds — keeps the name the markup gives it.
         if (RolaI18N.TranslationDirectory is not null)
         {
-            Title = _services.I18n.Get("window.title");
+            // The main window is the program; a window that is one dock is that dock, and says which: what a
+            // window of a dock's own is for is the dock in it, and a row of them all called the same thing is
+            // a row nobody can tell apart. The dock's name is the one its own tab would have carried.
+            Title =
+                _dock is { } alone
+                    ? _services.I18n.Get("window.titled", alone.Title)
+                    : _services.I18n.Get("window.title");
         }
 
-        // The height the toolkit reserves for the title bar is the height the row above the dock area
-        // is drawn at, and both are the one number the markup names (Section 10).
-        ExtendClientAreaTitleBarHeightHint = TitleBarHeight;
+        // The height the toolkit reserves for the title bar is the height the row above the dock area is drawn
+        // at, and both are one number: the row is a window's own, and a window that is one dock gives it the
+        // height the tabs would have needed (Section 10). The frame is told the same number, because what it
+        // keeps for that row is where its own buttons are drawn: a frame that kept room for a shorter row
+        // than this window draws would draw its buttons where the row is not.
+        TitleBar.Height = RowHeight;
+        ExtendClientAreaTitleBarHeightHint = RowHeight;
+        _frame = RorolalaTheme.DecorationsTheme(Program.WindowStyle, RowHeight);
 
         // There is no title bar of the desktop's left to move the window, so the row this program draws
         // in its place does it: a press on the row that no menu and no button claimed is a press on the
@@ -230,6 +253,16 @@ public partial class MainWindow : Window
         // holds for the rest of the run, and one that answered a change by rebuilding a row nobody can see.
         Closed += (_, _) => _services.Docks.Changed -= DocksChanged;
     }
+
+    /// <summary>
+    /// The height this window's row is drawn at.
+    /// </summary>
+    /// <remarks>
+    /// The one number a window has for its own row, since the row and what the toolkit reserves for a title
+    /// bar have to agree: a window of one dock has no strip for tabs, and its row takes the height that strip
+    /// would have given the menu somewhere to sit.
+    /// </remarks>
+    private double RowHeight => _key is null ? TitleBarHeight : DockHeaderHeight;
 
     /// <summary>
     /// Moves the window for a press on the row, or maximizes it for the second click of a double click.

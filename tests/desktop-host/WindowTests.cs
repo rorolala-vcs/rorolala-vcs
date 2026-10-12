@@ -199,6 +199,48 @@ public sealed class WindowTests
     }
 
     /// <summary>
+    /// A layer that is one dock keeps no chrome of its own.
+    /// </summary>
+    /// <remarks>
+    /// What a window of a dock's own is: the dock, under the window's own row. No strip of tabs, because
+    /// there is nothing to switch between; no splitter, because there is nothing to resize it against; and no
+    /// empty band where a region is not, because there are no regions. A window that drew the chrome anyway
+    /// would be a strip around a view that nothing can be put beside — and the one thing a torn-out dock must
+    /// not look like is the window it came out of.
+    /// <para>
+    /// Asked of the layer rather than of a window, because the chrome is the layer's: what a window does with
+    /// it is put it under the row. The two layers are compared by how much they hold, since a layer that
+    /// kept its regions would hold the five of them whether or not any dock were in it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AWindowThatIsOneDockDrawsNoRegionChrome()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.visible");
+        services.Docks.Register(registration);
+
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        // The layer of a window with docks in it, and the layer of a window that is one dock.
+        var many = new DockArea(services.Docks, services.I18n, services.Windows, null);
+        var alone = new DockArea(services.Docks, services.I18n, services.Windows, "w1");
+
+        Assert.False(many.Alone);
+        Assert.True(alone.Alone);
+
+        // A layer that is not one dock holds the surface it is laid out in: the five regions, the four
+        // splitters, and the boxes a drag could land in. It draws no dock itself.
+        Assert.IsAssignableFrom<Grid>(many.Content);
+        Assert.Null(many.Sole);
+
+        // A layer of one dock holds nothing until it is given the dock, since what it is for is that dock.
+        Assert.Null(alone.Sole);
+    }
+
+    /// <summary>
     /// A window of the host's can be closed, and the host knows it is gone.
     /// </summary>
     /// <remarks>

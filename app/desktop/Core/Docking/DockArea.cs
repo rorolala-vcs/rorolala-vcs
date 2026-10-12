@@ -100,10 +100,21 @@ internal sealed class DockArea : UserControl
     /// <summary>The class the button that closes the dock a region is showing carries.</summary>
     public const string CloseClass = "dock-close";
 
-    /// <summary>The height of a region's header strip, which its tabs sit in.</summary>
+    /// <summary>The class the area of a window that is one dock carries.</summary>
+    /// <remarks>
+    /// What a window of one dock is drawn as: the dock's own content under the window's row, with none of the
+    /// chrome a region has — no strip, no tabs, no splitter, no commands. The class is how the look knows to
+    /// leave the strip's ground and line off, since a surface that is not there is not drawn.
+    /// </remarks>
+    public const string AloneClass = "dock-area-alone";
+
+    /// <summary>
+    /// The height of a region's header strip, which its tabs sit in.
+    /// </summary>
     /// <remarks>
     /// Part of Section 10: the strip, the menu bar and a toolbar are one height, so that the window
-    /// reads as a stack of bands of the same weight.
+    /// reads as a stack of bands of the same weight. See <see cref="MainWindow.DockHeaderHeight"/>, which is
+    /// what a window of one dock gives its row instead: no tabs, and the row is a little taller for it.
     /// </remarks>
     private const double StripHeight = 36;
 
@@ -163,6 +174,36 @@ internal sealed class DockArea : UserControl
 
     /// <summary>Where a dock's own tab menu is registered, and where a move into a window is asked for.</summary>
     private readonly DockWindows _windows;
+
+    /// <summary>
+    /// Where the one dock of a window of its own is drawn.
+    /// </summary>
+    /// <remarks>
+    /// A border with nothing of its own rather than the dock's control dropped straight in, because the
+    /// control is the plugin's and this is the host's: what a window of one dock owns is the room the view is
+    /// given, and the line above that room is the row's.
+    /// </remarks>
+    private readonly Border _alone = new() { BorderThickness = new Thickness(0) };
+
+    /// <summary>
+    /// Whether this window holds one dock, and so has no chrome of its own.
+    /// </summary>
+    /// <remarks>
+    /// The one thing a window of a dock's own is not: a second view beside it. A region is a place a view is
+    /// kept with its own strip and splitter because another may be put beside it; a window that is one dock
+    /// has nothing to put beside it, so what it draws is the dock's own content.
+    /// </remarks>
+    public bool Alone => _window is not null;
+
+    /// <summary>
+    /// The dock a window of its own is drawing, or nothing while it is drawing none.
+    /// </summary>
+    /// <remarks>
+    /// Read rather than the tree walked, because what a window of one dock holds is one control and the
+    /// question about it is whether it is the dock's own: a place that holds a region's surface and a place
+    /// that holds a view are told apart by this and not by what is under them.
+    /// </remarks>
+    internal Control? Sole => _alone.Child;
 
     /// <summary>The area, with the drop zones drawn over it.</summary>
     private readonly Grid _surface = new();
@@ -234,7 +275,7 @@ internal sealed class DockArea : UserControl
     /// <param name="windows">The host's windows, for the tab menu and for moving a dock into one.</param>
     /// <param name="window">
     /// The window this area is in, or nothing for the main one: it draws the docks that are in that window
-    /// and no others.
+    /// and no others. A window of its own is one dock, and draws it without the chrome a region has.
     /// </param>
     public DockArea(DockManager manager, I18nService i18n, DockWindows windows, string? window)
     {
@@ -464,6 +505,19 @@ internal sealed class DockArea : UserControl
     /// <summary>Lays the regions, the splitters, and the drop zones out once.</summary>
     private void Build()
     {
+        // A window of one dock has no regions to lay out: what it is drawn as is the dock itself, under the
+        // window's own row, and everything below this is about putting one view beside another — a strip to
+        // choose between them, a splitter to resize one against the other, and boxes to drop a third into.
+        // None of that has anything to say in a window that holds one dock, and drawing it would be chrome
+        // around a view that nothing can be put beside.
+        if (Alone)
+        {
+            Classes.Add(AloneClass);
+            Content = _alone;
+
+            return;
+        }
+
         // The tracks the splitters sit in take no room of their own: what separates two docks is the line the
         // splitter draws, and the grip it draws it in hangs over both of them (see `ConfigureSplitter`). A
         // track of the grip's own width would be a band of the window's ground between the two.
@@ -669,11 +723,42 @@ internal sealed class DockArea : UserControl
     /// <summary>Brings the area back in step with what is registered, open, and where.</summary>
     private void Rebuild()
     {
+        if (Alone)
+        {
+            Only();
+
+            return;
+        }
+
         Forget();
         Place();
         Settle();
         Show();
         Arrange();
+    }
+
+    /// <summary>
+    /// Draws the one dock a window of its own is for, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Which dock that is, is the dock that names this window: the window was made for it, and it is the only
+    /// one there is. A dock that is closed is drawn too, and hidden — the same as a region does with a dock
+    /// that is not the one it is showing — so that opening it again is showing the control that is already
+    /// there rather than one that has to be put back.
+    /// </remarks>
+    private void Only()
+    {
+        var shown = _manager.Instances.FirstOrDefault(Mine);
+
+        if (!ReferenceEquals(_alone.Child, shown?.View.View))
+        {
+            _alone.Child = shown?.View.View;
+        }
+
+        if (shown is not null)
+        {
+            shown.View.View.IsVisible = shown.IsOpen;
+        }
     }
 
     /// <summary>Takes away the docks that are no longer open at all.</summary>
