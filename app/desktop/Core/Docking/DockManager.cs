@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.Logging;
@@ -301,6 +302,34 @@ internal sealed class DockManager
         (instance.View as IDisposable)?.Dispose();
 
         Raise();
+    }
+
+    /// <summary>
+    /// Brings a dock back to the main window, which is what happens when the window it was in goes away.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is raised: this is said by the one that is closing a window, in the middle of closing it, and
+    /// a rebuild started from there would be asking the windows to draw for a window that is already on its
+    /// way out. What is left is a dock that belongs to the main window and nothing else, which is the state
+    /// it was in before anyone asked for a window of its own — and a dock that was closed stays closed, so
+    /// one that is asked for again is shown and one that was hidden is not.
+    /// <para>
+    /// An instance member although nothing of this manager's is read: which window a dock is in is this
+    /// manager's own bookkeeping, and the one place that writes it is <see cref="Move"/>. What is written
+    /// here is that bookkeeping, so it belongs beside the other write rather than on the dock.
+    /// </para>
+    /// </remarks>
+    /// <param name="instance">The dock to bring back.</param>
+    [SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "the window a dock is in is this manager's own bookkeeping, and this is one of the two places that writes it"
+    )]
+    public void Rehome(DockInstance instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        instance.Window = null;
     }
 
     /// <summary>

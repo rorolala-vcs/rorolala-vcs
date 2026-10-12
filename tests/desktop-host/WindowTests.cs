@@ -31,7 +31,7 @@ public sealed class WindowTests
     [Fact]
     public void ADockMovedIntoAWindowOfItsOwnIsInThatWindow()
     {
-        var services = Host.Services();
+        var (services, _) = Windows();
         var registration = New("it.dock.browser");
         var other = New("it.dock.other");
         services.Docks.Register(registration);
@@ -57,9 +57,14 @@ public sealed class WindowTests
     [Fact]
     public void ADockAlreadyInAWindowOfItsOwnIsNotMovedAgain()
     {
-        var services = Host.Services();
+        var (services, _) = Windows();
         var registration = New("it.dock.browser");
         services.Docks.Register(registration);
+
+        // A dock that stays in the main window, so that tearing this one out leaves it standing.
+        var kept = New("it.dock.kept");
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
 
         var instance = services.Docks.Activate(registration);
 
@@ -73,8 +78,11 @@ public sealed class WindowTests
 
         services.Windows.ToOwnWindow(instance);
 
+        // The same window, and no second one: what is already there is brought forward instead. The key is
+        // what says so — a window made again would have the next one — and the count would not, since it
+        // counts the main window too and that moves with the docks in it.
         Assert.Equal(window, instance.Window);
-        Assert.Single(services.Docks.Instances);
+        Assert.Single(services.Docks.Instances, one => one.DockNameId == registration.DockNameId);
     }
 
     /// <summary>
@@ -102,11 +110,72 @@ public sealed class WindowTests
         Assert.DoesNotContain(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.browser");
     }
 
-    /// <summary>A dock opened in a window of its own is there before anything draws it.</summary>
+    /// <summary>
+    /// A dock whose window is closed comes back to the main window, and stays what it was.
+    /// </summary>
+    /// <remarks>
+    /// The thing a window closing must not leave behind: a dock that still says it is in a window that is
+    /// gone. Nothing can show a dock like that — the next time it is asked for there is no window to ask, so
+    /// it is invisible for the rest of the run, and a toggle is worse than invisible: choosing it again turns
+    /// it over rather than bringing it back.
+    /// <para>
+    /// A toggle is the dock this is asked of, because that is the one that lives on after its window closes,
+    /// which is what makes it the one that can be stranded.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADockWhoseWindowIsClosedComesBackToTheMainWindow()
+    {
+        var (services, _) = Windows();
+        var registration = new DockRegistration(
+            Core.Id,
+            "it.dock.toggle",
+            "it_dock.title",
+            DockOpenMode.Toggle,
+            DockPlacement.Bottom,
+            _ => new FakeDockView { Control = new Border() }
+        );
+        services.Docks.Register(registration);
+
+        // Another dock in the main window, so that it is still there when the toggle is torn out of it.
+        services.Docks.Register(New("it.dock.kept"));
+        services.Docks.Activate(services.Docks.Registrations[1]);
+
+        var toggle = services.Docks.Activate(registration);
+
+        Assert.NotNull(toggle);
+
+        services.Windows.ToOwnWindow(toggle);
+
+        var own = (MainWindow)services.Shell.Window!;
+
+        Assert.NotNull(toggle.Window);
+
+        own.Close();
+
+        // Back in the main window, which is where it came from, and open as it was: the window it was in is
+        // gone, and a dock a window took with it is a dock the main window still has.
+        Assert.Null(toggle.Window);
+        Assert.True(toggle.IsOpen);
+
+        // And asking for it again is asking for it where it is: the window it is in is the main one, so a
+        // toggle turns over as it always does — once to hide it, and once to show it again.
+        Assert.Same(toggle, services.Docks.Activate(registration));
+        Assert.False(toggle.IsOpen);
+
+        Assert.Same(toggle, services.Docks.Activate(registration));
+        Assert.True(toggle.IsOpen);
+    }
+
+    /// <summary>
+    /// A dock opened in a window of its own is there before anything draws it.
+    /// </summary>
     /// <remarks>
     /// The window is stated as the instance is made rather than assigned after it, because there is no
     /// moment at which a dock opened in a window of its own is in the main one: it would be drawn in a
-    /// region of the main window for as long as the assignment took.
+    /// region of the main window for as long as the assignment took. What is asked of the manager rather
+    /// than of the windows, because it is the manager's own answer: a window of the host's does not exist
+    /// yet at this point, and the dock is already where it is going.
     /// </remarks>
     [Fact]
     public void ADockOpenedInAWindowOfItsOwnIsNeverInTheMainOne()
@@ -360,6 +429,10 @@ public sealed class WindowTests
     }
 
     /// <summary>A registration for a dock that may be made again, as a browser is.</summary>
+    /// <remarks>
+    /// The view is given a control, because a test that makes a real window makes a real dock area, and an
+    /// area cannot put nothing in a region: what a dock is drawn as is part of what a window is made of.
+    /// </remarks>
     /// <param name="nameId">Its stable name id.</param>
     /// <returns>The registration.</returns>
     private static DockRegistration New(string nameId) =>
@@ -369,6 +442,6 @@ public sealed class WindowTests
             "it_dock.title",
             DockOpenMode.New,
             DockPlacement.Center,
-            _ => new FakeDockView()
+            _ => new FakeDockView { Control = new Border() }
         );
 }

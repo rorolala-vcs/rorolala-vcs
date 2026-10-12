@@ -223,6 +223,8 @@ internal sealed class DockWindows : IWindows
             return;
         }
 
+        Recover();
+
         // What was asked for is either a window or a second one of a dock that may have several, and the two
         // are one question about the dock: a dock that is already open and is one thing is moved, while a dock
         // that is one of many is made again beside it. What decides is the mode the request states, or the
@@ -273,6 +275,8 @@ internal sealed class DockWindows : IWindows
     public void ToOwnWindow(DockInstance instance)
     {
         ArgumentNullException.ThrowIfNull(instance);
+
+        Recover();
 
         if (instance.Window is { } already)
         {
@@ -354,6 +358,46 @@ internal sealed class DockWindows : IWindows
     }
 
     /// <summary>
+    /// Brings back the docks that are in a window which is no longer there.
+    /// </summary>
+    /// <remarks>
+    /// The belt to the braces of <see cref="Gone"/>: a dock whose window went away without saying so — one
+    /// that was made before this service knew about it, or one whose window was taken down another way —
+    /// would otherwise be a dock nobody can show. Asked at the two moments a dock is about to be placed,
+    /// because that is when a stale window reference first does harm, and asked as a question about the set
+    /// of windows rather than by remembering anything, so that what it answers cannot drift from what there
+    /// is.
+    /// </remarks>
+    private void Recover()
+    {
+        var stranded = _docks
+            .Instances.Where(instance => instance.Window is { } key && !_windows.ContainsKey(key))
+            .ToArray();
+
+        if (stranded.Length == 0)
+        {
+            return;
+        }
+
+        // The main window is where they came from, so it is what they need: a dock brought back to a window
+        // that is not there either would be no better off than it was.
+        OpenMain();
+
+        foreach (var instance in stranded)
+        {
+            var was = instance.Window;
+
+            _docks.Rehome(instance);
+            _docks.Show(instance);
+            _log.Record(
+                LogLevel.Debug,
+                Core.Source,
+                $"`{instance.DockNameId}` was in `{was}`, which is not there, and came back to the main window"
+            );
+        }
+    }
+
+    /// <summary>
     /// Closes a window by its key.
     /// </summary>
     /// <remarks>
@@ -381,6 +425,14 @@ internal sealed class DockWindows : IWindows
     /// <summary>
     /// Lets go of a window that has closed, and ends the program if it was the last one.
     /// </summary>
+    /// <remarks>
+    /// A dock that was in the window is brought back to the main one here, whether it was on show or not: a
+    /// dock left naming a window that is gone is a dock nothing can draw — the next time it is asked for,
+    /// there is no window to ask, and it stays invisible for the rest of the run. Bringing it back is what
+    /// keeps a dock a dock, and it is deliberately not said through <see cref="Changed"/>: this runs on the
+    /// way out of a window closing, and a rebuild started from there would be work for a window that is
+    /// already gone, and would run it for every dock that was in it.
+    /// </remarks>
     /// <param name="key">The window's key, or nothing for the main one.</param>
     private void Gone(string? key)
     {
@@ -391,6 +443,16 @@ internal sealed class DockWindows : IWindows
         else
         {
             _windows.Remove(key);
+
+            foreach (var instance in _docks.Instances.Where(one => one.Window == key).ToArray())
+            {
+                _docks.Rehome(instance);
+                _log.Record(
+                    LogLevel.Debug,
+                    Core.Source,
+                    $"`{instance.DockNameId}` came back to the main window from `{key}`, which closed"
+                );
+            }
         }
 
         _held.Remove(key ?? string.Empty);

@@ -224,6 +224,11 @@ public partial class MainWindow : Window
                 LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
             }
         };
+
+        // And a window that has gone stops being told about the docks: it has no regions to keep in step, and
+        // what is left of it needs no waking — a window that kept listening would be one the dock manager
+        // holds for the rest of the run, and one that answered a change by rebuilding a row nobody can see.
+        Closed += (_, _) => _services.Docks.Changed -= DocksChanged;
     }
 
     /// <summary>
