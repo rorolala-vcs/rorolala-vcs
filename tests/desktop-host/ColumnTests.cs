@@ -199,14 +199,15 @@ public sealed class ColumnTests
         );
         Assert.Equal(RolaI18N.Get("rorolala_vcs.state.merging"), RorolalaStates.Say(PathState.Merging).Hint);
 
-        Assert.Equal(MarkInk.Add, RorolalaStates.Say(PathState.Untagged).Ink);
-        Assert.Equal(MarkInk.Warn, RorolalaStates.Say(PathState.Modified).Ink);
-        Assert.Equal(MarkInk.Error, RorolalaStates.Say(PathState.Wrong).Ink);
-        Assert.Equal(MarkInk.Accent, RorolalaStates.Say(PathState.Renamed).Ink);
-        Assert.Equal(MarkInk.Accent, RorolalaStates.Say(PathState.RenamedLikely).Ink);
-        Assert.Equal(MarkInk.Warn, RorolalaStates.Say(PathState.Merging).Ink);
+        Assert.Equal(RorolalaColours.Untagged, RorolalaStates.Say(PathState.Untagged).Colour);
+        Assert.Equal(RorolalaColours.UnderWay, RorolalaStates.Say(PathState.Modified).Colour);
+        Assert.Equal(RorolalaColours.Wrong, RorolalaStates.Say(PathState.Wrong).Colour);
+        Assert.Equal(RorolalaColours.Moved, RorolalaStates.Say(PathState.Renamed).Colour);
+        Assert.Equal(RorolalaColours.Moved, RorolalaStates.Say(PathState.RenamedLikely).Colour);
+        Assert.Equal(RorolalaColours.UnderWay, RorolalaStates.Say(PathState.Merging).Colour);
 
-        // Every one of them is a dot, and every dot says its word on itself rather than in its cell.
+        // Every one of them is a dot with a line of its own, and every dot says its word on itself rather than
+        // in its cell.
         foreach (var state in new[]
         {
             PathState.Untagged,
@@ -221,6 +222,11 @@ public sealed class ColumnTests
 
             Assert.True(mark.Dot, $"{state}");
             Assert.Null(mark.Said());
+
+            // The line around it is a shade of the mark rather than the mark itself, so that the mark reads
+            // against the ground it is drawn on.
+            Assert.NotNull(mark.Edge);
+            Assert.NotEqual(mark.Colour, mark.Edge);
         }
 
         Assert.False(RorolalaStates.Say(PathState.Lost).Dot);

@@ -35,6 +35,11 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         host.I18n.RegisterDirectory(Translations());
         FileOperationPresets.Add(new RorolalaOperations());
 
+        // What a state is coloured is this plugin's answer rather than the theme's, so the four colours are its
+        // own settings: declaring them is what puts them in the preference panel, and what draws them reads
+        // them as it draws, so a colour chosen there is a colour the next pill or dot is drawn in.
+        RorolalaColours.Declare(host.Config);
+
         // And what the work holds: the Ownership column of a directory listing, and the corner a
         // locked tile wears. It is this plugin's to answer rather than the File System plugin's,
         // because who holds an entry is Rorolala's question and the answer comes through the C ABI.

@@ -2171,7 +2171,25 @@ internal sealed class ListBrowser : EntryView
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
+        // The colour is the contribution's where it named one, and the role it named otherwise: a mark drawn in
+        // the role and then painted over would be drawn twice, and the role's own brush would win.
+        if (mark.Colour is { } colour)
+        {
+            dot.Background = new SolidColorBrush(colour);
+        }
+        else
+        {
+            dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
+        }
+
+        if (mark.Edge is { } edge)
+        {
+            // The line is the contribution's own rather than the design's, since whatever named the colour named
+            // what reads around it: a hairline of the listing's would be a mark drawn differently from the one
+            // the contribution asked for.
+            dot.BorderThickness = new Thickness(1);
+            dot.BorderBrush = new SolidColorBrush(edge);
+        }
 
         if (mark.Hint is { Length: > 0 } hint)
         {

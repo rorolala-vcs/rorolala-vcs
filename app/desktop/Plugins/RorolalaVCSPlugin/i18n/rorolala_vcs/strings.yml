@@ -157,6 +157,23 @@ rorolala_vcs:
       en: Rorolala file operations
       zh-CN: Rorolala 文件操作
 
+    # What the four colours a state is drawn in are called where they are chosen. They are hexes, and the
+    # plugin reads them as colours: what a state is coloured is the state, so what is offered is the colour
+    # itself rather than a name for it.
+    state:
+      untagged:
+        en: "State: not recorded yet"
+        zh-CN: 状态：尚未记录
+      underway:
+        en: "State: under way"
+        zh-CN: 状态：进行中
+      wrong:
+        en: "State: must not be recorded"
+        zh-CN: 状态：不可记录
+      moved:
+        en: "State: named elsewhere"
+        zh-CN: 状态：被命名在别处
+
   # What the Owner column is headed: who holds the entry, which is what the column says about one. The name
   # a held entry wears is a name rather than a phrase and so is not translated at all.
   column_ownership:

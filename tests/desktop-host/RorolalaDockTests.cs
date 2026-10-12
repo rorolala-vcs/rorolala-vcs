@@ -251,13 +251,28 @@ public sealed class RorolalaDockTests
             [
                 RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned"),
                 RolaI18N.Get("rorolala_vcs.status.change_wrong_base"),
-                $"{RolaI18N.Get("rorolala_vcs.status.kind_merge")} + {RolaI18N.Get("rorolala_vcs.status.merge_variant")}1a2b3c4",
+                RolaI18N.Get("rorolala_vcs.status.kind_merge"),
                 RolaI18N.Get("rorolala_vcs.status.kind_lost"),
                 RolaI18N.Get("rorolala_vcs.status.kind_untagged"),
-                $"{RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")} + {RolaI18N.Get("rorolala_vcs.status.change_unchanged")}",
+                RolaI18N.Get("rorolala_vcs.status.kind_rename_strong"),
                 RolaI18N.Get("rorolala_vcs.status.change_modified"),
             ],
             rows.Select(Pills)
+        );
+
+        // What a row has to say that is not a state is written rather than coloured: the variant a merge waits
+        // for, and that a move left its content alone.
+        Assert.Equal(
+            [
+                string.Empty,
+                string.Empty,
+                $"{RolaI18N.Get("rorolala_vcs.status.merge_variant")}1a2b3c4",
+                string.Empty,
+                string.Empty,
+                RolaI18N.Get("rorolala_vcs.status.change_unchanged"),
+                string.Empty,
+            ],
+            rows.Select(Notes)
         );
 
         // A change of content has no kind of its own, so the row it makes is one pill saying what became of
@@ -442,6 +457,16 @@ public sealed class RorolalaDockTests
         ArgumentNullException.ThrowIfNull(row);
 
         return string.Join(" + ", row.Pills.Select(pill => pill.Said));
+    }
+
+    /// <summary>What a row's notes say, in the order they are drawn.</summary>
+    /// <param name="row">The row.</param>
+    /// <returns>What it says that is not a state.</returns>
+    private static string Notes(TableRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return string.Join(" + ", row.Notes);
     }
 }
 

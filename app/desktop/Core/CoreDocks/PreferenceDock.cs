@@ -619,6 +619,67 @@ internal sealed class PreferenceView : UserControl
 
                 return preset;
 
+            case SettingKind.Colour:
+                // The same editor a theme colour is chosen with, because it is the same question: a swatch
+                // that opens the plate, and the six digits beside it for a colour that is known by its name.
+                // The value is the colour as the hex it is kept as, which is what the plugin reads back.
+                var hex = Parse(value) ?? Colors.Transparent;
+                var shown = new TextBox { Text = Hex(hex), MinWidth = 120, VerticalAlignment = VerticalAlignment.Center };
+                var swatch = new Button
+                {
+                    Width = 24,
+                    Height = 24,
+                    Padding = new Thickness(0),
+                    BorderThickness = new Thickness(1),
+                    Background = new SolidColorBrush(hex),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    [!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border"),
+                };
+
+                var palette = new ColourPlate(hex);
+                var flyout = new Flyout { Content = palette };
+
+                palette.Chosen += chosen =>
+                {
+                    _settings.Keep(owner, setting, Hex(chosen));
+                    swatch.Background = new SolidColorBrush(chosen);
+                    shown.Text = Hex(chosen);
+                };
+
+                swatch.Click += (_, _) => flyout.ShowAt(swatch);
+
+                // What will not read as a colour is put back to what is in force rather than kept out of the
+                // file silently, the same way the theme's own colour fields answer.
+                void CommitColour()
+                {
+                    if (Parse(shown.Text) is { } typed)
+                    {
+                        _settings.Keep(owner, setting, Hex(typed));
+                        swatch.Background = new SolidColorBrush(typed);
+                    }
+                    else
+                    {
+                        shown.Text = Hex(hex);
+                    }
+                }
+
+                shown.LostFocus += (_, _) => CommitColour();
+                shown.KeyDown += (_, key) =>
+                {
+                    if (key.Key == Avalonia.Input.Key.Enter)
+                    {
+                        CommitColour();
+                    }
+                };
+
+                return new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children = { swatch, shown },
+                };
+
             default:
                 var field = new TextBox { Text = value, MinWidth = 240 };
 

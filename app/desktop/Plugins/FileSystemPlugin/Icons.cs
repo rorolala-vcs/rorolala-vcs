@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Styling;
 using Avalonia.Data;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
@@ -150,6 +151,16 @@ internal static partial class Icons
     /// <summary>The rounding a tag wears, which is the design's radius for a small control.</summary>
     private static readonly CornerRadius TagCorners = new(5);
 
+    /// <summary>
+    /// The ground a tagged mark is drawn on, which is the dark one on either look.
+    /// </summary>
+    /// <remarks>
+    /// A colour of its own rather than a wash of the ink, because a badge on a picture is not a surface of the
+    /// program: what it is drawn on decides how the ink on it reads, and the ink does not change with the look.
+    /// A wash would be the theme's answer, which is the thing a mark worn on a picture must not have.
+    /// </remarks>
+    private static readonly Color TagGround = Color.Parse("#1A1A1A");
+
     /// <summary>The theme resource a contributed mark is drawn in.</summary>
     /// <remarks>
     /// Written as the literals the look publishes, because a plugin has nowhere else to read them
@@ -192,7 +203,22 @@ internal static partial class Icons
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Ink(contributed.Ink));
+        // The colour is the contribution's where it named one, and the role it named otherwise: a mark drawn in
+        // the role and then painted over would be drawn twice, and the role's own brush would win.
+        if (contributed.Colour is { } colour)
+        {
+            dot.Background = new SolidColorBrush(colour);
+        }
+        else
+        {
+            dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Ink(contributed.Ink));
+        }
+
+        if (contributed.Edge is { } edge)
+        {
+            dot.BorderThickness = new Thickness(1);
+            dot.BorderBrush = new SolidColorBrush(edge);
+        }
 
         if (contributed.Hint is { Length: > 0 } hint)
         {
@@ -250,10 +276,22 @@ internal static partial class Icons
                 Padding = new Thickness(inset),
                 Child = glyph,
             };
-            tag[!Border.BackgroundProperty] = new DynamicResourceExtension(Wash(contributed.Ink));
+            // The ground is the mark's own and always the dark one, whatever the program is drawn on: a badge
+            // worn on a picture is part of the picture, and one that turned pale on the light look would be a
+            // mark that changed what it is when the user changed their colours. What says which mark it is is
+            // the ring and the picture, both in the role's ink.
+            tag.Background = new SolidColorBrush(TagGround);
             tag[!Border.BorderBrushProperty] = new DynamicResourceExtension(Ink(contributed.Ink));
 
-            corner = tag;
+            // The ink the badge is drawn in is the dark look's, whatever the program is drawn on: the ground
+            // is the dark one, so the colour that reads on it is the one the dark look holds — a mark that took
+            // the light look's darker ink would be a dark lock on a dark badge. Asked for as a scope rather
+            // than as a second set of colours, so that what the ink is stays the look's to say.
+            corner = new ThemeVariantScope
+            {
+                RequestedThemeVariant = ThemeVariant.Dark,
+                Child = tag,
+            };
         }
         else
         {

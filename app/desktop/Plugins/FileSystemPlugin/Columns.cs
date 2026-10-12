@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -40,7 +41,7 @@ public enum ColumnPlacement
 /// The words themselves, when they are not a phrase — a path, a name, which is data. Said, it wins over
 /// <paramref name="TextKey"/>.
 /// </param>
-/// <param name="Ink">What the words are drawn in, and what a dot is filled with.</param>
+/// <param name="Ink">What the words are drawn in, and what a dot is filled with where no colour is given.</param>
 /// <param name="Dot">
 /// Whether the cell is a round mark in the ink rather than the words: a state that is one of a handful, where
 /// the colour is read at a glance and the words would be a column of the same few words repeated. What the
@@ -50,12 +51,23 @@ public enum ColumnPlacement
 /// What the pointer resting on the mark says, which is the words the cell does not hold. Nothing to hover for
 /// when the words are the cell.
 /// </param>
+/// <param name="Colour">
+/// The mark's own colour, where the role the theme holds is not the one it is said in: a contribution with a
+/// palette of its own says what its marks are coloured rather than which of the look's roles they wear. It wins
+/// over <paramref name="Ink"/>, and nothing means the role is what is drawn.
+/// </param>
+/// <param name="Edge">
+/// The line around the mark, which is the contribution's for the same reason its colour is — the two are one
+/// thing drawn — or nothing for a mark with no line at all.
+/// </param>
 public sealed record EntryColumnMark(
     string? TextKey = null,
     string? Text = null,
     MarkInk Ink = MarkInk.Quiet,
     bool Dot = false,
-    string? Hint = null
+    string? Hint = null,
+    Color? Colour = null,
+    Color? Edge = null
 )
 {
     /// <summary>What the cell reads as, or nothing when the contribution has nothing to say.</summary>

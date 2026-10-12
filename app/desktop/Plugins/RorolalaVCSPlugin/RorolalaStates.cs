@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
@@ -98,11 +99,10 @@ internal sealed class RorolalaStates : IEntryColumnProvider
     /// What a state is drawn as: a dot in its colour, and the word for it said on the dot.
     /// </summary>
     /// <remarks>
-    /// The colour is the role the listing resolves to the theme's resource for it — green for what appeared,
-    /// the error red for what must not be recorded, the second colour for what moved, and the one amber for
-    /// what is under way: a change of this side's to record, and a merge waiting to be joined. A state that is
-    /// wrong says only that it is wrong: which of the two ways it is wrong is the Overview's to say, where
-    /// there is room for a reason.
+    /// The colour is this plugin's own — see <see cref="RorolalaColours"/> — and the line around the mark is a
+    /// shade of it chosen by the ground, since a mark that is its own edge on one ground is a smudge on the
+    /// other. A state that is wrong says only that it is wrong: which of the two ways it is wrong is the
+    /// Overview's to say, where there is room for a reason.
     /// <para>
     /// The words are the dot's, and they are asked for here rather than handed over as keys for the listing
     /// to translate: they are this plugin's own, in this plugin's catalogue, and a key named by a literal
@@ -114,35 +114,23 @@ internal sealed class RorolalaStates : IEntryColumnProvider
     internal static EntryColumnMark Say(PathState state) =>
         state switch
         {
-            PathState.Untagged => new EntryColumnMark(
-                Ink: MarkInk.Add,
-                Dot: true,
-                Hint: RolaI18N.Get("rorolala_vcs.state.untagged")
+            PathState.Untagged => Dot(
+                RorolalaColours.Untagged,
+                RolaI18N.Get("rorolala_vcs.state.untagged")
             ),
-            PathState.Modified => new EntryColumnMark(
-                Ink: MarkInk.Warn,
-                Dot: true,
-                Hint: RolaI18N.Get("rorolala_vcs.state.modified")
+            PathState.Modified => Dot(
+                RorolalaColours.UnderWay,
+                RolaI18N.Get("rorolala_vcs.state.modified")
             ),
-            PathState.Wrong => new EntryColumnMark(
-                Ink: MarkInk.Error,
-                Dot: true,
-                Hint: RolaI18N.Get("rorolala_vcs.state.wrong")
+            PathState.Wrong => Dot(RorolalaColours.Wrong, RolaI18N.Get("rorolala_vcs.state.wrong")),
+            PathState.Renamed => Dot(RorolalaColours.Moved, RolaI18N.Get("rorolala_vcs.state.renamed")),
+            PathState.RenamedLikely => Dot(
+                RorolalaColours.Moved,
+                RolaI18N.Get("rorolala_vcs.state.renamed_likely")
             ),
-            PathState.Renamed => new EntryColumnMark(
-                Ink: MarkInk.Accent,
-                Dot: true,
-                Hint: RolaI18N.Get("rorolala_vcs.state.renamed")
-            ),
-            PathState.RenamedLikely => new EntryColumnMark(
-                Ink: MarkInk.Accent,
-                Dot: true,
-                Hint: RolaI18N.Get("rorolala_vcs.state.renamed_likely")
-            ),
-            PathState.Merging => new EntryColumnMark(
-                Ink: MarkInk.Warn,
-                Dot: true,
-                Hint: RolaI18N.Get("rorolala_vcs.state.merging")
+            PathState.Merging => Dot(
+                RorolalaColours.UnderWay,
+                RolaI18N.Get("rorolala_vcs.state.merging")
             ),
 
             // A path the Layout names and the tree does not hold is not an entry of any listing, and a path
@@ -150,6 +138,19 @@ internal sealed class RorolalaStates : IEntryColumnProvider
             // beside a name, which is what a mark with nothing in it is.
             _ => new EntryColumnMark(),
         };
+
+    /// <summary>One state, as the mark it wears.</summary>
+    /// <param name="colour">What the state is coloured.</param>
+    /// <param name="said">What it is called, which is what the mark is hovered for.</param>
+    /// <returns>The mark.</returns>
+    private static EntryColumnMark Dot(Color colour, string said) =>
+        new(
+            Ink: MarkInk.Quiet,
+            Dot: true,
+            Hint: said,
+            Colour: colour,
+            Edge: RorolalaColours.Edge(colour)
+        );
 
     /// <summary>
     /// Lets go of what was read, so the next answer is read from the tree as it is now.

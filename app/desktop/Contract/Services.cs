@@ -114,6 +114,15 @@ public enum SettingKind
     /// <summary>Free text.</summary>
     Text,
 
+    /// <summary>
+    /// A colour, kept as the six digits it is written as.
+    /// </summary>
+    /// <remarks>
+    /// Kept as text rather than as a colour, because that is what a person may type and what a settings file
+    /// holds: what it is shown with is a swatch and a plate, and what is stored is what those say.
+    /// </remarks>
+    Colour,
+
     /// <summary>Something that is on or off.</summary>
     Bool,
 

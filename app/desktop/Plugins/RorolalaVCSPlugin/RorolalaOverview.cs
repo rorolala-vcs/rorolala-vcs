@@ -113,10 +113,10 @@ internal sealed record StatusFacts(
     }
 }
 
-/// <summary>One pill of a row's state: what it says, and the theme resource it is filled with.</summary>
+/// <summary>One pill of a row's state: what it says, and what it is coloured.</summary>
 /// <param name="Said">What it is called.</param>
-/// <param name="Fill">The theme resource the pill is filled with.</param>
-internal sealed record StatusPill(string Said, string Fill);
+/// <param name="Fill">What the pill is filled with, which is this plugin's colour rather than the look's.</param>
+internal sealed record StatusPill(string Said, Color Fill);
 
 /// <summary>One row of the table: what the reading says about one path.</summary>
 /// <param name="Pills">
@@ -124,9 +124,19 @@ internal sealed record StatusPill(string Said, string Fill);
 /// A change of content alone has no kind, and a kind alone has nothing to say about a content, so a row
 /// carries as many pills as it has states — one or two, and more where a merge has something to add.
 /// </param>
+/// <param name="Notes">
+/// What the row has to say that is not a state: the variant a merge is waiting for, where a merge moved to,
+/// and that a move left its content alone. A note is written rather than coloured, since it says what a row is
+/// about rather than what has to be done about it.
+/// </param>
 /// <param name="From">The path it comes from, or nothing when it comes from nowhere.</param>
 /// <param name="To">The path it goes to, or nothing when it goes nowhere.</param>
-internal sealed record TableRow(IReadOnlyList<StatusPill> Pills, string From, string To);
+internal sealed record TableRow(
+    IReadOnlyList<StatusPill> Pills,
+    IReadOnlyList<string> Notes,
+    string From,
+    string To
+);
 
 /// <summary>
 /// What the Overview shows: the work as it stands, read where the tree is rooted.
@@ -165,25 +175,24 @@ internal sealed class OverviewView : UserControl
     /// <summary>How round the ends of a pill are, which is half of how tall one is.</summary>
     private const double PillRadius = 10;
 
-    /// <summary>The theme resource for what has gone, or gone wrong.</summary>
-    private const string WrongFill = "rorolala.del";
-
-    /// <summary>The theme resource for what has appeared.</summary>
-    private const string AppearedFill = "rorolala.add";
-
-    /// <summary>The theme resource for what moved.</summary>
-    private const string MovedFill = "rorolala.primary";
-
-    /// <summary>
-    /// The theme resource for what is not settled: what is under way, and what has to be read twice.
-    /// </summary>
+    /// <summary>The colour a mark of one kind is filled with, which is this plugin's own.</summary>
     /// <remarks>
-    /// One role for both, since the two are one thing to a reader — neither is something done — and the words
-    /// on the pill are what tells them apart.
+    /// Four colours and nothing else: what is not recorded yet, what is under way, what must not be recorded,
+    /// and what is somewhere else than the Layout says. They are named here rather than read from the look,
+    /// because what a state is coloured is the state — see <see cref="RorolalaColours"/>.
     /// </remarks>
-    private const string UnsettledFill = "rorolala.warn";
+    private static Color WrongFill => RorolalaColours.Wrong;
 
-    /// <summary>The theme resource for what has nothing to say about itself.</summary>
+    /// <summary>What has appeared.</summary>
+    private static Color AppearedFill => RorolalaColours.Untagged;
+
+    /// <summary>What moved.</summary>
+    private static Color MovedFill => RorolalaColours.Moved;
+
+    /// <summary>What is not settled: what is under way, and what has to be read twice.</summary>
+    private static Color UnsettledFill => RorolalaColours.UnderWay;
+
+    /// <summary>The theme resource for what has nothing to say about itself, which a note is read in.</summary>
     private const string QuietFill = "rorolala.fg.faint";
 
     /// <summary>The theme resource a line told apart from the next is drawn in.</summary>
@@ -383,7 +392,7 @@ internal sealed class OverviewView : UserControl
 
         wrong.AddRange(
             facts.Unowned.Select(path =>
-                new TableRow([new StatusPill(notMine, WrongFill)], path, string.Empty)
+                new TableRow([new StatusPill(notMine, WrongFill)], [], path, string.Empty)
             )
         );
 
@@ -392,18 +401,20 @@ internal sealed class OverviewView : UserControl
         wrong.AddRange(
             changed
                 .Where(behind.Contains)
-                .Select(path => new TableRow([new StatusPill(stale, UnsettledFill)], path, string.Empty))
+                .Select(path =>
+                    new TableRow([new StatusPill(stale, WrongFill)], [], path, string.Empty)
+                )
         );
 
         structural.AddRange(
             facts.Lost.Select(path =>
-                new TableRow([new StatusPill(lost, WrongFill)], path, string.Empty)
+                new TableRow([new StatusPill(lost, WrongFill)], [], path, string.Empty)
             )
         );
 
         structural.AddRange(
             facts.Untagged.Select(path =>
-                new TableRow([new StatusPill(untagged, AppearedFill)], string.Empty, path)
+                new TableRow([new StatusPill(untagged, AppearedFill)], [], string.Empty, path)
             )
         );
 
@@ -422,12 +433,12 @@ internal sealed class OverviewView : UserControl
         merges.AddRange(
             facts.Merging.Select(item =>
                 new TableRow(
+                    [new StatusPill(merge, UnsettledFill)],
                     [
-                        new StatusPill(merge, UnsettledFill),
-                        new StatusPill($"{variant}{Short(item.Variant)}", QuietFill),
+                        $"{variant}{Short(item.Variant)}",
                         .. item.Moved is { Length: > 0 } to
-                            ? [new StatusPill(RolaI18N.Get("rorolala_vcs.status.merge_moved", to), QuietFill)]
-                            : Array.Empty<StatusPill>(),
+                            ? new[] { RolaI18N.Get("rorolala_vcs.status.merge_moved", to) }
+                            : [],
                     ],
                     item.Target,
                     item.Path
@@ -439,11 +450,12 @@ internal sealed class OverviewView : UserControl
             facts.Broken.Select(reason =>
                 new TableRow(
                     [
-                        // A merge that cannot go on is a thing gone wrong rather than work under way, so its
-                        // pill wears the colour of what is wrong rather than the colour of a merge that is.
+                        // A merge that cannot go on is a thing gone wrong rather than work under way, so both
+                        // its pills wear the colour of what is wrong rather than the colour of a merge that is.
                         new StatusPill(merge, WrongFill),
-                        new StatusPill($"{stopped}{BrokenSaid(reason)}", UnsettledFill),
+                        new StatusPill($"{stopped}{BrokenSaid(reason)}", WrongFill),
                     ],
+                    [string.Empty],
                     reason.Target,
                     BrokenPlace(reason)
                 )
@@ -454,7 +466,7 @@ internal sealed class OverviewView : UserControl
             changed
                 .Where(path => !behind.Contains(path))
                 .Select(path =>
-                    new TableRow([new StatusPill(edited, UnsettledFill)], path, string.Empty)
+                    new TableRow([new StatusPill(edited, UnsettledFill)], [], path, string.Empty)
                 )
         );
 
@@ -465,17 +477,23 @@ internal sealed class OverviewView : UserControl
         bool Misfit(Rename rename) => rename.Modified && behind.Contains(rename.To);
 
         // One move, as a row. A move whose file was edited is a change of content as well, so what became of
-        // the content is a pill of the move's own row rather than a row of its own.
+        // the content is a pill of the move's own row rather than a row of its own — and a move that changed
+        // nothing says so in a note, since nothing about it has to be done.
         TableRow Move(Rename rename, string kind) =>
             new(
                 [
                     new StatusPill(kind, MovedFill),
-                    !rename.Modified
-                        ? new StatusPill(unchanged, QuietFill)
-                        : behind.Contains(rename.To)
-                            ? new StatusPill(stale, UnsettledFill)
-                            : new StatusPill(edited, UnsettledFill),
+                    .. rename.Modified
+                        ? new[]
+                        {
+                            new StatusPill(
+                                behind.Contains(rename.To) ? stale : edited,
+                                behind.Contains(rename.To) ? WrongFill : UnsettledFill
+                            ),
+                        }
+                        : [],
                 ],
+                rename.Modified ? [] : new[] { unchanged },
                 rename.From,
                 rename.To
             );
@@ -581,7 +599,8 @@ internal sealed class OverviewView : UserControl
         left.From == right.From
         && left.To == right.To
         && left.Pills.Count == right.Pills.Count
-        && left.Pills.Zip(right.Pills).All(pair => pair.First == pair.Second);
+        && left.Pills.Zip(right.Pills).All(pair => pair.First == pair.Second)
+        && left.Notes.SequenceEqual(right.Notes, StringComparer.Ordinal);
 
     /// <summary>
     /// The changes as one table, which is the browser's list with a band over it.
@@ -711,10 +730,45 @@ internal sealed class OverviewView : UserControl
             state.Children.Add(Pill(pill));
         }
 
+        // What the row says that is not a state is written rather than coloured, and written after the states:
+        // a note is what a row is about, where a pill is what has to be done about it.
+        foreach (var note in row.Notes)
+        {
+            if (note is { Length: > 0 })
+            {
+                state.Children.Add(Note(note));
+            }
+        }
+
         return state;
     }
 
+    /// <summary>One note: what a row has to say that is not a state, in the ink the paths are read in.</summary>
+    /// <param name="said">What it says.</param>
+    /// <returns>The note to show.</returns>
+    private static TextBlock Note(string said)
+    {
+        var note = new TextBlock
+        {
+            Text = said,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 2, 6, 2),
+            Classes = { "caption", "mono" },
+        };
+
+        note[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(QuietFill);
+
+        return note;
+    }
+
     /// <summary>One pill: a rounded ground in the colour of its state, with the state written on it.</summary>
+    /// <remarks>
+    /// The ground is the colour and the words are a shade of it, so a pill is one thing said rather than a
+    /// colour with a label stuck on it; the hairline around it is a shade of the same colour picked by the
+    /// ground the dock is on, which is what tells a pale pill from a pale dock.
+    /// </remarks>
     /// <param name="pill">The pill.</param>
     /// <returns>The pill to show.</returns>
     private static Border Pill(StatusPill pill)
@@ -725,7 +779,11 @@ internal sealed class OverviewView : UserControl
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = Brushes.White,
+            Foreground = new SolidColorBrush(RorolalaColours.On(pill.Fill)),
+            // Heavier than the words around it, since a pill is a state said rather than a value read: the
+            // colour is what it is found by, and the weight is what keeps the words from reading as a label
+            // stuck on a colour.
+            FontWeight = FontWeight.Bold,
             Classes = { "caption" },
         };
 
@@ -734,13 +792,14 @@ internal sealed class OverviewView : UserControl
             Child = words,
             CornerRadius = new CornerRadius(PillRadius),
             Padding = new Thickness(8, 2),
+            Background = new SolidColorBrush(pill.Fill),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(RorolalaColours.Edge(pill.Fill)),
             // The room a pill keeps around it is its own rather than the panel's, since a panel spaces lines
             // and not the things on them: what wraps onto the next line has to be told from the line above.
             Margin = new Thickness(0, 2, 6, 2),
             VerticalAlignment = VerticalAlignment.Center,
         };
-
-        made[!Border.BackgroundProperty] = new DynamicResourceExtension(pill.Fill);
 
         return made;
     }
