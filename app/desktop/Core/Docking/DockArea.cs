@@ -218,6 +218,16 @@ internal sealed class DockArea : UserControl
     /// <summary>Whether the pointer has moved far enough to be dragging rather than clicking.</summary>
     private bool _moved;
 
+    /// <summary>
+    /// Whether this area is following the docks, which is while it is on a tree.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than asked of the toolkit, because attaching and detaching arrive more than once — a dock
+    /// dragged to another region is taken off the tree and put back — and a subscription made twice would be
+    /// a rebuild run twice for one change.
+    /// </remarks>
+    private bool _listening;
+
     /// <summary>Makes the area over the manager it shows.</summary>
     /// <param name="manager">The docks and where they are.</param>
     /// <param name="i18n">The host's translations.</param>
@@ -250,8 +260,69 @@ internal sealed class DockArea : UserControl
             handledEventsToo: true
         );
         AddHandler(InputElement.PointerCaptureLostEvent, (_, _) => Cancel());
+    }
 
+    /// <summary>
+    /// Follows the docks again, having been put back on a tree.
+    /// </summary>
+    /// <param name="e">What was attached.</param>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        Watch();
+    }
+
+    /// <summary>
+    /// Lets go of what this area placed, and of the docks it was listening to.
+    /// </summary>
+    /// <remarks>
+    /// A window that is closed takes its area off the tree and keeps nothing: this area is the one that
+    /// holds a dock's control in a region of it, and a control held by a window that is gone is a control
+    /// that can never be put in another — the toolkit refuses to give it a second parent, and the dock is
+    /// stuck in a window nobody can see. That is what an area still holding placements for a closed window
+    /// does the next time the dock is opened anywhere.
+    /// <para>
+    /// The listening is given up as well, and for the same reason: an area that is not on the tree is not
+    /// drawing anything, and one that went on rebuilding itself for a window that is gone would be doing the
+    /// work of a window nobody is looking at.
+    /// </para>
+    /// </remarks>
+    /// <param name="e">What was detached.</param>
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+
+        if (!_listening)
+        {
+            return;
+        }
+
+        _listening = false;
+        _manager.Changed -= Rebuild;
+
+        foreach (var (instance, placed) in _placed.ToArray())
+        {
+            Detach(placed);
+            _placed.Remove(instance);
+        }
+    }
+
+    /// <summary>Makes the area follow the docks again.</summary>
+    private void Watch()
+    {
+        if (_listening)
+        {
+            return;
+        }
+
+        _listening = true;
         _manager.Changed += Rebuild;
+
+        // A dock may be in this window, in another one, or in none: what makes an instance this window's is
+        // the window it names, which is not a question about the control. So the layer is brought in step as
+        // soon as there is one, so that a dock put into an area that is not on a tree yet — the main window
+        // while the layout is being restored, a window of a dock's own before it is shown — still lands
+        // somewhere, and the work is taken up again from there.
         Rebuild();
     }
 

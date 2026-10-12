@@ -130,6 +130,30 @@ public sealed class WindowTests
     }
 
     /// <summary>
+    /// A window of the host's can be closed, and the host knows it is gone.
+    /// </summary>
+    /// <remarks>
+    /// The smallest thing the tests above rest on, asked on its own: whether closing a window works at all
+    /// under the platform they are run on. Kept because the answer is not obvious — everything else here
+    /// depends on it, and a failure of this one would say what a failure of the others means.
+    /// </remarks>
+    [Fact]
+    public void AWindowOfTheHostsCanBeClosed()
+    {
+        var (services, _) = Windows();
+
+        services.Windows.OpenMain();
+
+        Assert.True(services.Windows.MainIsUp);
+
+        var main = (MainWindow)services.Shell.Window!;
+
+        main.Close();
+
+        Assert.False(services.Windows.MainIsUp);
+    }
+
+    /// <summary>
     /// A window that is asked for when there is no way to make one opens nothing and throws nothing.
     /// </summary>
     /// <remarks>
