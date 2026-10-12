@@ -133,6 +133,43 @@ public sealed class WindowTests
     }
 
     /// <summary>
+    /// The main window stands when the last dock leaves it, empty rather than closed.
+    /// </summary>
+    /// <remarks>
+    /// The one window and the one dock a program may be down to, which is the state a first run starts in: what
+    /// ends the program is every window being gone, so a main window closed as its last dock is torn out is the
+    /// program ending — the drag would take the program with it, and the dock with the window it was being moved
+    /// out of. What is left instead is an empty main window, which is the program's own window: its
+    /// <c>Window</c> menu is where a dock is asked for again, and it is what a dock in a window of its own is
+    /// brought back to.
+    /// </remarks>
+    [Fact]
+    public void TheMainWindowStandsWhenTheLastDockLeavesIt()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.browser");
+        services.Docks.Register(registration);
+        services.Windows.OpenMain();
+
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+        Assert.Null(instance.Window);
+
+        var ended = false;
+
+        services.Windows.End = () => ended = true;
+
+        services.Windows.ToOwnWindow(instance);
+
+        Assert.NotNull(instance.Window);
+        Assert.False(ended, "the program was not ended by a dock being torn out");
+        Assert.True(services.Windows.MainIsUp, "the main window was not closed with its last dock");
+        Assert.DoesNotContain(services.Docks.Instances, one => one.Window is null);
+        Assert.Equal(2, services.Windows.Count);
+    }
+
+    /// <summary>
     /// A dock opened in a window of its own goes with that window when it closes.
     /// </summary>
     /// <remarks>
