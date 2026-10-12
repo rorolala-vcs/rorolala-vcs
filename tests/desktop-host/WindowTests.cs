@@ -1,6 +1,11 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.VisualTree;
+using RorolalaDesktop;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
+using ContractMenuItem = RorolalaDesktop.Contract.MenuItem;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -15,12 +20,13 @@ namespace RorolalaDesktopHost.IntegrationTests;
 public sealed class WindowTests
 {
     /// <summary>
-    /// A dock moved into a window of its own is in that window, and its own placement says so.
+    /// A dock moved into a window of its own is in that window, and keeps the region it was in.
     /// </summary>
     /// <remarks>
-    /// The two are one change: a dock whose window moved and whose placement did not would be drawn in a
-    /// region of the window it left, and one whose placement moved and whose window did not would be drawn
-    /// in the middle of the window it is still in.
+    /// The window and the region are two questions: being in a window of its own is a change of window and
+    /// not of region, so a dock pulled out of the bottom band comes back to it when it returns. A placement
+    /// that meant "a window of its own" would be the one name meaning both, which is what this checks is not
+    /// the case.
     /// </remarks>
     [Fact]
     public void ADockMovedIntoAWindowOfItsOwnIsInThatWindow()
@@ -37,10 +43,11 @@ public sealed class WindowTests
         Assert.NotNull(mine);
         Assert.NotNull(theirs);
 
+        services.Docks.Move(mine, DockPlacement.Bottom);
         services.Windows.ToOwnWindow(mine);
 
         Assert.NotNull(mine.Window);
-        Assert.Equal(DockPlacement.Window, mine.Placement);
+        Assert.Equal(DockPlacement.Bottom, mine.Placement);
 
         // The dock beside it is where it was: one dock's window is that dock's, and nothing else moved.
         Assert.Null(theirs.Window);
@@ -110,14 +117,14 @@ public sealed class WindowTests
 
         var instance = services.Docks.Create(
             registration,
-            DockPlacement.Window,
+            DockPlacement.Center,
             new DockRequest(registration.DockNameId, "/work"),
             "dock-1"
         );
 
         Assert.NotNull(instance);
         Assert.Equal("dock-1", instance.Window);
-        Assert.Equal(DockPlacement.Window, instance.Placement);
+        Assert.Equal(DockPlacement.Center, instance.Placement);
         Assert.Equal("/work", instance.Request.StartAt);
         Assert.Empty(services.Docks.Snapshot().Docks);
     }
@@ -177,6 +184,156 @@ public sealed class WindowTests
     /// <returns>The label keys, in the order they are shown.</returns>
     private static string[] Items(HostServices services, string dockNameId) =>
         [.. services.Windows.DockMenuItems(DockMenuTarget.Tab, dockNameId).Select(item => item.LabelKey)];
+
+    /// <summary>
+    /// A dock moved into a window of its own is drawn in that window and in no other.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of moving one, and the one thing that cannot be checked by bookkeeping: the dock has
+    /// to end up on the tree of the window it was moved to, and off the tree of the window it left. A dock
+    /// that is in the right window and drawn nowhere is an empty window with a menu bar across the top —
+    /// which is what this test exists because it was once the case.
+    /// <para>
+    /// The window it arrives in is the one the shell names, which is the one the host last made, and that is
+    /// the window of the dock that was moved: what is checked is that the control went from the window it was
+    /// in to a window it was not, which is the whole of the defect this is here to keep out.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADockMovedIntoAWindowOfItsOwnIsDrawnInThatWindow()
+    {
+        var control = new Border();
+
+        var (services, disposed) = Windows();
+
+        try
+        {
+            var registration = new DockRegistration(
+                Core.Id,
+                "it.dock.visible",
+                "it_dock.title",
+                DockOpenMode.New,
+                DockPlacement.Center,
+                _ => new FakeDockView { Control = control }
+            );
+            services.Docks.Register(registration);
+
+            var instance = services.Docks.Activate(registration);
+
+            Assert.NotNull(instance);
+
+            var main = (MainWindow)services.Shell.Window!;
+
+            // Before the move it is drawn in the window that is up, which is what makes the check after it
+            // mean something: the same control, in another window.
+            var was = Window(control);
+
+            Assert.Same(main, was);
+
+            services.Windows.ToOwnWindow(instance);
+
+            var detached = (MainWindow)services.Shell.Window!;
+
+            Assert.True(control.IsAttachedToVisualTree(), "the dock is drawn somewhere");
+
+            // Drawn in a window of its own now, and not the one it was in: the control is on another window's
+            // tree, which is the whole of what tearing a dock out is.
+            var now = Window(control);
+
+            Assert.True(!ReferenceEquals(was, now), $"still drawn in the window it was moved out of: {detached.Tag}");
+        }
+        finally
+        {
+            foreach (var dispose in disposed)
+            {
+                dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// A window that is for a dock shows that dock's plugin's menus and the kernel's own.
+    /// </summary>
+    /// <remarks>
+    /// What a window of one dock is for is that dock, so a menu about a tree has nothing to say in a window
+    /// that holds a browser — while what the program itself has to say, which is the Window menu and the way
+    /// back to the main window, is said in every window there is.
+    /// <para>
+    /// Asked of the menu bar rather than of a window, because what a window shows is this question and
+    /// nothing else about windows: a row is what is drawn from the answer, and drawing one needs no
+    /// window.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AWindowForADockShowsThatDocksPluginMenusAndTheKernels()
+    {
+        var services = Host.Services();
+        var mine = new PluginId("it.mine");
+
+        services.Menu.AddTopLevel(Core.Id, -1, "menu.window", 100);
+        services.Menu.AddTopLevel(mine, 1, "rorolala_file_system.menu.operations", 50);
+        services.Menu.AddTopLevel(new PluginId("it.other"), 2, "rorolala_file_system.hidden", 60);
+
+        Assert.Equal(
+            ["rorolala_file_system.menu.operations", "rorolala_file_system.hidden", "menu.window"],
+            Keys(MainWindow.Visible(services.Menu, null))
+        );
+
+        Assert.Equal(
+            ["rorolala_file_system.menu.operations", "menu.window"],
+            Keys(MainWindow.Visible(services.Menu, mine))
+        );
+    }
+
+    /// <summary>The label keys of some top-level menus, in the order they are shown.</summary>
+    /// <param name="menus">The menus.</param>
+    /// <returns>Their label keys.</returns>
+    private static string[] Keys(IReadOnlyList<TopLevelMenu> menus) =>
+        [.. menus.Select(menu => menu.LabelKey)];
+
+    /// <summary>The window a control is drawn in, or nothing when it is in none.</summary>
+    /// <param name="control">The control.</param>
+    /// <returns>The window above it.</returns>
+    private static Window? Window(Control control)
+    {
+        for (Visual? at = control; at is not null; at = at.GetVisualParent())
+        {
+            if (at is Window window)
+            {
+                return window;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A host whose windows are real ones, so that what a dock ends up drawn in can be asked.
+    /// </summary>
+    /// <remarks>
+    /// The windows are the program's own — the shell a dock is drawn in, and everything that follows from it.
+    /// Nothing is closed at the end of a test that uses this: what is being read is where a control was put,
+    /// which is answered the moment it is put there, and a window closed from a test body is a window the
+    /// toolkit is still tearing down when the next test reads its tree.
+    /// </remarks>
+    /// <returns>Everything the host holds, and how to take the test's windows down.</returns>
+    private static (HostServices Services, IReadOnlyList<Action> Disposed) Windows()
+    {
+        var services = Host.Services();
+        var made = new List<MainWindow>();
+
+        services.Windows.Make = (key, dock) =>
+        {
+            var window = new MainWindow(services, key, dock);
+
+            services.Shell.Window = window;
+            made.Add(window);
+
+            return window;
+        };
+
+        return (services, []);
+    }
 
     /// <summary>A registration for a dock that may be made again, as a browser is.</summary>
     /// <param name="nameId">Its stable name id.</param>

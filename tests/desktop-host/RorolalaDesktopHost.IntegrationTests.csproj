@@ -21,6 +21,9 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Avalonia" Version="12.1.3" />
+    <!-- The platform the tests that make a window are run on: the toolkit's own window, drawing nothing and
+         showing nothing, so that what a window is made of is exercised rather than stood in for. -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.3" />
   </ItemGroup>
 
   <ItemGroup>
