@@ -281,6 +281,23 @@ internal sealed class DockManager
         );
 
     /// <summary>
+    /// One instance of a dock, told apart from its namesakes by its ordinal.
+    /// </summary>
+    /// <remarks>
+    /// How a drag names the instance it is carrying: a dock may be made again, so its name says which dock
+    /// it is and not which of them, and the ordinal is what the layout writes beside the name for the same
+    /// reason.
+    /// </remarks>
+    /// <param name="dockNameId">The dock's stable name id.</param>
+    /// <param name="ordinal">Which instance of that name.</param>
+    /// <returns>The instance, or nothing when that one is not open.</returns>
+    public DockInstance? InstanceOf(string dockNameId, int ordinal) =>
+        _instances.FirstOrDefault(instance =>
+            instance.Ordinal == ordinal
+            && string.Equals(instance.DockNameId, dockNameId, StringComparison.Ordinal)
+        );
+
+    /// <summary>
     /// Closes a dock: a toggle is hidden and kept, so showing it again is showing the same instance;
     /// a created instance is discarded.
     /// </summary>
@@ -290,17 +307,50 @@ internal sealed class DockManager
         if (instance.OpenMode == DockOpenMode.Toggle)
         {
             instance.IsOpen = false;
+            LetGo(instance);
+
+            return;
         }
-        else
+
+        Discard(instance);
+    }
+
+    /// <summary>
+    /// Lets go of an instance for good, whether or not its dock is one that is kept.
+    /// </summary>
+    /// <remarks>
+    /// What hides a toggle is <see cref="Close"/>, which leaves the instance where it is so that showing it
+    /// again is showing the same one. This is for an instance that must not be there at all: a second one of
+    /// a name that keeps only one, which is what a window of its own can come to hold when a dock is asked
+    /// for anew, and which is the instance a window of its own lets go of when a dock it cannot show twice
+    /// is brought back to the main window. Kept, it would be a hidden dock of that name that
+    /// <see cref="InstanceOf(string)"/> and the <c>Window</c> menu's toggle would both find first.
+    /// </remarks>
+    /// <param name="instance">The dock to let go of.</param>
+    public void Discard(DockInstance instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        if (!_instances.Remove(instance))
         {
-            _instances.Remove(instance);
+            return;
         }
 
-        // A view is let go of here, which is the moment a dock stops being a dock: it is held apart from
-        // every window it was drawn in — a dock closed from a window of its own is one whose control has
-        // already left the tree — and what it holds of the plugin's would otherwise outlive it.
-        (instance.View as IDisposable)?.Dispose();
+        LetGo(instance);
+    }
 
+    /// <summary>
+    /// Lets go of what a dock's view holds, and tells the windows it is gone.
+    /// </summary>
+    /// <remarks>
+    /// The view is let go of here, which is the moment a dock stops being a dock: it is held apart from every
+    /// window it was drawn in — a dock closed from a window of its own is one whose control has already left
+    /// the tree — and what it holds of the plugin's would otherwise outlive it.
+    /// </remarks>
+    /// <param name="instance">The dock that has stopped being one.</param>
+    private void LetGo(DockInstance instance)
+    {
+        (instance.View as IDisposable)?.Dispose();
         Raise();
     }
 

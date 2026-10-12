@@ -15,7 +15,7 @@ namespace RorolalaDesktop.Docking;
 
 /// <summary>
 /// The dock area: the regions a dock can be placed in, the headers that choose between them, and
-/// the dragging that moves one from a region to another.
+/// the dragging that moves one from a region to another, or into a window of its own.
 /// </summary>
 /// <remarks>
 /// A region keeps every dock it was given and shows one of them at a time, rather than rebuilding
@@ -27,12 +27,13 @@ namespace RorolalaDesktop.Docking;
 /// deliberate move is a drag, and that move is done by taking the dock out of one region and
 /// putting it in another, in that order.
 /// <para>
-/// Dragging a header shows where the dock would land before it is let go of: every region a drop could
-/// mean is drawn, and the one the pointer is over is picked out. A box is drawn where the region it
-/// stands for is — the band of the area that place in the layout has — so what a drag shows is where the
-/// dock will be rather than merely that something will happen. A region that is empty and taking no
-/// space is drawn too, at the size the layout remembers for it, which is the size it takes when the dock
-/// arrives.
+/// A header press becomes the toolkit's own drag (<see cref="DockDrag"/>), which is what lets a dock
+/// leave the window it was picked up in: the area a drag is carried over is asked where the dock would
+/// land, and shows it — every region a drop could mean is drawn, and the one the pointer is over is
+/// picked out. A box is drawn where the region it stands for is — the band of the area that place in
+/// the layout has — so what a drag shows is where the dock will be rather than merely that something
+/// will happen. A region that is empty and taking no space is drawn too, at the size the layout
+/// remembers for it, which is the size it takes when the dock arrives.
 /// </para>
 /// <para>
 /// A region with nothing open in it takes no space, and its splitter goes with it, so an empty left
@@ -113,8 +114,9 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// Part of Section 10: the strip, the menu bar and a toolbar are one height, so that the window
-    /// reads as a stack of bands of the same weight. See <see cref="MainWindow.DockHeaderHeight"/>, which is
-    /// what a window of one dock gives its row instead: no tabs, and the row is a little taller for it.
+    /// reads as a stack of bands of the same weight. A window of one dock has no strip at all — what it draws
+    /// is the dock itself, under the window's own row — so its row is the menu bar's height and this one
+    /// (<see cref="MainWindow.TitleBarHeight"/>) is not drawn there.
     /// </remarks>
     private const double StripHeight = 36;
 
@@ -144,9 +146,6 @@ internal sealed class DockArea : UserControl
     /// ground either side — so two docks read as one divider apart and still resize from five.
     /// </remarks>
     public const double SplitterSize = 5;
-
-    /// <summary>How far a pointer moves before a press becomes a drag rather than a click.</summary>
-    private const double DragThreshold = 4;
 
     /// <summary>How many pixels wide and tall a contributed mark is drawn in a menu item.</summary>
     /// <remarks>
@@ -250,14 +249,25 @@ internal sealed class DockArea : UserControl
     /// <summary>The zone each placement is drawn by.</summary>
     private readonly Dictionary<DockPlacement, Border> _lit = [];
 
-    /// <summary>The dock being dragged, if one is.</summary>
-    private DockInstance? _dragging;
+    /// <summary>
+    /// The drag the pointer is on, if it is on one.
+    /// </summary>
+    /// <remarks>
+    /// A press is written down here and nothing else: what a press becomes is the toolkit's drag, and the
+    /// gesture is this host's only until it has moved far enough to be one. It carries the window the dock
+    /// was picked up in, since that is what says whether a drag that lands nowhere tears a window out.
+    /// </remarks>
+    private DockDrag? _dragging;
 
-    /// <summary>Where the pointer was when the drag began.</summary>
-    private Point _from;
-
-    /// <summary>Whether the pointer has moved far enough to be dragging rather than clicking.</summary>
-    private bool _moved;
+    /// <summary>
+    /// Whether the boxes are up, which is while a drag that could land here is in flight.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than read off the drag, because the drag may have been picked up in another window: a
+    /// dock pulled out of a window of its own and carried over the main one is this area's to land, and
+    /// nothing of the gesture itself happened here.
+    /// </remarks>
+    private bool _zonesUp;
 
     /// <summary>
     /// Whether this area is following the docks, which is while it is on a tree.
@@ -301,6 +311,19 @@ internal sealed class DockArea : UserControl
             handledEventsToo: true
         );
         AddHandler(InputElement.PointerCaptureLostEvent, (_, _) => Cancel());
+
+        // A dock lands in a region, so a window that has regions takes a drag of one — and a window that is
+        // one dock does not: what it draws is the one dock it was made for, and there is no region in it to
+        // put another. Nothing is read here beyond where the drag is: what it carries, and whether the dock
+        // it carries may land, is asked where it arrives.
+        if (!Alone)
+        {
+            DragDrop.SetAllowDrop(this, true);
+            AddHandler(DragDrop.DragEnterEvent, Over);
+            AddHandler(DragDrop.DragOverEvent, Over);
+            AddHandler(DragDrop.DragLeaveEvent, Off);
+            AddHandler(DragDrop.DropEvent, Landed);
+        }
     }
 
     /// <summary>
@@ -318,10 +341,11 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// A window that is closed takes its area off the tree and keeps nothing: this area is the one that
-    /// holds a dock's control in a region of it, and a control held by a window that is gone is a control
-    /// that can never be put in another — the toolkit refuses to give it a second parent, and the dock is
-    /// stuck in a window nobody can see. That is what an area still holding placements for a closed window
-    /// does the next time the dock is opened anywhere.
+    /// holds a dock's control — in a region of it, or in the border a window of one dock draws its dock in —
+    /// and a control held by a window that is gone is a control that can never be put in another: the toolkit
+    /// refuses to give it a second parent, and the dock is stuck in a window nobody can see. That is what an
+    /// area still holding a dock for a closed window does the next time that dock is shown anywhere, which is
+    /// what a dock coming back to the main window is.
     /// <para>
     /// The listening is given up as well, and for the same reason: an area that is not on the tree is not
     /// drawing anything, and one that went on rebuilding itself for a window that is gone would be doing the
@@ -340,6 +364,16 @@ internal sealed class DockArea : UserControl
 
         _listening = false;
         _manager.Changed -= Rebuild;
+
+        // A window of one dock places nothing: what it draws is the one dock it was made for, put straight
+        // into the border that holds it, and the letting go of that is here rather than in the loop below
+        // because it is not a placement — there is no region to take it out of.
+        if (Alone)
+        {
+            _alone.Child = null;
+
+            return;
+        }
 
         foreach (var (instance, placed) in _placed.ToArray())
         {
@@ -1201,16 +1235,16 @@ internal sealed class DockArea : UserControl
     }
 
     /// <summary>
-    /// Remembers that a drag may have started on a header.
+    /// Remembers that a press may have started a drag.
     /// </summary>
     /// <remarks>
     /// A press is not a drag: what separates the two is how far the pointer goes before it is let
     /// go of, which is why nothing is done here but writing down where it started.
     /// <para>
-    /// Which button asked for the gesture is settled at the release rather than here. What a
+    /// Which button asked for the gesture is settled when the pointer moves rather than here. What a
     /// pointer event says about its own buttons at the moment of the press is not to be trusted —
-    /// reading it there is what kept the drag from starting at all — and the release knows what
-    /// began the gesture without having to be told.
+    /// reading it there is what kept the drag from starting at all — and the move knows what is held
+    /// without having to be told.
     /// </para>
     /// <para>
     /// The dock is the one named by the header that was pressed, or — from the strip's drag area —
@@ -1219,71 +1253,116 @@ internal sealed class DockArea : UserControl
     /// </remarks>
     private void Take(DockInstance? instance, PointerPressedEventArgs e)
     {
-        _dragging = instance;
-        _from = e.GetPosition(this);
-        _moved = false;
-    }
-
-    /// <summary>Lights the zone a dragged dock would land in.</summary>
-    private void OnPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (_dragging is null)
+        if (instance is null)
         {
+            _dragging = null;
+
             return;
         }
 
-        var at = e.GetPosition(this);
-
-        if (!_moved)
-        {
-            if (Distance(at, _from) < DragThreshold)
-            {
-                return;
-            }
-
-            _moved = true;
-        }
-
-        Preview(ZoneFor(at));
+        _dragging = new DockDrag(_windows, instance, _window);
+        _dragging.Take(e, this);
     }
 
-    /// <summary>Lands a dragged dock in the region it was let go of over, or closes it on a middle click.</summary>
+    /// <summary>
+    /// Follows the pointer, and hands a dock it has taken hold of over to the platform.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is drawn here: what a drag looks like over this area is said by the drag itself, which asks
+    /// the area it is over where it would land — including, for a dock picked up here, the area it was
+    /// picked up in.
+    /// </remarks>
+    /// <param name="sender">The area.</param>
+    /// <param name="e">The move.</param>
+    private void OnPointerMoved(object? sender, PointerEventArgs e) => _dragging?.Follow(e, this);
+
+    /// <summary>Closes the dock a middle click was let go of on, and forgets a gesture that was not one.</summary>
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        var instance = _dragging;
-        var moved = _moved;
-        var at = e.GetPosition(this);
-        var button = e.InitialPressMouseButton;
+        var instance = _dragging?.Instance;
 
         Cancel();
 
-        if (instance is null)
-        {
-            return;
-        }
-
         // The middle button is the gesture that closes a dock: a header is where a dock is grabbed,
-        // so it is where one is let go of for good.
-        if (button == MouseButton.Middle)
+        // so it is where one is let go of for good. A left release is the toolkit's drag or a click, and
+        // both are answered without this: a drag that landed has already been moved, and a click selects.
+        if (instance is not null && e.InitialPressMouseButton == MouseButton.Middle)
         {
             _manager.Close(instance);
-
-            return;
-        }
-
-        // A press that never moved is a click, and selecting the dock is what a click means; a
-        // release belonging to another button ends the gesture without moving anything.
-        if (button == MouseButton.Left && moved && ZoneFor(at) is { } placement)
-        {
-            _manager.Move(instance, placement);
         }
     }
 
     /// <summary>Forgets a drag that is over, whatever ended it.</summary>
-    private void Cancel()
+    private void Cancel() => _dragging = null;
+
+    /// <summary>Shows where a dragged dock would land, and says whether it may land here.</summary>
+    /// <remarks>
+    /// A drag this area did not begin is answered here as much as one it did: a dock is carried out of one
+    /// window and let go of in another, and the window it arrives in is the one that has to say where it
+    /// goes. A drag carrying something else — files, paths, another program's data — is left unanswered, so
+    /// that what is under the pointer answers it instead: a listing reads text as paths, and one that is
+    /// being dragged over is a listing's to light up.
+    /// </remarks>
+    /// <param name="sender">The area.</param>
+    /// <param name="e">The drag.</param>
+    private void Over(object? sender, DragEventArgs e)
     {
-        _dragging = null;
-        _moved = false;
+        if (DockDrag.Carried(_manager, e.DataTransfer) is null)
+        {
+            return;
+        }
+
+        var placement = ZoneFor(e.GetPosition(this));
+
+        _zonesUp = true;
+        Preview(placement);
+
+        e.DragEffects = placement is null ? DragDropEffects.None : DragDropEffects.Move;
+        e.Handled = placement is not null;
+
+        // Told to the host's windows rather than kept here, because whether the pointer was over a region is
+        // one answer for the whole host: the window a drag began in is the one that asks it when the drag
+        // ends, and it is not this area.
+        _windows.OverArea = placement is not null;
+    }
+
+    /// <summary>Takes the boxes down when a drag leaves, and says the pointer is over no region.</summary>
+    /// <param name="sender">The area.</param>
+    /// <param name="e">The drag.</param>
+    private void Off(object? sender, DragEventArgs e)
+    {
+        Clear();
+        _windows.OverArea = false;
+    }
+
+    /// <summary>Lands a dragged dock in the region it was let go of over.</summary>
+    /// <param name="sender">The area.</param>
+    /// <param name="e">The drop.</param>
+    private void Landed(object? sender, DragEventArgs e)
+    {
+        var instance = DockDrag.Carried(_manager, e.DataTransfer);
+
+        Clear();
+
+        if (instance is null || ZoneFor(e.GetPosition(this)) is not { } placement)
+        {
+            return;
+        }
+
+        e.DragEffects = DragDropEffects.Move;
+        e.Handled = true;
+        _windows.OverArea = false;
+
+        // This area's window, which is what says where the dock arrived: one dragged out of a window of its
+        // own and let go of over the main window is moved into the main window, and one let go of where it
+        // already was is not moved at all. What a window may not show twice is the windows' own answer.
+        _windows.Land(instance, placement, _window);
+    }
+
+    /// <summary>Brings the boxes down and says no region is being aimed at.</summary>
+    private void Clear()
+    {
+        _zonesUp = false;
         Preview(null);
     }
 
@@ -1321,9 +1400,10 @@ internal sealed class DockArea : UserControl
     /// drawn at a time would be one choice shown and four unknown. The one being aimed at takes a class
     /// rather than a colour, so that what being aimed at looks like is the look's to decide.
     /// </remarks>
+    /// <param name="target">The region the pointer is over, or nothing.</param>
     private void Preview(DockPlacement? target)
     {
-        var boxes = _dragging is null ? null : Boxes();
+        var boxes = _zonesUp ? Boxes() : null;
 
         foreach (var (placement, zone) in _lit)
         {
@@ -1360,15 +1440,6 @@ internal sealed class DockArea : UserControl
             DockPlacement.Bottom => _bottom,
             _ => _center,
         };
-
-    /// <summary>How far apart two points are.</summary>
-    private static double Distance(Point left, Point right)
-    {
-        var x = left.X - right.X;
-        var y = left.Y - right.Y;
-
-        return Math.Sqrt((x * x) + (y * y));
-    }
 
     /// <summary>A header: a small button that names, commands, or closes a dock.</summary>
     /// <remarks>

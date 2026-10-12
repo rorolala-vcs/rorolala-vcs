@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
@@ -145,6 +146,20 @@ internal sealed class DockWindows : IWindows
 
     /// <summary>Whether the main window is up.</summary>
     public bool MainIsUp => _main is not null;
+
+    /// <summary>
+    /// Whether the drag in flight was over a dock area of one of the host's windows the last time an area
+    /// heard about it.
+    /// </summary>
+    /// <remarks>
+    /// What a drag that ended in no drop is read as: a drag the host last heard of over a region was one that
+    /// ended without a drop there, which is a drag called off rather than let go of, while one it last heard of
+    /// nowhere was let go of in the open — and a dock let go of in the open is a dock the user pulled out of
+    /// the window it was in. The platform says the same thing about both, since neither landed anywhere, so
+    /// the last thing an area heard is what tells them apart. Written by whichever area hears the drag, which
+    /// is why it is here and not in the drag itself.
+    /// </remarks>
+    public bool OverArea { get; set; }
 
     /// <summary>
     /// The main window.
@@ -302,6 +317,173 @@ internal sealed class DockWindows : IWindows
         {
             Bring(opened);
         }
+    }
+
+    /// <summary>
+    /// Takes a dock by the pointer: hands it to the platform, and lands what comes back.
+    /// </summary>
+    /// <remarks>
+    /// A drag that no region took is a dock the user pulled out of the window it was in, so it becomes a
+    /// window of its own — which is the whole of what letting go of a header away from every region means. A
+    /// dock in a window of its own has nothing to tear out of: the window it is in is already its own, so a
+    /// drag of it that lands nowhere leaves it where it is.
+    /// <para>
+    /// A drag whose pointer was over a region when it ended, and which no region dropped, is one that was
+    /// called off rather than let go of, and a dock that was never let go of stays where it was.
+    /// </para>
+    /// <para>
+    /// A platform that will not carry a drag at all — a toolkit given no drag of its own — leaves the dock
+    /// where it was as well: the gesture never reached anything, and a window nobody asked for is worse than
+    /// a drag that did nothing.
+    /// </para>
+    /// </remarks>
+    /// <param name="instance">The dock the pointer took hold of.</param>
+    /// <param name="from">The press the drag begins at.</param>
+    /// <param name="window">The window it was picked up in, or nothing for the main one.</param>
+    public async void PickUp(DockInstance instance, PointerPressedEventArgs from, string? window)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        ArgumentNullException.ThrowIfNull(from);
+
+        OverArea = false;
+
+        DragDropEffects applied;
+
+        try
+        {
+            applied = await DockDrag.Away(from, instance);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _log.Record(
+                LogLevel.Warn,
+                Core.Source,
+                $"`{instance.DockNameId}` could not be dragged: {error.Message}"
+            );
+
+            return;
+        }
+
+        var over = OverArea;
+
+        OverArea = false;
+
+        if (applied != DragDropEffects.None || over || window is not null)
+        {
+            return;
+        }
+
+        // A dock that is no longer one of the manager's — closed from its tab, or by its view, while the
+        // pointer was still holding it — has no window to be torn into: what would be made is a window of a
+        // dock that is gone.
+        if (!_docks.Instances.Contains(instance))
+        {
+            return;
+        }
+
+        ToOwnWindow(instance);
+    }
+
+    /// <summary>
+    /// Lands a dragged dock in a region of one of the host's windows.
+    /// </summary>
+    /// <remarks>
+    /// The same judgement <see cref="MoveToMain"/> makes, because a dock dropped on the main window is the
+    /// same thing asked for with the hand: a dock that keeps one instance of its own, where that window
+    /// already shows it, is not moved in — the dock is already there, so what is let go of is the instance
+    /// that was being dragged, and the window it came from goes with it.
+    /// <para>
+    /// A drag let go of over the region it was already in is not a move at all, which is
+    /// <see cref="DockManager.Move"/>'s own answer rather than a second one here.
+    /// </para>
+    /// </remarks>
+    /// <param name="instance">The dock that was dragged.</param>
+    /// <param name="placement">The region it was let go of over.</param>
+    /// <param name="window">The window it was let go of in, or nothing for the main one.</param>
+    public void Land(DockInstance instance, DockPlacement placement, string? window)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        if (WouldDouble(instance, window))
+        {
+            _docks.Discard(instance);
+
+            return;
+        }
+
+        _docks.Move(instance, placement, window);
+    }
+
+    /// <summary>
+    /// Brings a dock back to the main window, which is what a window of its own offers.
+    /// </summary>
+    /// <remarks>
+    /// The main window is where a dock of its own came from, so it is what it goes back to — and it is opened
+    /// first where it is not up, because a dock brought back to a window that is not there would be no better
+    /// off than it was.
+    /// <para>
+    /// A dock that keeps one instance of its own, where the main window already shows that dock, is the one
+    /// thing this cannot do: the two are one dock, and moving this instance in would leave two of a name that
+    /// may have one. What is let go of is the instance in the window of its own, and that window with it —
+    /// what the user asked for is already the case, and a window of a dock the main window already holds is
+    /// the only thing left over.
+    /// </para>
+    /// </remarks>
+    /// <param name="instance">The dock to bring back.</param>
+    public void MoveToMain(DockInstance instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        if (instance.Window is null)
+        {
+            return;
+        }
+
+        OpenMain();
+
+        if (WouldDouble(instance, null))
+        {
+            _docks.Discard(instance);
+
+            return;
+        }
+
+        // The region it is in is the region it goes back to: a window of its own was a change of window and
+        // not of region, which is what a dock dragged out of a band and back finds again.
+        _docks.Move(instance, instance.Placement, null);
+    }
+
+    /// <summary>
+    /// Whether a dock may not be shown where it is going, because it is already shown there.
+    /// </summary>
+    /// <remarks>
+    /// A dock that keeps one instance of its own is one dock wherever its instances are, so a second one of
+    /// those in the main window is one too many: what a move would leave is two docks of a name that may have
+    /// one, and the <c>Window</c> menu's toggle would find the wrong one of them.
+    /// </remarks>
+    /// <param name="instance">The dock that is going somewhere.</param>
+    /// <param name="window">Where it is going, or nothing for the main window.</param>
+    /// <returns>Whether that window already shows it.</returns>
+    private bool WouldDouble(DockInstance instance, string? window)
+    {
+        if (instance.OpenMode != DockOpenMode.Toggle)
+        {
+            return false;
+        }
+
+        // A window of one dock is not a place two docks are put in: what it holds is the dock it was made
+        // for, so nothing can double there.
+        if (window is not null)
+        {
+            return false;
+        }
+
+        return _docks.Instances.Any(one =>
+            !ReferenceEquals(one, instance)
+            && one.IsOpen
+            && one.Window is null
+            && string.Equals(one.DockNameId, instance.DockNameId, StringComparison.Ordinal)
+        );
     }
 
     /// <summary>The registration a stable name id names, or nothing.</summary>
@@ -542,19 +724,25 @@ internal sealed class DockWindows : IWindows
     }
 
     /// <summary>
-    /// Closes the windows of docks that are gone.
+    /// Closes the windows of docks that are gone, or that have moved into another window.
     /// </summary>
     /// <remarks>
     /// A window of a dock's own is a window of that dock: a dock that was closed from its tab, or closed
     /// from the window's own button, leaves a window with nothing to draw in, and the window goes with it.
-    /// The main window is not closed here — it is not for any one dock — and neither is a window whose dock
-    /// is merely hidden, since a hidden dock is one that is still there.
+    /// So does a dock that left for another window — one brought back to the main window, or landed in a
+    /// region of it — since what a window of one dock draws is that dock and nothing else, and a window left
+    /// standing would be a frame around a dock that is drawn somewhere else. The main window is not closed
+    /// here — it is not for any one dock — and neither is a window whose dock is merely hidden, since a
+    /// hidden dock is one that is still there.
     /// </remarks>
     private void Settle()
     {
         foreach (var (key, instance) in _held.ToArray())
         {
-            if (_docks.Instances.Contains(instance))
+            if (
+                _docks.Instances.Contains(instance)
+                && string.Equals(instance.Window, key, StringComparison.Ordinal)
+            )
             {
                 continue;
             }
