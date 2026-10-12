@@ -1,0 +1,23 @@
+[package]
+name = "rola-jj"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Jujutsu's command line and the library under it, without their default features: the Git backend
+# and watchman are left out (`default-features = false`), so nothing here reads or writes a Git
+# repository, and what a repository's objects are kept in is rola's own backend.
+jj-cli.workspace = true
+jj-lib.workspace = true
+
+# What the backend trait is written in: its methods are `async` under this attribute, and the types
+# they hand back are `futures`'.
+async-trait.workspace = true
+futures.workspace = true
+
+# The I/O driver of the runtime jj's command line builds for itself, named here because jj-cli's own
+# tokio features do not reach it everywhere: tokio enables that driver for `net`, or for `process`
+# and `signal` *on Unix*, and what jj-cli declares is `process` — so on Windows the driver is off and
+# `jj-cli` does not compile. It is one feature more of a dependency already in the graph, and not a
+# second tokio.
+tokio = { workspace = true, features = ["net"] }

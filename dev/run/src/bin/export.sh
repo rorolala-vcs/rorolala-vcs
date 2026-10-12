@@ -28,9 +28,13 @@ fi
 cp "$HEADER" "$BUILD_DIR/lib/rorolala.h"
 cp "$HEADER" "$BUILD_DIR/lib/rorolala.hpp"
 
-for program in $PROGRAMS; do
+# Every program is laid down beside the others, so that a word of `rola`'s reaches the program it
+# names — `rola jj` is `rola-jj` — and the completions are laid down for the programs that have them.
+for program in $PROGRAMS $PROGRAMS_WITHOUT_COMPLETIONS; do
 	cp "$RELEASE_DIR/$program$EXE_SUFFIX" "$BUILD_DIR/bin/$program$EXE_SUFFIX"
+done
 
+for program in $PROGRAMS; do
 	mkdir -p "$SCRIPTS_DIR/$program"
 	for shell in $COMPLETION_SHELLS; do
 		cp "$COMPLETION_DIR/${program}_comp.$shell" \

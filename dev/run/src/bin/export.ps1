@@ -28,9 +28,13 @@ if ($CargoImport) {
 Copy-Item -Force $Header "$BuildDir/lib/rorolala.h"
 Copy-Item -Force $Header "$BuildDir/lib/rorolala.hpp"
 
-foreach ($program in $Programs) {
+# Every program is laid down beside the others, so that a word of `rola`'s reaches the program it
+# names — `rola jj` is `rola-jj` — and the completions are laid down for the programs that have them.
+foreach ($program in $Programs + $ProgramsWithoutCompletions) {
     Copy-Item -Force "$ReleaseDir/$program$ExeSuffix" "$BuildDir/bin/$program$ExeSuffix"
+}
 
+foreach ($program in $Programs) {
     New-Item -ItemType Directory -Force -Path "$ScriptsDir/$program" | Out-Null
     foreach ($shell in $CompletionShells) {
         Copy-Item -Force "$CompletionDir/${program}_comp.$shell" "$ScriptsDir/$program/$program-completion.$shell"

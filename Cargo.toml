@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "app/cli/rola",
     "app/cli/rola-daemon",
+    "app/cli/rola-jj",
     "app/cli/setups",
     "app/ffi",
     "dev/bindgen",
@@ -39,10 +40,24 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+# Jujutsu, which `rola-jj` is: its command line and the library under it, both depended on without
+# their default features — the Git backend and watchman are what `default-features = false` leaves
+# out — because what a rola repository is is rola's to say and not Git's (see `app/cli/rola-jj`).
+#
+# `async-trait` and `futures` are named here as well as there because the backend trait is written
+# in their terms: its methods are `async` under `#[async_trait]`, and what they hand back is
+# `futures`' own `AsyncRead` and `BoxStream`. A version other than jj's own would be a second
+# spelling of the same trait.
+async-trait = "0.1.89"
+futures = "0.3.32"
+jj-cli = { version = "0.46.0", default-features = false }
+jj-lib = { version = "0.46.0", default-features = false }
+
 # Members
 librorolala = { path = "." }
 rola = { path = "app/cli/rola" }
 rola-daemon = { path = "app/cli/rola-daemon" }
+rola-jj = { path = "app/cli/rola-jj" }
 rorolala-auth = { path = "modules/auth" }
 rorolala-cli-setups = { path = "app/cli/setups" }
 rorolala-daemon = { path = "modules/daemon" }

@@ -57,6 +57,13 @@ COMPLETION_SHELLS="sh zsh fish ps1"
 # refer to their own file name, so the exported name is free.
 PROGRAMS="rola rola-daemon"
 
+# The command line programs that bring no completion scripts of their own: `rola-jj` answers with
+# jj's command line, which is parsed by clap rather than by mingling, so the scripts
+# `gen_program!()` writes are not its to have. It is built and laid out beside the others all the
+# same — `rola jj` reaches it where they are — and the two lists are told apart only by what an
+# export copies for them.
+PROGRAMS_WITHOUT_COMPLETIONS="rola-jj"
+
 # The .NET side of the workspace as one solution: the Desktop program, the translations it reads,
 # and the tests of those translations.
 SOLUTION=RorolalaSharp.sln
