@@ -311,10 +311,17 @@ pub fn generate(config: &Config<'_>) -> Result<PathBuf, Error> {
     })?;
 
     let path = config.output_dir.join(HEADER_NAME);
-    fs::write(&path, header).map_err(|source| Error::Io {
-        path: path.clone(),
-        source,
-    })?;
+
+    // Written only when it differs, for the reason the C# binding is: a generated file whose bytes
+    // are already there is left alone, so a build that changed nothing leaves the timestamps of the
+    // tree where they were — and a timestamp that moved is what makes the next build recompile what
+    // reads it.
+    if !fs::read(&path).is_ok_and(|written| written == header.as_bytes()) {
+        fs::write(&path, header).map_err(|source| Error::Io {
+            path: path.clone(),
+            source,
+        })?;
+    }
 
     Ok(path)
 }

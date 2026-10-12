@@ -33,6 +33,12 @@
     header is the Rust side's output, which is why the Rust side has to have been built first; a build
     of this project alone, before any Rust build, has nothing to read.
 
+    The generator writes the binding only when it differs, so a build that changed nothing leaves the
+    file's timestamp — and therefore the Rust side, which watches the tree it sits in — where it was.
+    Skipping the cargo run itself is left out on purpose: an up-to-date check would have to compare
+    the header, which this generator does not rewrite when its bytes are unchanged, and a check that
+    could keep a regenerated binding from being read is worse than 190 ms of cargo.
+
     Not run for a design-time build: an IDE puts the project questions many times as a person types,
     and cargo is not a question. The file is checked in, so the IDE reads the last one written.
   -->

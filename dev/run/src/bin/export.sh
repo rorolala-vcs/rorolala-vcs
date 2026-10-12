@@ -42,6 +42,11 @@ for program in $PROGRAMS; do
 	done
 done
 
+# The whole solution is restored and built once for everything below rather than a project at a time:
+# the restore is shared, and one MSBuild over the solution is what builds the host, the plugins and the
+# bindings together.
+build_solution
+
 publish_desktop "$DESKTOP_DIR"
 publish_plugins
 

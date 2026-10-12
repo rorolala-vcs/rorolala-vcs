@@ -205,6 +205,14 @@ pub fn generate(config: &Config<'_>) -> Result<PathBuf, Error> {
         })?;
     }
 
+    // Written only when it differs, because the file is watched: the binding sits under `modules`,
+    // which the workspace's build script names in `rerun-if-changed`, so writing the same bytes
+    // again would make every build after this one rebuild the library — and this one runs before
+    // each .NET build, so that would be every export.
+    if fs::read(config.binding).is_ok_and(|written| written == csharp.as_bytes()) {
+        return Ok(config.binding.to_path_buf());
+    }
+
     fs::write(config.binding, csharp).map_err(|error| Error::Io {
         path: config.binding.to_path_buf(),
         source: error,

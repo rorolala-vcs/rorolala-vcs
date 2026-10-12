@@ -41,7 +41,16 @@ foreach ($program in $Programs) {
     }
 }
 
+# The whole solution is restored and built once for everything below rather than a project at a time:
+# the restore is shared, and one MSBuild over the solution is what builds the host, the plugins and the
+# bindings together.
+Build-Solution
+
 Publish-Desktop $DesktopDir
 Publish-Plugins
+
+# The C# bindings beside the native library they bind, under `lib/` where a consumer of the C ABI looks
+# for both.
+Publish-Rsharp
 
 icacls .\build /setintegritylevel '(OI)(CI)M' /T /C /Q

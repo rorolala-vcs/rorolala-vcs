@@ -12,5 +12,10 @@ $ErrorActionPreference = 'Stop'
 
 Invoke-Script lib
 
+# The whole solution is restored and built once for the two layouts below rather than a project at a
+# time: the restore is shared, and one MSBuild over the solution is what builds the host and the
+# plugins together.
+Build-Solution
+
 Publish-Desktop $DesktopDir
 Publish-Plugins

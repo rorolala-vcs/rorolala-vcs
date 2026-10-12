@@ -94,19 +94,42 @@ $ScriptsDir = "$BuildDir/scripts"
 $DesktopProject = 'app/desktop/Core/RorolalaDesktop.csproj'
 $DesktopDir = "$BuildDir/bin/desktop"
 
-# The plugins that ship with the Desktop program. Each is a project of its own, built apart from the
-# program that discovers it, and laid out only when something is run or handed over. The name of the
-# directory holding the project is also the assembly's name, which is what says which files to take
-# from the output it was built into.
+# The plugins that ship with the Desktop program, taken from the tree rather than listed anywhere.
+#
+# A plugin is a project under `Plugins/`, one directory to one plugin, and the name of the directory is
+# also the assembly's name — which is what says which files to take from the output it was built into.
+# The program finds its plugins by looking at what is beside it, so the tree is the one place a plugin
+# is declared: a directory added there is one these scripts build and lay down, and none of them has to
+# be told about it.
 #
 # The source tree spells the directory `Plugins` and the program spells the directory it scans
 # `plugins`; the two are deliberately not made to match. What a program looks in is its own business,
 # and the tree's spelling is the tree's.
-$DesktopPlugins = @(
-    'app/desktop/Plugins/FileSystemPlugin'
-    'app/desktop/Plugins/RorolalaVCSPlugin'
-    'app/desktop/Plugins/GitVCSPlugin'
-)
+function Get-DesktopPlugins {
+    Get-ChildItem -Path 'app/desktop/Plugins' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        # A project is named after the directory it sits in, so anything else in there is not one.
+        $project = Join-Path $_.FullName "$($_.Name).csproj"
+
+        if (Test-Path $project) {
+            $project
+        }
+    }
+}
+
+# Restores and builds the whole solution once for everything the .NET side of an export is made of.
+#
+# A restore is per solution rather than per project, and a project restored on its own is the same
+# packages resolved over again — which one export pays once per project, four times over, for nothing.
+# And what the projects are is the solution's own list, so nothing here names them: the host, the
+# plugins and the C# bindings are all projects the solution already has, and a plugin added to the tree
+# is one it already names.
+function Build-Solution {
+    & $DotnetProgram @DotnetFlags restore $Solution
+    Assert-Exit
+
+    & $DotnetProgram @DotnetFlags build $Solution -c Release --no-restore
+    Assert-Exit
+}
 
 # PowerShell carries on after a native command that failed, which is the opposite of what a gate
 # wants: `set -e` stops the shell scripts, and this is what stops a script here. It is called after
@@ -138,7 +161,7 @@ function Invoke-Script {
 function Publish-Desktop {
     param([Parameter(Mandatory = $true, Position = 0)][string] $Into)
 
-    & $DotnetProgram @DotnetFlags publish $DesktopProject -c Release -o $Into
+    & $DotnetProgram @DotnetFlags publish $DesktopProject -c Release --no-restore -o $Into
     Assert-Exit
 
     # The native library the Desktop's own bindings reach for, beside the program that binds it: a
@@ -152,13 +175,13 @@ function Publish-Desktop {
 # contract and Avalonia the plugin was built against are the host's own copies, delegated to rather
 # than carried, so laying them down would be laying down a second of each — but a dependency the host
 # does not carry is the plugin's own and travels with it.
+# One MSBuild over the solution is what builds the host and the plugins; what is left here is laying
+# each plugin where the program looks for it, which is files: its assembly, its translations and any
+# private dependency under `plugins/` beside the program.
 function Publish-Plugins {
-    foreach ($project in $DesktopPlugins) {
-        $name = Split-Path -Leaf $project
+    foreach ($project in Get-DesktopPlugins) {
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($project)
         $output = "$CsTargetDir/$name/bin/Release/net8.0"
-
-        & $DotnetProgram @DotnetFlags build "$project/$name.csproj" -c Release
-        Assert-Exit
 
         New-Item -ItemType Directory -Force -Path "$DesktopDir/plugins" | Out-Null
         Copy-Item -Force "$output/$name.dll" "$DesktopDir/plugins/"
@@ -171,6 +194,19 @@ function Publish-Plugins {
             Copy-Item -Force "$output/RolaSharp.dll" "$DesktopDir/plugins/"
         }
     }
+}
+
+# The C# bindings to the C ABI: a module of its own rather than part of the Desktop program, because
+# what reaches the ABI is not the desktop's concern. An export hands the assembly over beside the
+# native library it binds, since a consumer of the two takes them together.
+$RsharpProject = 'modules/rola-sharp/RolaSharp.csproj'
+$RsharpDll = "$CsTargetDir/RolaSharp/bin/Release/net8.0/RolaSharp.dll"
+
+# Lays the C# bindings down, beside the native library they bind, under `lib/` where a consumer of the
+# C ABI looks for both. Nothing is built here: it is a project of the solution, and built rather than
+# published even there — it is a library with nothing beside it.
+function Publish-Rsharp {
+    Copy-Item -Force $RsharpDll "$BuildDir/lib/RolaSharp.dll"
 }
 
 # `export` and `clean` delete a destination with `Remove-Item -Recurse`, so refuse a path that would

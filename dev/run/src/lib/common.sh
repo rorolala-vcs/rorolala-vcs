@@ -97,15 +97,27 @@ SCRIPTS_DIR="$BUILD_DIR/scripts"
 DESKTOP_PROJECT=app/desktop/Core/RorolalaDesktop.csproj
 DESKTOP_DIR="$BUILD_DIR/bin/desktop"
 
-# The plugins that ship with the Desktop program. Each is a project of its own, built apart from the
-# program that discovers it, and laid out only when something is run or handed over. The name of the
-# directory holding the project is also the assembly's name, which is what says which files to take
-# from the output it was built into.
+# The plugins that ship with the Desktop program, taken from the tree rather than listed anywhere.
+#
+# A plugin is a project under `Plugins/`, one directory to one plugin, and the name of the directory is
+# also the assembly's name — which is what says which files to take from the output it was built into.
+# The program finds its plugins by looking at what is beside it, so the tree is the one place a plugin
+# is declared: a directory added there is one these scripts build and lay down, and none of them has to
+# be told about it.
 #
 # The source tree spells the directory `Plugins` and the program spells the directory it scans
 # `plugins`; the two are deliberately not made to match. What a program looks in is its own business,
 # and the tree's spelling is the tree's.
-DESKTOP_PLUGINS="app/desktop/Plugins/FileSystemPlugin app/desktop/Plugins/RorolalaVCSPlugin app/desktop/Plugins/GitVCSPlugin"
+desktop_plugins() {
+	for directory in app/desktop/Plugins/*/; do
+		name=$(basename "$directory")
+
+		# A project is named after the directory it sits in, so anything else in there is not one.
+		if [ -f "$directory$name.csproj" ]; then
+			printf '%s\n' "$directory$name.csproj"
+		fi
+	done
+}
 
 # The C# bindings to the C ABI: a module of its own rather than part of the Desktop program, because
 # what reaches the ABI is not the desktop's concern. The file it compiles is generated on every build
@@ -120,11 +132,24 @@ again() {
 	"$RUN" "$@"
 }
 
+# Restores and builds the whole solution once for everything the .NET side of an export is made of.
+#
+# A restore is per solution rather than per project, and a project restored on its own is the same
+# packages resolved over again — which one export pays once per project, four times over, for nothing.
+# And what the projects are is the solution's own list, so nothing here names them: the host, the
+# plugins and the C# bindings are all projects the solution already has, and a plugin added to the tree
+# is one it already names. `restore` is the offline-first one above, so the build that follows it is
+# told not to ask the feed again.
+build_solution() {
+	restore "$SOLUTION"
+	# shellcheck disable=SC2086
+	$DOTNET build "$SOLUTION" -c Release --no-restore
+}
+
 # Publishes the Desktop program into the directory named. `dotnet publish` is the form that produces
 # a program with everything beside it that running it needs, which is what an export holds; a plain
 # build leaves a program whose dependencies are still only in the build tree.
 publish_desktop() {
-	restore "$DESKTOP_PROJECT"
 	# shellcheck disable=SC2086
 	$DOTNET publish "$DESKTOP_PROJECT" -c Release --no-restore -o "$1"
 
@@ -135,19 +160,18 @@ publish_desktop() {
 	cp "$RELEASE_DIR/$CARGO_SHARED" "$1/"
 }
 
-# Builds each plugin that ships with the Desktop program and lays it where the program looks for it:
-# its assembly, its translations and any private dependency under `plugins/` beside the program. The
-# contract and Avalonia the plugin was built against are the host's own copies, delegated to rather
-# than carried, so laying them down would be laying down a second of each — but a dependency the host
-# does not carry is the plugin's own and travels with it.
+# Lays each plugin that ships with the Desktop program where the program looks for it: its assembly,
+# its translations and any private dependency under `plugins/` beside the program. The contract and
+# Avalonia the plugin was built against are the host's own copies, delegated to rather than carried, so
+# laying them down would be laying down a second of each — but a dependency the host does not carry is
+# the plugin's own and travels with it.
+#
+# Nothing is built here: a plugin is a project of the solution ([`build_solution`]), so what is left is
+# what the program reads, which is files.
 publish_plugins() {
-	for project in $DESKTOP_PLUGINS; do
-		name=$(basename "$project")
+	for project in $(desktop_plugins); do
+		name=$(basename "$project" .csproj)
 		output="$CS_TARGET_DIR/$name/bin/Release/net8.0"
-
-		restore "$project/$name.csproj"
-		# shellcheck disable=SC2086
-		$DOTNET build "$project/$name.csproj" -c Release --no-restore
 
 		mkdir -p "$DESKTOP_DIR/plugins"
 		cp "$output/$name.dll" "$DESKTOP_DIR/plugins/"
@@ -166,14 +190,10 @@ publish_plugins() {
 	done
 }
 
-# Builds the C# bindings and lays the assembly down. Built rather than published: it is a library with
-# nothing beside it — the library it binds is the export's own `lib/` — so `dotnet publish` would only
-# copy it into a directory of its own to be moved again. The build regenerates `RorolalaBinding.cs`
-# from the header on the way through, which is what makes the export's bindings the export's header.
+# Lays the C# bindings down. Nothing is built here either: it is a project of the solution, and built
+# rather than published even there — it is a library with nothing beside it, since the library it binds
+# is the export's own `lib/`.
 publish_rsharp() {
-	restore "$RSHARP_PROJECT"
-	# shellcheck disable=SC2086
-	$DOTNET build "$RSHARP_PROJECT" -c Release --no-restore
 	cp "$RSHARP_DLL" "$BUILD_DIR/lib/RolaSharp.dll"
 }
 

@@ -86,13 +86,12 @@ fn main() {
 
     let out_file = out_dir.join(OUTPUT_FILE);
 
-    // Written only when it differs, because the file is watched: writing the same bytes again would
-    // be a build script that changes its own input and so runs again on every build after it.
+    // Written only when it differs, because the file is read by a crate that is compiled after this:
+    // `rola` embeds it with `include_str!` for `rola version`, so rewriting the same bytes would
+    // move its timestamp and recompile the program that reads it, on every build.
     if !std::fs::read(&out_file).is_ok_and(|written| written == json.as_bytes()) {
         std::fs::write(&out_file, json).expect("failed to write output JSON file");
     }
-
-    println!("cargo:rerun-if-changed={}", out_file.display());
 
     generate_c_header();
     generate_icons();
