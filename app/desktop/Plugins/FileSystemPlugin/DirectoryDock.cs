@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -15,7 +16,7 @@ using RorolalaDesktop.I18n;
 namespace FileSystemPlugin;
 
 /// <summary>The Directory dock: one directory's entries, read at a zoom.</summary>
-internal sealed class DirectoryDock : IDockView
+internal sealed class DirectoryDock : IDockView, IDockOpened
 {
     /// <summary>The control the dock shows.</summary>
     private readonly DirectoryControl _view;
@@ -36,6 +37,22 @@ internal sealed class DirectoryDock : IDockView
 
     /// <inheritdoc />
     public void Restored(IDockState state) => _view.Restored(state);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A dock opened onto a directory is one that was asked for by name — from a directory's own menu, or by
+    /// a run that called the one already going — so it is drawn at that directory rather than at wherever the
+    /// one location in the plugin happens to be. What it means is this dock looking at a place of its own, and
+    /// so out of step: the dock beside it goes on following the whole, which is the same judgement every dock
+    /// out of step is met with.
+    /// </remarks>
+    public void Opened(DockRequest request)
+    {
+        if (request.StartAt is { Length: > 0 } at)
+        {
+            _view.OpenAt(at);
+        }
+    }
 }
 
 /// <summary>
@@ -53,6 +70,11 @@ internal sealed class DirectoryDock : IDockView
 /// pictures, which is a grid nobody asked for.
 /// </para>
 /// </remarks>
+[SuppressMessage(
+    "Design",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "a control is not disposed by anything: this dock's own location is let go of where it is replaced, which is the one moment it is this dock's to keep"
+)]
 internal sealed class DirectoryControl : UserControl
 {
     /// <summary>The zoom the dock opens at, as a percentage of the size an icon is at its own.</summary>
@@ -198,7 +220,14 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>The view being read, which is what a copy or a paste in this dock is about.</summary>
     private EntryView? _view;
 
-    /// <summary>This dock's own location, while it is out of step, and nothing while it follows the whole.</summary>
+    /// <summary>
+    /// The location this dock was given, or nothing while it follows the whole.
+    /// </summary>
+    /// <remarks>
+    /// Held because a location that was made for this dock is this dock's to let go of: what it holds of the
+    /// plugin's is a subscription to the answers every dock shares, and a location nobody lets go of is a
+    /// listing that goes on being told about changes it will never draw.
+    /// </remarks>
     private Browser? _own;
 
     /// <summary>The location being listened to, so that one left behind is stopped being listened to.</summary>
@@ -302,6 +331,43 @@ internal sealed class DirectoryControl : UserControl
 
         Content = panel;
 
+        Draw();
+    }
+
+    /// <summary>
+    /// Looks at a directory of this dock's own, which is what it was opened onto.
+    /// </summary>
+    /// <remarks>
+    /// The switch is turned over and the dock taken out of step, rather than the whole location being sent
+    /// somewhere: a dock opened onto a directory is one window onto that place, and moving the whole would
+    /// take every other dock with it — including the one the user was working in when they asked for this.
+    /// <para>
+    /// The location is made here rather than by the toolbar, because what the switch does is start from where
+    /// the whole is and this starts from a directory that was named. The two are the same state either way,
+    /// which is why what follows is the one way out of step rather than a second one.
+    /// </para>
+    /// </remarks>
+    /// <param name="at">The directory to look at.</param>
+    public void OpenAt(string at)
+    {
+        // A directory that cannot be read is refused before a location is made over it: what a location is
+        // over is a directory, and one that cannot be read is not one. The dock then goes on following the
+        // whole, which is the one place that is always there.
+        if (!System.IO.Directory.Exists(Browser.Expand(at)))
+        {
+            _host.Log.Warn($"`{at}` cannot be looked at, so the dock stayed where the whole is looking");
+
+            return;
+        }
+
+        _own?.Dispose();
+        _own = new Browser(_host.Log, _shared, Browser.Expand(at));
+
+        _bar.Reading(_own);
+        Watch(_own);
+
+        // The switch says what this dock is rather than leading it, which is the same rule its click follows.
+        Follows(false);
         Draw();
     }
 

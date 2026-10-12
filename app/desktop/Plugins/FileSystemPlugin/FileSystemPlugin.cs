@@ -148,6 +148,30 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // who holds what has to read the Layout again for it.
         host.Files.Changed += browser.Touch;
 
+        // And the one thing the plugin says about a directory it is being looked at: a directory seen in a
+        // tree, a listing or a grid can be looked at in a window of its own. Registered by the plugin rather
+        // than by the host because the dock it opens is the plugin's own, and offered through the context
+        // every one of those views folds plugin items into, so that all three were given it at once.
+        host.ContextMenus.Add(
+            ContextMenuTarget.Directory,
+            new ContextMenuItem(
+                "rorolala_file_system.new_window",
+                60,
+                was =>
+                {
+                    if (was.Entry is { } about)
+                    {
+                        host.Windows.Open(
+                            new DockRequest(DirectoryDockNameId, about.Path, DockOpenMode.New)
+                        );
+                    }
+                },
+                null,
+                false,
+                was => was.Entry is { Kind: EntryKind.Directory }
+            )
+        );
+
         host.Docks.Register(
             new DockRegistration(
                 Manifest.Id,

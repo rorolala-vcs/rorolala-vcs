@@ -101,6 +101,9 @@ rorolala_file_system:
   open:
     en: Open
     zh-CN: 打开
+  new_window:
+    en: Open in New Window
+    zh-CN: 在新窗口打开
   reveal:
     en: Show in File Manager
     zh-CN: 在文件管理器中显示
