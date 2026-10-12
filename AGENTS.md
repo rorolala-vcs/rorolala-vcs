@@ -18,8 +18,9 @@ semantics may not.
 
 ## Dependencies and other projects
 
-- mingling, the CLI framework, is at https://github.com/mingling-rs/mingling and is depended on
-  through crates.io, with the version and features in the root `Cargo.toml`.
+- mingling, the CLI framework, is at https://github.com/mingling-rs/mingling; it is taken from a
+  git revision on the 0.6 line rather than the crates.io release, with the revision and features in
+  the root `Cargo.toml`.
 - A framework problem — hooks, picking, completion, rendering, argument parsing — is fixed in
   mingling, with an entry in its `CHANGELOG.md`. Working around it in `rola` only means meeting it
   again on the next upgrade.
