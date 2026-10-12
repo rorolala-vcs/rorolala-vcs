@@ -200,7 +200,7 @@ public sealed class ColumnTests
         Assert.Equal(RolaI18N.Get("rorolala_vcs.state.merging"), RorolalaStates.Say(PathState.Merging).Hint);
 
         Assert.Equal(MarkInk.Add, RorolalaStates.Say(PathState.Untagged).Ink);
-        Assert.Equal(MarkInk.Primary, RorolalaStates.Say(PathState.Modified).Ink);
+        Assert.Equal(MarkInk.Warn, RorolalaStates.Say(PathState.Modified).Ink);
         Assert.Equal(MarkInk.Error, RorolalaStates.Say(PathState.Wrong).Ink);
         Assert.Equal(MarkInk.Accent, RorolalaStates.Say(PathState.Renamed).Ink);
         Assert.Equal(MarkInk.Accent, RorolalaStates.Say(PathState.RenamedLikely).Ink);

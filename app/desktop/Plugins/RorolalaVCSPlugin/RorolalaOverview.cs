@@ -153,13 +153,14 @@ internal sealed class OverviewView : UserControl
     /// <summary>How far a band and its rows are inset, which the browser insets its own by.</summary>
     private const double Inset = 12.0;
 
-    /// <summary>How wide the column saying what each path's state is.</summary>
+    /// <summary>How much of the table's width each column takes, in the order they are read.</summary>
     /// <remarks>
-    /// Wide enough for two pills of the longest pairs the panel draws — a move that is a certainty and a
-    /// base upstream has moved past — on one line, and no wider: what a column holds is bounded, and what
-    /// is left is what the paths are read in. A pair too long for it wraps, and the row grows.
+    /// What a state is takes half of what a path does, since a path is read in full where a state is a word or
+    /// two: the share is one to two to two rather than a width, so that a wider dock gives the room to the
+    /// paths — which is where it is worth having — and a pair of pills too long for its share wraps, which is
+    /// what makes a row grow rather than lose what it has not said.
     /// </remarks>
-    private const double StateColumn = 268;
+    private static readonly double[] Shares = [1, 2, 2];
 
     /// <summary>How round the ends of a pill are, which is half of how tall one is.</summary>
     private const double PillRadius = 10;
@@ -170,11 +171,17 @@ internal sealed class OverviewView : UserControl
     /// <summary>The theme resource for what has appeared.</summary>
     private const string AppearedFill = "rorolala.add";
 
-    /// <summary>The theme resource for what moved, or is being joined.</summary>
+    /// <summary>The theme resource for what moved.</summary>
     private const string MovedFill = "rorolala.primary";
 
-    /// <summary>The theme resource for what must be read twice.</summary>
-    private const string CarefulFill = "rorolala.warn";
+    /// <summary>
+    /// The theme resource for what is not settled: what is under way, and what has to be read twice.
+    /// </summary>
+    /// <remarks>
+    /// One role for both, since the two are one thing to a reader — neither is something done — and the words
+    /// on the pill are what tells them apart.
+    /// </remarks>
+    private const string UnsettledFill = "rorolala.warn";
 
     /// <summary>The theme resource for what has nothing to say about itself.</summary>
     private const string QuietFill = "rorolala.fg.faint";
@@ -385,7 +392,7 @@ internal sealed class OverviewView : UserControl
         wrong.AddRange(
             changed
                 .Where(behind.Contains)
-                .Select(path => new TableRow([new StatusPill(stale, CarefulFill)], path, string.Empty))
+                .Select(path => new TableRow([new StatusPill(stale, UnsettledFill)], path, string.Empty))
         );
 
         structural.AddRange(
@@ -416,7 +423,7 @@ internal sealed class OverviewView : UserControl
             facts.Merging.Select(item =>
                 new TableRow(
                     [
-                        new StatusPill(merge, MovedFill),
+                        new StatusPill(merge, UnsettledFill),
                         new StatusPill($"{variant}{Short(item.Variant)}", QuietFill),
                         .. item.Moved is { Length: > 0 } to
                             ? [new StatusPill(RolaI18N.Get("rorolala_vcs.status.merge_moved", to), QuietFill)]
@@ -435,7 +442,7 @@ internal sealed class OverviewView : UserControl
                         // A merge that cannot go on is a thing gone wrong rather than work under way, so its
                         // pill wears the colour of what is wrong rather than the colour of a merge that is.
                         new StatusPill(merge, WrongFill),
-                        new StatusPill($"{stopped}{BrokenSaid(reason)}", CarefulFill),
+                        new StatusPill($"{stopped}{BrokenSaid(reason)}", UnsettledFill),
                     ],
                     reason.Target,
                     BrokenPlace(reason)
@@ -446,7 +453,9 @@ internal sealed class OverviewView : UserControl
         changes.AddRange(
             changed
                 .Where(path => !behind.Contains(path))
-                .Select(path => new TableRow([new StatusPill(edited, MovedFill)], path, string.Empty))
+                .Select(path =>
+                    new TableRow([new StatusPill(edited, UnsettledFill)], path, string.Empty)
+                )
         );
 
         return [.. wrong, .. merges, .. structural, .. changes];
@@ -464,8 +473,8 @@ internal sealed class OverviewView : UserControl
                     !rename.Modified
                         ? new StatusPill(unchanged, QuietFill)
                         : behind.Contains(rename.To)
-                            ? new StatusPill(stale, CarefulFill)
-                            : new StatusPill(edited, MovedFill),
+                            ? new StatusPill(stale, UnsettledFill)
+                            : new StatusPill(edited, UnsettledFill),
                 ],
                 rename.From,
                 rename.To
@@ -742,9 +751,10 @@ internal sealed class OverviewView : UserControl
     {
         var columns = new ColumnDefinitions();
 
-        columns.Add(new ColumnDefinition(new GridLength(StateColumn)));
-        columns.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
-        columns.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        foreach (var share in Shares)
+        {
+            columns.Add(new ColumnDefinition(new GridLength(share, GridUnitType.Star)));
+        }
 
         return columns;
     }

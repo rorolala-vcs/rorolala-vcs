@@ -99,9 +99,10 @@ internal sealed class RorolalaStates : IEntryColumnProvider
     /// </summary>
     /// <remarks>
     /// The colour is the role the listing resolves to the theme's resource for it — green for what appeared,
-    /// the user's own colour for what changed, the error red for what must not be recorded, the second colour
-    /// for what moved, and the one amber for what is waiting. A state that is wrong says only that it is
-    /// wrong: which of the two ways it is wrong is the Overview's to say, where there is room for a reason.
+    /// the error red for what must not be recorded, the second colour for what moved, and the one amber for
+    /// what is under way: a change of this side's to record, and a merge waiting to be joined. A state that is
+    /// wrong says only that it is wrong: which of the two ways it is wrong is the Overview's to say, where
+    /// there is room for a reason.
     /// <para>
     /// The words are the dot's, and they are asked for here rather than handed over as keys for the listing
     /// to translate: they are this plugin's own, in this plugin's catalogue, and a key named by a literal
@@ -119,7 +120,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider
                 Hint: RolaI18N.Get("rorolala_vcs.state.untagged")
             ),
             PathState.Modified => new EntryColumnMark(
-                Ink: MarkInk.Primary,
+                Ink: MarkInk.Warn,
                 Dot: true,
                 Hint: RolaI18N.Get("rorolala_vcs.state.modified")
             ),

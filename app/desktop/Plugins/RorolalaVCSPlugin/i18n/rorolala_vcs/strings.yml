@@ -157,12 +157,11 @@ rorolala_vcs:
       en: Rorolala file operations
       zh-CN: Rorolala 文件操作
 
-  # What the Ownership column is headed. The column is only there where Rorolala answers — a
-  # directory inside a Workspace whose Layout tracks a Vault — and what it says about one entry is
-  # below, a held entry's holder being a name rather than a phrase and so not translated at all.
+  # What the Owner column is headed: who holds the entry, which is what the column says about one. The name
+  # a held entry wears is a name rather than a phrase and so is not translated at all.
   column_ownership:
-    en: Ownership
-    zh-CN: 所有权
+    en: Owner
+    zh-CN: 持有者
 
   # What the Upstream column is headed: where the Vault names the entry the work names here. The
   # column is only there where Rorolala answers, and it says nothing about an entry the Vault's copy
