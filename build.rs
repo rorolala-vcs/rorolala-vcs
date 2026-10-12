@@ -54,6 +54,9 @@ const SCALING_LANCZOS3: &str = "lanczos3";
 /// The largest side an ICO frame may have, which is what the format's directory can state.
 const ICO_MAX_SIDE: u32 = 256;
 
+/// The number of characters that make up a date, `YYYY-MM-DD`, at the front of an ISO 8601 timestamp.
+const DATE_LENGTH: usize = 10;
+
 fn main() {
     // Re-run the build script whenever one of the input files changes.
     println!("cargo:rerun-if-changed={MANIFEST_PATH}");
@@ -63,7 +66,9 @@ fn main() {
     }
 
     let commit_hash = git_output(&["rev-parse", "HEAD"]).unwrap_or_default();
-    let commit_date = git_output(&["show", "-s", "--format=%cI", "HEAD"]).unwrap_or_default();
+    let commit_date = git_output(&["show", "-s", "--format=%cI", "HEAD"])
+        .map(|date| date_to_day(&date))
+        .unwrap_or_default();
     let rustc_version = rustc_output(&["--version"]).unwrap_or_default();
     let version = workspace_version();
 
@@ -80,12 +85,29 @@ fn main() {
     std::fs::create_dir_all(&out_dir).expect("failed to create output directory");
 
     let out_file = out_dir.join(OUTPUT_FILE);
-    std::fs::write(&out_file, json).expect("failed to write output JSON file");
+
+    // Written only when it differs, because the file is watched: writing the same bytes again would
+    // be a build script that changes its own input and so runs again on every build after it.
+    if !std::fs::read(&out_file).is_ok_and(|written| written == json.as_bytes()) {
+        std::fs::write(&out_file, json).expect("failed to write output JSON file");
+    }
 
     println!("cargo:rerun-if-changed={}", out_file.display());
 
     generate_c_header();
     generate_icons();
+}
+
+/// Cuts an ISO 8601 timestamp down to the day it falls on.
+///
+/// A build written twice on one day carries a date that says which day it was, which is all the date
+/// is for; the time of day is not something anyone reading it acts on, and having it there makes the
+/// file differ between two builds that differ in nothing else.
+///
+/// Anything too short to be a date is returned as it came in, so that a timestamp of some other shape
+/// is still reported rather than dropped.
+fn date_to_day(timestamp: &str) -> String {
+    timestamp.chars().take(DATE_LENGTH).collect()
 }
 
 /// Makes the icons the descriptions under `res/icons` ask for, beside them.
