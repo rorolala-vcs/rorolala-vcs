@@ -124,7 +124,7 @@ mod tests {
     fn a_key_that_is_not_a_literal_is_counted_rather_than_guessed() {
         let (found, unchecked) = keys(r"fn one(key: &str) { let _ = t!(key); }");
 
-        assert!(found.is_empty());
+        assert!(found.is_empty(), "keys were read: {found:?}");
         assert_eq!(unchecked, 1);
     }
 
@@ -140,7 +140,7 @@ mod tests {
             "#,
         );
 
-        assert!(found.is_empty());
+        assert!(found.is_empty(), "keys were read: {found:?}");
         assert_eq!(unchecked, 0);
     }
 }

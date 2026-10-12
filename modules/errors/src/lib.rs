@@ -207,7 +207,7 @@ impl From<IoErrorKind> for io::ErrorKind {
 /// [`io::Error`] cannot be exported: it is not this workspace's type, so it can carry no
 /// `#[lazyffi]`, and it has no repr-C sibling for an exported signature to name. What
 /// crosses is the kind it was, as [`IoErrorKind`], together with what it said, which is
-/// what a caller reads and branches on. Converting back gives an [`io::Error::new`] of
+/// what a caller reads and branches on. Converting back gives an `io::Error::new` of
 /// that kind carrying that message.
 #[lazyffi(export = RolaIoError)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

@@ -177,7 +177,7 @@ mod tests {
         let (found, unchecked) =
             keys(r#"var one = _i18n.Get(label); var two = _i18n.Get($"a.{part}");"#);
 
-        assert!(found.is_empty());
+        assert!(found.is_empty(), "keys were read: {found:?}");
         assert_eq!(unchecked, 2);
     }
 
@@ -186,7 +186,7 @@ mod tests {
         let (found, unchecked) =
             keys(r#"var one = config.Get("not.a.key"); var two = map.Get("x");"#);
 
-        assert!(found.is_empty());
+        assert!(found.is_empty(), "keys were read: {found:?}");
         assert_eq!(unchecked, 0);
     }
 }

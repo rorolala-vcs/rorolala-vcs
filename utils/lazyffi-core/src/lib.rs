@@ -50,12 +50,21 @@ pub const RESULT_ERR_VARIANT: &str = "Err";
 ///
 /// The `builtin` conversions are implemented for these types, and the header
 /// generator maps them to C; both go through this macro, so the list cannot drift.
+///
+/// What it expands to is a brace-delimited invocation and no semicolon, which is the one
+/// shape that serves both kinds of call site. A callback that renders names answers with
+/// an expression, and one that renders impls answers with items: a semicolon in here
+/// would make the expansion a statement, which is not an expression at all — the lint
+/// `semicolon_in_expressions_from_non_local_macros` says so, and `deny(warnings)` makes
+/// that an error — while a parenthesised invocation of a macro of items is refused
+/// wherever items are wanted. Braces are the delimiter an item macro may be called with,
+/// and an expression macro may be too.
 #[macro_export]
 macro_rules! for_each_scalar {
     ($callback:ident) => {
-        $callback!(
+        $callback! {
             bool, char, f32, f64, i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize
-        );
+        }
     };
 }
 
