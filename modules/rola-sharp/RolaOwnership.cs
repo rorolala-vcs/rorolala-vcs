@@ -109,9 +109,36 @@ public sealed class RolaOwnership : IDisposable
         }
     }
 
-    /// <summary>Gives the native ownership back.</summary>
-    public void Dispose()
+    /// <summary>
+    /// Where the Vault's copy names the entry at a path.
+    /// </summary>
+    /// <remarks>
+    /// The two are the same path until one side moves the file, and which side moved it is what this
+    /// tells apart: what is answered is where upstream holds the entry, so a path that is not the one
+    /// given is one that moved in the work. What is read is the copy the Workspace has fetched, so
+    /// nothing is reached for and the answer is as old as the last fetch.
+    /// </remarks>
+    /// <param name="path">The path of the entry, as the program names it.</param>
+    /// <returns>The path upstream names it by, or an empty string when it names none.</returns>
+    public string UpstreamOf(string path)
     {
+        ArgumentNullException.ThrowIfNull(path);
+        ObjectDisposedException.ThrowIf(_handle == 0, this);
+
+        var utf8 = Marshal.StringToCoTaskMemUTF8(path);
+
+        try
+        {
+            return NativeText.Taken(RorolalaBinding.rola_ownership_upstream_of(_handle, utf8));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(utf8);
+        }
+    }
+
+    /// <summary>Gives the native ownership back.</summary>
+    public void Dispose()    {
         // Nothing to give back the second time, and nothing was lost the first: the handle is
         // forgotten as soon as it is released, so a double `Dispose` releases nothing twice.
         if (_handle != 0)

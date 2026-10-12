@@ -562,6 +562,90 @@ internal struct RolaActionError
 }
 
 /// <summary>
+/// Why a merge in progress cannot go on, as C reads it.
+///
+/// One variant per reason, and [`BrokenKind::None`] for the reading having no such entry. What the
+/// reason is about — the variant, or the path its file lies at — is answered beside it by
+/// `rola_status_broken_what`.
+/// </summary>
+internal enum RolaStatusBroken : int
+{
+    /// <summary>
+    /// There is no such entry: the reading has fewer merges that cannot go on than were asked for.
+    /// </summary>
+    RolaStatusBroken_None = 0,
+    /// <summary>
+    /// The file the variant is for is no longer named by the Layout.
+    /// </summary>
+    RolaStatusBroken_NoTarget = 1,
+    /// <summary>
+    /// Nowhere here can hold its variant file.
+    /// </summary>
+    RolaStatusBroken_NoPlace = 2,
+    /// <summary>
+    /// The variant file is gone from where the record says it lies.
+    /// </summary>
+    RolaStatusBroken_FileGone = 3,
+    /// <summary>
+    /// This reading has no index to read the variant from.
+    /// </summary>
+    RolaStatusBroken_NoIndex = 4,
+    /// <summary>
+    /// The index does not hold that variant.
+    /// </summary>
+    RolaStatusBroken_NoVariant = 5,
+    /// <summary>
+    /// The variant file could not be read.
+    /// </summary>
+    RolaStatusBroken_Unreadable = 6,
+    /// <summary>
+    /// The variant file no longer holds the variant's content.
+    /// </summary>
+    RolaStatusBroken_Changed = 7,
+}
+
+/// <summary>
+/// What one path of the work is, as a reading says it in a word.
+///
+/// One variant by value, and no others: nothing about a path is [`PathState::Unknown`].
+/// </summary>
+internal enum RolaPathState : int
+{
+    /// <summary>
+    /// The reading says nothing about the path: it is not a path of the work the Layout describes.
+    /// </summary>
+    RolaPathState_Unknown = 0,
+    /// <summary>
+    /// The Layout names it and the tree does not hold it, so nothing is there to show.
+    /// </summary>
+    RolaPathState_Lost = 1,
+    /// <summary>
+    /// The tree holds it and the Layout does not name it.
+    /// </summary>
+    RolaPathState_Untagged = 2,
+    /// <summary>
+    /// Its content is not what the Layout agreed with, and it is this account's to record.
+    /// </summary>
+    RolaPathState_Modified = 3,
+    /// <summary>
+    /// Its content is not what the Layout agreed with, and it is not this account's to record: another
+    /// </summary>
+    RolaPathState_Wrong = 4,
+    /// <summary>
+    /// It is where a file the Layout names at another path now sits.
+    /// </summary>
+    RolaPathState_Renamed = 5,
+    /// <summary>
+    /// The same, where the move is one their likeness suggests rather than one their bytes make.
+    /// </summary>
+    RolaPathState_RenamedLikely = 6,
+    /// <summary>
+    /// A variant is waiting to be joined into it.
+    /// </summary>
+    RolaPathState_Merging = 7,
+}
+
+/// <summary>
 /// Represents an error that occurs during the creation of a Vault
 /// </summary>
 internal enum VaultCreationError : int
@@ -1262,6 +1346,15 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_action_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_status_broken(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_path_state(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_status(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_vault_config(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1371,6 +1464,18 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint rola_current_account();
+
+    /// <summary>
+    /// Reads how the work under `directory` stands beside the Layout it works from.
+    ///
+    /// A `RolaStatus` the caller releases with `free_rola_status`, or null when there is nothing to
+    /// read: no Workspace holds the directory, the Workspace works in no Layout, or the tree cannot be
+    /// read beside the one it does.
+    ///
+    /// Returns an owned `RolaStatus *`, or `NULL` when there is nothing; release it with `free_rola_status`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint locate_rola_status(nint directory);
 
     /// <summary>
     /// Runs the [`ActionHandshake`](crate::ActionHandshake) action, blocking until it has.
@@ -1878,6 +1983,213 @@ internal static partial class RorolalaBinding
     internal static extern ushort vault_address_read_port(nint self);
 
     /// <summary>
+    /// How many paths the Layout names that the tree does not hold.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_lost_count(nint self);
+
+    /// <summary>
+    /// The path at `index` among what the Layout names and the tree does not hold.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_lost_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many paths the tree holds that the Layout does not name.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_untagged_count(nint self);
+
+    /// <summary>
+    /// The path at `index` among what the tree holds and the Layout does not name.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_untagged_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many paths changed where they were.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_modified_count(nint self);
+
+    /// <summary>
+    /// The path at `index` among what changed where it was.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_modified_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many changed paths are based on a version upstream has moved past.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_wrong_base_count(nint self);
+
+    /// <summary>
+    /// The path at `index` among the ones based on a version upstream has moved past.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_wrong_base_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many paths the fetched copy of the Vault's Layout says another account holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_unowned_count(nint self);
+
+    /// <summary>
+    /// The path at `index` among the ones another account holds.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_unowned_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many paths moved.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_renamed_count(nint self);
+
+    /// <summary>
+    /// The path the move at `index` came from.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_renamed_from(nint self, nuint index);
+
+    /// <summary>
+    /// The path the move at `index` went to.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_renamed_to(nint self, nuint index);
+
+    /// <summary>
+    /// Whether the move at `index` was edited as well as moved.
+    ///
+    /// False when there is no such entry.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_status_renamed_modified(nint self, nuint index);
+
+    /// <summary>
+    /// Whether the move at `index` is one the two being the same bytes makes rather than one only
+    ///
+    /// False when there is no such entry.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_status_renamed_strong(nint self, nuint index);
+
+    /// <summary>
+    /// How many variants are waiting to be joined into files.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_merging_count(nint self);
+
+    /// <summary>
+    /// The file the variant at `index` is to be joined into.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_merging_target(nint self, nuint index);
+
+    /// <summary>
+    /// The variant at `index`, as the hex it is named by.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_merging_variant(nint self, nuint index);
+
+    /// <summary>
+    /// The path the file of the variant at `index` lies at, or lay at before a move.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_merging_path(nint self, nuint index);
+
+    /// <summary>
+    /// Where the tree holds the file of the variant at `index` now, when a move was found.
+    ///
+    /// An empty string when the file did not move, or when there is no such entry. The caller owns
+    /// the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_merging_moved(nint self, nuint index);
+
+    /// <summary>
+    /// How many merges in progress cannot go on.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_broken_count(nint self);
+
+    /// <summary>
+    /// Why the merge at `index` cannot go on.
+    ///
+    /// [`BrokenKind::None`] when there is no such entry.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaStatusBroken rola_status_broken_kind(nint self, nuint index);
+
+    /// <summary>
+    /// What the reason at `index` is about: the variant, or the path its file lies at.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_broken_what(nint self, nuint index);
+
+    /// <summary>
+    /// The file the merge at `index` cannot go on is for, when the Layout still names one.
+    ///
+    /// An empty string when the Layout names no such file, or when there is no such entry. The caller
+    /// owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_broken_target(nint self, nuint index);
+
+    /// <summary>
+    /// Where the Workspace the reading was made of is rooted, which the paths it reports are relative to.
+    ///
+    /// The root as a path. The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_root(nint self);
+
+    /// <summary>
+    /// What the reading says about the entry at a path a caller names.
+    ///
+    /// A [`PathState`] by value, which is `Unknown` for a path this reading is not about.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaPathState rola_status_state_of(nint self, nint path);
+
+    /// <summary>
     /// Creates a Vault in the specified directory
     ///
     /// Returns a result:
@@ -2108,6 +2420,15 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RolaEntryLock rola_ownership_lock_of(nint self, nint path);
+
+    /// <summary>
+    /// The path the Vault's copy names the entry at `path` by, or an empty string.
+    ///
+    /// The path as the Vault's copy names it, or an empty string. The caller owns the string and
+    /// releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_ownership_upstream_of(nint self, nint path);
 
     /// <summary>
     /// Whether the Vault is locked.

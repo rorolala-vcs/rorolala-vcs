@@ -21,9 +21,10 @@ use std::path::{Component, Path, PathBuf};
 use std::str::FromStr as _;
 
 use librorolala::layout::{Layout, LayoutPath};
+use librorolala::status::{Broken, Relation, Status, compare};
 use librorolala::storage::{Blake3Hash, Key};
-use librorolala::tree_analyze::{entry_of, tree_diff};
-use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Version};
+use librorolala::tree_analyze::tree_diff;
+use librorolala::vcs::VCSIndex;
 use librorolala::workspace::{Merging, Pending, Workspace};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
@@ -53,7 +54,6 @@ use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::hash::resolve as resolve_hash;
 use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_dir};
-use crate::ownership;
 use crate::vcs_index::cmd_vcs_index_lookback::{
     MergeHint, ResLookback, Standing, StandingRelation, from_object,
 };
@@ -205,71 +205,59 @@ pub fn handle_status(
         return lookback_of(&target, &layout, held, index, me, cwd.as_deref(), &merging);
     }
 
-    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
-        Ok(diff) => diff,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
-
-    // What is not this account's to change is read before anything is said, and kept out of the
-    // content changes: a run that read them as its own work would be reading past the one thing it
-    // is not to do.
     let me = account.get_ref().must_bind().ok();
-    let tracked = ownership::tracked_vault(held, &layout);
-    let unowned = match ownership::unowned(held, &layout, tracked.as_deref(), me.as_deref(), &diff)
-    {
-        Ok(unowned) => unowned,
+    let status = match Status::read(held, &layout, me.as_deref(), index.get_ref().as_ref()) {
+        Ok(status) => status,
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     };
-    let not_mine: BTreeSet<&str> = unowned.iter().map(String::as_str).collect();
-
-    // Which of the moves were edited as well: a move's destination is among the modified when what
-    // it holds is not what the Layout agreed with at the path it came from.
-    let edited: BTreeSet<&str> = diff.modified.iter().map(LayoutPath::as_str).collect();
-
-    // What is waiting to be joined is read against the Layout, the tree and the index: a record that
-    // does not stand is not a merge, and saying so is the point of reading them at all. A variant
-    // file the tree holds elsewhere is claimed here, so it is not also reported as a new file.
-    let (merging, broken, moved) = merging_view(
-        &merging,
-        &layout,
-        held,
-        index.get_ref().as_ref(),
-        &diff.untagged,
-    );
 
     ResultStatus {
-        lost: diff
-            .lost
-            .iter()
-            .map(|path| path.as_str().to_owned())
-            .collect(),
-        untagged: diff
-            .untagged
-            .iter()
-            .filter(|path| !moved.contains(*path))
-            .map(|path| path.as_str().to_owned())
-            .collect(),
-        modified: diff
-            .modified
-            .iter()
-            .filter(|path| !not_mine.contains(path.as_str()))
-            .map(|path| path.as_str().to_owned())
-            .collect(),
-        renamed: diff
+        lost: status.lost,
+        untagged: status.untagged,
+        modified: status.modified,
+        renamed: status
             .renamed
-            .iter()
+            .into_iter()
             .map(|rename| RenameItem {
-                from: rename.from.as_str().to_owned(),
-                to: rename.to.as_str().to_owned(),
-                modified: edited.contains(rename.to.as_str()),
+                from: rename.from,
+                to: rename.to,
+                modified: rename.modified,
                 strong: rename.strong,
             })
             .collect(),
-        unowned,
-        merging,
-        broken,
+        unowned: status.unowned,
+        merging: status
+            .merging
+            .into_iter()
+            .map(|merge| MergingItem {
+                target: merge.target,
+                variant: merge.variant,
+                path: merge.path,
+                moved: merge.moved,
+            })
+            .collect(),
+        broken: status.broken.iter().map(broken_said).collect(),
     }
     .into()
+}
+
+/// What a merge that cannot go on is said as.
+///
+/// The reason is the reading's and the words are this program's, which is why the two are joined
+/// here rather than in the library: what a person is shown is said where the command is, in the
+/// run's language.
+fn broken_said(broken: &Broken) -> String {
+    let said = match broken {
+        Broken::NoTarget { variant } => t!("status.merge_no_target", variant = variant),
+        Broken::NoPlace { variant, .. } => t!("status.merge_no_place", variant = variant),
+        Broken::FileGone { path, .. } => t!("status.merge_file_gone", path = path),
+        Broken::NoIndex { path, .. } => t!("status.merge_no_index", path = path),
+        Broken::NoVariant { variant, .. } => t!("status.merge_no_variant", variant = variant),
+        Broken::Unreadable { path, .. } => t!("status.merge_unreadable", path = path),
+        Broken::Changed { path, .. } => t!("status.merge_changed", path = path),
+    };
+
+    said.trim().to_owned()
 }
 
 /// The variant waiting whose file is at the path `target` names, when the target is one.
@@ -291,117 +279,6 @@ fn variant_pending<'a>(
     }
 
     None
-}
-
-/// What the merge in progress says, read against the Layout, the tree and the index.
-///
-/// A record is a merge only while all of it stands: the target is still named, the variant file is
-/// still there — or is found again where a move put it — the index still holds the variant and the
-/// file still holds that variant's content. One that does not stand is not dropped quietly — a merge
-/// that cannot go on is worse unseen — so it is answered as what it is rather than among the merges
-/// that are.
-///
-/// The paths the variant files were found at are handed back with it, so a reading that was told to
-/// leave variant files out can leave these out too.
-fn merging_view(
-    merging: &Merging,
-    layout: &Layout,
-    held: &Workspace,
-    index: Option<&VCSIndex>,
-    untagged: &[LayoutPath],
-) -> (Vec<MergingItem>, Vec<String>, BTreeSet<LayoutPath>) {
-    let Ok(runtime) = crate::vcs_index::runtime() else {
-        return (Vec::new(), Vec::new(), BTreeSet::new());
-    };
-
-    let moves = crate::merging::moves(merging, layout, held.get_root(), index, &runtime, untagged);
-    let mut waiting = Vec::new();
-    let mut broken = Vec::new();
-    let mut claimed = BTreeSet::new();
-
-    for pending in merging.iter() {
-        // A file that moved is not one to report as gone: the record still stands, and what is to be
-        // confirmed is where the file now lies.
-        if let Some(moved) = moves.iter().find(|moved| moved.target == pending.target())
-            && let Some(target) = layout.path_of(pending.target())
-        {
-            claimed.insert(moved.to.clone());
-            waiting.push(MergingItem {
-                target: target.as_str().to_owned(),
-                variant: crate::vcs_index::hex(pending.variant()),
-                path: moved.from.as_str().to_owned(),
-                moved: Some(moved.to.as_str().to_owned()),
-            });
-
-            continue;
-        }
-
-        match merging_item(merging, layout, held, index, &runtime, pending) {
-            Ok(item) => waiting.push(item),
-            Err(cause) => broken.push(cause),
-        }
-    }
-
-    (waiting, broken, claimed)
-}
-
-/// One record of the merge in progress, read as a merge that can go on or as why it cannot.
-fn merging_item(
-    merging: &Merging,
-    layout: &Layout,
-    held: &Workspace,
-    index: Option<&VCSIndex>,
-    runtime: &tokio::runtime::Runtime,
-    pending: &Pending,
-) -> Result<MergingItem, String> {
-    let variant = crate::vcs_index::hex(pending.variant());
-
-    let Some(target) = layout.path_of(pending.target()) else {
-        return Err(t!("status.merge_no_target", variant = variant)
-            .trim()
-            .to_owned());
-    };
-    let Some(path) = merging.variant_path(layout, pending) else {
-        return Err(t!("status.merge_no_place", variant = variant)
-            .trim()
-            .to_owned());
-    };
-
-    let disk = held.get_root().join(path.to_path_buf());
-    if !disk.is_file() {
-        return Err(t!("status.merge_file_gone", path = path.as_str())
-            .trim()
-            .to_owned());
-    }
-
-    let Some(index) = index else {
-        return Err(t!("status.merge_no_index", path = path.as_str())
-            .trim()
-            .to_owned());
-    };
-    let Some(joined) = read_variant(index, runtime, pending.variant()) else {
-        return Err(t!("status.merge_no_variant", variant = variant)
-            .trim()
-            .to_owned());
-    };
-
-    let Ok(entry) = entry_of(&disk) else {
-        return Err(t!("status.merge_unreadable", path = path.as_str())
-            .trim()
-            .to_owned());
-    };
-    if entry.digest() != *joined.storage_hash() {
-        return Err(t!("status.merge_changed", path = path.as_str())
-            .trim()
-            .to_owned());
-    }
-
-    Ok(MergingItem {
-        target: target.as_str().to_owned(),
-        variant,
-        path: path.as_str().to_owned(),
-        moved: None,
-    })
 }
 
 /// One thing a target named: the index object to look back from, and whether the work on it has
@@ -567,82 +444,27 @@ fn standing(
 
 /// How the version this Layout is at stands beside the Vault's, and how many versions apart they are.
 ///
-/// A version the index does not hold is one this side never had, so how far apart the two are is not
-/// known here: the Vault has moved and the chain that says how far is not local.
+/// The comparison itself is the status module's — see [`librorolala::status::compare`] — and what is
+/// added here is the command's own spelling of the answer: the chain drawn above a target names the
+/// relation in words of its own, and the reading that calls a base wrong speaks of it in terms of the
+/// work rather than of a drawing.
 fn apart(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     local: &Blake3Hash,
     upstream: &Blake3Hash,
 ) -> (StandingRelation, Option<u64>) {
-    if local == upstream {
-        return (StandingRelation::Same, Some(0));
-    }
+    let base = compare(index, runtime, local, upstream);
 
-    let (Some(local), Some(upstream)) = (
-        read_version(index, runtime, local),
-        read_version(index, runtime, upstream),
-    ) else {
-        return (StandingRelation::Unknown, None);
+    let relation = match base.relation {
+        Relation::Same => StandingRelation::Same,
+        Relation::Ahead => StandingRelation::Ahead,
+        Relation::Behind => StandingRelation::Behind,
+        Relation::Apart => StandingRelation::Apart,
+        Relation::Unknown => StandingRelation::Unknown,
     };
 
-    if let Some(distance) = distance_to(index, runtime, &local, upstream.hash().digest()) {
-        return (StandingRelation::Ahead, Some(distance));
-    }
-    if let Some(distance) = distance_to(index, runtime, &upstream, local.hash().digest()) {
-        return (StandingRelation::Behind, Some(distance));
-    }
-
-    (StandingRelation::Apart, None)
-}
-
-/// How many versions below `descendant` the version `ancestor` is, when it is below it at all.
-fn distance_to(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    descendant: &Version,
-    ancestor: &Blake3Hash,
-) -> Option<u64> {
-    let mut current = descendant.clone();
-    let mut steps = 0;
-
-    while !current.is_root() {
-        let variant = read_variant(index, runtime, current.variant())?;
-        let base = read_version(index, runtime, variant.base_version())?;
-
-        steps += 1;
-        if base.hash().digest() == ancestor {
-            return Some(steps);
-        }
-
-        current = base;
-    }
-
-    None
-}
-
-/// The version the index holds under `hash`, when it holds one.
-fn read_version(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    hash: &Blake3Hash,
-) -> Option<Version> {
-    match runtime.block_on(index.read(Key::new(*hash))) {
-        Ok(VCSIndexObject::Version(version)) => Some(version),
-        _ => None,
-    }
-}
-
-/// The variant the index holds under `hash`, when it holds one.
-fn read_variant(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    hash: &Blake3Hash,
-) -> Option<librorolala::vcs::Variant> {
-    match runtime.block_on(index.read(Key::new(*hash))) {
-        Ok(VCSIndexObject::Variant(variant)) => Some(variant),
-        _ => None,
-    }
+    (relation, base.distance)
 }
 
 /// The copy of the Vault's own Layout the Layout being worked in tracks, when there is one here,

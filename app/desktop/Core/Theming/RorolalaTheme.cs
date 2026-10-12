@@ -743,8 +743,11 @@ internal sealed class RorolalaTheme
             [Ring] = _ring,
             ["rorolala.add"] = Fill(grounds.Add),
             ["rorolala.add.bg"] = Fill(grounds.AddBg),
-            // The wash a warning stands on, which is its own amber laid thin rather than a second colour: what
-            // a warning is coloured is not a preference, and neither is the ground it is read against.
+            // The mark a warning is raised with, and the wash it stands on: its own amber laid thin rather
+            // than a second colour, since what a warning is coloured is not a preference, and neither is the
+            // ground it is read against. Both variants hold it, so that what names the mark — a contributed
+            // column asking for the warn ink — is answered wherever the look is asked.
+            [Warn] = Fill(WarnColour),
             ["rorolala.warn.bg"] = Fill(WithAlpha(WarnColour, 30)),
             [DelInk] = Fill(grounds.Del),
             [DelBackground] = Fill(grounds.DelBg),

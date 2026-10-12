@@ -1,0 +1,16 @@
+[package]
+name = "rorolala-status"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rorolala-layout.workspace = true
+rorolala-storage.workspace = true
+rorolala-tree-analyze.workspace = true
+rorolala-utils-constants.workspace = true
+rorolala-utils-lazyffi.workspace = true
+rorolala-utils-location.workspace = true
+rorolala-vcs.workspace = true
+rorolala-workspace.workspace = true
+tokio.workspace = true
+uuid.workspace = true

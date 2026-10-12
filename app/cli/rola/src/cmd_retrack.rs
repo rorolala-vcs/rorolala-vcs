@@ -31,6 +31,7 @@ use std::str::FromStr as _;
 
 use librorolala::daemon::action_fetch_layout;
 use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::status::{tracked_vault, variant_moves};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
 use librorolala::tree_analyze::{Cache, cache_path, entry_of, tree_diff};
 use librorolala::vcs::{VCSIndex, VCSWrite as _, Variant, Version};
@@ -366,7 +367,7 @@ pub fn handle_retrack(
     };
     let sources = match &account {
         Some(account) => {
-            let tracked = crate::ownership::tracked_vault(held, &layout);
+            let tracked = tracked_vault(held, &layout);
             let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
             let sources = Sources::new(held, account, remote.get_ref(), primary, **offline)
                 .map_err(failed)?;
@@ -522,7 +523,7 @@ fn variant_disk(
         return Some(disk);
     }
 
-    crate::merging::moves(merging, layout, root, Some(index), runtime, untagged)
+    variant_moves(merging, layout, root, Some(index), runtime, untagged)
         .into_iter()
         .find(|moved| moved.target == pending.target())
         .map(|moved| root.join(moved.to.to_path_buf()))

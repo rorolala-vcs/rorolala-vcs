@@ -138,25 +138,73 @@ internal static partial class Icons
     private const double TagInset = 0.16;
     private const double TagLeast = 3;
 
+    /// <summary>How much of an icon's width a dot takes, and the least and most it is drawn at.</summary>
+    /// <remarks>
+    /// It follows the zoom for the same reason a mark does, and stops: a dot is read as a colour, and one
+    /// grown past the size a colour is read at is a blob on the corner of a picture.
+    /// </remarks>
+    private const double DotShare = 0.2;
+    private const double DotLeast = 8;
+    private const double DotMost = 14;
+
     /// <summary>The rounding a tag wears, which is the design's radius for a small control.</summary>
     private static readonly CornerRadius TagCorners = new(5);
 
-    /// <summary>The theme resource a lock mark is drawn in.</summary>
+    /// <summary>The theme resource a contributed mark is drawn in.</summary>
     /// <remarks>
     /// Written as the literals the look publishes, because a plugin has nowhere else to read them
     /// from: the shell's own constants live in the host, which a plugin may not reference.
     /// </remarks>
     /// <param name="ink">The role the mark is drawn in.</param>
     /// <returns>The name of the resource it is read from.</returns>
-    public static string Ink(LockInk ink) =>
+    public static string Ink(MarkInk ink) =>
         ink switch
         {
-            LockInk.Plain => "rorolala.fg",
-            LockInk.Accent => "rorolala.accent",
-            LockInk.Error => "rorolala.del",
-            LockInk.Add => "rorolala.add",
+            MarkInk.Plain => "rorolala.fg",
+            MarkInk.Primary => "rorolala.primary",
+            MarkInk.Accent => "rorolala.accent",
+            MarkInk.Error => "rorolala.del",
+            MarkInk.Add => "rorolala.add",
+            MarkInk.Warn => "rorolala.warn",
             _ => "rorolala.fg.faint",
         };
+
+    /// <summary>
+    /// A contributed mark drawn as a dot.
+    /// </summary>
+    /// <remarks>
+    /// A dot rather than a picture: what a column of marks says is a state, and a state is a colour before it
+    /// is anything else. It is drawn against whatever it is put beside — a name in a tile, a name in a list —
+    /// since what it means is the mark's own and where it stands is the view's. What it means is said when the
+    /// pointer rests on it, which is what a colour cannot say by itself.
+    /// </remarks>
+    /// <param name="contributed">What the provider answered about the entry.</param>
+    /// <param name="size">How many pixels wide and tall the entry's icon is, which the dot follows.</param>
+    /// <returns>The dot to draw.</returns>
+    public static Control Dot(EntryColumnMark contributed, int size)
+    {
+        var extent = DotExtent(size);
+        var dot = new Border
+        {
+            Width = extent,
+            Height = extent,
+            CornerRadius = new CornerRadius(extent / 2),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Ink(contributed.Ink));
+
+        if (contributed.Hint is { Length: > 0 } hint)
+        {
+            ToolTip.SetTip(dot, hint);
+
+            // At once rather than after the wait a tooltip usually takes: the mark is a colour, and a reader
+            // who has to stop and wait for what a colour means is a reader who has to stop.
+            ToolTip.SetShowDelay(dot, 0);
+        }
+
+        return dot;
+    }
 
     /// <summary>
     /// An entry's icon with the lock its provider contributed at the top-right corner.
@@ -331,6 +379,23 @@ internal static partial class Icons
     /// <returns>How many pixels wide and tall the mark is.</returns>
     private static double Mark(int size) => Math.Max(MarkLeast, size * MarkShare);
 
+    /// <summary>
+    /// How large a dot is at an icon of `size`.
+    /// </summary>
+    /// <remarks>
+    /// Smaller than a corner mark and never larger than a mark of its own: a dot is a mark rather than a
+    /// mark's ground, so it grows with the icon only until it is big enough to read, and a tile at the
+    /// largest zoom wears a dot the size of the one at the smallest.
+    /// <para>
+    /// Read by the view as well as by the dot, because what the dot takes off what stands beside it is room
+    /// the view has to work out before the layout does: a thing measured wider than it is arranged is a thing
+    /// cut off by the edge of what holds it rather than trimmed by its own rule.
+    /// </para>
+    /// </remarks>
+    /// <param name="size">How many pixels wide and tall the icon is.</param>
+    /// <returns>How many pixels wide and tall the dot is.</returns>
+    public static double DotExtent(int size) => Math.Clamp(size * DotShare, DotLeast, DotMost);
+
     /// <summary>How many pixels a tag leaves around the mark drawn inside it.</summary>
     /// <param name="extent">How many pixels wide and tall the tag is.</param>
     /// <returns>How many pixels of inset it wears.</returns>
@@ -345,12 +410,13 @@ internal static partial class Icons
     /// </remarks>
     /// <param name="ink">The role the mark is drawn in.</param>
     /// <returns>The name of the resource the ground is read from.</returns>
-    public static string Wash(LockInk ink) =>
+    public static string Wash(MarkInk ink) =>
         ink switch
         {
-            LockInk.Accent => "rorolala.accent.wash",
-            LockInk.Error => "rorolala.del.bg",
-            LockInk.Add => "rorolala.add.bg",
+            MarkInk.Accent => "rorolala.accent.wash",
+            MarkInk.Error => "rorolala.del.bg",
+            MarkInk.Add => "rorolala.add.bg",
+            MarkInk.Warn => "rorolala.warn.bg",
             _ => "rorolala.bg.sunken",
         };
 

@@ -18,6 +18,7 @@ members = [
     "modules/layout",
     "modules/protocol",
     "modules/protocol-macros",
+    "modules/status",
     "modules/storage",
     "modules/tree-analyze",
     "modules/vault",
@@ -72,6 +73,7 @@ rorolala-inverse-index = { path = "modules/inverse-index" }
 rorolala-layout = { path = "modules/layout" }
 rorolala-protocol = { path = "modules/protocol" }
 rorolala-protocol-macros = { path = "modules/protocol-macros" }
+rorolala-status = { path = "modules/status" }
 rorolala-storage = { path = "modules/storage" }
 rorolala-tree-analyze = { path = "modules/tree-analyze" }
 rorolala-utils-cli-theme = { path = "utils/cli-theme" }
@@ -218,6 +220,7 @@ rorolala-inverse-index.workspace = true
 rorolala-layout.workspace = true
 rorolala-tree-analyze.workspace = true
 rorolala-protocol.workspace = true
+rorolala-status.workspace = true
 rorolala-storage.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
@@ -231,3 +234,8 @@ image.workspace = true
 rorolala-dev-bindgen.workspace = true
 serde_json.workspace = true
 toml.workspace = true
+
+[dev-dependencies]
+# The tests of the C ABI's own glue make a Workspace and name paths in a Layout, which is done by
+# `Uuid`: what a Layout binds a path to is one, and nothing else here can stand in for it.
+uuid.workspace = true

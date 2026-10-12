@@ -55,8 +55,6 @@ mod key;
 mod keys;
 mod lastec;
 mod layout;
-mod merging;
-mod ownership;
 mod pager;
 mod progress;
 mod rebuild;

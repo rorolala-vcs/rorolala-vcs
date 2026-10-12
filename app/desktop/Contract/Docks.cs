@@ -43,7 +43,11 @@ public enum DockPlacement
 /// <summary>One dock command shown in a dock's header.</summary>
 /// <param name="LabelKey">An i18n key for the command's label.</param>
 /// <param name="Command">What the command does.</param>
-/// <param name="IconKey">An optional key naming the command's icon.</param>
+/// <param name="IconKey">
+/// An optional key naming the command's icon. A command that names one is drawn as the mark alone in the
+/// dock's strip, because that is what a strip is for, and its label is what the mark says when the pointer
+/// rests on it.
+/// </param>
 public sealed record DockHeaderCommand(string LabelKey, Action Command, string? IconKey = null);
 
 /// <summary>

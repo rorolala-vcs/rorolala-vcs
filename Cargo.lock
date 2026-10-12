@@ -2278,6 +2278,7 @@ dependencies = [
  "rorolala-inverse-index",
  "rorolala-layout",
  "rorolala-protocol",
+ "rorolala-status",
  "rorolala-storage",
  "rorolala-tree-analyze",
  "rorolala-utils-constants",
@@ -2288,6 +2289,7 @@ dependencies = [
  "rorolala-workspace",
  "serde_json",
  "toml 0.8.23",
+ "uuid",
 ]
 
 [[package]]
@@ -3724,6 +3726,22 @@ dependencies = [
 [[package]]
 name = "rorolala-protocol-macros"
 version = "0.1.0"
+
+[[package]]
+name = "rorolala-status"
+version = "0.1.0"
+dependencies = [
+ "rorolala-layout",
+ "rorolala-storage",
+ "rorolala-tree-analyze",
+ "rorolala-utils-constants",
+ "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "rorolala-vcs",
+ "rorolala-workspace",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "rorolala-storage"

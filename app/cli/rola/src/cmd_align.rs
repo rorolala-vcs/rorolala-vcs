@@ -21,6 +21,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
+use librorolala::status::{VariantMove, tracked_vault, variant_moves};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
 use librorolala::tree_analyze::{Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff};
 use librorolala::vcs::VCSIndex;
@@ -334,7 +335,7 @@ pub fn handle_align(
         .and_then(|name| account_named(&name, Some(held), None).ok());
     let sources = match &account {
         Some(account) => {
-            let tracked = crate::ownership::tracked_vault(held, &layout);
+            let tracked = tracked_vault(held, &layout);
             let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
             let sources = match Sources::new(held, account, remote.get_ref(), primary, **offline) {
                 Ok(sources) => sources,
@@ -370,7 +371,7 @@ pub fn handle_align(
     // apply to it. It may be where the record says or somewhere a move put it, and what settles it
     // is ending the merge, putting its file back, or writing down where it moved to.
     let mut merging = Merging::read(&root);
-    let moves = variant_moves(&merging, &layout, &root, content, &diff);
+    let moves = moved_variants(&merging, &layout, &root, content, &diff);
 
     if let Selector::One(path) = &selected {
         let at = merging.variant_of(&layout, path);
@@ -586,18 +587,18 @@ fn unmerge(merging: &mut Merging, root: &Path, target: Uuid, path: &LayoutPath) 
 /// It is the finding `rola status` makes, so what a reading reports and what an alignment settles
 /// are one move seen twice: an untagged file whose content is the variant's own is the file that
 /// moved, and nothing else can be.
-fn variant_moves(
+fn moved_variants(
     merging: &Merging,
     layout: &Layout,
     root: &Path,
     content: Content<'_, '_>,
     diff: &TreeDiff,
-) -> Vec<crate::merging::VariantMove> {
+) -> Vec<VariantMove> {
     let Ok(runtime) = tokio::runtime::Runtime::new() else {
         return Vec::new();
     };
 
-    crate::merging::moves(
+    variant_moves(
         merging,
         layout,
         root,

@@ -1846,6 +1846,9 @@ internal sealed class ListBrowser : EntryView
     /// <summary>How wide the column of icons is, which is the design's own measure.</summary>
     private const double IconColumn = 22;
 
+    /// <summary>How large a dot is: a mark read at a glance rather than a thing to point at.</summary>
+    private const double DotSize = 8;
+
     /// <summary>
     /// How wide the grab between two columns is, and the marks it wears.
     /// </summary>
@@ -1927,6 +1930,9 @@ internal sealed class ListBrowser : EntryView
     /// <summary>Where a grab was taken, and how wide the two columns each side of it were then.</summary>
     private (int Left, int Right, double At, double LeftWas, double RightWas)? _grabbed;
 
+    /// <summary>The contributed columns that stand before everything, the picture included.</summary>
+    private readonly Column[] _leads;
+
     /// <summary>Makes the table over what the browser holds.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="browser">What is being shown.</param>
@@ -1935,11 +1941,40 @@ internal sealed class ListBrowser : EntryView
     public ListBrowser(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
         : base(host, browser, actions, clip)
     {
-        // The contributed column comes after the ones every table has, and is only there when a
-        // provider speaks for this directory: a column of placeholders would be a column of the
-        // listing saying what it does not know.
+        // A contributed column is placed where its own contribution asks to be, and is only there when a
+        // provider speaks for this directory: a column of placeholders would be a column of the listing
+        // saying what it does not know. The Ownership column comes last of all, since a lock is the one
+        // answer that is a state of the entry rather than a value of it.
+        var contributed = EntryColumns.For(Browser.Current);
+        var values = new List<Column>();
+
+        _leads =
+        [
+            .. contributed
+                .Where(provider => provider.Placement == ColumnPlacement.Leftmost)
+                .Select(Contributed),
+        ];
+
+        values.AddRange(
+            contributed
+                .Where(provider => provider.Placement == ColumnPlacement.BesideName)
+                .Select(Contributed)
+        );
+        values.AddRange(Values());
+        values.AddRange(
+            contributed
+                .Where(provider => provider.Placement == ColumnPlacement.AfterValues)
+                .Select(Contributed)
+        );
+
         _locks = EntryLockProviders.For(Browser.Current);
-        _values = _locks is null ? Values() : [.. Values(), Lock(_locks)];
+
+        if (_locks is { } locks)
+        {
+            values.Add(Lock(locks));
+        }
+
+        _values = [.. values];
         _widths = Widths();
 
         // The list's own border and inset are taken off: what draws the table is the view, and a border and a
@@ -2034,6 +2069,10 @@ internal sealed class ListBrowser : EntryView
     /// The value in it is the provider's to write and is not read from the entry's metadata, which is
     /// why the column draws its own cell: what a lock looks like — its words, and the ink they are
     /// written in — is what the provider answered, and none of it is in <see cref="Facts"/>.
+    /// <para>
+    /// What it says stands on the right, which is where a column of short answers is read from: the holder's
+    /// name is the last thing on the row, and the edge it is read against is the one the listing ends in.
+    /// </para>
     /// </remarks>
     /// <param name="provider">The provider that speaks for the directory being listed.</param>
     /// <returns>The column to add after the table's own.</returns>
@@ -2042,6 +2081,7 @@ internal sealed class ListBrowser : EntryView
             provider.ColumnKey,
             OwnershipColumn,
             _ => Placeholder,
+            TextAlignment.Right,
             Draw: entry => Locked(provider, entry)
         );
 
@@ -2052,16 +2092,113 @@ internal sealed class ListBrowser : EntryView
     private static TextBlock Locked(IEntryLockProvider provider, Entry entry)
     {
         var mark = provider.Mark(entry);
-        var cell = Cell(mark.Said() ?? Placeholder);
+        var cell = Cell(mark.Said() ?? Placeholder, TextAlignment.Right);
         cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.TextInk));
 
         return cell;
     }
 
+    /// <summary>
+    /// The column one column provider contributes.
+    /// </summary>
+    /// <remarks>
+    /// The value in it is the provider's to write and is not read from the entry's metadata, which is why
+    /// the column draws its own cell: what it says goes through <see cref="EntryColumnMark.Said"/>, which
+    /// is a key translated or a literal as the contribution asked, and neither is in <see cref="Facts"/>.
+    /// </remarks>
+    /// <param name="provider">The provider that speaks for the directory being listed.</param>
+    /// <returns>The column to add where the contribution asked.</returns>
+    private static Column Contributed(IEntryColumnProvider provider) =>
+        new(
+            provider.ColumnKey,
+            provider.Width,
+            _ => Placeholder,
+            Draw: entry => Contributed(provider, entry)
+        );
+
+    /// <summary>What one entry's cell in a contributed column is drawn as.</summary>
+    /// <param name="provider">The provider that speaks for the directory being listed.</param>
+    /// <param name="entry">The entry to write about.</param>
+    /// <returns>The cell, which draws nothing at all where a column of marks has no mark for the entry.</returns>
+    internal static Control Contributed(IEntryColumnProvider provider, Entry entry)
+    {
+        var mark = provider.Value(entry);
+
+        if (mark.Dot)
+        {
+            return Dot(mark);
+        }
+
+        // A column of marks says nothing by having no mark: the dash the listing says what it does not know
+        // with would be a mark of its own, and a cell with no mark has nothing else to say.
+        return provider.Marks ? new Panel() : Written(mark);
+    }
+
+    /// <summary>What one entry's cell in a contributed column that is words is written as.</summary>
+    /// <param name="mark">What the contribution answered.</param>
+    /// <returns>The cell.</returns>
+    private static TextBlock Written(EntryColumnMark mark)
+    {
+        var cell = Cell(mark.Said() ?? Placeholder);
+
+        // The ink is the contribution's to name and this plugin's to resolve: a column drawn in a colour the
+        // contribution picked for itself would be a colour the look does not hold, which is a column that
+        // vanishes somewhere the theme is another. The Ownership column writes its words the same way.
+        cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
+
+        return cell;
+    }
+
+    /// <summary>
+    /// What one entry's cell in a contributed column that is a mark is drawn as: a round dot in the ink.
+    /// </summary>
+    /// <remarks>
+    /// A dot rather than a word, because what it stands for is one of a handful of states and the colour is
+    /// read at a glance: a column of the same few words repeated is a column of text where a mark would do,
+    /// and the words are still there — said when the pointer rests on the mark, which is where a reader who
+    /// wants them is already looking.
+    /// </remarks>
+    /// <param name="mark">What the contribution answered.</param>
+    /// <returns>The cell.</returns>
+    private static Control Dot(EntryColumnMark mark)
+    {
+        var dot = new Border
+        {
+            Width = DotSize,
+            Height = DotSize,
+            CornerRadius = new CornerRadius(DotSize / 2),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
+
+        if (mark.Hint is { Length: > 0 } hint)
+        {
+            ToolTip.SetTip(dot, hint);
+
+            // At once rather than after the wait a tooltip usually takes: the mark is a colour, and a reader
+            // who has to stop and wait for what a colour means is a reader who has to stop. Nothing is said by
+            // the wait that is not said by the mark.
+            ToolTip.SetShowDelay(dot, 0);
+        }
+
+        return dot;
+    }
+
     /// <summary>How wide every column starts, in the order they are laid out.</summary>
     private GridLength[] Widths()
     {
-        var widths = new List<GridLength> { new(IconColumn), new(1, GridUnitType.Star) };
+        var widths = new List<GridLength>();
+
+        foreach (var column in _leads)
+        {
+            widths.Add(new GridLength(GrabColumn));
+            widths.Add(new GridLength(column.Width));
+        }
+
+        widths.Add(new GridLength(IconColumn));
+        widths.Add(new GridLength(1, GridUnitType.Star));
 
         foreach (var column in _values)
         {
@@ -2097,17 +2234,24 @@ internal sealed class ListBrowser : EntryView
     {
         _header.ColumnDefinitions = Definitions();
 
-        var cells = new List<Control?>
+        // The icon column is its own heading, with no word over it: the entries say what they are. A
+        // contributed column that names no key is headed the same way, which is what a column of marks is —
+        // what it says is said on the mark itself, and there is no word that would fit over one.
+        var cells = new List<Control?>();
+
+        foreach (var column in _leads)
         {
-            // The icon column is its own heading, with no word over it: the entries say what they are.
-            Head(string.Empty),
-            Head(RolaI18N.Get("rorolala_file_system.column_name")),
-        };
+            cells.Add(Grip());
+            cells.Add(Head(column.Header));
+        }
+
+        cells.Add(Head(string.Empty));
+        cells.Add(Head("rorolala_file_system.column_name"));
 
         foreach (var column in _values)
         {
             cells.Add(Grip());
-            cells.Add(Head(RolaI18N.Get(column.Header), column.Align));
+            cells.Add(Head(column.Header, column.Align));
         }
 
         Place(_header, cells);
@@ -2127,7 +2271,7 @@ internal sealed class ListBrowser : EntryView
         return band;
     }
 
-    /// <summary>One entry as a row: its icon, its name, and what each column of values says.</summary>
+    /// <summary>One entry as a row: its marks, its picture, its name, and what each value says.</summary>
     /// <param name="entry">The entry to draw.</param>
     private Control Row(Entry entry)
     {
@@ -2136,11 +2280,22 @@ internal sealed class ListBrowser : EntryView
         var icon = Icons.For(entry);
         icon.HorizontalAlignment = HorizontalAlignment.Left;
 
-        var cells = new List<Control?> { icon, Named(entry, name.Length > 0 ? name : entry.Path) };
+        var cells = new List<Control?>();
+
+        // The cell over the grab is nothing: a row has no grab, only the header does.
+        foreach (var column in _leads)
+        {
+            cells.Add(null);
+            cells.Add(
+                column.Draw is { } draw ? draw(entry) : Cell(column.Value(facts), column.Align)
+            );
+        }
+
+        cells.Add(icon);
+        cells.Add(Named(entry, name.Length > 0 ? name : entry.Path));
 
         foreach (var column in _values)
         {
-            // The cell over the grab is nothing: a row has no grab, only the header does.
             cells.Add(null);
             cells.Add(
                 column.Draw is { } draw ? draw(entry) : Cell(column.Value(facts), column.Align)
@@ -2390,12 +2545,17 @@ internal sealed class ListBrowser : EntryView
     }
 
     /// <summary>One heading's text: the design's label, set by the caller in capitals.</summary>
-    /// <param name="text">What the heading says.</param>
+    /// <remarks>
+    /// A heading named by no key says nothing, which is what the icon column and a column of marks are
+    /// headed by: what they are is read from the cells under them rather than from a word that would not
+    /// fit over one.
+    /// </remarks>
+    /// <param name="key">The translation key the heading is read from, or nothing for no heading.</param>
     /// <param name="align">Where the text sits over its column.</param>
-    private static TextBlock Head(string text, TextAlignment align = TextAlignment.Left) =>
+    private static TextBlock Head(string key, TextAlignment align = TextAlignment.Left) =>
         new()
         {
-            Text = text.ToUpperInvariant(),
+            Text = (key is { Length: > 0 } said ? RolaI18N.Get(said) : string.Empty).ToUpperInvariant(),
             TextAlignment = align,
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -2461,8 +2621,14 @@ internal sealed class GridBrowser : EntryView
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
+    /// <summary>How much room is left between a mark and what stands beside it.</summary>
+    private const double MarkGap = 4;
+
     /// <summary>The lock provider that speaks for this directory, or nothing when none does.</summary>
     private readonly IEntryLockProvider? _locks;
+
+    /// <summary>The contributed marks a tile wears, which are the columns that stand at the left.</summary>
+    private readonly IEntryColumnProvider[] _marks;
 
     /// <summary>Makes the grid layout over what the browser holds.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
@@ -2475,6 +2641,15 @@ internal sealed class GridBrowser : EntryView
     {
         _icon = icon;
         _locks = EntryLockProviders.For(Browser.Current);
+
+        // A column that stands at the left of a row stands at the left corner of a tile: a tile has no
+        // columns, so what a column says is worn as a corner rather than written in a place of its own.
+        _marks =
+        [
+            .. EntryColumns
+                .For(Browser.Current)
+                .Where(provider => provider.Placement == ColumnPlacement.Leftmost),
+        ];
 
         // The tiles of a wrapped line fill the width it is given, so that the grid's outer inset is the room
         // around it and stays put however wide the dock is — the room a line has to spare is spent between
@@ -2579,8 +2754,7 @@ internal sealed class GridBrowser : EntryView
         return count;
     }
 
-    /// <summary>One entry as a tile: its icon above its name.</summary>
-    /// <param name="entry">The entry to draw.</param>
+    /// <summary>One entry as a tile: its icon above its name, with what its marks say beside the name.</summary>
     private Control Tile(Entry entry)
     {
         // The surface a chosen tile wears is the item's; what is here is the content and the room around it.
@@ -2590,21 +2764,68 @@ internal sealed class GridBrowser : EntryView
             Child = new StackPanel
             {
                 Spacing = 8,
-                Children =
-                {
-                    Marked(entry),
-                    new TextBlock
-                    {
-                        Text = Names.Show(entry),
-                        Width = _icon,
-                        TextAlignment = TextAlignment.Center,
-                        TextWrapping = TextWrapping.NoWrap,
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                        Classes = { "entry-name", "caption" },
-                    },
-                },
+                Children = { Marked(entry), Caption(entry) },
             },
         };
+    }
+
+    /// <summary>
+    /// A tile's name, with what the contributions say standing immediately left of it.
+    /// </summary>
+    /// <remarks>
+    /// A state is read with the name — what a file is called and what became of it are one line — so the mark
+    /// stands in the caption rather than over the picture, which is where the browser's list has it too.
+    /// <para>
+    /// What is centred is the mark and the name together rather than the name alone: a name centred with a
+    /// mark beside it would stand off its own middle, and the eye reads the two as one thing. The pair is as
+    /// wide as what it holds and no wider, so the mark stays against the name, and it is no wider than the
+    /// icon, so every tile is the width of its icon and a row of tiles is a column of names rather than a
+    /// ragged one.
+    /// </para>
+    /// </remarks>
+    /// <param name="entry">The entry to draw.</param>
+    /// <returns>What to draw where the name goes.</returns>
+    private Control Caption(Entry entry)
+    {
+        var marks = new StackPanel { Orientation = Orientation.Horizontal, Spacing = MarkGap };
+        var taken = 0.0;
+
+        foreach (var provider in _marks)
+        {
+            var contributed = provider.Value(entry);
+
+            if (contributed.Dot)
+            {
+                marks.Children.Add(Icons.Dot(contributed, _icon));
+                taken += Icons.DotExtent(_icon) + MarkGap;
+            }
+        }
+
+        var name = new TextBlock
+        {
+            // The room the marks take comes off the name before the layout rather than during it: a name
+            // measured at the tile's whole width is one arranged narrower than it asked for, and what is
+            // arranged narrower than it asked for is cut off by the edge of what holds it rather than trimmed
+            // by its own rule — which is the difference between a name that says it is longer and one that
+            // simply stops.
+            MaxWidth = Math.Max(1, _icon - taken),
+            Text = Names.Show(entry),
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Classes = { "entry-name", "caption" },
+        };
+
+        var caption = new Grid { HorizontalAlignment = HorizontalAlignment.Center };
+
+        // Both columns are as wide as what they hold, so the mark takes no room the name does not have, and
+        // the name is cut off at the icon's edge rather than at the mark's.
+        caption.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        caption.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        Grid.SetColumn(name, 1);
+        caption.Children.Add(marks);
+        caption.Children.Add(name);
+
+        return caption;
     }
 
     /// <summary>An entry's icon, with the lock its provider contributed stamped on the corner.</summary>

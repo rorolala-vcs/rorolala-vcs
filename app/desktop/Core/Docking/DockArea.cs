@@ -1179,11 +1179,21 @@ internal sealed class DockArea : UserControl
 
         foreach (var command in shown.View.HeaderCommands)
         {
-            var button = Header(_i18n.Get(command.LabelKey));
+            var said = _i18n.Get(command.LabelKey);
+            var picture = command.IconKey is { Length: > 0 } key ? _windows.Pictures.Find(key) : null;
+            var button = Header(said, picture);
 
             // A command is chrome rather than a thing a surface is for: it draws nothing of its own
             // until the pointer is on it, so that a strip of them does not read as a row of actions.
             button.Classes.Add("ghost");
+
+            // A command drawn as its mark says what it is when the pointer rests on it: that is all that is
+            // left of its words, and a strip of marks a reader has to try is a strip of guesses.
+            if (picture is not null)
+            {
+                ToolTip.SetTip(button, said);
+            }
+
             button.Click += (_, _) => command.Command();
             region.Commands.Children.Add(button);
         }
@@ -1446,20 +1456,26 @@ internal sealed class DockArea : UserControl
     /// What it names is centred in it. A tab is built where a tab is made rather than here, because what a
     /// tab holds is more than a name and its geometry is the strip's rather than a header's.
     /// </remarks>
-    /// <param name="text">What the header names.</param>
+    /// <param name="text">What the header names, which is what it says when it wears no picture.</param>
+    /// <param name="picture">The picture it wears, or nothing.</param>
     /// <returns>The button.</returns>
-    private static Button Header(string text) =>
+    private static Button Header(string text, Bitmap? picture = null) =>
         new()
         {
-            Content = new TextBlock
-            {
-                Text = text,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            },
-            Padding = new Thickness(7, 1),
+            Content = picture is { } mark
+                ? WindowControls.Glyph(mark, CommandMark)
+                : new TextBlock
+                {
+                    Text = text,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            Padding = picture is null ? new Thickness(7, 1) : new Thickness(6),
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+    /// <summary>How large a command's picture is in a strip, which is the size of the words beside it.</summary>
+    private const double CommandMark = 14.0;
 
     /// <summary>A column's size, never narrower than the least it may be.</summary>
     private static GridLength ColumnLength(double size) => new(Math.Max(MinColumn, size));

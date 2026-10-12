@@ -12,11 +12,12 @@ namespace RorolalaVCSPlugin;
 /// The three docks this plugin shows: what the work is looked at through.
 /// </summary>
 /// <remarks>
-/// They are empty for now — what each of them will hold is not written yet — so what they carry is
-/// the one thing that is already known about all three: where the File System plugin is rooted. What
-/// Rorolala works on is a Workspace, and a base directory that no Workspace holds has nothing under
-/// it for any of the three to look at, which is worth saying rather than leaving a blank view of the
-/// work to be read as a work with nothing in it.
+/// The Overview is the view of the work that is there — how it stands beside the Layout it works from,
+/// which is the reading `rola status` makes (see <see cref="OverviewDock"/>). The other two are empty
+/// for now, and what they carry while they are is the one thing that is already known about them:
+/// where the File System plugin is rooted. What Rorolala works on is a Workspace, and a base directory
+/// that no Workspace holds has nothing under it for any of them to look at, which is worth saying
+/// rather than leaving a blank view of the work to be read as a work with nothing in it.
 /// <para>
 /// The base is read through <see cref="BaseDirectory"/>, the File System plugin's published answer,
 /// because that plugin is the one that owns where the browser works: a dock of this one that went
@@ -51,15 +52,19 @@ internal static class RorolalaDocks
     /// <summary>
     /// Registers the three, each under its own title.
     /// </summary>
+    /// <remarks>
+    /// Two of the three are still a line saying that the base is not a Workspace, since what each will
+    /// hold is not written yet; the Overview is the view of the work that is there.
+    /// </remarks>
     /// <param name="host">The host, whose dock registry they are registered with.</param>
     /// <param name="owner">This plugin, which is what the registrations are attributed to.</param>
     public static void Declare(IPluginHost host, PluginId owner)
     {
         ArgumentNullException.ThrowIfNull(host);
 
-        Add(host, owner, OverviewNameId, OverviewKey);
-        Add(host, owner, WorkspaceNameId, WorkspaceKey);
-        Add(host, owner, VersionGraphNameId, VersionGraphKey);
+        Add(host, owner, OverviewNameId, OverviewKey, _ => new OverviewDock(host.Log, host.Files, host.Refocus));
+        Add(host, owner, WorkspaceNameId, WorkspaceKey, _ => new RorolalaDock(host.Log));
+        Add(host, owner, VersionGraphNameId, VersionGraphKey, _ => new RorolalaDock(host.Log));
     }
 
     /// <summary>
@@ -74,16 +79,16 @@ internal static class RorolalaDocks
     /// <param name="owner">This plugin, which is what the registration is attributed to.</param>
     /// <param name="nameId">The dock's stable name id.</param>
     /// <param name="labelKey">An i18n key for the dock's title.</param>
-    private static void Add(IPluginHost host, PluginId owner, string nameId, string labelKey) =>
+    /// <param name="make">What the dock shows, made once per request for it.</param>
+    private static void Add(
+        IPluginHost host,
+        PluginId owner,
+        string nameId,
+        string labelKey,
+        Func<DockPlacement, IDockView> make
+    ) =>
         host.Docks.Register(
-            new DockRegistration(
-                owner,
-                nameId,
-                labelKey,
-                DockOpenMode.Toggle,
-                DockPlacement.Center,
-                _ => new RorolalaDock(host.Log)
-            )
+            new DockRegistration(owner, nameId, labelKey, DockOpenMode.Toggle, DockPlacement.Center, make)
         );
 }
 
@@ -95,7 +100,7 @@ internal sealed class RorolalaDock : IDockView
     /// <summary>The control the dock shows.</summary>
     private readonly WorkspaceNotice _view;
 
-    /// <summary>Makes one of the three.</summary>
+    /// <summary>Makes one of the two views that are still a line about where the tree is rooted.</summary>
     /// <param name="log">Where a base that could not be read is said.</param>
     public RorolalaDock(ILog log) => _view = new WorkspaceNotice(log);
 
@@ -107,8 +112,8 @@ internal sealed class RorolalaDock : IDockView
 }
 
 /// <summary>
-/// What a dock of this plugin shows: nothing at all while the work is a Workspace, and the one thing
-/// there is to say while it is not.
+/// What one of the views that is not the Overview shows: nothing at all while the work is a Workspace,
+/// and the one thing there is to say while it is not.
 /// </summary>
 /// <remarks>
 /// The base is read where it changes rather than once, and only while this control is on screen: a
@@ -202,11 +207,15 @@ internal sealed class WorkspaceNotice : UserControl
     /// a question about the C ABI's own notion of one, and asking it here would be a second answer to
     /// keep in step with the first (see <see cref="RolaWorkspace.IsWorkspace"/>). What is this plugin's
     /// is what to do when the question cannot be asked at all.
+    /// <para>
+    /// It is asked by the Overview as well, which is why it is not private to this view: a reading that
+    /// comes back with nothing is a different thing depending on whether a Workspace holds the base.
+    /// </para>
     /// </remarks>
     /// <param name="directory">The directory to ask about.</param>
     /// <param name="log">Where a read that failed is said.</param>
     /// <returns>Whether the directory is inside a Workspace.</returns>
-    private static bool Holds(string? directory, ILog log)
+    internal static bool Holds(string? directory, ILog log)
     {
         // Nothing is not a path, and the computer is not a directory: neither is somewhere a Workspace
         // can be found from, so neither is read.

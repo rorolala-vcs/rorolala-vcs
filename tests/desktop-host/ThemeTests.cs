@@ -55,7 +55,7 @@ public sealed class ThemeTests
                 look.Palette.ThemeDictionaries[variant]
             );
 
-            foreach (var ink in Enum.GetValues<LockInk>())
+            foreach (var ink in Enum.GetValues<MarkInk>())
             {
                 Assert.IsAssignableFrom<IBrush>(palette[Icons.Ink(ink)]);
                 Assert.IsAssignableFrom<IBrush>(palette[Icons.Wash(ink)]);

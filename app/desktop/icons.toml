@@ -68,8 +68,11 @@ key = "rorolala_vcs"
 # pencil — is the reader holding it, since holding it is what makes it theirs to change.
 # `lock` and `lock_open` are what taking ownership and letting it go wear in an entry's menu, `create` is
 # the pencil that marks the reader's own, and the last three are how a command's own report is read: what it
-# said went wrong, what it said to be careful of, and what it said could be done about it.
-icons = ["lock", "create", "lock_open", "error", "warning", "live_help"]
+# said went wrong, what it said to be careful of, and what it said could be done about it. `refresh` is what
+# reading the work again wears in the Overview's own strip, which is what the file browser's toolbar wears
+# for the same thing: the two are one mark, and each plugin draws its own rather than reaching for the
+# other's.
+icons = ["lock", "create", "lock_open", "error", "warning", "live_help", "refresh"]
 
 [[set]]
 plugin = "RorolalaDesktop"

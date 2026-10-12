@@ -16,6 +16,7 @@ use rorolala_layout::{Layout, LayoutPath};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
+use uuid::Uuid;
 
 use crate::Workspace;
 
@@ -117,20 +118,10 @@ impl Ownership {
     #[must_use]
     #[lazyffi(export = rola_ownership_lock_of)]
     pub fn lock_of(&self, path: &Path) -> EntryLock {
-        let Some(copy) = &self.copy else {
+        let (Some(copy), Some(id)) = (self.copy.as_ref(), self.id_at(path)) else {
             return EntryLock::Unnamed;
         };
-
-        // Normalised on both sides, so a path spelled with a `.` or a `..`, or reached through the
-        // Workspace's own root, is the same place rather than a second one.
-        let path = normalize(path);
-        let Ok(relative) = path.strip_prefix(&self.root) else {
-            return EntryLock::Unnamed;
-        };
-        let Ok(named) = LayoutPath::from_relative(relative) else {
-            return EntryLock::Unnamed;
-        };
-        let Some(data) = self.local.id_of(&named).and_then(|id| copy.entry(id)) else {
+        let Some(data) = copy.entry(id) else {
             return EntryLock::Unnamed;
         };
 
@@ -139,6 +130,46 @@ impl Ownership {
             Some(owner) if self.me.as_deref() == Some(owner) => EntryLock::Mine,
             Some(owner) => EntryLock::Held(owner.to_owned()),
         }
+    }
+
+    /// The path the Vault's copy names the entry at `path` by, or an empty string.
+    ///
+    /// The two are the same path until one side moves the file: the Layout the Workspace works in names
+    /// the entry at the path it sits at here, and the Vault's copy names the same entry at the path it
+    /// sits at there. What is answered is where upstream holds it, which is what tells a file that moved
+    /// here from one that moved there. An empty string is the copy saying nothing — no such entry, or
+    /// nothing fetched yet — rather than a path of its own.
+    ///
+    /// # FFI
+    ///
+    /// The path as the Vault's copy names it, or an empty string. The caller owns the string and
+    /// releases it with `free_string`.
+    #[must_use]
+    #[lazyffi(export = rola_ownership_upstream_of)]
+    pub fn upstream_of(&self, path: &Path) -> String {
+        let (Some(copy), Some(id)) = (self.copy.as_ref(), self.id_at(path)) else {
+            return String::new();
+        };
+
+        copy.path_of(id)
+            .map_or_else(String::new, |named| named.as_str().to_owned())
+    }
+}
+
+/// What both answers about an entry are read through, kept out of the exported block because it answers a
+/// `Uuid` rather than anything a C caller could hold.
+impl Ownership {
+    /// The `Uuid` the Layout the Workspace works in names `path` by, when it names one.
+    ///
+    /// Everything answered about an entry starts here: a path is what this side goes by, and what the
+    /// Vault's copy says of the same entry is said of that `Uuid`.
+    fn id_at(&self, path: &Path) -> Option<Uuid> {
+        // Normalised on both sides, so a path spelled with a `.` or a `..`, or reached through the
+        // Workspace's own root, is the same place rather than a second one.
+        let path = normalize(path);
+        let named = LayoutPath::from_relative(path.strip_prefix(&self.root).ok()?).ok()?;
+
+        self.local.id_of(&named)
     }
 }
 
@@ -176,6 +207,14 @@ mod tests {
     /// The Layout the Workspace works in names the path and leaves the entry unowned: who holds it
     /// is the Vault's to say, and the copy is where that is read.
     fn held(label: &str, owner: Option<&str>) -> (PathBuf, Workspace) {
+        held_at(label, "hero.psd", owner)
+    }
+
+    /// The same, with the Vault's copy naming the entry at `upstream` rather than where the work has it.
+    ///
+    /// It is one entry named twice: the `Uuid` is the entry, and the two Layouts are two answers about
+    /// where it sits. A copy that names it elsewhere is what a file moved upstream looks like.
+    fn held_at(label: &str, upstream: &str, owner: Option<&str>) -> (PathBuf, Workspace) {
         let dir = scratch(label);
 
         Workspace::create(&dir).unwrap();
@@ -196,7 +235,8 @@ mod tests {
         let copy_dir = workspace.readonly_layout_dir("vault", VAULT_LAYOUT_NAME);
         fs::create_dir_all(&copy_dir).unwrap();
         let copy = Layout::open(&copy_dir).unwrap();
-        copy.create_path(&path, id).unwrap();
+        copy.create_path(&LayoutPath::new(upstream).unwrap(), id)
+            .unwrap();
         copy.create_entry(
             id,
             MutableData::new(owner.map(str::to_owned), [1; 32], String::new()),
@@ -269,6 +309,48 @@ mod tests {
             ownership.lock_of(&dir.join("..").join("outside.psd")),
             EntryLock::Unnamed
         );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_path_names_where_upstream_holds_the_same_entry() {
+        let (dir, workspace) = held_at("upstream", "art/hero.psd", Some("alice"));
+        let ownership = Ownership::open(&workspace, Some("alice".to_owned())).unwrap();
+
+        // One entry, named here at one path and there at another: the mapping is where upstream holds it,
+        // which is not where this side has it.
+        assert_eq!(
+            ownership.upstream_of(&dir.join("hero.psd")),
+            "art/hero.psd".to_owned()
+        );
+
+        // Nothing is read from the Vault: an empty answer is a copy that names no such entry, a path the
+        // Layout does not name, and a path outside the Workspace alike.
+        fs::create_dir_all(dir.join("art")).unwrap();
+        fs::write(dir.join("art/hero.psd"), b"x").unwrap();
+
+        assert_eq!(
+            ownership.upstream_of(&dir.join("art/hero.psd")),
+            String::new()
+        );
+        assert_eq!(ownership.upstream_of(&dir.join("other.psd")), String::new());
+        assert_eq!(
+            ownership.upstream_of(&dir.join("..").join("outside.psd")),
+            String::new()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_vault_whose_copy_was_never_fetched_names_nothing() {
+        let (dir, workspace) = held("unfetched-upstream", Some("alice"));
+        fs::remove_dir_all(workspace.readonly_layout_dir("vault", VAULT_LAYOUT_NAME)).unwrap();
+
+        let ownership = Ownership::open(&workspace, Some("alice".to_owned())).unwrap();
+
+        assert_eq!(ownership.upstream_of(&dir.join("hero.psd")), String::new());
 
         let _ = fs::remove_dir_all(&dir);
     }

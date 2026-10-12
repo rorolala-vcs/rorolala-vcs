@@ -3,13 +3,13 @@ using RorolalaDesktop.I18n;
 
 namespace FileSystemPlugin;
 
-/// <summary>What ink a lock mark is drawn in.</summary>
+/// <summary>What ink a contributed mark is drawn in.</summary>
 /// <remarks>
 /// The colour is the contribution's, the brush is not: a plugin names a role and this plugin picks
 /// the theme's resource for it, so a mark follows the user's colours rather than being the one
 /// colour the plugin was written against.
 /// </remarks>
-public enum LockInk
+public enum MarkInk
 {
     /// <summary>The list's own metadata ink: nothing is being drawn attention to.</summary>
     Quiet,
@@ -17,7 +17,10 @@ public enum LockInk
     /// <summary>The ordinary foreground, which reads as any other words on the card.</summary>
     Plain,
 
-    /// <summary>The accent, which marks what is the reader's own.</summary>
+    /// <summary>The user's own colour, which marks what the work is theirs through.</summary>
+    Primary,
+
+    /// <summary>The second colour the user chose, which marks what is neither theirs nor wrong.</summary>
     Accent,
 
     /// <summary>The error red, which marks what is somebody else's.</summary>
@@ -31,6 +34,15 @@ public enum LockInk
     /// look's own answer for "this is yours to change", which reads the same whatever that choice was.
     /// </remarks>
     Add,
+
+    /// <summary>
+    /// The one amber, which marks what has to be read twice.
+    /// </summary>
+    /// <remarks>
+    /// Fixed rather than chosen, and the same on either ground: what a warning is coloured is not a
+    /// preference, so a state that wants noticing says so in this rather than in the user's own colour.
+    /// </remarks>
+    Warn,
 }
 
 /// <summary>
@@ -69,8 +81,8 @@ public sealed record EntryLockMark(
     string? TextKey = null,
     string? Text = null,
     string? IconKey = null,
-    LockInk Ink = LockInk.Quiet,
-    LockInk TextInk = LockInk.Quiet,
+    MarkInk Ink = MarkInk.Quiet,
+    MarkInk TextInk = MarkInk.Quiet,
     bool Tagged = false,
     string? HoverKey = null
 )

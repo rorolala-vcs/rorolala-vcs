@@ -147,7 +147,7 @@ public sealed class LockTests
         public bool Applies(string at) => string.Equals(at, directory, StringComparison.Ordinal);
 
         /// <inheritdoc />
-        public EntryLockMark Mark(Entry entry) => new(TextKey: "it.lock.mine", Ink: LockInk.Accent);
+        public EntryLockMark Mark(Entry entry) => new(TextKey: "it.lock.mine", Ink: MarkInk.Accent);
 
         /// <inheritdoc />
         public void Forget() => Forgotten++;

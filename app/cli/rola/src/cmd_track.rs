@@ -22,6 +22,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::status::{tracked_vault, unowned};
 use librorolala::storage::{Key, RorolalaStorage, store_file};
 use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
 use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
@@ -53,7 +54,6 @@ use crate::exit_codes::{
 };
 use crate::failure::failure;
 use crate::layout::{ErrorLayoutShouldInWorkspace, chosen, failed};
-use crate::ownership;
 
 /// The longest a message may be, in bytes.
 ///
@@ -297,8 +297,8 @@ pub fn handle_track(
     // records nothing — and a Vault that tracks nothing, a copy that is not there, and a file the
     // copy does not name are all answered with nothing to refuse.
     if !force {
-        let tracked = ownership::tracked_vault(held, &layout);
-        let unowned = match ownership::unowned(
+        let tracked = tracked_vault(held, &layout);
+        let unowned = match unowned(
             held,
             &layout,
             tracked.as_deref(),

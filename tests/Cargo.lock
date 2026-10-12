@@ -1148,6 +1148,7 @@ dependencies = [
  "rorolala-inverse-index",
  "rorolala-layout",
  "rorolala-protocol",
+ "rorolala-status",
  "rorolala-storage",
  "rorolala-tree-analyze",
  "rorolala-utils-constants",
@@ -1205,9 +1206,8 @@ dependencies = [
 
 [[package]]
 name = "mingling"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd812d4ca18445025fbb762ebec18bf77b196d6b02922acc145d929a024f6b47"
+version = "0.6.0"
+source = "git+https://github.com/mingling-rs/mingling?rev=3972930a83c1e7b998da60c5bd4cda93e666b020#3972930a83c1e7b998da60c5bd4cda93e666b020"
 dependencies = [
  "arg-picker",
  "mingling_core",
@@ -1217,9 +1217,8 @@ dependencies = [
 
 [[package]]
 name = "mingling_core"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f6eb66a4e2f1a2116170c3637f1ea2e2e7e5fc649632f01f6b57360530523ac"
+version = "0.6.0"
+source = "git+https://github.com/mingling-rs/mingling?rev=3972930a83c1e7b998da60c5bd4cda93e666b020#3972930a83c1e7b998da60c5bd4cda93e666b020"
 dependencies = [
  "just_fmt 0.2.1",
  "might_be_async",
@@ -1229,9 +1228,8 @@ dependencies = [
 
 [[package]]
 name = "mingling_macros"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "203fa24615ab586de619f322535620e25b874df22d34640f2b56b17226348576"
+version = "0.6.0"
+source = "git+https://github.com/mingling-rs/mingling?rev=3972930a83c1e7b998da60c5bd4cda93e666b020#3972930a83c1e7b998da60c5bd4cda93e666b020"
 dependencies = [
  "just_fmt 0.2.1",
  "just_template",
@@ -1243,9 +1241,8 @@ dependencies = [
 
 [[package]]
 name = "mingling_pathf"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2d8935c585447038867f3e71dd312ce6661e396a147b4ebd3a51521ea866c6a"
+version = "0.6.0"
+source = "git+https://github.com/mingling-rs/mingling?rev=3972930a83c1e7b998da60c5bd4cda93e666b020#3972930a83c1e7b998da60c5bd4cda93e666b020"
 dependencies = [
  "cargo_metadata",
  "just_fmt 0.2.1",
@@ -1732,6 +1729,22 @@ dependencies = [
 [[package]]
 name = "rorolala-protocol-macros"
 version = "0.1.0"
+
+[[package]]
+name = "rorolala-status"
+version = "0.1.0"
+dependencies = [
+ "rorolala-layout",
+ "rorolala-storage",
+ "rorolala-tree-analyze",
+ "rorolala-utils-constants",
+ "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
+ "rorolala-vcs",
+ "rorolala-workspace",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "rorolala-storage"

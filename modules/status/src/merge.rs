@@ -13,11 +13,11 @@
 
 use std::path::Path;
 
-use librorolala::layout::{Layout, LayoutPath};
-use librorolala::storage::{Blake3Hash, Key};
-use librorolala::tree_analyze::entry_of;
-use librorolala::vcs::{VCSIndex, VCSIndexObject};
-use librorolala::workspace::Merging;
+use rorolala_layout::{Layout, LayoutPath};
+use rorolala_storage::{Blake3Hash, Key};
+use rorolala_tree_analyze::entry_of;
+use rorolala_vcs::{VCSIndex, VCSIndexObject};
+use rorolala_workspace::Merging;
 use uuid::Uuid;
 
 /// A variant file the tree holds somewhere other than where the merge record puts it.
@@ -39,7 +39,7 @@ pub struct VariantMove {
 /// name, by the content each holds; a path is claimed by the first record that names it, so two
 /// records cannot be answered with one file.
 #[must_use]
-pub fn moves(
+pub fn variant_moves(
     merging: &Merging,
     layout: &Layout,
     root: &Path,

@@ -28,6 +28,7 @@ use globset::GlobBuilder;
 use librorolala::daemon::{action_fetch_layout, action_sync_index_all_async};
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::protocol::ActionError;
+use librorolala::status::tracked_vault;
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::{VCSIndex, VCSIndexObject, Variant};
 use librorolala::workspace::{Merging, Pending};
@@ -448,7 +449,7 @@ fn checkin_variant(
         .ok()
         .and_then(|name| account_named(&name, Some(held), None).ok());
     if let Some(account) = &account {
-        let tracked = crate::ownership::tracked_vault(held, layout);
+        let tracked = tracked_vault(held, layout);
         let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
 
         if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline) {
@@ -517,7 +518,7 @@ fn index_from_vault(
     runtime: &tokio::runtime::Runtime,
     offline: bool,
 ) -> Result<(), String> {
-    let Some(vault_name) = crate::ownership::tracked_vault(held, layout) else {
+    let Some(vault_name) = tracked_vault(held, layout) else {
         return Err(t!("checkin.err_join_no_track").trim().to_owned());
     };
     let Some(account_name) = current.get_ref().must_bind().ok() else {

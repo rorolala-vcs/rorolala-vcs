@@ -2,8 +2,10 @@ _version: 2
 
 # What the Rorolala plugin says. What it adds to the browser is one preset to the File System
 # plugin's settings and one column to its listing, and what it shows of its own is its three docks;
-# its words are the plugin's name, that preset's name, what a lock reads as, and what each of the
-# docks is called. Every key is namespaced by the plugin's identity — the id with dots underscored.
+# its words are the plugin's name, that preset's name, what a lock reads as, what each of the docks
+# is called, and every line the Overview draws — which is the reading `rola status` makes, said in
+# that command's own words. Every key is namespaced by the plugin's identity — the id with dots
+# underscored.
 
 rorolala_vcs:
   name:
@@ -31,6 +33,123 @@ rorolala_vcs:
     en: The current base directory is not a Rorolala Workspace
     zh-CN: 当前基础目录并非 Rorolala Workspace
 
+  # What the Overview says while a Workspace holds the base and still answers nothing: a Workspace that
+  # works in no Layout and one whose work cannot be read both come to this, and neither is the base
+  # being somewhere else. What the reason was is in the log; what the window can say is that there is
+  # nothing to show.
+  status_unreadable:
+    en: The state of the work under the current base directory could not be read
+    zh-CN: 无法读取当前基础目录下工作的状态
+
+  # What the Overview draws. These are the panel's own words rather than the command line's: what a
+  # command prints is a report meant to be read once and acted on by typing, and what a panel says is
+  # meant to be looked at. So there is no mention of a command here, and the reading behind it is the
+  # command line's only in what it found, not in how it is said.
+  #
+  # The panel is one table of the changes: a row is one thing the reading says about one path, and the
+  # three columns are what each path's state is — the kind of change it is and what became of its
+  # content, one pill each — where it comes from, and where it goes. A cell is empty where there is
+  # nothing on that side of the change, which is what makes a lost path and an untagged one read apart:
+  # the one comes from somewhere and goes nowhere, and the other the reverse.
+  #
+  # What the table cannot show is said in the middle of the dock, in one line: that there is nothing to
+  # confirm, or that a work there is could not be read.
+  status:
+    clean:
+      en: Nothing to confirm
+      zh-CN: 没有要确认的内容
+
+    # What the command in the dock's own strip offers: read the work again now, rather than wait for the
+    # reading the dock makes by itself — which is what a reader wants after saving in another program.
+    refresh:
+      en: Refresh
+      zh-CN: 刷新
+
+    # What the columns are called, which is the band over the rows. The first is what each path's state is —
+    # the kind of change it is and what became of its content, one pill each — and the other two are the
+    # paths a change is between, one of which is empty where the change has no such side.
+    column_state:
+      en: State
+      zh-CN: 状态
+    column_from:
+      en: From
+      zh-CN: 从
+    column_to:
+      en: To
+      zh-CN: 至
+
+    # What kind of change a row is. A change of content alone has no kind and says so by being blank:
+    # what happened to it is in the last column, which is the one every row has something in.
+    kind_lost:
+      en: Lost
+      zh-CN: 丢失
+    kind_untagged:
+      en: Untagged
+      zh-CN: 未标记
+    kind_rename_weak:
+      en: Rename (likely)
+      zh-CN: 重命名（可能）
+    kind_rename_strong:
+      en: Rename (certain)
+      zh-CN: 重命名（一定）
+    kind_merge:
+      en: Merge
+      zh-CN: 合并
+
+    # What became of a row's content.
+    change_modified:
+      en: Changed
+      zh-CN: 修改
+    change_unchanged:
+      en: Unchanged
+      zh-CN: 未修改
+    change_wrong_unowned:
+      en: "Wrong change: not yours"
+      zh-CN: 错误修改（不持有）
+    change_wrong_base:
+      en: "Wrong change: base has moved"
+      zh-CN: 错误修改（基准版本错误）
+
+    # What a merge says in the last column: the variant waiting, where its file went when it moved, and
+    # why a merge cannot go on. A merge has no content change of its own — what settles it is the two
+    # files being joined — so the column carries what the row would otherwise have to leave out.
+    merge_variant:
+      en: "variant "
+      zh-CN: 变体
+    merge_moved:
+      en: moved to %{path}
+      zh-CN: 移动至 %{path}
+    merge_broken:
+      en: "cannot go on: "
+      zh-CN: "无法继续："
+
+    # Why a merge cannot go on. The reason is what the reading found; the words for it are this panel's,
+    # and the value is the variant, as the hex it is named by, or the path its file lies at.
+    broken_no_target:
+      en: the file it is for is no longer named by the Layout
+      zh-CN: 它要并入的文件已不再被布局命名
+    broken_no_place:
+      en: nowhere here can hold its variant file
+      zh-CN: 本地没有可以放置其变体文件的位置
+    broken_file_gone:
+      en: the variant file %{path} is gone
+      zh-CN: 变体文件 %{path} 已不存在
+    broken_no_index:
+      en: there is no index to read the variant from
+      zh-CN: 没有可读取该变体的索引
+    broken_no_variant:
+      en: the index does not hold that variant
+      zh-CN: 索引中没有该变体
+    broken_unreadable:
+      en: the variant file could not be read
+      zh-CN: 无法读取该变体文件
+    broken_changed:
+      en: the variant file no longer holds the variant's content
+      zh-CN: 该变体文件已不再持有变体的内容
+    broken_unknown:
+      en: this build does not know why it cannot go on
+      zh-CN: 本版本不知道它为何无法继续
+
   # What the preset is called where the File System plugin's settings offer it: Rorolala's own file
   # operations, the commands of `rola fs-ops`.
   setting:
@@ -44,6 +163,38 @@ rorolala_vcs:
   column_ownership:
     en: Ownership
     zh-CN: 所有权
+
+  # What the Upstream column is headed: where the Vault names the entry the work names here. The
+  # column is only there where Rorolala answers, and it says nothing about an entry the Vault's copy
+  # does not name — one this side has never told it of.
+  column_upstream:
+    en: Upstream
+    zh-CN: 上游
+
+  # What one file of the work is, in a word. These are what the mark beside a name says when the pointer
+  # rests on it rather than what is written in a column: a file is in one of a handful of states, and which
+  # one is read from the colour of the mark before any word of it is read. The words are the listing's own
+  # rather than the Overview's, which says more where there is room for a reason: here a change that is
+  # wrong says only that it is wrong, and a file that stands as it was recorded has nothing at all.
+  state:
+    untagged:
+      en: Untagged
+      zh-CN: 未标记
+    modified:
+      en: Changed
+      zh-CN: 修改
+    wrong:
+      en: Wrong change
+      zh-CN: 错误修改
+    renamed:
+      en: Renamed
+      zh-CN: 被重命名
+    renamed_likely:
+      en: Possibly renamed
+      zh-CN: 可能被重命名
+    merging:
+      en: Merging
+      zh-CN: 合并中
 
   ownership:
     mine:

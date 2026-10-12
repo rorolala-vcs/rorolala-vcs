@@ -1,6 +1,8 @@
 using Avalonia.Controls;
 using FileSystemPlugin;
+using RolaSharp;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
 using RorolalaVCSPlugin;
 using Vcs = global::RorolalaVCSPlugin.RorolalaVCSPlugin;
 
@@ -73,17 +75,22 @@ public sealed class RorolalaDockTests
     }
 
     /// <summary>
-    /// A dock made while no Workspace holds the base is a control holding the words, not an empty one.
+    /// A dock made while no Workspace holds the base is a control holding something, not an empty one.
     /// </summary>
     /// <remarks>
     /// The judgement and the control are two halves, and a dock that decides rightly and carries nothing
     /// is a window the user reads as an empty work: what is checked here is that what the registration
-    /// makes is a control whose content is the line, drawn rather than hidden. Nothing about a Workspace
-    /// is asked, since the base published by an earlier test of this run is no more a Workspace than a
-    /// fresh one is — and the line is what a base outside every Workspace comes to either way.
+    /// makes is a control with content in it. The two views that are not the Overview say the words as
+    /// their only line; the Overview draws the work when there is work to draw, so what it carries is
+    /// checked by <see cref="TheOverviewSaysABaseOutsideEveryWorkspaceIsNotOne"/>.
+    /// <para>
+    /// Nothing about a Workspace is asked, since the base published by an earlier test of this run is no
+    /// more a Workspace than a fresh one is — and the line is what a base outside every Workspace comes
+    /// to either way.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void ADockOutsideEveryWorkspaceCarriesTheWordsItIsMadeWith()
+    public void ADockOutsideEveryWorkspaceCarriesSomethingItIsMadeWith()
     {
         var services = Host.Services();
         var plugin = new Vcs();
@@ -95,13 +102,346 @@ public sealed class RorolalaDockTests
 
         foreach (var registration in services.Docks.Registrations)
         {
-            var view = registration.Create(DockPlacement.Center).View;
+            var view = Assert.IsAssignableFrom<UserControl>(
+                registration.Create(DockPlacement.Center).View
+            );
 
-            var line = Assert.IsType<TextBlock>(Assert.IsAssignableFrom<UserControl>(view).Content);
+            Assert.NotNull(view.Content);
+
+            if (registration.DockNameId == RorolalaDocks.OverviewNameId)
+            {
+                continue;
+            }
+
+            var line = Assert.IsType<TextBlock>(view.Content);
 
             Assert.True(line.IsVisible);
             Assert.False(string.IsNullOrEmpty(line.Text));
         }
+    }
+
+    /// <summary>
+    /// The Overview has nothing to draw for a base no Workspace holds, and says so in words.
+    /// </summary>
+    /// <remarks>
+    /// What is exercised is the judgement the view is filled by, which is the same one the command line
+    /// makes: there is no reading, and there is something to say instead. A base that was never said,
+    /// the empty string and the computer are all somewhere no Workspace can be found from.
+    /// </remarks>
+    [Fact]
+    public void TheOverviewSaysABaseOutsideEveryWorkspaceIsNotOne()
+    {
+        // A plugin's own view of the host's log, which is what a view is handed: the one log is the
+        // host's and what it hands a plugin is that log attributed to the plugin.
+        ILog log = Host.Services().For(new PluginId("it.overview"), 1).Log;
+
+        string?[] bases = [Scratch.New("outside"), null, string.Empty];
+
+        foreach (var directory in bases)
+        {
+            var reading = OverviewView.Of(directory, log);
+
+            Assert.Null(reading.Facts);
+            Assert.False(string.IsNullOrEmpty(reading.Said), $"{directory}");
+        }
+    }
+
+    /// <summary>The Overview offers a reading on demand, beside the ones it makes by itself.</summary>
+    /// <remarks>
+    /// What the dock's own strip carries is what the dock says about the thing it is showing, and for a
+    /// reading that is the reading itself: a reader who has just saved a file in another program should not
+    /// have to wait for the next one. What is checked is that the command is offered, that it wears a mark of
+    /// its own — a command with a picture is drawn as the picture in the strip, and the host resolves the key,
+    /// so a key nothing contributes is a button with nothing in it — and that it can be asked for. What it
+    /// draws is the table the other tests are about.
+    /// </remarks>
+    [Fact]
+    public void TheOverviewOffersToReadTheWorkAgain()
+    {
+        var services = Host.Services();
+        var plugin = new Vcs();
+
+        plugin.Initialize(services.For(plugin.Manifest.Id, 1));
+
+        var overview = services.Docks.Registrations.Single(dock =>
+            dock.DockNameId == RorolalaDocks.OverviewNameId
+        );
+        var view = overview.Create(DockPlacement.Center);
+        var command = Assert.Single(view.HeaderCommands);
+
+        Assert.Equal("rorolala_vcs.status.refresh", command.LabelKey);
+        Assert.Equal("rorolala_vcs.refresh", command.IconKey);
+
+        // The key is one the plugin contributes a picture under, which is what makes the button a mark rather
+        // than an empty one: the library is the shell's, and a plugin's pictures are found in it by key.
+        Assert.Contains(
+            "rorolala_vcs.refresh",
+            global::RorolalaVCSPlugin.Icons.Pictures.Select(picture => picture.Key)
+        );
+
+        command.Command();
+    }
+
+    /// <summary>A line in the middle of the dock is said only where the table has nothing to show.</summary>
+    /// <remarks>
+    /// The two say different things at once: a work with changes is the table, and the words for a work without
+    /// them are what stands in its place. A line left over a table is a dock saying both at once — that there
+    /// is nothing to confirm, over the things to confirm.
+    /// </remarks>
+    [Fact]
+    public void ALineIsSaidOnlyWhereTheTableHasNothingToShow()
+    {
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: ["gone.txt"],
+            Untagged: [],
+            Renamed: [],
+            Modified: [],
+            Unowned: [],
+            WrongBase: [],
+            Merging: [],
+            Broken: []
+        );
+
+        OverviewReading read = new(facts, null);
+        OverviewReading unread = new(null, "it.overview.unreadable");
+
+        // A reading with nothing in it says so, and a reading that could not be made says why.
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.status.clean"), OverviewView.Line(read, 0));
+        Assert.Equal("it.overview.unreadable", OverviewView.Line(unread, 0));
+
+        // A reading with a row in it says nothing in the middle: the row is the whole of what is said.
+        Assert.Null(OverviewView.Line(read, 1));
+        Assert.Null(OverviewView.Line(unread, 1));
+    }
+
+    /// <summary>Every change a reading holds becomes one row, and no more.</summary>
+    /// <remarks>
+    /// The table is the whole of what the Overview shows, so what it is built from is the one thing worth
+    /// checking without a window: a change of each kind becomes a row of its own, the paths land in the
+    /// columns they belong in, and the state a row is in is the pills it wears — the kind of change it is,
+    /// and what became of its content.
+    /// </remarks>
+    [Fact]
+    public void EveryChangeBecomesOneRowOfTheTable()
+    {
+        // The translations are named before anything is asked for them, which is what a run does: what a
+        // key reads as here is the key, since the catalogue is a scratch directory that states nothing.
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: ["gone.txt"],
+            Untagged: ["new.txt"],
+            Renamed: [new Rename("a.txt", "b.txt", Modified: false, Strong: true)],
+            Modified: ["kept.txt", "stale.psd"],
+            Unowned: ["theirs.psd"],
+            WrongBase: ["stale.psd"],
+            Merging: [new Merge("merge/file.txt", "1a2b3c4d5e6f", "merge/file.1a2b3c4.txt", null)],
+            Broken: []
+        );
+
+        var rows = OverviewView.Rows(facts);
+
+        Assert.Equal(7, rows.Count);
+
+        // What is wrong is read first — another account's before a base upstream has moved past — then what
+        // is under way, then what the Layout and the tree disagree about, and last what is to be recorded.
+        Assert.Equal(
+            [
+                RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned"),
+                RolaI18N.Get("rorolala_vcs.status.change_wrong_base"),
+                $"{RolaI18N.Get("rorolala_vcs.status.kind_merge")} + {RolaI18N.Get("rorolala_vcs.status.merge_variant")}1a2b3c4",
+                RolaI18N.Get("rorolala_vcs.status.kind_lost"),
+                RolaI18N.Get("rorolala_vcs.status.kind_untagged"),
+                $"{RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")} + {RolaI18N.Get("rorolala_vcs.status.change_unchanged")}",
+                RolaI18N.Get("rorolala_vcs.status.change_modified"),
+            ],
+            rows.Select(Pills)
+        );
+
+        // A change of content has no kind of its own, so the row it makes is one pill saying what became of
+        // it, and the two that are wrong carry the paths they are about.
+        Assert.Equal(("theirs.psd", string.Empty), (rows[0].From, rows[0].To));
+        Assert.Equal(("stale.psd", string.Empty), (rows[1].From, rows[1].To));
+
+        // A merge has nothing to say about a content of its own, so the column carries the variant waiting.
+        Assert.Equal(("merge/file.txt", "merge/file.1a2b3c4.txt"), (rows[2].From, rows[2].To));
+
+        // What the Layout names and the tree has lost comes from a path and goes nowhere, and what the tree
+        // holds and the Layout does not name is the other way round. A move is read after both, since what it
+        // says is where a file went rather than that one is missing.
+        Assert.Equal(("gone.txt", string.Empty), (rows[3].From, rows[3].To));
+        Assert.Equal((string.Empty, "new.txt"), (rows[4].From, rows[4].To));
+        Assert.Equal(("a.txt", "b.txt"), (rows[5].From, rows[5].To));
+
+        Assert.Equal(("kept.txt", string.Empty), (rows[6].From, rows[6].To));
+    }
+
+    /// <summary>A move whose content is wrong is read among the wrong changes rather than among the moves.</summary>
+    /// <remarks>
+    /// A row stands in one group, and it is the group of the state that has to be acted on first: the move is
+    /// a move whichever group it is read in, and what the order says is which of the two a reader meets first.
+    /// </remarks>
+    [Fact]
+    public void AMoveWithAWrongBaseIsReadWithTheWrongChanges()
+    {
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: [],
+            Untagged: [],
+            Renamed:
+            [
+                new Rename("c.txt", "d.txt", Modified: false, Strong: true),
+                new Rename("a.txt", "b.txt", Modified: true, Strong: true),
+            ],
+            Modified: ["b.txt"],
+            Unowned: [],
+            WrongBase: ["b.txt"],
+            Merging: [],
+            Broken: []
+        );
+
+        var rows = OverviewView.Rows(facts);
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("b.txt", rows[0].To);
+        Assert.Equal("d.txt", rows[1].To);
+    }
+
+    /// <summary>A move whose file was edited is one row, which says both things about it.</summary>
+    /// <remarks>
+    /// The destination of a move is among the changes of content as well — what it holds is not what the
+    /// Layout agreed with at the path it came from — so a table that took both lists at their word would
+    /// show one file twice, once as a move and once as a change, with nothing to say they are the same.
+    /// </remarks>
+    [Fact]
+    public void AMoveThatWasEditedIsOneRow()
+    {
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: [],
+            Untagged: [],
+            Renamed: [new Rename("a.txt", "b.txt", Modified: true, Strong: false)],
+            Modified: ["b.txt"],
+            Unowned: [],
+            WrongBase: [],
+            Merging: [],
+            Broken: []
+        );
+
+        var row = Assert.Single(OverviewView.Rows(facts));
+
+        Assert.Equal(
+            $"{RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")} + {RolaI18N.Get("rorolala_vcs.status.change_modified")}",
+            Pills(row)
+        );
+        Assert.Equal(("a.txt", "b.txt"), (row.From, row.To));
+    }
+
+    /// <summary>A merge that cannot go on still names the file it is for.</summary>
+    /// <remarks>
+    /// The reason crosses as a kind and what it is about; the file the variant is for is the one thing the
+    /// row's own columns want and no reason carries, so it is asked for beside them — and the one reason
+    /// where the Layout names no such file is the one that answers with nothing.
+    /// </remarks>
+    [Fact]
+    public void AMergeThatCannotGoOnNamesTheFileItIsFor()
+    {
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: [],
+            Untagged: [],
+            Renamed: [],
+            Modified: [],
+            Unowned: [],
+            WrongBase: [],
+            Merging: [],
+            Broken:
+            [
+                new BrokenReason(BrokenKind.FileGone, "merge/hero.txt", "merge/hero.psd"),
+                new BrokenReason(BrokenKind.NoTarget, "1a2b3c4d5e6f", string.Empty),
+            ]
+        );
+
+        var rows = OverviewView.Rows(facts);
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(("merge/hero.psd", "merge/hero.txt"), (rows[0].From, rows[0].To));
+
+        // The reason is the row's second pill, said after the words for a merge that cannot go on.
+        Assert.Equal(2, rows[0].Pills.Count);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.status.kind_merge"), rows[0].Pills[0].Said);
+        Assert.StartsWith(
+            RolaI18N.Get("rorolala_vcs.status.merge_broken"),
+            rows[0].Pills[1].Said,
+            StringComparison.Ordinal
+        );
+
+        // The Layout naming no such file is a reason rather than a missing answer, so the row is there with
+        // both its pills, and the columns that want a path are the ones left empty.
+        Assert.Equal((string.Empty, string.Empty), (rows[1].From, rows[1].To));
+        Assert.Equal(2, rows[1].Pills.Count);
+        Assert.True(
+            rows[1].Pills[1].Said.Length > RolaI18N.Get("rorolala_vcs.status.merge_broken").Length,
+            rows[1].Pills[1].Said
+        );
+    }
+
+    /// <summary>Two readings that say the same thing are one drawing, and any difference makes two.</summary>
+    /// <remarks>
+    /// The dock reads the work again on a timer, and what it reads is what it draws: a reading that says
+    /// what the last one said must leave the table alone, or the reader loses what they had scrolled to,
+    /// chosen and were pointing at every few seconds. That rests on two readings built apart comparing equal
+    /// — which a row holding a list of pills is where it is easy to get wrong, since two lists that say the
+    /// same thing are not the same list.
+    /// </remarks>
+    [Fact]
+    public void ReadingsThatSayTheSameThingAreTheSameDrawing()
+    {
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: ["gone.txt"],
+            Untagged: ["new.txt"],
+            Renamed: [new Rename("a.txt", "b.txt", Modified: true, Strong: true)],
+            Modified: ["a-b.txt", "kept.txt"],
+            Unowned: ["theirs.psd"],
+            WrongBase: [],
+            Merging: [new Merge("merge/file.txt", "1a2b3c4d5e6f", "merge/file.txt.v", null)],
+            Broken: []
+        );
+
+        var once = OverviewView.Rows(facts);
+
+        Assert.True(OverviewView.Same(once, OverviewView.Rows(facts)));
+
+        // A path the reading no longer holds is a different table, and so is one it holds instead.
+        Assert.False(OverviewView.Same(once, OverviewView.Rows(facts with { Lost = [] })));
+        Assert.False(OverviewView.Same(once, OverviewView.Rows(facts with { Untagged = ["new.txt", "more.txt"] })));
+
+        // A path that moved losing its edit turns two pills into one, and a version that is behind turns a
+        // pill into another: what a row says is what it is drawn as.
+        StatusFacts settled = facts with
+        {
+            Renamed = [new Rename("a.txt", "b.txt", Modified: false, Strong: true)],
+        };
+
+        Assert.False(OverviewView.Same(once, OverviewView.Rows(settled)));
+        Assert.False(OverviewView.Same(once, OverviewView.Rows(facts with { WrongBase = ["kept.txt"] })));
+    }
+
+    /// <summary>What a row's pills say, in the order they are drawn.</summary>
+    /// <param name="row">The row.</param>
+    /// <returns>What it says about the path's state.</returns>
+    private static string Pills(TableRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return string.Join(" + ", row.Pills.Select(pill => pill.Said));
     }
 }
 
