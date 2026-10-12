@@ -44,6 +44,23 @@ internal sealed class DockInstance
     /// </remarks>
     public string? Window { get; set; }
 
+    /// <summary>
+    /// Whether this dock was opened in the window it is in, rather than moved into it.
+    /// </summary>
+    /// <remarks>
+    /// What a window closing means for the dock it holds. A dock that was moved into a window of its own came
+    /// out of the main window, and the main window is where it goes back to; a dock that was opened in one —
+    /// a directory asked for in a window of its own, which is what a dock asked for anew in its own window is
+    /// — was never in the main window, so closing that window is the end of it rather than a return. Without
+    /// the difference, closing a window that was opened onto one directory leaves a dock of that directory in
+    /// the main window that nobody asked for.
+    /// <para>
+    /// Written where the window is written: it is set as the instance is made in a window, and cleared as the
+    /// instance is moved, so a dock that has been moved reads as moved.
+    /// </para>
+    /// </remarks>
+    public bool OpenedHere { get; set; }
+
     /// <summary>Where the dock currently sits.</summary>
     public DockPlacement Placement { get; set; }
 

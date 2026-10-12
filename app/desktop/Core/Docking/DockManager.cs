@@ -215,6 +215,8 @@ internal sealed class DockManager
             Title = _i18n.Get(registration.DisplayNameKey),
             Request = request,
             Window = window,
+            // A dock made in a window was made for it, and one made with no window is the main window's.
+            OpenedHere = window is not null,
             Placement = placement,
             IsOpen = true,
         };
@@ -422,6 +424,10 @@ internal sealed class DockManager
     /// window it is leaving and the one it is arriving in would otherwise both draw it for as long as it
     /// took to say both, and a view belongs to one parent at a time. Nothing is said when neither the
     /// region nor the window changed, because a drag that ended where it started is not a move.
+    /// <para>
+    /// A dock that has been moved is one that was moved rather than one that was opened where it is, which is
+    /// what a window closing is answered by (see <see cref="DockInstance.OpenedHere"/>).
+    /// </para>
     /// </remarks>
     /// <param name="instance">The dock to move.</param>
     /// <param name="placement">The region to move it to.</param>
@@ -435,6 +441,7 @@ internal sealed class DockManager
 
         instance.Placement = placement;
         instance.Window = window;
+        instance.OpenedHere = false;
         Raise();
     }
 

@@ -133,6 +133,53 @@ public sealed class WindowTests
     }
 
     /// <summary>
+    /// A dock opened in a window of its own goes with that window when it closes.
+    /// </summary>
+    /// <remarks>
+    /// What a directory asked for in a window of its own is, and the one thing it must not do: a dock that was
+    /// <em>opened</em> in a window — rather than moved into it out of the main window — was never in the main
+    /// window, so closing that window is the end of it. Brought back instead, closing a window opened onto one
+    /// directory would leave a dock of that directory in the main window, kept in the layout, that nobody
+    /// asked for.
+    /// </remarks>
+    [Fact]
+    public void ADockOpenedInAWindowOfItsOwnGoesWithIt()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.browser");
+        var kept = New("it.dock.kept");
+        services.Docks.Register(registration);
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
+        services.Windows.OpenMain();
+
+        var stays = services.Docks.InstanceOf(kept.DockNameId);
+
+        Assert.NotNull(stays);
+        Assert.Null(stays.Window);
+
+        // What the File System's own item asks for: a dock of its own, in a window of its own.
+        services.Windows.Open(new DockRequest(registration.DockNameId, "/work", DockOpenMode.New));
+
+        var opened = services.Docks.Instances.Single(one => one.DockNameId == "it.dock.browser");
+
+        Assert.NotNull(opened.Window);
+        Assert.True(opened.OpenedHere);
+        Assert.Equal(2, services.Windows.Count);
+
+        var own = (MainWindow)services.Shell.Window!;
+
+        own.Close();
+
+        // Gone with the window, and not moved into the main window: what is left there is the dock that was
+        // in it from the start.
+        Assert.DoesNotContain(services.Docks.Instances, one => one.DockNameId == "it.dock.browser");
+        Assert.DoesNotContain(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.browser");
+        Assert.Equal(1, services.Windows.Count);
+        Assert.Same(stays, services.Docks.InstanceOf(kept.DockNameId));
+    }
+
+    /// <summary>
     /// A dock that keeps one instance of its own is not moved in beside the one the main window shows.
     /// </summary>
     /// <remarks>
