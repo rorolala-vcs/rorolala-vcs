@@ -571,6 +571,7 @@ mod tests {
     use std::time::Duration;
 
     use rorolala_layout::{Layout, LayoutPath, MutableData};
+    use rorolala_tree_analyze::remember_moved;
     use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, VAULT_LAYOUT_NAME};
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
@@ -806,6 +807,46 @@ mod tests {
         assert_eq!(status.unowned, vec!["hero.psd".to_owned()], "{status:?}");
         assert_eq!(status.modified, Vec::<String>::new(), "{status:?}");
         assert_eq!(status.state_of(&dir.join("hero.psd")), PathState::Wrong);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A file that was changed and then moved is still a change, wherever it is now.
+    ///
+    /// What the Layout agrees with is the entry rather than the path it is named at, so a move carries that
+    /// agreement with it — which is what `rola fs-ops mv` writes down, since by the time a reading looks, the
+    /// path that would tell it is gone. Written down as agreement with what the file holds now, a change made
+    /// before a move would be a change no reading reports: what is checked here is the run that hid one.
+    #[test]
+    fn a_file_that_changed_and_then_moved_is_still_a_change() {
+        let (dir, workspace) = workspace("moved-changed");
+        track(&workspace, 1, "a.txt");
+        fs::write(dir.join("a.txt"), b"before\n").unwrap();
+
+        // A first reading writes down what the file holds, which is what the Layout then agrees with.
+        let _ = read(&workspace);
+
+        sleep(Duration::from_millis(20));
+        fs::write(dir.join("a.txt"), b"after\n").unwrap();
+
+        assert_eq!(read(&workspace).modified, vec!["a.txt".to_owned()]);
+
+        // The move: what the file system did, what the Layout says about it, and what the run writes down.
+        let from = LayoutPath::new("a.txt").unwrap();
+        let to = LayoutPath::new("b.txt").unwrap();
+        let layout = working(&workspace);
+
+        fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
+        layout.move_path(&from, &to).unwrap();
+        remember_moved(&dir, &layout, &from, &to).unwrap();
+
+        let status = read(&workspace);
+
+        // What changed is still what changed: the path the Layout names is where the file is, so there is no
+        // move left to be seen, and the change is the reading's own to report.
+        assert_eq!(status.modified, vec!["b.txt".to_owned()], "{status:?}");
+        assert_eq!(status.renamed, Vec::new(), "{status:?}");
+        assert_eq!(status.state_of(&dir.join("b.txt")), PathState::Modified);
 
         let _ = fs::remove_dir_all(&dir);
     }

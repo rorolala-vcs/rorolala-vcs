@@ -466,6 +466,53 @@ pub fn cache_path(root: &Path, layout: &Layout) -> PathBuf {
         .join("entries")
 }
 
+/// Writes down that a path the Layout names holds what it held where it was, a move having put it there.
+///
+/// A move is not a change. The entry the Layout agrees with is the *entry*, wherever it is named, so what a
+/// reading wrote down about it where it was is what it has where it is: what the file holds is read afresh —
+/// it is at another path, so the reading's own skip of a file whose time and length are what they were does
+/// not apply — and the digest the Layout was known to agree with is carried over with it.
+///
+/// Written down as agreement with what the file holds now, a file that was changed before it moved would be a
+/// file that changed nothing: the path it moved to is one the Layout names, so there is no move left to be
+/// seen either, and the change is one no reading reports. What is written here is what a reading cannot work
+/// out for itself, since by the time it looks, the path that would tell it is gone.
+///
+/// # Errors
+///
+/// Returns [`TreeDiffError::Io`] when the file at the path, or the cache, could not be read or written.
+pub fn remember_moved(
+    root: &Path,
+    layout: &Layout,
+    from: &LayoutPath,
+    to: &LayoutPath,
+) -> Result<(), TreeDiffError> {
+    let disk = root.join(to.to_path_buf());
+
+    // A path that is not a file — a move that landed nowhere — is nothing to write down.
+    if !disk.is_file() {
+        return Ok(());
+    }
+
+    let file = cache_path(root, layout);
+    let mut cache = Cache::read(&file);
+    let read = entry_of(&disk)?;
+
+    // A path the cache has never read is one nothing has disagreed with yet, which is what a file read for the
+    // first time is; a path it has read keeps the agreement — or the disagreement — that entry had.
+    cache.insert(
+        to.clone(),
+        match cache.get(from) {
+            Some(was) => read.with_agreed(was.agreed()),
+            None => read,
+        },
+    );
+
+    // Where it came from is left as it is: whether the Layout still names anything there is the Layout's to
+    // say, and a reading that finds nothing is one that can still say the file moved.
+    cache.write(&file)
+}
+
 /// What the file at `disk` holds now, as a reading of it writes it down.
 ///
 /// It is one file read on its own, for a caller that needs what a file looks like to the analysis

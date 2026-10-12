@@ -233,7 +233,7 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
                         .into();
                     }
 
-                    if let Err(next) = remember(&plan.layout, held, &moved) {
+                    if let Err(next) = remember(&plan.layout, held, &path, &moved) {
                         return next;
                     }
                 }
@@ -251,10 +251,25 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
     .into()
 }
 
-/// Writes down that the moved path holds what the Layout now names there.
-fn remember(layout: &Layout, held: &Workspace, path: &LayoutPath) -> Result<(), Next> {
-    if let Err(cause) = crate::checkout::remember(layout, held.get_root(), path.as_str()) {
-        return Err(ErrorFsOpsFailed { verb: "mv", cause }.into());
+/// Writes down that the moved path holds what it held where it was.
+///
+/// What the Layout agrees with is the entry rather than the path it is named at, so a move carries the
+/// agreement with it: see [`librorolala::tree_analyze::remember_moved`], which is where that is written down
+/// and why it must be written down at all.
+fn remember(
+    layout: &Layout,
+    held: &Workspace,
+    path: &LayoutPath,
+    moved: &LayoutPath,
+) -> Result<(), Next> {
+    if let Err(cause) =
+        librorolala::tree_analyze::remember_moved(held.get_root(), layout, path, moved)
+    {
+        return Err(ErrorFsOpsFailed {
+            verb: "mv",
+            cause: cause.to_string(),
+        }
+        .into());
     }
 
     Ok(())
