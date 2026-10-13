@@ -196,54 +196,38 @@ rorolala_vcs:
     en: Standing
     zh-CN: 领先
 
-  # What the cell of that column says when the pointer rests on it, and what the corner of a tile says. The
-  # count is the same number the cell holds, written out in words, because what a reader wants from the cell is
-  # how far and from the hover is which way; the corner has no room for a number, so its own words say only the
-  # direction the work would have to move.
+  # What the cell of that column says when the pointer rests on it, and what a tile's badge says when it does:
+  # one answer about one file, so the two read alike. What it says is what the count means and what to do about
+  # it, since a number beside a name is a fact a reader has to know how to act on; the count is the one the cell
+  # holds, written out in words.
+  #
+  # The count is not always there: a fetch brings the Vault's Layout and never its versions, so being behind is
+  # ordinarily a direction with no distance, and what is said is the direction alone. Being behind is being
+  # behind — how far is added to the sentence when the count is known, rather than a note about what is not.
+  # Being ahead always has one, since the chain that says so is this side's own.
   standing:
     ahead:
-      en: "%{count} versions ahead of upstream"
-      zh-CN: 领先上游 %{count} 个版本
+      en: This file's version is %{count} version(s) ahead of upstream. Sync to share it with others.
+      zh-CN: 该文件的当前版本领先于上游 %{count} 个版本，同步以共享给他人
     behind:
-      en: "%{count} versions behind upstream"
-      zh-CN: 落后上游 %{count} 个版本
+      en: This file's version is %{count} version(s) behind upstream. Sync to get the new content.
+      zh-CN: 该文件的当前版本落后于上游 %{count} 个版本，同步以获得新内容
+    behind_untold:
+      en: This file's version is behind upstream. Sync to get the new content.
+      zh-CN: 该文件的当前版本落后于上游，同步以获得新内容
     apart:
-      en: Both sides have moved on, so neither is based on the other
-      zh-CN: 两边都往前走了，互不基于对方
-    ahead_hover:
-      en: This side has versions the Vault has not been told of
-      zh-CN: 这边有 Vault 还不知道的版本
-    behind_hover:
-      en: The Vault has versions this side has not fetched
-      zh-CN: Vault 有这边还没取的版本
-    apart_hover:
-      en: Both sides have moved on, so work has to come this way
-      zh-CN: 两边都往前走了，得先取这边的
+      en: This file's version is based on one upstream does not share.
+      zh-CN: 该文件的当前版本基线和上游不一致
 
-  # What one file of the work is, in a word. These are what the mark beside a name says when the pointer
-  # rests on it rather than what is written in a column: a file is in one of a handful of states, and which
-  # one is read from the colour of the mark before any word of it is read. The words are the listing's own
-  # rather than the Overview's, which says more where there is room for a reason: here a change that is
-  # wrong says only that it is wrong, and a file that stands as it was recorded has nothing at all.
+  # What one file of the work is, and what is said when the pointer rests on the mark that says it. The words
+  # are the Overview's own — see `status` above — because the two are one answer about one state, and a reader
+  # who has learnt what a badge means has learnt what the panel's pill means too. What is left here is the one
+  # thing the panel knows and a state does not: which of the two ways a change is wrong is read from the lists
+  # the reading holds, and this is the answer for a change whose reason is neither of them.
   state:
-    untagged:
-      en: Untagged
-      zh-CN: 未标记
-    modified:
-      en: Changed
-      zh-CN: 修改
     wrong:
       en: Wrong change
       zh-CN: 错误修改
-    renamed:
-      en: Renamed
-      zh-CN: 被重命名
-    renamed_likely:
-      en: Possibly renamed
-      zh-CN: 可能被重命名
-    merging:
-      en: Merging
-      zh-CN: 合并中
 
   # What a variant file is called, and what is said about it. A variant file is one the Layout does not
   # name — it holds content waiting to be joined into a file the Layout does name — so it has no name of
@@ -268,25 +252,25 @@ rorolala_vcs:
   # ways into it do one thing rather than two.
   operations:
     rebuild:
-      en: Rebuild file
+      en: Rebuild
       zh-CN: 重建文件
     restore_move:
-      en: Undo move
+      en: Undo
       zh-CN: 还原移动
     restore_content:
-      en: Restore content
+      en: Restore
       zh-CN: 还原内容
     confirm_rename:
-      en: Confirm rename
+      en: Confirm
       zh-CN: 确定重命名
     connect:
-      en: Connect to
+      en: Connect
       zh-CN: 连接至
     take_ownership:
-      en: Take ownership
+      en: Hold
       zh-CN: 获取所有权
     cancel_merge:
-      en: Cancel the merge
+      en: Cancel
       zh-CN: 取消该合并
 
     # What the two sides of a connection say while one is being made, in place of what they do. The button that
@@ -328,11 +312,20 @@ rorolala_vcs:
       en: You
       zh-CN: 你
 
-    # What the corner of a lock says when the pointer rests on it. A corner is a picture, so the name goes
-    # in a phrase here rather than standing alone as it does in the column.
+    # What the badge of a lock says when the pointer rests on it, which is the whole of what holding a file
+    # means to the person reading it: whether they may edit it, and on whose word. The words the column holds
+    # are a name or nothing, so the sentence is the badge's own — and the column and the badge are two views of
+    # one answer, which is why what they say is stated here rather than in the column's cell.
+    #
+    # The holder's name is the one value the phrase leaves a place for, and the phrase for the reader's own
+    # file names nobody: "you" is not somebody else's name, and a lock that said "held by you" would be a lock
+    # read as though it were another account's.
+    mine_hover:
+      en: You hold this file, so you can edit it
+      zh-CN: 你正持有该文件，可编辑
     held_by:
-      en: Held by %{holder}
-      zh-CN: 由 %{holder} 持有
+      en: "%{holder} holds this file, so you cannot edit it"
+      zh-CN: 该文件由 %{holder} 持有，无法编辑
 
   # What an entry's menu offers about who holds it. What is claimed is one file, or everything under a
   # directory — the command line takes a directory recursively — so the two are said apart. The forced

@@ -21,7 +21,10 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// <summary>The i18n key a held-by-you cell reads as.</summary>
     private const string Mine = "rorolala_vcs.ownership.mine";
 
-    /// <summary>The phrase the badge of a lock is hovered for, with the holder's name in it.</summary>
+    /// <summary>What the badge of the reader's own lock says when the pointer rests on it.</summary>
+    private const string MineHover = "rorolala_vcs.ownership.mine_hover";
+
+    /// <summary>The phrase the badge of another account's lock is hovered for, with the holder's name in it.</summary>
     private const string HeldBy = "rorolala_vcs.ownership.held_by";
 
     /// <summary>What the Vault copy says about the entries being listed.</summary>
@@ -49,12 +52,17 @@ internal sealed class RorolalaLocks : IEntryLockProvider
             // another account's lock is — the two are the two answers to the same question, so they are drawn
             // the same way round. The words stay in the ordinary ink, since "you" is a name like any other and
             // a column that shouted it would shout every row it holds.
+            //
+            // What the badge says on hover is what holding the file means to the person reading it, which the
+            // column's own word for it does not: the column says a name, and a name does not say whether the
+            // file may be edited. The phrase names nobody, because "you" is not somebody else's name.
             { Kind: EntryLockKind.Mine } => new EntryMark(
                 TextKey: Mine,
                 IconKey: Icons.Create,
                 Ink: MarkInk.Add,
                 TextInk: MarkInk.Plain,
-                Tagged: true
+                Tagged: true,
+                HoverKey: MineHover
             ),
 
             // Held by somebody else, which is the lock: the one answer on the card that is not the

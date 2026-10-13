@@ -88,9 +88,15 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
     /// have each moved on, so the work cannot be settled by moving it either way.
     /// </para>
     /// <para>
-    /// Behind is one answer whether or not the count is known. A fetch brings the Vault's Layout and never its
-    /// versions, so what the Vault is at is ordinarily a version this side has never had: the direction is
-    /// certain — it has work this side has not fetched — and how far is the Vault's own chain's to say.
+    /// What it says on hover is the whole of what the count means and what to do about it, and it is the very
+    /// words the column's cell is hovered for — see <see cref="RorolalaStanding.Said"/> — because the two are one
+    /// answer about one file: a count on a badge would say how far and not which way, and a count in a cell would
+    /// say how far and not what to do about it.
+    /// </para>
+    /// <para>
+    /// Behind is one answer whether or not the count is known, and the words say which of the two it is: a fetch
+    /// brings the Vault's Layout and never its versions, so what the Vault is at is ordinarily a version this
+    /// side has never had.
     /// </para>
     /// </remarks>
     /// <param name="standing">What the reading says about the entry.</param>
@@ -106,7 +112,7 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
                 IconKey: Upload,
                 Ink: MarkInk.Add,
                 Tagged: true,
-                HoverKey: "rorolala_vcs.standing.ahead_hover"
+                Text: RorolalaStanding.Said(standing)
             ),
 
             // Behind the Vault's: work upstream has that this side has not fetched, whether or not the chain
@@ -115,7 +121,7 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
                 IconKey: Download,
                 Ink: MarkInk.Error,
                 Tagged: true,
-                HoverKey: "rorolala_vcs.standing.behind_hover"
+                Text: RorolalaStanding.Said(standing)
             ),
 
             // Both moved on: neither is based on the other, so there is no side the work could move to.
@@ -123,7 +129,7 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
                 IconKey: Split,
                 Ink: MarkInk.Error,
                 Tagged: true,
-                HoverKey: "rorolala_vcs.standing.apart_hover"
+                Text: RorolalaStanding.Said(standing)
             ),
 
             // In step, or nothing says how the two stand: no badge at all, since a mark saying "nothing is

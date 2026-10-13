@@ -190,25 +190,25 @@ public sealed class ColumnTests
     {
         _ = Host.Services();
 
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.state.untagged"), RorolalaStates.Say(PathState.Untagged).Hint);
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.state.modified"), RorolalaStates.Say(PathState.Modified).Hint);
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.state.wrong"), RorolalaStates.Say(PathState.Wrong).Hint);
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.state.renamed"), RorolalaStates.Say(PathState.Renamed).Hint);
-        Assert.Equal(
-            RolaI18N.Get("rorolala_vcs.state.renamed_likely"),
-            RorolalaStates.Say(PathState.RenamedLikely).Hint
-        );
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.state.merging"), RorolalaStates.Say(PathState.Merging).Hint);
+        // What a state says is the reading's answer rather than the view's, and the words are handed in: a dot
+        // and a badge of the same state say the same sentence, and what this pins is that the words are what
+        // the mark is hovered for rather than a key it means to name.
+        Assert.Equal("it", RorolalaStates.Say(PathState.Untagged, "it").Hint);
+        Assert.Equal("it", RorolalaStates.Say(PathState.Modified, "it").Hint);
+        Assert.Equal("it", RorolalaStates.Say(PathState.Wrong, "it").Hint);
+        Assert.Equal("it", RorolalaStates.Say(PathState.Renamed, "it").Hint);
+        Assert.Equal("it", RorolalaStates.Say(PathState.RenamedLikely, "it").Hint);
+        Assert.Equal("it", RorolalaStates.Say(PathState.Merging, "it").Hint);
 
-        Assert.Equal(RorolalaColours.Untagged, RorolalaStates.Say(PathState.Untagged).Colour);
-        Assert.Equal(RorolalaColours.UnderWay, RorolalaStates.Say(PathState.Modified).Colour);
-        Assert.Equal(RorolalaColours.Wrong, RorolalaStates.Say(PathState.Wrong).Colour);
-        Assert.Equal(RorolalaColours.Moved, RorolalaStates.Say(PathState.Renamed).Colour);
-        Assert.Equal(RorolalaColours.Moved, RorolalaStates.Say(PathState.RenamedLikely).Colour);
-        Assert.Equal(RorolalaColours.UnderWay, RorolalaStates.Say(PathState.Merging).Colour);
+        // The colours are this plugin's own four, and every one of them is a dot with a line of its own: the
+        // colour is what a row is scanned by, and the line is what makes the mark read against its ground.
+        Assert.Equal(RorolalaColours.Untagged, RorolalaStates.Say(PathState.Untagged, "it").Colour);
+        Assert.Equal(RorolalaColours.UnderWay, RorolalaStates.Say(PathState.Modified, "it").Colour);
+        Assert.Equal(RorolalaColours.Wrong, RorolalaStates.Say(PathState.Wrong, "it").Colour);
+        Assert.Equal(RorolalaColours.Moved, RorolalaStates.Say(PathState.Renamed, "it").Colour);
+        Assert.Equal(RorolalaColours.Moved, RorolalaStates.Say(PathState.RenamedLikely, "it").Colour);
+        Assert.Equal(RorolalaColours.UnderWay, RorolalaStates.Say(PathState.Merging, "it").Colour);
 
-        // Every one of them is a dot with a line of its own, and every dot says its word on itself rather than
-        // in its cell.
         foreach (var state in new[]
         {
             PathState.Untagged,
@@ -219,19 +219,65 @@ public sealed class ColumnTests
             PathState.Merging,
         })
         {
-            var mark = RorolalaStates.Say(state);
+            var mark = RorolalaStates.Say(state, "it");
 
             Assert.True(mark.Dot, $"{state}");
             Assert.Null(mark.Said());
-
-            // The line around it is a shade of the mark rather than the mark itself, so that the mark reads
-            // against the ground it is drawn on.
             Assert.NotNull(mark.Edge);
             Assert.NotEqual(mark.Colour, mark.Edge);
         }
 
-        Assert.False(RorolalaStates.Say(PathState.Lost).Dot);
-        Assert.False(RorolalaStates.Say(PathState.Unknown).Dot);
+        // A path the Layout names and the tree does not hold is not an entry of any listing, and a path the
+        // reading says nothing about stands as it was recorded: neither is a mark at all.
+        Assert.False(RorolalaStates.Say(PathState.Lost, "it").Dot);
+        Assert.False(RorolalaStates.Say(PathState.Unknown, "it").Dot);
+    }
+
+    /// <summary>A state says what the Overview says, which is one answer about one state.</summary>
+    /// <remarks>
+    /// The badge and the panel's pill are read by the same person about the same file, so a state that meant one
+    /// thing on a tile and another in the panel would be a state a reader had to learn twice — and whichever of
+    /// the two they read last would be the one they believed. What is checked is that every state is said with
+    /// the panel's own words, which is why the keys are the panel's: a correction to either is a correction to
+    /// both.
+    /// </remarks>
+    [Fact]
+    public void AStateSaysWhatTheOverviewSays()
+    {
+        _ = Host.Services();
+
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.status.kind_untagged"),
+            RorolalaStates.Words(PathState.Untagged)
+        );
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.status.change_modified"),
+            RorolalaStates.Words(PathState.Modified)
+        );
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.status.kind_rename_strong"),
+            RorolalaStates.Words(PathState.Renamed)
+        );
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.status.kind_rename_weak"),
+            RorolalaStates.Words(PathState.RenamedLikely)
+        );
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.status.kind_merge"),
+            RorolalaStates.Words(PathState.Merging)
+        );
+
+        // The one state whose words the reading may say more about: what a change that is wrong is said as is
+        // which of the two ways it is wrong, and this is the answer where neither list names it.
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.state.wrong"),
+            RorolalaStates.Words(PathState.Wrong)
+        );
+
+        // A path the Layout names and the tree has lost, and one the reading says nothing about, have nothing
+        // said about them at all.
+        Assert.Empty(RorolalaStates.Words(PathState.Lost));
+        Assert.Empty(RorolalaStates.Words(PathState.Unknown));
     }
 
     /// <summary>The Standing column writes a count where there is one, and says so where there is not.</summary>
@@ -258,12 +304,12 @@ public sealed class ColumnTests
         Assert.Equal(RorolalaColours.Wrong, behind.Colour);
         Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.behind", 1UL), behind.Hint);
 
-        // Behind with no count is the dash in the red of what must not be recorded, hovered for which side
-        // holds what — said on itself, since only the reading knows which of the two it is.
+        // Behind with no count is the dash in the red of what must not be recorded, and the words say that the
+        // count is not known rather than holding a zero that would read as being in step.
         var untold = RorolalaStanding.Say(new Standing(StandingRelation.Behind, null));
         Assert.Equal("-", untold.Text);
         Assert.Equal(RorolalaColours.Wrong, untold.Colour);
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.behind_hover"), untold.Hint);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.behind_untold"), untold.Hint);
 
         // Two chains that parted have no number between them at all, which is what the question mark says.
         var apart = RorolalaStanding.Say(new Standing(StandingRelation.Apart, null));
@@ -305,13 +351,23 @@ public sealed class ColumnTests
         Assert.Equal(VcsIcons.CallSplit, apart.IconKey);
         Assert.Equal(MarkInk.Error, apart.Ink);
 
-        // Every one of them is worn on the badge's own ground, since a tile carries marks of several kinds at
-        // once and a bare picture and a badge would be two of them.
+        // Every one of them is worn on the badge's own ground, and says on itself the very sentence the column's
+        // cell is hovered for: the count is what the cell is for and the sentence is what to do about it, and a
+        // badge and a cell that said two things about one file would be two answers about it.
         foreach (var mark in new[] { ahead, behind, untold, apart })
         {
             Assert.True(mark.Tagged);
-            Assert.NotNull(mark.HoverKey);
+            Assert.Null(mark.HoverKey);
+            Assert.False(string.IsNullOrEmpty(mark.Hover()));
         }
+
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.standing.ahead", 2UL),
+            ahead.Hover()
+        );
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.behind", 1UL), behind.Hover());
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.behind_untold"), untold.Hover());
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.apart"), apart.Hover());
 
         // In step, and a standing nothing says: no badge at all.
         Assert.Null(RorolalaStandingBadge.Say(new Standing(StandingRelation.Same, 0)).IconKey);
@@ -359,18 +415,21 @@ public sealed class ColumnTests
     {
         _ = Host.Services();
 
-        Assert.Equal(VcsIcons.Add, RorolalaStates.Badge(PathState.Untagged).IconKey);
-        Assert.Equal(VcsIcons.EditNote, RorolalaStates.Badge(PathState.Modified).IconKey);
-        Assert.Equal(VcsIcons.PriorityHigh, RorolalaStates.Badge(PathState.Wrong).IconKey);
-        Assert.Equal(VcsIcons.ArrowRightAlt, RorolalaStates.Badge(PathState.Renamed).IconKey);
-        Assert.Equal(VcsIcons.ArrowRightAlt, RorolalaStates.Badge(PathState.RenamedLikely).IconKey);
-        Assert.Equal(VcsIcons.EditNote, RorolalaStates.Badge(PathState.Merging).IconKey);
+        Assert.Equal(VcsIcons.Add, RorolalaStates.Badge(PathState.Untagged, "it").IconKey);
+        Assert.Equal(VcsIcons.EditNote, RorolalaStates.Badge(PathState.Modified, "it").IconKey);
+        Assert.Equal(VcsIcons.PriorityHigh, RorolalaStates.Badge(PathState.Wrong, "it").IconKey);
+        Assert.Equal(VcsIcons.ArrowRightAlt, RorolalaStates.Badge(PathState.Renamed, "it").IconKey);
+        Assert.Equal(VcsIcons.ArrowRightAlt, RorolalaStates.Badge(PathState.RenamedLikely, "it").IconKey);
+        Assert.Equal(VcsIcons.EditNote, RorolalaStates.Badge(PathState.Merging, "it").IconKey);
 
         // The colours are the ones the dots are, since what a state is coloured is the state and not the shape
         // it is drawn in.
         foreach (var state in new[] { PathState.Untagged, PathState.Modified, PathState.Wrong, PathState.Renamed })
         {
-            Assert.Equal(RorolalaStates.Say(state).Colour, RorolalaStates.Badge(state).Colour);
+            Assert.Equal(
+                RorolalaStates.Say(state, "it").Colour,
+                RorolalaStates.Badge(state, "it").Colour
+            );
         }
 
         // Every one of them is worn on the badge's own ground, and says on itself what the dot says on itself.
@@ -384,17 +443,17 @@ public sealed class ColumnTests
             PathState.Merging,
         })
         {
-            var worn = RorolalaStates.Badge(state);
+            var worn = RorolalaStates.Badge(state, "it");
 
             Assert.True(worn.Tagged, $"{state}");
             Assert.Null(worn.HoverKey);
-            Assert.Equal(RorolalaStates.Say(state).Hint, worn.Hover());
+            Assert.Equal(RorolalaStates.Say(state, "it").Hint, worn.Hover());
         }
 
         // A path the Layout names and the tree has lost is not an entry of any listing, and one the reading
         // says nothing about stands as it was recorded: neither wears a badge.
-        Assert.Null(RorolalaStates.Badge(PathState.Lost).IconKey);
-        Assert.Null(RorolalaStates.Badge(PathState.Unknown).IconKey);
+        Assert.Null(RorolalaStates.Badge(PathState.Lost, "it").IconKey);
+        Assert.Null(RorolalaStates.Badge(PathState.Unknown, "it").IconKey);
     }
 
     /// <summary>A provider that speaks for one directory and says one thing about an entry.</summary>

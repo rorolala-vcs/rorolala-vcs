@@ -131,7 +131,7 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
             StandingRelation.Ahead when standing.Distance is { } ahead => new EntryColumnMark(
                 Text: $"+{ahead}",
                 Colour: RorolalaColours.Untagged,
-                Hint: RolaI18N.Get("rorolala_vcs.standing.ahead", ahead)
+                Hint: Said(standing)
             ),
 
             // A version behind the Vault's: work upstream has that this side has not fetched, and the chain
@@ -139,15 +139,15 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
             StandingRelation.Behind when standing.Distance is { } behind => new EntryColumnMark(
                 Text: $"-{behind}",
                 Colour: RorolalaColours.Wrong,
-                Hint: RolaI18N.Get("rorolala_vcs.standing.behind", behind)
+                Hint: Said(standing)
             ),
 
             // Behind it, with the count the Vault's chain would give not here: the same direction as above,
-            // said without a number. The words are the hover's own, which say which side holds what.
+            // said without a number, and the words say so rather than leaving a zero to read as being in step.
             StandingRelation.Behind => new EntryColumnMark(
                 Text: Diverged,
                 Colour: RorolalaColours.Wrong,
-                Hint: RolaI18N.Get("rorolala_vcs.standing.behind_hover")
+                Hint: Said(standing)
             ),
 
             // Both sides moved on, so neither is based on the other and neither is a distance from it: there
@@ -155,12 +155,47 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
             StandingRelation.Apart => new EntryColumnMark(
                 Text: Apart,
                 Colour: RorolalaColours.Wrong,
-                Hint: RolaI18N.Get("rorolala_vcs.standing.apart")
+                Hint: Said(standing)
             ),
 
             // In step, or nothing says how the two stand, or the path is not one this reading is about: the
             // listing's own dash, which is what it says everything it does not know with.
             _ => new EntryColumnMark(Text: Diverged),
+        };
+    }
+
+    /// <summary>
+    /// What a standing says, which is the whole of what the count means and what to do about it.
+    /// </summary>
+    /// <remarks>
+    /// It is what the cell is hovered for and what the badge on a tile says, read from here by both: a count
+    /// beside a name is a fact a reader has to know how to act on, and a badge has no room for the number — so
+    /// the sentence is where the two are one answer about one file rather than two halves of one.
+    /// <para>
+    /// Where the count is not known the sentence says the direction and stops: being behind is being behind, and
+    /// how far is added when it is known rather than an apology for not knowing it. A number that is not known is
+    /// not a number a reader may read as "in step", which is why the two are separate sentences at all.
+    /// </para>
+    /// </remarks>
+    /// <param name="standing">What the reading says about the entry.</param>
+    /// <returns>What to say, or nothing for a file with nothing between it and upstream.</returns>
+    internal static string Said(Standing standing)
+    {
+        ArgumentNullException.ThrowIfNull(standing);
+
+        return standing.Relation switch
+        {
+            StandingRelation.Ahead => RolaI18N.Get(
+                "rorolala_vcs.standing.ahead",
+                standing.Distance ?? 0UL
+            ),
+            StandingRelation.Behind when standing.Distance is { } behind => RolaI18N.Get(
+                "rorolala_vcs.standing.behind",
+                behind
+            ),
+            StandingRelation.Behind => RolaI18N.Get("rorolala_vcs.standing.behind_untold"),
+            StandingRelation.Apart => RolaI18N.Get("rorolala_vcs.standing.apart"),
+            _ => string.Empty,
         };
     }
 

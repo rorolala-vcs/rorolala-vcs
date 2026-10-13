@@ -43,7 +43,7 @@ internal static class VariantFiles
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(path);
 
-        return merges.FirstOrDefault(merge => Same(root, Place(merge), path));
+        return merges.FirstOrDefault(merge => StatusReadings.Names(root, Place(merge), path));
     }
 
     /// <summary>Where the tree holds a merge's variant file, which is where it moved to when it moved.</summary>
@@ -65,22 +65,4 @@ internal static class VariantFiles
 
         return variant.Length > Short ? variant[..Short] : variant;
     }
-
-    /// <summary>Whether a path the reading names and a path the program names are the same file.</summary>
-    /// <remarks>
-    /// Both are made absolute before they are compared, since one is relative to the Workspace's root and the
-    /// other to whatever the program was run in, and a path that is the same file spelled two ways is one
-    /// file. What the comparison is case-sensitive about is the platform's answer rather than this one's:
-    /// Windows holds one file under either case, and a filesystem that does not would have two.
-    /// </remarks>
-    /// <param name="root">Where the Workspace is rooted.</param>
-    /// <param name="named">The path the reading names, relative to the root.</param>
-    /// <param name="path">The path the program names.</param>
-    /// <returns>Whether they are the same file.</returns>
-    private static bool Same(string root, string named, string path) =>
-        string.Equals(
-            Path.GetFullPath(Path.Combine(root, named)),
-            Path.GetFullPath(path),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
-        );
 }

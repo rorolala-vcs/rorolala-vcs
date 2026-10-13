@@ -71,7 +71,9 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        return State(entry) is { } state ? Say(state) : new EntryColumnMark();
+        return Answer(entry) is { } stated
+            ? Say(stated.State, stated.Words)
+            : new EntryColumnMark();
     }
 
     /// <inheritdoc />
@@ -79,19 +81,31 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        return State(entry) is { } state ? Badge(state) : new EntryMark();
+        return Answer(entry) is { } stated
+            ? Badge(stated.State, stated.Words)
+            : new EntryMark();
     }
 
-    /// <summary>What the reading says about an entry, or nothing when this is not about it.</summary>
+    /// <summary>What a reading says about one entry: the state it is in, and what that state is said as.</summary>
+    /// <param name="State">What the reading says about the entry.</param>
+    /// <param name="Words">What that is called, which is the same words wherever the state is shown.</param>
+    private sealed record Stated(PathState State, string Words);
+
+    /// <summary>What the reading says about an entry and what it is said as, or nothing.</summary>
     /// <remarks>
     /// The two places a state is drawn ask the same question of the same reading — a mark in a list and a
     /// badge on a tile are one answer about one file — so what they read is read once here: a directory the
     /// entry names none of, and a reading that could not answer, are both nothing to say rather than a
     /// failure, since a listing that will not appear is a worse answer than one without a mark on it.
+    /// <para>
+    /// The words are read here rather than in either view because they are the reading's to say: which of the
+    /// two ways a change is wrong is not in the state, and a mark that had only the state to go by would say
+    /// less than the panel does about the same file.
+    /// </para>
     /// </remarks>
     /// <param name="entry">The entry to ask about.</param>
     /// <returns>What the reading says, or nothing.</returns>
-    private PathState? State(Entry entry)
+    private Stated? Answer(Entry entry)
     {
         // What a state is about is a file of the work, so an entry that names no directory of its own — the
         // way up, which is a step rather than a place — is nothing this speaks about.
@@ -105,7 +119,17 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
 
         try
         {
-            return status.StateOf(entry.Path);
+            var state = status.StateOf(entry.Path);
+
+            return new Stated(
+                state,
+                state switch
+                {
+                    PathState.Wrong => Wrong(status, entry.Path),
+                    PathState.Merging => Merging(status, entry.Path),
+                    _ => Words(state),
+                }
+            );
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -114,46 +138,109 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     }
 
     /// <summary>
+    /// What a state is said as, which is the Overview's own words for it.
+    /// </summary>
+    /// <remarks>
+    /// The two are one answer about one file, so the words are the panel's rather than the listing's: a reader
+    /// who has learnt what a badge means has learnt what the panel's pill means, and a sentence corrected in one
+    /// place is corrected in the other. They live here rather than in either view because they are what the
+    /// reading says about a file, and what a view does with them — a dot, a badge, a pill — is the view's own.
+    /// <para>
+    /// The one state whose words need more than the state is a change that is wrong: the two ways it can be are
+    /// told apart by the lists the reading holds, which is <see cref="Wrong"/>, and what is said here is the
+    /// answer where neither list names it.
+    /// </para>
+    /// </remarks>
+    /// <param name="state">What the reading says about the entry.</param>
+    /// <returns>What to say, which is nothing for a state a listing has no entry for.</returns>
+    internal static string Words(PathState state) =>
+        state switch
+        {
+            PathState.Untagged => RolaI18N.Get("rorolala_vcs.status.kind_untagged"),
+            PathState.Modified => RolaI18N.Get("rorolala_vcs.status.change_modified"),
+            PathState.Wrong => RolaI18N.Get("rorolala_vcs.state.wrong"),
+            PathState.Renamed => RolaI18N.Get("rorolala_vcs.status.kind_rename_strong"),
+            PathState.RenamedLikely => RolaI18N.Get("rorolala_vcs.status.kind_rename_weak"),
+
+            // A merge the reading holds as one waiting to be joined: the words are the panel's for a merge, and
+            // the variant it waits for is on the badge of the variant file — the other half of the same record.
+            PathState.Merging => RolaI18N.Get("rorolala_vcs.status.kind_merge"),
+
+            // A path the Layout names and the tree does not hold is not an entry of any listing, and a path the
+            // reading says nothing about is a file that stands as it was recorded: neither has anything said
+            // about it.
+            _ => string.Empty,
+        };
+
+    /// <summary>
+    /// What a merge in progress is said as, which names the variant it is waiting for.
+    /// </summary>
+    /// <remarks>
+    /// The panel's words for a merge name the variant, because that is the one thing about a merge no column of
+    /// its row carries — and what a reader who has stopped at a mark on a file wants to know is which variant is
+    /// holding it up. The variant is read from the record the entry is the target of, which is the other half of
+    /// the record whose variant file wears the same sentence; a file the reading calls merging with no record
+    /// naming it as a target is said the way the state alone can say it.
+    /// </remarks>
+    /// <param name="reading">The reading.</param>
+    /// <param name="path">The path of the entry, as the program names it.</param>
+    /// <returns>What to say.</returns>
+    private static string Merging(RolaStatus reading, string path) =>
+        reading.Merging.FirstOrDefault(
+            merge => StatusReadings.Names(reading.Root, merge.Target, path)
+        ) is { } merge
+            ? RolaI18N.Get("rorolala_vcs.variant.pending", VariantFiles.Head(merge.Variant))
+            : Words(PathState.Merging);
+
+    /// <summary>
+    /// What a change that is wrong is said as, which is which of the two ways it is wrong.
+    /// </summary>
+    /// <remarks>
+    /// A change is wrong because another account holds it, or because the version it is based on is one
+    /// upstream has moved past, and the reading names the paths of each: the state says only that something is
+    /// wrong, so the list is what tells the two apart. A path in neither list is a wrong change the reading
+    /// came to another way, which is answered with the listing's own word for it rather than with a reason that
+    /// may not be the one.
+    /// </remarks>
+    /// <param name="reading">The reading.</param>
+    /// <param name="path">The path of the entry, as the program names it.</param>
+    /// <returns>What to say.</returns>
+    private static string Wrong(RolaStatus reading, string path)
+    {
+        if (reading.Unowned.Any(named => StatusReadings.Names(reading.Root, named, path)))
+        {
+            return RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned");
+        }
+
+        if (reading.WrongBase.Any(named => StatusReadings.Names(reading.Root, named, path)))
+        {
+            return RolaI18N.Get("rorolala_vcs.status.change_wrong_base");
+        }
+
+        return RolaI18N.Get("rorolala_vcs.state.wrong");
+    }
+
+    /// <summary>
     /// What a state is drawn as: a dot in its colour, and the word for it said on the dot.
     /// </summary>
     /// <remarks>
     /// The colour is this plugin's own — see <see cref="RorolalaColours"/> — and the line around the mark is a
     /// shade of it chosen by the ground, since a mark that is its own edge on one ground is a smudge on the
-    /// other. A state that is wrong says only that it is wrong: which of the two ways it is wrong is the
-    /// Overview's to say, where there is room for a reason.
-    /// <para>
-    /// The words are the dot's, and they are asked for here rather than handed over as keys for the listing
-    /// to translate: they are this plugin's own, in this plugin's catalogue, and a key named by a literal
-    /// where the gate can see it is a key that cannot go missing without the gate saying so.
-    /// </para>
+    /// other. The words are handed in rather than worked out here, because what a state means is the reading's
+    /// to say and what it is drawn as is this mark's: one function answers a colour, the other a sentence.
     /// </remarks>
     /// <param name="state">What the reading says about the entry.</param>
+    /// <param name="words">What that state is called.</param>
     /// <returns>What the mark is, which is nothing for a state a listing has no entry for.</returns>
-    internal static EntryColumnMark Say(PathState state) =>
+    internal static EntryColumnMark Say(PathState state, string words) =>
         state switch
         {
-            PathState.Untagged => Dot(
-                RorolalaColours.Untagged,
-                RolaI18N.Get("rorolala_vcs.state.untagged")
-            ),
-            PathState.Modified => Dot(
-                RorolalaColours.UnderWay,
-                RolaI18N.Get("rorolala_vcs.state.modified")
-            ),
-            PathState.Wrong => Dot(RorolalaColours.Wrong, RolaI18N.Get("rorolala_vcs.state.wrong")),
-            PathState.Renamed => Dot(RorolalaColours.Moved, RolaI18N.Get("rorolala_vcs.state.renamed")),
-            PathState.RenamedLikely => Dot(
-                RorolalaColours.Moved,
-                RolaI18N.Get("rorolala_vcs.state.renamed_likely")
-            ),
-            PathState.Merging => Dot(
-                RorolalaColours.UnderWay,
-                RolaI18N.Get("rorolala_vcs.state.merging")
-            ),
-
-            // A path the Layout names and the tree does not hold is not an entry of any listing, and a path
-            // the reading says nothing about is a file that stands as it was recorded: neither has a mark
-            // beside a name, which is what a mark with nothing in it is.
+            PathState.Untagged => Dot(RorolalaColours.Untagged, words),
+            PathState.Modified => Dot(RorolalaColours.UnderWay, words),
+            PathState.Wrong => Dot(RorolalaColours.Wrong, words),
+            PathState.Renamed => Dot(RorolalaColours.Moved, words),
+            PathState.RenamedLikely => Dot(RorolalaColours.Moved, words),
+            PathState.Merging => Dot(RorolalaColours.UnderWay, words),
             _ => new EntryColumnMark(),
         };
 
@@ -168,40 +255,17 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// the shape it is drawn in.
     /// </remarks>
     /// <param name="state">What the reading says about the entry.</param>
+    /// <param name="words">What that state is called, which is what the badge is hovered for.</param>
     /// <returns>What the badge is, which is nothing for a state a listing has no entry for.</returns>
-    internal static EntryMark Badge(PathState state) =>
+    internal static EntryMark Badge(PathState state, string words) =>
         state switch
         {
-            PathState.Untagged => Worn(
-                Icons.Add,
-                RorolalaColours.Untagged,
-                "rorolala_vcs.state.untagged"
-            ),
-            PathState.Modified => Worn(
-                Icons.EditNote,
-                RorolalaColours.UnderWay,
-                "rorolala_vcs.state.modified"
-            ),
-            PathState.Wrong => Worn(
-                Icons.PriorityHigh,
-                RorolalaColours.Wrong,
-                "rorolala_vcs.state.wrong"
-            ),
-            PathState.Renamed => Worn(
-                Icons.ArrowRightAlt,
-                RorolalaColours.Moved,
-                "rorolala_vcs.state.renamed"
-            ),
-            PathState.RenamedLikely => Worn(
-                Icons.ArrowRightAlt,
-                RorolalaColours.Moved,
-                "rorolala_vcs.state.renamed_likely"
-            ),
-            PathState.Merging => Worn(
-                Icons.EditNote,
-                RorolalaColours.UnderWay,
-                "rorolala_vcs.state.merging"
-            ),
+            PathState.Untagged => Worn(Icons.Add, RorolalaColours.Untagged, words),
+            PathState.Modified => Worn(Icons.EditNote, RorolalaColours.UnderWay, words),
+            PathState.Wrong => Worn(Icons.PriorityHigh, RorolalaColours.Wrong, words),
+            PathState.Renamed => Worn(Icons.ArrowRightAlt, RorolalaColours.Moved, words),
+            PathState.RenamedLikely => Worn(Icons.ArrowRightAlt, RorolalaColours.Moved, words),
+            PathState.Merging => Worn(Icons.EditNote, RorolalaColours.UnderWay, words),
             _ => new EntryMark(),
         };
 
@@ -226,10 +290,10 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// </remarks>
     /// <param name="icon">The key of the picture the set draws for it.</param>
     /// <param name="colour">What the state is coloured.</param>
-    /// <param name="said">The key of the word for it, which is what the badge is hovered for.</param>
+    /// <param name="words">What that state is called, which is what the badge is hovered for.</param>
     /// <returns>The mark.</returns>
-    private static EntryMark Worn(string icon, Color colour, string said) =>
-        new(IconKey: icon, Colour: colour, Tagged: true, TextKey: said);
+    private static EntryMark Worn(string icon, Color colour, string words) =>
+        new(IconKey: icon, Colour: colour, Tagged: true, Text: words);
 
     /// <summary>
     /// Lets go of what was read, so the next answer is read from the tree as it is now.

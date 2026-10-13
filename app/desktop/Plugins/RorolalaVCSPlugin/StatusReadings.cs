@@ -60,6 +60,36 @@ internal sealed class StatusReadings
     }
 
     /// <summary>
+    /// Whether a path a reading named is the file the program names at `path`.
+    /// </summary>
+    /// <remarks>
+    /// What a reading names is relative to the Workspace it was made of — a state, a standing and a merge are
+    /// all lists of such paths — and what a listing has is a path the system names, so the two are joined before
+    /// they are compared. The reading itself does this for a state and a standing, which it is asked about one
+    /// path at a time; a list it hands over whole is what a reader of those lists has to do it for.
+    /// </remarks>
+    /// <param name="root">Where the Workspace the reading was made of is rooted.</param>
+    /// <param name="named">The path the reading named, relative to the root.</param>
+    /// <param name="path">The path the program names.</param>
+    /// <returns>Whether they are the same file.</returns>
+    public static bool Names(string root, string named, string path)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(named);
+        ArgumentNullException.ThrowIfNull(path);
+
+        // Both are made absolute before they are compared, since one is relative to the root and the other to
+        // whatever the program was run in, and a path that is the same file spelled two ways is one file. What
+        // the comparison is case-sensitive about is the platform's answer rather than this one's: Windows
+        // holds one file under either case, and a filesystem that does not would have two.
+        return string.Equals(
+            Path.GetFullPath(Path.Combine(root, named)),
+            Path.GetFullPath(path),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
+        );
+    }
+
+    /// <summary>
     /// Lets go of what was read, so the next answer is read from the tree as it is now.
     /// </summary>
     /// <remarks>
