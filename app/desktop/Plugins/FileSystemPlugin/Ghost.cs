@@ -74,9 +74,9 @@ internal sealed class Ghost
 
         // Read from the look's own keys rather than written in colours, like the band a frame is drawn with:
         // colours of its own here would be a second answer to what this program looks like.
-        _card[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.primary");
-        _card[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-        _card[!Border.BoxShadowProperty] = new DynamicResourceExtension("rorolala.shadow");
+        _card[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Primary);
+        _card[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
+        _card[!Border.BoxShadowProperty] = new DynamicResourceExtension(PaletteKeys.Shadow);
 
         over.Children.Add(_card);
     }

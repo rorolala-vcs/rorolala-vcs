@@ -114,11 +114,15 @@ internal sealed class Desktop
         var dialogs = new Dialogs(shell, i18n, icon);
 
         // The look has to be applied before anything is drawn, so the service that applies it is made
-        // here, with the rest of what a run is assembled from, rather than in the window.
-        var theme = new ThemeService(
+        // here, with the rest of what a run is assembled from, rather than in the window. It is made by
+        // its own factory because what a plugin is handed is not the service but the palette it answers
+        // from: both come out of the one statement of how a colour in force is found.
+        var making = ThemeService.Make(
             Application.Current ?? throw new InvalidOperationException("the host was assembled without an application"),
             _state.Theme
         );
+
+        var theme = making.Service;
 
         var docks = new DockManager(new DockRegistry(), i18n, log, popups);
         var menus = new MenuRegistry();
@@ -133,6 +137,7 @@ internal sealed class Desktop
             I18n = i18n,
             ProgramIcon = icon,
             Theme = theme,
+            Palette = making.Palette,
             Rola = new RolaCapability(),
             Preference = _state.Preference,
             Settings = new SettingRegistry(_state.Preference),

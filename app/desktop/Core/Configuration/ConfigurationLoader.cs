@@ -93,8 +93,18 @@ internal static class ConfigurationLoader
             var defaults = new ThemeConfiguration
             {
                 Mode = ThemeConfiguration.DefaultMode,
-                Primary = ThemeConfiguration.DefaultPrimary,
-                Accent = ThemeConfiguration.DefaultAccent,
+                Primary = ThemePalette.DefaultPrimary,
+                Accent = ThemePalette.DefaultAccent,
+                ThemeDarkBright = ThemePalette.DefaultDark.Bright,
+                ThemeDarkMid = ThemePalette.DefaultDark.Mid,
+                ThemeDarkDark = ThemePalette.DefaultDark.Dark,
+                ThemeDarkFront = ThemePalette.DefaultDark.Front,
+                ThemeDarkSplitter = ThemePalette.DefaultDark.Splitter,
+                ThemeLightBright = ThemePalette.DefaultLight.Bright,
+                ThemeLightMid = ThemePalette.DefaultLight.Mid,
+                ThemeLightDark = ThemePalette.DefaultLight.Dark,
+                ThemeLightFront = ThemePalette.DefaultLight.Front,
+                ThemeLightSplitter = ThemePalette.DefaultLight.Splitter,
             };
 
             WriteTheme(defaults);
@@ -184,7 +194,7 @@ internal static class ConfigurationLoader
     }
 
     /// <summary>
-    /// Writes the three things the user chooses about how the program looks.
+    /// Writes what the user chooses about how the program looks.
     /// </summary>
     /// <remarks>
     /// Only the fields that are set are written. A field that is not there is a choice not made, and
@@ -194,16 +204,26 @@ internal static class ConfigurationLoader
     /// <param name="config">What to write.</param>
     public static void WriteTheme(ThemeConfiguration config)
     {
-        var dto = new ThemeDto { Version = ThemeConfiguration.SchemaVersion };
+        var dto = new ThemeDto
+        {
+            Version = ThemeConfiguration.SchemaVersion,
+            DarkBright = Hex(config.ThemeDarkBright),
+            DarkMid = Hex(config.ThemeDarkMid),
+            DarkDark = Hex(config.ThemeDarkDark),
+            DarkFront = Hex(config.ThemeDarkFront),
+            DarkSplitter = Hex(config.ThemeDarkSplitter),
+            LightBright = Hex(config.ThemeLightBright),
+            LightMid = Hex(config.ThemeLightMid),
+            LightDark = Hex(config.ThemeLightDark),
+            LightFront = Hex(config.ThemeLightFront),
+            LightSplitter = Hex(config.ThemeLightSplitter),
+            Primary = Hex(config.Primary),
+            Accent = Hex(config.Accent),
+        };
 
         if (config.Mode is { } mode)
         {
             dto.Mode = Name(mode);
-        }
-
-        if (config.Primary is { } primary)
-        {
-            dto.Primary = Hex(primary);
         }
 
         // What is in force rather than what the file said: an ink that belongs to the primary the look ships
@@ -211,11 +231,6 @@ internal static class ConfigurationLoader
         if (config.PrimaryTextOrDefault is { } ink)
         {
             dto.PrimaryText = Hex(ink);
-        }
-
-        if (config.Accent is { } accent)
-        {
-            dto.Accent = Hex(accent);
         }
 
         Write(ConfigPaths.Theme, dto, ExitCode.Theme);
@@ -343,7 +358,15 @@ internal static class ConfigurationLoader
         return config;
     }
 
-    /// <summary>Reads the shape of <c>theme.json</c>.</summary>
+    /// <summary>
+    /// Reads the shape of <c>theme.json</c>.
+    /// </summary>
+    /// <remarks>
+    /// A colour is stated under the identity it is kept under, which is the whole of <c>Theme/Dark/Bright</c>
+    /// rather than a name nested under a <c>themes</c> object: the panel edits one field at a time, and an
+    /// identity that is one word is the one the field is named by, so nothing here has to know how the file
+    /// nests what it states. A field this program does not know is left alone, as everywhere else.
+    /// </remarks>
     private static ThemeConfiguration ParseTheme(JsonElement root, string path)
     {
         if (root.ValueKind != JsonValueKind.Object)
@@ -378,6 +401,32 @@ internal static class ConfigurationLoader
         if (root.TryGetProperty("accent", out var accent))
         {
             config.Accent = ParseColour(accent, "accent", path);
+        }
+
+        // The twelve a look is made of, read by the identity each is kept under rather than by position:
+        // one reader serves all twelve, and the identity is what says which field it lands in.
+        var fields = new Dictionary<string, Action<Color>>(StringComparer.Ordinal)
+        {
+            [ThemeConfiguration.DarkBrightKey] = colour => config.ThemeDarkBright = colour,
+            [ThemeConfiguration.DarkMidKey] = colour => config.ThemeDarkMid = colour,
+            [ThemeConfiguration.DarkDarkKey] = colour => config.ThemeDarkDark = colour,
+            [ThemeConfiguration.DarkFrontKey] = colour => config.ThemeDarkFront = colour,
+            [ThemeConfiguration.DarkSplitterKey] = colour => config.ThemeDarkSplitter = colour,
+            [ThemeConfiguration.LightBrightKey] = colour => config.ThemeLightBright = colour,
+            [ThemeConfiguration.LightMidKey] = colour => config.ThemeLightMid = colour,
+            [ThemeConfiguration.LightDarkKey] = colour => config.ThemeLightDark = colour,
+            [ThemeConfiguration.LightFrontKey] = colour => config.ThemeLightFront = colour,
+            [ThemeConfiguration.LightSplitterKey] = colour => config.ThemeLightSplitter = colour,
+            [ThemeConfiguration.PrimaryKey] = colour => config.Primary = colour,
+            [ThemeConfiguration.AccentKey] = colour => config.Accent = colour,
+        };
+
+        foreach (var (key, set) in fields)
+        {
+            if (root.TryGetProperty(key, out var colour))
+            {
+                set(ParseColour(colour, key, path));
+            }
         }
 
         return config;
@@ -459,8 +508,13 @@ internal static class ConfigurationLoader
             _ => "system",
         };
 
-    /// <summary>The accent as the file writes it: six digits, whatever the colour's alpha is.</summary>
+    /// <summary>The colour as the file writes it: six digits, whatever the colour's alpha is.</summary>
     private static string Hex(Color colour) => $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}";
+
+    /// <summary>The same, for a field that may state nothing — which is written as nothing at all.</summary>
+    /// <param name="colour">The colour, or nothing.</param>
+    /// <returns>The six digits, or nothing.</returns>
+    private static string? Hex(Color? colour) => colour is { } stated ? Hex(stated) : null;
 
     /// <summary>Reads every plugin's own section, keeping each value as it stands.</summary>
     private static void ParsePluginSections(
@@ -617,6 +671,11 @@ internal static class ConfigurationLoader
     }
 
     /// <summary>How <c>theme.json</c> is written: only the fields that are set.</summary>
+    /// <remarks>
+    /// A field is named for the identity it is kept under, which is what lets one reader and one writer
+    /// serve all twelve: the name a person edits is the name the panel shows, and nothing anywhere
+    /// translates between two spellings of one field.
+    /// </remarks>
     private sealed class ThemeDto
     {
         [JsonPropertyName("_version")]
@@ -626,16 +685,56 @@ internal static class ConfigurationLoader
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Mode { get; set; }
 
-        [JsonPropertyName("primary")]
+        [JsonPropertyName(ThemeConfiguration.DarkBrightKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkBright { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkMidKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkMid { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkDarkKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkDark { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkFrontKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkFront { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkSplitterKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkSplitter { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightBrightKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightBright { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightMidKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightMid { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightDarkKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightDark { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightFrontKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightFront { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightSplitterKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightSplitter { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.PrimaryKey)]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Primary { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.AccentKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Accent { get; set; }
 
         [JsonPropertyName("primaryText")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? PrimaryText { get; set; }
-
-        [JsonPropertyName("accent")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string? Accent { get; set; }
     }
 }

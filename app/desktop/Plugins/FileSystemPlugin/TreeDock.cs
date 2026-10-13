@@ -136,7 +136,7 @@ internal sealed class TreeControl : UserControl
         // drawn here, because the dock area draws the line between two docks itself and draws it the same
         // wherever two meet: one drawn here as well would stand a pixel inside that one and read as two.
         var ground = new Border { Child = _content };
-        ground[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+        ground[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
 
         Content = ground;
 
@@ -826,7 +826,7 @@ internal sealed class TreeBrowser : UserControl
 
             // Bound rather than read, so that the mark follows a colour changed while the program runs, the way
             // the band a frame is drawn with does.
-            row[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.selection");
+            row[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Selection);
             _marked = row;
 
             return;

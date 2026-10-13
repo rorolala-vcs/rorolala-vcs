@@ -193,13 +193,13 @@ internal sealed class OverviewView : UserControl
     private static Color UnsettledFill => RorolalaColours.UnderWay;
 
     /// <summary>The theme resource for what has nothing to say about itself, which a note is read in.</summary>
-    private const string QuietFill = "rorolala.fg.faint";
+    private const string QuietFill = PaletteKeys.Faint;
 
     /// <summary>The theme resource a line told apart from the next is drawn in.</summary>
-    private const string EdgeInk = "rorolala.border";
+    private const string EdgeInk = PaletteKeys.Splitter;
 
     /// <summary>The theme resource a band is drawn on, which is the ground a heading sits on.</summary>
-    private const string BandGround = "rorolala.bg.sunken";
+    private const string BandGround = PaletteKeys.Dark;
 
     /// <summary>How much of a variant's hash is shown.</summary>
     private const int ShortVariant = 7;

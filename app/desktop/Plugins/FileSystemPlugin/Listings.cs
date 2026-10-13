@@ -332,8 +332,8 @@ internal abstract class EntryView : UserControl
             CornerRadius = new CornerRadius(5),
         };
 
-        band[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.primary");
-        band[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.selection");
+        band[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Primary);
+        band[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Selection);
 
         return band;
     }
@@ -1773,7 +1773,7 @@ internal abstract class EntryView : UserControl
                 continue;
             }
 
-            Paint(row, Resource("rorolala.selection", new SolidColorBrush(Color.FromArgb(0x33, 0x80, 0x80, 0x80))));
+            Paint(row, Resource(PaletteKeys.Selection, new SolidColorBrush(Color.FromArgb(0x33, 0x80, 0x80, 0x80))));
             _marked = row;
 
             return;
@@ -2281,8 +2281,8 @@ internal sealed class ListBrowser : EntryView
             MinHeight = 30,
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
-        band[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.sunken");
-        band[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
+        band[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Dark);
+        band[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
 
         _heading = band;
 
@@ -2334,7 +2334,7 @@ internal sealed class ListBrowser : EntryView
             Padding = new Thickness(12, 0),
             BorderThickness = last ? new Thickness(0) : new Thickness(0, 0, 0, 1),
         };
-        row[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
+        row[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
 
         return row;
     }
@@ -2722,7 +2722,7 @@ internal sealed class GridBrowser : EntryView
                 {
                     new Setter(
                         TemplatedControl.BorderBrushProperty,
-                        new DynamicResourceExtension("rorolala.border")
+                        new DynamicResourceExtension(PaletteKeys.Splitter)
                     ),
                 },
             }

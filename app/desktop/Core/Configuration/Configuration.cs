@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Avalonia.Media;
+using Avalonia.Styling;
 using RorolalaDesktop.Contract;
 
 namespace RorolalaDesktop.Configuration;
@@ -18,13 +19,14 @@ internal enum ColorMode
 }
 
 /// <summary>
-/// <c>theme.json</c>: the three things the user chooses about how the program looks.
+/// <c>theme.json</c>: what the user chooses about how the program looks.
 /// </summary>
 /// <remarks>
 /// The look itself is not one of them. It is the program's own — rectangles, one-pixel edges, hover in
 /// the variant's ink and the two colours spent on what is selected and what asks for attention — and it
 /// is what makes the program look like one thing rather than like whatever it was assembled out of. What
-/// is left to choose is the variant it is drawn in and the two colours it is drawn with.
+/// is left to choose is the variant it is drawn in, the two colours it is drawn with, and the ten
+/// grounds the two variants are made of.
 /// <para>
 /// Every field is optional, and a field that is not there is the default: the file holds only what the
 /// user chose, so taking a choice back is removing it rather than writing the default down.
@@ -36,6 +38,12 @@ internal enum ColorMode
 /// are not a preference about the program but what the program is drawn in, and nothing else is allowed
 /// beside them.
 /// </para>
+/// <para>
+/// The ten grounds are stated twice over, once per variant, because that is what they are: a surface is
+/// not the same colour on the light ground and the dark one, and one entry per role shared between the
+/// two would be one of the two variants drawn wrong. The two colours that do not follow the window —
+/// the primary and the accent — are stated once.
+/// </para>
 /// </remarks>
 internal sealed class ThemeConfiguration
 {
@@ -44,24 +52,6 @@ internal sealed class ThemeConfiguration
 
     /// <summary>The variant used when the file names none.</summary>
     public const ColorMode DefaultMode = ColorMode.System;
-
-    /// <summary>
-    /// The primary used when the file names none.
-    /// </summary>
-    /// <remarks>
-    /// A blue: the colour the program is known by, and one light enough that white on it can be read — which is
-    /// what the look works out for it, since this primary ships with no ink of its own named.
-    /// </remarks>
-    public static readonly Color DefaultPrimary = Color.FromRgb(0x44, 0x6D, 0xD6);
-
-    /// <summary>
-    /// The accent used when the file names none.
-    /// </summary>
-    /// <remarks>
-    /// A warm pink, and spent only on the marks a drag draws — never on a selection, so that a mark can
-    /// always be told from a choice.
-    /// </remarks>
-    public static readonly Color DefaultAccent = Color.FromRgb(0xFF, 0x7E, 0xA2);
 
     /// <summary>
     /// The ink the look used to ship with the primary it used to ship, which a file written then may hold.
@@ -74,6 +64,42 @@ internal sealed class ThemeConfiguration
     /// for another, so it is left out rather than written on.
     /// </remarks>
     public static readonly Color WasPrimaryText = Color.FromRgb(0x42, 0x21, 0x2A);
+
+    /// <summary>The identity the dark variant's face is kept under.</summary>
+    public const string DarkBrightKey = "Theme/Dark/Bright";
+
+    /// <summary>The identity the dark variant's ground is kept under.</summary>
+    public const string DarkMidKey = "Theme/Dark/Mid";
+
+    /// <summary>The identity the dark variant's hollow is kept under.</summary>
+    public const string DarkDarkKey = "Theme/Dark/Dark";
+
+    /// <summary>The identity the dark variant's ink is kept under.</summary>
+    public const string DarkFrontKey = "Theme/Dark/Front";
+
+    /// <summary>The identity the dark variant's line is kept under.</summary>
+    public const string DarkSplitterKey = "Theme/Dark/Splitter";
+
+    /// <summary>The identity the light variant's face is kept under.</summary>
+    public const string LightBrightKey = "Theme/Light/Bright";
+
+    /// <summary>The identity the light variant's ground is kept under.</summary>
+    public const string LightMidKey = "Theme/Light/Mid";
+
+    /// <summary>The identity the light variant's hollow is kept under.</summary>
+    public const string LightDarkKey = "Theme/Light/Dark";
+
+    /// <summary>The identity the light variant's ink is kept under.</summary>
+    public const string LightFrontKey = "Theme/Light/Front";
+
+    /// <summary>The identity the light variant's line is kept under.</summary>
+    public const string LightSplitterKey = "Theme/Light/Splitter";
+
+    /// <summary>The identity the primary is kept under.</summary>
+    public const string PrimaryKey = "Theme/Primary";
+
+    /// <summary>The identity the accent is kept under.</summary>
+    public const string AccentKey = "Theme/Accent";
 
     /// <summary>The variant the program is drawn in, or nothing when the file names none.</summary>
     public ColorMode? Mode { get; set; }
@@ -89,14 +115,44 @@ internal sealed class ThemeConfiguration
     /// <summary>The colour the drag marks are drawn in, or nothing.</summary>
     public Color? Accent { get; set; }
 
+    /// <summary>The dark variant's face, or nothing to use the default.</summary>
+    public Color? ThemeDarkBright { get; set; }
+
+    /// <summary>The dark variant's ground, or nothing to use the default.</summary>
+    public Color? ThemeDarkMid { get; set; }
+
+    /// <summary>The dark variant's hollow, or nothing to use the default.</summary>
+    public Color? ThemeDarkDark { get; set; }
+
+    /// <summary>The dark variant's ink, or nothing to use the default.</summary>
+    public Color? ThemeDarkFront { get; set; }
+
+    /// <summary>The dark variant's line, or nothing to use the default.</summary>
+    public Color? ThemeDarkSplitter { get; set; }
+
+    /// <summary>The light variant's face, or nothing to use the default.</summary>
+    public Color? ThemeLightBright { get; set; }
+
+    /// <summary>The light variant's ground, or nothing to use the default.</summary>
+    public Color? ThemeLightMid { get; set; }
+
+    /// <summary>The light variant's hollow, or nothing to use the default.</summary>
+    public Color? ThemeLightDark { get; set; }
+
+    /// <summary>The light variant's ink, or nothing to use the default.</summary>
+    public Color? ThemeLightFront { get; set; }
+
+    /// <summary>The light variant's line, or nothing to use the default.</summary>
+    public Color? ThemeLightSplitter { get; set; }
+
     /// <summary>The variant in force, which is the default when the file names none.</summary>
     public ColorMode ModeOrDefault => Mode ?? DefaultMode;
 
     /// <summary>The primary in force, which is the default when the file names none.</summary>
-    public Color PrimaryOrDefault => Primary ?? DefaultPrimary;
+    public Color PrimaryOrDefault => Primary ?? ThemePalette.DefaultPrimary;
 
     /// <summary>The accent in force, which is the default when the file names none.</summary>
-    public Color AccentOrDefault => Accent ?? DefaultAccent;
+    public Color AccentOrDefault => Accent ?? ThemePalette.DefaultAccent;
 
     /// <summary>
     /// What is written on a surface filled with the primary, or nothing to work one out by contrast.
@@ -109,6 +165,59 @@ internal sealed class ThemeConfiguration
     /// every primary a file names no ink for.
     /// </remarks>
     public Color? PrimaryTextOrDefault => PrimaryText == WasPrimaryText ? null : PrimaryText;
+
+    /// <summary>
+    /// The two variants and the two colours the look is built from, with every default filled in.
+    /// </summary>
+    /// <remarks>
+    /// It is worked out as it is read rather than kept, because it is a reading of the twelve fields and
+    /// nothing else: a copy would be a second statement of them that could disagree with them.
+    /// </remarks>
+    public ThemePalette Theme =>
+        new()
+        {
+            Primary = PrimaryOrDefault,
+            Accent = AccentOrDefault,
+            Bright = ThemeDarkBright ?? ThemePalette.DefaultDark.Bright,
+            Mid = ThemeDarkMid ?? ThemePalette.DefaultDark.Mid,
+            Dark = ThemeDarkDark ?? ThemePalette.DefaultDark.Dark,
+            Front = ThemeDarkFront ?? ThemePalette.DefaultDark.Front,
+            Splitter = ThemeDarkSplitter ?? ThemePalette.DefaultDark.Splitter,
+        };
+
+    /// <summary>
+    /// The light variant and the two colours the look is built from, with every default filled in.
+    /// </summary>
+    /// <remarks>
+    /// The variant in force is not what decides this: <see cref="Mode"/> may name the dark one, or name
+    /// neither and follow the desktop, and the look is built from both variants either way — so both are
+    /// read, and which of them is drawn is the window's own question.
+    /// </remarks>
+    public ThemePalette LightTheme =>
+        new()
+        {
+            Primary = PrimaryOrDefault,
+            Accent = AccentOrDefault,
+            Bright = ThemeLightBright ?? ThemePalette.DefaultLight.Bright,
+            Mid = ThemeLightMid ?? ThemePalette.DefaultLight.Mid,
+            Dark = ThemeLightDark ?? ThemePalette.DefaultLight.Dark,
+            Front = ThemeLightFront ?? ThemePalette.DefaultLight.Front,
+            Splitter = ThemeLightSplitter ?? ThemePalette.DefaultLight.Splitter,
+        };
+
+    /// <summary>
+    /// The colours to draw in when the variant is the one in force.
+    /// </summary>
+    /// <remarks>
+    /// Which of the two is in force is not decided here: the file may name the dark one, or name neither
+    /// and follow the desktop, and how a default is followed is the window's question rather than a
+    /// file's. A caller that knows which variant it is drawing in asks this, and one that does not asks
+    /// the look (see the theme service).
+    /// </remarks>
+    /// <param name="variant">The variant being drawn in, where it is one of the two.</param>
+    /// <returns>The colours of that variant, with every default filled in.</returns>
+    public ThemePalette PaletteOrDefault(ThemeVariant? variant = null) =>
+        variant == ThemeVariant.Light || ModeOrDefault == ColorMode.Light ? LightTheme : Theme;
 }
 
 /// <summary>

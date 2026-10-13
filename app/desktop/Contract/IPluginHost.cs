@@ -61,6 +61,18 @@ public interface IPluginHost
     IDialogs Dialogs { get; }
 
     /// <summary>
+    /// The colours the program is drawn in, in the variant it is drawn in.
+    /// </summary>
+    /// <remarks>
+    /// What a plugin draws itself with, when it needs the colour rather than a resource to name: the
+    /// five members answer for whichever of the two looks is in force, which is what keeps a plugin
+    /// from having to know which one that is, and they are answered afresh each time they are read, so
+    /// a colour the user changes is the next one drawn. What a plugin says about its own marks is its
+    /// own and is not here.
+    /// </remarks>
+    IPalette Palette { get; }
+
+    /// <summary>
     /// The picture the program is known by, for the windows the plugin shows of its own.
     /// </summary>
     /// <remarks>

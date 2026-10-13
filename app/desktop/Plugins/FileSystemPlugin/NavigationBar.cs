@@ -156,8 +156,8 @@ internal sealed class NavigationBar : UserControl
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = bar,
         };
-        band[!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-        band[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
+        band[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
+        band[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
 
         Content = band;
 
@@ -495,7 +495,7 @@ internal sealed class NavigationBar : UserControl
         }
         else
         {
-            crumb[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension("rorolala.fg.muted");
+            crumb[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Muted);
         }
 
         crumb.Click += (_, _) =>

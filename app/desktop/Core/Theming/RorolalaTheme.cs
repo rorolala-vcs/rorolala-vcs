@@ -12,7 +12,9 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Styling;
+// Aliased because the contract carries a MenuItem of its own, and this file styles Avalonia's.
 using RorolalaDesktop.CoreDocks;
+using Contract = RorolalaDesktop.Contract;
 using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using Path = Avalonia.Controls.Shapes.Path;
@@ -71,15 +73,14 @@ internal sealed class RorolalaTheme
     /// comes from names its own (a dark green on a lime rather than a black) and a named value is a
     /// choice the program should keep.
     /// </remarks>
-    /// <param name="primary">The colour what is chosen is drawn in.</param>
-    /// <param name="accent">The colour the drag marks are drawn in.</param>
+    /// <param name="palette">The colours the user chose, both variants of them.</param>
     /// <param name="primaryText">What is written on the primary, or nothing to work it out.</param>
     /// <param name="style">Which of the three ways a window's own frame is drawn this window is drawn in.</param>
-    public RorolalaTheme(Color primary, Color accent, Color? primaryText, WindowStyle style)
+    public RorolalaTheme(Contract.ThemePalette palette, Color? primaryText, WindowStyle style)
     {
-        _primary = primary;
-        _accent = accent;
-        _primaryText = primaryText ?? InkOn(primary);
+        _primary = palette.Primary;
+        _accent = palette.Accent;
+        _primaryText = primaryText ?? InkOn(_primary);
         _style = style;
 
         // What the design hovers a filled action with: its own colour mixed a little of the way towards
@@ -89,8 +90,8 @@ internal sealed class RorolalaTheme
 
         // The wash a chosen row is filled with. It is stated by the design as two alphas rather than
         // derived, because a wash has to stay a wash on both grounds and a factor would not.
-        _selectionLight = WithAlpha(primary, 0x59);
-        _selectionDark = WithAlpha(primary, 0x4D);
+        _selectionLight = WithAlpha(_primary, 0x59);
+        _selectionDark = WithAlpha(_primary, 0x4D);
 
         // The ring a focused field wears. The design draws it as an outline two pixels out, which is
         // this: a shadow with a spread and no blur, drawn outside the border box.
@@ -101,12 +102,18 @@ internal sealed class RorolalaTheme
                 OffsetY = 0,
                 Blur = 0,
                 Spread = 2,
-                Color = WithAlpha(primary, 0x8C),
+                Color = WithAlpha(_primary, 0x8C),
             }
         );
 
-        _light = Variant(Grounds.Light, selection: _selectionLight);
-        _dark = Variant(Grounds.Dark, selection: _selectionDark);
+        // The accent at two alphas, made here rather than where the two things that take it are drawn,
+        // because a rule holds a brush rather than a colour and the two are one answer.
+        _accentWash = WithAlpha(_accent, 0x2E);
+        _accentBrightWash = WithAlpha(Mix(_accent, Colors.White, 0.18), 0x59);
+        _dropZone = WithAlpha(_accent, 0x40);
+
+        _light = Variant(Grounds.Light(palette), selection: _selectionLight);
+        _dark = Variant(Grounds.Dark(palette), selection: _selectionDark);
 
         _palette = new ResourceDictionary
         {
@@ -125,9 +132,9 @@ internal sealed class RorolalaTheme
             },
         };
 
-        var palette = new Style(selector => selector.OfType<Window>()) { Resources = _palette };
+        var window = new Style(selector => selector.OfType<Window>()) { Resources = _palette };
 
-        Styles = [palette, .. Type(), .. Roles(), .. Content(), .. Parts(), .. Chrome(), .. Cards()];
+        Styles = [window, .. Type(), .. Roles(), .. Content(), .. Parts(), .. Chrome(), .. Cards()];
     }
 
     /// <summary>
@@ -462,8 +469,23 @@ internal sealed class RorolalaTheme
     /// <summary>The primary lifted towards white, which the design hovers a filled action with.</summary>
     private readonly Color _primaryBright;
 
-    /// <summary>The colour the drag marks are drawn in.</summary>
     private readonly Color _accent;
+
+    /// <summary>The accent laid thin, which is what a drag-marked surface is washed with.</summary>
+    private readonly Color _accentWash;
+
+    /// <summary>The accent lifted and laid thin, which is what a held one is washed with.</summary>
+    private readonly Color _accentBrightWash;
+
+    /// <summary>
+    /// The accent at the alpha a drop zone is filled with.
+    /// </summary>
+    /// <remarks>
+    /// Read from a field rather than mixed where the rule is written, because the rules are built once
+    /// when the look is and are not built again: a colour worked out inside one of them would keep the
+    /// accent the look first had, where an entry of the palette is replaced when the accent changes.
+    /// </remarks>
+    private readonly Color _dropZone;
 
     /// <summary>What is written on a surface filled with the primary.</summary>
     private readonly Color _primaryText;
@@ -502,73 +524,91 @@ internal sealed class RorolalaTheme
     internal ResourceDictionary DarkPalette => _dark;
 
     /// <summary>
-    /// One variant's neutral ground, which is the design's own token set.
+    /// One variant's tokens, as the look paints them.
     /// </summary>
     /// <remarks>
     /// Three grounds rather than one: content sits on the ground, chrome and a control sit on the
     /// elevated one, and what is hovered, held or welled sits in the sunken one. The ramp of ink is
     /// three steps rather than an opacity, so that text is legible by construction rather than by
-    /// arithmetic — and the two semantic pairs are the design's own, not the user's to choose, because
+    /// arithmetic - and the two semantic pairs are the look's own, not the user's to choose, because
     /// what a failure is coloured is not a preference.
+    /// <para>
+    /// The five the user chooses are taken from <see cref="Contract.ThemePalette"/> and named here for what this
+    /// file paints them as. The rest are worked out: the second and third steps of the ink and the
+    /// second weight of the border are shades of the two that were chosen, since a palette that asked
+    /// for nine neutrals would be a panel nobody finishes, and a ramp derived from the chosen ink keeps
+    /// its steps apart whatever ink is chosen. The two shadows are the one thing that does not follow a
+    /// colour at all: a shadow is the absence of light, not a colour the user has an opinion about.
+    /// </para>
     /// </remarks>
-    private readonly record struct Grounds(
-        Color Bg,
-        Color Elevated,
-        Color Sunken,
-        Color Fg,
-        Color Muted,
-        Color Faint,
-        Color Border,
-        Color Strong,
-        Color Add,
-        Color AddBg,
-        Color Del,
-        Color DelBg,
-        Color Shadow,
-        Color ShadowSoft
-    )
+    /// <param name="palette">The five the user chose, for the variant this is.</param>
+    private readonly record struct Grounds(Contract.ThemePalette palette)
     {
-        /// <summary>The light ground.</summary>
+        /// <summary>The ground itself: what the program is drawn on where nothing stands on anything.</summary>
+        public Color Bg => palette.Mid;
+
+        /// <summary>The face: what a surface that stands out from the ground is filled with.</summary>
+        public Color Elevated => palette.Bright;
+
+        /// <summary>The hollow: what a surface that sits in the ground is filled with.</summary>
+        public Color Sunken => palette.Dark;
+
+        /// <summary>The ink.</summary>
+        public Color Fg => palette.Front;
+
+        /// <summary>
+        /// The second step of the ink, which is what a line that is read rather than looked at is set in.
+        /// </summary>
         /// <remarks>
-        /// The ramp is hue-free. It began as the design's own warm sage, tuned to its lime primary; kept
-        /// that way under a primary the user chooses it reads as a green film over the whole window and
-        /// fights whatever colour is set — so it carries no hue at all, and the two configured colours are
-        /// the only colour in a window that has not drawn an added or a removed thing.
+        /// A little over a third of the way from the ink to the ground, which is the design's own
+        /// relationship: stated as a mix rather than as a colour so that it holds for a light ink on a
+        /// dark ground and a dark one on a light ground alike, which one written-out grey would not.
         /// </remarks>
-        public static readonly Grounds Light = new(
-            Bg: Color.FromRgb(0xF7, 0xF7, 0xF7),
-            Elevated: Color.FromRgb(0xFF, 0xFF, 0xFF),
-            Sunken: Color.FromRgb(0xEC, 0xEC, 0xEC),
-            Fg: Color.FromRgb(0x1D, 0x1D, 0x1D),
-            Muted: Color.FromRgb(0x5D, 0x5D, 0x5D),
-            Faint: Color.FromRgb(0x8B, 0x8B, 0x8B),
-            Border: Color.FromRgb(0xDC, 0xDC, 0xDC),
-            Strong: Color.FromRgb(0xC2, 0xC2, 0xC2),
-            Add: Color.FromRgb(0x1F, 0x8A, 0x3B),
-            AddBg: Color.FromRgb(0xE2, 0xF6, 0xE6),
-            Del: Color.FromRgb(0xC0, 0x36, 0x2C),
-            DelBg: Color.FromRgb(0xFB, 0xE6, 0xE3),
-            Shadow: Color.FromArgb(0x0F, 0x00, 0x00, 0x00),
-            ShadowSoft: Color.FromArgb(0x0F, 0x00, 0x00, 0x00)
-        );
+        public Color Muted => Mix(Fg, Bg, 0.38);
+
+        /// <summary>The third step of the ink, for what is beside what is read rather than in it.</summary>
+        /// <remarks>
+        /// Halfway to the ground: past this the ink stops being read at all, and short of it the step is
+        /// not told from <see cref="Muted"/>.
+        /// </remarks>
+        public Color Faint => Mix(Fg, Bg, 0.62);
+
+        /// <summary>The line: what tells a surface from the ground, and one region from the next.</summary>
+        public Color Border => palette.Splitter;
+
+        /// <summary>The firmer line a control takes under the pointer, and a border of the second weight.</summary>
+        /// <remarks>
+        /// A quarter of the way from the line to the ink, so that the two weights are told apart on
+        /// either ground and neither is a different colour.
+        /// </remarks>
+        public Color Strong => Mix(Border, Fg, 0.25);
+
+        /// <summary>What was added, which is the green on either ground rather than one chosen.</summary>
+        /// <remarks>
+        /// Fixed, like the failure's red below and for the same reason: what a recorded thing is
+        /// coloured is not a preference. Each is picked to carry on its own ground, which is why there
+        /// are two of each rather than one that reads on both.
+        /// </remarks>
+        public Color Add { get; init; }
+
+        /// <summary>What was removed or failed.</summary>
+        public Color Del { get; init; }
+
+        /// <summary>The light ground: the one the design ships, in the colours the user chose for it.</summary>
+        public static Grounds Light(Contract.ThemePalette palette) =>
+            new(palette)
+            {
+                Add = Color.FromRgb(0x1F, 0x8A, 0x3B),
+                Del = Color.FromRgb(0xC0, 0x36, 0x2C),
+            };
 
         /// <summary>The dark ground.</summary>
-        public static readonly Grounds Dark = new(
-            Bg: Color.FromRgb(0x14, 0x14, 0x14),
-            Elevated: Color.FromRgb(0x1C, 0x1C, 0x1C),
-            Sunken: Color.FromRgb(0x0F, 0x0F, 0x0F),
-            Fg: Color.FromRgb(0xE6, 0xE6, 0xE6),
-            Muted: Color.FromRgb(0x9A, 0x9A, 0x9A),
-            Faint: Color.FromRgb(0x6B, 0x6B, 0x6B),
-            Border: Color.FromRgb(0x2C, 0x2C, 0x2C),
-            Strong: Color.FromRgb(0x3C, 0x3C, 0x3C),
-            Add: Color.FromRgb(0x5F, 0xD0, 0x7A),
-            AddBg: Color.FromRgb(0x16, 0x30, 0x1D),
-            Del: Color.FromRgb(0xFF, 0x7A, 0x6B),
-            DelBg: Color.FromRgb(0x3A, 0x1D, 0x1A),
-            Shadow: Color.FromArgb(0x66, 0x00, 0x00, 0x00),
-            ShadowSoft: Color.FromArgb(0x59, 0x00, 0x00, 0x00)
-        );
+        public static Grounds Dark(Contract.ThemePalette palette) =>
+            new(palette)
+            {
+                Add = Color.FromRgb(0x5F, 0xD0, 0x7A),
+                Del = Color.FromRgb(0xFF, 0x7A, 0x6B),
+            };
 
         /// <summary>The soft shadow the design raises a surface with.</summary>
         /// <remarks>
@@ -596,6 +636,25 @@ internal sealed class RorolalaTheme
                 },
             ]
         );
+
+        /// <summary>The shadow a raised surface sits in, which is the light's own on the light ground.</summary>
+        private Color Shadow =>
+            IsLight ? Color.FromArgb(0x0F, 0x00, 0x00, 0x00) : Color.FromArgb(0x66, 0x00, 0x00, 0x00);
+
+        /// <summary>The wide part of it, which is a little thinner on the light ground.</summary>
+        private Color ShadowSoft =>
+            IsLight ? Color.FromArgb(0x0F, 0x00, 0x00, 0x00) : Color.FromArgb(0x59, 0x00, 0x00, 0x00);
+
+        /// <summary>
+        /// Whether this is the light one, which is what the two shadows are decided by.
+        /// </summary>
+        /// <remarks>
+        /// Read from the ground rather than carried as a flag: a shadow is drawn against what is
+        /// underneath it, and what is underneath it is the ground, so the ground is what says which of
+        /// the two it is. A flag would be a second statement of the same thing, and the one that could
+        /// be wrong.
+        /// </remarks>
+        private bool IsLight => Bg.R + Bg.G + Bg.B > (3 * 0x80);
     }
 
     /// <summary>
@@ -726,8 +785,8 @@ internal sealed class RorolalaTheme
             [PrimaryBright] = Fill(_primaryBright),
             [PrimaryText] = Fill(_primaryText),
             [Accent] = Fill(_accent),
-            [AccentWash] = Fill(WithAlpha(_accent, 0x2E)),
-            [AccentBrightWash] = Fill(WithAlpha(Mix(_accent, Colors.White, 0.18), 0x59)),
+            [AccentWash] = Fill(_accentWash),
+            [AccentBrightWash] = Fill(_accentBrightWash),
 
             // The line between two docks, and the same line under the pointer. Both are made here rather
             // than where the splitter is styled, because a hairline is a gradient with hard stops and a
@@ -741,16 +800,19 @@ internal sealed class RorolalaTheme
             [Selection] = Fill(selection),
             [Shadow] = grounds.Raised,
             [Ring] = _ring,
-            ["rorolala.add"] = Fill(grounds.Add),
-            ["rorolala.add.bg"] = Fill(grounds.AddBg),
+            // The semantic pairs, at the two alphas a mark and the surface behind it are drawn at: the
+            // grounds are the colour laid thin rather than a second, paler colour per ground, so that a
+            // mark and its wash are one family on either look and neither had to be picked twice.
+            [Contract.PaletteKeys.Add] = Fill(grounds.Add),
+            [Contract.PaletteKeys.AddBackground] = Fill(WithAlpha(grounds.Add, 0x24)),
             // The mark a warning is raised with, and the wash it stands on: its own amber laid thin rather
             // than a second colour, since what a warning is coloured is not a preference, and neither is the
             // ground it is read against. Both variants hold it, so that what names the mark — a contributed
             // column asking for the warn ink — is answered wherever the look is asked.
             [Warn] = Fill(WarnColour),
-            ["rorolala.warn.bg"] = Fill(WithAlpha(WarnColour, 30)),
+            [Contract.PaletteKeys.WarnBackground] = Fill(WithAlpha(WarnColour, 30)),
             [DelInk] = Fill(grounds.Del),
-            [DelBackground] = Fill(grounds.DelBg),
+            [DelBackground] = Fill(WithAlpha(grounds.Del, 0x24)),
             [DelWash] = Fill(WithAlpha(grounds.Del, 0x2E)),
         };
 
@@ -1521,7 +1583,7 @@ internal sealed class RorolalaTheme
                         .OfType<Border>()
                         .Class(DockArea.DropZoneClass)
                         .Class(DockArea.DropTargetClass),
-                NewBrush(Border.BackgroundProperty, WithAlpha(_accent, 0x40)),
+                NewBrush(Border.BackgroundProperty, _dropZone),
                 Brushed(Border.BorderBrushProperty, Accent)
             ),
         ];

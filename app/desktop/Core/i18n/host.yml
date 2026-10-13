@@ -66,21 +66,51 @@ core:
     en: Nothing has been logged yet.
     zh-CN: 暂无日志。
   setting:
-    theme:
-      en: Theme
-      zh-CN: 主题
+    # What is one colour whatever the window is drawn in, and the two variants' own ten grounds. The
+    # ten are named for what a surface is rather than for the field they came from, because the field
+    # name is a shape and this is what a person is choosing. The two variants are a step of their own
+    # rather than `light` and `dark`, because those two names are already the appearance's options: one
+    # key cannot be both a leaf and a step on the way to another.
+    general:
+      en: Both Looks
+      zh-CN: 通用
+    look:
+      light:
+        en: Light Look
+        zh-CN: 亮色
+      dark:
+        en: Dark Look
+        zh-CN: 暗色
+    bright:
+      en: Face
+      zh-CN: 面
+    mid:
+      en: Ground
+      zh-CN: 底
+    dark:
+      en: Hollow
+      zh-CN: 凹
+    front:
+      en: Ink
+      zh-CN: 前景
+    splitter:
+      en: Line
+      zh-CN: 分隔线
     mode:
       en: Appearance
       zh-CN: 明暗模式
-    system:
-      en: Follow system
-      zh-CN: 跟随系统
-    light:
-      en: Light
-      zh-CN: 亮色
-    dark:
-      en: Dark
-      zh-CN: 暗色
+    # The three the appearance may be, under a step of their own rather than beside the row that names
+    # them: the field is `core.setting.mode` and these are answered from `core.setting.appearance.<mode>`.
+    appearance:
+      system:
+        en: Follow system
+        zh-CN: 跟随系统
+      light:
+        en: Light
+        zh-CN: 亮色
+      dark:
+        en: Dark
+        zh-CN: 暗色
     primary:
       en: Primary colour
       zh-CN: 主色

@@ -184,43 +184,59 @@ internal sealed class PreferenceView : UserControl
     }
 
     /// <summary>
-    /// The three things the look is drawn in: the variant, the primary, and the accent.
+    /// What the look is drawn from: the variant, the primary and the accent, and the ten grounds.
     /// </summary>
     /// <remarks>
     /// They are the kernel's own rather than a plugin's, and they are kept in <c>theme.json</c> rather
     /// than in the panel's own file, so they are drawn here rather than declared like a setting. What a
     /// change does is applied at once: a colour is a resource replaced in place, which reaches every
     /// control without adding a style to a window that already has one.
+    /// <para>
+    /// The ten grounds are said twice over, once per variant, because that is what they are: the panel
+    /// is where a person finds out that the two looks are two sets of colours rather than one set and a
+    /// switch, and a field named for a variant it does not belong to is a field that gets changed twice.
+    /// Which variant is on screen is not what decides what the fields say: they say what is kept, and
+    /// what is kept is kept for both.
+    /// </para>
     /// </remarks>
     private Control ThemeGroup()
     {
         var theme = _theme.Theme;
+
+        return new StackPanel
+        {
+            Spacing = 24,
+            Children =
+            {
+                Section(_i18n.Get("core.setting.mode"), Appearances(theme)),
+                Section(_i18n.Get("core.setting.general"), General(theme)),
+                Section(_i18n.Get("core.setting.look.light"), Grounds(theme, light: true)),
+                Section(_i18n.Get("core.setting.look.dark"), Grounds(theme, light: false)),
+            },
+        };
+    }
+
+    /// <summary>The two colours that do not follow the window.</summary>
+    /// <param name="theme">What the user chose, edited in place.</param>
+    private Control General(ThemeConfiguration theme)
+    {
         var rows = new StackPanel { Spacing = 8 };
 
-        rows.Children.Add(ModeRow(theme));
         rows.Children.Add(ColourRow("core.setting.primary", theme.PrimaryOrDefault, chosen => theme.Primary = chosen));
         rows.Children.Add(ColourRow("core.setting.accent", theme.AccentOrDefault, chosen => theme.Accent = chosen));
 
-        rows.Children.Add(
-            new TextBlock
-            {
-                Text = _i18n.Get("core.setting.immediate"),
-                Classes = { "caption", "faint" },
-            }
-        );
-
-        return Section(_i18n.Get("core.setting.theme"), rows);
+        return rows;
     }
 
-    /// <summary>The row that chooses the variant, with its way back to the default.</summary>
+    /// <summary>Choosing which of the two looks is drawn, and the way back to following the desktop.</summary>
     /// <param name="theme">What the user chose, edited in place.</param>
-    private Control ModeRow(ThemeConfiguration theme)
+    private Control Appearances(ThemeConfiguration theme)
     {
         var modes = new[] { ColorMode.System, ColorMode.Light, ColorMode.Dark };
 
         var choice = new ComboBox
         {
-            ItemsSource = modes.Select(mode => _i18n.Get($"core.setting.mode.{mode.ToString().ToLowerInvariant()}")).ToArray(),
+            ItemsSource = modes.Select(mode => _i18n.Get($"core.setting.appearance.{mode.ToString().ToLowerInvariant()}")).ToArray(),
             SelectedIndex = Array.IndexOf(modes, theme.ModeOrDefault),
             MinWidth = 200,
             VerticalAlignment = VerticalAlignment.Center,
@@ -239,12 +255,55 @@ internal sealed class PreferenceView : UserControl
             }
         };
 
-        return Row("core.setting.mode", choice, () =>
+        var rows = new StackPanel { Spacing = 8 };
+
+        rows.Children.Add(Row("core.setting.mode", choice, () =>
         {
             theme.Mode = null;
             _theme.Save();
             Show();
-        });
+        }));
+        rows.Children.Add(
+            new TextBlock
+            {
+                Text = _i18n.Get("core.setting.immediate"),
+                Classes = { "caption", "faint" },
+            }
+        );
+
+        return rows;
+    }
+
+    /// <summary>One variant's five grounds, each as a row that goes back to its default.</summary>
+    /// <param name="theme">What the user chose, edited in place.</param>
+    /// <param name="light">Which of the two variants these are.</param>
+    private Control Grounds(ThemeConfiguration theme, bool light)
+    {
+        var prefix = light ? "core.setting.look.light" : "core.setting.look.dark";
+
+        // The order a surface is read in rather than the order of any table: the ground a thing stands
+        // on, the face it is, the hollow it sits in, the ink on it, and the line between it and its
+        // neighbour — which is also the order the two configured colours come after.
+        var rows = new StackPanel { Spacing = 8 };
+
+        if (light)
+        {
+            rows.Children.Add(ColourRow($"{prefix}.bright", theme.ThemeLightBright ?? ThemePalette.DefaultLight.Bright, chosen => theme.ThemeLightBright = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.mid", theme.ThemeLightMid ?? ThemePalette.DefaultLight.Mid, chosen => theme.ThemeLightMid = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.dark", theme.ThemeLightDark ?? ThemePalette.DefaultLight.Dark, chosen => theme.ThemeLightDark = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.front", theme.ThemeLightFront ?? ThemePalette.DefaultLight.Front, chosen => theme.ThemeLightFront = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.splitter", theme.ThemeLightSplitter ?? ThemePalette.DefaultLight.Splitter, chosen => theme.ThemeLightSplitter = chosen));
+
+            return rows;
+        }
+
+        rows.Children.Add(ColourRow($"{prefix}.bright", theme.ThemeDarkBright ?? ThemePalette.DefaultDark.Bright, chosen => theme.ThemeDarkBright = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.mid", theme.ThemeDarkMid ?? ThemePalette.DefaultDark.Mid, chosen => theme.ThemeDarkMid = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.dark", theme.ThemeDarkDark ?? ThemePalette.DefaultDark.Dark, chosen => theme.ThemeDarkDark = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.front", theme.ThemeDarkFront ?? ThemePalette.DefaultDark.Front, chosen => theme.ThemeDarkFront = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.splitter", theme.ThemeDarkSplitter ?? ThemePalette.DefaultDark.Splitter, chosen => theme.ThemeDarkSplitter = chosen));
+
+        return rows;
     }
 
     /// <summary>

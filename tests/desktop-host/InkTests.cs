@@ -6,6 +6,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Styling;
+using RorolalaDesktop.Contract;
 using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -64,7 +65,15 @@ public sealed class InkTests
     /// <summary>A state that fills with the primary names the ink that goes on it, or is one of the named few.</summary>
     [Fact]
     public void EveryStateFilledWithThePrimarySaysWhatIsWrittenOnIt()
-    {
+        var look = new RorolalaTheme(
+            ThemePalette.DefaultLight with
+            {
+                Primary = Color.Parse("#BFFF00"),
+                Accent = Color.Parse("#FF6D00"),
+            },
+            null,
+            WindowStyle.Windows
+        );
         var look = new RorolalaTheme(Color.Parse("#BFFF00"), Color.Parse("#FF6D00"), null, WindowStyle.Windows);
         var unnamed = new List<string>();
 

@@ -48,14 +48,15 @@ internal static partial class Icons
     /// </remarks>
     public const int Menu = 16;
 
-    /// <summary>The theme resource an icon of a tool that is not on is drawn in.</summary>
+    /// <summary>
+    /// The theme resource an icon of a tool that is not on is drawn in.
+    /// </summary>
     /// <remarks>
-    /// Written as the literal the look publishes, because a plugin has nowhere else to read it from: the shell's
-    /// own constants live in the host, which a plugin may not reference. What is drawn in it is a mark that is
-    /// nobody's button — a menu item's — and is therefore read from the look rather than from the control that
-    /// holds it.
+    /// What is drawn in it is a mark that is nobody's button — a menu item's — and is therefore read
+    /// from the look rather than from the control that holds it. Which name that is belongs to the
+    /// look, which is why it is not written here (see <see cref="PaletteKeys"/>).
     /// </remarks>
-    public const string PlainInk = "rorolala.fg";
+    public const string PlainInk = PaletteKeys.PlainInk;
 
     /// <summary>How many pixels wide and tall a toolbar's icon is.</summary>
     /// <remarks>
@@ -163,21 +164,22 @@ internal static partial class Icons
 
     /// <summary>The theme resource a contributed mark is drawn in.</summary>
     /// <remarks>
-    /// Written as the literals the look publishes, because a plugin has nowhere else to read them
-    /// from: the shell's own constants live in the host, which a plugin may not reference.
+    /// The names are the look's own and are not written here: a plugin may not reference the host, so a
+    /// literal in this file would be a second statement of a name the look publishes, and the two would
+    /// become two the day one of them was corrected (see <see cref="PaletteKeys"/>).
     /// </remarks>
     /// <param name="ink">The role the mark is drawn in.</param>
     /// <returns>The name of the resource it is read from.</returns>
     public static string Ink(MarkInk ink) =>
         ink switch
         {
-            MarkInk.Plain => "rorolala.fg",
-            MarkInk.Primary => "rorolala.primary",
-            MarkInk.Accent => "rorolala.accent",
-            MarkInk.Error => "rorolala.del",
-            MarkInk.Add => "rorolala.add",
-            MarkInk.Warn => "rorolala.warn",
-            _ => "rorolala.fg.faint",
+            MarkInk.Plain => PaletteKeys.Front,
+            MarkInk.Primary => PaletteKeys.Primary,
+            MarkInk.Accent => PaletteKeys.Accent,
+            MarkInk.Error => PaletteKeys.Del,
+            MarkInk.Add => PaletteKeys.Add,
+            MarkInk.Warn => PaletteKeys.Warn,
+            _ => PaletteKeys.Faint,
         };
 
     /// <summary>
@@ -451,11 +453,11 @@ internal static partial class Icons
     public static string Wash(MarkInk ink) =>
         ink switch
         {
-            MarkInk.Accent => "rorolala.accent.wash",
-            MarkInk.Error => "rorolala.del.bg",
-            MarkInk.Add => "rorolala.add.bg",
-            MarkInk.Warn => "rorolala.warn.bg",
-            _ => "rorolala.bg.sunken",
+            MarkInk.Accent => PaletteKeys.AccentWash,
+            MarkInk.Error => PaletteKeys.DelBackground,
+            MarkInk.Add => PaletteKeys.AddBackground,
+            MarkInk.Warn => PaletteKeys.WarnBackground,
+            _ => PaletteKeys.Dark,
         };
 
     /// <summary>What an entry is drawn as where the system had nothing to give.</summary>

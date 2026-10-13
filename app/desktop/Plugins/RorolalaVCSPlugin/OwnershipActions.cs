@@ -218,9 +218,9 @@ internal static class OwnershipActions
             ? colour
             : colour.ToLowerInvariant() switch
             {
-                "red" => "rorolala.del",
-                "yellow" => "rorolala.warn",
-                "green" => "rorolala.add",
+                "red" => PaletteKeys.Del,
+                "yellow" => PaletteKeys.Warn,
+                "green" => PaletteKeys.Add,
                 _ => null,
             };
 

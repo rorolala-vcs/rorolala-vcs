@@ -41,8 +41,8 @@ public sealed class ConfigurationTests
         var theme = ConfigurationLoader.LoadTheme();
 
         Assert.Equal(ThemeConfiguration.DefaultMode, theme.ModeOrDefault);
-        Assert.Equal(ThemeConfiguration.DefaultPrimary, theme.PrimaryOrDefault);
-        Assert.Equal(ThemeConfiguration.DefaultAccent, theme.AccentOrDefault);
+        Assert.Equal(ThemePalette.DefaultPrimary, theme.PrimaryOrDefault);
+        Assert.Equal(ThemePalette.DefaultAccent, theme.AccentOrDefault);
         Assert.True(File.Exists(ConfigPaths.Theme));
 
         // Read back as text, because what the file says is what a person edits: the colours have to be
@@ -50,12 +50,121 @@ public sealed class ConfigurationTests
         var written = File.ReadAllText(ConfigPaths.Theme);
         Assert.Contains("\"_version\": 1", written, StringComparison.Ordinal);
         Assert.Contains("\"mode\": \"system\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"primary\": \"#446DD6\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"accent\": \"#FF7EA2\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Primary\": \"#446DD6\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Accent\": \"#FF7EA2\"", written, StringComparison.Ordinal);
+
+        // The ten a look is made of, in the spellings the panel shows and the reader reads.
+        Assert.Contains("\"Theme/Dark/Bright\": \"#1C1C1C\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Mid\": \"#141414\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Dark\": \"#0F0F0F\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Front\": \"#E6E6E6\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Splitter\": \"#2C2C2C\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Bright\": \"#FFFFFF\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Mid\": \"#F7F7F7\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Dark\": \"#ECECEC\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Front\": \"#1D1D1D\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Splitter\": \"#DCDCDC\"", written, StringComparison.Ordinal);
 
         // And no ink: what is written on the primary is worked out from it, so a file that names none is a file
         // that is drawn correctly rather than one that is missing something.
         Assert.DoesNotContain("primaryText", written, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every one of the twelve is read back as the field it names, and one that is taken back is gone.
+    /// </summary>
+    /// <remarks>
+    /// The round trip is what says the reader and the writer agree on the spellings, which is the one
+    /// thing about twelve hand-written names that can go wrong without anything else noticing: a field
+    /// read into the wrong role, or written under a name the reader does not ask for, is a colour the
+    /// panel shows and the look never takes.
+    /// </remarks>
+    [Fact]
+    public void TheTwelveAColourIsChosenFromAreReadBackAndTakenBack()
+    {
+        Given(
+            ConfigPaths.Theme,
+            """
+            {"_version": 1, "mode": "dark",
+             "Theme/Dark/Bright": "#010203", "Theme/Dark/Mid": "#040506", "Theme/Dark/Dark": "#070809",
+             "Theme/Dark/Front": "#0A0B0C", "Theme/Dark/Splitter": "#0D0E0F",
+             "Theme/Light/Bright": "#101112", "Theme/Light/Mid": "#131415", "Theme/Light/Dark": "#161718",
+             "Theme/Light/Front": "#191A1B", "Theme/Light/Splitter": "#1C1D1E",
+             "Theme/Primary": "#202122", "Theme/Accent": "#232425"}
+            """
+        );
+
+        var theme = ConfigurationLoader.LoadTheme();
+
+        Assert.Equal(Color.Parse("#010203"), theme.ThemeDarkBright);
+        Assert.Equal(Color.Parse("#040506"), theme.ThemeDarkMid);
+        Assert.Equal(Color.Parse("#070809"), theme.ThemeDarkDark);
+        Assert.Equal(Color.Parse("#0A0B0C"), theme.ThemeDarkFront);
+        Assert.Equal(Color.Parse("#0D0E0F"), theme.ThemeDarkSplitter);
+        Assert.Equal(Color.Parse("#101112"), theme.ThemeLightBright);
+        Assert.Equal(Color.Parse("#131415"), theme.ThemeLightMid);
+        Assert.Equal(Color.Parse("#161718"), theme.ThemeLightDark);
+        Assert.Equal(Color.Parse("#191A1B"), theme.ThemeLightFront);
+        Assert.Equal(Color.Parse("#1C1D1E"), theme.ThemeLightSplitter);
+        Assert.Equal(Color.Parse("#202122"), theme.Primary);
+        Assert.Equal(Color.Parse("#232425"), theme.Accent);
+
+        // And the roles a look is built from are those, not the defaults they stand in front of.
+        Assert.Equal(Color.Parse("#010203"), theme.Theme.Bright);
+        Assert.Equal(Color.Parse("#101112"), theme.LightTheme.Bright);
+        Assert.Equal(Color.Parse("#202122"), theme.Theme.Primary);
+        Assert.Equal(Color.Parse("#232425"), theme.LightTheme.Accent);
+
+        // A file written again says the same thing, which is the round trip proper.
+        ConfigurationLoader.WriteTheme(theme);
+        var rewritten = ConfigurationLoader.LoadTheme();
+        Assert.Equal(theme.Theme, rewritten.Theme);
+        Assert.Equal(theme.LightTheme, rewritten.LightTheme);
+
+        // Taking one back is removing it rather than writing the default down.
+        theme.ThemeDarkBright = null;
+        ConfigurationLoader.WriteTheme(theme);
+
+        Assert.DoesNotContain("Theme/Dark/Bright", File.ReadAllText(ConfigPaths.Theme), StringComparison.Ordinal);
+        Assert.Null(ConfigurationLoader.LoadTheme().ThemeDarkBright);
+    }
+
+    /// <summary>A colour of the wrong shape is refused by the name it is under.</summary>
+    [Fact]
+    public void AColourOfTheWrongShapeIsRefusedByName()
+    {
+        Given(ConfigPaths.Theme, """{"_version": 1, "Theme/Light/Front": "#FFF"}""");
+
+        var failure = Assert.Throws<ConfigurationFailure>(ConfigurationLoader.LoadTheme);
+
+        Assert.Equal(ExitCode.Theme, failure.Code);
+        Assert.Contains("`Theme/Light/Front`", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A field this program does not know is left alone, which is what keeps an older file readable.
+    /// </summary>
+    /// <remarks>
+    /// The ten grounds arrived after the first file was written, under names one word wide rather than
+    /// nested under a branch: a file from before them holds only the two configured colours, and reading
+    /// it has to answer the defaults for the ten rather than refuse the file for a shape it no longer
+    /// matches. The reverse matters too: a file from a later version states fields this one has never
+    /// heard of, and a reader that refused those would refuse to open anything it did not write itself.
+    /// </remarks>
+    [Fact]
+    public void AFieldThisProgramDoesNotKnowIsLeftAlone()
+    {
+        Given(
+            ConfigPaths.Theme,
+            """{"_version": 1, "primary": "#3366FF", "accent": "#FF0000", "themes": {"dark": {"bright": "#000000"}}}"""
+        );
+
+        var theme = ConfigurationLoader.LoadTheme();
+
+        Assert.Equal(ThemePalette.DefaultPrimary, theme.PrimaryOrDefault);
+        Assert.Equal(ThemePalette.DefaultAccent, theme.AccentOrDefault);
+        Assert.Equal(ThemePalette.DefaultDark.Bright, theme.Theme.Bright);
+        Assert.Equal(ThemePalette.DefaultLight.Mid, theme.LightTheme.Mid);
     }
 
     /// <summary>A field the file does not name is a choice not made, which is not the same as the default.</summary>

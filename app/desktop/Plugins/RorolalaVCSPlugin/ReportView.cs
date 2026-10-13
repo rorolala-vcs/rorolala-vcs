@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media.Imaging;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using RorolalaDesktop.Contract;
 
 namespace RorolalaVCSPlugin;
 
@@ -74,9 +75,9 @@ internal static class ReportView
         // which is what a reader knows an alert by.
         var (key, inkKey, groundKey) = block.Kind switch
         {
-            ReportKind.Error => (Icons.Error, "rorolala.fg", (string?)null),
-            ReportKind.Warning => (Icons.Warning, "rorolala.warn", "rorolala.warn.bg"),
-            _ => (Icons.LiveHelp, "rorolala.add", "rorolala.add.bg"),
+            ReportKind.Error => (Icons.Error, PaletteKeys.Front, (string?)null),
+            ReportKind.Warning => (Icons.Warning, PaletteKeys.Warn, PaletteKeys.WarnBackground),
+            _ => (Icons.LiveHelp, PaletteKeys.Add, PaletteKeys.AddBackground),
         };
 
         var row = new StackPanel { Orientation = Orientation.Horizontal };

@@ -47,6 +47,15 @@ internal sealed class HostServices
     /// </remarks>
     public required ThemeService Theme { get; init; }
 
+    /// <summary>
+    /// The colours in force, which is what a plugin draws itself with.
+    /// </summary>
+    /// <remarks>
+    /// The same palette the theme service answers from, held here rather than reached through the
+    /// service so that what a plugin is handed is the interface and never the machinery behind it.
+    /// </remarks>
+    public required IPalette Palette { get; init; }
+
     /// <summary>What Rorolala can do.</summary>
     public required IRola Rola { get; init; }
 
@@ -202,6 +211,9 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public WindowIcon? ProgramIcon => _services.ProgramIcon;
+
+    /// <inheritdoc />
+    public IPalette Palette => _services.Palette;
 
     /// <inheritdoc />
     void IMenuRegistry.AddTopLevel(string labelKey, int order) =>

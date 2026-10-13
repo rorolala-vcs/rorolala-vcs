@@ -45,15 +45,18 @@ internal static class Host
         var icons = new IconLibrary();
         var refocus = new Refocus();
 
+        // There is no application here, so the look is never applied; the service is what the
+        // preference panel reads and writes, which is all a headless test has any use for.
+        var making = ThemeService.Make(null, new ThemeConfiguration());
+
         return new HostServices
         {
             Log = log,
             Popups = popups,
             I18n = i18n,
             ProgramIcon = icon,
-            // There is no application here, so the look is never applied; the service is what the
-            // preference panel reads and writes, which is all a headless test has any use for.
-            Theme = new ThemeService(null, new ThemeConfiguration()),
+            Theme = making.Service,
+            Palette = making.Palette,
             Rola = new RolaCapability(),
             Preference = preference,
             Settings = new SettingRegistry(preference),
