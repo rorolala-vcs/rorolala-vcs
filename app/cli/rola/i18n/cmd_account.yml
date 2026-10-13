@@ -3,110 +3,105 @@ _version: 2
 account:
   help:
     en: |
-        Name the account the work acts as, or list the accounts it can act as
+        Query or switch the available accounts on this machine
 
-        **Usage**: `rola account <ACCOUNT> [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola account <SUBCOMMAND|ACCOUNT>
+        **Flags**:
+            --vault, -v    Also show the accounts in the current Vault
+        **Commands**:
+            ls             List the available accounts on this machine
+            current        Print the account currently in use
 
-        **Commands**
-            ls                   List the accounts the work can act as
-            current              Print the account the work acts as
-
-        Naming no account lists every account any scope holds, each name once and in name
-        order — the same list completion offers. Naming one records it, in Rorolala's own
-        file for the user (`~/.local/share/rola/user`), as the account the work acts as by
-        default. A name that is not an account anywhere is reported rather than recorded.
-
-        An account is a private key, `<ACCOUNT>.pem`; `rola key --pem` prints where the ones
-        there are kept.
+        List the account names found in every scope
+        When an account is given, set it as the current account
     zh-CN: |
-        指定当前工作以哪个账户行事，或列出可用的账户
+        查询或切换本机的可用账户
 
-        **用法**：`rola account <ACCOUNT> [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola account <子命令|账户名>
+        **标识**：
+            --vault, -v    同时显示当前所在保险库的账户
+        **命令**：
+            ls             列出本机可用账户
+            current        直接输出当前使用的账户
 
-        **命令**
-            ls                   列出当前工作可以使用的账户
-            current              输出当前工作行事所用的账户
-
-        不带账户名时，列出所有作用域中能找到的账户名，去重并按名字排序——与补全给出的列表同源。
-        给出账户名时，会把它记录到 Rorolala 为用户保存的文件（`~/.local/share/rola/user`）里，
-        作为当前工作默认使用的账户。若该名字不是任何作用域中的账户，会报错而不会记录下来。
-
-        账户即私钥，形如 `<ACCOUNT>.pem`；`rola key --pem` 可以列出它们所在的位置。
+        列出所有作用域中能找到的账户名
+        若指定账户，则设置为当前账户
 
   cmd_account_description:
-    en: Name the account the work acts as, or list the accounts there are
-    zh-CN: 指定当前账户，或列出可用账户
+    en: Query or switch the available accounts on this machine
+    zh-CN: 查询或切换本机的可用账户
 
   result_none:
-    en: No account is installed
-    zh-CN: 尚未安装任何账户
+    en: There are no available accounts on this machine
+    zh-CN: 本机没有任何可用的账户
 
   result_current:
-    en: "%{name} (current)"
+    en: "%{name} (CURRENT)"
     zh-CN: "%{name}（当前）"
 
   result_set:
-    en: The work now acts as %{name} — recorded in %{path}
-    zh-CN: 当前工作将以 %{name} 的身份行事 —— 已记录到 %{path}
+    en: Set the machine's account to %{name}, recorded in %{path}
+    zh-CN: 设置本机账户为 %{name}，记录在 %{path}
 
   err_not_found:
-    en: "`%{name}` is not an account the work can act as"
-    zh-CN: "`%{name}` 不是当前工作可以使用的账户"
+    en: "No account found: %{name}, please check the spelling"
+    zh-CN: "未发现账户：%{name}，请检查拼写是否正确"
 
   err_not_found_help:
     en: |
-      Please run `rola account` to see the accounts there are, or `rola key --generate` to
-      make one
+      Run `rola account` to see the existing accounts, or you can use `rola key --generate` to make a new account key
     zh-CN: |
-      请运行 `rola account` 查看已有账户，或用 `rola key --generate` 生成一个
+      运行 `rola account` 查看已有账户，你也可以使用 `rola key --generate` 来生成新的账户密钥
 
   err_no_user_dir:
-    en: Could not find the directory Rorolala keeps the user's files in
+    en: Cannot determine the directory where Rorolala keeps user files
     zh-CN: 无法确定 Rorolala 保存用户文件的目录
 
   err_no_user_dir_help:
     en: |
-        Naming an account needs the local data directory, which this machine does not name.
+        Recording an account needs the local data directory, but this machine does not name it
         Please set `XDG_DATA_HOME`
     zh-CN: |
-        记录账户需要本地数据目录，但本机未指明该目录。请设置 `XDG_DATA_HOME`
+        记录账户需要本地数据目录，但本机未指明该目录
+        请设置 `XDG_DATA_HOME`
 
 account_ls:
   help:
     en: |
-        List the accounts the work can act as
+        List the available accounts on this machine
 
-        **Usage**: `rola account ls [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola account ls
+        **Flags**:
+            --vault, -v    Also show the accounts in the current Vault
 
-        Every account any scope holds, deduplicated and in name order, one per line. Each one
-        carries whether it is the account the work acts as, which `--json` and `--format` read
-        as `is_current`.
+        This command has the same effect as `rola account`
     zh-CN: |
-        列出当前工作可以使用的账户
+        列出本机可用账户
 
-        **用法**：`rola account ls [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola account ls
+        **标识**：
+            --vault, -v    同时显示当前所在保险库的账户
 
-        列出所有作用域中能找到的账户，去重并按名字排序，每行一个。每个账户带有它是否就是
-        当前工作行事所用的那一个，`--json` 与 `--format` 中以 `is_current` 读取。
+        该命令效果和 `rola account` 一致
+
   description:
-    en: List the accounts the work can act as
-    zh-CN: 列出当前工作可以使用的账户
+    en: List the available accounts on this machine
+    zh-CN: 列出本机可用账户
 
 account_current:
   help:
     en: |
-        Print the account the work acts as
+        Print the account currently in use
 
-        **Usage**: `rola account current [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: `rola account current`
 
-        The name alone, so a run can read it without a sentence around it. Nothing is printed
-        when the work acts as no account.
+        Print only the content to Stdout, and stay completely silent when no account is set
     zh-CN: |
-        输出当前工作行事所用的账户
+        直接输出当前使用的账户
 
-        **用法**：`rola account current [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：`rola account current`
 
-        只输出名字，便于直接读取。尚未指定账户时不输出任何内容。
+        仅输出内容到 Stdout，若未设置账户则完全静默
   description:
-    en: Print the account the work acts as
-    zh-CN: 输出当前工作行事所用的账户
+    en: Print the account currently in use
+    zh-CN: 直接输出当前使用的账户

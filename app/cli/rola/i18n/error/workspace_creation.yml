@@ -3,7 +3,7 @@ _version: 2
 error:
   workspace_creation:
     err_data_dir_create_failed:
-      en: Failed to create the directory the workspace keeps its data in
+      en: Failed to create the directory where the Workspace keeps its data
       zh-CN: 创建工作区存放数据的目录失败
 
     err_data_dir_create_failed_help:
@@ -43,8 +43,8 @@ error:
           请检查目标路径的写权限，然后重试
 
     err_config_publish_failed:
-      en: Failed to publish the staging file to the configuration file
-      zh-CN: 将暂存文件发布（复制）到配置文件失败
+      en: Failed to copy the staging file to the configuration file
+      zh-CN: 将暂存文件复制到配置文件失败
 
     err_config_publish_failed_help:
       en: |

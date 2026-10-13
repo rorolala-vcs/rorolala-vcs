@@ -3,104 +3,81 @@ _version: 2
 pack:
   complete:
     no_index:
-      en: Leave the index as it is
-      zh-CN: 保持索引不变
+      en: Do not tidy the index
+      zh-CN: 不整理索引
     no_storage:
-      en: Leave the store as it is
-      zh-CN: 保持仓库不变
+      en: Do not tidy the store
+      zh-CN: 不整理仓库
   help:
     en: |
-        Lay the objects a store and an index hold out in packs
+        Tidy the objects of the store and the index into packs
 
-        **Usage**: `rola pack [--no-index] [--no-storage] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: `rola pack`
+        **Flags**:
+            --no-index      Do not tidy the index, leave it as it is
+            --no-storage    Do not tidy the store, leave it as it is
 
-        Everything the store holds is written again: the entries of every pack are gathered up with
-        the loose objects, and the whole of it is laid down as one pack — or as several, once one
-        would pass the store's `max_pack_size`, which is `[storage] max_pack_size` in the store's
-        configuration and two gibibytes when that says nothing. The index the run is inside is laid
-        out the same way, as one pack.
-
-        What each object is does not change: a pack holds its entries exactly as they sat loose, so
-        every read that worked before works after. What is already laid out this way is left alone,
-        so running this twice in a row changes nothing the second time.
-
-        Both are packed by default. `--no-index` leaves the index as it is and `--no-storage`
-        leaves the store as it is; writing both leaves nothing to pack, and is refused.
-
-        Each is locked for the whole of the work, so one another run is packing is not packed at the
-        same time: the run is told, and nothing is changed.
-
-        The run has to be somewhere a store or an index can be found: inside one, or inside a Vault
-        or Workspace that keeps one.
+        Tidy the objects of the store and the index into packs, laid as several once `max_pack_size` is exceeded
+        Both are tidied by default, and giving `--no-index` and `--no-storage` together is refused
     zh-CN: |
-        将仓库与索引中的对象整理进 pack
+        把仓库与索引中的对象整理进 pack
 
-        **用法**：`rola pack [--no-index] [--no-storage] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola pack
+        **标识**：
+            --no-index      不整理索引，保持原样
+            --no-storage    不整理仓库，保持原样
 
-        仓库持有的全部内容都会被重新写出：各 pack 的条目与松散对象一并收集，整体落成一个 pack——若某个
-        pack 将超过仓库的 `max_pack_size`，则落成多个。`max_pack_size` 来自仓库配置中的
-        `[storage] max_pack_size`，未配置时为 2 GiB。当前运行所在的索引以同样方式整理成一个 pack。
-
-        对象本身不受影响：pack 按它们在松散时的样子原样存放条目，所以此前能读的，之后照样能读。已经
-        是这样布局的一方会保持原样，因此连续运行两次不会有第二次改动。
-
-        默认两者都整理。`--no-index` 保持索引原样，`--no-storage` 保持仓库原样；两者同时给出则没有
-        可整理的对象，会被拒绝。
-
-        整个过程中各自会被锁定，因此另一个运行正在打包时不会同时打包：本次运行会被告知，且什么都不
-        改动。
-
-        运行必须处在能发现仓库或索引的地方：仓库／索引内、或保有它们的保险库／工作区内。
+        将仓库与索引中的对象整理成 pack，超过 `max_pack_size` 时落成多个
+        默认两者都整理，同时给出 `--no-index` 与 `--no-storage` 会被拒绝
 
   cmd_pack_description:
-    en: Lay the objects a store and an index hold out in packs
-    zh-CN: 将仓库与索引中的对象整理进 pack
+    en: Tidy the objects of the store and the index
+    zh-CN: 整理仓库与索引中的对象
 
   result_packed:
-    en: Laid the objects out afresh
-    zh-CN: 已重新整理对象
+    en: The objects have been tidied again
+    zh-CN: 对象已重新整理
 
   result_nothing:
-    en: The objects were already laid out that way
-    zh-CN: 对象已是这样的布局
+    en: The objects are already laid out like this
+    zh-CN: 对象已经是这样的布局
 
   err_no_storage:
-    en: This run is nowhere a store or an index is
-    zh-CN: 当前运行不处于任何仓库或索引中
+    en: This run is not inside any store or index
+    zh-CN: 当前不在任何仓库或索引之中
 
   err_no_storage_help:
     en: |
-        Please run this inside a store or an index, or inside the Vault or Workspace that keeps one
+        Please run `rola pack` inside a store or an index, or inside the Vault or Workspace that keeps them
     zh-CN: |
-        请在仓库或索引内运行，或在保有它们的保险库／工作区内运行
+        请在仓库或索引内运行 `rola pack`，或在保有它们的保险库或工作区内运行
 
   err_nothing_to_pack:
-    en: Both `--no-index` and `--no-storage` were written, so there is nothing to pack
-    zh-CN: 同时写下了 `--no-index` 与 `--no-storage`，没有可整理的对象
+    en: "`--no-index` and `--no-storage` were both given, so there are no objects to tidy"
+    zh-CN: 同时给出了 `--no-index` 与 `--no-storage`，没有可整理的对象
 
   err_nothing_to_pack_help:
     en: |
-        Please leave out at least one of the two, so that the store or the index is packed
+        Please leave out at least one of `--no-index` and `--no-storage`, so that the store or the index is tidied
     zh-CN: |
-        请至少省略其中之一，以便整理仓库或索引
+        请至少省略 `--no-index` 与 `--no-storage` 其中之一，以便整理仓库或索引
 
   err_pack_failed:
-    en: "The store's objects could not be packed — %{reason}"
-    zh-CN: "无法打包仓库中的对象 —— %{reason}"
+    en: "The objects in the store could not be packed: %{reason}"
+    zh-CN: "无法打包仓库中的对象：%{reason}"
 
   err_pack_failed_help:
     en: |
-        Please check that the store can be read and written, then try again
+        Please make sure the store is readable and writable, then try again
     zh-CN: |
         请确认仓库可读可写，然后重试
 
   err_pack_locked:
-    en: "The store could not be locked — %{reason}"
-    zh-CN: "无法锁定仓库 —— %{reason}"
+    en: "The store could not be locked: %{reason}"
+    zh-CN: "无法锁定仓库：%{reason}"
 
   err_pack_locked_help:
     en: |
-        Please check that no other run is packing this store, and that no lock was left behind by
-        one that did not finish
+        Please make sure no other run is packing this store, and that no run that ended midway left a lock file behind
     zh-CN: |
-        请确认没有其他运行正在打包该仓库，也没有未结束的运行留下锁文件
+        请确认没有其他运行正在打包该仓库，也没有中途结束的运行留下锁文件

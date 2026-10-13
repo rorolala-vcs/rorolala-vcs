@@ -3,102 +3,91 @@ _version: 2
 sync:
   complete:
     up_only:
-      en: Only what this Layout holds goes up
-      zh-CN: 只把本 Layout 的内容上传
+      en: Only what the local Layout holds goes up
+      zh-CN: 只上传本地布局的内容
     down_only:
       en: Only what the Vault holds comes down
-      zh-CN: 只把保险库的内容下载
+      zh-CN: 只下拉保险库的内容
     both:
-      en: Move in both directions
+      en: Sync in both directions
       zh-CN: 双向同步
     dry_run:
       en: Show the plan and change nothing
       zh-CN: 只显示计划，不做任何改动
     no_index:
       en: Leave the index alone; only the Layout and the store move
-      zh-CN: 不动索引，只移动 Layout 和仓库
+      zh-CN: 不动索引，只移动布局和仓库
     no_storage:
       en: Leave the store alone; only the Layout and the index move
-      zh-CN: 不动仓库，只移动 Layout 和索引
+      zh-CN: 不动仓库，只移动布局和索引
     no_layout:
       en: Leave the Vault's Layout alone; only data and index move
-      zh-CN: 不动保险库的 Layout，只移动数据和索引
+      zh-CN: 不动保险库的布局，只移动数据和索引
   help:
     en: |
-        Bring the Layout being worked in together with the Vault it tracks
+        Bring the local Layout and the Vault it tracks into agreement
 
-        **Usage**: `rola sync [--up-only | --down-only | --both] [--force] [--dry-run]
-        [--no-index] [--no-storage] [--no-layout] [--vault] [--offline] [--no-pager]`
+        **Usage**: rola sync
+        **Flags**:
+            --up-only           Only what the local Layout holds goes up
+            --down-only         Only what the Vault holds comes down
+            --both              Sync in both directions, the default when no direction is given
 
-        The Vault is the one the Layout's `TRACK` names, which the Workspace has bound with
-        `rola vault bind`. What the Vault holds now is fetched first, and the plan says what is to
-        move:
+            --dry-run           Show the plan and change nothing
+            --no-index          Leave the index alone; only the Layout and the store move
+            --no-storage        Leave the store alone; only the Layout and the index move
+            --no-layout         Leave the Vault's Layout alone; only data and index move
+            --force             Go on uploading when the version chain has moved apart
 
-        - a `Uuid` only this Layout holds goes up under the Vault's `@/new/`;
-        - a version the Vault is behind on goes up when this account holds it;
-        - one this Layout is behind on comes down;
-        - one whose chain moved apart needs `--force`;
-        - a `Uuid` only the Vault holds is named rather than brought, since `checkin` is what
-          brings one.
-
-        `--up-only` and `--down-only` keep the plan to one direction; neither, or `--both`, is
-        both. `--dry-run` prints the plan and changes nothing.
-
-        What the plan names then has its content moved: the index and the store, unless
-        `--no-index` or `--no-storage` leaves one behind. `--no-layout` leaves the Layout itself
-        behind, so only data and index move.
-
-        A file changed here that the Vault is ahead on is refused before anything is written, so a
-        pull never overwrites what the run does not know about.
+        Bring the local Layout and the Vault it tracks into agreement
+        The Vault is named by the Layout's `TRACK`, and the Workspace binds it first
+        The run first fetches what the Vault holds now, then moves by the plan: a `Uuid` only the local side holds goes up, and the side that is behind is updated
+        A file changed here that the Vault is ahead on is refused, so it is never overwritten
     zh-CN: |
-        让当前使用的布局与它所追踪的保险库同步
+        让本地布局与它所追踪的保险库保持一致
 
-        **用法**：`rola sync [--up-only | --down-only | --both] [--force] [--dry-run]
-        [--no-index] [--no-storage] [--no-layout] [--vault] [--offline] [--no-pager]`
+        **用法**：rola sync
+        **标识**：
+            --up-only           只上传本地布局持有的内容
+            --down-only         只下拉保险库持有的内容
+            --both              双向同步，未指定方向时即此
 
-        保险库由布局的 `TRACK` 指定，并且必须已被工作区用 `rola vault bind` 绑定。先取回保险库
-        当前的内容，再由计划说明要移动什么：
+            --dry-run           只显示计划，不做任何改动
+            --no-index          不动索引，只移动布局和仓库
+            --no-storage        不动仓库，只移动布局和索引
+            --no-layout         不动保险库的布局，只移动数据和索引
+            --force             版本链已分叉时仍然上传
 
-        - 只有本地布局持有的 `Uuid` 会以 `@/new/` 下的名字上传；
-        - 保险库落后的版本，在本账户持有时会上传；
-        - 本地落后的版本会下拉；
-        - 版本链已经分叉的需要 `--force`；
-        - 只有保险库持有的 `Uuid` 只列出、不下拉，因为进入本地布局要用 `checkin`。
-
-        `--up-only` 与 `--down-only` 把计划限制在单一方向；都不给或给 `--both` 时双向。
-        `--dry-run` 只打印计划，不做任何改动。
-
-        计划中列出的条目随后会移动其内容：索引与存储，除非用 `--no-index` 或 `--no-storage`
-        跳过其中一个。`--no-layout` 则连布局本身也跳过，只移动数据与索引。
-
-        本地已改动、而保险库更前的文件会在写入任何内容之前被拒绝，因此下拉不会覆盖本次运行
-        所不了解的改动。
+        让本地布局与它所追踪的保险库保持一致
+        保险库由布局的 `TRACK` 指定，须先由工作区绑定
+        运行先取回保险库的当前内容，再按计划移动：本地独有的 `Uuid` 上传，落后的一端被更新
+        本地已改动而保险库更前的文件会被拒绝，避免被覆盖
 
   description:
-    en: Bring the Layout being worked in together with the Vault it tracks
-    zh-CN: 让当前布局与它所追踪的保险库同步
+    en: Bring the local Layout and the Vault it tracks into agreement
+    zh-CN: 让本地布局与追踪的保险库保持一致
 
   err_no_track:
-    en: The Layout being worked in tracks no Vault
-    zh-CN: 当前使用的布局没有追踪任何保险库
+    en: The current Layout tracks no Vault
+    zh-CN: 当前布局没有追踪任何保险库
 
   err_no_track_help:
     en: |
-        Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then try again
+        Please name one with `rola layout set-track <LAYOUT> [VAULT]`, then try again
     zh-CN: |
-        请用 `rola layout set-track <LAYOUT> <VAULT>` 指定一个，然后重试
+        请用 `rola layout set-track <布局> <保险库>` 指定后再次运行该命令
 
   err_blocked:
-    en: A file changed here is behind the Vault, so bringing the Vault's version down would
-        overwrite it
+    en: A file changed here is behind the Vault, so bringing the Vault's version down would overwrite it
     zh-CN: 有文件在本地被改动且落后于保险库，下拉保险库的版本会覆盖它
 
   err_blocked_help:
     en: |
-        Please record the change with `rola track`, or set it aside, then try again; merging is
-        not here yet
+        Please record the change with `rola track`, or set it aside, then try again
+        Merging semantics are not implemented yet
     zh-CN: |
-        请用 `rola track` 记录该改动，或将其放到一边，然后重试；合并语义尚未实现
+        请用 `rola track` 记录该改动，或将其放到一边，然后重试
+        合并语义尚未实现
 
   err_failed:
     en: "The sync could not go on: %{cause}"
@@ -118,7 +107,7 @@ sync:
     en: |
         Name at most one of `--up-only`, `--down-only`, and `--both`
     zh-CN: |
-        `--up-only`、`--down-only`、`--both` 最多只能给一个
+        请只给出 `--up-only`、`--down-only`、`--both` 中的一个
 
   write_written:
     en: written
@@ -166,7 +155,8 @@ sync:
 
   warn_blocked_help:
     en: |
-        Please record the change with `rola track`, or set it aside, then try again; merging is
-        not here yet
+        Please record the change with `rola track`, or set it aside, then try again
+        Merging semantics are not implemented yet
     zh-CN: |
-        请用 `rola track` 记录该改动，或将其放到一边，然后重试；合并语义尚未实现
+        请用 `rola track` 记录该改动，或将其放到一边，然后重试
+        合并语义尚未实现

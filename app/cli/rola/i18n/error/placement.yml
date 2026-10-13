@@ -8,10 +8,10 @@ error:
 
     err_should_in_workspace_help:
       en: |
-        Please run it inside one — `rola create <PATH>` makes a Workspace, and
-        `--workspace-dir <PATH>` works in one that is already there
+        Please run it inside one — `rola create <PATH>` can create a Workspace
+        `--workspace-dir <PATH>` can name a Workspace that already exists
       zh-CN: |
-        请在某个工作区内运行 —— `rola create <PATH>` 可以创建工作区，
+        请在工作区内运行 —— `rola create <PATH>` 可以创建工作区
         `--workspace-dir <PATH>` 可以指定已有的工作区
 
     err_should_in_vault:
@@ -20,14 +20,14 @@ error:
 
     err_should_in_vault_help:
       en: |
-        Please run it inside one — `rola create --vault <PATH>` makes a Vault, and
-        `--vault-dir <PATH>` works in one that is already there
+        Please run it inside one — `rola create --vault <PATH>` can create a Vault
+        `--vault-dir <PATH>` can name a Vault that already exists
       zh-CN: |
-        请在某个保险库内运行 —— `rola create --vault <PATH>` 可以创建保险库，
+        请在保险库内运行 —— `rola create --vault <PATH>` 可以创建保险库
         `--vault-dir <PATH>` 可以指定已有的保险库
 
     err_config_unreadable:
-      en: Could not read the Workspace configuration at %{path}
+      en: "Could not read the Workspace configuration: %{path}"
       zh-CN: 无法读取工作区配置：%{path}
 
     err_config_unreadable_help:
@@ -35,16 +35,15 @@ error:
       zh-CN: 请修复该文件后重试 —— %{reason}
 
     err_not_chosen:
-      en: No Vault was named to reach for, and the Workspace reaches for none
+      en: No Vault was named to connect to, and the Workspace has no default choice
       zh-CN: 未给出要连接的保险库，工作区也没有默认选择
 
     err_not_chosen_help:
       en: |
-        Please name one, as in `rola vault handshake origin` or `rola vault handshake
-        127.0.0.1:7717`, or run `rola vault set-default <NAME>` to choose a Vault for the
-        Workspace to reach for without naming it every time
+        Please give a name or an address, as in `rola vault handshake origin` or `rola vault handshake 127.0.0.1:7717`
+        Or run `rola vault set-default <NAME>` to choose a default Vault for the Workspace, so it need not be named every time
       zh-CN: |
-        请给出名字或地址，例如 `rola vault handshake origin` 或 `rola vault handshake 127.0.0.1:7717`；
+        请给出名字或地址，例如 `rola vault handshake origin` 或 `rola vault handshake 127.0.0.1:7717`
         也可以运行 `rola vault set-default <NAME>` 为工作区选定默认保险库，以后就不必每次指定
 
     err_not_address:
@@ -53,11 +52,9 @@ error:
 
     err_not_address_help:
       en: |
-        Please name a Vault the Workspace has bound with `rola vault bind`, or write an
-        address such as `127.0.0.1:7717` or `rola://127.0.0.1/alpha`
+        Please give the name of a Vault bound with `rola vault bind`, or write an address such as `127.0.0.1:7717` or `rola://127.0.0.1/alpha`
       zh-CN: |
-        请给出已用 `rola vault bind` 绑定的保险库名字，或写成地址，例如
-        `127.0.0.1:7717` 或 `rola://127.0.0.1/alpha`
+        请给出已用 `rola vault bind` 绑定的保险库名字，或写成地址，例如 `127.0.0.1:7717` 或 `rola://127.0.0.1/alpha`
 
     err_not_bound:
       en: "`%{name}` is not a Vault this Workspace has bound"
@@ -65,8 +62,6 @@ error:
 
     err_not_bound_help:
       en: |
-        This command keeps what it fetches under the Vault's name, so it takes a name the
-        Workspace has bound with `rola vault bind`, and not an address
+        This command keeps what it fetches under the Vault's name, so it needs a name bound with `rola vault bind`, not an address
       zh-CN: |
-        该命令把取回的内容按保险库的名字存放，因此需要一个已用 `rola vault bind` 绑定的名字，
-        而不是地址
+        该命令把取回的内容按保险库的名字存放，因此需要一个已用 `rola vault bind` 绑定的名字，而不是地址

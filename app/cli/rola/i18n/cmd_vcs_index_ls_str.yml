@@ -5,44 +5,42 @@ vcs_index_ls_str:
     en: |
         List the hashes of the text objects the index holds
 
-        **Usage**: `rola vcs-index ls-str [--json] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: `rola vcs-index ls-str`
+        **Flags**:
+            --json    Output as JSON
 
-        A Creator and a Message are the index's text: a name and a message, held as objects so that
-        a Version can say who made it and what was done by carrying their hashes. What is listed is
-        those hashes, one per line, as hex. The text itself is read with `rola vcs-index read`.
-
-        The run has to be somewhere an index can be found: inside a Vault or a Workspace.
+        List the hashes of the Creator and Message objects in the index, one per line, in hex
+        The run has to be inside a Vault or a Workspace
     zh-CN: |
         列出索引中文本对象的哈希
 
-        **用法**：`rola vcs-index ls-str [--json] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola vcs-index ls-str
+        **标识**：
+            --json    以 JSON 输出
 
-        Creator 与 Message 是索引里的文本：一个是名字、一个是消息，作为对象保存，好让 Version 携带
-        它们的哈希说明是谁做的、做了什么。这里列出的是这些哈希，每行一个，十六进制。文本本身用
-        `rola vcs-index read` 读取。
-
-        运行必须处在能发现索引的地方：保险库或工作区内。
+        列出索引中 Creator 与 Message 对象的哈希，每行一个，十六进制
+        运行必须处在保险库或工作区内
 
   cmd_vcs_index_ls_str_description:
     en: List the hashes of the creator and message objects the index holds
-    zh-CN: 列出索引中 creator 与 message 对象的哈希
+    zh-CN: 列出索引中 Creator 与 Message 对象的哈希
 
   err_no_index:
     en: This run is nowhere a version control index is
-    zh-CN: 当前运行不处于任何版本控制索引中
+    zh-CN: 当前运行不在任何版本控制索引中
 
   err_no_index_help:
     en: |
         Please run this inside a Vault or Workspace
     zh-CN: |
-        请在保险库或工作区内运行
+        请在保险库或工作区内运行该命令
 
   err_read:
     en: "The index could not be read — %{reason}"
-    zh-CN: "无法读取索引 —— %{reason}"
+    zh-CN: "无法读取索引：%{reason}"
 
   err_read_help:
     en: |
         Please check that the index can be read, then try again
     zh-CN: |
-        请确认索引可读，然后重试
+        请确认索引可读后重试

@@ -5,45 +5,42 @@ storage_sync_all:
     en: |
         Make the stores at both ends hold the same keys
 
-        **Usage**: `rola storage sync-all [VAULT] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: `rola storage sync-all [VAULT]`
+        **Flags**:
+            --confirm    Confirm in advance that both stores will be changed
+            --offline    This command needs to reach the Vault, and does not run when offline
 
-        `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`, or
-        an ip, with the port a Vault listens on by default when none is written. Naming none reaches
-        for the one the Workspace reaches for by default.
-
-        What crosses is what only one end holds, in whichever direction that is: this is neither an
-        upload nor a download, and one run leaves each store holding everything either of them had.
-        A key is the whole of what it names — a content kept as chunks is its manifest and the
-        chunks the manifest names — so a store that is given one keeps it the way the other store
-        had it.
-
-        Both stores are changed, so the run asks before it starts; `--confirm` answers in advance.
+        Make the stores at both ends hold the same keys
+        What is carried is content only one end holds, in whichever direction the holder decides
+        One key represents the whole it names
+        The Vault argument specifies the Vault to connect to, and the Workspace default is used when not given
+        Both stores will be changed, and confirmation is asked before the run
     zh-CN: |
-        让两端的仓库持有相同的 key
+        让两端的仓库持有相同的密钥
 
-        **用法**：`rola storage sync-all [VAULT] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola storage sync-all [保险库]
+        **标识**：
+            --confirm    预先确认两个仓库都会被改动
+            --offline    本命令需要访问保险库，离线时不执行
 
-        `VAULT` 指定要连接的保险库：工作区已用 `rola vault bind` 绑定的名字，或一个 ip（不写端口时用
-        保险库默认监听的端口）。不指定则连接工作区默认使用的那个。
-
-        传输的是"只有一端持有"的内容，方向由谁持有决定：既不是上传也不是下载，一次运行会让两个仓库都
-        持有它们原本合计持有的全部内容。一个 key 代表它所命名的整体——分块保存的内容即它的 manifest
-        以及 manifest 点名的那些块——因此被赋予该 key 的仓库会按对方保存它的原样持有它。
-
-        两个仓库都会被改动，所以运行前会先征求确认；`--confirm` 可预先作答。
+        让两端的仓库持有相同的密钥
+        搬运的是仅一端持有的内容，方向由持有方决定
+        一个密钥代表它所命名的整体
+        保险库参数指定要连接的保险库，不填则用工作区默认的保险库
+        两个仓库都会被改动，运行前会先征求确认
 
   cmd_storage_sync_all_description:
     en: Make the stores at both ends hold the same keys
-    zh-CN: 让两端的仓库持有相同的 key
+    zh-CN: 让两端的仓库持有相同的密钥
 
   confirm:
-    en: "Both stores will be changed, so that each holds everything the other has. Continue? [y/n] "
+    en: "Both stores will be changed, so that each holds all the content the other holds. Continue? [y/n] "
     zh-CN: "两个仓库都会被改动，使各自持有对方所持有的全部内容。是否继续？[y/n] "
 
   result_synced:
-    en: The stores at both ends now hold the same keys
-    zh-CN: 两端仓库现在持有相同的 key
+    en: "The stores at both ends now hold the same keys"
+    zh-CN: 两端仓库现在持有相同的密钥
 
   result_declined:
-    en: Nothing was done — the sync was not confirmed
-    zh-CN: 未做任何改动 —— 同步未获确认
+    en: "Nothing was changed — the sync was not confirmed"
+    zh-CN: 未做任何改动——同步未获确认

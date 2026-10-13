@@ -3,36 +3,27 @@ _version: 2
 vault_bind:
   complete:
     set_default:
-      en: Also make the name the one the Workspace reaches for
-      zh-CN: 同时把该名字设为工作区默认使用的保险库
+      en: Also set the name as the Vault the Workspace reaches for by default
+      zh-CN: 同时设为工作区默认使用的保险库
   help:
     en: |
         Bind a name to a Vault address
 
-        **Usage**: `rola vault bind [--set-default] <NAME> <ADDR> [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola vault bind <NAME> <ADDR>
+        **Flags**:
+            --set-default    Also set the name as the Vault the Workspace reaches for by default
 
-        `NAME` is the Workspace's own shorthand for a Vault, and naming one that is already
-        bound changes what it means. `ADDR` is a host and a port, such as `127.0.0.1:7000`,
-        where the host is an ip or a name — `localhost`, say — and the port may be left out,
-        which means the one a Vault listens on by default. It may also be a full link,
-        `rola://<host>[:<port>]/<sub-vault>`, which names the Vault under the daemon's own as
-        well. The address is remembered, so a later `bind` can offer it again.
-
-        With `--set-default`, the name also becomes the one the Workspace reaches for, as if
-        `rola vault set-default` had been run once the binding was made.
+        Binding the same name again changes what it means
+        The address may be a host and a port, such as `127.0.0.1:7000`, or a full link `rola://<host>[:<port>]/<sub-vault>`
     zh-CN: |
         将名字绑定到保险库地址
 
-        **用法**：`rola vault bind [--set-default] <NAME> <ADDR> [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola vault bind <名字> <地址>
+        **标识**：
+            --set-default    同时把该名字设为工作区默认使用的保险库
 
-        `NAME` 是工作区为保险库起的简称；名字已存在时，再次绑定即为修改其含义。
-        `ADDR` 是主机与端口，例如 `127.0.0.1:7000`；主机可以是 ip，也可以是名字（如 `localhost`），
-        端口可以省略，此时使用保险库的默认端口。还可以写成完整链接
-        `rola://<主机>[:<端口>]/<子保险库>`，这样就能一并指定子保险库。
-        地址会被记住，方便下次 `bind` 时补全。
-
-        加 `--set-default` 时，该名字同时成为工作区默认使用的保险库，
-        相当于绑定完成后再执行一次 `rola vault set-default`。
+        重复绑定同一个名字即修改其含义
+        地址可以是主机与端口，如 `127.0.0.1:7000`，也可以是完整链接 `rola://<host>[:<port>]/<sub-vault>`
 
   cmd_vault_bind_description:
     en: Bind a name to a Vault address
@@ -48,23 +39,20 @@ vault_bind:
 
   err_address_missing:
     en: An address is required
-    zh-CN: 缺少地址
+    zh-CN: 缺少保险库地址
 
   err_address_missing_help:
     en: |
-        Please name the address, as in `rola vault bind origin 127.0.0.1:7000` or
-        `rola bind 127.0.0.1:7000`
+        Please give a Vault address, for example `rola vault bind origin 127.0.0.1:7000` or `rola bind 127.0.0.1:7000`
     zh-CN: |
-        请给出地址，例如 `rola vault bind origin 127.0.0.1:7000` 或 `rola bind 127.0.0.1:7000`
+        请给出保险库地址，例如 `rola vault bind origin 127.0.0.1:7000` 或 `rola bind 127.0.0.1:7000`
 
   err_address_invalid:
     en: "`%{address}` is not an address"
-    zh-CN: "`%{address}` 不是地址"
+    zh-CN: "`%{address}` 不是有效的保险库地址"
 
   err_address_invalid_help:
     en: |
-        Please write it as a host and a port, such as `127.0.0.1:7000` or `localhost:7000`,
-        or as a link, such as `rola://127.0.0.1:7000/alpha`
+        Please write it as a host and a port, such as `127.0.0.1:7000` or `localhost:7000`, or as a link, such as `rola://127.0.0.1:7000/alpha`
     zh-CN: |
-        请写成主机与端口，例如 `127.0.0.1:7000` 或 `localhost:7000`；也可写成链接，例如
-        `rola://127.0.0.1:7000/alpha`
+        请写成主机与端口，例如 `127.0.0.1:7000` 或 `localhost:7000`，也可写成链接，例如 `rola://127.0.0.1:7000/alpha`

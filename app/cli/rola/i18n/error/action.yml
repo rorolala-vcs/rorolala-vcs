@@ -8,27 +8,31 @@ error:
 
     err_no_channel_help:
       en: |
-        This is a fault in the program rather than in what was asked for; please report it
+        This is a fault in the program rather than in what was asked for
+        Please report this
       zh-CN: |
-        这是程序自身的问题，而不是所请求的内容有问题；请反馈这个情况
+        这是程序自身的问题，而不是所请求的内容有问题
+        请反馈这个情况
 
     err_missing_value:
-      en: The side that owned a value held none to send
+      en: The side holding the value had no value to send
       zh-CN: 持有值的一侧没有可发送的值
 
     err_missing_value_help:
       en: |
-        This is a fault in the program rather than in what was asked for; please report it
+        This is a fault in the program rather than in what was asked for
+        Please report this
       zh-CN: |
-        这是程序自身的问题，而不是所请求的内容有问题；请反馈这个情况
+        这是程序自身的问题，而不是所请求的内容有问题
+        请反馈这个情况
 
     err_missing_object:
-      en: An object the exchange needed is held by neither side
+      en: Neither side holds an object the exchange needs
       zh-CN: 交易所需要的对象两侧都没有
 
     err_missing_object_help:
       en: |
-        Please check that the key was asked for by something that actually holds it
+        Please check that the side asking for the key really holds it
       zh-CN: |
         请确认索要该 key 的一方确实持有它
 
@@ -43,7 +47,7 @@ error:
         请确认仓库可读可写，然后重试
 
     err_value_too_large:
-      en: A value was too long to fit in a frame
+      en: The value to send is too long to fit in a frame
       zh-CN: 要发送的值太长，放不下一帧
 
     err_value_too_large_help:
@@ -68,13 +72,14 @@ error:
 
     err_codec_help:
       en: |
-        The two sides disagree about what is on the wire; please check that both are the
-        same build
+        The two sides disagree about what is on the wire
+        Please check that both are the same build
       zh-CN: |
-        两侧对线上内容的约定不一致；请确认双方是同一个构建
+        两侧对线上内容的约定不一致
+        请确认双方是同一个构建
 
     err_unknown_action:
-      en: No action answers to id %{id}
+      en: No action responds to id %{id}
       zh-CN: 没有动作响应编号 %{id}
 
     err_unknown_action_help:
@@ -84,24 +89,26 @@ error:
         请确认守护进程提供所请求的动作
 
     err_json:
-      en: What the action produced would not encode — %{reason}
+      en: The action's output could not be encoded — %{reason}
       zh-CN: 动作的输出无法编码 —— %{reason}
 
     err_json_help:
       en: |
-        This is a fault in the program rather than in what was asked for; please report it
+        This is a fault in the program rather than in what was asked for
+        Please report this
       zh-CN: |
-        这是程序自身的问题，而不是所请求的内容有问题；请反馈这个情况
+        这是程序自身的问题，而不是所请求的内容有问题
+        请反馈这个情况
 
     err_addr:
-      en: "`%{target}` is not an ip"
-      zh-CN: "`%{target}` 不是 ip"
+      en: "`%{target}` is not an IP"
+      zh-CN: "`%{target}` 不是 IP"
 
     err_addr_help:
       en: |
-        Please write it as an ip, such as `127.0.0.1` or `127.0.0.1:7717`
+        Please write it as an IP, such as `127.0.0.1` or `127.0.0.1:7717`
       zh-CN: |
-        请写成 ip，例如 `127.0.0.1` 或 `127.0.0.1:7717`
+        请写成 IP，例如 `127.0.0.1` 或 `127.0.0.1:7717`
 
     err_auth:
       en: The session could not be established — %{reason}
@@ -109,7 +116,6 @@ error:
 
     err_auth_help:
       en: |
-        Please check that the keys can be read and that the daemon knows the account's
-        public key as a member
+        Please check that the keys can be read, and that the daemon already counts the account's public key as a member
       zh-CN: |
-        请确认密钥可读，且守护进程认识该账户的公钥（成员）
+        请确认密钥可读，且守护进程已把该账户的公钥认作成员

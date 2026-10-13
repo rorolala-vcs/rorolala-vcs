@@ -4,36 +4,30 @@ entries:
   complete:
     remote:
       en: Read the Vault's own Layout instead of the one being worked in
-      zh-CN: 读取保险库自己的 Layout，而不是当前工作的 Layout
+      zh-CN: 读取保险库自己的布局，而非当前工作的布局
   help:
     en: |
-        List the paths a Layout names, one a line
+        List the paths a Layout names, one per line
 
-        **Usage**: `rola entries [--remote] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola entries
+        **Flags**:
+            --remote    Read the Vault's own Layout instead of the one being worked in
 
-        The Layout being worked in is what is read. `--remote` reads the Vault's own Layout
-        instead — the one that Layout tracks — as the copy `rola layout fetch` left in the
-        Workspace; nothing is fetched for it, so a run that has not fetched is told there is no
-        copy rather than quietly reaching for one.
-
-        A path a line, and nothing else: what comes out is what a `tree`, or anything else that
-        reads one path a line, is given. What each entry is held by, at what version, and whether
-        the Vault has deprecated it are `rola layout entries`'s to say.
+        By default, read the Layout currently in use
+        Use `--remote` to read the **already cached** remote Layout
     zh-CN: |
-        列出一个布局命名的路径，一行一个
+        列出布局命名的路径，一行一个
 
-        **用法**：`rola entries [--remote] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola entries
+        **标识**：
+            --remote    读取保险库自己的布局，而非当前工作的布局
 
-        默认读当前使用的布局。`--remote` 改读保险库自己的布局 —— 也就是该布局追踪的那个 ——
-        取自 `rola layout fetch` 留在工作区里的副本；它不会替你取回，没有取回过就会被告知没有
-        副本，而不是悄悄去取。
-
-        一行一个路径，没有别的，因此输出正适合管道给 `tree`，或任何按行读路径的工具。每个条目
-        被谁持有、在什么版本、保险库是否已废弃它，由 `rola layout entries` 负责。
+        默认读取当前使用的布局
+        使用 `--remote` 读取 **已经缓存** 的远程布局
 
   description:
     en: List the paths a Layout names
-    zh-CN: 列出一个布局命名的路径
+    zh-CN: 列出布局命名的路径
 
   err_no_track:
     en: The Layout being worked in tracks no Vault
@@ -43,4 +37,4 @@ entries:
     en: |
         Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then try again
     zh-CN: |
-        请用 `rola layout set-track <LAYOUT> <VAULT>` 指定一个，然后重试
+        请用 `rola layout set-track <布局> <保险库>` 指定一个保险库，然后重试

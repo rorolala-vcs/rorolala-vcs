@@ -3,55 +3,41 @@ _version: 2
 storage_write_file:
   help:
     en: |
-        Store a file's content, and print the hash it is kept under
+        Store a file's content into the store, and print the hash it is kept under
 
-        **Usage**: `rola storage write-file <FILE> [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola storage write-file <FILE>
 
-        `FILE` names a file, not a directory. How the content is kept — whether it is
-        compressed, whether it is cut into chunks — is the store's own decision, made from the
-        content itself, so what is said here is a path and nothing else.
-
-        What is printed is the hash, on a line of its own. It is the same hash
-        `rola storage extract-file` takes, so what one command answers is what the other is asked.
-        Content the store cuts into chunks is named `manifest:<digest>` rather than
-        `blake3:<digest>`, since how it is kept is part of what the line says; either name is read
-        back by `rola storage extract-file`.
-
-        The run has to be somewhere a store can be found: inside one, or inside a Vault or
-        Workspace that keeps one.
+        Store a file's content into the store, and print the hash it is kept under
+        A single file is given, not a directory
+        How it is kept is the store's own decision from the content
+        Content kept in chunks is named `manifest:<DIGEST>`, the rest `blake3:<DIGEST>`
     zh-CN: |
         将文件内容存入仓库，并打印它所用的哈希
 
-        **用法**：`rola storage write-file <FILE> [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola storage write-file <文件>
 
-        `FILE` 是文件，不是目录。内容如何保存——是否压缩、是否分块——由仓库根据内容自行决定，
-        所以这里给的只是一个路径。
-
-        打印出来的是哈希，单独一行。它与 `rola storage extract-file` 接受的是同一个哈希，
-        所以一条命令给出的正是另一条命令所要的。被仓库分块保存的内容会写成 `manifest:<摘要>`
-        而不是 `blake3:<摘要>`，因为“如何保存”也是这一行要说的；两种写法 `rola storage extract-file`
-        都能读回。
-
-        运行必须处在能发现仓库的地方：仓库内、或保有仓库的保险库／工作区内。
+        将文件内容存入仓库，并打印它所用的哈希
+        给出的是单个文件而非目录
+        如何保存由仓库根据内容决定
+        分块保存的内容命名为 `manifest:<摘要>`，其余为 `blake3:<摘要>`
 
   cmd_storage_write_file_description:
     en: Store a file's content and print its hash
-    zh-CN: 存储文件内容并打印其哈希
+    zh-CN: 存储文件内容并打印它的哈希
 
   err_file_missing:
-    en: No file was named
-    zh-CN: 未指定文件
+    en: No file to store was named
+    zh-CN: 未指定要存储的文件
 
   err_file_missing_help:
     en: |
-        Please name the file whose content is to be stored, for example
-        `rola storage write-file ./notes.txt`
+        Please name the file whose content is to be stored, for example `rola storage write-file ./notes.txt`
     zh-CN: |
         请指定要存入内容的文件，例如 `rola storage write-file ./notes.txt`
 
   err_no_storage:
     en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    zh-CN: 当前运行不在任何仓库中
 
   err_no_storage_help:
     en: |
@@ -65,8 +51,7 @@ storage_write_file:
 
   err_not_a_file_help:
     en: |
-        What is stored is a file's content, so the path has to name a file that is there — a
-        directory is not something there is content to take
+        What is stored is a file's content, so the path has to name a file that is there — a directory has no content to take
     zh-CN: |
         存入的是文件内容，所以路径必须指向一个确实存在的文件——目录里没有可取的内容
 
@@ -76,7 +61,6 @@ storage_write_file:
 
   err_write_failed_help:
     en: |
-        Please check that the file can be read and that the store can be written to, then try
-        again
+        Please check that the file can be read and the store can be written to, then try again
     zh-CN: |
         请确认该文件可读、仓库可写，然后重试

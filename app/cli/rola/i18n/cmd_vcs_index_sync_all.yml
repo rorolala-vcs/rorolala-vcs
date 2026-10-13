@@ -3,46 +3,38 @@ _version: 2
 vcs_index_sync_all:
   help:
     en: |
-        Make the indexes at both ends hold the same keys
+        Make the indexes at both ends hold the same objects
 
-        **Usage**: `rola vcs-index sync-all [VAULT] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: `rola vcs-index sync-all [VAULT]`
+        **Flags**:
+            --confirm    Run without asking for confirmation beforehand
 
-        `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`, or
-        an ip, with the port a Vault listens on by default when none is written. Naming none reaches
-        for the one the Workspace reaches for by default.
-
-        What crosses is what only one end holds, in whichever direction that is: this is neither an
-        upload nor a download, and one run leaves each index holding every object either of them had.
-        An index object is one object and is never cut, so a key crosses as its bytes and the other
-        side keeps it under the hash it hashes to.
-
-        Both indexes are changed, so the run asks before it starts; `--confirm` answers in advance.
+        `[VAULT]` names the Vault to reach, either a name the Workspace has bound with `rola vault bind` or an ip, with the port a Vault listens on by default when none is written, and with none given, the Vault the Workspace uses by default
+        Transfer the objects only one end holds, one run leaving each index holding every object the two have together
+        Both indexes are changed, so confirmation is asked before the run
     zh-CN: |
-        让两端的索引持有相同的对象
+        让两端索引持有相同的对象
 
-        **用法**：`rola vcs-index sync-all [VAULT] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola vcs-index sync-all [保险库]
+        **标识**：
+            --confirm    运行前不征求确认，直接执行
 
-        `VAULT` 指定要连接的保险库：工作区已用 `rola vault bind` 绑定的名字，或一个 ip（不写端口时用
-        保险库默认监听的端口）。不指定则连接工作区默认使用的那个。
-
-        传输的是「只有一端持有」的对象，方向由谁持有决定：既不是上传也不是下载，一次运行会让两个索引都
-        持有它们原本合计持有的全部对象。索引对象是单个对象、从不分块，因此一个 key 就以它的字节传输，
-        对方按它的哈希原样保存。
-
-        两个索引都会被改动，所以运行前会先征求确认；`--confirm` 可预先作答。
+        `[保险库]` 指定要连接的保险库，可以是工作区已用 `rola vault bind` 绑定的名字，或一个 ip，不写端口时用保险库默认监听的端口，不指定时连接工作区默认使用的保险库
+        传输「只有一端持有」的对象，一次运行让两端索引都持有两者合计的全部对象
+        两个索引都会被改动，运行前会先征求确认
 
   cmd_vcs_index_sync_all_description:
-    en: Make the indexes at both ends hold the same keys
-    zh-CN: 让两端的索引持有相同的对象
+    en: Make the indexes at both ends hold the same objects
+    zh-CN: 让两端索引持有相同的对象
 
   confirm:
     en: "Both indexes will be changed, so that each holds everything the other has. Continue? [y/n] "
-    zh-CN: "两个索引都会被改动，使各自持有对方所持有的全部对象。是否继续？[y/n] "
+    zh-CN: "两个索引都会被改动，各自将持有对方所持有的全部对象。是否继续？[y/n] "
 
   result_synced:
-    en: The indexes at both ends now hold the same keys
+    en: The indexes at both ends now hold the same objects
     zh-CN: 两端索引现在持有相同的对象
 
   result_declined:
     en: Nothing was done — the sync was not confirmed
-    zh-CN: 未做任何改动 —— 同步未获确认
+    zh-CN: 未做任何改动，同步未获确认

@@ -5,24 +5,23 @@ vault_admin:
     en: |
         Name the administrators of this Vault
 
-        **Usage**: `rola vault admin [add <NAME> | rm <NAME>] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola vault admin [add <MEMBER> | rm <MEMBER>]
+        **Commands**:
+            add <MEMBER>   Name a member an administrator of this Vault
+            rm <MEMBER>    Stop a member being an administrator of this Vault
 
-        An administrator may move any file in the Vault's Layout, where a member who is not one
-        may move only what it holds. Naming no subcommand lists the administrators.
-
-        The list is the Vault's own, kept under `[auth] admins` in its `vault.toml`, so these
-        commands work on the Vault the run is inside. The first administrator is written by hand:
-        a Vault with none has nobody who may name one.
+        An administrator may change any file in the Vault's Layout, and an ordinary member only the files it holds
+        With no subcommand the administrators are listed
     zh-CN: |
         指定该保险库的管理员
 
-        **用法**：`rola vault admin [add <NAME> | rm <NAME>] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola vault admin [add <成员> | rm <成员>]
+        **命令**：
+            add <成员>    指定成员为该保险库的管理员
+            rm <成员>     取消成员作为该保险库管理员
 
-        管理员可以移动保险库布局中的任何文件，而非管理员的成员只能移动自己持有的文件。
-        不指定子命令时列出管理员。
-
-        该名单属于保险库本身，保存在其 `vault.toml` 的 `[auth] admins` 下，因此这些命令作用于
-        当前所在的保险库。第一个管理员需要手动写入：没有任何管理员的保险库无人可以指定管理员。
+        管理员可以修改保险库布局中的任何文件，普通成员只能修改自己持有的文件
+        不指定子命令时列出管理员
 
   description:
     en: Name the administrators of this Vault
@@ -32,43 +31,41 @@ vault_admin:
     en: |
         Name a member an administrator of this Vault
 
-        **Usage**: `rola vault admin add <NAME> [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola vault admin add <MEMBER>
 
-        Naming one who is already named is not an error, only the same naming made again.
+        Naming the same member again is not an error
     zh-CN: |
-        指定某个成员为该保险库的管理员
+        指定成员为该保险库的管理员
 
-        **用法**：`rola vault admin add <NAME> [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola vault admin add <成员>
 
-        重复指定同一个成员不是错误，只是把同一件事再做一次。
+        重复指定同一个成员不算错误
 
   add_description:
     en: Name a member an administrator of this Vault
-    zh-CN: 指定某个成员为该保险库的管理员
+    zh-CN: 指定成员为该保险库的管理员
 
   rm_help:
     en: |
         Stop a member being an administrator of this Vault
 
-        **Usage**: `rola vault admin rm <NAME> [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola vault admin rm <MEMBER>
 
-        The last administrator cannot be removed: a Vault left with none has no way back but the
-        same hand edit that made the first one.
+        The last administrator cannot be removed
     zh-CN: |
-        取消某个成员作为该保险库管理员
+        取消成员作为该保险库管理员
 
-        **用法**：`rola vault admin rm <NAME> [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola vault admin rm <成员>
 
-        最后一个管理员无法被移除：没有任何管理员的保险库，除了像当初写出第一个那样手动编辑，
-        没有别的办法。
+        最后一个管理员无法被移除
 
   rm_description:
     en: Stop a member being an administrator of this Vault
-    zh-CN: 取消某个成员作为该保险库管理员
+    zh-CN: 取消成员作为该保险库管理员
 
   result_none:
     en: This Vault names no administrator
-    zh-CN: 该保险库没有指定任何管理员
+    zh-CN: 该保险库尚未指定任何管理员
 
   result_named:
     en: "`%{name}` is now an administrator of this Vault"

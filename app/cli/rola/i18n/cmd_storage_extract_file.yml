@@ -3,82 +3,78 @@ _version: 2
 storage_extract_file:
   help:
     en: |
-        Take stored content back out, under the hash it is kept by
+        Take the content back out by the hash it is kept under
 
-        **Usage**: `rola storage extract-file <HASH> [DIR] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: `rola storage extract-file <HASH> [DIR]`
 
-        `HASH` is what `rola storage write-file` printed: written as a digest in hex, with or
-        without the hash's name in front of it. The content is written under that digest, in
-        `DIR` — or in the current directory when none is named.
-
-        `DIR` is made if it is not there yet, so naming a path into somewhere new is a request
-        to write there rather than a mistake. A file already under the name is not written
-        over: it is reported, so that what is there is never lost to what was asked for.
+        The hash is what `rola storage write-file` printed, written as a hex digest, with or without the hash's name in front of it
+        The content is written under that digest as the name, into `DIR`, or into the current directory when not named
+        `DIR` is created when it does not exist
+        When a file already exists under that name it is not overwritten, but an error is reported
     zh-CN: |
         按内容所用的哈希将内容取出
 
-        **用法**：`rola storage extract-file <HASH> [DIR] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola storage extract-file <哈希> [目录]
 
-        `HASH` 就是 `rola storage write-file` 打印出来的：写成十六进制摘要，前面带不带哈希名均可。
-        内容会以该摘要为名写入 `DIR`；不指定时写入当前目录。
-
-        `DIR` 不存在时会创建，因此指向新位置的路径是“写到这里”的请求，而不是错误。
-        若该名字下已有文件，不会覆盖，而是报错——免得已有内容被这次请求悄悄替换掉。
+        哈希即 `rola storage write-file` 打印出的哈希，写成十六进制摘要，前面带不带哈希名均可
+        内容以该摘要为名写入 `目录`，不指定时写入当前目录
+        `目录` 不存在时会创建
+        该名字下已有文件时不会覆盖，而是报错
 
   cmd_storage_extract_file_description:
-    en: Write stored content out under its hash
+    en: Write the stored content out by its hash
     zh-CN: 按哈希将存储的内容写出
 
   err_hash_missing:
-    en: No hash was named
-    zh-CN: 未指定哈希
+    en: No content hash was named
+    zh-CN: 未指定内容哈希
 
   err_hash_missing_help:
     en: |
-        Please name the hash of the content to write out, as `rola storage write-file` printed it
+        Please name the hash of the content to write out, the hash `rola storage write-file` printed
     zh-CN: |
-        请指定要写出的内容哈希，即 `rola storage write-file` 打印的那个
+        请指定要写出的内容哈希，即 `rola storage write-file` 打印出的哈希
 
   err_no_storage:
-    en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    en: This run is not inside any store
+    zh-CN: 当前运行不在任何仓库中
 
   err_no_storage_help:
     en: |
-        Please run this inside a store, or inside the Vault or Workspace that keeps one
+        Please run this inside a store, or inside the Vault or Workspace that keeps a store
     zh-CN: |
         请在仓库内运行，或在保有仓库的保险库／工作区内运行
 
   err_bad_hash:
-    en: "`%{hash}` does not read as a hash"
+    en: "`%{hash}` is not a valid hash"
     zh-CN: "`%{hash}` 不是合法的哈希"
 
   err_bad_hash_help:
     en: |
-        A hash is a digest in hex, written with or without the hash's name in front of it, for
-        example `blake3:1f9d…`. Please check what was typed
+        A hash is a hex digest, with or without the hash's name in front of it, for example `blake3:1f9d…`
+        Please check what was typed
     zh-CN: |
-        哈希是十六进制摘要，前面带不带哈希名均可，例如 `blake3:1f9d…`。请检查输入
+        哈希是十六进制摘要，前面带不带哈希名均可，例如 `blake3:1f9d…`
+        请检查输入
 
   err_target_exists:
-    en: "%{path} is already there"
+    en: "%{path} already exists"
     zh-CN: "%{path} 已存在"
 
   err_target_exists_help:
     en: |
-        What is stored is written under its hash, and a file already there is left as it is.
-        Please name another directory, or remove the file first
+        The content is written under its hash as the name, and a file already there is left as it is
+        Please use another directory, or delete the file first
     zh-CN: |
-        内容以它的哈希为名写出，已存在的文件会保持原样。
-        请换一个目录，或先删除该文件
+        内容以它的哈希为名写出，已存在的文件会保持原样
+        请改用其他目录，或先删除该文件
 
   err_extract_failed:
-    en: "Could not write the content of %{hash} out — %{reason}"
+    en: "Could not write out the content of %{hash} — %{reason}"
     zh-CN: "无法写出 %{hash} 的内容 —— %{reason}"
 
   err_extract_failed_help:
     en: |
-        Please check that the store holds that content and that the directory can be written
-        to, then try again
+        Please make sure the store really holds that content and the target directory is writable, then try again
     zh-CN: |
         请确认仓库中确有该内容、且目标目录可写，然后重试

@@ -3,61 +3,56 @@ _version: 2
 explain:
   help:
     en: |
-        Say what a number or a name the program left behind means
+        Explain what a number or a name the program left behind means
 
-        **Usage**: `rola explain <COMMAND> [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola explain <COMMAND>
+        **Commands**:
+            exit-code [N]   Explain exit code N, or the last failing exit code when N is omitted
 
-        **Commands**
-            exit-code [N]   Explain exit code N, or the one the last run ended with
+        What can be explained is decided by the subcommand
 
-        What `explain` explains is what its commands name, and each of them says what it
-        can say. An exit code is the number `rola` ends a run with, and what it means is
-        written in the locale files rather than in the program, so it is spoken in the
-        run's language.
+        The meaning of an exit code is spoken in the language chosen for this run
     zh-CN: |
-        解释程序留下的某个数字或名字的含义
+        解释程序留下的数字或名字的含义
 
-        **用法**：`rola explain <命令> [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola explain <命令>
+        **命令**：
+            exit-code [N]   解释退出码 N，省略 N 时解释上次失败的退出码
 
-        **命令**
-            exit-code [N]   解释退出码 N，或不带 N 时解释上一次运行结束时的退出码
+        能解释什么由子命令决定
 
-        `explain` 能解释什么由它的子命令给出，每条子命令会说明自己能说什么。
-        退出码是 `rola` 结束一次运行时留下的数字；它的含义写在语言文件里而不是程序里，
-        因此会以本次运行所选的语言说出来。
+        退出码的含义以本次运行所选的语言说出
 
   cmd_explain_description:
     en: Explain what a number or a name the program left behind means
-    zh-CN: 解释程序留下的某个数字或名字的含义
+    zh-CN: 解释程序留下的数字或名字的含义
 
 explain_exit_code:
   help:
     en: |
         Explain an exit code
 
-        **Usage**: `rola explain exit-code [N] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola explain exit-code [N]
 
-        `N` is the exit code to explain, and it has to be one the program states — they
-        are listed below. Naming none explains the code the last run that failed ended
-        with, which is kept under the user's local data directory —
-        `~/.local/share/rola/lastec` on a machine that follows the XDG layout.
+        `N` must be an exit code this program has stated
+        They are listed below
 
-        A code the program does not state is reported rather than passed over, since a
-        number no code stands for is not something there is anything of the program to say
-        about.
+        When `N` is omitted, explain the exit code of the last failing run, which is kept under the user's local data directory, at `~/.local/share/rola/lastec` on an XDG machine
+
+        A code the program has not stated is reported as an error, rather than quietly passed over
 
         **Exit codes**
     zh-CN: |
         解释一个退出码
 
-        **用法**：`rola explain exit-code [N] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola explain exit-code [N]
 
-        `N` 是要解释的退出码，必须是本程序声明过的码 —— 它们列在下方。
-        不加 `N` 时解释上一次失败运行结束时的退出码，它保存在用户的本地数据目录下
-        （遵循 XDG 的机器上是 `~/.local/share/rola/lastec`）。
+        `N` 须是本程序声明过的退出码
+        它们列在下方
 
-        程序没有声明的码会报错而不是默默略过：一个没有任何码对应的数字，
-        本程序对它无话可说。
+        省略 `N` 时解释上一次失败运行的退出码，该退出码保存在用户的本地数据目录下，XDG 机器上位于 `~/.local/share/rola/lastec`
+
+        程序没有声明的码会报错，而不是默默略过
 
         **退出码**
 
@@ -71,15 +66,15 @@ explain_exit_code:
 
   err_no_lastec:
     en: No failing run has been recorded to explain
-    zh-CN: 尚未记录任何可供解释的失败运行
+    zh-CN: 还没有记录任何可供解释的失败运行
 
   err_no_lastec_help:
     en: |
         Please name the code to explain, as in `rola explain exit-code 84`; one is recorded
         as each run that fails ends
     zh-CN: |
-        请给出要解释的退出码，例如 `rola explain exit-code 84`；
-        每次运行以失败结束时都会记录一个
+        请给出要解释的退出码，例如 `rola explain exit-code 84`
+        每次运行以失败结束时都会记录一个退出码
 
   err_unknown_code:
     en: "`%{code}` is not an exit code `rola` states"

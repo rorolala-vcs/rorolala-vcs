@@ -3,35 +3,26 @@ _version: 2
 cmd_layout_giveup_ownership:
   help:
     en: |
-        Ask the Vault to name nobody as entries' holders
+        Ask the Vault to clear the holders of the named entries
 
-        **Usage**: `rola layout giveup-ownership [VAULT] <UUID>... [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola layout giveup-ownership [VAULT] <UUID>...
 
-        `VAULT` names the Vault to reach: a name the Workspace has bound with `rola vault bind`.
-        Naming none reaches for the one the Workspace reaches for by default. Each `UUID` is the
-        `Uuid` of an entry to let go of, and they are let go of in the order they are named.
-
-        An entry this account holds is named as nobody's. One another account holds is left alone,
-        and the run is told who holds it — where that happens nothing after it is let go of, so a
-        run that names several stops at the first one it cannot let go of. One nobody holds is
-        already what was asked for. When the Vault's Layout has been fetched here, the copy is
-        changed to agree with the Vault.
+        Give up each `UUID` in the order given
+        An entry this account holds has its holder cleared, an entry another account holds is left as it is and its holder is reported before stopping, and an entry nobody holds is taken as already satisfied
+        When a copy of the Vault's Layout is kept locally, it is updated to agree with the Vault
     zh-CN: |
-        请求保险库把某些条目的持有者清空
+        请求保险库把指定条目的持有者清空
 
-        **用法**：`rola layout giveup-ownership [VAULT] <UUID>... [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola layout giveup-ownership [保险库名] <UUID>...
 
-        `VAULT` 指要连接的保险库：必须是工作区用 `rola vault bind` 绑定的名字。不指定时，
-        使用工作区选定的默认保险库。每个 `UUID` 是要放弃的条目的 `Uuid`，按给出的顺序依次放弃。
-
-        本账户持有的条目会被清空持有者。已被其他账户持有的条目保持原样，并会告知持有者是谁；
-        此时它之后的都不会再放弃，因此一次给多个时会在第一个放不掉的条目上停下。本就无人持有的
-        条目则已经满足要求。若曾在此取回保险库的布局，副本会同步改为与保险库一致。
+        按给出的顺序依次放弃每个 `UUID`
+        本账户持有的条目被清空持有者，他人持有的条目保留原样并报告持有者后停止，无人持有的条目视为已满足
+        本地存有该保险库的布局副本时，同步更新为与保险库一致
 
   description:
-    en: Ask the Vault to name nobody as entries' holders
-    zh-CN: 请求保险库清空某些条目的持有者
+    en: Ask the Vault to clear the holders of the named entries
+    zh-CN: 请求保险库将指定条目的持有者清空
 
   result_given_up:
-    en: "`%{uuid}` is no longer held"
-    zh-CN: "`%{uuid}` 已不再被持有"
+    en: "The entry `%{uuid}` is no longer held"
+    zh-CN: "条目 `%{uuid}` 已不再被持有"

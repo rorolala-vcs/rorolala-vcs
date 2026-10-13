@@ -4,36 +4,30 @@ key_generate:
   complete:
     install:
       en: Put the pair in the user's key directory
-      zh-CN: 把密钥对放入用户的密钥目录
+      zh-CN: 将密钥对写入用户密钥目录
   help:
     en: |
         Generate an Ed25519 key pair under a name
 
-        **Usage**: `rola key generate <NAME> [--install] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola key generate <NAME>
+        **Flags**:
+            --install    Write the pair into this machine's user key directory
 
-        `<NAME>.pem` — the private key, a PKCS#8 PEM, which is what an account is — and
-        `<NAME>.pub` — the public key derived from it, an SPKI PEM, which is what a member is —
-        are written in the current directory. `NAME` names the *pair* rather than one file, so
-        an extension on it separates the stem from what a key is written as: `alice`,
-        `alice.pem` and `alice.pub` all name the same two files.
+        Write the private key `<NAME>.pem` and the public key `<NAME>.pub` in the current directory
+        An extension on the name is treated as a boundary, and `alice`, `alice.pem` and `alice.pub` name the same two files
 
-        With `--install`, the pair goes into the user's key directory under the local data
-        directory — `~/.local/share/rola/keys` on a machine that follows the XDG layout —
-        which is created if it is not there yet. An account in that directory is one every
-        run on this machine can act as, which is what a key made for the machine itself is
-        for; one made in the current directory is the work's own.
+        With `--install` it is written into the user key directory, `~/.local/share/rola/keys` on a machine that follows XDG, created when it is not there
     zh-CN: |
         按名字生成一对 Ed25519 密钥
 
-        **用法**：`rola key generate <NAME> [--install] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola key generate <名字>
+        **标识**：
+            --install    将密钥对写入本机用户密钥目录
 
-        在当前目录写出 `<NAME>.pem`（私钥，PKCS#8 PEM，即账户）与 `<NAME>.pub`（由它导出的
-        公钥，SPKI PEM，即成员）。`NAME` 是“这一对”的名字而不是单个文件，因此名字上的扩展名
-        当作分界：`alice`、`alice.pem`、`alice.pub` 都表示同样的两个文件。
+        在当前目录写出私钥 `<名字>.pem` 与公钥 `<名字>.pub`
+        名字上的扩展名当作分界，`alice`、`alice.pem`、`alice.pub` 表示同样的两个文件
 
-        加 `--install` 时写入用户密钥目录（遵循 XDG 的机器上是 `~/.local/share/rola/keys`），
-        目录不存在时会创建。该目录里的账户是本机每个运行都可以扮演的身份，适合为机器本身
-        生成密钥；而当前目录里的那一对属于当前工作。
+        `--install` 时写入用户密钥目录，遵循 XDG 的机器上是 `~/.local/share/rola/keys`，目录不存在时创建
 
   cmd_key_generate_description:
     en: Generate an Ed25519 key pair under a name
@@ -41,14 +35,14 @@ key_generate:
 
   success:
     en: Key pair written to %{private} and %{public}
-    zh-CN: 密钥对已生成：%{private} 与 %{public}
+    zh-CN: 密钥对已写入 %{private} 与 %{public}
 
   err_name_missing:
-    en: A name is required
-    zh-CN: 缺少名字
+    en: No name was given for the key pair
+    zh-CN: 未给出密钥对的名字
 
   err_name_missing_help:
-    en: Please name the pair, as in `rola key generate alice`
+    en: Please give the name of the key pair, for example `rola key generate alice`
     zh-CN: 请给出密钥对的名字，例如 `rola key generate alice`
 
   err_no_openssl:
@@ -57,32 +51,32 @@ key_generate:
 
   err_no_openssl_help:
     en: |
-        `rola key generate` makes keys with OpenSSL. Please install it and make sure
-        `openssl` is on your PATH, then try again
+        `rola key generate` makes keys with OpenSSL
+        Please install OpenSSL, and make sure `openssl` is on PATH, then try again
     zh-CN: |
-        `rola key generate` 使用 OpenSSL 生成密钥。请安装 OpenSSL，并确认 `openssl`
-        在 PATH 中，然后重试
+        `rola key generate` 使用 OpenSSL 生成密钥
+        请安装 OpenSSL，并确认 `openssl` 在 PATH 中，然后重试
 
   err_keygen_failed:
-    en: OpenSSL ran but did not produce both keys
+    en: OpenSSL ran, but did not produce a complete key pair
     zh-CN: OpenSSL 已运行，但未能生成完整密钥对
 
   err_keygen_failed_help:
     en: |
-        Please run `openssl genpkey -algorithm ed25519 -out alice.pem` by hand to see why
+        Please run `openssl genpkey -algorithm ed25519 -out alice.pem` by hand to see the specific reason
     zh-CN: |
         请手动运行 `openssl genpkey -algorithm ed25519 -out alice.pem` 查看具体原因
 
   err_no_key_dir:
-    en: Could not find the user's key directory
+    en: Could not determine the user's key directory
     zh-CN: 无法确定用户密钥目录
 
   err_no_key_dir_help:
     en: |
-        `--install` writes into the local data directory, which this machine does not name.
-        Please generate the pair here instead, or set `XDG_DATA_HOME`
+        `--install` needs to write into the local data directory, but this machine does not name that directory
+        Please generate in the current directory instead, or set `XDG_DATA_HOME`
     zh-CN: |
-        `--install` 需要写入本地数据目录，但本机未指明该目录。
+        `--install` 需要写入本地数据目录，但本机未指明该目录
         请改为在当前目录生成，或设置 `XDG_DATA_HOME`
 
   err_install_dir:

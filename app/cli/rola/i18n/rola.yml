@@ -3,84 +3,89 @@ _version: 2
 rola:
   help:
     en: |
-        **Usage**: rola [-v | --vault] [--rebuild] [--no-color] [--no-progress]
-                    [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
-                    [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
-                    [--offline] [--force] [--no-pager]
-                    [-V | --version] [-h | --help] <COMMAND> <ARGS>
+        **Usage**: rola <COMMAND> [ARGS]
+
+        **Global Flags**:
+            [-v | --vault] [--rebuild] [--no-color] [--no-progress]
+            [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
+            [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
+            [--offline] [--force] [--no-pager]
+            [-V | --version] [-h | --help]
 
         **Initialization**
-            init                    Create a Workspace or Vault in the current directory
-            create <PATH>           Create a Workspace at PATH, or a Vault with --vault
+            init                        Create a Workspace or Vault in the current directory
+            create <PATH>               Create a Workspace at PATH, or a Vault with `--vault`
 
         **Identity**
-            account <ACCOUNT>       Name the account the work acts as, or list the accounts there are
-            key [--pem]             List the keys Rorolala can reach, or generate one
+            account <ACCOUNT>           Query or switch the accounts available on this machine
+            key [--pem]                 List the keys Rorolala can use, or generate a pair
 
         **Everyday**
-            status                  Show how the working tree stands beside the Layout
-            bind <LINK> [NAME]      Bind a Vault address as NAME and start a Layout on it
-            align <PATH>            Bring the tree and the Layout back into agreement
-            fetch [VAULT]           Bring a Vault's Layout here as a read-only copy
-            checkin <REF>... [TO]   Bring what the Vault holds but this Layout does not into it
-            track <FILES>           Record files in the Layout being worked in
-            retrack <FILE>          Move a file's recorded version back
-            sync                    Bring this Layout and the Vault it tracks into agreement
-            pack                    Lay the objects a store and an index hold out in packs
+            status                      Show the difference between the Workspace's file structure and the record
+            bind <LINK> [NAME]          Bind a Vault address as NAME and start a Layout on it
+            align <PATH>                Keep the Workspace's file structure and the record in agreement
+            fetch [VAULT]               Bring a Vault's Layout here as a read-only copy
+            checkin <UPSTREAM> [PATH]   Add the upstream Layout's entries into the local Layout
+            track <FILE>                Record the file into the current Layout
+            retrack <FILE>              Move a file's recorded version back
+            sync                        Bring this Layout and the Vault it tracks into agreement
+            pack                        Organize the objects in the store and the index into packs
 
         **Help**
-            explain <COMMAND>       Explain what a number or a name the program left behind means
+            explain                     Explain what a number or a name the program left behind means
 
         **Low-level**
-            storage <CMD>           Read and write the content a store holds, by hand
-            vcs-index <CMD>         Read and write the version control index, by hand
-            inv-idx <CMD>           Build and ask the inverse index, by hand
-            layout <CMD>            Work with the Layouts a run keeps
+            storage                     Read and write the content a store holds
+            vcs-index                   Read and write the version control index
+            inv-idx                     Build and query the inverse index
+            layout                      Work with the Layouts a run keeps
 
         **Other**
-            vault <CMD>             List the Vaults this Workspace knows
-            desktop                 Open the Desktop program that sits beside this one
-            fs-ops <CMD>            Move, copy or remove a path
+            vault                       Query and work with the Vaults this Workspace knows
+            desktop                     Open `rola`'s desktop program
+            fs-ops                      Move, copy or remove a path
     zh-CN: |
-        **用法**：rola [-v | --vault] [--rebuild] [--no-color] [--no-progress]
-                   [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
-                   [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
-                   [--offline] [--force] [--no-pager]
-                   [-V | --version] [-h | --help] <命令> <参数>
+        **用法**：rola <命令> [参数]
+
+        **全局标识**：
+            [-v | --vault] [--rebuild] [--no-color] [--no-progress]
+            [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
+            [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
+            [--offline] [--force] [--no-pager]
+            [-V | --version] [-h | --help]
 
         **初始化**
-            init                    在当前目录创建工作区或保险库
-            create <PATH>           在 PATH 创建工作区；加 --vault 则创建保险库
+            init                     在当前目录创建工作区或保险库
+            create <路径>            在指定路径创建工作区，加 `--vault` 则创建保险库
 
         **身份**
-            account <ACCOUNT>       指定当前账户，或列出可用账户
-            key [--pem]             列出 Rorolala 能找到的密钥，或生成一对
+            account <账户名>         查询或切换本机的可用账户
+            key [--pem]              列出 Rorolala 可用的密钥，或生成一对
 
         **日常使用**
-            status                  展示工作树相对于布局的状态
-            bind <LINK> [NAME]      将保险库地址绑定为 NAME，并以此建立布局
-            align <PATH>            让工作树与布局重新一致
-            fetch [VAULT]           将某个保险库的布局取回为只读副本
-            checkin <REF>... [TO]   把保险库持有、而当前布局没有的内容带入当前布局
-            track <FILES>           将文件记入当前正在使用的布局
-            retrack <FILE>          回退文件已记录的版本
-            sync                    让当前布局与它追踪的保险库重新一致
-            pack                    将仓库与索引中的对象整理进 pack
+            status                   展示工作区文件结构与记录之间的差异
+            bind <链接> [名字]       将保险库地址绑定为名字，并在其上建立布局
+            align <路径>             让工作区下的文件结构与记录的保持一致
+            fetch [保险库名]         将保险库的布局取回为只读副本
+            checkin <上游> [路径]    将上游布局的条目加入到本地布局中
+            track <文件>             将文件记入当前布局
+            retrack <文件>           回退文件已记录的版本
+            sync                     让当前布局与它追踪的保险库重新一致
+            pack                     将仓库与索引中的对象整理进 pack
 
         **帮助**
-            explain <COMMAND>       解释程序留下的某个数字或名字的含义
+            explain                  解释程序留下的数字或名字的含义
 
         **底层操作**
-            storage <CMD>           手工读写仓库持有的内容
-            vcs-index <CMD>         手工读写版本控制索引
-            inv-idx <CMD>           手工建立并查询反向索引
-            layout <CMD>            操作本运行所持有的布局
+            storage                  读写仓库持有的内容
+            vcs-index                读写版本控制索引
+            inv-idx                  建立并查询反向索引
+            layout                   操作本次运行所持有的布局
 
         **其他**
-            vault <CMD>             列出当前工作区已知的保险库
-            desktop                 打开与 rola 并排的桌面程序
-            fs-ops <CMD>            移动、复制或删除一个路径
-
+            vault                    查询和操作当前工作区已知的保险库
+            desktop                  打开 `rola` 的桌面端程序
+            fs-ops                   移动、复制或删除一个路径
   err_unknown_command:
     en: Unknown command `%{command}`
     zh-CN: 未知命令 `%{command}`
@@ -90,5 +95,5 @@ rola:
     zh-CN: "找到类似命令：“%{commands}”"
 
   err_unknown_command_help:
-    en: Please run `rola -h` to see the commands there are
+    en: Please run `rola -h` to see the available commands
     zh-CN: 请运行 `rola -h` 查看可用的命令

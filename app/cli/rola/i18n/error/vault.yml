@@ -3,7 +3,7 @@ _version: 2
 error:
   vault:
     err_name_missing:
-      en: A name is required
+      en: A name is missing
       zh-CN: 缺少名字
 
     err_name_missing_help:
@@ -19,12 +19,12 @@ error:
       zh-CN: 运行 `rola vault` 查看已绑定的名字
 
     err_admin_missing:
-      en: This Vault names no administrator, so nobody may name one
+      en: This Vault has not named any administrator, so nobody may name one
       zh-CN: 该保险库没有指定任何管理员，因此无人可以指定管理员
 
     err_admin_missing_help:
       en: |
-        Please name the first one by hand, under `[auth] admins` in the Vault's `vault.toml`
+        Please write the first administrator by hand, under `[auth] admins` in the Vault's `vault.toml`
       zh-CN: |
         请手动在保险库的 `vault.toml` 中 `[auth] admins` 下写出第一个管理员
 
@@ -41,7 +41,7 @@ error:
       zh-CN: "`%{name}` 不是该保险库的管理员"
 
     err_admin_unknown_help:
-      en: Run `rola vault admin` to see who is
+      en: Run `rola vault admin` to see who the administrators are
       zh-CN: 运行 `rola vault admin` 查看谁是管理员
 
     err_last_admin:

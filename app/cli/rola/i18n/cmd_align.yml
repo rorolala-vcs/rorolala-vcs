@@ -3,126 +3,125 @@ _version: 2
 align:
   complete:
     delete:
-      en: Confirm that a path the Layout names but the tree does not hold is gone
-      zh-CN: 确认 Layout 记录而工作树已不存在的路径已经丢失
+      en: Consider the lost entry already removed
+      zh-CN: 认定丢失项已经移除
     rename:
-      en: Confirm that a path that moved has moved
-      zh-CN: 确认已移动的路径确实移动了
+      en: Confirm and record the named move
+      zh-CN: 确认并记录指定的移动项
     break:
-      en: Take back a move the reading guessed at
-      zh-CN: 撤销读取所猜测的一次移动
+      en: Break the move into a separate lost entry and untracked entry
+      zh-CN: 断开移动项，将其变为独立的丢失项和未标记项
     move:
-      en: Assert that the path moved to the file named
-      zh-CN: 声明该路径移动到了所给的文件
+      en: Consider a pair of a lost entry and an untracked entry as a move
+      zh-CN: 将一对丢失项和未标记项认定为移动项
     restore_move:
-      en: Put a moved file back where the Layout names it
-      zh-CN: 把移动过的文件放回 Layout 记录的位置
+      en: Reject the named move, and restore it to its original position
+      zh-CN: 否决指定的移动项，将其还原回开始的位置
     restore_modify:
-      en: Put a changed file back to the version the Layout names
-      zh-CN: 把改动过的文件恢复到 Layout 记录的版本
+      en: Revert the content change, which loses the edited content
+      zh-CN: 撤回内容变更，这会丢失已编辑的内容
     restore_delete:
-      en: Put a deleted file back, taking it out of the store
-      zh-CN: 从仓库把删除的文件取回
+      en: Rebuild the lost entry's file
+      zh-CN: 重建丢失项的文件
     restore:
-      en: Put a path back to what the Layout names, whichever of the three it needs
-      zh-CN: 按需要把路径恢复成 Layout 记录的样子，三种方式自动选择
+      en: Automatically choose and restore the move, the lost entry or the modification
+      zh-CN: 自动选择并还原移动项、丢失项或修改项
     completely:
-      en: Put a move's file back where and as the Layout names it
-      zh-CN: 按 Layout 记录的位置和内容完整还原一次移动
+      en: Fully restore what is named
+      zh-CN: 完全还原所指内容
   help:
     en: |
-        Bring the tree and the Layout back into agreement
+        Bring the file structure under the Workspace into agreement with what is recorded
 
-        **Usage**: `rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore) [--completely] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola align <PATH>
+        **Flags**:
+            --delete            Confirm the **lost entry** is gone
+            --rename            Confirm the **move**, and update the record to the new position
+            --break             For a **non-deterministic move**, break it into a **lost entry** and an **untracked entry**
+            --move <FILE>       Assert that PATH moved to FILE, forming a **non-deterministic move**
 
-        `PATH` is read where the run was made, as a shell would read it. `.` is the directory the run
-        is in and everything under it, and a name that lands on a directory selects everything under
-        it. Exactly one mode is given:
+            --restore-move      Confirm the **move**, and restore it to its original position
+            --restore-modify    Restore the file's content change
+            --restore-delete    Rebuild a **lost entry**'s file
+            --restore           Do one of the three above, as PATH needs
+            --completely        Restore the content as well as the position, meaningful only for restoring a move
 
-        - `--delete` confirms that a path the Layout names but the tree does not hold is gone.
-        - `--rename` confirms a move the reading found, whichever side `PATH` is.
-        - `--break` takes a move back, leaving a loss and a gain; two identical files are a fact.
-        - `--move FILE` asserts that `PATH` moved to `FILE`, for a move the reading could not guess.
-        - `--restore-move` puts a moved file back where the Layout names it.
-        - `--restore-modify` writes the version the Layout names back over a changed file.
-        - `--restore-delete` takes a deleted file back out of the store to where the Layout names it.
-        - `--restore` does whichever of the three `PATH` needs.
-
-        Every mode but `--restore` acts on one path. Given a directory or `.`, `--restore` puts every
-        path under it back by what it needs; a path the tree holds and no Layout names is left alone.
-        `--completely` puts a move back as well as where it was, and means something only for a move
-        being put back — `--restore` or `--restore-move`.
+            --vault             Include this Vault as a Layout source during alignment
+            --offline           Look for the content needed to restore only locally without asking the Vault
     zh-CN: |
-        让工作树与布局重新一致
+        让工作区下的文件结构与记录的保持一致
 
-        **用法**：`rola align <PATH> (--delete | --rename | --break | --move <FILE> | --restore-move | --restore-modify | --restore-delete | --restore) [--completely] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola align <路径>
+        **标识**：
+            --delete            确认该 **丢失项** 已丢失
+            --rename            确认该 **移动项**，并更新记录至到新位置
+            --break             对于 **非确定性移动**，可以断开为 **丢失项** 和 **未标记项**
+            --move <FILE>       断言 PATH 移动到了 FILE，形成一个 **非确定性移动**
 
-        `PATH` 按运行所在目录解析，与 shell 一致。`.` 就是运行所在目录及其下全部；落在目录上的名字会选中其下全部。模式必须且只能给出一个：
+            --restore-move      确认该 **移动项**，并还原至原来的位置
+            --restore-modify    还原该文件的内容变更
+            --restore-delete    重建某条 **丢失项** 的文件
+            --restore           按 PATH 需要，执行上面三者中的一个
+            --completely        在还原位置的同时还原内容，只对还原移动有意义
 
-        - `--delete` 确认某个布局命名、但工作树已不存在的路径已消失。
-        - `--rename` 确认一次读取发现的移动，`PATH` 是移动的哪一侧都可以。
-        - `--break` 撤销一次移动，使它重新变回一失一得；两份完全一致的文件属于事实，不能撤销。
-        - `--move FILE` 断言 `PATH` 移动到了 `FILE`，用于读取无法猜出的移动。
-        - `--restore-move` 把移动过的文件放回布局所命名的位置。
-        - `--restore-modify` 用布局所记录的版本覆盖已改动的文件。
-        - `--restore-delete` 从仓库取回已删除的文件，写回布局所命名的位置。
-        - `--restore` 按 `PATH` 需要，执行上面三者中的一个。
-
-        除 `--restore` 外都只作用于一个路径。给 `--restore` 一个目录或 `.` 时，它会按需要把其下每个路径都还原；工作树有、但没有布局命名的路径保持不动。`--completely` 在还原位置的同时还原内容，只对还原移动（`--restore` 或 `--restore-move`）有意义。
+            --vault             在校准时把该保险库作为布局来源一起纳入
+            --offline           还原需要的内容只从本地查找，不向保险库请求
 
   description:
-    en: Bring the tree and the Layout back into agreement
-    zh-CN: 让工作树与布局重新一致
+    en: Bring the file structure under the Workspace into agreement with what is recorded
+    zh-CN: 让工作区下的文件结构与记录的保持一致
 
   result_deleted:
-    en: "gone  %{what}"
-    zh-CN: "已消失  %{what}"
+    en: "Path %{what} is gone"
+    zh-CN: "路径 %{what} 已消失"
 
   result_moved:
-    en: "moved  %{what}"
-    zh-CN: "已移动  %{what}"
+    en: "Path %{what} has moved"
+    zh-CN: "路径 %{what} 已移动"
 
   result_broke:
-    en: "broken  %{what}"
-    zh-CN: "已撤销  %{what}"
+    en: "Path %{what} has been taken back"
+    zh-CN: "路径 %{what} 已撤销"
 
   result_asserted:
-    en: "asserted  %{what}"
-    zh-CN: "已断言  %{what}"
+    en: "Path %{what} has been asserted"
+    zh-CN: "路径 %{what} 已断言"
 
   result_restored_move:
-    en: "restored  %{what}"
-    zh-CN: "已放回  %{what}"
+    en: "Path %{what} has been put back"
+    zh-CN: "路径 %{what} 已放回"
 
   result_restored_completely:
-    en: "restored fully  %{what}"
-    zh-CN: "已完整还原  %{what}"
+    en: "Path %{what} has been fully put back"
+    zh-CN: "路径 %{what} 已完整还原"
 
   result_restored_modify:
-    en: "restored  %{what}"
-    zh-CN: "已还原  %{what}"
+    en: "Path %{what} has been restored"
+    zh-CN: "路径 %{what} 已还原"
 
   result_restored_delete:
-    en: "recovered  %{what}"
-    zh-CN: "已恢复  %{what}"
+    en: "Path %{what} has been recovered"
+    zh-CN: "路径 %{what} 已恢复"
 
   result_restored_merge:
-    en: "variant recovered  %{what}"
-    zh-CN: "变体已恢复  %{what}"
+    en: "Variant for path %{what} has been recovered"
+    zh-CN: "路径 %{what} 的变体已恢复"
 
   result_unmerged:
-    en: "merge ended  %{what}"
-    zh-CN: "已结束合并  %{what}"
+    en: "Merge for path %{what} has ended"
+    zh-CN: "路径 %{what} 的合并已结束"
 
   err_argument:
-    en: A path and exactly one mode are needed
-    zh-CN: 需要给出一个路径和恰好一个模式
+    en: The path and mode given do not match
+    zh-CN: 给出的路径与模式不匹配
 
   err_argument_help:
     en: |
-        Run `rola align --help` for the modes
+        A path is needed and exactly one mode for it, and the mode must suit what the path is:
+        run `rola align --help` for the modes, and `rola status` to see what the path is
     zh-CN: |
-        运行 `rola align --help` 查看各个模式
+        需要给出一个路径和恰好一个模式，且模式要与该路径的实际情况相称：
+        运行 `rola align --help` 查看各个模式，运行 `rola status` 查看该路径的情况
 
   err_completely:
     en: "`--completely` only means something for a move being put back"
@@ -155,7 +154,7 @@ align:
         运行 `rola layout tree-diff` 查看移动，或用 `--move` 断言一次移动
 
   err_real_move:
-    en: "`%{from}` and `%{to}` hold the same bytes, so the move is real and cannot be taken back"
+    en: "`%{from}` and `%{to}` have exactly the same content, this is a real move and it cannot be taken back"
     zh-CN: "`%{from}` 与 `%{to}` 内容完全相同，这是真实的移动，无法撤销"
 
   err_real_move_help:
@@ -176,7 +175,7 @@ align:
     en: |
         `--move` names the file a lost path moved to, which must be a file the Layout does not know
     zh-CN: |
-        `--move` 指定某个丢失路径移动到的文件，该文件必须是布局尚不认识的
+        `--move` 指定丢失路径移动到的文件，该文件必须是布局尚不认识的
 
   err_not_modified:
     en: "`%{path}` is not a change against a version the Layout names"
@@ -184,9 +183,11 @@ align:
 
   err_not_modified_help:
     en: |
-        A move's destination has no version of its own; put the move back first with `--restore-move`
+        A move's destination has no version of its own
+        Put the move back first with `--restore-move`
     zh-CN: |
-        移动的目的地没有自己的版本；请先用 `--restore-move` 把移动放回
+        移动的目的地没有自己的版本
+        请先用 `--restore-move` 把移动放回
 
   err_restore_exists:
     en: "Putting the file back would land on `%{path}`, which is already there"

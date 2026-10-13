@@ -7,11 +7,11 @@ _version: 2
 
 external:
   err_launch_failed:
-    en: "The program `%{program}` beside this one could not be started - %{reason}"
-    zh-CN: "本程序旁边的 `%{program}` 无法启动 —— %{reason}"
+    en: "The program `%{program}` beside this one could not be started: %{reason}"
+    zh-CN: "旁边的程序 `%{program}` 无法启动：%{reason}"
 
   err_launch_failed_help:
     en: |
         Please check that the program can be run where it sits, then try again
     zh-CN: |
-        请确认该程序在其所在位置可以运行，然后重试
+        请确认该程序能够在它所在的位置运行，然后重试

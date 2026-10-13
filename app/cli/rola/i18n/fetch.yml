@@ -2,5 +2,5 @@ _version: 2
 
 fetch:
   brought:
-    en: "Brought %{count} object(s) from the Vaults: %{vaults}"
-    zh-CN: "已从保险库获取 %{count} 个对象：%{vaults}"
+    en: "Brought %{count} objects from the Vaults: %{vaults}"
+    zh-CN: "已从保险库取回 %{count} 个对象：%{vaults}"

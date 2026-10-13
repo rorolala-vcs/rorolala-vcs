@@ -11,11 +11,11 @@ exit_codes:
 
   unknown_command:
     en: The run named a command the program does not have
-    zh-CN: 本次运行给出的命令不属于本程序
+    zh-CN: 本程序没有这个命令
 
   external_failed:
     en: The run was handed over to a program beside this one, and did not end with that program's code
-    zh-CN: 本次运行交给了本程序旁边的一个程序，但没能以该程序的退出码结束
+    zh-CN: 本次运行已交给旁边的外部程序，但未能以它的退出码结束
 
   help:
     en: Help was asked for
@@ -23,7 +23,7 @@ exit_codes:
 
   cancelled:
     en: The run was cancelled before it did anything
-    zh-CN: 本次运行在动手之前被取消
+    zh-CN: 本次运行在开始之前被取消
 
   creation_workspace:
     en: A Workspace could not be created
@@ -63,7 +63,7 @@ exit_codes:
 
   storage_write_file_no_storage:
     en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    zh-CN: 本次运行不在任何仓库中
 
   storage_write_file_not_a_file:
     en: The path named is not a file
@@ -79,7 +79,7 @@ exit_codes:
 
   storage_extract_file_no_storage:
     en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    zh-CN: 本次运行不在任何仓库中
 
   storage_extract_file_bad_hash:
     en: What was named does not read as a hash
@@ -87,7 +87,7 @@ exit_codes:
 
   storage_extract_file_exists:
     en: A file is already under the name the content would be written as
-    zh-CN: 内容将要写出的名字下已有文件
+    zh-CN: 该内容将要写出的名字下已有文件
 
   storage_extract_file_failed:
     en: Stored content could not be written out
@@ -95,7 +95,7 @@ exit_codes:
 
   pack_no_storage:
     en: This run is nowhere a store or an index is
-    zh-CN: 当前运行不处于任何仓库或索引中
+    zh-CN: 本次运行不在任何仓库或索引中
 
   pack_failed:
     en: "The store's objects could not be packed"
@@ -111,7 +111,7 @@ exit_codes:
 
   vcs_index_no_index:
     en: This run is nowhere a version control index is
-    zh-CN: 当前运行不处于任何版本控制索引中
+    zh-CN: 本次运行不在任何版本控制索引中
 
   vcs_index_read:
     en: The version control index could not be read
@@ -131,7 +131,7 @@ exit_codes:
 
   inv_idx_no_index:
     en: This run is nowhere a version control index is
-    zh-CN: 当前运行不处于任何版本控制索引中
+    zh-CN: 本次运行不在任何版本控制索引中
 
   inv_idx_read:
     en: The inverse index could not be built or read
@@ -147,7 +147,7 @@ exit_codes:
 
   storage_ls_storaged_no_storage:
     en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    zh-CN: 本次运行不在任何仓库中
 
   storage_ls_storaged_failed:
     en: "The store's objects could not be listed"
@@ -155,7 +155,7 @@ exit_codes:
 
   storage_ls_manifests_no_storage:
     en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    zh-CN: 本次运行不在任何仓库中
 
   storage_ls_manifests_failed:
     en: "The store's manifests could not be listed"
@@ -171,7 +171,7 @@ exit_codes:
 
   vault_not_bound:
     en: "The name a `rola vault unbind` was given is not bound"
-    zh-CN: "`rola vault unbind` 得到的名字并未绑定"
+    zh-CN: "`rola vault unbind` 得到的名字未绑定"
 
   vault_not_admin:
     en: The account is not an administrator of the Vault
@@ -179,7 +179,7 @@ exit_codes:
 
   account_not_found:
     en: The name given is not an account the work can act as
-    zh-CN: 所给名字不是可作为身份使用的账户
+    zh-CN: 所给名字不是本机可用的账户
 
   account_no_dir:
     en: The machine does not name where Rorolala keeps the user's files
@@ -187,7 +187,7 @@ exit_codes:
 
   account_not_bound:
     en: The work acts as no account, which the command needs
-    zh-CN: 尚未指定身份，而该命令需要
+    zh-CN: 尚未指定账户，而该命令需要
 
   should_in_workspace:
     en: The run is not inside a Workspace, which the command needs
@@ -282,8 +282,8 @@ exit_codes:
     zh-CN: 文件系统拒绝了该操作
 
   format:
-    en: "The result could not be drawn through --format"
-    zh-CN: "无法用 --format 绘制结果"
+    en: "The result could not be drawn through `--format`"
+    zh-CN: "无法用 `--format` 绘制结果"
 
   layout:
     en: A layout could not be worked on
@@ -299,7 +299,7 @@ exit_codes:
 
   layout_ownership:
     en: An entry's ownership could not be taken or let go of
-    zh-CN: 无法取得或放弃某个条目的所有权
+    zh-CN: 无法取得或放弃条目的所有权
 
   layout_no_current:
     en: The Workspace has no Layout to work in
@@ -327,7 +327,7 @@ exit_codes:
 
   align:
     en: The tree could not be brought back into agreement with the Layout
-    zh-CN: 无法让工作树与布局重新一致
+    zh-CN: 无法让工作区下的文件结构与记录的保持一致
 
   align_argument:
     en: "`rola align` was given arguments it cannot use"
@@ -343,7 +343,7 @@ exit_codes:
 
   checkin:
     en: A `Uuid` the Vault holds could not be brought into the Layout
-    zh-CN: 无法把保险库持有的 `Uuid` 带入布局
+    zh-CN: 无法将保险库持有的 `Uuid` 带入布局
 
   checkin_argument:
     en: "`rola checkin` was given arguments it cannot use"
@@ -358,7 +358,7 @@ exit_codes:
     zh-CN: "`rola retrack` 收到了无法使用的参数"
 
   retrack_dirty:
-    en: The file has changes that were never recorded, or a merge that was never joined
+    en: The file has changes that were never recorded, or a variant that was never merged
     zh-CN: 该文件有从未记录的改动，或有从未合并的变体
 
   offline:

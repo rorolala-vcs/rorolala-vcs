@@ -3,27 +3,27 @@ _version: 2
 editor:
   err_no_editor:
     en: |
-      This run has to open an editor to write a message, and none is named — and the `rola-edit`
-      this project ships is not beside `rola` either
+      This run has to open an editor to write a message, and none is named, and the `rola-edit` this project ships is not beside `rola` either
     zh-CN: |
-      本次运行需要打开编辑器来撰写提交信息，但没有指定编辑器，本项目的 `rola-edit` 也不在 `rola` 旁边
+      需要打开编辑器来撰写提交信息，但未指定编辑器，本项目自带的 `rola-edit` 也不在 `rola` 旁边
 
   err_named_none:
     en: |
       This run was told to open no editor, and the message still has to be written
     zh-CN: |
-      本次运行被指定为不使用编辑器，但仍需要撰写提交信息
+      已指定不使用编辑器，但提交信息仍需撰写
 
   err_no_editor_help:
     en: |
       Name one with `--editor`, or set `ROLA_EDITOR` or `EDITOR`
 
-      Leaving all of them out falls back to the `rola-edit` beside `rola`. Naming `--editor=""` is
-      what says no editor is to be opened at all.
+      Leaving all of them out falls back to the `rola-edit` beside `rola`
+      Naming `--editor=""` is what says no editor is to be opened at all
     zh-CN: |
-      用 `--editor` 指定，或设置 `ROLA_EDITOR`、`EDITOR`
+      请用 `--editor` 指定编辑器，或设置 `ROLA_EDITOR`、`EDITOR`
 
-      都不指定时会回退到 `rola` 旁边的 `rola-edit`。`--editor=""` 才表示完全不使用编辑器。
+      都不指定时会回退到 `rola` 旁边的 `rola-edit`
+      `--editor=""` 才表示完全不使用编辑器
 
   err_editor_failed:
     en: "`%{editor}` could not be opened: %{reason}"

@@ -3,7 +3,7 @@ _version: 2
 error:
   vault_creation:
     err_dir_create_failed:
-      en: Failed to create the directory the vault keeps its configuration in
+      en: Failed to create the directory where the Vault keeps its configuration
       zh-CN: 创建保险库存放配置的目录失败
 
     err_dir_create_failed_help:
@@ -13,12 +13,12 @@ error:
           请检查目标路径的写权限，然后重试
 
     err_layout_create_failed:
-      en: Failed to create the layout the vault keeps
+      en: Failed to create the Vault's Layout
       zh-CN: 创建保险库的布局失败
 
     err_layout_create_failed_help:
       en: |
-          Please check the write permission of the vault directory, then try again
+          Please check the write permission of the Vault directory, then try again
       zh-CN: |
           请检查保险库目录的写权限，然后重试
 
@@ -53,8 +53,8 @@ error:
           请检查目标路径的写权限，然后重试
 
     err_config_publish_failed:
-      en: Failed to publish the staging file to the configuration file
-      zh-CN: 将暂存文件发布（复制）到配置文件失败
+      en: Failed to copy the staging file to the configuration file
+      zh-CN: 将暂存文件复制到配置文件失败
 
     err_config_publish_failed_help:
       en: |

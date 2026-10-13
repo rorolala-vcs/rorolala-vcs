@@ -3,38 +3,29 @@ _version: 2
 create:
   help:
     en: |
-        Create a workspace or a vault
+        Create a Workspace or a Vault
 
-        **Usage**: `rola create <PATH> [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola create <PATH>
+        **Flags**:
+            --vault, -v    Create a Vault instead of a Workspace
 
-        A Workspace is the copy you work in; a Vault is what copies are shared through.
-        With `--vault` a Vault is created, and without it a Workspace. The directory is
-        created if it is not there yet.
-
-        Run inside a Vault, `--vault` makes a Vault inside that one instead: the name
-        given is taken as the directory under the current vault's `vaults/`.
-
-        `rola init` does the same for the current directory.
+        Create a Workspace at the given path, or use `--vault` to create a Vault
     zh-CN: |
         创建工作区或保险库
 
-        **用法**：`rola create <PATH> [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola create <路径>
+        **标识**：
+            --vault, -v    创建保险库而不是工作区
 
-        工作区是你动手改的那份副本；保险库是副本之间共享的落点。
-        加 `--vault` 创建保险库，不加则创建工作区。目录不存在时会一并创建。
-
-        在保险库内运行时，`--vault` 会在其内部再建一个保险库：所给名字用作当前保险库
-        `vaults/` 下的目录名。
-
-        `rola init` 对当前目录做同样的事。
+        在给定路径创建工作区，或使用 `--vault` 指定创建保险库
 
   cmd_create_description:
-    en: Create workspace or vault
+    en: Create a Workspace or a Vault
     zh-CN: 创建工作区或保险库
 
   path_not_provided:
     en: Path not provided, `rola create` cannot create the target
-    zh-CN: 路径未指定，`rola create` 无法创建目标
+    zh-CN: 没有给出路径，`rola create` 无法创建目标
 
   path_not_provided_help:
     en: |
@@ -43,7 +34,7 @@ create:
         **Example**: `rola create my-workspace`
                   `rola create our-vault --vault`
     zh-CN: |
-        请提供路径以完成创建
+        请提供一个路径以完成创建
 
         **例如**：`rola create my-workspace`
                 `rola create our-vault --vault`
@@ -54,7 +45,7 @@ create:
 
   sub_vault_name_is_path:
     en: "A vault inside a vault is named, not pathed: `%{name}` is a path"
-    zh-CN: 保险库内的保险库用名字指定，而非路径：`%{name}` 是路径
+    zh-CN: 保险库内的保险库应当给出名字而非路径，但 `%{name}` 是一个路径
 
   sub_vault_name_is_path_help:
     en: |
@@ -62,7 +53,7 @@ create:
 
         **Example**: `rola create alpha --vault`
     zh-CN: |
-        给该保险库一个名字，它会被创建在当前保险库的 `vaults/` 下
+        请给出保险库的名字，它会被创建在当前保险库的 `vaults/` 下
 
         **例如**：`rola create alpha --vault`
 

@@ -3,23 +3,21 @@ _version: 2
 error:
   account:
     err_no_account:
-      en: The work does not act as any account
+      en: The work has not yet specified an account
       zh-CN: 当前工作还没有指定账户
 
     err_no_account_help:
       en: |
-        Acting as someone is what a client proves an identity with, so please run
-        `rola account <ACCOUNT>` to name the account the work acts as
+        A client proves itself as an account, so please run `rola account <ACCOUNT>` to name the account the work is using
       zh-CN: |
-        客户端需要以某个账户的身份自证，因此请运行 `rola account <ACCOUNT>` 指定当前使用的账户
+        客户端需要以账户的身份自证，因此请运行 `rola account <ACCOUNT>` 指定当前使用的账户
 
     err_unknown:
-      en: "`%{name}` is not an account the work can act as"
+      en: "`%{name}` is not an account the work can use"
       zh-CN: "`%{name}` 不是当前工作可以使用的账户"
 
     err_unknown_help:
       en: |
-        Please run `rola account` to see the accounts there are, or `rola key --generate` to
-        make one
+        Please run `rola account` to see the existing accounts, or `rola key --generate` to generate a key pair
       zh-CN: |
-        请运行 `rola account` 查看已有账户，或用 `rola key --generate` 生成一个
+        请运行 `rola account` 查看已有账户，或用 `rola key --generate` 生成一个密钥对

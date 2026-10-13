@@ -3,151 +3,119 @@ _version: 2
 status:
   complete:
     compact:
-      en: Draw the versions alone, without the variants between them
+      en: Only draw the versions, not the variants between them
       zh-CN: 只画版本，不画中间的变体
     no_message:
-      en: Leave out what each version says
+      en: Do not show each version's message
       zh-CN: 不显示每个版本的说明
     no_creator:
-      en: Leave out who made each version
+      en: Do not show who created each version
       zh-CN: 不显示每个版本由谁创建
     max_message_length:
-      en: How much of a message is shown before it is cut short
-      zh-CN: 说明在截断前显示多少字符
+      en: The number of characters shown before the message is cut short
+      zh-CN: 说明截断前显示的字符数
     no_graph:
-      en: Leave out the chain itself
+      en: Do not draw that version chain
       zh-CN: 不画出那条版本链
     no_hint:
-      en: Leave out the lines that say where the file comes from and how it stands
+      en: Do not show the two lines for origin and state
       zh-CN: 不显示来源与状态两行
   help:
     en: |
-        Show how the working tree stands beside the Layout, or look back from one thing in it
+        Show the state of the working tree relative to the Layout, or look back from one item in it
 
-        **Usage**: `rola status [<TARGET>] [--compact] [--no-creator] [--no-message]
-        [--max-message-length <N>] [--no-graph] [--no-hint] [--json] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: `rola status [TARGET]`
+        **Flags**:
+            --compact                 Only draw the versions, not the variants between them
+            --no-creator              Do not show who created each version
+            --no-message              Do not show each version's message
+            --max-message-length <N> The number of characters shown before the message is cut short
+            --no-graph                Do not draw that version chain
+            --no-hint                 Do not show the two lines for origin and state
 
-        With nothing named, a line beginning with `>` is a path that moved, `-` one the Layout names
-        and the tree does not hold, `+` one the tree holds and the Layout does not name; a line with
-        none of them is content that changed where it was. A `(*)` marks a line that is also a
-        content change.
+        With no target named, the working tree's differences are shown line by line: a `>` beginning means a moved path, a `-` a path the Layout records and the working tree lacks, a `+` a path the working tree has and the Layout does not record, and the rest are paths with content changes in place, while `(*)` marks a line that also has a content change
 
-        A change to a file the Vault's fetched copy says another account holds is not among the
-        content changes: it is said first, on its own, since recording it would make a version this
-        side cannot push. What is lost or untagged is settled with `rola align`; what changed is
-        recorded with `rola track`, and a file that is not yours only with `rola track --force`.
-
-        With a `<TARGET>` named, the chain that thing sits at the top of is drawn instead, the same
-        drawing `rola vcs-index lookback` makes and with the same flags to shape it. What a target
-        may be is read in this order, and the first that names something is what is drawn: a path in
-        the Layout being worked in, where a path of the Layout has moved to in the tree, a path in
-        the Vault's own Layout as the copy here has it, a `Uuid`, then the hash of an index object.
-        A path is read from where the run was made, the way `rola track` reads one, and from the
-        Workspace root when that names nothing.
-        A file whose changes were never recorded is drawn with an extra version over it, `??` being
-        edited, since the work is on its way to a version the index does not have yet; a target that
-        names nothing at all is refused.
-
-        The version the Vault's own Layout records for the entry is drawn with the Vault's name
-        beside it, `(origin)` where `origin` is the name the Workspace bound it by, in a colour of
-        its own. So where the Vault stands in the chain is read without counting versions — and a
-        target naming an entry the Vault was never told of has nothing marked.
-
-        A target that names a file is drawn with two lines above the chain: where the file is mapped
-        from in the Vault, and how it stands — who holds it, whether the tree holds changes that were
-        never recorded, and how far its version stands from the Vault's. How it stands is drawn white
-        when the two sides are as they should be and bright yellow when they are not, so what is
-        wrong reads first. `--no-graph` leaves the chain out and `--no-hint` leaves the two lines out.
+        With a target named, the version chain at the top of it is drawn instead
+        A target may be a path in the Layout, a `Uuid`, or the hash of an index object
     zh-CN: |
-        展示工作树相对于布局的状态，或从其中某样东西往回看
+        查看工作区相对布局的状态，或从其中某一项往回查看
 
-        **用法**：`rola status [<TARGET>] [--compact] [--no-creator] [--no-message]
-        [--max-message-length <N>] [--no-graph] [--no-hint] [--json] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola status [目标]
+        **标识**：
+            --compact                只画版本，不画中间的变体
+            --no-creator             不显示每个版本由谁创建
+            --no-message             不显示每个版本的说明
+            --max-message-length <N> 说明截断前显示的字符数
+            --no-graph               不画出那条版本链
+            --no-hint                不显示来源与状态两行
 
-        不指定目标时：以 `>` 开头的行是移动的路径，`-` 是布局命名而工作树缺失的路径，`+` 是工作树有
-        而布局未命名的路径；没有什么开头的行是原地发生内容变化的路径。`(*)` 表示该行同时也有内容变化。
+        不指定目标时，逐行展示工作区的差异：`>` 开头是移动的路径，`-` 是布局记录而工作区缺失的路径，`+` 是工作区有而布局未记录的路径，其余行是原地发生内容变化的路径，`(*)` 表示该行同时也有内容变化
 
-        保险库取回的副本显示属于其他账户的文件，其改动不算在内容变更里：它会单独出现在最前面，
-        因为把它记录下来会产生一个这一侧推不上去的版本。丢失或未命名的用 `rola align` 处理；
-        内容变化用 `rola track` 记录，而不属于你的文件只有 `rola track --force` 才能记录。
-
-        指定 `<TARGET>` 时，改为画出以它为目标的那条版本链 —— 与 `rola vcs-index lookback` 同一幅图，
-        同样的那几个 flag 也一并可用。目标的解读顺序如下，先认出什么就画什么：当前布局中的路径、
-        当前布局中的路径移动到的新位置、保险库自己的布局（取回副本所见）中的路径、`Uuid`、
-        索引对象的哈希。路径按运行所在目录解读（与 `rola track` 相同），认不出时再按工作区根目录
-        解读。文件若有未记录的改动，会在它之上多画一个版本 `?? 编辑中的版本`，因为工作
-        正走向一个索引里还没有的版本；完全认不出任何东西的目标会被拒绝。
-
-        保险库自己的布局为该条目记录的那个版本，会在旁边标出保险库的名字，如 `(origin)`
-        （`origin` 是工作区绑定它时用的名字），并用另一种颜色整行画出。这样不必数版本号就能看出
-        保险库停在哪一版；保险库从未被告知过的条目则没有任何标记。
-
-        目标指向某个文件时，链的上方会多两行：该文件在保险库中映射自哪个路径，以及它的状态 ——
-        谁持有它、工作树上是否有未记录的改动、它的版本与保险库的版本相差多少。状态正常时用白色，
-        异常时用亮黄色，这样出错的地方先被读到。`--no-graph` 不画链，`--no-hint` 不显示这两行。
+        指定目标时，改为画出以它为目标的那条版本链
+        目标可为布局中的路径、`Uuid` 或索引对象的哈希
 
   description:
-    en: Show how the working tree stands beside the Layout
-    zh-CN: 展示工作树相对于布局的状态
+    en: Show the state of the working tree relative to the Layout
+    zh-CN: 查看工作区相对布局的状态
 
   source:
-    en: "Mapped from %{path} in %{vault}"
+    en: "The file is mapped from %{path} in %{vault}"
     zh-CN: "文件映射来自 %{vault} 的 %{path}"
 
   holder_held:
-    en: "Held by `%{holder}`"
+    en: "The file is held by `%{holder}`"
     zh-CN: "文件由 `%{holder}` 持有"
 
   holder_nobody:
-    en: Held by nobody
+    en: The file is held by nobody
     zh-CN: 文件无人持有
 
   state_mine_same:
-    en: You hold it, and it is unmodified
+    en: You hold the file, and it is currently unmodified
     zh-CN: 你持有该文件，当前未修改
 
   state_mine_changed:
-    en: You hold it, and it has changes that were never recorded
+    en: You hold the file, and it is currently modified but untracked
     zh-CN: 你持有该文件，当前已修改但未追踪
 
   state_mine_only:
-    en: You hold it
+    en: You hold the file
     zh-CN: 你持有该文件
 
   state_mine_ahead:
-    en: You hold it, and it is %{distance} version(s) ahead
+    en: You hold the file, and it is ahead by %{distance} versions
     zh-CN: 你持有该文件，且已领先 %{distance} 个版本
 
   state_mine_ahead_changed:
-    en: You hold it, it is %{distance} version(s) ahead, and newer changes were never recorded
+    en: You hold the file, and it is ahead by %{distance} versions, with newer changes not yet tracked
     zh-CN: 你持有该文件，且已领先 %{distance} 个版本，新的修改尚未追踪
 
   state_mine_behind:
-    en: You hold it, yet it is %{distance} version(s) behind!
+    en: You hold the file, yet it is behind by %{distance} versions!
     zh-CN: 你持有该文件，但却落后 %{distance} 个版本！
 
   state_mine_behind_changed:
-    en: You hold it, it is %{distance} version(s) behind, and it has changes of its own!
+    en: You hold the file, yet it is behind by %{distance} versions, and local changes have appeared!
     zh-CN: 你持有该文件，但却落后 %{distance} 个版本，且本地已产生修改！
 
   state_mine_behind_untold:
-    en: You hold it, yet the Vault has moved on — by how many versions this side has not fetched!
-    zh-CN: 你持有该文件，但 Vault 已经往前走了 —— 差多少个版本这边还没取！
+    en: You hold the file, but the Vault has moved on — how many versions behind this side has not fetched!
+    zh-CN: 你持有该文件，但保险库已经往前走了 —— 差多少个版本这边还没取！
 
   state_mine_behind_untold_changed:
-    en: You hold it, the Vault has moved on — by how many versions this side has not fetched — and it has changes of its own!
-    zh-CN: 你持有该文件，但 Vault 已经往前走了（差多少个版本这边还没取），且本地已产生修改！
+    en: You hold the file, but the Vault has moved on — how many versions behind this side has not fetched — and local changes have appeared!
+    zh-CN: 你持有该文件，但保险库已经往前走了（差多少个版本这边还没取），且本地已产生修改！
 
   state_mine_apart:
-    en: You hold it, but the two versions have diverged!
+    en: You hold the file, but the two versions have diverged!
     zh-CN: 你持有该文件，但双方版本已分叉！
 
   state_mine_apart_changed:
-    en: You hold it, the two versions have diverged, and it has changes of its own!
+    en: You hold the file, but the two versions have diverged, and local changes have appeared!
     zh-CN: 你持有该文件，但双方版本已分叉，且本地已产生修改！
 
   state_held_same:
-    en: "%{holder}, and it is read-only here"
+    en: "%{holder}, and the current state is read-only"
     zh-CN: "%{holder}，当前状态为只读"
 
   state_held_changed:
@@ -159,28 +127,28 @@ status:
     zh-CN: "%{holder}"
 
   state_held_ahead:
-    en: "%{holder}, yet it is %{distance} version(s) ahead!"
+    en: "%{holder}, yet it is ahead by %{distance} versions!"
     zh-CN: "%{holder}，却领先 %{distance} 个版本！"
 
   state_held_ahead_changed:
-    en: "%{holder}, it is %{distance} version(s) ahead, and the file has changed!"
+    en: "%{holder}, yet it is ahead by %{distance} versions, but the file has changed!"
     zh-CN: "%{holder}，却领先 %{distance} 个版本，但文件产生了变化！"
 
   state_held_behind:
-    en: "%{holder}, and it is %{distance} version(s) behind"
+    en: "%{holder}, and the current state is behind by %{distance} versions"
     zh-CN: "%{holder}，当前落后 %{distance} 个版本"
 
   state_held_behind_changed:
-    en: "%{holder}, it is %{distance} version(s) behind, and the file has changed!"
+    en: "%{holder}, the current state is behind by %{distance} versions, but the file has changed!"
     zh-CN: "%{holder}，当前落后 %{distance} 个版本，但文件产生了变化！"
 
   state_held_behind_untold:
-    en: "%{holder}, and the Vault has moved on — by how many versions this side has not fetched"
-    zh-CN: "%{holder}，Vault 已经往前走了 —— 差多少个版本这边还没取"
+    en: "%{holder}, the Vault has moved on — how many versions behind this side has not fetched"
+    zh-CN: "%{holder}，保险库已经往前走了 —— 差多少个版本这边还没取"
 
   state_held_behind_untold_changed:
-    en: "%{holder}, the Vault has moved on — by how many versions this side has not fetched — and the file has changed!"
-    zh-CN: "%{holder}，Vault 已经往前走了（差多少个版本这边还没取），但文件产生了变化！"
+    en: "%{holder}, the Vault has moved on — how many versions behind this side has not fetched — but the file has changed!"
+    zh-CN: "%{holder}，保险库已经往前走了（差多少个版本这边还没取），但文件产生了变化！"
 
   state_held_apart:
     en: "%{holder}, but the two versions have diverged!"
@@ -191,11 +159,11 @@ status:
     zh-CN: "%{holder}，双方版本已分叉，且文件产生了变化！"
 
   clean:
-    en: Your workspace has nothing unrecorded.
-    zh-CN: 你的工作区无未提交内容。
+    en: Your workspace has nothing unrecorded
+    zh-CN: 你的工作区没有未记录的内容
 
   header_merging:
-    en: "Your workspace has %{count} merge(s) in progress:"
+    en: "Your workspace has %{count} merges in progress:"
     zh-CN: "你的工作区有 %{count} 项正在进行的合并："
 
   body_merging:
@@ -215,19 +183,19 @@ status:
     zh-CN: "> %{from} -> %{to}"
 
   help_merging:
-    en: "Record a merge with `rola track <file>`, or cancel it with `rola align --delete`"
+    en: "Record a merge with `rola track <FILE>`, or cancel it with `rola align --delete`"
     zh-CN: "用 `rola track <文件>` 记录合并，或用 `rola align --delete` 取消"
 
   help_merging_moved:
-    en: "Confirm where a variant file moved to with `rola align --rename`, or assert it with `rola align --move`"
+    en: "Confirm where the variant file moved to with `rola align --rename`, or assert this move with `rola align --move`"
     zh-CN: "用 `rola align --rename` 确认变体文件移到何处，或用 `rola align --move` 断言这次移动"
 
   merging_into:
-    en: "Variant %{variant} in %{path} is being joined into this file"
+    en: "Variant %{variant} in %{path} is being joined into the current file"
     zh-CN: "变体 %{variant}（%{path}）正在并入当前文件"
 
   merge_variant_from:
-    en: "Current variant from %{variant}"
+    en: "The current variant comes from %{variant}"
     zh-CN: "当前变体来自 %{variant}"
 
   merge_variant_into:
@@ -235,11 +203,11 @@ status:
     zh-CN: "正准备并入 %{target}"
 
   merge_no_target:
-    en: "merge %{variant}: the file it is for is no longer named by the Layout"
+    en: "merge %{variant}: the file it is to be joined into is no longer named by the Layout"
     zh-CN: "合并 %{variant}：它要并入的文件已不再被布局命名"
 
   merge_no_place:
-    en: "merge %{variant}: nowhere here can hold its variant file"
+    en: "merge %{variant}: there is nowhere here to hold its variant file"
     zh-CN: "合并 %{variant}：本地没有可以放置其变体文件的位置"
 
   merge_file_gone:
@@ -268,44 +236,44 @@ status:
 
   err_target_help:
     en: |
-        Name a path in the Layout, a `Uuid`, or the hash of a Version or a Variant
+        Please give a path in the Layout, a `Uuid`, or the hash of a **Version** or a **Variant**
     zh-CN: |
-        请给出布局中的路径、`Uuid`，或 Version / Variant 的哈希
+        请给出布局中的路径、`Uuid`，或 **版本** / **变体** 的哈希
 
   err_target_names_nothing:
-    en: it names no path, no `Uuid` and no hash
+    en: It is neither a path, nor a `Uuid`, nor a hash
     zh-CN: 它既不是路径，也不是 `Uuid`，也不是哈希
 
   err_target_no_version:
-    en: nothing was ever recorded for it
+    en: No version was ever recorded for it
     zh-CN: 它从未被记录过任何版本
 
   header_unowned:
-    en: "Note: your workspace has %{count} content change(s) that are not yours to make!"
-    zh-CN: "注意，你的工作区存在 %{count} 项错误的内容变更！"
+    en: "Note: your workspace has %{count} content changes that are not yours to make!"
+    zh-CN: "注意，你的工作区存在 %{count} 项不该由你进行的内容变更！"
 
   body_unowned:
-    en: "These files are not yours: changing them on cannot avoid a conflict:"
-    zh-CN: "这些文件你并未拥有他们的所有权，如果继续修改，会无法避免地产生冲突："
+    en: "These files are not yours, and continuing to modify them cannot avoid a conflict:"
+    zh-CN: "这些文件不属于你，继续修改将无法避免冲突："
 
   help_unowned:
-    en: "If you really mean it, record them with `rola track --force`"
-    zh-CN: "确需记录请使用 `rola track --force`"
+    en: "If they really must be recorded, use `rola track --force` to force it"
+    zh-CN: "确需记录请使用 `rola track --force` 强制记录"
 
   header_structural:
-    en: "Your workspace has %{count} structural change(s) to confirm:"
+    en: "Your workspace has %{count} structural changes to confirm:"
     zh-CN: "你的工作区存在 %{count} 项结构性变更，需要确认："
 
   header_structural_matched:
-    en: "Your workspace has %{count} structural change(s), %{renamed} of them moves matched for you:"
+    en: "Your workspace has %{count} structural changes, and %{renamed} renames have been matched automatically:"
     zh-CN: "你的工作区存在 %{count} 项结构性变更，已自动匹配重命名 %{renamed} 项："
 
   header_content:
-    en: "Your workspace has %{count} content change(s) to record"
+    en: "Your workspace has %{count} content changes to confirm"
     zh-CN: "你的工作区存在 %{count} 项内容变更，需要确认"
 
   header_content_more:
-    en: "There are also %{count} content change(s) to record:"
+    en: "Also, %{count} content changes need confirmation:"
     zh-CN: "另外，%{count} 项内容变更需要确认："
 
   mark_modified:
@@ -313,7 +281,7 @@ status:
     zh-CN: " (*)"
 
   help_align:
-    en: "You can confirm these changes with `rola align`"
+    en: "You can use `rola align` to confirm these changes"
     zh-CN: "你可以使用 `rola align` 来确认这些变更"
 
   help_align_both:
@@ -321,5 +289,5 @@ status:
     zh-CN: "使用 `rola align` 确认结构性变更"
 
   help_track:
-    en: "Use `rola track` to record the content changes"
+    en: "Use `rola track` to confirm the content changes"
     zh-CN: "使用 `rola track` 确认内容变更"

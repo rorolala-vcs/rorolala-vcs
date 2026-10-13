@@ -3,50 +3,38 @@ _version: 2
 storage_ls_manifests:
   help:
     en: |
-        List every content the store keeps cut, as a manifest
+        List every content the store keeps in chunks
 
-        **Usage**: `rola storage ls-manifests [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: `rola storage ls-manifests`
 
-        A manifest is what a cut content has and a whole one has none, so what is printed is the
-        contents the store was told to cut. Each is named `manifest:<digest>` — the way
-        `rola storage write-file` names content it cut — and that same name is read back by
-        `rola storage extract-file`, so a line read here can be handed straight to it. A manifest whose
-        chunks have gone is still listed, since it is still what the store was told to keep.
-
-        The run has to be somewhere a store can be found: inside one, or inside a Vault or
-        Workspace that keeps one.
+        List every content the store keeps in chunks, each line named `manifest:<digest>`, and a manifest whose chunks are gone is still listed
     zh-CN: |
-        列出仓库以 manifest 保存（即被分块）的全部内容
+        列出仓库中分块保存的全部内容
 
-        **用法**：`rola storage ls-manifests [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola storage ls-manifests
 
-        分块内容有一份 manifest，整份内容则没有，因此这里列出的是仓库被告知要分块的那些内容。每行以
-        `manifest:<摘要>` 命名——与 `rola storage write-file` 对分块内容的命名一致——而同一个名字
-        `rola storage extract-file` 也能读回，所以这里读到的一行可以直接交给它。块已丢失的 manifest
-        仍会列出，因为它仍是仓库被告知要保存的内容。
-
-        运行必须处在能发现仓库的地方：仓库内、或保有仓库的保险库／工作区内。
+        列出仓库中分块保存的全部内容，每行名为 `manifest:<摘要>`，块已丢失的 manifest 仍会列出
 
   cmd_storage_ls_manifests_description:
-    en: List every content the store keeps cut
+    en: List every content the store keeps in chunks
     zh-CN: 列出仓库中分块保存的全部内容
 
   err_no_storage:
-    en: This run is nowhere a store is
-    zh-CN: 当前运行不处于任何仓库中
+    en: This run is not inside any store
+    zh-CN: 当前运行不在任何仓库中
 
   err_no_storage_help:
     en: |
-        Please run this inside a store, or inside the Vault or Workspace that keeps one
+        Please run this inside a store, or inside the Vault or Workspace that keeps a store
     zh-CN: |
         请在仓库内运行，或在保有仓库的保险库／工作区内运行
 
   err_ls_failed:
-    en: "The store's manifests could not be listed — %{reason}"
+    en: "The manifests in the store could not be listed — %{reason}"
     zh-CN: "无法列出仓库中的 manifest —— %{reason}"
 
   err_ls_failed_help:
     en: |
-        Please check that the store can be read, then try again
+        Please make sure the store is readable, then try again
     zh-CN: |
         请确认仓库可读，然后重试

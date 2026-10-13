@@ -5,18 +5,19 @@ vault_unbind:
     en: |
         Let a name go
 
-        **Usage**: `rola vault unbind <NAME> [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola vault unbind <NAME>
 
-        The name stops meaning a Vault. A name that was not bound is reported rather than
-        passed over in silence. A name that was the one reached for by default goes along
-        with it, since a default that named nothing would reach nowhere.
+        The name no longer refers to any Vault
+        A name that was not bound is reported as an error
+        If the name is the one reached for by default, the default is cleared with it
     zh-CN: |
         解除名字的绑定
 
-        **用法**：`rola vault unbind <NAME> [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola vault unbind <名字>
 
-        该名字不再指代任何保险库。名字本就没有绑定时会报错，而不是默默略过。
-        若该名字正是默认使用的保险库，默认选择会一并清除，以免指向不存在的名字。
+        该名字不再指代任何保险库
+        未绑定的名字会报错
+        若该名字正是默认使用的保险库，默认选择会一并清除
 
   cmd_vault_unbind_description:
     en: Let a name go

@@ -3,11 +3,11 @@ _version: 2
 error:
   offline:
     err_offline:
-      en: This command does its work by reaching the Vault, and this run may not
+      en: This command's work requires reaching the Vault, and this run is asked not to
       zh-CN: 该命令的工作需要连接保险库，而本次运行被要求不连接
 
     err_offline_help:
       en: |
-        Please run it again without `--offline`
+        Please retry after removing `--offline`
       zh-CN: |
         请去掉 `--offline` 后重试

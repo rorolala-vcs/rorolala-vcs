@@ -5,34 +5,21 @@ vault_handshake:
     en: |
         Speak the handshake action to a Vault daemon
 
-        **Usage**: `rola vault handshake [VAULT] [--vault] [--offline] [--force] [--no-pager]`
+        **Usage**: rola vault handshake [VAULT]
 
-        `VAULT` names the daemon to reach: a name the Workspace has bound with `rola vault
-        bind`, or an ip, with the port a Vault listens on by default when none is written. The
-        action runs as the account the work acts as — the one `rola account` names — and
-        introduces itself by that name, so the call needs nothing else; what the daemon answers
-        is printed as it is.
-
-        Naming no `VAULT` reaches for the one the Workspace was told to reach for by default
-        with `rola vault set-default`. The exchange is between the work and its remote, so it is
-        spoken from inside a Workspace — that is what says which Vault is reached, and whose
-        keys the account comes from.
-
-        `rola-daemon listen` is the other side of this exchange.
+        It runs as the account the work acts as, and introduces itself by that account's name
+        What the daemon answers is printed as it is
+        With no Vault named, the default Vault chosen by the Workspace is used
+        It has to be spoken from inside a Workspace
     zh-CN: |
         向保险库守护进程发起一次握手
 
-        **用法**：`rola vault handshake [VAULT] [--vault] [--offline] [--force] [--no-pager]`
+        **用法**：rola vault handshake [保险库]
 
-        `VAULT` 指要连的守护进程：可以是工作区用 `rola vault bind` 绑定的名字，也可以是
-        ip（不写端口时使用保险库的默认端口）。动作以当前工作所使用的账户（由 `rola account`
-        指定）行事，并以该账户的名字自报家门，所以不需要别的参数；守护进程的回答会原样输出。
-
-        不指定 `VAULT` 时，使用工作区通过 `rola vault set-default` 选定的默认保险库。
-        这次对话发生在当前工作与它的远端之间，因此必须在工作区内发起 —— 工作区既决定要连哪个
-        保险库，也决定账户从哪些密钥中查找。
-
-        `rola-daemon listen` 则是这次对话的另一端。
+        以当前工作所使用的账户身份发起，并以该账户的名字自报家门
+        守护进程的回答会原样输出
+        不指定保险库时，使用工作区选定的默认保险库
+        必须在工作区内发起
 
   cmd_vault_handshake_description:
     en: Speak the handshake action to a Vault daemon
