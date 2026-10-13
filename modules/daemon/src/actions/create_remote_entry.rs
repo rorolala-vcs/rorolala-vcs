@@ -1,7 +1,8 @@
 //! `create-remote-entry`: putting a `Uuid` only the Workspace holds into the Vault's Layout.
 //!
-//! A file enters a Layout by being tracked, and enters the Vault's Layout by this: the name it is
-//! given is `@/new/<the path it was tracked under>@<short uuid>`, so what a reader sees first is
+//! A file enters a Layout by being tracked, and enters the Vault's Layout by this: the name to hold
+//! it under is `@/new/` and what follows, which is the caller's to choose — the path it was tracked
+//! under when free, else that path with the `Uuid` in short form — so what a reader sees first is
 //! that it is new and where it came from. The holder is the account that asked, which the Vault
 //! reads from the session rather than from anything sent.
 

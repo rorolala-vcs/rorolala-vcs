@@ -599,8 +599,8 @@ async fn main() {
         ),
     );
 
-    // A file tracked here and not in the Vault goes up under `@/new/`, named by its path and the
-    // short form of its `Uuid`.
+    // A file tracked here and not in the Vault goes up under `@/new/`, named by the path it was
+    // tracked under.
     let fresh: Uuid = Uuid::from_u128(0xaa);
     let version = "33".repeat(32);
     run(&mut client(
@@ -633,8 +633,7 @@ async fn main() {
     let said = run(&mut client(&workspace, &data, &["sync", "--up-only"]));
     checked.wants(
         "a file only this Layout holds goes up under @/new/",
-        said.success()
-            && vault_path_of(&root, fresh) == Some("@/new/art/hero.psd@0000000".to_owned()),
+        said.success() && vault_path_of(&root, fresh) == Some("@/new/art/hero.psd".to_owned()),
         &format!(
             "it ended with {:?}, said {:?}, and the Vault names {:?}",
             said.code,
@@ -666,7 +665,7 @@ async fn main() {
     ));
     checked.wants(
         "the fetched copy follows what went up",
-        said.success() && said.stdout.contains("@/new/art/hero.psd@0000000"),
+        said.success() && said.stdout.contains("@/new/art/hero.psd"),
         &format!(
             "it ended with {:?} and said {:?}",
             said.code,
@@ -778,13 +777,12 @@ async fn main() {
     // A `Uuid` the Vault holds but this Layout does not is brought in by naming where it goes. In
     // the Layout that already holds it, that is refused; in a Workspace that never did, it is how
     // the file arrives at all — content and all.
-    let plain = id.simple().to_string();
-    let remote_path = format!("@/new/models/hero.psd@{}", &plain[..7]);
+    let remote_path = "@/new/models/hero.psd";
 
     // The name a destination that is a directory takes the entry by: the leaf of the Vault's path.
-    let leaf = format!("hero.psd@{}", &plain[..7]);
+    let leaf = "hero.psd";
 
-    let said = run(&mut client(&workspace, &data, &["checkin", &remote_path]));
+    let said = run(&mut client(&workspace, &data, &["checkin", remote_path]));
     checked.wants(
         "checking in what this Layout already holds is refused",
         said.code == Some(240),
@@ -794,7 +792,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["checkin", &remote_path, "a.psd", "only/one.psd"],
+        &["checkin", remote_path, "a.psd", "only/one.psd"],
     ));
     checked.wants(
         "several references with a destination that is not a directory are refused",
@@ -844,20 +842,20 @@ async fn main() {
     checked.wants(
         "a checkin brings what only the Vault holds into a fresh Workspace",
         said.success()
-            && fs::read(other.join(&leaf)).unwrap() == b"second"
+            && fs::read(other.join(leaf)).unwrap() == b"second"
             && said.stdout.contains(&id.to_string()),
         &format!(
             "it ended with {:?}, said {:?}, and the tree holds {:?}",
             said.code,
             said.stdout.trim(),
-            fs::read(other.join(&leaf))
+            fs::read(other.join(leaf))
         ),
     );
     checked.wants(
         "the Layout names what was checked in",
         Layout::open(other.join(".rola/layouts/main"))
             .expect("the second Layout")
-            .id_of(&LayoutPath::new(&leaf).unwrap())
+            .id_of(&LayoutPath::new(leaf).unwrap())
             == Some(id),
         "the second Layout does not name what came in",
     );
@@ -1379,7 +1377,11 @@ async fn main() {
     // still one the Layout has moved under, and the reading has to be told so rather than left
     // calling the two agreed.
     fs::write(&model, b"third").expect("what the Layout agreed with");
-    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/hero.psd"],
+    ));
     checked.wants(
         "a file holding what the Layout names is not being edited",
         said.success() && !said.stdout.contains("??"),
@@ -1395,7 +1397,13 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", "-1", "--only-index"],
+        &[
+            "retrack",
+            "models/hero.psd",
+            "--until",
+            "-1",
+            "--only-index",
+        ],
     ));
     checked.wants(
         "a retrack moves the pointer one version back",
@@ -1413,7 +1421,11 @@ async fn main() {
         &format!("the tree holds {:?}", fs::read(&model)),
     );
 
-    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/hero.psd"],
+    ));
     checked.wants(
         "a pointer moved off the file is drawn as a change never recorded",
         said.success() && said.stdout.contains("??"),
@@ -1544,7 +1556,11 @@ async fn main() {
     // Layout records is marked with the Vault's name, so a run reads what is left to send without
     // counting versions. The oldest version is drawn with its own words too, which is the one whose
     // variant is based on the root and so hangs from no level of the drawing.
-    let said = run(&mut client(&workspace, &data, &["status", "models/hero.psd"]));
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["status", "models/hero.psd"],
+    ));
     let chain = clean(&said.stdout);
     checked.wants(
         "the version the Vault records is marked in the chain",
@@ -1615,9 +1631,17 @@ async fn main() {
     // write over the file or move the pointer under it: what the two sides hold is the run's to
     // join or to discard. The variant of the version after the one the entry is at is joined, so
     // its base is the version the entry names and the merge is one that could go on.
-    let second_hex: String = second_version.iter().map(|byte| format!("{byte:02x}")).collect();
+    let second_hex: String = second_version
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
     let variants = clean(
-        &run(&mut client(&workspace, &data, &["vcs-index", "ls-variants"])).stdout,
+        &run(&mut client(
+            &workspace,
+            &data,
+            &["vcs-index", "ls-variants"],
+        ))
+        .stdout,
     );
     let variant = variants
         .lines()
@@ -1657,7 +1681,13 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", "-1", "--only-index"],
+        &[
+            "retrack",
+            "models/hero.psd",
+            "--until",
+            "-1",
+            "--only-index",
+        ],
     ));
     checked.wants(
         "`--only-index` cannot end a merge, and says as much",
@@ -1686,7 +1716,11 @@ async fn main() {
             said.stdout.trim(),
             local_version_of(&workspace, id),
             fs::read(&model),
-            if variant_file.exists() { "there" } else { "gone" },
+            if variant_file.exists() {
+                "there"
+            } else {
+                "gone"
+            },
             if workspace.join(".rola/MERGING").exists() {
                 "there"
             } else {
@@ -1806,9 +1840,7 @@ async fn main() {
         ),
     );
 
-    let said = clean(
-        &run(&mut client(&workspace, &data, &["status"])).stdout,
-    );
+    let said = clean(&run(&mut client(&workspace, &data, &["status"])).stdout);
     checked.wants(
         "a move that was not edited is not drawn as a content change",
         said.contains("models/moved.psd -> models/moved-again.psd")
@@ -1819,9 +1851,7 @@ async fn main() {
     let edited = long.replace("line 20 of", "line 20 EDITED of");
     fs::write(&moved_to, &edited).expect("the moved file, edited");
 
-    let said = clean(
-        &run(&mut client(&workspace, &data, &["status"])).stdout,
-    );
+    let said = clean(&run(&mut client(&workspace, &data, &["status"])).stdout);
     checked.wants(
         "a move whose file was edited is marked as a content change",
         said.contains("models/moved.psd -> models/moved-again.psd (*)"),
@@ -1877,7 +1907,10 @@ async fn main() {
     // for; the copy is fetched so the gates are read against it.
     Layout::open(root.join(LAYOUT_DIR))
         .expect("the Vault's Layout")
-        .create_entry(gated_id, MutableData::new(None, gated_version, String::new()))
+        .create_entry(
+            gated_id,
+            MutableData::new(None, gated_version, String::new()),
+        )
         .expect("the entry, held by nobody");
     run(&mut client(
         &workspace,
@@ -1888,7 +1921,11 @@ async fn main() {
 
     fs::write(&gated, b"two").expect("work written before the claim");
 
-    let said = run(&mut client(&workspace, &data, &["hold", "models/gated.psd"]));
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["hold", "models/gated.psd"],
+    ));
     checked.wants(
         "a claim over work written past the version is allowed",
         said.success() && vault_owner_of(&root, gated_id).as_deref() == Some(ALICE),

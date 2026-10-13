@@ -21,18 +21,69 @@ use serde::Serialize;
 /// How alike two text files have to be to count as the same file moved.
 const ALIKE: f32 = 0.6;
 
+/// The prefix a `Uuid` only this Layout holds is put under when it goes up.
+const NEW_PREFIX: &str = "@/new/";
+
 /// The marker a remote path carries when the Vault has deprecated the file.
 const REMOVED_PREFIX: &str = "@/removed/";
 
-/// The short form of a `Uuid` that a new file's remote name carries.
+/// The name the Vault's Layout is to give a `Uuid` only this Layout holds.
 ///
-/// The name keeps the path it was submitted under and adds this, so two files submitted under one
-/// path are still two names in the Vault's Layout.
-#[must_use]
-pub fn short_name(id: &str) -> String {
-    let plain: String = id.chars().filter(|c| *c != '-').collect();
+/// The path it was tracked under when the Vault's Layout does not already name it, so what a reader
+/// sees first is where the file came from. When that name is taken, the parent, the stem, the
+/// `Uuid` in short form, and the extension: `art/hero.psd` becomes `art/hero@1a2b3c4.psd`. The short
+/// form grows a character at a time while even that name is taken, so two files submitted under one
+/// path stay two names — the whole `Uuid` last, which no `Uuid`-carrying name can share.
+///
+/// `None` when even the whole `Uuid` leaves the name taken, which cannot happen for a real one.
+fn create_remote_path(
+    local_path: &LayoutPath,
+    uuid: &str,
+    taken: impl Fn(&LayoutPath) -> bool,
+) -> Option<String> {
+    let clean = LayoutPath::new(&format!("{NEW_PREFIX}{}", local_path.as_str())).ok()?;
+    if !taken(&clean) {
+        return Some(clean.as_str().to_owned());
+    }
 
-    plain[..plain.len().min(7)].to_owned()
+    let (parent, file) = split_parent(local_path.as_str());
+    let (stem, extension) = split_extension(file);
+    let plain: String = uuid.chars().filter(|c| *c != '-').collect();
+
+    for length in plain.len().min(7)..=plain.len() {
+        let short = &plain[..length];
+        let candidate = if parent.is_empty() {
+            format!("{NEW_PREFIX}{stem}@{short}{extension}")
+        } else {
+            format!("{NEW_PREFIX}{parent}/{stem}@{short}{extension}")
+        };
+
+        let Ok(named) = LayoutPath::new(&candidate) else {
+            continue;
+        };
+        if !taken(&named) {
+            return Some(named.as_str().to_owned());
+        }
+    }
+
+    None
+}
+
+/// `text` split into its parent and its last component; the parent is empty at the root.
+fn split_parent(text: &str) -> (&str, &str) {
+    text.rfind('/')
+        .map_or(("", text), |at| (&text[..at], &text[at + 1..]))
+}
+
+/// A file name split at its last `.` into the stem and the extension, dot included.
+///
+/// `a.png` is `("a", ".png")` and `a.pkg.tar.zst` is `("a.pkg.tar", ".zst")`. A name with no dot, or
+/// one whose only dot leads it, has no extension: `.gitignore` is all stem.
+fn split_extension(file: &str) -> (&str, &str) {
+    match file.rfind('.') {
+        Some(at) if at > 0 => file.split_at(at),
+        _ => (file, ""),
+    }
 }
 
 /// How far a run is to go.
@@ -176,9 +227,9 @@ async fn local_entries(
         let Some(held) = remote.entry(id) else {
             if kept(Kind::Create, direction) {
                 let uuid = id.to_string();
-                let planned_path = local_path
-                    .as_ref()
-                    .map(|path| format!("@/new/{}@{}", path.as_str(), short_name(&uuid)));
+                let planned_path = local_path.as_ref().and_then(|path| {
+                    create_remote_path(path, &uuid, |candidate| remote.id_of(candidate).is_some())
+                });
 
                 entries.push(Entry {
                     uuid,
@@ -446,15 +497,62 @@ fn hex(digest: [u8; 32]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Direction, Kind, Relation, decide, kept, short_name};
+    use librorolala::layout::LayoutPath;
+
+    use super::{Direction, Kind, Relation, create_remote_path, decide, kept, split_extension};
+
+    const UUID: &str = "1a2b3c4d-0000-0000-0000-000000000000";
 
     #[test]
-    fn a_new_file_is_named_by_its_path_and_a_short_uuid() {
+    fn a_new_file_is_named_by_its_path() {
+        let free = |_: &LayoutPath| false;
+
         assert_eq!(
-            short_name("1a2b3c4d-0000-0000-0000-000000000000"),
-            "1a2b3c4"
+            create_remote_path(&LayoutPath::new("art/hero.psd").unwrap(), UUID, free).as_deref(),
+            Some("@/new/art/hero.psd")
         );
-        assert_eq!(short_name("ab"), "ab");
+    }
+
+    #[test]
+    fn a_taken_path_takes_the_short_uuid_before_the_extension() {
+        let taken = |candidate: &LayoutPath| candidate.as_str() == "@/new/art/hero.psd";
+
+        assert_eq!(
+            create_remote_path(&LayoutPath::new("art/hero.psd").unwrap(), UUID, taken).as_deref(),
+            Some("@/new/art/hero@1a2b3c4.psd")
+        );
+
+        // A dotted name keeps everything before the last dot as the stem: `a.pkg.tar.zst` is
+        // `a.pkg.tar` and `.zst`.
+        let taken = |candidate: &LayoutPath| candidate.as_str() == "@/new/a.pkg.tar.zst";
+
+        assert_eq!(
+            create_remote_path(&LayoutPath::new("a.pkg.tar.zst").unwrap(), UUID, taken).as_deref(),
+            Some("@/new/a.pkg.tar@1a2b3c4.zst")
+        );
+    }
+
+    #[test]
+    fn a_taken_short_uuid_grows_a_character_at_a_time() {
+        let taken = |candidate: &LayoutPath| {
+            matches!(
+                candidate.as_str(),
+                "@/new/hero.psd" | "@/new/hero@1a2b3c4.psd"
+            )
+        };
+
+        assert_eq!(
+            create_remote_path(&LayoutPath::new("hero.psd").unwrap(), UUID, taken).as_deref(),
+            Some("@/new/hero@1a2b3c4d.psd")
+        );
+    }
+
+    #[test]
+    fn an_extension_is_what_follows_the_last_dot() {
+        assert_eq!(split_extension("a.png"), ("a", ".png"));
+        assert_eq!(split_extension("a.pkg.tar.zst"), ("a.pkg.tar", ".zst"));
+        assert_eq!(split_extension("a"), ("a", ""));
+        assert_eq!(split_extension(".gitignore"), (".gitignore", ""));
     }
 
     #[test]

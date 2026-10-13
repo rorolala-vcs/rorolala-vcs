@@ -361,8 +361,9 @@ where
 
 /// Creates an entry of the Vault's Layout under `@/new/`, held by the account that asks.
 ///
-/// The path keeps the name the file was submitted under and carries the short form of its `Uuid`,
-/// so two files submitted under one name are still two paths.
+/// The name is the caller's to choose and only has to be under `@/new/`: when the path the file was
+/// submitted under is free it is that path, and when it is taken the caller disambiguates it, so two
+/// files submitted under one name are still two paths.
 ///
 /// # Errors
 ///
