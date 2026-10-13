@@ -130,6 +130,14 @@ status:
     en: You hold it, it is %{distance} version(s) behind, and it has changes of its own!
     zh-CN: 你持有该文件，但却落后 %{distance} 个版本，且本地已产生修改！
 
+  state_mine_behind_untold:
+    en: You hold it, yet the Vault has moved on — by how many versions this side has not fetched!
+    zh-CN: 你持有该文件，但 Vault 已经往前走了 —— 差多少个版本这边还没取！
+
+  state_mine_behind_untold_changed:
+    en: You hold it, the Vault has moved on — by how many versions this side has not fetched — and it has changes of its own!
+    zh-CN: 你持有该文件，但 Vault 已经往前走了（差多少个版本这边还没取），且本地已产生修改！
+
   state_mine_apart:
     en: You hold it, but the two versions have diverged!
     zh-CN: 你持有该文件，但双方版本已分叉！
@@ -165,6 +173,14 @@ status:
   state_held_behind_changed:
     en: "%{holder}, it is %{distance} version(s) behind, and the file has changed!"
     zh-CN: "%{holder}，当前落后 %{distance} 个版本，但文件产生了变化！"
+
+  state_held_behind_untold:
+    en: "%{holder}, and the Vault has moved on — by how many versions this side has not fetched"
+    zh-CN: "%{holder}，Vault 已经往前走了 —— 差多少个版本这边还没取"
+
+  state_held_behind_untold_changed:
+    en: "%{holder}, the Vault has moved on — by how many versions this side has not fetched — and the file has changed!"
+    zh-CN: "%{holder}，Vault 已经往前走了（差多少个版本这边还没取），但文件产生了变化！"
 
   state_held_apart:
     en: "%{holder}, but the two versions have diverged!"

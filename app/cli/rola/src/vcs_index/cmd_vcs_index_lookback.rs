@@ -488,7 +488,11 @@ pub struct Standing {
     pub modified: bool,
     /// How the version this Layout is at stands beside the Vault's.
     pub relation: StandingRelation,
-    /// How many versions apart the two are, when one is below the other.
+    /// How many versions apart the two are, when one is below the other and that chain is here to be walked.
+    ///
+    /// It is nothing for the ordinary way of being behind: a fetch brings the Vault's Layout and never its
+    /// versions, so the version the Vault is at is one this side has never had, and the chain that would count
+    /// the gap is the Vault's own.
     pub distance: Option<u64>,
     /// The variant waiting to be joined into this file, when the work is in a merge.
     pub merging: Option<MergeHint>,
@@ -511,11 +515,11 @@ pub enum StandingRelation {
     Same,
     /// The Vault's version is on the chain below this one.
     Ahead,
-    /// This version is on the chain below the Vault's.
+    /// This version is on the chain below the Vault's, or the Vault's is not here to be walked at all.
     Behind,
     /// Neither is below the other.
     Apart,
-    /// The index does not hold one of them, so how far apart they are is not known here.
+    /// The index does not hold the version this Layout records, so how far apart the two are is not known here.
     Unknown,
 }
 
@@ -795,6 +799,26 @@ fn standing_state(standing: &Standing) -> String {
 /// What the state line says, from who holds the file and how it stands.
 fn state_words(standing: &Standing) -> String {
     let holder = holder_words(standing);
+
+    // Being behind is ordinarily without a count: a fetch brings the Vault's Layout and never its versions,
+    // so the chain that would measure the gap is the Vault's own and is not here. The direction is said on
+    // its own, since the count a reader would otherwise be given is the one thing that is not known — and a
+    // zero there would read as the two sides being in step.
+    if matches!(standing.relation, StandingRelation::Behind) && standing.distance.is_none() {
+        return match (standing.mine, standing.modified) {
+            (true, false) => t!("status.state_mine_behind_untold").trim().to_owned(),
+            (true, true) => t!("status.state_mine_behind_untold_changed")
+                .trim()
+                .to_owned(),
+            (false, false) => t!("status.state_held_behind_untold", holder = holder)
+                .trim()
+                .to_owned(),
+            (false, true) => t!("status.state_held_behind_untold_changed", holder = holder)
+                .trim()
+                .to_owned(),
+        };
+    }
+
     let distance = standing.distance.unwrap_or(0);
 
     let said = match (standing.mine, standing.relation, standing.modified) {
@@ -1085,26 +1109,76 @@ fn node_of(view: &VariantView, level: u64, spine: bool, at: &HashMap<&str, usize
 
 #[cfg(test)]
 mod tests {
-    use super::truncate;
+    use rust_i18n::t;
 
+    use super::{Standing, StandingRelation, holder_words, state_words, truncate};
+
+    /// A file this side holds, standing as told.
+    fn ours(relation: StandingRelation, distance: Option<u64>) -> Standing {
+        Standing {
+            vault: "it.vault".to_owned(),
+            source: None,
+            holder: Some("alice".to_owned()),
+            mine: false,
+            modified: false,
+            relation,
+            distance,
+            merging: None,
+        }
+    }
+
+    /// A message that fits is shown whole.
     #[test]
     fn a_message_that_fits_is_shown_whole() {
         assert_eq!(truncate("abc", 3), "abc");
         assert_eq!(truncate("abc", 64), "abc");
     }
 
+    /// Being behind is said with the count the chain gave, and without a count when it did not give one.
+    ///
+    /// The second is the ordinary one — a fetch brings the Vault's Layout and never its versions — and what it
+    /// must not say is a number: the count is the one thing that is not known, and a zero there would read as
+    /// the two sides being in step.
+    #[test]
+    fn being_behind_is_said_with_the_count_the_chain_gave() {
+        let counted = ours(StandingRelation::Behind, Some(3));
+        let untold = ours(StandingRelation::Behind, None);
+
+        assert_eq!(
+            state_words(&counted),
+            t!(
+                "status.state_held_behind",
+                holder = holder_words(&counted),
+                distance = 3
+            )
+            .trim()
+        );
+        assert_eq!(
+            state_words(&untold),
+            t!(
+                "status.state_held_behind_untold",
+                holder = holder_words(&untold)
+            )
+            .trim()
+        );
+        assert_ne!(state_words(&counted), state_words(&untold));
+    }
+
+    /// What is cut ends in an ellipsis that fits the length.
     #[test]
     fn what_is_cut_ends_in_an_ellipsis_that_fits_the_length() {
         assert_eq!(truncate("abcdefgh", 6), "abc...");
         assert_eq!(truncate("abcdefgh", 4), "a...");
     }
 
+    /// A length too small for an ellipsis cuts the text alone.
     #[test]
     fn a_length_too_small_for_an_ellipsis_cuts_the_text_alone() {
         assert_eq!(truncate("abcdefgh", 3), "abc");
         assert_eq!(truncate("abcdefgh", 0), "");
     }
 
+    /// Characters are what is counted.
     #[test]
     fn characters_are_what_is_counted() {
         assert_eq!(truncate("中文中文中文", 5), "中文...");

@@ -35,6 +35,9 @@ internal static partial class Icons
     /// <summary>The key the `download` picture is held under.</summary>
     public const string Download = "rorolala_vcs.download";
 
+    /// <summary>The key the `call_split` picture is held under.</summary>
+    public const string CallSplit = "rorolala_vcs.call_split";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -47,5 +50,6 @@ internal static partial class Icons
         (Refresh, "refresh"),
         (Upload, "upload"),
         (Download, "download"),
+        (CallSplit, "call_split"),
     ];
 }

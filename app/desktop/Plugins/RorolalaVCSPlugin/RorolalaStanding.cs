@@ -17,6 +17,13 @@ namespace RorolalaVCSPlugin;
 /// which by the sign of a number rather than by a word: `+2` is two versions this side has that the Vault does
 /// not, `-1` is one the Vault has that this side does not.
 /// <para>
+/// A number is not always there to give. A fetch brings the Vault's Layout and never its versions, so the
+/// version the Vault is at is ordinarily one this side has never had: being behind is then a direction with no
+/// count, and two sides that have each moved on are not a distance from one another at all. The three answers
+/// are told apart by what the cell holds — a signed number, a bare sign, and a question mark — because what a
+/// reader does about them differs too.
+/// </para>
+/// <para>
 /// It is read from the work the same way the State mark beside it is, and through the same reading — see
 /// <see cref="StatusReadings"/> — so a directory is read once for both columns rather than once each.
 /// </para>
@@ -103,6 +110,14 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     /// red the plugin spends on the two sides of the same question everywhere else: green for work that is
     /// here and not recorded yet, which is what being ahead is, and red for what must not be recorded, which is
     /// what another side having moved on is.
+    /// <para>
+    /// The count is what the cell is for, and it is not always known: a fetch brings the Vault's Layout and
+    /// never its versions, so the version the Vault is at is ordinarily one this side has never had, and the
+    /// chain that would count the gap is the Vault's own. A standing whose count is not known says so by
+    /// holding no number at all, and one whose chains have parted says so with a question mark — which is the
+    /// one thing a number cannot say, since there is no number of versions between two sides that are not on
+    /// one chain.
+    /// </para>
     /// </remarks>
     /// <param name="standing">What the reading says about the entry.</param>
     /// <returns>What the cell says, which is the dash for a file with nothing between it and upstream.</returns>
@@ -119,16 +134,26 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
                 Hint: RolaI18N.Get("rorolala_vcs.standing.ahead", ahead)
             ),
 
-            // A version behind the Vault's: work upstream has that this side has not fetched.
+            // A version behind the Vault's: work upstream has that this side has not fetched, and the chain
+            // that counts the versions between is the Vault's own.
             StandingRelation.Behind when standing.Distance is { } behind => new EntryColumnMark(
                 Text: $"-{behind}",
                 Colour: RorolalaColours.Wrong,
                 Hint: RolaI18N.Get("rorolala_vcs.standing.behind", behind)
             ),
 
-            // Both sides moved on, so neither is based on the other and neither is a distance from it.
-            StandingRelation.Apart => new EntryColumnMark(
+            // Behind it, with the count the Vault's chain would give not here: the same direction as above,
+            // said without a number. The words are the hover's own, which say which side holds what.
+            StandingRelation.Behind => new EntryColumnMark(
                 Text: Diverged,
+                Colour: RorolalaColours.Wrong,
+                Hint: RolaI18N.Get("rorolala_vcs.standing.behind_hover")
+            ),
+
+            // Both sides moved on, so neither is based on the other and neither is a distance from it: there
+            // is no number of versions between two chains, which is what the mark says.
+            StandingRelation.Apart => new EntryColumnMark(
+                Text: Apart,
                 Colour: RorolalaColours.Wrong,
                 Hint: RolaI18N.Get("rorolala_vcs.standing.apart")
             ),
@@ -148,6 +173,16 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     /// character on purpose: a reader should not have to tell one dash from another.
     /// </remarks>
     private const string Diverged = "-";
+
+    /// <summary>
+    /// What a cell says when the two sides are not on one chain at all.
+    /// </summary>
+    /// <remarks>
+    /// A question mark rather than a dash or a number, because what is being said is that the cell has no
+    /// number to give: a dash reads as nothing between the two, and any count would be a lie about versions
+    /// that were never on one chain. What it stands for is on the cell, where the pointer reaching it says it.
+    /// </remarks>
+    private const string Apart = "?";
 
     /// <summary>
     /// Lets go of what was read, so the next answer is read from the tree as it is now.

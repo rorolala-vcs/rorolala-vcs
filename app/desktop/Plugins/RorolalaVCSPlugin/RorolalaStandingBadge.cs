@@ -28,6 +28,13 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
     /// <summary>The arrow the set draws for work the Vault has that this side has not fetched.</summary>
     private const string Download = Icons.Download;
 
+    /// <summary>The mark the set draws for two chains that have each moved on.</summary>
+    /// <remarks>
+    /// A fork rather than an arrow, because there is no direction the work could move in to settle it: the
+    /// two arrows say which side is further on, and this says that neither is.
+    /// </remarks>
+    private const string Split = Icons.CallSplit;
+
     /// <summary>What the work says about the directories being listed, shared with the list's own columns.</summary>
     private readonly StatusReadings _readings;
 
@@ -65,19 +72,25 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
     }
 
     /// <summary>
-    /// What a standing is worn as: an arrow for the way the work would have to move, drawn the way the lock
-    /// beside it is, and nothing at all where there is nothing to move.
+    /// What a standing is worn as: an arrow for the way the work would have to move, a fork where there is no
+    /// way, drawn the way the lock beside it is — and nothing at all where there is nothing to move.
     /// </summary>
     /// <remarks>
     /// Worn on the dark ground the lock's badge wears: the two mark the same tile at once and are read one
     /// after the other, so a picture laid on the artwork and a badge the artwork carries would be two marks of
     /// two different kinds about one file. The ground is the badge's own dark whatever the look is, so the role
-    /// the arrow is drawn in is read against that and not against the tile — which is why the arrow is the ink
-    /// and the ground the badge's.
+    /// the picture is drawn in is read against that and not against the tile — which is why the picture is the
+    /// ink and the ground the badge's.
     /// <para>
     /// Green up for work waiting to be sent and red down for work waiting to be fetched: the two are opposite
     /// things to do about the same file, and the direction is what tells them apart where a glance at the colour
-    /// only says that something is there to do.
+    /// only says that something is there to do. A fork is the third answer and is drawn as one: the two sides
+    /// have each moved on, so the work cannot be settled by moving it either way.
+    /// </para>
+    /// <para>
+    /// Behind is one answer whether or not the count is known. A fetch brings the Vault's Layout and never its
+    /// versions, so what the Vault is at is ordinarily a version this side has never had: the direction is
+    /// certain — it has work this side has not fetched — and how far is the Vault's own chain's to say.
     /// </para>
     /// </remarks>
     /// <param name="standing">What the reading says about the entry.</param>
@@ -96,7 +109,8 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
                 HoverKey: "rorolala_vcs.standing.ahead_hover"
             ),
 
-            // Behind the Vault's: work upstream has that this side has not fetched.
+            // Behind the Vault's: work upstream has that this side has not fetched, whether or not the chain
+            // that would count the versions between is here.
             StandingRelation.Behind => new EntryMark(
                 IconKey: Download,
                 Ink: MarkInk.Error,
@@ -104,9 +118,9 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
                 HoverKey: "rorolala_vcs.standing.behind_hover"
             ),
 
-            // Both moved on: neither is based on the other, so the work that has to come this way does.
+            // Both moved on: neither is based on the other, so there is no side the work could move to.
             StandingRelation.Apart => new EntryMark(
-                IconKey: Download,
+                IconKey: Split,
                 Ink: MarkInk.Error,
                 Tagged: true,
                 HoverKey: "rorolala_vcs.standing.apart_hover"

@@ -635,7 +635,7 @@ internal enum RolaStanding : int
     /// </summary>
     RolaStanding_Apart = 3,
     /// <summary>
-    /// How the two stand is not known here: one of the versions is not in the index, or the reading holds
+    /// How the two stand is not known here: the version this side records is not in the index, or the reading
     /// </summary>
     RolaStanding_Unknown = 4,
 }

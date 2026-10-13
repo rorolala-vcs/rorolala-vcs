@@ -76,8 +76,9 @@ key = "rorolala_vcs"
 # `upload` and `download` are how a file stands beside upstream: the version recorded for it is ahead of
 # what the Vault was told of, or behind it, and the arrows say which way the work would have to move to be
 # in step — nothing is uploaded or downloaded by them, so the mark is of a direction rather than of an
-# action.
-icons = ["lock", "create", "lock_open", "error", "warning", "live_help", "refresh", "upload", "download"]
+# action. `call_split` is the third answer: the two sides have each moved on, so neither is based on the
+# other and there is no direction the work could move in to settle it.
+icons = ["lock", "create", "lock_open", "error", "warning", "live_help", "refresh", "upload", "download", "call_split"]
 
 [[set]]
 plugin = "RorolalaDesktop"

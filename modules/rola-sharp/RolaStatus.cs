@@ -127,14 +127,19 @@ public enum StandingRelation
     Ahead,
 
     /// <summary>The Vault has moved on, so what is here is based on a version that has.</summary>
+    /// <remarks>
+    /// This is also the answer when the version the Vault records is not in the index, which is the ordinary
+    /// case: a fetch brings the Vault's Layout and never its versions. The direction is known from the version
+    /// having come from elsewhere, and how far is not — see <see cref="Standing.Distance"/>.
+    /// </remarks>
     Behind,
 
     /// <summary>Both sides have moved on, so neither is based on the other.</summary>
     Apart,
 
     /// <summary>
-    /// How the two stand is not known here: one of the versions is not in the index, the reading was made
-    /// without the Vault's copy, or the path is one this reading is not about at all.
+    /// How the two stand is not known here: the version this side records is not in the index, the reading was
+    /// made without the Vault's copy, or the path is one this reading is not about at all.
     /// </summary>
     /// <remarks>
     /// A caller that has to tell those apart asks the distance beside it: zero is the two being the same
@@ -148,7 +153,9 @@ public enum StandingRelation
 /// <param name="Distance">
 /// How many versions apart they are, or nothing when the chain does not say — which includes both a standing
 /// that is <see cref="StandingRelation.Unknown"/> and one that is <see cref="StandingRelation.Apart"/>, where
-/// the two have moved on from each other and neither is a distance from the other.
+/// the two have moved on from each other and neither is a distance from the other. It is also nothing for the
+/// ordinary way of being behind: what the Vault is at is a version this side never fetched, so the direction
+/// is known and the chain that would count the versions between is the Vault's own.
 /// </param>
 public sealed record Standing(StandingRelation Relation, ulong? Distance);
 
@@ -365,6 +372,12 @@ public sealed class RolaStatus : IDisposable
     /// A path outside the Workspace, one nothing was ever recorded for, and one upstream does not name are
     /// all answered <see cref="StandingRelation.Unknown"/>: what tells those apart from a path in step is the
     /// distance, which is zero for the two being the same and nothing otherwise.
+    /// <para>
+    /// A path the Vault is ahead on is answered <see cref="StandingRelation.Behind"/> whether or not a distance
+    /// comes with it, because what the Vault is at is ordinarily a version this side never fetched: the
+    /// direction is read from the version having come from elsewhere, and the count from a chain that is not
+    /// here.
+    /// </para>
     /// </remarks>
     /// <param name="path">The path of the entry, as the program names it.</param>
     /// <returns>Where the two stand, and how many versions apart they are when the chain says.</returns>

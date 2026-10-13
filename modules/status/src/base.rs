@@ -7,8 +7,10 @@
 //! *apart*. The last two are what makes a base wrong — a change made on one of them is a change made
 //! against a version the other side is not at — which is why they are told apart from being ahead.
 //!
-//! Telling them apart costs reading the chain: the index holds the variants and versions to walk, and a
-//! version it does not hold is one this side never had, so how far apart the two are is not known here.
+//! Telling them apart costs reading the chain: the index holds the variants and versions to walk. What a
+//! fetch brings is the Vault's Layout and never its versions, so being behind is ordinarily answered
+//! without a distance — the direction is known from the version having come from elsewhere, and the chain
+//! that would count the versions between is the Vault's own. See [`compare`] for the whole of it.
 
 use rorolala_layout::{Layout, LayoutPath};
 use rorolala_storage::{Blake3Hash, Key};
@@ -45,6 +47,15 @@ pub struct Base {
 }
 
 /// How the version `local` stands beside `upstream`.
+///
+/// # Being behind
+///
+/// A fetch brings the Vault's *Layout* here and never its versions, so the version upstream records is
+/// ordinarily **not** in the index this reads. That is not a reading that cannot answer: a version this side
+/// never had can only have come from elsewhere — the Vault is ahead of this side — and it is answered
+/// [`Relation::Behind`] with no distance, because the chain that would measure the gap is the Vault's own and
+/// is not here. What is *not* answered that way is a version this side holds and cannot place either: see
+/// [`Relation::Unknown`].
 #[must_use]
 pub fn compare(
     index: &VCSIndex,
@@ -59,29 +70,45 @@ pub fn compare(
         };
     }
 
-    // A version the index does not hold is one this side never had, so how far apart the two are is not
-    // known here: the other side has moved on and the chain that says how far is not local.
-    let (Some(local), Some(upstream)) = (
-        read_version(index, runtime, local),
-        read_version(index, runtime, upstream),
-    ) else {
-        return Base {
-            relation: Relation::Unknown,
-            distance: None,
-        };
-    };
+    let here = read_version(index, runtime, local);
 
-    if let Some(distance) = distance_to(index, runtime, &local, upstream.hash().digest()) {
+    // Ahead is asked first, and it walks this side's own chain: the other version is compared by its hash
+    // alone, which the Layout records whether or not the version itself was ever fetched here. So being ahead
+    // is answered without the Vault's chain, which is the one thing a fetch does not bring.
+    if let Some(distance) = here
+        .as_ref()
+        .and_then(|held| distance_to(index, runtime, held, upstream))
+    {
         return Base {
             relation: Relation::Ahead,
             distance: Some(distance),
         };
     }
 
-    if let Some(distance) = distance_to(index, runtime, &upstream, local.hash().digest()) {
+    // What is left to walk is the other side's chain, which starts at a version that has to be here.
+    let Some(remote) = read_version(index, runtime, upstream) else {
+        // It is not here, and the chain that would say how far apart the two are is the Vault's own. What is
+        // known is the direction: the Vault holds a version this side never had (see the note above).
+        return Base {
+            relation: Relation::Behind,
+            distance: None,
+        };
+    };
+
+    if let Some(distance) = distance_to(index, runtime, &remote, local) {
         return Base {
             relation: Relation::Behind,
             distance: Some(distance),
+        };
+    }
+
+    // Both versions are here and neither is below the other, so the two sides have moved on from each other —
+    // unless this side's own version is the one that cannot be read, which is a reading that cannot place
+    // what it recorded and says nothing rather than calling the two chains separate.
+    if here.is_none() {
+        return Base {
+            relation: Relation::Unknown,
+            distance: None,
         };
     }
 
@@ -144,8 +171,10 @@ pub fn every(
 /// The paths among `paths` whose version stands behind or apart from the one upstream records.
 ///
 /// These are the changes made against a version the other side is not at: what is recorded here would be
-/// based on something the Vault does not have. A path upstream does not name — one it was never told of —
-/// is not one of them: nothing there is in the way, and there is no version to be based on.
+/// based on something the Vault does not have. That includes the ordinary case of being behind — the Vault
+/// moved on and this side never fetched the version it is at, which is a base gone wrong whether or not the
+/// chain that would measure the gap is here (see [`compare`]). A path upstream does not name — one it was
+/// never told of — is not one of them: nothing there is in the way, and there is no version to be based on.
 ///
 /// A path whose version is *ahead* is not one of them either: this side holding work the other has not
 /// been told of is what working looks like, not a base gone wrong.
@@ -253,8 +282,12 @@ pub fn read_variant(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use rorolala_storage::Blake3Hash;
-    use rorolala_vcs::VCSIndex;
+    use rorolala_vcs::{VCSIndex, VCSWrite as _, Version};
 
     use super::{Base, Relation, compare};
 
@@ -263,9 +296,72 @@ mod tests {
         tokio::runtime::Runtime::new().expect("a runtime for the walk")
     }
 
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-status-base-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+
+        dir
+    }
+
     /// An index with nothing in it, which is what a version nothing holds is read against.
     fn empty() -> VCSIndex {
         VCSIndex::default()
+    }
+
+    /// An index holding a chain of `many` versions, oldest first, with this side at the newest.
+    ///
+    /// Every version and the variant that fixes it are written, since a walk reads both; the root is
+    /// written too, because a chain is walked down to it.
+    fn chain(label: &str, many: u8) -> (PathBuf, VCSIndex, Vec<Version>, tokio::runtime::Runtime) {
+        let runtime = runtime();
+        let dir = scratch(label);
+        let index = VCSIndex::create(&dir);
+        let mut versions = vec![Version::root()];
+
+        runtime.block_on(index.write(Version::root())).unwrap();
+
+        for step in 0..many {
+            // UNWRAP: the chain always holds the version the last step made, which is what the first
+            // pass is given and every pass after it appends.
+            let base = versions.last().unwrap();
+            let variant = base.new_variant([step.wrapping_add(1); 32], [0; 32], [0; 32]);
+            let version = variant.new_version();
+
+            runtime.block_on(index.write(variant)).unwrap();
+            runtime.block_on(index.write(version.clone())).unwrap();
+
+            versions.push(version);
+        }
+
+        (dir, index, versions, runtime)
+    }
+
+    /// A version of a chain of its own, based on the same root as the one beside it.
+    ///
+    /// It is what two sides that have each moved on look like: neither is below the other, and both are
+    /// here to be walked.
+    fn branch(label: &str, seed: u8) -> (PathBuf, VCSIndex, Version, tokio::runtime::Runtime) {
+        let runtime = runtime();
+        let dir = scratch(label);
+        let index = VCSIndex::create(&dir);
+
+        runtime.block_on(index.write(Version::root())).unwrap();
+
+        let variant = Version::root().new_variant([seed; 32], [0; 32], [0; 32]);
+        let version = variant.new_version();
+
+        runtime.block_on(index.write(variant)).unwrap();
+        runtime.block_on(index.write(version.clone())).unwrap();
+
+        (dir, index, version, runtime)
     }
 
     #[test]
@@ -281,19 +377,110 @@ mod tests {
         );
     }
 
-    /// The two chains that say ahead from behind are the index's, so a version it does not hold is one
-    /// this side never had: how the two stand is not known, which is not the same as being wrong.
+    /// This side holding work the other has not been told of is ahead, and how far is counted along the
+    /// chain the index holds — which is this side's own.
     #[test]
-    fn a_version_the_index_does_not_hold_is_not_known() {
-        let local: Blake3Hash = [1; 32];
-        let upstream: Blake3Hash = [2; 32];
+    fn work_the_other_side_has_not_been_told_of_is_ahead() {
+        let (dir, index, versions, runtime) = chain("ahead", 3);
 
         assert_eq!(
-            compare(&empty(), &runtime(), &local, &upstream),
+            compare(
+                &index,
+                &runtime,
+                &versions[3].hash().digest(),
+                &versions[1].hash().digest()
+            ),
+            Base {
+                relation: Relation::Ahead,
+                distance: Some(2),
+            }
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The Vault having moved on is behind, and how far is counted along the Vault's chain — which is
+    /// walked when the version it starts at is here.
+    #[test]
+    fn the_other_side_having_moved_on_is_behind() {
+        let (dir, index, versions, runtime) = chain("behind", 3);
+
+        assert_eq!(
+            compare(
+                &index,
+                &runtime,
+                &versions[1].hash().digest(),
+                &versions[3].hash().digest()
+            ),
+            Base {
+                relation: Relation::Behind,
+                distance: Some(2),
+            }
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A version the index does not hold is one this side never had, so it can only have come from
+    /// elsewhere: the other side is ahead of this one, whatever the chain that would count the gap is.
+    ///
+    /// This is the ordinary shape of being behind, because a fetch brings the Vault's Layout and never its
+    /// versions: what is checked here is the answer a reading that cannot walk the other chain gives.
+    #[test]
+    fn a_version_only_the_other_side_has_is_behind_with_no_distance() {
+        let (dir, index, versions, runtime) = chain("behind-elsewhere", 1);
+        let elsewhere: Blake3Hash = [0xE1; 32];
+
+        assert_eq!(
+            compare(&index, &runtime, &versions[1].hash().digest(), &elsewhere),
+            Base {
+                relation: Relation::Behind,
+                distance: None,
+            }
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Two sides that have each moved on from the same version are apart: neither is based on the other,
+    /// which is not the same as one of them being ahead.
+    #[test]
+    fn two_sides_that_moved_on_from_one_version_are_apart() {
+        let (dir, index, ours, runtime) = branch("apart", 0x11);
+
+        // The other side's branch, in the same index, so both versions are here to be walked.
+        let theirs_variant = Version::root().new_variant([0x22; 32], [0; 32], [0; 32]);
+        let theirs = theirs_variant.new_version();
+
+        runtime.block_on(index.write(theirs_variant)).unwrap();
+        runtime.block_on(index.write(theirs.clone())).unwrap();
+
+        assert_eq!(
+            compare(&index, &runtime, &ours.hash().digest(), &theirs.hash().digest()),
+            Base {
+                relation: Relation::Apart,
+                distance: None,
+            }
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A version this side cannot read either is a reading that cannot place what it recorded: it says
+    /// nothing about the two rather than calling them separate chains.
+    #[test]
+    fn a_version_this_side_cannot_place_is_not_known() {
+        let (dir, index, versions, runtime) = chain("unknown", 1);
+        let ours: Blake3Hash = [0xD1; 32];
+
+        assert_eq!(
+            compare(&index, &runtime, &ours, &versions[1].hash().digest()),
             Base {
                 relation: Relation::Unknown,
                 distance: None,
             }
         );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

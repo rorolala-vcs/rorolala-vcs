@@ -88,13 +88,18 @@ pub enum Standing {
     Ahead,
 
     /// The Vault has moved on, so what is here is based on a version that has.
+    ///
+    /// This is also the answer when the version the Vault records is not in the index — which is the ordinary
+    /// case, since a fetch brings the Vault's Layout and never its versions. The direction is known from the
+    /// version having come from elsewhere; how far is not, and is asked for by
+    /// `rola_status_standing_distance_of`, which answers nothing for it.
     Behind,
 
     /// Both sides have moved on, so neither is based on the other.
     Apart,
 
-    /// How the two stand is not known here: one of the versions is not in the index, or the reading holds
-    /// no standing for the path at all. A caller that must tell those apart asks the distance: it is zero
+    /// How the two stand is not known here: the version this side records is not in the index, or the reading
+    /// holds no standing for the path at all. A caller that must tell those apart asks the distance: it is zero
     /// for the two being the same, and nothing here is.
     Unknown,
 }

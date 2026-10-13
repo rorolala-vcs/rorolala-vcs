@@ -9,6 +9,7 @@ using RorolalaVCSPlugin;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 using Vcs = global::RorolalaVCSPlugin.RorolalaVCSPlugin;
 using FileIcons = FileSystemPlugin.Icons;
+using VcsIcons = RorolalaVCSPlugin.Icons;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -231,6 +232,90 @@ public sealed class ColumnTests
 
         Assert.False(RorolalaStates.Say(PathState.Lost).Dot);
         Assert.False(RorolalaStates.Say(PathState.Unknown).Dot);
+    }
+
+    /// <summary>The Standing column writes a count where there is one, and says so where there is not.</summary>
+    /// <remarks>
+    /// What the column is for is how far apart the two sides are, and that is a number only while the chain
+    /// that counts is here: a fetch brings the Vault's Layout and never its versions, so being behind is
+    /// ordinarily a direction without a count, and two sides that are not on one chain have no count at all.
+    /// The three are told apart because what a reader does about them differs — one is work to fetch, one is
+    /// work to fetch by an unknown amount, and one cannot be settled by moving anything.
+    /// </remarks>
+    [Fact]
+    public void TheStandingColumnWritesACountWhereThereIsOne()
+    {
+        _ = Host.Services();
+
+        // Ahead and behind are the count the chain gave, with the sign saying which side holds what.
+        var ahead = RorolalaStanding.Say(new Standing(StandingRelation.Ahead, 2));
+        Assert.Equal("+2", ahead.Text);
+        Assert.Equal(RorolalaColours.Untagged, ahead.Colour);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.ahead", 2UL), ahead.Hint);
+
+        var behind = RorolalaStanding.Say(new Standing(StandingRelation.Behind, 1));
+        Assert.Equal("-1", behind.Text);
+        Assert.Equal(RorolalaColours.Wrong, behind.Colour);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.behind", 1UL), behind.Hint);
+
+        // Behind with no count is the dash in the red of what must not be recorded, hovered for which side
+        // holds what — said on itself, since only the reading knows which of the two it is.
+        var untold = RorolalaStanding.Say(new Standing(StandingRelation.Behind, null));
+        Assert.Equal("-", untold.Text);
+        Assert.Equal(RorolalaColours.Wrong, untold.Colour);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.behind_hover"), untold.Hint);
+
+        // Two chains that parted have no number between them at all, which is what the question mark says.
+        var apart = RorolalaStanding.Say(new Standing(StandingRelation.Apart, null));
+        Assert.Equal("?", apart.Text);
+        Assert.Equal(RorolalaColours.Wrong, apart.Colour);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.standing.apart"), apart.Hint);
+
+        // In step, and a standing nothing says: the listing's own dash, and no ink of its own.
+        Assert.Equal("-", RorolalaStanding.Say(new Standing(StandingRelation.Same, 0)).Text);
+        Assert.Equal("-", RorolalaStanding.Say(new Standing(StandingRelation.Unknown, null)).Text);
+        Assert.Null(RorolalaStanding.Say(new Standing(StandingRelation.Same, 0)).Colour);
+    }
+
+    /// <summary>A tile wears an arrow for the direction, and a fork where there is no direction.</summary>
+    /// <remarks>
+    /// The badge is the one thing a tile has room for, so what it says is the direction the work would have to
+    /// move: up for work waiting to be sent, down for work waiting to be fetched, and the fork where the two
+    /// sides have each moved on — which is the one standing no arrow can say.
+    /// </remarks>
+    [Fact]
+    public void ATileWearsAnArrowForTheDirectionAndAForkWhereThereIsNone()
+    {
+        _ = Host.Services();
+
+        var ahead = RorolalaStandingBadge.Say(new Standing(StandingRelation.Ahead, 2));
+        Assert.Equal(VcsIcons.Upload, ahead.IconKey);
+        Assert.Equal(MarkInk.Add, ahead.Ink);
+
+        // Behind is one answer with the count and without it: what a reader does about either is fetch.
+        var behind = RorolalaStandingBadge.Say(new Standing(StandingRelation.Behind, 1));
+        Assert.Equal(VcsIcons.Download, behind.IconKey);
+        Assert.Equal(MarkInk.Error, behind.Ink);
+
+        var untold = RorolalaStandingBadge.Say(new Standing(StandingRelation.Behind, null));
+        Assert.Equal(VcsIcons.Download, untold.IconKey);
+        Assert.Equal(MarkInk.Error, untold.Ink);
+
+        var apart = RorolalaStandingBadge.Say(new Standing(StandingRelation.Apart, null));
+        Assert.Equal(VcsIcons.CallSplit, apart.IconKey);
+        Assert.Equal(MarkInk.Error, apart.Ink);
+
+        // Every one of them is worn on the badge's own ground, since a tile carries marks of several kinds at
+        // once and a bare picture and a badge would be two of them.
+        foreach (var mark in new[] { ahead, behind, untold, apart })
+        {
+            Assert.True(mark.Tagged);
+            Assert.NotNull(mark.HoverKey);
+        }
+
+        // In step, and a standing nothing says: no badge at all.
+        Assert.Null(RorolalaStandingBadge.Say(new Standing(StandingRelation.Same, 0)).IconKey);
+        Assert.Null(RorolalaStandingBadge.Say(new Standing(StandingRelation.Unknown, null)).IconKey);
     }
 
     /// <summary>A column of marks says nothing about an entry by having no mark at all.</summary>

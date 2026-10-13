@@ -241,6 +241,10 @@ pub struct Status {
     /// A path either side names without a version is not here — nothing was ever recorded for it, so there
     /// is nothing to stand beside anything — and neither is a path upstream does not name at all. A reading
     /// made without the copy, the index or a runtime has nothing here, since the walk is what answers it.
+    ///
+    /// The distance is not always there: the version the Vault records is ordinarily one this side never
+    /// fetched, so a path that is behind upstream is a standing with a direction and no count — see
+    /// [`base::compare`].
     standing: Vec<(String, base::Standing)>,
 }
 
@@ -357,7 +361,9 @@ impl Status {
     /// [`Relation::Unknown`] with no distance for a path this reading holds no standing for — one it is not
     /// about, one nothing was ever recorded for, and one upstream does not name. A caller that cannot tell
     /// those apart from a path in step is asking for the distance beside it: in step is a distance of zero
-    /// and nothing else is.
+    /// and nothing else is. Nor is a distance what a path the Vault is ahead on always has: what the Vault is
+    /// at is ordinarily a version this side never fetched, so being behind is answered without one — see
+    /// [`Relation::Behind`](crate::base::Relation).
     #[must_use]
     pub fn standing_of(&self, path: &Path) -> (Relation, Option<u64>) {
         let Some(at) = self.named(path) else {
