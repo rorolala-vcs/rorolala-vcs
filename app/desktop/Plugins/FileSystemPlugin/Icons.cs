@@ -131,14 +131,34 @@ internal static partial class Icons
     private const double MarkShare = 0.42;
     private const double MarkLeast = 12;
 
-    /// <summary>How much of a tag's width is left around the mark drawn inside it, and the least of it.</summary>
+    /// <summary>
+    /// How much of a tag a ball takes, and how much of the ball is left around the picture inside it.
+    /// </summary>
     /// <remarks>
-    /// The mark is a glyph with nothing around it, so a tag holding it at its own size would have the
-    /// glyph running into the tag's edge — which reads as a picture with a border drawn over it rather
-    /// than as a state.
+    /// Three quarters of the square the ground used to be, which is what makes a ball read as the same weight
+    /// as the square it replaces rather than as a smaller mark: a circle is measured across its whole width
+    /// where a square of that width has its corners doing nothing.
+    /// <para>
+    /// The room around the picture is a share of the ball rather than of the icon, since what it has to clear
+    /// is the ball's own line: at this size a fixed few pixels is most of the ball at the smallest zoom and
+    /// nothing at the largest.
+    /// </para>
     /// </remarks>
-    private const double TagInset = 0.16;
-    private const double TagLeast = 3;
+    private const double BallShare = 0.75;
+
+    /// <inheritdoc cref="BallShare" />
+    private const double BallInset = 0.2;
+
+    /// <inheritdoc cref="BallShare" />
+    private const double BallLeast = 2;
+
+    /// <summary>How heavy the ring around a ball is.</summary>
+    /// <remarks>
+    /// Thicker than the hairline a control wears, because a ball is a few pixels across and a line thinner than
+    /// this disappears into the antialiasing at the smallest zoom — and thinner than the border a letter tag
+    /// wears, because at this size that would be a third of the ball.
+    /// </remarks>
+    private const double BallEdge = 1.5;
 
     /// <summary>How much of an icon's width a dot takes, and the least and most it is drawn at.</summary>
     /// <remarks>
@@ -148,9 +168,6 @@ internal static partial class Icons
     private const double DotShare = 0.2;
     private const double DotLeast = 8;
     private const double DotMost = 14;
-
-    /// <summary>The rounding a tag wears, which is the design's radius for a small control.</summary>
-    private static readonly CornerRadius TagCorners = new(5);
 
     /// <summary>
     /// The ground a tagged mark is drawn on, which is the dark one on either look.
@@ -256,34 +273,45 @@ internal static partial class Icons
     public static Control Marked(Control icon, Bitmap mark, int size, EntryLockMark contributed)
     {
         var extent = Mark(size);
-        var inset = Inset(extent);
-        var glyph = Glyph(
-            mark,
-            Ink(contributed.Ink),
-            contributed.Tagged ? extent - (2 * inset) - 2 : extent
-        );
+        var colour = Ink(contributed.Ink);
 
-        Control corner = glyph;
+        Control corner;
 
         if (contributed.Tagged)
         {
-            var tag = new Border
+            // A ball with the picture inside it rather than a rounded square with the picture filling it: the
+            // ground is a thing the mark is worn on, and a ball is the smallest ground a picture can stand on
+            // at this size — a corner is a few pixels across, and a square one reads as a chip of the tile
+            // rather than as a mark laid on it. The ball is smaller than the square it replaces, because the
+            // circle is what is seen where the square's corners were: the same width of ground reads larger
+            // when all of it is away from the tile's corner.
+            var ball = extent * BallShare;
+
+            // The picture is taken off the ball's own edge, and the ball's line is the ground's edge rather
+            // than the picture's: a mark drawn to the very edge of what holds it reads as a picture with a
+            // border drawn over it rather than as a picture inside something.
+            var room = Math.Max(BallLeast, ball * BallInset);
+            var glyph = Glyph(mark, colour, ball - (2 * room));
+            glyph.CornerRadius = new CornerRadius(glyph.Width / 2);
+
+            var worn = new Border
             {
-                Width = extent,
-                Height = extent,
+                Width = ball,
+                Height = ball,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
-                BorderThickness = new Thickness(1),
-                CornerRadius = TagCorners,
-                Padding = new Thickness(inset),
+                // A hairline of the ring, since the ball is a few pixels across: a line as heavy as the
+                // letter tags wear would be a third of the ball and would crowd the picture inside it.
+                BorderThickness = new Thickness(BallEdge),
+                CornerRadius = new CornerRadius(ball / 2),
                 Child = glyph,
             };
             // The ground is the mark's own and always the dark one, whatever the program is drawn on: a badge
             // worn on a picture is part of the picture, and one that turned pale on the light look would be a
             // mark that changed what it is when the user changed their colours. What says which mark it is is
             // the ring and the picture, both in the role's ink.
-            tag.Background = new SolidColorBrush(TagGround);
-            tag[!Border.BorderBrushProperty] = new DynamicResourceExtension(Ink(contributed.Ink));
+            worn.Background = new SolidColorBrush(TagGround);
+            worn[!Border.BorderBrushProperty] = new DynamicResourceExtension(colour);
 
             // The ink the badge is drawn in is the dark look's, whatever the program is drawn on: the ground
             // is the dark one, so the colour that reads on it is the one the dark look holds — a mark that took
@@ -292,13 +320,15 @@ internal static partial class Icons
             corner = new ThemeVariantScope
             {
                 RequestedThemeVariant = ThemeVariant.Dark,
-                Child = tag,
+                Child = worn,
             };
         }
         else
         {
+            var glyph = Glyph(mark, colour, extent);
             glyph.HorizontalAlignment = HorizontalAlignment.Right;
             glyph.VerticalAlignment = VerticalAlignment.Top;
+            corner = glyph;
         }
 
         // What the corner stands for is said in words when the pointer rests on it: the corner is a picture of a
@@ -435,11 +465,6 @@ internal static partial class Icons
     /// <param name="size">How many pixels wide and tall the icon is.</param>
     /// <returns>How many pixels wide and tall the dot is.</returns>
     public static double DotExtent(int size) => Math.Clamp(size * DotShare, DotLeast, DotMost);
-
-    /// <summary>How many pixels a tag leaves around the mark drawn inside it.</summary>
-    /// <param name="extent">How many pixels wide and tall the tag is.</param>
-    /// <returns>How many pixels of inset it wears.</returns>
-    private static double Inset(double extent) => Math.Max(TagLeast, extent * TagInset);
 
     /// <summary>
     /// The resource a tag's ground is drawn from: the wash of the ink it is edged in.
