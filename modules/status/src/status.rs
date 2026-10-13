@@ -23,6 +23,7 @@ use rorolala_vcs::VCSIndex;
 use rorolala_workspace::{Merging, Pending, Workspace};
 
 use crate::base;
+use crate::base::Relation;
 use crate::{tracked_vault, unowned, variant_moves, vault_copy};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
@@ -229,6 +230,18 @@ pub struct Status {
     /// of [`modified`](Self::modified), and a path is in it only when the index could say how the two
     /// versions stand: a version this side never had is not a base known to be wrong.
     pub wrong_base: Vec<String>,
+
+    /// Every path this Layout records a version for, and how that version stands beside the one the
+    /// fetched copy of the Vault's Layout records.
+    ///
+    /// It is what the two sides being in step or not is read from, which is not the same question as
+    /// whether a change is based on something wrong: a path that is ahead is ordinary work the other side
+    /// has not been told of, and one that is behind is work it has not been given.
+    ///
+    /// A path either side names without a version is not here — nothing was ever recorded for it, so there
+    /// is nothing to stand beside anything — and neither is a path upstream does not name at all. A reading
+    /// made without the copy, the index or a runtime has nothing here, since the walk is what answers it.
+    standing: Vec<(String, base::Standing)>,
 }
 
 impl Status {
@@ -288,6 +301,15 @@ impl Status {
             runtime.as_ref(),
         );
 
+        // Where every recorded path stands beside the Vault's own, which is one walk of the chain per path.
+        // A reading without the copy, the index or a runtime has none of them: how two versions stand is not
+        // known without the chain, and a reading that guessed would be saying something it does not hold.
+        let standing = match (index, runtime.as_ref()) {
+            (Some(index), Some(runtime)) => vault_copy(workspace, layout)
+                .map_or_else(Vec::new, |copy| base::every(layout, &copy, index, runtime)),
+            _ => Vec::new(),
+        };
+
         Ok(Self {
             root: normalize(workspace.get_root()),
             lost: diff
@@ -322,7 +344,32 @@ impl Status {
             merging,
             broken,
             wrong_base: wrong_base(workspace, layout, index, runtime.as_ref(), &modified),
+            standing: standing
+                .into_iter()
+                .map(|(path, standing)| (path.as_str().to_owned(), standing))
+                .collect(),
         })
+    }
+
+    /// How the version recorded for `path` stands beside the one the Vault's copy records.
+    ///
+    /// The path is one a caller names, as [`state_of`](Self::state_of) takes it, and the answer is
+    /// [`Relation::Unknown`] with no distance for a path this reading holds no standing for — one it is not
+    /// about, one nothing was ever recorded for, and one upstream does not name. A caller that cannot tell
+    /// those apart from a path in step is asking for the distance beside it: in step is a distance of zero
+    /// and nothing else is.
+    #[must_use]
+    pub fn standing_of(&self, path: &Path) -> (Relation, Option<u64>) {
+        let Some(at) = self.named(path) else {
+            return (Relation::Unknown, None);
+        };
+
+        self.standing
+            .iter()
+            .find(|(named, _)| named == at.as_str())
+            .map_or((Relation::Unknown, None), |(_, standing)| {
+                (standing.relation, standing.distance)
+            })
     }
 
     /// What the reading says about the entry at `path`, in one word.

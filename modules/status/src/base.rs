@@ -91,6 +91,56 @@ pub fn compare(
     }
 }
 
+/// How one path's version stands beside the one upstream records, and how many versions apart they are.
+///
+/// It is [`compare`]'s answer named for what a reader of a *path* asks, which is not what a reader of two
+/// versions asks: a path whose version is the same has nothing to say about itself, and one whose standing
+/// is not known here is not the same as one that is in step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Standing {
+    /// Where the two stand.
+    pub relation: Relation,
+
+    /// How many versions apart they are, when the chain says; nothing when it does not.
+    pub distance: Option<u64>,
+}
+
+/// How every version this Layout records stands beside the one upstream records for the same entry.
+///
+/// A path this side records and upstream does not name is left out: there is no version to be beside, and
+/// nothing there for a record to be based on. So is one either side names without a version, which is an
+/// entry that was never recorded rather than one that is behind.
+///
+/// This is the whole of what [`wrong_base`] is a filter of, and it is read the same way — one walk of the
+/// chain per path, which is what the command line already pays for every path it draws.
+#[must_use]
+pub fn every(
+    local: &Layout,
+    copy: &Layout,
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+) -> Vec<(LayoutPath, Standing)> {
+    local
+        .paths()
+        .into_iter()
+        .filter_map(|(path, id)| {
+            let (Some(local), Some(upstream)) = (version_of(local, id), version_of(copy, id)) else {
+                return None;
+            };
+
+            let base = compare(index, runtime, &local, &upstream);
+
+            Some((
+                path,
+                Standing {
+                    relation: base.relation,
+                    distance: base.distance,
+                },
+            ))
+        })
+        .collect()
+}
+
 /// The paths among `paths` whose version stands behind or apart from the one upstream records.
 ///
 /// These are the changes made against a version the other side is not at: what is recorded here would be
@@ -107,6 +157,24 @@ pub fn wrong_base(
     runtime: &tokio::runtime::Runtime,
     paths: &[LayoutPath],
 ) -> Vec<String> {
+    wrong(local, copy, index, runtime, paths)
+        .into_iter()
+        .map(|path| path.as_str().to_owned())
+        .collect()
+}
+
+/// The same, as the paths themselves rather than as their names.
+///
+/// Split out because [`Status::read`](crate::Status) wants the paths and the command line wants the names:
+/// answering one with the other would be a second copy of the walk, and the walk is the expensive half.
+#[must_use]
+pub fn wrong(
+    local: &Layout,
+    copy: &Layout,
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    paths: &[LayoutPath],
+) -> Vec<LayoutPath> {
     paths
         .iter()
         .filter(|path| {
@@ -123,7 +191,7 @@ pub fn wrong_base(
                 Relation::Behind | Relation::Apart
             )
         })
-        .map(|path| path.as_str().to_owned())
+        .cloned()
         .collect()
 }
 

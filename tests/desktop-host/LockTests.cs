@@ -16,7 +16,11 @@ namespace RorolalaDesktopHost.IntegrationTests;
 public sealed class LockTests
 {
     /// <summary>Begins each test from no provider at all.</summary>
-    public LockTests() => EntryLockProviders.Clear();
+    public LockTests()
+    {
+        EntryLockProviders.Clear();
+        EntryMarkProviders.Clear();
+    }
 
     /// <summary>
     /// A mark says its literal first, and nothing at all when it has neither.
@@ -29,10 +33,10 @@ public sealed class LockTests
     [Fact]
     public void AMarkSaysItsLiteralBeforeItsKey()
     {
-        Assert.Equal("alice", new EntryLockMark(Text: "alice").Said());
-        Assert.Equal("alice", new EntryLockMark(TextKey: "it.lock.mine", Text: "alice").Said());
-        Assert.Null(new EntryLockMark().Said());
-        Assert.Null(new EntryLockMark(Text: "", TextKey: "").Said());
+        Assert.Equal("alice", new EntryMark(Text: "alice").Said());
+        Assert.Equal("alice", new EntryMark(TextKey: "it.lock.mine", Text: "alice").Said());
+        Assert.Null(new EntryMark().Said());
+        Assert.Null(new EntryMark(Text: "", TextKey: "").Said());
     }
 
     /// <summary>
@@ -45,8 +49,8 @@ public sealed class LockTests
     [Fact]
     public void AMarkWithoutAPhraseIsHoveredForWhatItSays()
     {
-        Assert.Equal("alice", new EntryLockMark(Text: "alice").Hover());
-        Assert.Null(new EntryLockMark().Hover());
+        Assert.Equal("alice", new EntryMark(Text: "alice").Hover());
+        Assert.Null(new EntryMark().Hover());
     }
 
     /// <summary>A provider is the one a listing asks only for the directory it speaks for.</summary>
@@ -147,7 +151,7 @@ public sealed class LockTests
         public bool Applies(string at) => string.Equals(at, directory, StringComparison.Ordinal);
 
         /// <inheritdoc />
-        public EntryLockMark Mark(Entry entry) => new(TextKey: "it.lock.mine", Ink: MarkInk.Accent);
+        public EntryMark Mark(Entry entry) => new(TextKey: "it.lock.mine", Ink: MarkInk.Accent);
 
         /// <inheritdoc />
         public void Forget() => Forgotten++;

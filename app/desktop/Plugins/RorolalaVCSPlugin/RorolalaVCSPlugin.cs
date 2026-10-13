@@ -40,7 +40,7 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // them as it draws, so a colour chosen there is a colour the next pill or dot is drawn in.
         RorolalaColours.Declare(host.Config);
 
-        // And what the work holds: the Ownership column of a directory listing, and the corner a
+        // And what the work holds: the Ownership column of a directory listing, and the badge a
         // locked tile wears. It is this plugin's to answer rather than the File System plugin's,
         // because who holds an entry is Rorolala's question and the answer comes through the C ABI.
         RorolalaLocks.Declare(host);

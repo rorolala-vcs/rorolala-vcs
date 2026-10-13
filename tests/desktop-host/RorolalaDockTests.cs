@@ -19,7 +19,11 @@ namespace RorolalaDesktopHost.IntegrationTests;
 public sealed class RorolalaDockTests
 {
     /// <summary>Begins each test from no lock provider at all, since starting the plugin adds one.</summary>
-    public RorolalaDockTests() => EntryLockProviders.Clear();
+    public RorolalaDockTests()
+    {
+        EntryLockProviders.Clear();
+        EntryMarkProviders.Clear();
+    }
 
     /// <summary>The plugin adds one dock for each view of the work, named and titled apart.</summary>
     [Fact]
@@ -277,10 +281,12 @@ public sealed class RorolalaDockTests
         Assert.Equal(("merge/file.txt", "merge/file.1a2b3c4.txt"), (rows[2].From, rows[2].To));
 
         // What the Layout names and the tree has lost comes from a path and goes nowhere, and what the tree
-        // holds and the Layout does not name is the other way round. A move is read after both, since what it
-        // says is where a file went rather than that one is missing.
+        // holds and the Layout does not name is read the same way round rather than the other: an untagged
+        // entry names no path the Layout has, so which column carries it is the table's choice and not the
+        // reading's, and it is written where what the Layout names goes. A move is read after both, since what
+        // it says is where a file went rather than that one is missing.
         Assert.Equal(("gone.txt", string.Empty), (rows[3].From, rows[3].To));
-        Assert.Equal((string.Empty, "new.txt"), (rows[4].From, rows[4].To));
+        Assert.Equal(("new.txt", string.Empty), (rows[4].From, rows[4].To));
         Assert.Equal(("a.txt", "b.txt"), (rows[5].From, rows[5].To));
 
         Assert.Equal(("kept.txt", string.Empty), (rows[6].From, rows[6].To));

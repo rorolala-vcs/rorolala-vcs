@@ -193,6 +193,38 @@ rorolala_vcs:
     en: Upstream
     zh-CN: 上游
 
+  # What the Standing column is headed: how far the version recorded for the entry is from the one the Vault
+  # records. It is a number rather than a word — `+2` for two versions this side has that upstream has not
+  # been told of, `-1` for one upstream has that this side has not fetched — so what the sign means is said
+  # here rather than in the column.
+  column_standing:
+    en: Standing
+    zh-CN: 领先
+
+  # What the cell of that column says when the pointer rests on it, and what the corner of a tile says. The
+  # count is the same number the cell holds, written out in words, because what a reader wants from the cell is
+  # how far and from the hover is which way; the corner has no room for a number, so its own words say only the
+  # direction the work would have to move.
+  standing:
+    ahead:
+      en: "%{count} versions ahead of upstream"
+      zh-CN: 领先上游 %{count} 个版本
+    behind:
+      en: "%{count} versions behind upstream"
+      zh-CN: 落后上游 %{count} 个版本
+    apart:
+      en: Both sides have moved on, so neither is based on the other
+      zh-CN: 两边都往前走了，互不基于对方
+    ahead_hover:
+      en: This side has versions the Vault has not been told of
+      zh-CN: 这边有 Vault 还不知道的版本
+    behind_hover:
+      en: The Vault has versions this side has not fetched
+      zh-CN: Vault 有这边还没取的版本
+    apart_hover:
+      en: Both sides have moved on, so work has to come this way
+      zh-CN: 两边都往前走了，得先取这边的
+
   # What one file of the work is, in a word. These are what the mark beside a name says when the pointer
   # rests on it rather than what is written in a column: a file is in one of a handful of states, and which
   # one is read from the colour of the mark before any word of it is read. The words are the listing's own

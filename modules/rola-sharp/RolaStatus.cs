@@ -110,6 +110,49 @@ public enum PathState
 public sealed record BrokenReason(BrokenKind Kind, string What, string Target);
 
 /// <summary>
+/// How the version recorded for a path stands beside the one upstream records.
+/// </summary>
+/// <remarks>
+/// It is <see cref="PathState"/>'s shape and not its subject: a path's <em>state</em> is what is wrong with
+/// it, and its <em>standing</em> is how far it is from what the Vault has. A path may be in either without
+/// the other — one that is in step and one that was never recorded are both nothing to act on — so the two
+/// are asked separately.
+/// </remarks>
+public enum StandingRelation
+{
+    /// <summary>The two are the same version, so there is nothing between them and nothing to tell.</summary>
+    Same,
+
+    /// <summary>This side records work the Vault has not been told of.</summary>
+    Ahead,
+
+    /// <summary>The Vault has moved on, so what is here is based on a version that has.</summary>
+    Behind,
+
+    /// <summary>Both sides have moved on, so neither is based on the other.</summary>
+    Apart,
+
+    /// <summary>
+    /// How the two stand is not known here: one of the versions is not in the index, the reading was made
+    /// without the Vault's copy, or the path is one this reading is not about at all.
+    /// </summary>
+    /// <remarks>
+    /// A caller that has to tell those apart asks the distance beside it: zero is the two being the same
+    /// version, and nothing at all is a standing that is not known.
+    /// </remarks>
+    Unknown,
+}
+
+/// <summary>How one path stands beside upstream, and how many versions apart the two are.</summary>
+/// <param name="Relation">Where the two stand.</param>
+/// <param name="Distance">
+/// How many versions apart they are, or nothing when the chain does not say — which includes both a standing
+/// that is <see cref="StandingRelation.Unknown"/> and one that is <see cref="StandingRelation.Apart"/>, where
+/// the two have moved on from each other and neither is a distance from the other.
+/// </param>
+public sealed record Standing(StandingRelation Relation, ulong? Distance);
+
+/// <summary>
 /// How the working tree stands beside the Layout it works from.
 /// </summary>
 /// <remarks>
@@ -315,7 +358,43 @@ public sealed class RolaStatus : IDisposable
         }
     }
 
-    /// <summary>Gives the native reading back.</summary>
+    /// <summary>
+    /// How the version recorded for the entry at a path stands beside the one upstream records.
+    /// </summary>
+    /// <remarks>
+    /// A path outside the Workspace, one nothing was ever recorded for, and one upstream does not name are
+    /// all answered <see cref="StandingRelation.Unknown"/>: what tells those apart from a path in step is the
+    /// distance, which is zero for the two being the same and nothing otherwise.
+    /// </remarks>
+    /// <param name="path">The path of the entry, as the program names it.</param>
+    /// <returns>Where the two stand, and how many versions apart they are when the chain says.</returns>
+    public Standing StandingOf(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ObjectDisposedException.ThrowIf(_handle == 0, this);
+
+        var utf8 = Marshal.StringToCoTaskMemUTF8(path);
+
+        try
+        {
+            // The distance is a signed number on the other side, where a negative one is "nothing says how
+            // far": C has no `Option`, so the two answers are told apart by the sign rather than by a second
+            // value. Zero is kept as a distance rather than read as "none", since it is what says the two are
+            // the same version where the relation alone would have said the standing is not known.
+            var distance = RorolalaBinding.rola_status_standing_distance_of(_handle, utf8);
+
+            return new Standing(
+                (StandingRelation)RorolalaBinding.rola_status_standing_of(_handle, utf8),
+                distance < 0 ? null : (ulong)distance
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(utf8);
+        }
+    }
+
+/// <summary>Gives the native reading back.</summary>
     public void Dispose()
     {
         // Nothing to give back the second time, and nothing was lost the first: the handle is forgotten as

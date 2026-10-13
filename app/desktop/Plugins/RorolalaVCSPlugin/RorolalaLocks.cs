@@ -5,7 +5,7 @@ using RorolalaDesktop.Contract;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// Rorolala's answer to who holds an entry: the Ownership column, and the corner a locked tile wears.
+/// Rorolala's answer to who holds an entry: the Ownership column, and the badge a locked tile wears.
 /// </summary>
 /// <remarks>
 /// What it reads is the Vault copy the Workspace has fetched, through <see cref="OwnershipReadings"/> —
@@ -21,7 +21,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// <summary>The i18n key a held-by-you cell reads as.</summary>
     private const string Mine = "rorolala_vcs.ownership.mine";
 
-    /// <summary>The phrase the corner of a lock is hovered for, with the holder's name in it.</summary>
+    /// <summary>The phrase the badge of a lock is hovered for, with the holder's name in it.</summary>
     private const string HeldBy = "rorolala_vcs.ownership.held_by";
 
     /// <summary>What the Vault copy says about the entries being listed.</summary>
@@ -41,15 +41,15 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     public bool Applies(string directory) => _readings.Knows(directory);
 
     /// <inheritdoc />
-    public EntryLockMark Mark(Entry entry) =>
+    public EntryMark Mark(Entry entry) =>
         _readings.Lock(entry) switch
         {
             // Held by the reader, which is the pencil: holding it is what makes it theirs to change, and the
-            // corner says so in the green the look uses for what has come in, worn as a tag the way another
-            // account's lock is — the two are the two answers to the same question, so they are drawn the same
-            // way round. The words stay in the ordinary ink, since "you" is a name like any other and a column
-            // that shouted it would shout every row it holds.
-            { Kind: EntryLockKind.Mine } => new EntryLockMark(
+            // badge says so in the green the look uses for what has come in, worn on the dark ground the way
+            // another account's lock is — the two are the two answers to the same question, so they are drawn
+            // the same way round. The words stay in the ordinary ink, since "you" is a name like any other and
+            // a column that shouted it would shout every row it holds.
+            { Kind: EntryLockKind.Mine } => new EntryMark(
                 TextKey: Mine,
                 IconKey: Icons.Create,
                 Ink: MarkInk.Add,
@@ -58,10 +58,10 @@ internal sealed class RorolalaLocks : IEntryLockProvider
             ),
 
             // Held by somebody else, which is the lock: the one answer on the card that is not the
-            // reader's, so it is drawn in the error red and worn as a tag, the way the shell draws a
-            // state. The words name whoever holds it, in the same red — and the corner, which is only a
+            // reader's, so it is drawn in the error red and worn on the dark ground, the way the shell draws a
+            // state. The words name whoever holds it, in the same red — and the badge, which is only a
             // picture of a lock, is hovered for the phrase that name goes in.
-            { Kind: EntryLockKind.Held, Holder: { Length: > 0 } holder } => new EntryLockMark(
+            { Kind: EntryLockKind.Held, Holder: { Length: > 0 } holder } => new EntryMark(
                 Text: holder,
                 IconKey: Icons.Lock,
                 Ink: MarkInk.Error,
@@ -71,7 +71,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
             ),
 
             // Nobody holds it, or nothing says: the same thing to a reader, and the same cell.
-            _ => new EntryLockMark(Text: Nothing),
+            _ => new EntryMark(Text: Nothing),
         };
 
     /// <summary>
@@ -87,13 +87,27 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         // One set of readings for both of this plugin's contributions: who holds an entry and where
         // upstream names it are read from the same two Layouts, and asking twice would open them twice.
         var readings = new OwnershipReadings(host.Log);
+        var locks = new RorolalaLocks(readings);
 
-        EntryLockProviders.Register(new RorolalaLocks(readings));
+        // The same answer is a tile's badge as well as the list's column, so it is contributed as both: a
+        // badge is one of the marks a tile wears, and the ownership column is drawn from the provider rather
+        // than from the badge.
+        EntryLockProviders.Register(locks);
+        EntryMarkProviders.Register(locks);
         EntryColumns.Register(new RorolalaUpstream(readings));
 
-        // The State column reads the work itself rather than the Vault's copy the two above read, so it keeps
-        // a reading of its own.
-        EntryColumns.Register(new RorolalaStates(host.Log));
+        // The State mark and the column saying how far a path is from upstream are both read from the work
+        // itself rather than from the Vault's copy the two above read, so they share a set of readings of
+        // their own: one reading of a directory answers both columns, and the badge too.
+        var statuses = new StatusReadings(host.Log);
+
+        EntryColumns.Register(new RorolalaStates(statuses));
+        EntryColumns.Register(new RorolalaStanding(statuses));
+
+        // How far a version has come is a different question about the same file as who holds it, so it is a
+        // badge of its own, worn after the lock: a file may be somebody else's and be behind, and neither
+        // answer may hide the other.
+        EntryMarkProviders.Register(new RorolalaStandingBadge(statuses));
 
         // Nothing is subscribed to here for letting go of what was read: the File System plugin says
         // when the files may have changed — after an operation of its own, and when the window is come

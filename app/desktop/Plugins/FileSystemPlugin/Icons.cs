@@ -122,34 +122,17 @@ internal static partial class Icons
         return Math.Max(Step, rounded);
     }
 
-    /// <summary>How much of an icon's width a mark takes, and the least it is drawn at.</summary>
-    /// <remarks>
-    /// A share of the icon rather than a size, because a tile's icon follows the zoom and a mark of
-    /// a fixed size would be lost on a large icon and cover a small one. The least is what keeps it
-    /// drawable at the smallest a list row ever is.
-    /// </remarks>
-    private const double MarkShare = 0.42;
-    private const double MarkLeast = 12;
-
     /// <summary>
-    /// How much of a tag a ball takes, and how much of the ball is left around the picture inside it.
+    /// How much of a badge is left around the picture inside it.
     /// </summary>
     /// <remarks>
-    /// Three quarters of the square the ground used to be, which is what makes a ball read as the same weight
-    /// as the square it replaces rather than as a smaller mark: a circle is measured across its whole width
-    /// where a square of that width has its corners doing nothing.
-    /// <para>
-    /// The room around the picture is a share of the ball rather than of the icon, since what it has to clear
-    /// is the ball's own line: at this size a fixed few pixels is most of the ball at the smallest zoom and
-    /// nothing at the largest.
-    /// </para>
+    /// The room around the picture is a share of the badge rather than of the icon, since what it has to clear
+    /// is the badge's own line: at this size a fixed few pixels is most of the badge at the smallest zoom and
+    /// nothing at the largest. The least is what keeps a picture to be drawn at all on the smallest badge.
     /// </remarks>
-    private const double BallShare = 0.75;
-
-    /// <inheritdoc cref="BallShare" />
     private const double BallInset = 0.2;
 
-    /// <inheritdoc cref="BallShare" />
+    /// <inheritdoc cref="BallInset" />
     private const double BallLeast = 2;
 
     /// <summary>How heavy the ring around a ball is.</summary>
@@ -252,58 +235,85 @@ internal static partial class Icons
     }
 
     /// <summary>
-    /// An entry's icon with the lock its provider contributed at the top-right corner.
+    /// An entry's icon with the badges its contributions asked for around the top right corner.
     /// </summary>
     /// <remarks>
-    /// The picture is drawn as a mask over a coloured ground rather than as a picture, so that it
-    /// takes the ink the theme gives it: a picture carries whatever colours it was drawn with, and a
-    /// mark that had to be drawn once per colour would be a mark per theme.
+    /// Every contribution that speaks for the entry is worn at once, numbered the way it was registered: two
+    /// badges say two different things — who holds the entry, and how far its version has come — and neither
+    /// is the other's to replace.
     /// <para>
-    /// A mark the contribution asked to have tagged is drawn the way the shell draws a state — a wash
-    /// of the ink with the ink's own edge, which is how the plugin manager draws a plugin that failed —
-    /// so that a corner saying an entry is somebody else's reads as an answer rather than as another
-    /// icon beside the file's own.
+    /// The picture is drawn as a mask over a coloured ground rather than as a picture, so that it takes the
+    /// ink the theme gives it: a picture carries whatever colours it was drawn with, and a mark that had to be
+    /// drawn once per colour would be a mark per theme.
+    /// </para>
+    /// <para>
+    /// A mark the contribution asked to have tagged is drawn on the dark ground a badge wears, which is how
+    /// the shell draws a state, so that a badge saying an entry is somebody else's reads as an answer rather
+    /// than as another icon beside the file's own.
     /// </para>
     /// </remarks>
     /// <param name="icon">What the entry is drawn as.</param>
-    /// <param name="mark">The picture to stamp on it.</param>
+    /// <param name="badges">What the contributions said, in the order the badges are numbered.</param>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
-    /// <param name="contributed">What the provider said about the entry.</param>
-    /// <returns>The icon and its mark, as one thing to draw.</returns>
-    public static Control Marked(Control icon, Bitmap mark, int size, EntryLockMark contributed)
+    /// <returns>The icon and its badges, as one thing to draw.</returns>
+    public static Control Marked(Control icon, IReadOnlyList<EntryBadge> badges, int size)
     {
-        var extent = Mark(size);
-        var colour = Ink(contributed.Ink);
+        ArgumentNullException.ThrowIfNull(icon);
+        ArgumentNullException.ThrowIfNull(badges);
 
-        Control corner;
-
-        if (contributed.Tagged)
+        // Nothing contributed is nothing drawn: an icon that wore an empty panel would be one the layout has
+        // to place for an answer that is not there.
+        if (badges.Count == 0)
         {
-            // A ball with the picture inside it rather than a rounded square with the picture filling it: the
-            // ground is a thing the mark is worn on, and a ball is the smallest ground a picture can stand on
-            // at this size — a corner is a few pixels across, and a square one reads as a chip of the tile
-            // rather than as a mark laid on it. The ball is smaller than the square it replaces, because the
-            // circle is what is seen where the square's corners were: the same width of ground reads larger
-            // when all of it is away from the tile's corner.
-            var ball = extent * BallShare;
+            return icon;
+        }
 
-            // The picture is taken off the ball's own edge, and the ball's line is the ground's edge rather
+        var arc = new BadgeArc();
+
+        // Only the first of them are worn. Past that the arc cannot tell one badge from its neighbour, and
+        // what it cannot tell is not worn rather than worn on top of another (see BadgeArc.Most).
+        for (var at = 0; at < BadgeArc.Worn(badges.Count); at++)
+        {
+            arc.Children.Add(Badge(badges[at], size));
+        }
+
+        var grid = new Grid { Width = size, Height = size };
+        grid.Children.Add(icon);
+        grid.Children.Add(arc);
+
+        return grid;
+    }
+
+    /// <summary>
+    /// One badge drawn: the picture on the ground it was asked to wear, or bare in the ink.
+    /// </summary>
+    /// <param name="badge">The picture and what the contribution said about the entry.</param>
+    /// <param name="size">How many pixels wide and tall the icon is.</param>
+    /// <returns>What to stand on the arc.</returns>
+    private static Control Badge(EntryBadge badge, int size)
+    {
+        var extent = BadgeArc.Extent(size);
+        var colour = Ink(badge.Mark.Ink);
+
+        Control drawn;
+
+        if (badge.Mark.Tagged)
+        {
+            // The picture is taken off the badge's own edge, and the badge's line is the ground's edge rather
             // than the picture's: a mark drawn to the very edge of what holds it reads as a picture with a
             // border drawn over it rather than as a picture inside something.
-            var room = Math.Max(BallLeast, ball * BallInset);
-            var glyph = Glyph(mark, colour, ball - (2 * room));
+            var room = Math.Max(BallLeast, extent * BallInset);
+            var glyph = Glyph(badge.Picture, colour, extent - (2 * room));
             glyph.CornerRadius = new CornerRadius(glyph.Width / 2);
 
             var worn = new Border
             {
-                Width = ball,
-                Height = ball,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-                // A hairline of the ring, since the ball is a few pixels across: a line as heavy as the
-                // letter tags wear would be a third of the ball and would crowd the picture inside it.
+                Width = extent,
+                Height = extent,
+                // A hairline of the ring, since the badge is a few pixels across: a line as heavy as the
+                // letter tags wear would be a third of the badge and would crowd the picture inside it.
                 BorderThickness = new Thickness(BallEdge),
-                CornerRadius = new CornerRadius(ball / 2),
+                CornerRadius = new CornerRadius(extent / 2),
                 Child = glyph,
             };
             // The ground is the mark's own and always the dark one, whatever the program is drawn on: a badge
@@ -317,7 +327,7 @@ internal static partial class Icons
             // is the dark one, so the colour that reads on it is the one the dark look holds — a mark that took
             // the light look's darker ink would be a dark lock on a dark badge. Asked for as a scope rather
             // than as a second set of colours, so that what the ink is stays the look's to say.
-            corner = new ThemeVariantScope
+            drawn = new ThemeVariantScope
             {
                 RequestedThemeVariant = ThemeVariant.Dark,
                 Child = worn,
@@ -325,25 +335,18 @@ internal static partial class Icons
         }
         else
         {
-            var glyph = Glyph(mark, colour, extent);
-            glyph.HorizontalAlignment = HorizontalAlignment.Right;
-            glyph.VerticalAlignment = VerticalAlignment.Top;
-            corner = glyph;
+            drawn = Glyph(badge.Picture, colour, extent);
         }
 
-        // What the corner stands for is said in words when the pointer rests on it: the corner is a picture of a
-        // lock, and who holds an entry is a name rather than a picture. Set on whatever was finally drawn — the
-        // tag when there is one — so that the whole of it answers rather than the glyph inside it.
-        if (contributed.Hover() is { Length: > 0 } hover)
+        // What the badge stands for is said in words when the pointer rests on it: the badge is a picture, and
+        // who holds an entry is a name rather than a picture. Set on whatever was finally drawn — the ground
+        // when there is one — so that the whole of it answers rather than the glyph inside it.
+        if (badge.Mark.Hover() is { Length: > 0 } hover)
         {
-            ToolTip.SetTip(corner, hover);
+            ToolTip.SetTip(drawn, hover);
         }
 
-        var grid = new Grid { Width = size, Height = size };
-        grid.Children.Add(icon);
-        grid.Children.Add(corner);
-
-        return grid;
+        return drawn;
     }
 
     /// <summary>
@@ -444,18 +447,13 @@ internal static partial class Icons
         return glyph;
     }
 
-    /// <summary>How many pixels a lock mark is at an icon of `size`.</summary>
-    /// <param name="size">How many pixels wide and tall the icon is.</param>
-    /// <returns>How many pixels wide and tall the mark is.</returns>
-    private static double Mark(int size) => Math.Max(MarkLeast, size * MarkShare);
-
     /// <summary>
     /// How large a dot is at an icon of `size`.
     /// </summary>
     /// <remarks>
-    /// Smaller than a corner mark and never larger than a mark of its own: a dot is a mark rather than a
-    /// mark's ground, so it grows with the icon only until it is big enough to read, and a tile at the
-    /// largest zoom wears a dot the size of the one at the smallest.
+    /// Smaller than a badge and never larger than a mark of its own: a dot is a mark rather than a mark's
+    /// ground, so it grows with the icon only until it is big enough to read, and a tile at the largest zoom
+    /// wears a dot the size of the one at the smallest.
     /// <para>
     /// Read by the view as well as by the dot, because what the dot takes off what stands beside it is room
     /// the view has to work out before the layout does: a thing measured wider than it is arranged is a thing

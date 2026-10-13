@@ -29,6 +29,12 @@ internal static partial class Icons
     /// <summary>The key the `refresh` picture is held under.</summary>
     public const string Refresh = "rorolala_vcs.refresh";
 
+    /// <summary>The key the `upload` picture is held under.</summary>
+    public const string Upload = "rorolala_vcs.upload";
+
+    /// <summary>The key the `download` picture is held under.</summary>
+    public const string Download = "rorolala_vcs.download";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -39,5 +45,7 @@ internal static partial class Icons
         (Warning, "warning"),
         (LiveHelp, "live_help"),
         (Refresh, "refresh"),
+        (Upload, "upload"),
+        (Download, "download"),
     ];
 }

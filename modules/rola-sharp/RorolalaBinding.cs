@@ -605,6 +605,42 @@ internal enum RolaStatusBroken : int
 }
 
 /// <summary>
+/// How the version recorded for a path stands beside the one upstream records, as C reads it.
+///
+/// One variant per standing, which is [`PathState`]'s shape and not its subject: a path's *state* is what
+/// is wrong with it, and its *standing* is how far it is from what the Vault has. A path may be in either
+/// without the other — a file that is in step and a file that was never recorded are both nothing to act
+/// on — so the two are asked separately.
+///
+/// The distance is not part of this by value: it is asked for by `rola_status_standing_distance_of`, which
+/// answers how many versions apart the two are, or a negative number when nothing says. See that function
+/// for what a caller has to ask in what order.
+/// </summary>
+internal enum RolaStanding : int
+{
+    /// <summary>
+    /// The two are the same version, so there is nothing between them and nothing to tell.
+    /// </summary>
+    RolaStanding_Same = 0,
+    /// <summary>
+    /// This side records work the Vault has not been told of.
+    /// </summary>
+    RolaStanding_Ahead = 1,
+    /// <summary>
+    /// The Vault has moved on, so what is here is based on a version that has.
+    /// </summary>
+    RolaStanding_Behind = 2,
+    /// <summary>
+    /// Both sides have moved on, so neither is based on the other.
+    /// </summary>
+    RolaStanding_Apart = 3,
+    /// <summary>
+    /// How the two stand is not known here: one of the versions is not in the index, or the reading holds
+    /// </summary>
+    RolaStanding_Unknown = 4,
+}
+
+/// <summary>
 /// What one path of the work is, as a reading says it in a word.
 ///
 /// One variant by value, and no others: nothing about a path is [`PathState::Unknown`].
@@ -1347,6 +1383,9 @@ internal static partial class RorolalaBinding
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_status_broken(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_standing(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_path_state(nint value);
@@ -2188,6 +2227,29 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RolaPathState rola_status_state_of(nint self, nint path);
+
+    /// <summary>
+    /// How the version recorded for a path stands beside the one upstream records.
+    ///
+    /// A [`Standing`] by value, which is `Unknown` for a path this reading holds no standing for: one it is
+    /// not about, one nothing was ever recorded for, and one upstream does not name. `Same` and `Unknown`
+    /// are told apart by `rola_status_standing_distance_of`, which is zero for the first and negative for
+    /// the second.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaStanding rola_status_standing_of(nint self, nint path);
+
+    /// <summary>
+    /// How many versions apart the path named is from the one upstream records.
+    ///
+    /// A signed number rather than an `Option`, because C has no `Option` and this is one number: a negative
+    /// answer is "nothing says how far", and zero is "they are the same version", which is the one distance
+    /// that is not a count of anything. A caller wanting to tell "in step" from "not known" reads this
+    /// rather than the standing, since both of those are answered `Unknown` above — in step because there is
+    /// nothing to act on, and not known because the chain is not here.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern long rola_status_standing_distance_of(nint self, nint path);
 
     /// <summary>
     /// Creates a Vault in the specified directory

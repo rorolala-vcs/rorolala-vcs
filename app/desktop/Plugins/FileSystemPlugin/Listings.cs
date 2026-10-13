@@ -2164,16 +2164,27 @@ internal sealed class ListBrowser : EntryView
     }
 
     /// <summary>What one entry's cell in a contributed column that is words is written as.</summary>
+    /// <remarks>
+    /// The ink is the contribution's to name and this plugin's to resolve: a column drawn in a colour the
+    /// contribution picked for itself would be a colour the look does not hold, which is a column that
+    /// vanishes somewhere the theme is another — unless the contribution has a palette of its own, which is
+    /// what a colour of its own says, and then it is drawn in that. The Ownership column writes its words the
+    /// same way.
+    /// </remarks>
     /// <param name="mark">What the contribution answered.</param>
     /// <returns>The cell.</returns>
     private static TextBlock Written(EntryColumnMark mark)
     {
         var cell = Cell(mark.Said() ?? Placeholder);
 
-        // The ink is the contribution's to name and this plugin's to resolve: a column drawn in a colour the
-        // contribution picked for itself would be a colour the look does not hold, which is a column that
-        // vanishes somewhere the theme is another. The Ownership column writes its words the same way.
-        cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
+        if (mark.Colour is { } colour)
+        {
+            cell.Foreground = new SolidColorBrush(colour);
+        }
+        else
+        {
+            cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
+        }
 
         return cell;
     }
@@ -2675,8 +2686,8 @@ internal sealed class GridBrowser : EntryView
     /// </remarks>
     private const double MarkGapShare = 1.25;
 
-    /// <summary>The lock provider that speaks for this directory, or nothing when none does.</summary>
-    private readonly IEntryLockProvider? _locks;
+    /// <summary>What a tile's icon wears at its top right corner, in the order the badges are numbered.</summary>
+    private readonly IReadOnlyList<IEntryMarkProvider> _badges;
 
     /// <summary>The contributed marks a tile wears, which are the columns that stand at the left.</summary>
     private readonly IEntryColumnProvider[] _marks;
@@ -2691,10 +2702,10 @@ internal sealed class GridBrowser : EntryView
         : base(host, browser, actions, clip)
     {
         _icon = icon;
-        _locks = EntryLockProviders.For(Browser.Current);
+        _badges = EntryMarkProviders.For(Browser.Current);
 
-        // A column that stands at the left of a row stands at the left corner of a tile: a tile has no
-        // columns, so what a column says is worn as a corner rather than written in a place of its own.
+        // A column that stands at the left of a row stands at the left of a tile's name: a tile has no columns,
+        // so what a column of marks says is worn beside the name rather than written in a place of its own.
         _marks =
         [
             .. EntryColumns
@@ -2883,26 +2894,37 @@ internal sealed class GridBrowser : EntryView
         return caption;
     }
 
-    /// <summary>An entry's icon, with the lock its provider contributed stamped on the corner.</summary>
+    /// <summary>An entry's icon, with what every contributor marked worn around its top right corner.</summary>
     /// <remarks>
-    /// The picture is looked up rather than carried, and a key that names nothing draws nothing:
-    /// a provider that contributed a mark but no picture is a listing without a corner on it, not a
-    /// listing that fails to be drawn.
+    /// Every provider that speaks for the directory is asked, rather than one of them: two badges say two
+    /// different things — who holds the entry and how far its version has come — and neither is the other's to
+    /// replace. A picture is looked up rather than carried, and a key that names nothing draws nothing: a
+    /// provider that contributed a mark but no picture is a listing without a badge on it, not a listing that
+    /// fails to be drawn.
+    /// <para>
+    /// The order the providers were asked in is the order the badges are numbered, which is what makes a badge
+    /// stand in the same place of the arc from one listing to the next: what is read at the top of the arc is
+    /// the contribution that was registered first and is the same contribution every time.
+    /// </para>
     /// </remarks>
     /// <param name="entry">The entry to draw.</param>
     /// <returns>What to draw where the icon goes.</returns>
     private Control Marked(Entry entry)
     {
         var icon = Icons.For(entry, _icon);
+        var badges = new List<EntryBadge>();
 
-        if (
-            _locks?.Mark(entry) is { IconKey: { Length: > 0 } key } mark
-            && Host.Icons.Find(key) is { } picture
-        )
+        foreach (var provider in _badges)
         {
-            return Icons.Marked(icon, picture, _icon, mark);
+            if (
+                provider.Mark(entry) is { IconKey: { Length: > 0 } key } mark
+                && Host.Icons.Find(key) is { } picture
+            )
+            {
+                badges.Add(new EntryBadge(picture, mark));
+            }
         }
 
-        return icon;
+        return Icons.Marked(icon, badges, _icon);
     }
 }

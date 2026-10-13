@@ -179,8 +179,8 @@ public sealed class ConfigurationTests
         Assert.Null(theme.Primary);
         Assert.Null(theme.Accent);
         Assert.Equal(ThemeConfiguration.DefaultMode, theme.ModeOrDefault);
-        Assert.Equal(ThemeConfiguration.DefaultPrimary, theme.PrimaryOrDefault);
-        Assert.Equal(ThemeConfiguration.DefaultAccent, theme.AccentOrDefault);
+        Assert.Equal(ThemePalette.DefaultPrimary, theme.PrimaryOrDefault);
+        Assert.Equal(ThemePalette.DefaultAccent, theme.AccentOrDefault);
     }
 
     /// <summary>
@@ -198,7 +198,7 @@ public sealed class ConfigurationTests
     {
         var shipped = new ThemeConfiguration
         {
-            Primary = ThemeConfiguration.DefaultPrimary,
+            Primary = ThemePalette.DefaultPrimary,
             PrimaryText = ThemeConfiguration.WasPrimaryText,
         };
 

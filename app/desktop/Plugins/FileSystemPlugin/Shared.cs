@@ -122,6 +122,7 @@ internal sealed class Shared
         // the class's, since the property of the same name is what answers the rest.
         global::FileSystemPlugin.HideRegistry.Forget();
         EntryLockProviders.Forget();
+        EntryMarkProviders.Forget();
         EntryColumns.Forget();
 
         Touched?.Invoke();

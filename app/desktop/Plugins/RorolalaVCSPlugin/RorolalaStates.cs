@@ -26,18 +26,12 @@ internal sealed class RorolalaStates : IEntryColumnProvider
     /// <summary>How wide the column starts, which is room for a dot and the room around it.</summary>
     private const double ColumnWidth = 18;
 
-    /// <summary>What was read for each directory, so a listing costs one read rather than one per row.</summary>
-    private readonly Dictionary<string, RolaStatus?> _readings = new(StringComparer.Ordinal);
-
-    /// <summary>Where what could not be read is said, once.</summary>
-    private readonly ILog _log;
-
-    /// <summary>Whether what could not be read has already been said.</summary>
-    private bool _warned;
+    /// <summary>What the work says about the directories being listed, shared with the standing column.</summary>
+    private readonly StatusReadings _readings;
 
     /// <summary>Makes the provider.</summary>
-    /// <param name="log">Where what could not be read is said.</param>
-    public RorolalaStates(ILog log) => _log = log;
+    /// <param name="readings">What the work says about the directories being listed.</param>
+    public RorolalaStates(StatusReadings readings) => _readings = readings;
 
     /// <inheritdoc />
     public string Id => "rorolala.states";
@@ -68,7 +62,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider
     public bool Marks => true;
 
     /// <inheritdoc />
-    public bool Applies(string directory) => Reading(directory) is not null;
+    public bool Applies(string directory) => _readings.Reading(directory) is not null;
 
     /// <inheritdoc />
     public EntryColumnMark Value(Entry entry)
@@ -77,7 +71,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider
         // way up, which is a step rather than a place — is nothing this speaks about.
         if (
             Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory
-            || Reading(directory) is not { } status
+            || _readings.Reading(directory) is not { } status
         )
         {
             return new EntryColumnMark();
@@ -89,8 +83,6 @@ internal sealed class RorolalaStates : IEntryColumnProvider
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            Warn($"what the work says about `{entry.Path}`", error);
-
             return new EntryColumnMark();
         }
     }
@@ -156,64 +148,8 @@ internal sealed class RorolalaStates : IEntryColumnProvider
     /// Lets go of what was read, so the next answer is read from the tree as it is now.
     /// </summary>
     /// <remarks>
-    /// What was read is a snapshot of the work, and a snapshot is what the tree held at one moment: a file
-    /// operation changes what a path is — it may move it, or change what it holds — so the reading is given
-    /// back rather than kept across one.
+    /// The readings are shared with the standing column, so this may be the second letting go of the same
+    /// set: what is already let go of is nothing to let go of again.
     /// </remarks>
-    public void Forget()
-    {
-        foreach (var status in _readings.Values)
-        {
-            status?.Dispose();
-        }
-
-        _readings.Clear();
-    }
-
-    /// <summary>The reading of the work a directory sits in, read once and kept.</summary>
-    /// <param name="directory">The directory being listed.</param>
-    /// <returns>The reading, or nothing when the directory is not inside a Workspace that works in a Layout.</returns>
-    private RolaStatus? Reading(string directory)
-    {
-        if (_readings.TryGetValue(directory, out var known))
-        {
-            return known;
-        }
-
-        RolaStatus? status = null;
-
-        try
-        {
-            status = RolaStatus.Locate(directory);
-        }
-        catch (Exception error) when (error is not OutOfMemoryException)
-        {
-            Warn($"how the work under `{directory}` stands", error);
-        }
-
-        _readings[directory] = status;
-
-        return status;
-    }
-
-    /// <summary>
-    /// Says once that something could not be read.
-    /// </summary>
-    /// <remarks>
-    /// A listing that will not appear because a state could not be read is a worse answer than one that
-    /// appears without the column, and it is said once because a directory of a thousand entries would
-    /// otherwise say the same thing a thousand times.
-    /// </remarks>
-    /// <param name="what">What could not be read.</param>
-    /// <param name="error">Why it could not be read.</param>
-    private void Warn(string what, Exception error)
-    {
-        if (_warned)
-        {
-            return;
-        }
-
-        _warned = true;
-        _log.Warn($"{what} could not be read: {error.Message}");
-    }
+    public void Forget() => _readings.Forget();
 }

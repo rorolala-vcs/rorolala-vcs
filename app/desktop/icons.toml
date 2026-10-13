@@ -72,7 +72,12 @@ key = "rorolala_vcs"
 # reading the work again wears in the Overview's own strip, which is what the file browser's toolbar wears
 # for the same thing: the two are one mark, and each plugin draws its own rather than reaching for the
 # other's.
-icons = ["lock", "create", "lock_open", "error", "warning", "live_help", "refresh"]
+#
+# `upload` and `download` are how a file stands beside upstream: the version recorded for it is ahead of
+# what the Vault was told of, or behind it, and the arrows say which way the work would have to move to be
+# in step — nothing is uploaded or downloaded by them, so the mark is of a direction rather than of an
+# action.
+icons = ["lock", "create", "lock_open", "error", "warning", "live_help", "refresh", "upload", "download"]
 
 [[set]]
 plugin = "RorolalaDesktop"

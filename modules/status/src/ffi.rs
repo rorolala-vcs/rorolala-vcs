@@ -11,6 +11,7 @@ use std::path::Path;
 use rorolala_utils_lazyffi::lazyffi;
 
 use crate::{Broken, Merge, PathState, Rename, Status};
+use crate::base::Relation;
 
 /// Why a merge in progress cannot go on, as C reads it.
 ///
@@ -61,6 +62,52 @@ impl BrokenKind {
             Broken::NoVariant { .. } => Self::NoVariant,
             Broken::Unreadable { .. } => Self::Unreadable,
             Broken::Changed { .. } => Self::Changed,
+        }
+    }
+}
+
+/// How the version recorded for a path stands beside the one upstream records, as C reads it.
+///
+/// # FFI
+///
+/// One variant per standing, which is [`PathState`]'s shape and not its subject: a path's *state* is what
+/// is wrong with it, and its *standing* is how far it is from what the Vault has. A path may be in either
+/// without the other — a file that is in step and a file that was never recorded are both nothing to act
+/// on — so the two are asked separately.
+///
+/// The distance is not part of this by value: it is asked for by `rola_status_standing_distance_of`, which
+/// answers how many versions apart the two are, or a negative number when nothing says. See that function
+/// for what a caller has to ask in what order.
+#[lazyffi(export = RolaStanding)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Standing {
+    /// The two are the same version, so there is nothing between them and nothing to tell.
+    Same,
+
+    /// This side records work the Vault has not been told of.
+    Ahead,
+
+    /// The Vault has moved on, so what is here is based on a version that has.
+    Behind,
+
+    /// Both sides have moved on, so neither is based on the other.
+    Apart,
+
+    /// How the two stand is not known here: one of the versions is not in the index, or the reading holds
+    /// no standing for the path at all. A caller that must tell those apart asks the distance: it is zero
+    /// for the two being the same, and nothing here is.
+    Unknown,
+}
+
+impl Standing {
+    /// The standing `relation` is.
+    const fn of(relation: Relation) -> Self {
+        match relation {
+            Relation::Same => Self::Same,
+            Relation::Ahead => Self::Ahead,
+            Relation::Behind => Self::Behind,
+            Relation::Apart => Self::Apart,
+            Relation::Unknown => Self::Unknown,
         }
     }
 }
@@ -349,6 +396,39 @@ impl Status {
     #[lazyffi(export = rola_status_state_of)]
     pub fn state(&self, path: &Path) -> PathState {
         self.state_of(path)
+    }
+
+    /// How the version recorded for a path stands beside the one upstream records.
+    ///
+    /// # FFI
+    ///
+    /// A [`Standing`] by value, which is `Unknown` for a path this reading holds no standing for: one it is
+    /// not about, one nothing was ever recorded for, and one upstream does not name. `Same` and `Unknown`
+    /// are told apart by `rola_status_standing_distance_of`, which is zero for the first and negative for
+    /// the second.
+    #[must_use]
+    #[lazyffi(export = rola_status_standing_of)]
+    pub fn standing(&self, path: &Path) -> Standing {
+        Standing::of(self.standing_of(path).0)
+    }
+
+    /// How many versions apart the path named is from the one upstream records.
+    ///
+    /// # FFI
+    ///
+    /// A signed number rather than an `Option`, because C has no `Option` and this is one number: a negative
+    /// answer is "nothing says how far", and zero is "they are the same version", which is the one distance
+    /// that is not a count of anything. A caller wanting to tell "in step" from "not known" reads this
+    /// rather than the standing, since both of those are answered `Unknown` above — in step because there is
+    /// nothing to act on, and not known because the chain is not here.
+    #[must_use]
+    #[lazyffi(export = rola_status_standing_distance_of)]
+    pub fn standing_distance(&self, path: &Path) -> i64 {
+        // WRAP: a chain longer than `i64` can count is longer than any workspace holds, and a number that
+        // large would be meaningless rather than wrong.
+        self.standing_of(path)
+            .1
+            .map_or(-1, |distance| i64::try_from(distance).unwrap_or(i64::MAX))
     }
 }
 

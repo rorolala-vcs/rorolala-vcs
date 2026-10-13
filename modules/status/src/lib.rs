@@ -13,7 +13,7 @@ mod status;
 
 // The base of a version is read through the index, which is the FFI surface's own business alone; what
 // crosses is the standing itself, so the reader beside it is named here rather than re-exported.
-pub use base::{Base, Relation, compare, wrong_base};
+pub use base::{Base, Relation, Standing, compare, wrong_base};
 pub use ffi::*;
 pub use merge::*;
 pub use ownership::*;

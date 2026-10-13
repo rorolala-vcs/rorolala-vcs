@@ -33,7 +33,7 @@ public enum ColumnPlacement
 /// <remarks>
 /// The words and the ink, and nothing else: a column of values is text where the listing's own columns are,
 /// and one that grew a picture or a tag would be a second kind of thing in a table of one kind. What a
-/// contribution wants drawn rather than written — a mark with a picture in it, a corner on a tile — is the
+/// contribution wants drawn rather than written — a mark with a picture in it, a badge on a tile — is the
 /// Ownership column's business, which is another question asked in another way.
 /// </remarks>
 /// <param name="TextKey">An i18n key for the words, when they are the contributor's own.</param>
