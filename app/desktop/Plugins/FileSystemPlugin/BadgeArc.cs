@@ -8,17 +8,16 @@ namespace FileSystemPlugin;
 /// </summary>
 /// <remarks>
 /// The badges stand on an arc whose centre is the middle of the icon's top right quarter and whose radius is
-/// the circle between that quarter's inscribed and circumscribed ones — the mean of the two, which is
-/// <c>size·(1+√2)/8</c>. That is the ring a corner reads as holding: nearer than the inscribed circle the
-/// badges crowd the middle of the picture, and further than the circumscribed one they have left the corner
-/// altogether. The whole arc is at most a quarter turn and the middle of it points at the icon's own top
-/// right corner, so one badge stands on the diagonal and a crowd spreads about it rather than marching along
-/// an edge.
+/// between that quarter's inscribed and circumscribed circles, a little inside the mean of the two — see
+/// [`Radius`]. That is the ring a corner reads as holding: nearer than the inscribed circle the badges crowd
+/// the middle of the picture, and further than the circumscribed one they have left the corner altogether. The
+/// whole arc is at most a quarter turn and the middle of it points at the icon's own top right corner, so one
+/// badge stands on the diagonal and a crowd spreads about it rather than marching along an edge.
 /// <para>
-/// A badge is a little wider than the room between the ring and the icon's edge, so a full arc stands a few
-/// pixels outside the icon at its ends and at its middle, and nothing clips it: this is what the design was
-/// drawn as, and what an icon of a badge overhanging it reads as is a mark worn on the tile rather than one
-/// drawn inside the picture. What that needs is the room the tile already leaves around its icon.
+/// A badge is a little wider than the room between the ring and the icon's edge, so the ends of a full arc
+/// stand a few pixels outside the icon and nothing clips them: a mark worn on the tile reads as a mark worn on
+/// the tile, which is what a badge on a picture is. What that needs is the room the tile already leaves around
+/// its icon.
 /// </para>
 /// <para>
 /// The badges are numbered from the counter-clockwise end of the arc and run clockwise, which is the order
@@ -65,14 +64,42 @@ internal sealed class BadgeArc : Panel
     /// </remarks>
     private const double Widest = Math.PI / 2;
 
+    /// <summary>
+    /// How far the ring stands between the quarter's inscribed and circumscribed circles.
+    /// </summary>
+    /// <remarks>
+    /// Half of the way is the mean of the two, which is where the design was first drawn: the ring is pulled in
+    /// from it so that a badge reaches the icon's own corner by no more than the mark it is — see
+    /// <see cref="Radius"/>.
+    /// </remarks>
+    private const double Between = 0.3;
+
     /// <summary>How large one badge is at an icon of `size`.</summary>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
     /// <returns>How many pixels wide and tall the badge is.</returns>
     public static double Extent(double size) => Math.Max(BadgeLeast, size * BadgeShare);
 
     /// <summary>
-    /// How many badges an icon wears of what its contributions answered.
+    /// How far the badges stand from the middle of the icon's top right quarter, at an icon of `size`.
     /// </summary>
+    /// <remarks>
+    /// The quarter's inscribed circle has half its edge as a radius and its circumscribed one has
+    /// <c>halfSize·√2/2</c>; the ring is drawn between the two, at <see cref="Between"/> of the way from the
+    /// first to the second rather than at the mean of them.
+    /// <para>
+    /// The mean is where the design was first drawn and it is a little too far out: a badge standing there
+    /// reaches past the icon's own corner by more than a mark worn on the tile reads as, and the whole arc
+    /// ends up looking laid against the edge rather than on the corner. Pulling the ring in towards the
+    /// inscribed circle brings a full arc back onto the picture without crowding the middle of it — the arc
+    /// still spreads about the corner, since it is the angle that says where a badge stands and not the ring.
+    /// </para>
+    /// </remarks>
+    /// <param name="size">How many pixels wide and tall the icon is.</param>
+    /// <returns>How many pixels from the quarter's middle a badge stands.</returns>
+    public static double Radius(double size) =>
+        size * (0.25 + (Between * ((Math.Sqrt(2) / 4) - 0.25)));
+
+    /// <summary>How many badges an icon wears of what its contributions answered.</summary>
     /// <remarks>
     /// Read out rather than tested where the badges are gathered, because the limit is the arc's own: it is
     /// the arc that cannot tell one badge from its neighbour, and a second place that decided the count would
@@ -99,11 +126,7 @@ internal sealed class BadgeArc : Panel
         // The middle of the icon's top right quarter: the square is divided in two each way and this is the
         // part that holds the corner the badges are read at.
         var quarter = new Point(size * 3 / 4, size / 4);
-
-        // The quarter's inscribed circle has half its edge as a radius and its circumscribed one has
-        // halfSize·√2/2; the ring between the two has the mean of those, which is size·(1+√2)/8. It is
-        // written as the quarter's own edge rather than as the icon's so that the two readings agree.
-        var radius = size * (1 + Math.Sqrt(2)) / 8;
+        var radius = Radius(size);
 
         // Towards the icon's top right corner, which is the middle of the arc and the direction a lone badge
         // stands in. The sign is the screen's: y grows downwards, so the corner is at a negative angle.

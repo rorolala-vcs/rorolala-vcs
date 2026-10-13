@@ -61,12 +61,17 @@ public sealed class IconTests
     {
         const int size = 64;
 
-        // The ring is centred on the icon's top right quarter and its radius is between that quarter's
-        // inscribed and circumscribed circles, all of which is inside the icon's own corner.
+        // The ring is centred on the icon's top right quarter, and it stands between that quarter's inscribed
+        // and circumscribed circles — inside the mean of the two, which is what keeps a badge from reaching
+        // past the corner by more than the mark it is.
         var quarter = new Point(size * 3 / 4, size / 4);
-        var radius = size * (1 + Math.Sqrt(2)) / 8;
+        var radius = BadgeArc.Radius(size);
+        var inscribed = size / 4.0;
+        var circumscribed = size * Math.Sqrt(2) / 4;
 
-        Assert.True(radius < size * Math.Sqrt(2) / 4, "the ring leaves the quarter it belongs to");
+        Assert.True(radius > inscribed, "the ring has crowded the middle of the quarter");
+        Assert.True(radius < (inscribed + circumscribed) / 2, "the ring is not pulled in from the mean");
+        Assert.True(radius < circumscribed, "the ring leaves the quarter it belongs to");
 
         // One badge stands up and to the right of the icon's middle: the direction of the corner itself.
         var alone = BadgeArc.Centre(0, 1, size);
