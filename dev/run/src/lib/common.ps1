@@ -47,6 +47,24 @@ if ($env:CS_TARGET_DIR) { $CsTargetDir = $env:CS_TARGET_DIR }
 $BuildDir = 'build'
 if ($env:BUILD_DIR) { $BuildDir = $env:BUILD_DIR }
 
+# Where a toolchain that is fetched rather than installed is kept. `publish` needs one — Inno Setup, to
+# build the Windows installer — and it is deliberately not the machine's own copy of it: a build that used
+# whatever version happened to be installed would be a build nobody could repeat, which is the one thing a
+# package must be.
+$ToolchainDir = '.cache/toolchains'
+if ($env:TOOLCHAIN_DIR) { $ToolchainDir = $env:TOOLCHAIN_DIR }
+
+# Inno Setup: the version, the artifact of that version, and the hash the artifact must have.
+#
+# Pinned the way the icon set is pinned, and for the same reason: what a package is built with decides what
+# is in it, so it is named rather than found. The hash is what makes the download safe to run — an installer
+# fetched from the network is run silently by `Install-Inno`, and a hash that does not match is that
+# download refused rather than executed.
+$InnoVersion = '6.7.3'
+$InnoSha256 = '9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732'
+$InnoUrl = "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-$InnoVersion.exe"
+$InnoDir = "$ToolchainDir/innosetup"
+
 # The only profile anything here builds. Everything it produces is release, so nothing that ships
 # can carry debug assertions or debug info.
 $ReleaseFlag = '--release'
@@ -242,6 +260,69 @@ $RsharpDll = "$CsTargetDir/RolaSharp/bin/Release/net8.0/RolaSharp.dll"
 # published even there — it is a library with nothing beside it.
 function Publish-Rsharp {
     Copy-Item -Force $RsharpDll "$BuildDir/lib/RolaSharp.dll"
+}
+
+# The version everything in the workspace is at, which is what a package is named and versioned by.
+#
+# Read from `Cargo.toml` rather than asked of a program, because no program here knows it: the version is
+# one number in the manifest of the whole workspace, and every crate and every package reads it there.
+function Get-WorkspaceVersion {
+    $said = Get-Content 'Cargo.toml'
+    $inside = $false
+
+    foreach ($line in $said) {
+        if ($line -match '^\[workspace\.package\]') { $inside = $true; continue }
+        if ($inside -and $line -match '^\[') { break }
+        if ($inside -and $line -match '^version\s*=\s*"([^"]+)"') { return $Matches[1] }
+    }
+
+    return ''
+}
+
+# Lays the pinned Inno Setup out under the toolchains, fetching it if it is not there yet.
+#
+# Deployed rather than installed for the machine: what it is for is one build, and a build that used
+# whatever version a machine happened to have would be one nobody could repeat. The installer it comes as
+# is Inno's own, run with the silent switches and told where to put itself; the rights it asks for are the
+# one thing an unattended build cannot give it, so where it cannot lay itself out the exact command to run
+# once by hand is said rather than met as a build that waits for a prompt nobody can see.
+function Install-Inno {
+    if (Test-Path "$InnoDir/ISCC.exe") { return }
+
+    $fetched = "$InnoDir/innosetup-$InnoVersion.exe"
+
+    if (-not (Test-Path $fetched)) {
+        Write-Host "fetching Inno Setup $InnoVersion into $InnoDir"
+        New-Item -ItemType Directory -Force -Path $InnoDir | Out-Null
+        curl.exe -fsSL $InnoUrl -o $fetched
+        if ($LASTEXITCODE -ne 0) { Write-Error "the download failed: $InnoUrl"; exit 1 }
+    }
+
+    # What is fetched is run, so what it is is checked first: a hash that does not match is a download that
+    # is thrown away rather than executed.
+    $said = (Get-FileHash $fetched -Algorithm SHA256).Hash.ToUpperInvariant()
+
+    if ($said -ne $InnoSha256) {
+        Remove-Item -Force $fetched
+        Write-Error "what was downloaded is not the pinned Inno Setup $InnoVersion (expected $InnoSha256, found $said)"
+        exit 1
+    }
+
+    $root = (Resolve-Path $InnoDir).Path
+    $process = Start-Process -FilePath $fetched -PassThru -ArgumentList @(
+        '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS', "/DIR=$root"
+    )
+
+    # Waited for with a bound, because what the installer does without the rights it asks for is wait for a
+    # prompt: a build that hung there would say nothing at all about why.
+    if (-not $process.WaitForExit(600000)) {
+        $process.Kill()
+    }
+
+    if (-not (Test-Path "$InnoDir/ISCC.exe")) {
+        Write-Error "Inno Setup $InnoVersion is not laid out in $InnoDir. Run this once, answering the prompt it raises: $fetched /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS /DIR=`"$root`""
+        exit 1
+    }
 }
 
 # `export` and `clean` delete a destination with `Remove-Item -Recurse`, so refuse a path that would

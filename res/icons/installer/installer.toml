@@ -1,0 +1,14 @@
+# The installer's icon, in the sizes Windows asks a program for: the small ones for a list, the
+# larger for the tile and the properties page. Each source is a frame at its own size — they are
+# drawn at the size they are wanted at rather than sampled down from one — so the 512 and above are
+# not named here: an ICO frame is at most 256 on a side, and the sizes above it have no frame to be.
+#
+# The frames are written in the order below, smallest first, which is the order the format is read in.
+sources = [
+    "installer_ico_16.png",
+    "installer_ico_32.png",
+    "installer_ico_64.png",
+    "installer_ico_128.png",
+    "installer_ico_256.png",
+]
+target-format = "ico"

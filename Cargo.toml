@@ -40,6 +40,10 @@ members = [
 license = "MIT"
 version = "0.1.0"
 edition = "2024"
+authors = [
+    "RorolalaVCS",
+    "Weicao-CatilGrass <1992414357@qq.com>",
+]
 
 [workspace.dependencies]
 # Jujutsu, which `rola-jj` is: its command line and the library under it, both depended on without
@@ -211,6 +215,7 @@ name = "librorolala"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
 
 [dependencies]
 rorolala-auth.workspace = true

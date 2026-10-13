@@ -32,6 +32,23 @@ CS_TARGET_DIR="${CS_TARGET_DIR:-.cache/cs-target}"
 # The directory `export` lays the hand-off artifacts out in.
 BUILD_DIR="${BUILD_DIR:-build}"
 
+# Where a toolchain that is fetched rather than installed is kept. `publish` needs one — Inno Setup,
+# to build the Windows installer — and it is deliberately not the machine's own copy of it: a build
+# that used whatever version happened to be installed would be a build nobody could repeat, which is
+# the one thing a package must be.
+TOOLCHAIN_DIR="${TOOLCHAIN_DIR:-.cache/toolchains}"
+
+# Inno Setup: the version, the artifact of that version, and the hash the artifact must have.
+#
+# Pinned the way the icon set is pinned, and for the same reason: what a package is built with decides
+# what is in it, so it is named rather than found. The hash is what makes the download safe to run —
+# an installer fetched from the network is run silently by [`ensure_inno`], and a hash that does not
+# match is that download refused rather than executed.
+INNO_VERSION=6.7.3
+INNO_SHA256=9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732
+INNO_URL="https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-$INNO_VERSION.exe"
+INNO_DIR="$TOOLCHAIN_DIR/innosetup"
+
 # The only profile anything here builds. Everything it produces is release, so nothing that ships
 # can carry debug assertions or debug info.
 RELEASE_FLAG=--release
@@ -225,6 +242,73 @@ publish_plugins() {
 # is the export's own `lib/`.
 publish_rsharp() {
 	cp "$RSHARP_DLL" "$BUILD_DIR/lib/RolaSharp.dll"
+}
+
+# The version everything in the workspace is at, which is what a package is named and versioned by.
+#
+# Read from `Cargo.toml` rather than asked of a program, because no program here knows it: the version is
+# one number in the manifest of the whole workspace, and every crate and every package reads it there.
+workspace_version() {
+	sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\([^"]*\)".*/\1/p' Cargo.toml | head -n 1
+}
+
+# A path a Windows program can read, given one this shell can.
+#
+# The shells this runs in on Windows are POSIX ones — msys, Git Bash — and they spell a path the way Unix
+# does: a native program started from one is handed `/d/rorolala-vcs/build` by a shell that means
+# `D:\rorolala-vcs\build`. `cygpath` is what knows the difference; where there is none, the path is left
+# alone, which is what the Unix this also runs on wants.
+win_path() {
+	if command -v cygpath >/dev/null 2>&1; then
+		cygpath -w "$1"
+	else
+		printf '%s' "$1"
+	fi
+}
+
+# Lays the pinned Inno Setup out under the toolchains, fetching it if it is not there yet.
+#
+# Deployed rather than installed for the machine: what it is for is one build, and a build that used
+# whatever version a machine happened to have would be one nobody could repeat. The installer it comes as
+# is Inno's own, run with the silent switches and told where to put itself; the rights it asks for are the
+# one thing an unattended build cannot give it, so where it cannot lay itself out the exact command to run
+# once by hand is said rather than met as a build that waits for a prompt nobody can see.
+ensure_inno() {
+	if [ -x "$INNO_DIR/ISCC.exe" ]; then
+		return 0
+	fi
+
+	fetched="$INNO_DIR/innosetup-$INNO_VERSION.exe"
+
+	if [ ! -f "$fetched" ]; then
+		echo "fetching Inno Setup $INNO_VERSION into $INNO_DIR" >&2
+		mkdir -p "$INNO_DIR"
+		curl -fsSL "$INNO_URL" -o "$fetched" || {
+			echo "the download failed: $INNO_URL" >&2
+			exit 1
+		}
+	fi
+
+	# What is fetched is run, so what it is is checked first: a hash that does not match is a download that
+	# is thrown away rather than executed.
+	said=$(sha256sum "$fetched" | cut -d' ' -f1 | tr 'a-f' 'A-F')
+
+	if [ "$said" != "$INNO_SHA256" ]; then
+		rm -f "$fetched"
+		echo "what was downloaded is not the pinned Inno Setup $INNO_VERSION" >&2
+		echo "  expected $INNO_SHA256" >&2
+		echo "  found    $said" >&2
+		exit 1
+	fi
+
+	"$fetched" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS "/DIR=$(win_path "$INNO_DIR")" || true
+
+	if [ ! -x "$INNO_DIR/ISCC.exe" ]; then
+		echo "Inno Setup $INNO_VERSION is not laid out in $INNO_DIR." >&2
+		echo "Run this once, answering the prompt it raises, and run this script again:" >&2
+		echo "  $fetched /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS /DIR=\"$(win_path "$INNO_DIR")\"" >&2
+		exit 1
+	fi
 }
 
 # `export` and `clean` delete a destination with `rm -rf`, so refuse a path that would take
