@@ -48,4 +48,38 @@ public sealed class RenameTests
     [InlineData("scenes.2024.final")]
     public void ADirectoryIsChosenWhole(string name) =>
         Assert.Equal(name.Length, Names.Chosen(EntryKind.Directory, name));
+
+    /// <summary>
+    /// A second of a taken name carries the number before its extension rather than after it.
+    /// </summary>
+    /// <remarks>
+    /// The two are one rule read from its two ends — where a name stops and what says the kind of file it is
+    /// begin at the same dot — so a name that took its number at the end is a name whose extension is the
+    /// number, which is a file nothing opens by its extension any more.
+    /// </remarks>
+    /// <param name="name">The name that is taken.</param>
+    /// <param name="numbered">What the second of it is called.</param>
+    [Theory]
+    [InlineData("源文件.txt", "源文件 (2).txt")]
+    [InlineData("hero.psd", "hero (2).psd")]
+    // The last dot is where the extension begins, so a stack of them keeps all but the last.
+    [InlineData("源文件.pkg.tar.zst", "源文件.pkg.tar (2).zst")]
+    [InlineData("archive.tar.gz", "archive.tar (2).gz")]
+    [InlineData("a.b", "a (2).b")]
+    // The dot is the whole of the extension, and what precedes it is the name.
+    [InlineData("name.", "name (2).")]
+    public void ANumberGoesBeforeTheExtension(string name, string numbered) =>
+        Assert.Equal(numbered, Names.Numbered(name, 2));
+
+    /// <summary>
+    /// What has no extension to put a number before takes it at the end.
+    /// </summary>
+    /// <param name="name">The name that is taken.</param>
+    /// <param name="numbered">What the second of it is called.</param>
+    [Theory]
+    [InlineData("README", "README (2)")]
+    [InlineData(".gitignore", ".gitignore (2)")]
+    [InlineData("", " (2)")]
+    public void WhatHasNoExtensionTakesTheNumberAtItsEnd(string name, string numbered) =>
+        Assert.Equal(numbered, Names.Numbered(name, 2));
 }

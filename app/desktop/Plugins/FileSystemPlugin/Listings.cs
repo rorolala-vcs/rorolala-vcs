@@ -69,6 +69,35 @@ internal static class Names
 
         return dot > 0 ? dot : name.Length;
     }
+
+    /// <summary>
+    /// A name with a number put before its extension, which is what a second of the same name is called.
+    /// </summary>
+    /// <remarks>
+    /// It is the choice above, used the other way round: the boundary <see cref="Chosen"/> leaves out of what
+    /// a rename selects is exactly where a number belongs, because it is the boundary between the name and
+    /// what says what kind of file it is. So <c>源文件.txt</c> becomes <c>源文件 (2).txt</c> rather than
+    /// <c>源文件.txt (2)</c> — a name that ends in the number has no extension at all as far as anything
+    /// that opens a file by one is concerned, and the file stops being the kind of file it is. Everything
+    /// before the last dot is the name, so a stack of them keeps all of it but the last:
+    /// <c>源文件.pkg.tar.zst</c> is <c>源文件.pkg.tar (2).zst</c>, since <c>.zst</c> is what a program that
+    /// reads an extension reads.
+    /// <para>
+    /// A directory and a dot-file have no extension, so the number goes at the end: <c>.gitignore</c> is
+    /// <c>.gitignore (2)</c> rather than a name the number was pushed in front of.
+    /// </para>
+    /// </remarks>
+    /// <param name="name">The name that is taken.</param>
+    /// <param name="number">The number to put in it.</param>
+    /// <returns>The name to try.</returns>
+    public static string Numbered(string name, int number)
+    {
+        var dot = Chosen(EntryKind.File, name);
+
+        return dot == name.Length
+            ? $"{name} ({number})"
+            : $"{name[..dot]} ({number}){name[dot..]}";
+    }
 }
 
 /// <summary>

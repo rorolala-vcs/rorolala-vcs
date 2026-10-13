@@ -321,12 +321,16 @@ internal static class Executor
     }
 
     /// <summary>
-    /// A free name beside an existing target, by the <c>name (2)</c>, <c>name (3)</c> … scheme.
+    /// A free name beside an existing target, by the <c>name (2).ext</c>, <c>name (3).ext</c> … scheme.
     /// </summary>
     /// <remarks>
-    /// The number is added to the whole file name, extension included, which is what the scheme as
-    /// written says; a caller wanting the extension kept at the end would split it off here.
+    /// How much of the name is the name is <see cref="Names.Numbered"/>, which is the rule a rename box
+    /// already chooses by: the number goes before the extension rather than after the whole name, so that
+    /// the file stays the kind of file it is. What is left to this is the counting, which is the half that
+    /// needs the filesystem.
     /// </remarks>
+    /// <param name="target">The path that is taken.</param>
+    /// <returns>A path beside it that is free.</returns>
     private static string FreeName(string target)
     {
         var directory = Path.GetDirectoryName(target) ?? string.Empty;
@@ -334,7 +338,7 @@ internal static class Executor
 
         for (var number = 2; ; number++)
         {
-            var candidate = Path.Combine(directory, $"{name} ({number})");
+            var candidate = Path.Combine(directory, Names.Numbered(name, number));
 
             if (!Pathing.Exists(candidate))
             {
