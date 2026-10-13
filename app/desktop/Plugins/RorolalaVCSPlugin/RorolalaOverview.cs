@@ -34,11 +34,12 @@ internal sealed class OverviewDock : IDockView
     private readonly OverviewView _view;
 
     /// <summary>Makes the dock.</summary>
+    /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
     /// <param name="log">Where a reading that could not be made is said.</param>
     /// <param name="files">What the files may have done, which the reading is made again for.</param>
     /// <param name="refocus">The host's windows being come back to, which the reading is made again for too.</param>
-    public OverviewDock(ILog log, IFileChanges files, IRefocus refocus) =>
-        _view = new OverviewView(log, files, refocus);
+    public OverviewDock(IPluginHost host, ILog log, IFileChanges files, IRefocus refocus) =>
+        _view = new OverviewView(host, log, files, refocus);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -114,21 +115,70 @@ internal sealed record StatusFacts(
 }
 
 /// <summary>
-/// One pill of a row's state: the letters it is read by, what it is coloured, and the whole of what it means.
+/// One state of a row, which is the letters it is read by, how it is coloured, and what may be done about it.
+/// </summary>
+/// <remarks>
+/// Seven, because that is how many the reading may say about a path, and a state is one of them rather than a
+/// word composed where a row is made: the letters, the colour and the operations are the state's own answer, so
+/// a state added later is a member here and nothing else changes.
+/// <para>
+/// The colour is this plugin's own — see <see cref="RorolalaColours"/> — rather than a role of the look's,
+/// because what a state is coloured is the state: red for what must not be recorded, green for what is not
+/// recorded yet, amber for what is under way or has to be read twice, and blue for what is somewhere else than
+/// the Layout says.
+/// </para>
+/// </remarks>
+internal enum State
+{
+    /// <summary>What the Layout does not name and the tree holds.</summary>
+    Untagged,
+
+    /// <summary>What the Layout names and the tree has lost.</summary>
+    Lost,
+
+    /// <summary>What is not this account's to record.</summary>
+    NotMine,
+
+    /// <summary>What is this account's to record but stands on a version upstream has moved past.</summary>
+    Stale,
+
+    /// <summary>A move, where the bytes make it one.</summary>
+    Renamed,
+
+    /// <summary>A move, where only the likeness suggests it.</summary>
+    RenamedLikely,
+
+    /// <summary>A change of content that is this account's to record.</summary>
+    Modified,
+
+    /// <summary>A variant waiting to be joined in.</summary>
+    Merging,
+
+    /// <summary>A variant that cannot be joined in.</summary>
+    Broken,
+}
+
+/// <summary>
+/// One pill of a row's state: which state it is, the letters it is read by, and the whole of what it means.
 /// </summary>
 /// <remarks>
 /// One or two letters rather than the state's name, because the letters are what a column of states is scanned
 /// by: the names are two to five characters each and a column holding them is the widest thing in the row,
 /// where what a reader wants from the column is which state a row is in and not what that state is called. The
 /// name and the reason are on the pill's hover, which is where a reader who has stopped at one is looking.
+/// <para>
+/// The state is carried as well as the letters, because what may be done about a row is read from which states
+/// it is in: the letters are how a state is drawn, and the state is what it means.
+/// </para>
 /// </remarks>
+/// <param name="State">Which state it is.</param>
 /// <param name="Letters">What the state is known by, which is what the pill carries.</param>
 /// <param name="Fill">What the pill is coloured, which is this plugin's colour rather than the look's.</param>
 /// <param name="Hint">
 /// What the pointer resting on the pill says: the state's name and the whole of what it means, since the
 /// letters say only which state it is.
 /// </param>
-internal sealed record StatusPill(string Letters, Color Fill, string Hint);
+internal sealed record StatusPill(State State, string Letters, Color Fill, string Hint);
 
 /// <summary>One row of the table: what the reading says about one path.</summary>
 /// <param name="Pills">
@@ -138,16 +188,21 @@ internal sealed record StatusPill(string Letters, Color Fill, string Hint);
 /// </param>
 /// <param name="Notes">
 /// What the row has to say that is not a state: the variant a merge is waiting for, where a merge moved to,
-/// and that a move left its content alone. A note is written rather than coloured, since it says what a row is
-/// about rather than what has to be done about it.
+/// and why a merge cannot go on. A note is written rather than coloured, since it says what a row is about
+/// rather than what has to be done about it.
 /// </param>
 /// <param name="From">The path it comes from, or nothing when it comes from nowhere.</param>
 /// <param name="To">The path it goes to, or nothing when it goes nowhere.</param>
+/// <param name="Operations">
+/// What may be done about it, which is what each of its states offers, once each: a row in two states has the
+/// buttons of both, because a file that moved and was edited is two things to act on.
+/// </param>
 internal sealed record TableRow(
     IReadOnlyList<StatusPill> Pills,
     IReadOnlyList<string> Notes,
     string From,
-    string To
+    string To,
+    IReadOnlyList<Operation> Operations
 );
 
 /// <summary>
@@ -181,15 +236,22 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// What a state is a width and the two paths are shares of what is left: a state is one or two letters in a
     /// pill of a fixed size, so the room it wants is a measure rather than a share — three pills and the room
-    /// between them, which is what a row of states comes to before it wraps. A path is read in full, so the
-    /// rest is given to the two of them as shares rather than as widths, and a wider dock is a longer path
-    /// rather than a wider column of states.
+    /// between them, which is what a row of states comes to before it wraps. A path is read in full, so the rest
+    /// is given to the two of them as shares rather than as widths, and a wider dock is a longer path rather than
+    /// a wider column of states.
+    /// <para>
+    /// The operations are a measure of their own, and the widest measure in the table: a button is a word, and
+    /// the words are the command's own — 「还原内容」 and 「获取所有权」 are not shorter for being a table's. They
+    /// are the last column rather than the first because they are what a reader does <em>after</em> reading what
+    /// a row says: the state, then the paths, then what may be done about them.
+    /// </para>
     /// </remarks>
     private static readonly GridLength[] Columns =
     [
         new(StateColumn, GridUnitType.Pixel),
         new(1, GridUnitType.Star),
         new(1, GridUnitType.Star),
+        new(OperationsColumn, GridUnitType.Pixel),
     ];
 
     /// <summary>The colour a mark of one kind is filled with, which is this plugin's own.</summary>
@@ -249,15 +311,35 @@ internal sealed class OverviewView : UserControl
     /// <summary>What asks for a reading while nothing else does: a file changed by another program.</summary>
     private readonly DispatcherTimer _again;
 
+    /// <summary>The host, which is what a row's buttons reach to run and to report.</summary>
+    private readonly IPluginHost _host;
+
+    /// <summary>
+    /// The row a connection was begun from, or nothing while none is.
+    /// </summary>
+    /// <remarks>
+    /// Held by the row rather than by a button, because what is connected to what is a fact about two rows and
+    /// not about the control that was pressed: the table is drawn again under a reader — by the reading on its
+    /// timer — and a connection kept in a button would be lost the moment the button was thrown away.
+    /// <para>
+    /// What is held is the path rather than the row, since a row is built afresh on every reading and two rows
+    /// that say the same thing are not the same object: the path is what a row is about, and a path is what the
+    /// command line takes.
+    /// </para>
+    /// </remarks>
+    private string? _connecting;
+
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
 
     /// <summary>Makes the control.</summary>
+    /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
     /// <param name="log">Where a reading that could not be made is said.</param>
     /// <param name="files">What the files may have done.</param>
     /// <param name="refocus">The host's windows being come back to.</param>
-    public OverviewView(ILog log, IFileChanges files, IRefocus refocus)
+    public OverviewView(IPluginHost host, ILog log, IFileChanges files, IRefocus refocus)
     {
+        _host = host;
         _log = log;
         _files = files;
         _refocus = refocus;
@@ -401,7 +483,9 @@ internal sealed class OverviewView : UserControl
         var behind = facts.WrongBase.ToHashSet(StringComparer.Ordinal);
 
         wrong.AddRange(
-            facts.Unowned.Select(path => new TableRow([Pill(State.NotMine)], [], path, string.Empty))
+            facts.Unowned.Select(path =>
+                new TableRow([Pill(State.NotMine)], [], path, string.Empty, OverviewOperations.Of(State.NotMine))
+            )
         );
 
         var changed = facts.Modified.Where(path => !destinations.Contains(path)).ToList();
@@ -409,18 +493,24 @@ internal sealed class OverviewView : UserControl
         wrong.AddRange(
             changed
                 .Where(behind.Contains)
-                .Select(path => new TableRow([Pill(State.Stale)], [], path, string.Empty))
+                .Select(path =>
+                    new TableRow([Pill(State.Stale)], [], path, string.Empty, OverviewOperations.Of(State.Stale))
+                )
         );
 
         structural.AddRange(
-            facts.Lost.Select(path => new TableRow([Pill(State.Lost)], [], path, string.Empty))
+            facts.Lost.Select(path =>
+                new TableRow([Pill(State.Lost)], [], path, string.Empty, OverviewOperations.Of(State.Lost))
+            )
         );
 
         // What the tree holds and the Layout does not name is a path with nothing on the other side of it, so it
         // is written where a path stands rather than where one goes: `From` and `To` are not a direction here,
         // they are the two columns a path may stand in, and the states that are about one path use the first.
         structural.AddRange(
-            facts.Untagged.Select(path => new TableRow([Pill(State.Untagged)], [], path, string.Empty))
+            facts.Untagged.Select(path =>
+                new TableRow([Pill(State.Untagged)], [], path, string.Empty, OverviewOperations.Of(State.Untagged))
+            )
         );
 
         // A move is read where the content it carries has to be acted on: one that was edited against a
@@ -446,7 +536,10 @@ internal sealed class OverviewView : UserControl
                             : [],
                     ],
                     item.Target,
-                    item.Path
+                    item.Path,
+                    // A merge is settled by joining its variant, which is not an operation on a path: the row
+                    // says so by having nothing to press.
+                    []
                 )
             )
         );
@@ -460,7 +553,8 @@ internal sealed class OverviewView : UserControl
                     [Pill(State.Broken)],
                     [$"{stopped}{BrokenSaid(reason)}"],
                     reason.Target,
-                    BrokenPlace(reason)
+                    BrokenPlace(reason),
+                    []
                 )
             )
         );
@@ -468,7 +562,9 @@ internal sealed class OverviewView : UserControl
         changes.AddRange(
             changed
                 .Where(path => !behind.Contains(path))
-                .Select(path => new TableRow([Pill(State.Modified)], [], path, string.Empty))
+                .Select(path =>
+                    new TableRow([Pill(State.Modified)], [], path, string.Empty, OverviewOperations.Of(State.Modified))
+                )
         );
 
         return [.. wrong, .. merges, .. structural, .. changes];
@@ -480,6 +576,10 @@ internal sealed class OverviewView : UserControl
         // One move, as a row. A move whose file was edited is a change of content as well, so what became of
         // the content is a pill of the move's own row rather than a row of its own — and a move that changed
         // nothing says nothing beyond being a move, since there is no change of content to report.
+        //
+        // The buttons are both states' where it is both: what a reader has to do about a file that moved and
+        // was edited is both things, and a row offering one of them would be a row that could not be settled
+        // from where it is read.
         TableRow Move(Rename rename, State kind) =>
             new(
                 [
@@ -490,52 +590,11 @@ internal sealed class OverviewView : UserControl
                 ],
                 [],
                 rename.From,
-                rename.To
+                rename.To,
+                rename.Modified
+                    ? OverviewOperations.Of([kind, behind.Contains(rename.To) ? State.Stale : State.Modified])
+                    : OverviewOperations.Of(kind)
             );
-    }
-
-    /// <summary>
-    /// One state of a row, which is the letters it is read by, how it is coloured, and what it means.
-    /// </summary>
-    /// <remarks>
-    /// Seven, because that is how many the reading may say about a path, and a state is one of them rather than
-    /// a word composed where a row is made: the letters and the colour are the state's own answer, so a state
-    /// added later is a member here and nothing else changes.
-    /// <para>
-    /// The colour is this plugin's own — see <see cref="RorolalaColours"/> — rather than a role of the look's,
-    /// because what a state is coloured is the state: red for what must not be recorded, green for what is not
-    /// recorded yet, amber for what is under way or has to be read twice, and blue for what is somewhere else
-    /// than the Layout says.
-    /// </para>
-    /// </remarks>
-    private enum State
-    {
-        /// <summary>What the Layout does not name and the tree holds.</summary>
-        Untagged,
-
-        /// <summary>What the Layout names and the tree has lost.</summary>
-        Lost,
-
-        /// <summary>What is not this account's to record.</summary>
-        NotMine,
-
-        /// <summary>What is this account's to record but stands on a version upstream has moved past.</summary>
-        Stale,
-
-        /// <summary>A move, where the bytes make it one.</summary>
-        Renamed,
-
-        /// <summary>A move, where only the likeness suggests it.</summary>
-        RenamedLikely,
-
-        /// <summary>A change of content that is this account's to record.</summary>
-        Modified,
-
-        /// <summary>A variant waiting to be joined in.</summary>
-        Merging,
-
-        /// <summary>A variant that cannot be joined in.</summary>
-        Broken,
     }
 
     /// <summary>One state, as the pill a row wears for it.</summary>
@@ -549,16 +608,256 @@ internal sealed class OverviewView : UserControl
     private static StatusPill Pill(State state) =>
         state switch
         {
-            State.Untagged => new StatusPill("A", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_untagged")),
-            State.Lost => new StatusPill("D", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_lost")),
-            State.NotMine => new StatusPill("E", WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned")),
-            State.Stale => new StatusPill("E", WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_base")),
-            State.Renamed => new StatusPill("R", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")),
-            State.RenamedLikely => new StatusPill("R?", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")),
-            State.Modified => new StatusPill("M", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.change_modified")),
-            State.Merging => new StatusPill("J", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
-            _ => new StatusPill("J", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
+            State.Untagged => new StatusPill(state, "A", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_untagged")),
+            State.Lost => new StatusPill(state, "D", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_lost")),
+            State.NotMine => new StatusPill(state, "E", WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned")),
+            State.Stale => new StatusPill(state, "E", WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_base")),
+            State.Renamed => new StatusPill(state, "R", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")),
+            State.RenamedLikely => new StatusPill(state, "R?", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")),
+            State.Modified => new StatusPill(state, "M", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.change_modified")),
+            State.Merging => new StatusPill(state, "J", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
+            _ => new StatusPill(state, "J", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
         };
+
+    /// <summary>
+    /// The states a row is in, read from the pills it wears.
+    /// </summary>
+    /// <remarks>
+    /// Read off the pills rather than carried beside them, since the pills are already the row's answer to which
+    /// states it is in: a second list that could disagree with them would be a row whose buttons acted on
+    /// something other than what it says.
+    /// </remarks>
+    /// <param name="row">The row.</param>
+    /// <returns>The states, in the order the pills are read.</returns>
+    private static IReadOnlyList<State> Choices(TableRow row) =>
+        [.. row.Pills.Select(pill => pill.State)];
+
+    /// <summary>
+    /// What the buttons of a row are made of, which is a fresh set on every drawing.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than made where a row is, because what a button does needs the host — and the rows are built
+    /// by a static method that has no host and no reason to want one. The owner is what the buttons read as they
+    /// are drawn: the path the run is made in and what to tell when the files have changed.
+    /// </remarks>
+    /// <param name="row">The row the buttons are for.</param>
+    /// <param name="at">Where the run is made, which is what the paths in the row are read from.</param>
+    /// <param name="host">The host, which is what a button reaches to run and to report.</param>
+    /// <param name="view">The control the buttons belong to, which is what a connection is remembered on.</param>
+    /// <returns>The buttons, or nothing drawn when the row has no operations.</returns>
+    private static Control Cell(TableRow row, string at, IPluginHost host, OverviewView view)
+    {
+        var operations = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        foreach (var operation in row.Operations)
+        {
+            operations.Children.Add(view.NewButton(operation, row, at, host));
+        }
+
+        return operations;
+    }
+
+    /// <summary>
+    /// One operation as a button.
+    /// </summary>
+    /// <remarks>
+    /// A button rather than a menu, because what may be done about a row is one to three things and a row of
+    /// things to press says them at once: a menu would hide what a row offers behind a click, and a row that has
+    /// to be opened to be read is a row that is read twice.
+    /// <para>
+    /// What a press does depends on what is being connected: a connection is two clicks and the second one runs
+    /// the operation, where every other button runs when it is pressed. While a connection is on, every button
+    /// that is not a side of it is disabled — including the other buttons of the row it began from — so that a
+    /// reader who has begun one cannot also ask for something else, which would be two runs over one path.
+    /// </para>
+    /// <para>
+    /// The two sides of it are the two that stand out, and what tells them is what they say rather than how
+    /// they are painted: the button that began the connection says that it is waiting, and every button it
+    /// could be finished on says that it is an answer (see <see cref="Label"/>). The rest keep their own words
+    /// and are not dimmed — the look has no faded state, and inventing one here would be a colour the theme
+    /// does not hold — but they do not answer: a disabled button takes no press and takes no pointer, so a
+    /// reader finds the ones that name themselves before they find the ones that do not.
+    /// </para>
+    /// </remarks>
+    /// <param name="operation">What the button does.</param>
+    /// <param name="row">The row it is on.</param>
+    /// <param name="at">Where the run is made, which is what the row's paths are read from.</param>
+    /// <param name="host">The host, which is what the button reaches to run and to report.</param>
+    /// <returns>The button.</returns>
+    private Button NewButton(Operation operation, TableRow row, string at, IPluginHost host)
+    {
+        var path = Path(row);
+        var pairing = OverviewOperations.IsPairing(operation);
+
+        // Both of these are asked of a connection button and of no other, and `pairing` is part of both rather
+        // than only of the candidate: every button of a row acts on the row's one path, so a button that is not
+        // a connection is `begun` the moment a connection is begun on its row, and would be drawn as the button
+        // waiting for a second press rather than as the thing it does.
+        var begun = pairing && _connecting is { Length: > 0 } begunAt && begunAt == path;
+        var candidate = pairing
+            && _connecting is { Length: > 0 } from
+            && from != path
+            && OverviewOperations.Pairs(Choices(row), StatesAt(from, _shown?.Rows ?? []));
+        var running = _connecting is not null;
+
+        var button = new Button
+        {
+            Content = RolaI18N.Get(Label(operation, begun, candidate)),
+            Classes = { "ghost" },
+            VerticalAlignment = VerticalAlignment.Center,
+            // One width for every button, whatever it says and whether or not it is part of a connection. A
+            // button sized by its words is a button that changes size when its words do, and the words of the
+            // two sides of a connection are the ones that change: the whole column would jump sideways at the
+            // press, and the two rows being paired would jump by different amounts.
+            Width = ButtonWidth,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 2, ButtonGap, 2),
+            // Everything is pressable while nothing is being connected; while one is, only the two sides of it
+            // are — which is the row's own button again, so that a second press takes it back.
+            IsEnabled = !running || begun || candidate,
+        };
+
+        button.Click += (_, _) =>
+        {
+            if (pairing)
+            {
+                Connect(operation, row, at, host);
+                return;
+            }
+
+            Ask(operation, path, at, host);
+        };
+
+        return button;
+    }
+
+    /// <summary>
+    /// What a button says, which is not always what it does.
+    /// </summary>
+    /// <remarks>
+    /// A connection is a question — which of these two is which — and the answer is given by pressing one of
+    /// them. So the buttons that are part of the question stop saying what they do and start saying what they
+    /// are: the one that began it says that it is waiting, and each one it could be finished on says that it is
+    /// an answer. Every other button on the table says what it does, and the two flags are the connection
+    /// button's own (see <see cref="NewButton"/>) rather than the row's, since a row's buttons all act on the
+    /// row's one path and a flag that went by the path would catch them all.
+    /// <para>
+    /// Words rather than a mark, because the two sides of a connection are two rows that may be far apart and
+    /// may look alike: what a reader has to be able to tell is which of them they started from and which of them
+    /// they may finish on, and 「…」 and 「组合」 say that where a tint has to be noticed first.
+    /// </para>
+    /// </remarks>
+    /// <param name="operation">The operation the button is for.</param>
+    /// <param name="begun">Whether it is the button the connection began from.</param>
+    /// <param name="candidate">Whether it is one the connection could be finished on.</param>
+    /// <returns>The key its words are read from.</returns>
+    private static string Label(Operation operation, bool begun, bool candidate) =>
+        begun ? "rorolala_vcs.operations.connecting"
+        : candidate ? "rorolala_vcs.operations.pair"
+        : OverviewOperations.Key(operation);
+
+    /// <summary>
+    /// What a connection button does when it is pressed: begins one, takes one back, or finishes one.
+    /// </summary>
+    /// <remarks>
+    /// A press on the row a connection began from takes it back, which is what a reader who has changed their
+    /// mind wants and is also what keeps the button from being pressed twice into a connection of a row with
+    /// itself. A press on a row that is the other side of it runs the operation, with the two paths.
+    /// </remarks>
+    /// <param name="operation">The operation, which is always a connection here.</param>
+    /// <param name="row">The row it was pressed on.</param>
+    /// <param name="at">Where the run is made.</param>
+    /// <param name="host">The host.</param>
+    private void Connect(Operation operation, TableRow row, string at, IPluginHost host)
+    {
+        var path = Path(row);
+        var begun = _connecting is { Length: > 0 } begunAt && begunAt == path;
+
+        if (begun || _connecting is not { Length: > 0 } from)
+        {
+            // Begun, or begun again after a reading threw the row away: either way the next press is the first
+            // of a new connection rather than the second of a stale one.
+            _connecting = begun ? null : path;
+
+            // The rows say the same thing they did, so this is a drawing of what is already read: reading the
+            // work again would be a reading spent on a button, and one that might disagree with what is on
+            // screen about a connection the reader is in the middle of making.
+            Redraw();
+            return;
+        }
+
+        // The lost path is the one that moved, so it is the one the command is given and the other is what it
+        // moved to — whichever of the two rows was clicked first.
+        var lost = Choices(row).Contains(State.Lost) ? path : from;
+        var gain = lost == path ? from : path;
+
+        _connecting = null;
+        OverviewOperations.Run(operation, lost, at, gain, host);
+
+        // The run says the files may have changed, so the reading that follows will say something else. What is
+        // drawn now is that reading and not these rows: the two rows of a connection are about to become one
+        // move, and drawing them as they were would be drawing a question that has been answered.
+        _shown = null;
+    }
+
+    /// <summary>
+    /// Asks about an operation that cannot be taken back, and runs it when the answer is yes.
+    /// </summary>
+    /// <remarks>
+    /// Putting content back writes over what the file holds now, and what it held is not in the store: the
+    /// Layout names a version, and what was changed between them is work that no command can recover. So it is
+    /// asked about rather than done — the one operation of the six whose effect a reader might not have meant.
+    /// <para>
+    /// The other five are not asked about, and that is deliberate: a move that is taken back is a move made
+    /// again, a loss that is confirmed is a record of what already happened, and a claim is answered by the
+    /// Vault. None of them destroys anything the reader has no other copy of.
+    /// </para>
+    /// </remarks>
+    /// <param name="operation">The operation.</param>
+    /// <param name="path">The path it is done to.</param>
+    /// <param name="at">Where the run is made.</param>
+    /// <param name="host">The host, whose window the question is put over.</param>
+    private static void Ask(Operation operation, string path, string at, IPluginHost host)
+    {
+        if (operation is not Operation.RestoreContent)
+        {
+            OverviewOperations.Run(operation, path, at, null, host);
+            return;
+        }
+
+        host.Dialogs.Show(
+            new Dialog(
+                RolaI18N.Get("rorolala_vcs.operations.restore_confirm_title"),
+                RolaI18N.Get("rorolala_vcs.operations.restore_confirm_message", path),
+                () => OverviewOperations.Run(operation, path, at, null, host)
+            )
+        );
+    }
+
+    /// <summary>
+    /// What a row is about, which is the path its operations act on.
+    /// </summary>
+    /// <remarks>
+    /// A row that stands for one path has that path in one of its two columns and nothing in the other, and
+    /// which of the two it is depends on the state: a loss is a path the Layout names, a gain is one the tree
+    /// holds. A move is the one row with both, and what a move's operations act on is where the file is now —
+    /// that is the path a reader is looking at, and the one the command can find.
+    /// </remarks>
+    /// <param name="row">The row.</param>
+    /// <returns>The path, or empty for a row that names none.</returns>
+    private static string Path(TableRow row) =>
+        row.To is { Length: > 0 } to ? to : row.From;
+
+    /// <summary>The states of the row a path is on, or none when no row names it.</summary>
+    /// <param name="path">The path.</param>
+    /// <param name="rows">The rows the table is showing.</param>
+    /// <returns>The states, which are none for a path no row is about.</returns>
+    private static IReadOnlyList<State> StatesAt(string path, IReadOnlyList<TableRow> rows) =>
+        rows.FirstOrDefault(row => Path(row) == path) is { } row ? Choices(row) : [];
 
     /// <summary>Starts or stops listening for what a reading goes stale from.</summary>
     /// <param name="on">Whether to listen.</param>
@@ -582,6 +881,22 @@ internal sealed class OverviewView : UserControl
         Draw();
     }
 
+    /// <summary>
+    /// Redraws what is already on screen, without reading the work again.
+    /// </summary>
+    /// <remarks>
+    /// For what changes what the table looks like without changing what it says: beginning a connection, and
+    /// taking one back. Reading the work again for that would be a reading spent on nothing — and worse, it
+    /// would be a reading that might disagree, since the work may have moved since the last one.
+    /// </remarks>
+    private void Redraw()
+    {
+        if (_shown is { } shown)
+        {
+            Show(shown.Said, shown.Rows);
+        }
+    }
+
     /// <summary>Reads the work again and draws it, on the thread the control belongs to.</summary>
     private void Draw() => Dispatcher.UIThread.Post(Drawn);
 
@@ -595,12 +910,45 @@ internal sealed class OverviewView : UserControl
         // What would be drawn is what is already drawn, so nothing is drawn: the table is the whole of the
         // dock, and building it again throws away what the reader has scrolled to, chosen and is pointing at.
         // A reading is asked for on a timer, so all but a few of them say what the last one said.
-        if (_shown is { } shown && shown.Said == said && Same(shown.Rows, rows))
+        //
+        // What the rows say is not the whole of what the table looks like: a connection in hand is the view's
+        // rather than the reading's, and the row it is on is not rebuilt when a button is pressed — see
+        // <see cref="Redraw"/>. So a reading that says what the last one said is still drawn when the table on
+        // screen was drawn with no connection in it, which is the one case where the two differ.
+        if (
+            _shown is { } shown
+            && shown.Said == said
+            && Same(shown.Rows, rows)
+            && _connecting is null
+        )
         {
             return;
         }
 
+        Show(said, rows);
+    }
+
+    /// <summary>
+    /// Puts a reading on screen, which is what both ways of drawing come to.
+    /// </summary>
+    /// <remarks>
+    /// One place rather than two, because the two callers differ only in where the rows came from: the reading
+    /// on its timer, and a redraw of the rows already on screen. Everything below is about the drawing rather
+    /// than about the reading.
+    /// </remarks>
+    /// <param name="said">What is said in the middle, or nothing when the table is what is shown.</param>
+    /// <param name="rows">The rows to show.</param>
+    private void Show(string? said, IReadOnlyList<TableRow> rows)
+    {
         _shown = new Shown(said, rows);
+
+        // A connection whose row is no longer in the table is nothing to finish, and a reader is not told about
+        // it: the work moved under them, and what the button was about is gone. What is left is the table as the
+        // reading now says it, which is what a reader is looking at either way.
+        if (_connecting is { Length: > 0 } connecting && !rows.Any(row => Path(row) == connecting))
+        {
+            _connecting = null;
+        }
 
         _blocks.Children.Clear();
 
@@ -609,7 +957,7 @@ internal sealed class OverviewView : UserControl
 
         if (rows.Count > 0)
         {
-            _blocks.Children.Add(Table(rows));
+            _blocks.Children.Add(Table(rows, BaseDirectory.Current ?? string.Empty, _host, this));
         }
     }
 
@@ -674,8 +1022,11 @@ internal sealed class OverviewView : UserControl
     /// the ones beside it.
     /// </remarks>
     /// <param name="rows">The changes.</param>
+    /// <param name="at">Where the run is made, which is what a row's paths are read from.</param>
+    /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
+    /// <param name="view">The control the rows belong to, which is what a connection is remembered on.</param>
     /// <returns>The table to show.</returns>
-    private static Control Table(IReadOnlyList<TableRow> rows)
+    private static Control Table(IReadOnlyList<TableRow> rows, string at, IPluginHost host, OverviewView view)
     {
         var list = new ListBox
         {
@@ -683,7 +1034,7 @@ internal sealed class OverviewView : UserControl
             Background = Brushes.Transparent,
             Padding = new Thickness(0),
             BorderThickness = new Thickness(0),
-            ItemTemplate = new FuncDataTemplate<TableRow>((row, _) => Row(row), true),
+            ItemTemplate = new FuncDataTemplate<TableRow>((row, _) => Row(row, at, host, view), true),
         };
 
         // The row keeps the design's height, and its own inset is taken off so that the band and the rows
@@ -719,6 +1070,7 @@ internal sealed class OverviewView : UserControl
         Place(heads, Head(RolaI18N.Get("rorolala_vcs.status.column_state")), 0);
         Place(heads, Head(RolaI18N.Get("rorolala_vcs.status.column_from")), 1);
         Place(heads, Head(RolaI18N.Get("rorolala_vcs.status.column_to")), 2);
+        Place(heads, Head(RolaI18N.Get("rorolala_vcs.status.column_operations")), 3);
 
         var band = new Border
         {
@@ -734,16 +1086,20 @@ internal sealed class OverviewView : UserControl
         return band;
     }
 
-    /// <summary>One row of the table: what the path's state is, and the paths it is between.</summary>
+    /// <summary>One row of the table: what the path's state is, the paths it is between, and what to do about it.</summary>
     /// <param name="row">The row.</param>
+    /// <param name="at">Where the run is made, which is what the row's paths are read from.</param>
+    /// <param name="host">The host, which is what a button reaches to run and to report.</param>
+    /// <param name="view">The control the row belongs to, which is what a connection is remembered on.</param>
     /// <returns>The row to show.</returns>
-    private static Control Row(TableRow row)
+    private static Control Row(TableRow row, string at, IPluginHost host, OverviewView view)
     {
         var cells = new Grid { ColumnDefinitions = Definitions() };
 
         Place(cells, States(row), 0);
         Place(cells, Cell(row.From), 1);
         Place(cells, Cell(row.To), 2);
+        Place(cells, Cell(row, at, host, view), 3);
 
         var line = new Border
         {
@@ -924,6 +1280,32 @@ internal sealed class OverviewView : UserControl
     /// — the room belongs to the paths, which is where it is read.
     /// </remarks>
     private const double StateColumn = (3 * PillWidth) + (3 * PillGap);
+
+    /// <summary>
+    /// How wide a button is, and how far one stands from the next.
+    /// </summary>
+    /// <remarks>
+    /// Wide enough for the longest words a button ever carries — 「获取所有权」 — and no wider, since the column
+    /// is taken from the paths beside it. The width is stated rather than left to the words, because the words
+    /// change while a connection is being made and the column must not: what a reader is doing is reading three
+    /// buttons that say what they are part of, and a button that moved out from under the pointer between the
+    /// two presses would be a button that has to be found twice.
+    /// </remarks>
+    private const double ButtonWidth = 84;
+
+    /// <inheritdoc cref="ButtonWidth" />
+    private const double ButtonGap = 4;
+
+    /// <summary>
+    /// How wide the column of operations is: the widest button and the room for a second beside it.
+    /// </summary>
+    /// <remarks>
+    /// The buttons wrap, so the column has to be wide enough for the two that most often stand together — a
+    /// loss wants rebuilding and connecting, and a file that is somebody else's wants its content put back and
+    /// itself claimed — rather than only for the widest one. A row with more than fits wraps onto a second line,
+    /// which is what the WrapPanel is for and what makes a row grow rather than lose a button.
+    /// </remarks>
+    private const double OperationsColumn = (2 * ButtonWidth) + (2 * ButtonGap);
 
     /// <summary>One colour with the alpha a pill's ground is laid at, over whatever the row is drawn on.</summary>
     /// <param name="colour">The state's colour.</param>

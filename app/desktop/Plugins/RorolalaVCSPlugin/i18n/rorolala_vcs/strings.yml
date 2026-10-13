@@ -77,6 +77,11 @@ rorolala_vcs:
     column_to:
       en: To
       zh-CN: 至
+    # What the column of buttons is called. Every row has it and most rows have something in it, so the band
+    # names it rather than leaving it to be guessed at from the buttons below it.
+    column_operations:
+      en: Operations
+      zh-CN: 操作
 
     # What kind of change a row is. A change of content alone has no kind and says so by being blank:
     # what happened to it is in the last column, which is the one every row has something in.
@@ -212,6 +217,57 @@ rorolala_vcs:
     merging:
       en: Merging
       zh-CN: 合并中
+
+  # What the Overview offers to do about a row, one line each: what a button says and what it is hovered for
+  # are the same words, since a button's label is what it does. Every one of them is a mode of `rola align`,
+  # except taking ownership, which is `rola hold` — the same command the grid's own menu runs, so that the two
+  # ways into it do one thing rather than two.
+  operations:
+    rebuild:
+      en: Rebuild file
+      zh-CN: 重建文件
+    restore_move:
+      en: Undo move
+      zh-CN: 还原移动
+    restore_content:
+      en: Restore content
+      zh-CN: 还原内容
+    confirm_rename:
+      en: Confirm rename
+      zh-CN: 确定重命名
+    connect:
+      en: Connect to
+      zh-CN: 连接至
+    take_ownership:
+      en: Take ownership
+      zh-CN: 获取所有权
+
+    # What the two sides of a connection say while one is being made, in place of what they do. The button that
+    # began it is waiting, and each one it could be finished on is an answer: three dots rather than a word,
+    # because there is nothing to say yet, and 「组合」 rather than 「连接至」 again, because the second press is
+    # not asking the same question as the first.
+    connecting:
+      en: "..."
+      zh-CN: "…"
+    pair:
+      en: Pair
+      zh-CN: 组合
+
+    # What is said when a run could not be made at all, which is a window that was opened without the command
+    # line beside it rather than a command that failed. What a command said about its own failure is its own
+    # words and is shown as they are.
+    failed:
+      en: The operation could not be run
+      zh-CN: 操作无法执行
+
+    # The one operation that is asked about before it runs, because putting content back writes over what the
+    # file holds now and what was changed between the two is work no command can recover.
+    restore_confirm_title:
+      en: Restore content?
+      zh-CN: 要还原内容吗？
+    restore_confirm_message:
+      en: "`%{path}` will be overwritten with the version the Layout records. What it holds now cannot be recovered."
+      zh-CN: "`%{path}` 会被布局所记录的版本覆盖。它现在的内容无法找回。"
 
   ownership:
     mine:

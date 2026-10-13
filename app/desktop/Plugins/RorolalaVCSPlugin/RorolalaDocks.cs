@@ -62,7 +62,7 @@ internal static class RorolalaDocks
     {
         ArgumentNullException.ThrowIfNull(host);
 
-        Add(host, owner, OverviewNameId, OverviewKey, _ => new OverviewDock(host.Log, host.Files, host.Refocus));
+        Add(host, owner, OverviewNameId, OverviewKey, _ => new OverviewDock(host, host.Log, host.Files, host.Refocus));
         Add(host, owner, WorkspaceNameId, WorkspaceKey, _ => new RorolalaDock(host.Log));
         Add(host, owner, VersionGraphNameId, VersionGraphKey, _ => new RorolalaDock(host.Log));
     }
