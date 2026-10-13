@@ -247,21 +247,14 @@ public sealed class RorolalaDockTests
 
         // What is wrong is read first — another account's before a base upstream has moved past — then what
         // is under way, then what the Layout and the tree disagree about, and last what is to be recorded.
+        // A pill is read by its letters, which is what a column of states is scanned by.
         Assert.Equal(
-            [
-                RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned"),
-                RolaI18N.Get("rorolala_vcs.status.change_wrong_base"),
-                RolaI18N.Get("rorolala_vcs.status.kind_merge"),
-                RolaI18N.Get("rorolala_vcs.status.kind_lost"),
-                RolaI18N.Get("rorolala_vcs.status.kind_untagged"),
-                RolaI18N.Get("rorolala_vcs.status.kind_rename_strong"),
-                RolaI18N.Get("rorolala_vcs.status.change_modified"),
-            ],
+            ["E", "E", "J", "D", "A", "R", "M"],
             rows.Select(Pills)
         );
 
         // What a row has to say that is not a state is written rather than coloured: the variant a merge waits
-        // for, and that a move left its content alone.
+        // for. A move that changed nothing has nothing to report beyond being a move, so it carries no note.
         Assert.Equal(
             [
                 string.Empty,
@@ -269,7 +262,7 @@ public sealed class RorolalaDockTests
                 $"{RolaI18N.Get("rorolala_vcs.status.merge_variant")}1a2b3c4",
                 string.Empty,
                 string.Empty,
-                RolaI18N.Get("rorolala_vcs.status.change_unchanged"),
+                string.Empty,
                 string.Empty,
             ],
             rows.Select(Notes)
@@ -349,10 +342,9 @@ public sealed class RorolalaDockTests
 
         var row = Assert.Single(OverviewView.Rows(facts));
 
-        Assert.Equal(
-            $"{RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")} + {RolaI18N.Get("rorolala_vcs.status.change_modified")}",
-            Pills(row)
-        );
+        // A move whose file was edited is two states on one row, because the move and what became of its
+        // content are two things to know.
+        Assert.Equal("R? + M", Pills(row));
         Assert.Equal(("a.txt", "b.txt"), (row.From, row.To));
     }
 
@@ -387,22 +379,23 @@ public sealed class RorolalaDockTests
         Assert.Equal(2, rows.Count);
         Assert.Equal(("merge/hero.psd", "merge/hero.txt"), (rows[0].From, rows[0].To));
 
-        // The reason is the row's second pill, said after the words for a merge that cannot go on.
-        Assert.Equal(2, rows[0].Pills.Count);
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.status.kind_merge"), rows[0].Pills[0].Said);
+        // A merge is one state whatever became of it, so the row wears one pill: the colour is what says that
+        // this merge is a thing gone wrong, and the reason is in the note, where there is room to say it.
+        Assert.Single(rows[0].Pills);
+        Assert.Equal("J", rows[0].Pills[0].Letters);
         Assert.StartsWith(
             RolaI18N.Get("rorolala_vcs.status.merge_broken"),
-            rows[0].Pills[1].Said,
+            Assert.Single(rows[0].Notes),
             StringComparison.Ordinal
         );
 
-        // The Layout naming no such file is a reason rather than a missing answer, so the row is there with
-        // both its pills, and the columns that want a path are the ones left empty.
+        // The Layout naming no such file is a reason rather than a missing answer, so the row is there with its
+        // pill and its reason, and the columns that want a path are the ones left empty.
         Assert.Equal((string.Empty, string.Empty), (rows[1].From, rows[1].To));
-        Assert.Equal(2, rows[1].Pills.Count);
+        Assert.Single(rows[1].Pills);
         Assert.True(
-            rows[1].Pills[1].Said.Length > RolaI18N.Get("rorolala_vcs.status.merge_broken").Length,
-            rows[1].Pills[1].Said
+            Assert.Single(rows[1].Notes).Length > RolaI18N.Get("rorolala_vcs.status.merge_broken").Length,
+            Assert.Single(rows[1].Notes)
         );
     }
 
@@ -449,14 +442,14 @@ public sealed class RorolalaDockTests
         Assert.False(OverviewView.Same(once, OverviewView.Rows(facts with { WrongBase = ["kept.txt"] })));
     }
 
-    /// <summary>What a row's pills say, in the order they are drawn.</summary>
+    /// <summary>What a row's pills are read by, in the order they are drawn.</summary>
     /// <param name="row">The row.</param>
-    /// <returns>What it says about the path's state.</returns>
+    /// <returns>What the letters on it are.</returns>
     private static string Pills(TableRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        return string.Join(" + ", row.Pills.Select(pill => pill.Said));
+        return string.Join(" + ", row.Pills.Select(pill => pill.Letters));
     }
 
     /// <summary>What a row's notes say, in the order they are drawn.</summary>

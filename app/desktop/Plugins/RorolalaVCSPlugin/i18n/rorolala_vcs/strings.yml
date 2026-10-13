@@ -80,35 +80,36 @@ rorolala_vcs:
 
     # What kind of change a row is. A change of content alone has no kind and says so by being blank:
     # what happened to it is in the last column, which is the one every row has something in.
+    #
+    # These are what a pill is hovered for rather than what is written on it, since what is written on it is
+    # one or two letters: each is the whole of what those letters mean, which is the state's name and the
+    # reason for it, because a reader who has stopped at a pill is asking what it is.
     kind_lost:
-      en: Lost
-      zh-CN: 丢失
+      en: The record names it, but it is really not there.
+      zh-CN: 在记录当中，该条目存在，但实际不存在。
     kind_untagged:
-      en: Untagged
-      zh-CN: 未标记
+      en: The record does not name it, but it is really there.
+      zh-CN: 在记录当中，该条目不存在，但实际存在。
     kind_rename_weak:
-      en: Rename (likely)
-      zh-CN: 重命名（可能）
+      en: A lost and an untagged one that may be a move, which has to be confirmed.
+      zh-CN: 产生了一对丢失和未标记，可能为一组移动，需要确认。
     kind_rename_strong:
-      en: Rename (certain)
-      zh-CN: 重命名（一定）
+      en: A lost and an untagged one whose content matches, so it is a move.
+      zh-CN: 产生了一对丢失和未标记，它们内容一致，推断为移动。
     kind_merge:
-      en: Merge
-      zh-CN: 合并
+      en: A variant is waiting to be joined in.
+      zh-CN: 有一个变体等待合并。
 
     # What became of a row's content.
     change_modified:
-      en: Changed
-      zh-CN: 修改
-    change_unchanged:
-      en: Unchanged
-      zh-CN: 未修改
+      en: Its content has changed.
+      zh-CN: 文件内容产生了变化。
     change_wrong_unowned:
-      en: "Wrong change: not yours"
-      zh-CN: 错误修改（不持有）
+      en: Its content has changed, and it is not yours to change.
+      zh-CN: 文件内容产生了变化，但是你不持有它，所以无权修改。
     change_wrong_base:
-      en: "Wrong change: base has moved"
-      zh-CN: 错误修改（基准版本错误）
+      en: Its content has changed, but the version it is based on does not match.
+      zh-CN: 文件内容产生了变化，但是它的基准版本并不匹配。
 
     # What a merge says in the last column: the variant waiting, where its file went when it moved, and
     # why a merge cannot go on. A merge has no content change of its own — what settles it is the two

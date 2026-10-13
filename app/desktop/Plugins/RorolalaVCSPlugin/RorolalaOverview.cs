@@ -113,10 +113,22 @@ internal sealed record StatusFacts(
     }
 }
 
-/// <summary>One pill of a row's state: what it says, and what it is coloured.</summary>
-/// <param name="Said">What it is called.</param>
-/// <param name="Fill">What the pill is filled with, which is this plugin's colour rather than the look's.</param>
-internal sealed record StatusPill(string Said, Color Fill);
+/// <summary>
+/// One pill of a row's state: the letters it is read by, what it is coloured, and the whole of what it means.
+/// </summary>
+/// <remarks>
+/// One or two letters rather than the state's name, because the letters are what a column of states is scanned
+/// by: the names are two to five characters each and a column holding them is the widest thing in the row,
+/// where what a reader wants from the column is which state a row is in and not what that state is called. The
+/// name and the reason are on the pill's hover, which is where a reader who has stopped at one is looking.
+/// </remarks>
+/// <param name="Letters">What the state is known by, which is what the pill carries.</param>
+/// <param name="Fill">What the pill is coloured, which is this plugin's colour rather than the look's.</param>
+/// <param name="Hint">
+/// What the pointer resting on the pill says: the state's name and the whole of what it means, since the
+/// letters say only which state it is.
+/// </param>
+internal sealed record StatusPill(string Letters, Color Fill, string Hint);
 
 /// <summary>One row of the table: what the reading says about one path.</summary>
 /// <param name="Pills">
@@ -163,17 +175,22 @@ internal sealed class OverviewView : UserControl
     /// <summary>How far a band and its rows are inset, which the browser insets its own by.</summary>
     private const double Inset = 12.0;
 
-    /// <summary>How much of the table's width each column takes, in the order they are read.</summary>
+    /// <summary>
+    /// How much of the table's width each column takes, in the order they are read.
+    /// </summary>
     /// <remarks>
-    /// What a state is takes half of what a path does, since a path is read in full where a state is a word or
-    /// two: the share is one to two to two rather than a width, so that a wider dock gives the room to the
-    /// paths — which is where it is worth having — and a pair of pills too long for its share wraps, which is
-    /// what makes a row grow rather than lose what it has not said.
+    /// What a state is a width and the two paths are shares of what is left: a state is one or two letters in a
+    /// pill of a fixed size, so the room it wants is a measure rather than a share — three pills and the room
+    /// between them, which is what a row of states comes to before it wraps. A path is read in full, so the
+    /// rest is given to the two of them as shares rather than as widths, and a wider dock is a longer path
+    /// rather than a wider column of states.
     /// </remarks>
-    private static readonly double[] Shares = [1, 2, 2];
-
-    /// <summary>How round the ends of a pill are, which is half of how tall one is.</summary>
-    private const double PillRadius = 10;
+    private static readonly GridLength[] Columns =
+    [
+        new(StateColumn, GridUnitType.Pixel),
+        new(1, GridUnitType.Star),
+        new(1, GridUnitType.Star),
+    ];
 
     /// <summary>The colour a mark of one kind is filled with, which is this plugin's own.</summary>
     /// <remarks>
@@ -369,16 +386,9 @@ internal sealed class OverviewView : UserControl
         ArgumentNullException.ThrowIfNull(facts);
 
         // Read once and used for every row, since a table is one drawing: what a kind is called is the same
-        // word on every row it names. Every one is asked for by a literal so that the gate can see it.
-        var lost = RolaI18N.Get("rorolala_vcs.status.kind_lost");
-        var untagged = RolaI18N.Get("rorolala_vcs.status.kind_untagged");
-        var weak = RolaI18N.Get("rorolala_vcs.status.kind_rename_weak");
-        var strong = RolaI18N.Get("rorolala_vcs.status.kind_rename_strong");
-        var merge = RolaI18N.Get("rorolala_vcs.status.kind_merge");
-        var edited = RolaI18N.Get("rorolala_vcs.status.change_modified");
-        var unchanged = RolaI18N.Get("rorolala_vcs.status.change_unchanged");
-        var notMine = RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned");
-        var stale = RolaI18N.Get("rorolala_vcs.status.change_wrong_base");
+        // word on every row it names. Every one is asked for by a literal so that the gate can see it — and the
+        // letters are the pill's own, so what a state is known by is stated where the state is made rather than
+        // read from the catalogue.
         var variant = RolaI18N.Get("rorolala_vcs.status.merge_variant");
         var stopped = RolaI18N.Get("rorolala_vcs.status.merge_broken");
 
@@ -391,9 +401,7 @@ internal sealed class OverviewView : UserControl
         var behind = facts.WrongBase.ToHashSet(StringComparer.Ordinal);
 
         wrong.AddRange(
-            facts.Unowned.Select(path =>
-                new TableRow([new StatusPill(notMine, WrongFill)], [], path, string.Empty)
-            )
+            facts.Unowned.Select(path => new TableRow([Pill(State.NotMine)], [], path, string.Empty))
         );
 
         var changed = facts.Modified.Where(path => !destinations.Contains(path)).ToList();
@@ -401,39 +409,36 @@ internal sealed class OverviewView : UserControl
         wrong.AddRange(
             changed
                 .Where(behind.Contains)
-                .Select(path =>
-                    new TableRow([new StatusPill(stale, WrongFill)], [], path, string.Empty)
-                )
+                .Select(path => new TableRow([Pill(State.Stale)], [], path, string.Empty))
         );
 
         structural.AddRange(
-            facts.Lost.Select(path =>
-                new TableRow([new StatusPill(lost, WrongFill)], [], path, string.Empty)
-            )
+            facts.Lost.Select(path => new TableRow([Pill(State.Lost)], [], path, string.Empty))
         );
 
+        // What the tree holds and the Layout does not name is a path with nothing on the other side of it, so it
+        // is written where a path stands rather than where one goes: `From` and `To` are not a direction here,
+        // they are the two columns a path may stand in, and the states that are about one path use the first.
         structural.AddRange(
-            facts.Untagged.Select(path =>
-                new TableRow([new StatusPill(untagged, AppearedFill)], [], string.Empty, path)
-            )
+            facts.Untagged.Select(path => new TableRow([Pill(State.Untagged)], [], path, string.Empty))
         );
 
         // A move is read where the content it carries has to be acted on: one that was edited against a
         // version upstream has moved past is a wrong change before it is a move.
         foreach (var rename in facts.Renamed.Where(rename => !rename.Strong))
         {
-            (Misfit(rename) ? wrong : structural).Add(Move(rename, weak));
+            (Misfit(rename) ? wrong : structural).Add(Move(rename, State.RenamedLikely));
         }
 
         foreach (var rename in facts.Renamed.Where(rename => rename.Strong))
         {
-            (Misfit(rename) ? wrong : structural).Add(Move(rename, strong));
+            (Misfit(rename) ? wrong : structural).Add(Move(rename, State.Renamed));
         }
 
         merges.AddRange(
             facts.Merging.Select(item =>
                 new TableRow(
-                    [new StatusPill(merge, UnsettledFill)],
+                    [Pill(State.Merging)],
                     [
                         $"{variant}{Short(item.Variant)}",
                         .. item.Moved is { Length: > 0 } to
@@ -449,13 +454,11 @@ internal sealed class OverviewView : UserControl
         merges.AddRange(
             facts.Broken.Select(reason =>
                 new TableRow(
-                    [
-                        // A merge that cannot go on is a thing gone wrong rather than work under way, so both
-                        // its pills wear the colour of what is wrong rather than the colour of a merge that is.
-                        new StatusPill(merge, WrongFill),
-                        new StatusPill($"{stopped}{BrokenSaid(reason)}", WrongFill),
-                    ],
-                    [string.Empty],
+                    // A merge that cannot go on is a thing gone wrong rather than work under way, so its pill
+                    // wears the colour of what is wrong rather than the colour of a merge that is — and what is
+                    // wrong with it is in the note, where there is room for the reason.
+                    [Pill(State.Broken)],
+                    [$"{stopped}{BrokenSaid(reason)}"],
                     reason.Target,
                     BrokenPlace(reason)
                 )
@@ -465,9 +468,7 @@ internal sealed class OverviewView : UserControl
         changes.AddRange(
             changed
                 .Where(path => !behind.Contains(path))
-                .Select(path =>
-                    new TableRow([new StatusPill(edited, UnsettledFill)], [], path, string.Empty)
-                )
+                .Select(path => new TableRow([Pill(State.Modified)], [], path, string.Empty))
         );
 
         return [.. wrong, .. merges, .. structural, .. changes];
@@ -478,26 +479,86 @@ internal sealed class OverviewView : UserControl
 
         // One move, as a row. A move whose file was edited is a change of content as well, so what became of
         // the content is a pill of the move's own row rather than a row of its own — and a move that changed
-        // nothing says so in a note, since nothing about it has to be done.
-        TableRow Move(Rename rename, string kind) =>
+        // nothing says nothing beyond being a move, since there is no change of content to report.
+        TableRow Move(Rename rename, State kind) =>
             new(
                 [
-                    new StatusPill(kind, MovedFill),
+                    Pill(kind),
                     .. rename.Modified
-                        ? new[]
-                        {
-                            new StatusPill(
-                                behind.Contains(rename.To) ? stale : edited,
-                                behind.Contains(rename.To) ? WrongFill : UnsettledFill
-                            ),
-                        }
+                        ? new[] { Pill(behind.Contains(rename.To) ? State.Stale : State.Modified) }
                         : [],
                 ],
-                rename.Modified ? [] : new[] { unchanged },
+                [],
                 rename.From,
                 rename.To
             );
     }
+
+    /// <summary>
+    /// One state of a row, which is the letters it is read by, how it is coloured, and what it means.
+    /// </summary>
+    /// <remarks>
+    /// Seven, because that is how many the reading may say about a path, and a state is one of them rather than
+    /// a word composed where a row is made: the letters and the colour are the state's own answer, so a state
+    /// added later is a member here and nothing else changes.
+    /// <para>
+    /// The colour is this plugin's own — see <see cref="RorolalaColours"/> — rather than a role of the look's,
+    /// because what a state is coloured is the state: red for what must not be recorded, green for what is not
+    /// recorded yet, amber for what is under way or has to be read twice, and blue for what is somewhere else
+    /// than the Layout says.
+    /// </para>
+    /// </remarks>
+    private enum State
+    {
+        /// <summary>What the Layout does not name and the tree holds.</summary>
+        Untagged,
+
+        /// <summary>What the Layout names and the tree has lost.</summary>
+        Lost,
+
+        /// <summary>What is not this account's to record.</summary>
+        NotMine,
+
+        /// <summary>What is this account's to record but stands on a version upstream has moved past.</summary>
+        Stale,
+
+        /// <summary>A move, where the bytes make it one.</summary>
+        Renamed,
+
+        /// <summary>A move, where only the likeness suggests it.</summary>
+        RenamedLikely,
+
+        /// <summary>A change of content that is this account's to record.</summary>
+        Modified,
+
+        /// <summary>A variant waiting to be joined in.</summary>
+        Merging,
+
+        /// <summary>A variant that cannot be joined in.</summary>
+        Broken,
+    }
+
+    /// <summary>One state, as the pill a row wears for it.</summary>
+    /// <remarks>
+    /// The letters are stated here rather than read from the catalogue, because they are not words: one or two
+    /// characters a reader learns once and then scans for, and a translation that changed them would change what
+    /// a column is read by. What is translated is the hint, which is what the letters stand for.
+    /// </remarks>
+    /// <param name="state">The state.</param>
+    /// <returns>The pill.</returns>
+    private static StatusPill Pill(State state) =>
+        state switch
+        {
+            State.Untagged => new StatusPill("A", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_untagged")),
+            State.Lost => new StatusPill("D", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_lost")),
+            State.NotMine => new StatusPill("E", WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_unowned")),
+            State.Stale => new StatusPill("E", WrongFill, RolaI18N.Get("rorolala_vcs.status.change_wrong_base")),
+            State.Renamed => new StatusPill("R", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")),
+            State.RenamedLikely => new StatusPill("R?", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")),
+            State.Modified => new StatusPill("M", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.change_modified")),
+            State.Merging => new StatusPill("J", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
+            _ => new StatusPill("J", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
+        };
 
     /// <summary>Starts or stops listening for what a reading goes stale from.</summary>
     /// <param name="on">Whether to listen.</param>
@@ -680,7 +741,7 @@ internal sealed class OverviewView : UserControl
     {
         var cells = new Grid { ColumnDefinitions = Definitions() };
 
-        Place(cells, State(row), 0);
+        Place(cells, States(row), 0);
         Place(cells, Cell(row.From), 1);
         Place(cells, Cell(row.To), 2);
 
@@ -717,7 +778,7 @@ internal sealed class OverviewView : UserControl
     /// </remarks>
     /// <param name="row">The row.</param>
     /// <returns>The pills to show.</returns>
-    private static Control State(TableRow row)
+    private static Control States(TableRow row)
     {
         var state = new WrapPanel
         {
@@ -763,11 +824,21 @@ internal sealed class OverviewView : UserControl
         return note;
     }
 
-    /// <summary>One pill: a rounded ground in the colour of its state, with the state written on it.</summary>
+    /// <summary>
+    /// One pill: a rounded tag of its letters, in the state's own colour, with the whole of it said on hover.
+    /// </summary>
     /// <remarks>
-    /// The ground is the colour and the words are a shade of it, so a pill is one thing said rather than a
-    /// colour with a label stuck on it; the hairline around it is a shade of the same colour picked by the
-    /// ground the dock is on, which is what tells a pale pill from a pale dock.
+    /// The line and the letters are the state's colour and the ground behind them is that colour laid thin, so
+    /// a pill is one thing said rather than a colour with a label stuck on it: the tint is what tells the pill
+    /// from the row it stands on, and the colour entire is what makes it a mark. Laid thin rather than mixed
+    /// down, so that one pill reads on the light look and the dark one without being told which it is on — what
+    /// stands behind the colour is whatever the row is drawn on.
+    /// <para>
+    /// Every pill is the same size, whatever its letters: they are read as a column of marks rather than as
+    /// words, and a column whose marks grew and shrank with what they said would be one a reader has to measure
+    /// rather than scan. One letter and two both fit the width, so what a state is known by costs the column
+    /// nothing.
+    /// </para>
     /// </remarks>
     /// <param name="pill">The pill.</param>
     /// <returns>The pill to show.</returns>
@@ -775,14 +846,15 @@ internal sealed class OverviewView : UserControl
     {
         var words = new TextBlock
         {
-            Text = pill.Said,
+            Text = pill.Letters,
             TextWrapping = TextWrapping.NoWrap,
-            TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = new SolidColorBrush(RorolalaColours.On(pill.Fill)),
-            // Heavier than the words around it, since a pill is a state said rather than a value read: the
-            // colour is what it is found by, and the weight is what keeps the words from reading as a label
-            // stuck on a colour.
+            HorizontalAlignment = HorizontalAlignment.Center,
+            // The state's own colour rather than a shade of it, because the ground is that colour laid thin:
+            // words in a shade would be a third colour in a tag that is meant to be one.
+            Foreground = new SolidColorBrush(pill.Fill),
+            // Heavier than the words around it, since a pill is a state said rather than a value read. A bold
+            // face is also what makes one letter read as a mark rather than as the beginning of a word.
             FontWeight = FontWeight.Bold,
             Classes = { "caption" },
         };
@@ -790,19 +862,75 @@ internal sealed class OverviewView : UserControl
         var made = new Border
         {
             Child = words,
-            CornerRadius = new CornerRadius(PillRadius),
-            Padding = new Thickness(8, 2),
-            Background = new SolidColorBrush(pill.Fill),
+            // One size for every state: the letters are the column's marks, and a mark that changed size with
+            // what it said would be a column that has to be measured rather than read.
+            Width = PillWidth,
+            Height = PillHeight,
+            CornerRadius = TagRadius,
+            Background = new SolidColorBrush(WithAlpha(pill.Fill, PillWash)),
             BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(RorolalaColours.Edge(pill.Fill)),
+            BorderBrush = new SolidColorBrush(pill.Fill),
             // The room a pill keeps around it is its own rather than the panel's, since a panel spaces lines
             // and not the things on them: what wraps onto the next line has to be told from the line above.
-            Margin = new Thickness(0, 2, 6, 2),
+            Margin = new Thickness(0, 2, PillGap, 2),
             VerticalAlignment = VerticalAlignment.Center,
         };
 
+        // What the letters stand for is on the pill, at once: a reader who has stopped at one is asking what it
+        // is, and nothing is said by making them wait that the pill's own colour has not said already.
+        ToolTip.SetTip(made, pill.Hint);
+        ToolTip.SetShowDelay(made, 0);
+
         return made;
     }
+
+    /// <summary>
+    /// How thin the colour behind a pill is laid.
+    /// </summary>
+    /// <remarks>
+    /// Enough that the pill is a shape rather than a word in a row, and no more: past a fifth or so the tint
+    /// stops being a tint of the row and starts being a surface of its own, which is the loudness a table of
+    /// states does not want.
+    /// </remarks>
+    private const byte PillWash = 0x22;
+
+    /// <summary>How round a pill is, which is the design's radius for a small control.</summary>
+    private static readonly CornerRadius TagRadius = new(5);
+
+    /// <summary>
+    /// How large a pill is, and how far one stands from the next.
+    /// </summary>
+    /// <remarks>
+    /// Wide enough for the two letters a state may be known by and no wider, since the marks are read across
+    /// rather than word by word; as tall as the words beside them, so that a row of states and the paths it is
+    /// about are read along one line. The gap is the pill's own rather than the panel's, because a panel spaces
+    /// lines and not the things on a line.
+    /// </remarks>
+    private const double PillWidth = 34;
+
+    /// <inheritdoc cref="PillWidth" />
+    private const double PillHeight = 18;
+
+    /// <inheritdoc cref="PillWidth" />
+    private const double PillGap = 6;
+
+    /// <summary>
+    /// How wide the column of states is: three pills and the room between them.
+    /// </summary>
+    /// <remarks>
+    /// Three because that is what a row of states comes to before it wraps: a move whose file was edited is two,
+    /// and three is the most a reader is given before the rest goes on the next line. A width rather than a
+    /// share of the dock, because a column of one- to two-letter marks has nothing to gain from a wider window
+    /// — the room belongs to the paths, which is where it is read.
+    /// </remarks>
+    private const double StateColumn = (3 * PillWidth) + (3 * PillGap);
+
+    /// <summary>One colour with the alpha a pill's ground is laid at, over whatever the row is drawn on.</summary>
+    /// <param name="colour">The state's colour.</param>
+    /// <param name="alpha">How thin to lay it.</param>
+    /// <returns>The colour to fill with.</returns>
+    private static Color WithAlpha(Color colour, byte alpha) =>
+        Color.FromArgb(alpha, colour.R, colour.G, colour.B);
 
     /// <summary>The columns every row and the band are laid out by.</summary>
     /// <returns>The width of each column.</returns>
@@ -810,9 +938,9 @@ internal sealed class OverviewView : UserControl
     {
         var columns = new ColumnDefinitions();
 
-        foreach (var share in Shares)
+        foreach (var width in Columns)
         {
-            columns.Add(new ColumnDefinition(new GridLength(share, GridUnitType.Star)));
+            columns.Add(new ColumnDefinition(width));
         }
 
         return columns;
