@@ -143,15 +143,6 @@ internal static partial class Icons
     /// </remarks>
     private const double BallEdge = 1.5;
 
-    /// <summary>How much of an icon's width a dot takes, and the least and most it is drawn at.</summary>
-    /// <remarks>
-    /// It follows the zoom for the same reason a mark does, and stops: a dot is read as a colour, and one
-    /// grown past the size a colour is read at is a blob on the corner of a picture.
-    /// </remarks>
-    private const double DotShare = 0.2;
-    private const double DotLeast = 8;
-    private const double DotMost = 14;
-
     /// <summary>
     /// The ground a tagged mark is drawn on, which is the dark one on either look.
     /// </summary>
@@ -181,58 +172,6 @@ internal static partial class Icons
             MarkInk.Warn => PaletteKeys.Warn,
             _ => PaletteKeys.Faint,
         };
-
-    /// <summary>
-    /// A contributed mark drawn as a dot.
-    /// </summary>
-    /// <remarks>
-    /// A dot rather than a picture: what a column of marks says is a state, and a state is a colour before it
-    /// is anything else. It is drawn against whatever it is put beside — a name in a tile, a name in a list —
-    /// since what it means is the mark's own and where it stands is the view's. What it means is said when the
-    /// pointer rests on it, which is what a colour cannot say by itself.
-    /// </remarks>
-    /// <param name="contributed">What the provider answered about the entry.</param>
-    /// <param name="size">How many pixels wide and tall the entry's icon is, which the dot follows.</param>
-    /// <returns>The dot to draw.</returns>
-    public static Control Dot(EntryColumnMark contributed, int size)
-    {
-        var extent = DotExtent(size);
-        var dot = new Border
-        {
-            Width = extent,
-            Height = extent,
-            CornerRadius = new CornerRadius(extent / 2),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        // The colour is the contribution's where it named one, and the role it named otherwise: a mark drawn in
-        // the role and then painted over would be drawn twice, and the role's own brush would win.
-        if (contributed.Colour is { } colour)
-        {
-            dot.Background = new SolidColorBrush(colour);
-        }
-        else
-        {
-            dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Ink(contributed.Ink));
-        }
-
-        if (contributed.Edge is { } edge)
-        {
-            dot.BorderThickness = new Thickness(1);
-            dot.BorderBrush = new SolidColorBrush(edge);
-        }
-
-        if (contributed.Hint is { Length: > 0 } hint)
-        {
-            ToolTip.SetTip(dot, hint);
-
-            // At once rather than after the wait a tooltip usually takes: the mark is a colour, and a reader
-            // who has to stop and wait for what a colour means is a reader who has to stop.
-            ToolTip.SetShowDelay(dot, 0);
-        }
-
-        return dot;
-    }
 
     /// <summary>
     /// An entry's icon with the badges its contributions asked for around the top right corner.
@@ -287,13 +226,26 @@ internal static partial class Icons
     /// <summary>
     /// One badge drawn: the picture on the ground it was asked to wear, or bare in the ink.
     /// </summary>
+    /// <remarks>
+    /// What it is drawn in is the role the contribution named, or its own colour where it named one: a
+    /// contribution that has a palette of its own — the states a work's files are in, which are the plugin's
+    /// answer and the user's to choose — says what its marks are coloured rather than which of the look's roles
+    /// they wear.
+    /// <para>
+    /// The two are one or the other and never both, and that is load-bearing rather than tidy: a resource a
+    /// control carries is asked for when the control is attached to a tree, and what comes back is written over
+    /// what the property held — so a badge made with the look's role and then painted with the contribution's
+    /// own colour is a badge that turns the look's grey the moment it is drawn.
+    /// </para>
+    /// </remarks>
     /// <param name="badge">The picture and what the contribution said about the entry.</param>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
     /// <returns>What to stand on the arc.</returns>
     private static Control Badge(EntryBadge badge, int size)
     {
         var extent = BadgeArc.Extent(size);
-        var colour = Ink(badge.Mark.Ink);
+        var role = Ink(badge.Mark.Ink);
+        var own = badge.Mark.Colour;
 
         Control drawn;
 
@@ -303,7 +255,7 @@ internal static partial class Icons
             // than the picture's: a mark drawn to the very edge of what holds it reads as a picture with a
             // border drawn over it rather than as a picture inside something.
             var room = Math.Max(BallLeast, extent * BallInset);
-            var glyph = Glyph(badge.Picture, colour, extent - (2 * room));
+            var glyph = Picture(badge.Picture, extent - (2 * room));
             glyph.CornerRadius = new CornerRadius(glyph.Width / 2);
 
             var worn = new Border
@@ -319,9 +271,10 @@ internal static partial class Icons
             // The ground is the mark's own and always the dark one, whatever the program is drawn on: a badge
             // worn on a picture is part of the picture, and one that turned pale on the light look would be a
             // mark that changed what it is when the user changed their colours. What says which mark it is is
-            // the ring and the picture, both in the role's ink.
+            // the ring and the picture, both in the one colour the contribution asked for.
             worn.Background = new SolidColorBrush(TagGround);
-            worn[!Border.BorderBrushProperty] = new DynamicResourceExtension(colour);
+            Painted(glyph, Border.BackgroundProperty, own, role);
+            Painted(worn, Border.BorderBrushProperty, own, role);
 
             // The ink the badge is drawn in is the dark look's, whatever the program is drawn on: the ground
             // is the dark one, so the colour that reads on it is the one the dark look holds — a mark that took
@@ -335,7 +288,9 @@ internal static partial class Icons
         }
         else
         {
-            drawn = Glyph(badge.Picture, colour, extent);
+            var glyph = Picture(badge.Picture, extent);
+            Painted(glyph, Border.BackgroundProperty, own, role);
+            drawn = glyph;
         }
 
         // What the badge stands for is said in words when the pointer rests on it: the badge is a picture, and
@@ -347,6 +302,36 @@ internal static partial class Icons
         }
 
         return drawn;
+    }
+
+    /// <summary>
+    /// Paints a picture or a ring in the one colour the mark is drawn in: its own, or the look's role for it.
+    /// </summary>
+    /// <remarks>
+    /// One or the other and never both, because what a control carries is asked for when the control is
+    /// attached to a tree and what comes back is written over what the property held: a resource named beside a
+    /// colour is the look answering last, which is a mark of the contribution's own drawn like one that named
+    /// no colour at all.
+    /// </remarks>
+    /// <param name="target">The picture or the ball to paint.</param>
+    /// <param name="brush">Which of the two properties it is painted through.</param>
+    /// <param name="own">The colour the contribution named, or nothing for the look's role.</param>
+    /// <param name="role">The role the look's colour is read from.</param>
+    private static void Painted(
+        Border target,
+        AvaloniaProperty<IBrush?> brush,
+        Color? own,
+        string role
+    )
+    {
+        if (own is { } colour)
+        {
+            target[brush] = new SolidColorBrush(colour);
+        }
+        else
+        {
+            target[!brush] = new DynamicResourceExtension(role);
+        }
     }
 
     /// <summary>
@@ -364,6 +349,25 @@ internal static partial class Icons
     /// <returns>What to draw, whose background is the ink it was given.</returns>
     public static Border Glyph(Bitmap picture, string ink, double extent)
     {
+        var glyph = Picture(picture, extent);
+        glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(ink);
+
+        return glyph;
+    }
+
+    /// <summary>
+    /// A picture cut out and not yet coloured: the mask, with nothing painted through it.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is painted here because what paints it is the caller's — the colour a contribution named, or the
+    /// look's role for it — and a picture made with one of them and then painted with the other carries both,
+    /// of which the resource is the one that is answered last (see <see cref="Painted"/>).
+    /// </remarks>
+    /// <param name="picture">The picture to stamp.</param>
+    /// <param name="extent">How many pixels wide and tall it is.</param>
+    /// <returns>What to draw, which is a picture and no colour.</returns>
+    private static Border Picture(Bitmap picture, double extent)
+    {
         var glyph = new Border
         {
             Width = extent,
@@ -372,7 +376,6 @@ internal static partial class Icons
             VerticalAlignment = VerticalAlignment.Center,
             OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
         };
-        glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(ink);
 
         // Every picture this plugin draws is read at many times the size it is shown at, so what the mask
         // does is a reduction: the high filter is what keeps a thin stroke whole through it, where a cheaper
@@ -446,23 +449,6 @@ internal static partial class Icons
 
         return glyph;
     }
-
-    /// <summary>
-    /// How large a dot is at an icon of `size`.
-    /// </summary>
-    /// <remarks>
-    /// Smaller than a badge and never larger than a mark of its own: a dot is a mark rather than a mark's
-    /// ground, so it grows with the icon only until it is big enough to read, and a tile at the largest zoom
-    /// wears a dot the size of the one at the smallest.
-    /// <para>
-    /// Read by the view as well as by the dot, because what the dot takes off what stands beside it is room
-    /// the view has to work out before the layout does: a thing measured wider than it is arranged is a thing
-    /// cut off by the edge of what holds it rather than trimmed by its own rule.
-    /// </para>
-    /// </remarks>
-    /// <param name="size">How many pixels wide and tall the icon is.</param>
-    /// <returns>How many pixels wide and tall the dot is.</returns>
-    public static double DotExtent(int size) => Math.Clamp(size * DotShare, DotLeast, DotMost);
 
     /// <summary>
     /// The resource a tag's ground is drawn from: the wash of the ink it is edged in.

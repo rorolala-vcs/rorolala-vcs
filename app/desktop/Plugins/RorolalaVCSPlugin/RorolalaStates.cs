@@ -7,7 +7,8 @@ using RorolalaDesktop.I18n;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// Rorolala's answer to what a file of the work is: the State mark at the left of a directory's list.
+/// Rorolala's answer to what a file of the work is: the State mark at the left of a directory's list, and the
+/// badge a tile's icon wears.
 /// </summary>
 /// <remarks>
 /// What it reads is a reading of the work, through <see cref="RolaStatus"/> — nothing is reached for, and a
@@ -15,13 +16,14 @@ namespace RorolalaVCSPlugin;
 /// listed, and one path is asked of it rather than answered from a copy of its lists: which state a path is
 /// in is a judgement about the reading, and it is the library's to make.
 /// <para>
-/// What it contributes is a dot rather than a column of words. A file is in one of a handful of states, and
-/// which one is read from the colour before any word of it is read: a column of the same few words beside
-/// every name would be a column of text where a mark does, and would take the room the names are read in.
-/// The words are the dot's own, said when the pointer rests on it.
+/// What it contributes to a list is a dot rather than a column of words: a file is in one of a handful of
+/// states, and which one is read from the colour before any word of it is read. A tile has no column to put
+/// one in, so there the state is a badge on the icon — a picture in the same colour, since what a state is
+/// coloured is the state (see <see cref="RorolalaColours"/>) — and the words are the dot's and the badge's
+/// own, said when the pointer rests on either.
 /// </para>
 /// </remarks>
-internal sealed class RorolalaStates : IEntryColumnProvider
+internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
 {
     /// <summary>How wide the column starts, which is room for a dot and the room around it.</summary>
     private const double ColumnWidth = 18;
@@ -67,6 +69,30 @@ internal sealed class RorolalaStates : IEntryColumnProvider
     /// <inheritdoc />
     public EntryColumnMark Value(Entry entry)
     {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return State(entry) is { } state ? Say(state) : new EntryColumnMark();
+    }
+
+    /// <inheritdoc />
+    public EntryMark Mark(Entry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return State(entry) is { } state ? Badge(state) : new EntryMark();
+    }
+
+    /// <summary>What the reading says about an entry, or nothing when this is not about it.</summary>
+    /// <remarks>
+    /// The two places a state is drawn ask the same question of the same reading — a mark in a list and a
+    /// badge on a tile are one answer about one file — so what they read is read once here: a directory the
+    /// entry names none of, and a reading that could not answer, are both nothing to say rather than a
+    /// failure, since a listing that will not appear is a worse answer than one without a mark on it.
+    /// </remarks>
+    /// <param name="entry">The entry to ask about.</param>
+    /// <returns>What the reading says, or nothing.</returns>
+    private PathState? State(Entry entry)
+    {
         // What a state is about is a file of the work, so an entry that names no directory of its own — the
         // way up, which is a step rather than a place — is nothing this speaks about.
         if (
@@ -74,16 +100,16 @@ internal sealed class RorolalaStates : IEntryColumnProvider
             || _readings.Reading(directory) is not { } status
         )
         {
-            return new EntryColumnMark();
+            return null;
         }
 
         try
         {
-            return Say(status.StateOf(entry.Path));
+            return status.StateOf(entry.Path);
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            return new EntryColumnMark();
+            return null;
         }
     }
 
@@ -131,6 +157,54 @@ internal sealed class RorolalaStates : IEntryColumnProvider
             _ => new EntryColumnMark(),
         };
 
+    /// <summary>
+    /// What a state is worn as on a tile: a picture in the state's own colour, on the badge's ground.
+    /// </summary>
+    /// <remarks>
+    /// One picture per state, and the two that are alike share one: a file that is only possibly renamed is
+    /// renamed as far as what a reader does with it goes, and one that changed and one waiting to be joined
+    /// are both content on its way to a version — so the mark is the same and what tells them apart is the
+    /// words on it. The colours are the ones the dots are, since what a state is coloured is the state and not
+    /// the shape it is drawn in.
+    /// </remarks>
+    /// <param name="state">What the reading says about the entry.</param>
+    /// <returns>What the badge is, which is nothing for a state a listing has no entry for.</returns>
+    internal static EntryMark Badge(PathState state) =>
+        state switch
+        {
+            PathState.Untagged => Worn(
+                Icons.Add,
+                RorolalaColours.Untagged,
+                "rorolala_vcs.state.untagged"
+            ),
+            PathState.Modified => Worn(
+                Icons.EditNote,
+                RorolalaColours.UnderWay,
+                "rorolala_vcs.state.modified"
+            ),
+            PathState.Wrong => Worn(
+                Icons.PriorityHigh,
+                RorolalaColours.Wrong,
+                "rorolala_vcs.state.wrong"
+            ),
+            PathState.Renamed => Worn(
+                Icons.ArrowRightAlt,
+                RorolalaColours.Moved,
+                "rorolala_vcs.state.renamed"
+            ),
+            PathState.RenamedLikely => Worn(
+                Icons.ArrowRightAlt,
+                RorolalaColours.Moved,
+                "rorolala_vcs.state.renamed_likely"
+            ),
+            PathState.Merging => Worn(
+                Icons.EditNote,
+                RorolalaColours.UnderWay,
+                "rorolala_vcs.state.merging"
+            ),
+            _ => new EntryMark(),
+        };
+
     /// <summary>One state, as the mark it wears.</summary>
     /// <param name="colour">What the state is coloured.</param>
     /// <param name="said">What it is called, which is what the mark is hovered for.</param>
@@ -143,6 +217,19 @@ internal sealed class RorolalaStates : IEntryColumnProvider
             Colour: colour,
             Edge: RorolalaColours.Edge(colour)
         );
+
+    /// <summary>One state, as the badge it wears on a tile.</summary>
+    /// <remarks>
+    /// No ink role is named, because the badge is painted in the state's own colour rather than in one of the
+    /// look's: the colour is the whole of what the picture and the ring around it are drawn in, and a role
+    /// beside it would be a second answer about the same mark.
+    /// </remarks>
+    /// <param name="icon">The key of the picture the set draws for it.</param>
+    /// <param name="colour">What the state is coloured.</param>
+    /// <param name="said">The key of the word for it, which is what the badge is hovered for.</param>
+    /// <returns>The mark.</returns>
+    private static EntryMark Worn(string icon, Color colour, string said) =>
+        new(IconKey: icon, Colour: colour, Tagged: true, TextKey: said);
 
     /// <summary>
     /// Lets go of what was read, so the next answer is read from the tree as it is now.

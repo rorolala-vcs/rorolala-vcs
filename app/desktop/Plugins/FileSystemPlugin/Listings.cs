@@ -2679,18 +2679,8 @@ internal sealed class GridBrowser : EntryView
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
-    /// <summary>How far a mark stands from what it is beside, as a share of the mark's own size.</summary>
-    /// <remarks>
-    /// A share rather than a size, because the mark follows the zoom: a gap of a fixed few pixels is a wide one
-    /// at the smallest zoom and barely a gap at the largest.
-    /// </remarks>
-    private const double MarkGapShare = 1.25;
-
     /// <summary>What a tile's icon wears at its top right corner, in the order the badges are numbered.</summary>
     private readonly IReadOnlyList<IEntryMarkProvider> _badges;
-
-    /// <summary>The contributed marks a tile wears, which are the columns that stand at the left.</summary>
-    private readonly IEntryColumnProvider[] _marks;
 
     /// <summary>Makes the grid layout over what the browser holds.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
@@ -2703,15 +2693,6 @@ internal sealed class GridBrowser : EntryView
     {
         _icon = icon;
         _badges = EntryMarkProviders.For(Browser.Current);
-
-        // A column that stands at the left of a row stands at the left of a tile's name: a tile has no columns,
-        // so what a column of marks says is worn beside the name rather than written in a place of its own.
-        _marks =
-        [
-            .. EntryColumns
-                .For(Browser.Current)
-                .Where(provider => provider.Placement == ColumnPlacement.Leftmost),
-        ];
 
         // The tiles of a wrapped line fill the width it is given, so that the grid's outer inset is the room
         // around it and stays put however wide the dock is — the room a line has to spare is spent between
@@ -2816,7 +2797,7 @@ internal sealed class GridBrowser : EntryView
         return count;
     }
 
-    /// <summary>One entry as a tile: its icon above its name, with what its marks say beside the name.</summary>
+    /// <summary>One entry as a tile: its icon above its name.</summary>
     private Control Tile(Entry entry)
     {
         // The surface a chosen tile wears is the item's; what is here is the content and the room around it.
@@ -2832,66 +2813,30 @@ internal sealed class GridBrowser : EntryView
     }
 
     /// <summary>
-    /// A tile's name, with what the contributions say standing immediately left of it.
+    /// A tile's name, on a line of its own under the picture.
     /// </summary>
     /// <remarks>
-    /// A state is read with the name — what a file is called and what became of it are one line — so the mark
-    /// stands in the caption rather than over the picture, which is where the browser's list has it too.
-    /// <para>
-    /// What is centred is the mark and the name together rather than the name alone: a name centred with a
-    /// mark beside it would stand off its own middle, and the eye reads the two as one thing. The pair is as
-    /// wide as what it holds and no wider, so the mark stays against the name, and it is no wider than the
-    /// icon, so every tile is the width of its icon and a row of tiles is a column of names rather than a
-    /// ragged one.
-    /// </para>
+    /// What a contribution says about an entry stands on the icon here rather than beside the name, which is
+    /// where the list has it: a tile is a picture with a caption, and a mark in the caption would be a mark
+    /// taking room off the name at every zoom — the one thing a tile has none of. What is left is the name,
+    /// as wide as the icon and not one pixel wider, so that the two read as one column rather than as a
+    /// picture with a caption under it that happens to start somewhere else.
     /// </remarks>
     /// <param name="entry">The entry to draw.</param>
     /// <returns>What to draw where the name goes.</returns>
     private Control Caption(Entry entry)
     {
-        // How far a mark stands from the name is the mark's own measure rather than a few pixels: the two are
-        // read as one thing, and how far apart they want to be is the same question at every zoom.
-        var extent = Icons.DotExtent(_icon);
-        var gap = extent * MarkGapShare;
-        var marks = new StackPanel { Orientation = Orientation.Horizontal, Spacing = gap };
-        var taken = 0.0;
-
-        foreach (var provider in _marks)
-        {
-            var contributed = provider.Value(entry);
-
-            if (contributed.Dot)
-            {
-                marks.Children.Add(Icons.Dot(contributed, _icon));
-                taken += extent + gap;
-            }
-        }
-
         var name = new TextBlock
         {
-            // The room the marks take comes off the name before the layout rather than during it: a name
-            // measured at the tile's whole width is one arranged narrower than it asked for, and what is
-            // arranged narrower than it asked for is cut off by the edge of what holds it rather than trimmed
-            // by its own rule — which is the difference between a name that says it is longer and one that
-            // simply stops.
-            MaxWidth = Math.Max(1, _icon - taken),
+            MaxWidth = Math.Max(1, _icon),
             Text = Names.Show(entry),
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Classes = { "entry-name", "caption" },
+            HorizontalAlignment = HorizontalAlignment.Center,
         };
 
-        var caption = new Grid { HorizontalAlignment = HorizontalAlignment.Center };
-
-        // Both columns are as wide as what they hold, so the mark takes no room the name does not have, and
-        // the name is cut off at the icon's edge rather than at the mark's.
-        caption.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        caption.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        Grid.SetColumn(name, 1);
-        caption.Children.Add(marks);
-        caption.Children.Add(name);
-
-        return caption;
+        return name;
     }
 
     /// <summary>An entry's icon, with what every contributor marked worn around its top right corner.</summary>

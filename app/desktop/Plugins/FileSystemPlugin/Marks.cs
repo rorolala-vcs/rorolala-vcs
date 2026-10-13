@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -40,6 +41,11 @@ namespace FileSystemPlugin;
 /// A key for what the badge says when the pointer rests on it, with the mark's own words as the one value it
 /// leaves a place for, or nothing to be hovered for the mark's own words as they stand.
 /// </param>
+/// <param name="Colour">
+/// The picture's own colour, where the role the look holds is not the one it is said in: a contribution with a
+/// palette of its own says what its marks are coloured rather than which of the look's roles they wear. It wins
+/// over <paramref name="Ink"/>, and nothing means the role is what is drawn.
+/// </param>
 public sealed record EntryMark(
     string? TextKey = null,
     string? Text = null,
@@ -47,7 +53,8 @@ public sealed record EntryMark(
     MarkInk Ink = MarkInk.Quiet,
     MarkInk TextInk = MarkInk.Quiet,
     bool Tagged = false,
-    string? HoverKey = null
+    string? HoverKey = null,
+    Color? Colour = null
 )
 {
     /// <summary>

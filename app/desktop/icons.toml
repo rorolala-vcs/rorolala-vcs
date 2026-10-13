@@ -81,7 +81,29 @@ key = "rorolala_vcs"
 #
 # `merge` is what a variant file waiting to be joined wears: the set draws two lines coming together into
 # one, which is what the file is for — its content is to become part of the file beside it.
-icons = ["lock", "create", "lock_open", "error", "warning", "live_help", "refresh", "upload", "download", "call_split", "merge"]
+#
+# The last four are what a file's own state is worn as on a tile, where there is no column to draw a dot in:
+# `add` for a file the Layout does not name, `edit_note` for one whose content has changed or is waiting to
+# be joined — a pencil over lines, which is the nearest this set has to an edited line, since its `edit` is
+# the very picture `create` is and that one is already the lock's — `arrow_right_alt` for one that moved,
+# and `priority_high` for a change that must not be recorded.
+icons = [
+    "lock",
+    "create",
+    "lock_open",
+    "error",
+    "warning",
+    "live_help",
+    "refresh",
+    "upload",
+    "download",
+    "call_split",
+    "merge",
+    "add",
+    "edit_note",
+    "arrow_right_alt",
+    "priority_high",
+]
 
 [[set]]
 plugin = "RorolalaDesktop"

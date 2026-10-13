@@ -1,6 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Styling;
 using FileSystemPlugin;
+using RorolalaDesktop.Configuration;
+using RorolalaDesktop.Contract;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -121,6 +126,82 @@ public sealed class IconTests
         Assert.Equal(3, BadgeArc.Worn(3));
         Assert.Equal(BadgeArc.Most, BadgeArc.Worn(BadgeArc.Most));
         Assert.Equal(BadgeArc.Most, BadgeArc.Worn(12));
+    }
+
+    /// <summary>A badge a contribution coloured itself is painted in that colour, ring and picture alike.</summary>
+    /// <remarks>
+    /// A contribution that has a palette of its own — the states a work's files are in, which the plugin owns
+    /// and the user chooses — names a colour rather than one of the look's roles, and what it names is the whole
+    /// of the badge: the picture is a mask over the colour and the ring is the ground's edge, so a picture drawn
+    /// in the role and a ring drawn in the contribution's colour is one mark in two colours, which reads as two
+    /// marks laid over each other rather than as a state.
+    /// <para>
+    /// It is drawn inside a window, with the look's own resources over it, and that is the point rather than
+    /// ceremony: a resource a control carries is asked for when the control is attached to a tree and is
+    /// answered last, so a badge that named a role beside the contribution's colour came out in the look's grey
+    /// the moment it reached the screen — a fault that no windowless test can see.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ABadgeColouredByItsContributionIsPaintedInThatColour()
+    {
+        var look = new RorolalaTheme(
+            ThemePalette.DefaultDark,
+            Color.Parse("#223300"),
+            WindowStyle.Windows
+        );
+        var resources = Assert.IsAssignableFrom<ResourceDictionary>(
+            look.Palette.ThemeDictionaries[ThemeVariant.Dark]
+        );
+        var faint = Assert.IsType<SolidColorBrush>(resources[PaletteKeys.Faint]).Color;
+
+        using var picture = Icons.Picture(Icons.Pictures[0].Key);
+        var ours = new EntryMark(Colour: Colors.Lime, Tagged: true, Text: "it");
+        var theirs = new EntryMark(Ink: MarkInk.Quiet, Tagged: true, Text: "it");
+
+        var window = new Window
+        {
+            Resources = resources,
+            Content = new StackPanel
+            {
+                Children =
+                {
+                    Icons.Marked(new Border(), [new EntryBadge(picture, ours)], 64),
+                    Icons.Marked(new Border(), [new EntryBadge(picture, theirs)], 64),
+                },
+            },
+        };
+
+        window.Show();
+
+        var both = Assert.IsType<StackPanel>(window.Content);
+
+        // The ground the badge is worn on is the mark's own rather than the look's, and the picture and the ring
+        // drawn on it are the contribution's colour — the look's resources being in reach and all.
+        var (ball, glyph) = Worn(Assert.IsType<Grid>(both.Children[0]));
+
+        Assert.Equal(Colors.Lime, Assert.IsType<SolidColorBrush>(ball.BorderBrush).Color);
+        Assert.Equal(Colors.Lime, Assert.IsType<SolidColorBrush>(glyph.Background).Color);
+        Assert.NotEqual(Colors.Lime, Assert.IsType<SolidColorBrush>(ball.Background).Color);
+
+        // A mark that named no colour is the look's own answer, which is the other half of the same rule.
+        var (quiet, quietGlyph) = Worn(Assert.IsType<Grid>(both.Children[1]));
+
+        Assert.Equal(faint, Assert.IsType<SolidColorBrush>(quiet.BorderBrush).Color);
+        Assert.Equal(faint, Assert.IsType<SolidColorBrush>(quietGlyph.Background).Color);
+    }
+
+    /// <summary>The ball and the picture one drawn badge is made of, wherever the arc put them.</summary>
+    /// <param name="marked">What the icon was drawn as.</param>
+    /// <returns>The ball, and the picture inside it.</returns>
+    private static (Border Ball, Border Glyph) Worn(Grid marked)
+    {
+        var arc = Assert.IsType<BadgeArc>(marked.Children[1]);
+        var ball = Assert.IsType<Border>(
+            Assert.IsType<ThemeVariantScope>(Assert.Single(arc.Children)).Child
+        );
+
+        return (ball, Assert.IsType<Border>(ball.Child));
     }
 
     /// <summary>The arc puts a badge where the geometry says, rather than in the panel's own corner.</summary>

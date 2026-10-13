@@ -346,22 +346,55 @@ public sealed class ColumnTests
         Assert.Equal("-", Assert.IsType<TextBlock>(ListBrowser.Contributed(values, entry)).Text);
     }
 
-    /// <summary>A mark that is a dot is a round mark drawn against whatever it is put beside.</summary>
+    /// <summary>A state is worn on a tile as a picture in the colour the dot beside a name is.</summary>
     /// <remarks>
-    /// Where a dot stands is the view's — beside a name in a tile's caption, in a column in a list — so what
-    /// the plugin draws is the mark itself and the room around it is the view's. What it means is the dot's,
-    /// and it is said at once when the pointer rests on it.
+    /// A tile has no column to draw a dot in, so the state is a badge there — and what a state is coloured is
+    /// the state, so the badge and the dot are the same colour. Two states share a picture where what a reader
+    /// does about them is the same thing: a file that is only possibly renamed is renamed as far as that goes,
+    /// and one that changed and one waiting to be joined are both content on its way to a version. What tells
+    /// those apart is the word on the badge, which is the word the dot is hovered for.
     /// </remarks>
     [Fact]
-    public void AMarkIsADotDrawnAgainstWhatItStandsBeside()
+    public void AStateIsWornOnATileAsAPictureInItsColour()
     {
-        var dot = Assert.IsType<Border>(
-            FileIcons.Dot(new EntryColumnMark(Ink: MarkInk.Add, Dot: true, Hint: "it"), 64)
-        );
+        _ = Host.Services();
 
-        Assert.Equal(VerticalAlignment.Center, dot.VerticalAlignment);
-        Assert.Equal(dot.Width, dot.Height);
-        Assert.Equal(new CornerRadius(dot.Width / 2), dot.CornerRadius);
+        Assert.Equal(VcsIcons.Add, RorolalaStates.Badge(PathState.Untagged).IconKey);
+        Assert.Equal(VcsIcons.EditNote, RorolalaStates.Badge(PathState.Modified).IconKey);
+        Assert.Equal(VcsIcons.PriorityHigh, RorolalaStates.Badge(PathState.Wrong).IconKey);
+        Assert.Equal(VcsIcons.ArrowRightAlt, RorolalaStates.Badge(PathState.Renamed).IconKey);
+        Assert.Equal(VcsIcons.ArrowRightAlt, RorolalaStates.Badge(PathState.RenamedLikely).IconKey);
+        Assert.Equal(VcsIcons.EditNote, RorolalaStates.Badge(PathState.Merging).IconKey);
+
+        // The colours are the ones the dots are, since what a state is coloured is the state and not the shape
+        // it is drawn in.
+        foreach (var state in new[] { PathState.Untagged, PathState.Modified, PathState.Wrong, PathState.Renamed })
+        {
+            Assert.Equal(RorolalaStates.Say(state).Colour, RorolalaStates.Badge(state).Colour);
+        }
+
+        // Every one of them is worn on the badge's own ground, and says on itself what the dot says on itself.
+        foreach (var state in new[]
+        {
+            PathState.Untagged,
+            PathState.Modified,
+            PathState.Wrong,
+            PathState.Renamed,
+            PathState.RenamedLikely,
+            PathState.Merging,
+        })
+        {
+            var worn = RorolalaStates.Badge(state);
+
+            Assert.True(worn.Tagged, $"{state}");
+            Assert.Null(worn.HoverKey);
+            Assert.Equal(RorolalaStates.Say(state).Hint, worn.Hover());
+        }
+
+        // A path the Layout names and the tree has lost is not an entry of any listing, and one the reading
+        // says nothing about stands as it was recorded: neither wears a badge.
+        Assert.Null(RorolalaStates.Badge(PathState.Lost).IconKey);
+        Assert.Null(RorolalaStates.Badge(PathState.Unknown).IconKey);
     }
 
     /// <summary>A provider that speaks for one directory and says one thing about an entry.</summary>

@@ -106,6 +106,11 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         EntryColumns.Register(new RorolalaStates(statuses));
         EntryColumns.Register(new RorolalaStanding(statuses));
 
+        // A state is worn on a tile as well as drawn in the list's own column, and it is worn before the rest:
+        // what a file of the work is, is the first thing about it — who holds it and how far it has come are
+        // read after that.
+        EntryMarkProviders.Register(new RorolalaStates(statuses));
+
         // How far a version has come is a different question about the same file as who holds it, so it is a
         // badge of its own, worn after the lock: a file may be somebody else's and be behind, and neither
         // answer may hide the other.

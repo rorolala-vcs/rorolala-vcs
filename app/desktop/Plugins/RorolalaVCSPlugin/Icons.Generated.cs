@@ -41,6 +41,18 @@ internal static partial class Icons
     /// <summary>The key the `merge` picture is held under.</summary>
     public const string Merge = "rorolala_vcs.merge";
 
+    /// <summary>The key the `add` picture is held under.</summary>
+    public const string Add = "rorolala_vcs.add";
+
+    /// <summary>The key the `edit_note` picture is held under.</summary>
+    public const string EditNote = "rorolala_vcs.edit_note";
+
+    /// <summary>The key the `arrow_right_alt` picture is held under.</summary>
+    public const string ArrowRightAlt = "rorolala_vcs.arrow_right_alt";
+
+    /// <summary>The key the `priority_high` picture is held under.</summary>
+    public const string PriorityHigh = "rorolala_vcs.priority_high";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -55,5 +67,9 @@ internal static partial class Icons
         (Download, "download"),
         (CallSplit, "call_split"),
         (Merge, "merge"),
+        (Add, "add"),
+        (EditNote, "edit_note"),
+        (ArrowRightAlt, "arrow_right_alt"),
+        (PriorityHigh, "priority_high"),
     ];
 }
