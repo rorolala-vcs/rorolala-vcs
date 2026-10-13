@@ -48,18 +48,27 @@ internal sealed class OverviewDock : IDockView
     /// What the dock's own strip offers about what it is showing.
     /// </summary>
     /// <remarks>
-    /// One command, and it is the reading itself: a reader who has just saved a file, or who has just been
-    /// told by another program that something moved, should not have to wait for the reading the dock makes
-    /// on its own. What it does is what the dock does when the files change — read the work again — so
-    /// there is nothing here that a reading made by itself would not have done.
+    /// One strip, drawn by this plugin, and it holds what reading the work again is as well as the sync: what a
+    /// reader reaches for about the whole work belongs in one row, and a refresh that stood apart from the
+    /// buttons beside it would be the one thing in the row that is not about the work as a whole.
     /// <para>
-    /// It is drawn as its picture rather than as its word, and the picture is this plugin's own `refresh`:
-    /// what the file browser's toolbar wears for reading a directory again is the same mark, and each plugin
-    /// drawing its own is what keeps one plugin's keys its own.
+    /// It is drawn as its pictures rather than as its words — the reading's own `refresh` first, then this
+    /// plugin's three for the sync — because that is what a header is for: each plugin draws its own marks, so
+    /// one plugin's keys stay its own.
+    /// </para>
+    /// <para>
+    /// Reading the work again is offered as the strip's own command as well, because a header drawn as a menu —
+    /// a dock in a window of its own — has nowhere to put a control: without that, a window holding this dock
+    /// would have no way to ask for a reading, which is a way it had before the strip existed.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<DockHeaderCommand> HeaderCommands =>
-        [new DockHeaderCommand("rorolala_vcs.status.refresh", _view.Refresh, IconKey: Icons.Refresh)];
+    public IReadOnlyList<DockHeaderItem> Header =>
+        [
+            new DockHeaderView(
+                _view.Strip,
+                new DockHeaderCommand("rorolala_vcs.status.refresh", _view.Refresh, IconKey: Icons.Refresh)
+            ),
+        ];
 }
 
 /// <summary>What where the tree is rooted comes to, as the Overview reads it.</summary>
@@ -357,15 +366,32 @@ internal sealed class OverviewView : UserControl
 
         _blocks = new StackPanel();
 
+        // The sync's own state, which the strip in the dock's header and the bar above the table are two
+        // drawings of: the two are made here together, and neither of them keeps any of it.
+        _sync = new SyncWatcher(_host, _log);
+        _strip = new SyncStrip(_host, _sync, () => BaseDirectory.Current, Refresh);
+        _band = new SyncBand(_sync);
+
         var root = new Grid();
 
-        root.Children.Add(
-            new ScrollViewer
-            {
-                Content = _blocks,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            }
-        );
+        // Two rows rather than one: what a sync is doing stands above the reading, and the reading fills what
+        // is left. The bar is nothing at all while no run is going, so the row it is in is nothing then too.
+        root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        root.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+
+        Grid.SetRow(_band, 0);
+        root.Children.Add(_band);
+
+        var body = new ScrollViewer
+        {
+            Content = _blocks,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
+
+        Grid.SetRow(body, 1);
+        Grid.SetRow(_notice, 1);
+
+        root.Children.Add(body);
         root.Children.Add(_notice);
 
         Content = root;
@@ -383,14 +409,49 @@ internal sealed class OverviewView : UserControl
 
         // Listening while it is on screen rather than for as long as it exists: the host's windows and the
         // file changes outlive every dock, and a dock that was closed has nothing to draw.
-        AttachedToVisualTree += (_, _) => Listen(true);
+        AttachedToVisualTree += (_, _) =>
+        {
+            Listen(true);
+
+            // What there is to carry is asked when the dock appears rather than on the timer the reading is made
+            // on: a plan costs a fetch of the Vault's Layout, and a listing left open would ask every five
+            // seconds for as long as it was looked at.
+            _sync.Plan(BaseDirectory.Current);
+        };
+
         DetachedFromVisualTree += (_, _) => Listen(false);
 
         Draw();
     }
 
+    /// <summary>What the dock's header carries, which is the sync strip with the reading's own refresh in it.</summary>
+    /// <remarks>
+    /// One control rather than a run of commands, because what is in it is more than buttons: three that belong
+    /// together, three whose colour answers a key the user is holding, and a dropdown of what a run is to leave
+    /// out. The host puts it in its header and asks nothing about what is inside it.
+    /// </remarks>
+    public Control Strip => _strip;
+
+    /// <summary>What the reading is drawn from, and what a sync is watched by.</summary>
+    private readonly SyncWatcher _sync;
+
+    /// <summary>The strip the dock's header carries.</summary>
+    private readonly SyncStrip _strip;
+
+    /// <summary>What a run that is going is drawn as, above the table.</summary>
+    private readonly SyncBand _band;
+
     /// <summary>Reads the work again and draws it, which is what the dock's own command asks for.</summary>
-    public void Refresh() => Draw();
+    /// <remarks>
+    /// What a sync would carry is asked for as well, since the two are the same question to a reader: reading
+    /// the work again is what tells them what there is to do, and what there is to carry is the Vault's answer
+    /// to the same. It is asked on its own thread, so the reading is drawn while the Vault is being asked.
+    /// </remarks>
+    public void Refresh()
+    {
+        Draw();
+        _sync.Plan(BaseDirectory.Current);
+    }
 
     /// <summary>
     /// What the Overview makes of a directory the tree is rooted at.

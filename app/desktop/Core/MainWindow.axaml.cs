@@ -10,6 +10,10 @@ using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Logging;
+// Named rather than imported whole, because the contract has a menu item of its own and the toolkit has one
+// too: what a window's menu is built from is the toolkit's, and only these two are the contract's.
+using DockHeaderCommand = RorolalaDesktop.Contract.DockHeaderCommand;
+using DockHeaderView = RorolalaDesktop.Contract.DockHeaderView;
 using RorolalaDesktop.Theming;
 using ContractMenuItem = RorolalaDesktop.Contract.MenuItem;
 using DockOpenMode = RorolalaDesktop.Contract.DockOpenMode;
@@ -521,14 +525,34 @@ public partial class MainWindow : Window
     /// <param name="menu">The Window menu to add them under.</param>
     private void AddCommands(MenuItem menu)
     {
-        if (_dock is not { } instance || instance.View.HeaderCommands.Count == 0)
+        if (_dock is not { } instance)
+        {
+            return;
+        }
+
+        // A menu entry is a word and an action, so what a dock's header carries as a strip is represented here by
+        // the one command the strip offered in its place — the reading again, for this dock — and by nothing
+        // where it offered none: a window of one dock has no strip to put a control in.
+        var commands = instance
+            .View.Header.Select(item =>
+                item switch
+                {
+                    DockHeaderCommand command => command,
+                    DockHeaderView { Command: { } offered } => offered,
+                    _ => null,
+                }
+            )
+            .OfType<DockHeaderCommand>()
+            .ToArray();
+
+        if (commands.Length == 0)
         {
             return;
         }
 
         menu.Items.Add(new Separator());
 
-        foreach (var command in instance.View.HeaderCommands)
+        foreach (var command in commands)
         {
             var entry = new MenuItem { Header = _services.I18n.Get(command.LabelKey) };
 

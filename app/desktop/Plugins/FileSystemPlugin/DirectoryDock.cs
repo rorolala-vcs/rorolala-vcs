@@ -33,7 +33,7 @@ internal sealed class DirectoryDock : IDockView, IDockOpened
     public Control View => _view;
 
     /// <inheritdoc />
-    public IReadOnlyList<DockHeaderCommand> HeaderCommands => [];
+    public IReadOnlyList<DockHeaderItem> Header => [];
 
     /// <inheritdoc />
     public void Restored(IDockState state) => _view.Restored(state);

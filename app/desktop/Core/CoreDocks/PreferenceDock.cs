@@ -48,7 +48,7 @@ internal sealed class PreferenceDock : IDockView
     public Control View => _view;
 
     /// <inheritdoc />
-    public IReadOnlyList<DockHeaderCommand> HeaderCommands => [];
+    public IReadOnlyList<DockHeaderItem> Header => [];
 }
 
 /// <summary>The Preference dock's control: owners on the left, what the chosen one declared on the right.</summary>

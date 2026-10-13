@@ -996,9 +996,22 @@ internal sealed class DockArea : UserControl
             menu.Items.Add(entry);
         }
 
-        var commands = instance.View.HeaderCommands;
+        // A header drawn as a menu takes the commands, and of every strip what the strip itself offered as its
+        // one command: a menu entry is a word and an action, so a control has nothing to put there, and a dock
+        // whose strip held the only way to read the work again would have no way to do it in a menu.
+        var commands = instance
+            .View.Header.Select(item =>
+                item switch
+                {
+                    DockHeaderCommand command => command,
+                    DockHeaderView { Command: { } offered } => offered,
+                    _ => null,
+                }
+            )
+            .OfType<DockHeaderCommand>()
+            .ToArray();
 
-        if (commands.Count > 0 && menu.Items.Count > 0)
+        if (commands.Length > 0 && menu.Items.Count > 0)
         {
             menu.Items.Add(new Separator());
         }
@@ -1177,7 +1190,7 @@ internal sealed class DockArea : UserControl
             return;
         }
 
-        foreach (var command in shown.View.HeaderCommands)
+        foreach (var command in shown.View.Header.OfType<DockHeaderCommand>())
         {
             var said = _i18n.Get(command.LabelKey);
             var picture = command.IconKey is { Length: > 0 } key ? _windows.Pictures.Find(key) : null;
@@ -1196,6 +1209,13 @@ internal sealed class DockArea : UserControl
 
             button.Click += (_, _) => command.Command();
             region.Commands.Children.Add(button);
+        }
+
+        // A strip a plugin drew is put in as it stands, beside the buttons rather than among them: what is
+        // inside it is the plugin's answer, and a host that took it apart would be a second author of it.
+        foreach (var view in shown.View.Header.OfType<DockHeaderView>())
+        {
+            region.Commands.Children.Add(view.View);
         }
     }
 

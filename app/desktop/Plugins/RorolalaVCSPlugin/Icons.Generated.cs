@@ -53,6 +53,18 @@ internal static partial class Icons
     /// <summary>The key the `priority_high` picture is held under.</summary>
     public const string PriorityHigh = "rorolala_vcs.priority_high";
 
+    /// <summary>The key the `cloud_upload` picture is held under.</summary>
+    public const string CloudUpload = "rorolala_vcs.cloud_upload";
+
+    /// <summary>The key the `cloud_download` picture is held under.</summary>
+    public const string CloudDownload = "rorolala_vcs.cloud_download";
+
+    /// <summary>The key the `sync` picture is held under.</summary>
+    public const string Sync = "rorolala_vcs.sync";
+
+    /// <summary>The key the `more_vert` picture is held under.</summary>
+    public const string MoreVert = "rorolala_vcs.more_vert";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -71,5 +83,9 @@ internal static partial class Icons
         (EditNote, "edit_note"),
         (ArrowRightAlt, "arrow_right_alt"),
         (PriorityHigh, "priority_high"),
+        (CloudUpload, "cloud_upload"),
+        (CloudDownload, "cloud_download"),
+        (Sync, "sync"),
+        (MoreVert, "more_vert"),
     ];
 }

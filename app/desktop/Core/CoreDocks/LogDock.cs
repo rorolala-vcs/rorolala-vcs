@@ -38,8 +38,7 @@ internal sealed class LogDock : IDockView
     public Control View => _view;
 
     /// <inheritdoc />
-    public IReadOnlyList<DockHeaderCommand> HeaderCommands =>
-        [new DockHeaderCommand("log.clear", _log.Clear)];
+    public IReadOnlyList<DockHeaderItem> Header => [new DockHeaderCommand("log.clear", _log.Clear)];
 }
 
 /// <summary>The Log dock's control: each distinct line once, with its repeat count.</summary>

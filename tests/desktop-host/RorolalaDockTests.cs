@@ -153,14 +153,14 @@ public sealed class RorolalaDockTests
         }
     }
 
-    /// <summary>The Overview offers a reading on demand, beside the ones it makes by itself.</summary>
+    /// <summary>The Overview's header carries the strip that holds the reading and the sync together.</summary>
     /// <remarks>
-    /// What the dock's own strip carries is what the dock says about the thing it is showing, and for a
-    /// reading that is the reading itself: a reader who has just saved a file in another program should not
-    /// have to wait for the next one. What is checked is that the command is offered, that it wears a mark of
-    /// its own — a command with a picture is drawn as the picture in the strip, and the host resolves the key,
-    /// so a key nothing contributes is a button with nothing in it — and that it can be asked for. What it
-    /// draws is the table the other tests are about.
+    /// It is one strip rather than a run of commands, because what stands there is more than buttons: the three
+    /// sync buttons belong together, their colour answers a key the user is holding, and what they are to leave
+    /// out is a dropdown. The host puts the control in its header and asks nothing about what is inside it, so
+    /// what this pins is that the dock hands one over at all — which is the whole of what the header says — and
+    /// that reading the work again is still in it, drawn from a picture the plugin contributes: the library is
+    /// the shell's, and a plugin's pictures are found in it by key.
     /// </remarks>
     [Fact]
     public void TheOverviewOffersToReadTheWorkAgain()
@@ -174,19 +174,14 @@ public sealed class RorolalaDockTests
             dock.DockNameId == RorolalaDocks.OverviewNameId
         );
         var view = overview.Create(DockPlacement.Center);
-        var command = Assert.Single(view.HeaderCommands);
+        var strip = Assert.IsType<DockHeaderView>(Assert.Single(view.Header));
 
-        Assert.Equal("rorolala_vcs.status.refresh", command.LabelKey);
-        Assert.Equal("rorolala_vcs.refresh", command.IconKey);
+        Assert.IsType<SyncStrip>(strip.View);
 
-        // The key is one the plugin contributes a picture under, which is what makes the button a mark rather
-        // than an empty one: the library is the shell's, and a plugin's pictures are found in it by key.
         Assert.Contains(
             "rorolala_vcs.refresh",
             global::RorolalaVCSPlugin.Icons.Pictures.Select(picture => picture.Key)
         );
-
-        command.Command();
     }
 
     /// <summary>A line in the middle of the dock is said only where the table has nothing to show.</summary>

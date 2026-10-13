@@ -21,5 +21,5 @@ internal sealed class FakeDockView : IDockView
     public Control View => Control!;
 
     /// <inheritdoc />
-    public IReadOnlyList<DockHeaderCommand> HeaderCommands => [];
+    public IReadOnlyList<DockHeaderItem> Header => [];
 }

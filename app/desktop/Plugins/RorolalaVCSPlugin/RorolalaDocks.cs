@@ -108,7 +108,7 @@ internal sealed class RorolalaDock : IDockView
     public Control View => _view;
 
     /// <inheritdoc />
-    public IReadOnlyList<DockHeaderCommand> HeaderCommands => [];
+    public IReadOnlyList<DockHeaderItem> Header => [];
 }
 
 /// <summary>

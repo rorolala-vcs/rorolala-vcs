@@ -40,6 +40,11 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // them as it draws, so a colour chosen there is a colour the next pill or dot is drawn in.
         RorolalaColours.Declare(host.Config);
 
+        // And what a sync carries, which is the same kind of answer: the command line takes a sync apart into
+        // the index, the Layout and the storage, and which of the three a run is to carry is the user's, so the
+        // strip beside the Overview reads what these settings say and the warning before a run is read from it.
+        SyncSettings.Declare(host.Config);
+
         // And what the work holds: the Ownership column of a directory listing, and the badge a
         // locked tile wears. It is this plugin's to answer rather than the File System plugin's,
         // because who holds an entry is Rorolala's question and the answer comes through the C ABI.

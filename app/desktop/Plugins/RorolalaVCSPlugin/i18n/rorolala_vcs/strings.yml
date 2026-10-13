@@ -246,6 +246,99 @@ rorolala_vcs:
       en: The variant %{variant} is being merged in
       zh-CN: 该变体 %{variant} 正在合并中
 
+  # What the Overview's sync strip says and does. The three buttons are the command line's three directions,
+  # so what each is called is what it carries rather than what it is: a reader who knows `rola sync --up-only`
+  # knows the first button, and the words that name a direction are the command's own.
+  #
+  # `forced` is said on a button when the key that changes a run is held, and `more` is the last button of the
+  # row: what a run is to leave out. The three choices under it are named for what is carried rather than for
+  # the flag that leaves it out, since a box a user ticks is what a sync does.
+  sync:
+    up:
+      en: Upload only
+      zh-CN: 仅上传
+    down:
+      en: Update only
+      zh-CN: 仅更新
+    both:
+      en: Sync both ways
+      zh-CN: 双向同步
+    forced:
+      en: history may be changed (Shift held)
+      zh-CN: 可改写历史（按住 Shift）
+    more:
+      en: What the sync is to leave out
+      zh-CN: 同步要跳过的部分
+    index:
+      en: Sync the index
+      zh-CN: 同步索引
+    layout:
+      en: Sync the Layout
+      zh-CN: 同步布局
+    storage:
+      en: Sync the storage
+      zh-CN: 同步存储
+    working:
+      en: Syncing…
+      zh-CN: 正在同步……
+    confirm_title:
+      en: Sync with something left out?
+      zh-CN: 要跳过一部分来同步吗？
+    failed:
+      en: The sync could not be finished
+      zh-CN: 同步未能完成
+    no_program:
+      en: This window was not opened by the command line, so it cannot run one.
+      zh-CN: 这个窗口不是由命令行打开的，因此无法运行命令。
+    plan_unreadable:
+      en: What a sync would carry could not be read.
+      zh-CN: 无法读出一次同步要搬什么。
+
+    # What is said before a sync that leaves something out, one line per way of leaving it out and per
+    # direction: what is left behind still gets written, and which part it was decides what becomes
+    # inconsistent — a version the index does not hold, content the storage does not, a Layout that does not
+    # say which of them a version belongs to. The ways that leave the Layout out say one thing whichever way
+    # the run goes, since nothing about the Vault's Layout moves either way.
+    warn_no_index_up:
+      en: The Layout and the storage are synced, but not the index — so what is uploaded is written into the Vault's Layout and its storage while neither goes into the Vault's index. Confirm?
+      zh-CN: 同步布局和仓库，但不同步索引，这会使上传的版本写进保险库布局、内容进保险库仓库，却都不进保险库索引，请确认。
+    warn_no_index_down:
+      en: The Layout and the storage are synced, but not the index — so the update fails where the local index lacks the Vault's version object. Confirm?
+      zh-CN: 同步布局和仓库，但不同步索引，这会使下拉因本地索引缺少保险库的版本对象而失败，请确认。
+    warn_no_index_both:
+      en: The Layout and the storage are synced, but not the index — so what is uploaded does not go into the Vault's index, and the update fails where the local index lacks a version object. Confirm?
+      zh-CN: 同步布局和仓库，但不同步索引，这会使上传的内容不进保险库索引、下拉因本地索引缺版本对象而失败，请确认。
+    warn_no_storage_up:
+      en: The Layout and the index are synced, but not the storage — so the Vault's Layout and index record a version whose content the Vault does not hold. Confirm?
+      zh-CN: 同步布局和索引，但不同步仓库，这会使保险库布局与索引记下一个仓库里没有内容的版本，请确认。
+    warn_no_storage_down:
+      en: The Layout and the index are synced, but not the storage — so entries whose content is not here fail to update, and the Layout version is not advanced. Confirm?
+      zh-CN: 同步布局和索引，但不同步仓库，这会使内容不在本地的下拉条目失败、布局版本不再推进，请确认。
+    warn_no_storage_both:
+      en: The Layout and the index are synced, but not the storage — so the Vault records a version whose content it does not hold, and the update fails where the local storage lacks the content. Confirm?
+      zh-CN: 同步布局和索引，但不同步仓库，这会使保险库记下仓库里没有的版本、下拉因本地仓库缺内容而失败，请确认。
+    warn_no_layout:
+      en: The index and the storage are synced, but not the Layout — so everything in the local index is uploaded, the Vault's Layout does not move, and there is no check for overwriting. Confirm?
+      zh-CN: 同步索引和仓库，但不同步布局，这会使本地索引里的全部内容被上传、保险库布局不动、没有覆盖检查，请确认。
+    warn_layout_only_up:
+      en: Only the Layout is synced — so the Vault's Layout records a version whose content was never uploaded, and neither the index nor the storage moves. Confirm?
+      zh-CN: 仅同步布局，这会使保险库布局记下未上传内容的版本、索引与仓库都不动，请确认。
+    warn_layout_only_down:
+      en: Only the Layout is synced — so the update fails where the local storage lacks the content, and neither the index nor the storage moves. Confirm?
+      zh-CN: 仅同步布局，这会使下拉因本地仓库缺内容而失败、索引与仓库都不动，请确认。
+    warn_layout_only_both:
+      en: Only the Layout is synced — so the Vault records a version whose content it does not hold, the update fails where the local storage lacks the content, and neither the index nor the storage moves. Confirm?
+      zh-CN: 仅同步布局，这会使保险库记下没有内容的版本、下拉因本地仓库缺内容而失败，索引与仓库都不动，请确认。
+    warn_index_only:
+      en: Only the index is synced — so the two sides' indexes swap objects while neither the Layout nor the storage moves. Confirm?
+      zh-CN: 仅同步索引，这会使两侧索引互换对象、布局与仓库都不动，请确认。
+    warn_storage_only:
+      en: Only the storage is synced — so everything in the local index is uploaded while neither the Vault's index nor its Layout moves. Confirm?
+      zh-CN: 仅同步仓库，这会使本地索引里的全部内容被上传、保险库索引与布局都不动，请确认。
+    warn_nothing:
+      en: The Layout, the index and the storage are all left out — so this run changes nothing at all. Confirm?
+      zh-CN: 不同步布局、索引和仓库，这会使本次运行不做任何改动，请确认。
+
   # What the Overview offers to do about a row, one line each: what a button says and what it is hovered for
   # are the same words, since a button's label is what it does. Every one of them is a mode of `rola align`,
   # except taking ownership, which is `rola hold` — the same command the grid's own menu runs, so that the two

@@ -87,6 +87,15 @@ key = "rorolala_vcs"
 # be joined — a pencil over lines, which is the nearest this set has to an edited line, since its `edit` is
 # the very picture `create` is and that one is already the lock's — `arrow_right_alt` for one that moved,
 # and `priority_high` for a change that must not be recorded.
+#
+# `cloud_upload`, `cloud_download` and `sync` are the three sync buttons in the Overview's strip, and they
+# are the cloud's own arrows rather than the `upload`/`download` above so that the two are told apart at a
+# glance: what stands beside a file is a direction, and what is pressed is an exchange with the Vault that
+# carries data both ways. The order they are read in is the command line's — up, then down, then both — and
+# `sync` is the two arrows that turn into each other, which is what both is.
+#
+# `more_vert` is the button that opens what the three of them are told to leave out: three vertical beads,
+# which is what this set draws for a menu of a few more choices.
 icons = [
     "lock",
     "create",
@@ -103,6 +112,10 @@ icons = [
     "edit_note",
     "arrow_right_alt",
     "priority_high",
+    "cloud_upload",
+    "cloud_download",
+    "sync",
+    "more_vert",
 ]
 
 [[set]]
