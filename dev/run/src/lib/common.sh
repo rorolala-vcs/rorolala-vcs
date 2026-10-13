@@ -252,6 +252,18 @@ workspace_version() {
 	sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\([^"]*\)".*/\1/p' Cargo.toml | head -n 1
 }
 
+# What the project is published by, which is the first of the workspace's authors.
+#
+# Read from `Cargo.toml` for the same reason the version is: no program here knows it, and a package whose
+# publisher were written out by hand would be one that named it wrongly the day an author changed. The first
+# is taken because a publisher is one name and the list is of people: what a reader is shown is who makes it.
+workspace_publisher() {
+	sed -n '/^\[workspace\.package\]/,/^\[/p' Cargo.toml \
+		| sed -n '/^authors *= *\[/,/^\]/p' \
+		| sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p' \
+		| head -n 1
+}
+
 # A path a Windows program can read, given one this shell can.
 #
 # The shells this runs in on Windows are POSIX ones — msys, Git Bash — and they spell a path the way Unix
@@ -266,49 +278,48 @@ win_path() {
 	fi
 }
 
-# Lays the pinned Inno Setup out under the toolchains, fetching it if it is not there yet.
+# The compiler the Windows installer is built with: the toolchain under the project's own cache, or the one this
+# machine has on its path.
 #
-# Deployed rather than installed for the machine: what it is for is one build, and a build that used
-# whatever version a machine happened to have would be one nobody could repeat. The installer it comes as
-# is Inno's own, run with the silent switches and told where to put itself; the rights it asks for are the
-# one thing an unattended build cannot give it, so where it cannot lay itself out the exact command to run
-# once by hand is said rather than met as a build that waits for a prompt nobody can see.
-ensure_inno() {
+# The project's own is preferred, because a package built with a compiler this project names is one that anybody
+# can build again the same way. A machine's is taken where there is no other: a developer who already has Inno
+# Setup installed should not have to lay a second copy down to build a package — and which of the two was used
+# is said, so that what a package was built with is never something a reader has to work out.
+#
+# Nothing is fetched and nothing is installed. Laying a toolchain down is a decision, and a build that
+# downloaded a program and ran it silently would be making that decision for whoever ran the build, in a place
+# they did not choose. What is given instead is everything needed to make one.
+require_iscc() {
 	if [ -x "$INNO_DIR/ISCC.exe" ]; then
+		printf '%s\n' "$INNO_DIR/ISCC.exe"
 		return 0
 	fi
 
-	fetched="$INNO_DIR/innosetup-$INNO_VERSION.exe"
-
-	if [ ! -f "$fetched" ]; then
-		echo "fetching Inno Setup $INNO_VERSION into $INNO_DIR" >&2
-		mkdir -p "$INNO_DIR"
-		curl -fsSL "$INNO_URL" -o "$fetched" || {
-			echo "the download failed: $INNO_URL" >&2
-			exit 1
-		}
+	if command -v ISCC.exe >/dev/null 2>&1; then
+		found=$(command -v ISCC.exe)
+		echo "Inno Setup is not laid out under $INNO_DIR; using the one on this machine's path: $found" >&2
+		printf '%s\n' "$found"
+		return 0
 	fi
 
-	# What is fetched is run, so what it is is checked first: a hash that does not match is a download that
-	# is thrown away rather than executed.
-	said=$(sha256sum "$fetched" | cut -d' ' -f1 | tr 'a-f' 'A-F')
+	# What is written below is expanded, so nothing in it is quoted with backticks: a backtick would be a
+	# command substitution, and the message would be a program being run to say where to get one.
+	cat >&2 <<EOF
+Inno Setup $INNO_VERSION is neither laid out in $INNO_DIR nor on this machine's path, and the Windows installer
+is compiled with it.
 
-	if [ "$said" != "$INNO_SHA256" ]; then
-		rm -f "$fetched"
-		echo "what was downloaded is not the pinned Inno Setup $INNO_VERSION" >&2
-		echo "  expected $INNO_SHA256" >&2
-		echo "  found    $said" >&2
-		exit 1
-	fi
+  It is fetched from:  $INNO_URL
+  It hashes to:        $INNO_SHA256  (sha256)
 
-	"$fetched" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS "/DIR=$(win_path "$INNO_DIR")" || true
+  Lay it out where this project looks for it first — under its own cache, not on the machine:
 
-	if [ ! -x "$INNO_DIR/ISCC.exe" ]; then
-		echo "Inno Setup $INNO_VERSION is not laid out in $INNO_DIR." >&2
-		echo "Run this once, answering the prompt it raises, and run this script again:" >&2
-		echo "  $fetched /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS /DIR=\"$(win_path "$INNO_DIR")\"" >&2
-		exit 1
-	fi
+    "$(win_path "$INNO_DIR/innosetup-$INNO_VERSION.exe")" /VERYSILENT /CURRENTUSER /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS /DIR="$(win_path "$INNO_DIR")"
+
+  An Inno Setup already installed on this machine needs neither that nor a copy: its directory on the path is
+  found, and what is read from it is ISCC.exe and the files beside it.
+EOF
+
+	exit 1
 }
 
 # `export` and `clean` delete a destination with `rm -rf`, so refuse a path that would take

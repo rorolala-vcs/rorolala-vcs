@@ -12,27 +12,38 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/../lib/common.ps1"
 
 $Version = Get-WorkspaceVersion
+$Publisher = Get-WorkspacePublisher
 $PackageDir = $BuildDir
 
 # The installer's own file name, which the script that builds it is told rather than naming out of its own
 # head: what a package is called is decided here, so that it and an archive read alike.
 $Setup = "rorolala-$Version-setup"
 
+# The toolchain first, and deliberately: what an export costs is minutes of compiling, and a machine that has no
+# compiler for the installer should say so before one is built for a package that cannot be made. Which one is
+# used — this project's own under the cache, or the one on this machine's path — is what `Get-Iscc` answers with
+# and says.
+if ($env:OS -eq 'Windows_NT') {
+    $iscc = Get-Iscc
+}
+
 Invoke-Script export
 
 # The programs of a Unix install are the ones an archive holds, and what tells them where to go is the script
 # beside them; a Windows install is a program, so it is built here.
 if ($env:OS -eq 'Windows_NT') {
-    Install-Inno
-
     # The script is told the four things it cannot work out for itself: what version this is, what the
     # installer is to be called, and where the layout it packages was laid and is to be written.
-    $iscc = "$InnoDir/ISCC.exe"
     $script = (Resolve-Path 'dev/packaging/windows/rorolala.iss').Path
     $source = (Resolve-Path $BuildDir).Path
     $out = (Resolve-Path $PackageDir).Path
 
-    & $iscc /Q "/DVersion=$Version" "/DSetup=$Setup" "/DSourceDir=$source" "/DOutputDir=$out" $script
+    # The compiler reads its sources out of the layout and writes the installer into the layout, so anything of
+    # a previous build left there would be read as part of the payload: an export clears the directory first and
+    # leaves nothing, and this is what makes that true even of a run that did not export.
+    Remove-Item -Force "$PackageDir/$Setup.exe" -ErrorAction SilentlyContinue
+
+    & $iscc /Q "/DVersion=$Version" "/DPublisher=$Publisher" "/DSetup=$Setup" "/DSourceDir=$source" "/DOutputDir=$out" $script
     Assert-Exit
 
     Get-Item "$PackageDir/$Setup.exe" | Select-Object FullName, Length

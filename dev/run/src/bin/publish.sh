@@ -13,6 +13,7 @@ set -eu
 . "$(dirname "$0")/../lib/common.sh"
 
 VERSION=$(workspace_version)
+PUBLISHER=$(workspace_publisher)
 PACKAGE_DIR="$BUILD_DIR"
 
 # The archive a Unix is given, and the installer a Windows is given: both are named for what they are, the
@@ -26,12 +27,23 @@ SETUP="rorolala-$VERSION-setup"
 
 export VERSION SETUP ARCHIVE
 
+# The toolchain first, and deliberately: what an export costs is minutes of compiling, and a machine that has no
+# compiler for the installer should say so before one is built for a package that cannot be made. Which one is
+# used — this project's own under the cache, or the one on this machine's path — is what `require_iscc` answers
+# with and says.
+if [ -n "$EXE_SUFFIX" ]; then
+	ISCC=$(require_iscc)
+fi
+
 again export
 
 # The programs of a Unix install are the ones an archive holds, and what tells them where to go is the script
 # beside them; a Windows install is a program, so it is built here.
 if [ -n "$EXE_SUFFIX" ]; then
-	ensure_inno
+	# The compiler reads its sources out of the layout and writes the installer into the layout, so anything of
+	# a previous build left there would be read as part of the payload: an export clears the directory first and
+	# leaves nothing, and this is what makes that true even of a run that did not export.
+	rm -f "$PACKAGE_DIR/$SETUP.exe"
 
 	# The script is told the three things it cannot work out for itself: what version this is, what the
 	# installer is to be called, and where the layout it packages was laid and is to be written — the last of
@@ -41,8 +53,9 @@ if [ -n "$EXE_SUFFIX" ]; then
 	# translate a lone `/word` into a path before the program is started — `/DVersion=0.1.0` reaches it as
 	# something beginning with a drive letter — and a leading `//` is what tells them not to. ISCC's own
 	# switches are spelled with one, and it is given one.
-	"$INNO_DIR/ISCC.exe" //Q \
+	"$ISCC" //Q \
 		"//DVersion=$VERSION" \
+		"//DPublisher=$PUBLISHER" \
 		"//DSetup=$SETUP" \
 		"//DSourceDir=$(win_path "$PWD/$BUILD_DIR")" \
 		"//DOutputDir=$(win_path "$PWD/$PACKAGE_DIR")" \

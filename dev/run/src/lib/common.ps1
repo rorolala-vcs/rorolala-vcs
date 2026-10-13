@@ -279,50 +279,65 @@ function Get-WorkspaceVersion {
     return ''
 }
 
-# Lays the pinned Inno Setup out under the toolchains, fetching it if it is not there yet.
+# What the project is published by, which is the first of the workspace's authors.
 #
-# Deployed rather than installed for the machine: what it is for is one build, and a build that used
-# whatever version a machine happened to have would be one nobody could repeat. The installer it comes as
-# is Inno's own, run with the silent switches and told where to put itself; the rights it asks for are the
-# one thing an unattended build cannot give it, so where it cannot lay itself out the exact command to run
-# once by hand is said rather than met as a build that waits for a prompt nobody can see.
-function Install-Inno {
-    if (Test-Path "$InnoDir/ISCC.exe") { return }
+# Read from `Cargo.toml` for the same reason the version is: no program here knows it, and a package whose
+# publisher were written out by hand would be one that named it wrongly the day an author changed. The first
+# is taken because a publisher is one name and the list is of people: what a reader is shown is who makes it.
+function Get-WorkspacePublisher {
+    $said = Get-Content 'Cargo.toml'
+    $inside = $false
+    $listing = $false
 
-    $fetched = "$InnoDir/innosetup-$InnoVersion.exe"
+    foreach ($line in $said) {
+        if ($line -match '^\[workspace\.package\]') { $inside = $true; continue }
+        if ($inside -and $line -match '^\[') { break }
+        if (-not $inside) { continue }
 
-    if (-not (Test-Path $fetched)) {
-        Write-Host "fetching Inno Setup $InnoVersion into $InnoDir"
-        New-Item -ItemType Directory -Force -Path $InnoDir | Out-Null
-        curl.exe -fsSL $InnoUrl -o $fetched
-        if ($LASTEXITCODE -ne 0) { Write-Error "the download failed: $InnoUrl"; exit 1 }
+        if ($line -match '^authors\s*=\s*\[') { $listing = $true; continue }
+        if ($listing -and $line -match '^\s*\]') { break }
+        if ($listing -and $line -match '^\s*"([^"]+)"') { return $Matches[1] }
     }
 
-    # What is fetched is run, so what it is is checked first: a hash that does not match is a download that
-    # is thrown away rather than executed.
-    $said = (Get-FileHash $fetched -Algorithm SHA256).Hash.ToUpperInvariant()
+    return ''
+}
 
-    if ($said -ne $InnoSha256) {
-        Remove-Item -Force $fetched
-        Write-Error "what was downloaded is not the pinned Inno Setup $InnoVersion (expected $InnoSha256, found $said)"
-        exit 1
+# The compiler the Windows installer is built with: the toolchain under the project's own cache, or the one this
+# machine has on its path.
+#
+# The project's own is preferred, because a package built with a compiler this project names is one that anybody
+# can build again the same way. A machine's is taken where there is no other: a developer who already has Inno
+# Setup installed should not have to lay a second copy down to build a package — and which of the two was used
+# is said, so that what a package was built with is never something a reader has to work out.
+#
+# Nothing is fetched and nothing is installed. Laying a toolchain down is a decision, and a build that
+# downloaded a program and ran it silently would be making that decision for whoever ran the build, in a place
+# they did not choose. What is given instead is everything needed to make one.
+function Get-Iscc {
+    if (Test-Path "$InnoDir/ISCC.exe") { return "$InnoDir/ISCC.exe" }
+
+    $found = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($found) {
+        Write-Host "Inno Setup is not laid out under $InnoDir; using the one on this machine's path: $($found.Source)"
+        return $found.Source
     }
 
-    $root = (Resolve-Path $InnoDir).Path
-    $process = Start-Process -FilePath $fetched -PassThru -ArgumentList @(
-        '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS', "/DIR=$root"
-    )
+    Write-Host @"
+Inno Setup $InnoVersion is neither laid out in $InnoDir nor on this machine's path, and the Windows installer is
+compiled with it.
 
-    # Waited for with a bound, because what the installer does without the rights it asks for is wait for a
-    # prompt: a build that hung there would say nothing at all about why.
-    if (-not $process.WaitForExit(600000)) {
-        $process.Kill()
-    }
+  It is fetched from:  $InnoUrl
+  It hashes to:        $InnoSha256  (sha256)
 
-    if (-not (Test-Path "$InnoDir/ISCC.exe")) {
-        Write-Error "Inno Setup $InnoVersion is not laid out in $InnoDir. Run this once, answering the prompt it raises: $fetched /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS /DIR=`"$root`""
-        exit 1
-    }
+  Lay it out where this project looks for it first — under its own cache, not on the machine:
+
+    "$InnoDir/innosetup-$InnoVersion.exe" /VERYSILENT /CURRENTUSER /SUPPRESSMSGBOXES /NORESTART /SP- /NOICONS /DIR="$((Resolve-Path $InnoDir -ErrorAction SilentlyContinue).Path)"
+
+  An Inno Setup already installed on this machine needs neither that nor a copy: its directory on the path is
+  found, and what is read from it is ISCC.exe and the files beside it.
+"@
+
+    exit 1
 }
 
 # `export` and `clean` delete a destination with `Remove-Item -Recurse`, so refuse a path that would
