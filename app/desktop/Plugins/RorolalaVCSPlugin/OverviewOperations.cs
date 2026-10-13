@@ -6,13 +6,20 @@ using RorolalaDesktop.I18n;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// What may be done about one state of a row, which is a mode of <c>rola align</c> apiece.
+/// What may be done about one state of a row, which is a mode of <c>rola align</c> apiece — except cancelling
+/// a merge, which is a file taken away and a record confirmed after it.
 /// </summary>
 /// <remarks>
-/// One operation is one mode, because that is what the command line offers and what each button means: the
-/// command settles one thing about one path, so a button that settled two would be two buttons wearing one
-/// label. What a state offers is read from the command's own modes rather than invented here (see
+/// One operation is one thing a reader means, which is usually one mode, because that is what the command line
+/// offers: the command settles one thing about one path, so a button that settled two would be two buttons
+/// wearing one label. What a state offers is read from the command's own modes rather than invented here (see
 /// <c>cmd_align</c>), so a mode added there is a button added here.
+/// <para>
+/// Ending a merge is the one that is not one mode: the command line ends a merge because its variant file is
+/// gone, and refuses while it is still there, so cancelling one is that file being taken away and the record
+/// confirmed after it. A reader means one thing by it and the program runs two, which is where this file's
+/// own words are worth less than the command's.
+/// </para>
 /// <para>
 /// The words are this plugin's and are named by a key, because a button says what it does and the lookup is the
 /// catalogue's: the command's own flag names are a command line's, not a window's.
@@ -44,6 +51,14 @@ internal enum Operation
 
     /// <summary>Claim what another account holds, by running the command line that does it.</summary>
     TakeOwnership,
+
+    /// <summary>End the merge a variant file is waiting for, taking that file and the record away.</summary>
+    /// <remarks>
+    /// The file the variant is for is left as it holds now: what is cancelled is the joining, not what has
+    /// become of either file. A reader who wants the variant's content instead records the merge, which is
+    /// `rola track` on the file it is for.
+    /// </remarks>
+    CancelMerge,
 }
 
 /// <summary>
@@ -77,9 +92,10 @@ internal static class OverviewOperations
     /// What each state offers, in the order the buttons are read.
     /// </summary>
     /// <remarks>
-    /// A state that is nothing to act on — a merge, which is settled by joining its variant rather than by
-    /// moving a path — offers nothing, which is an answer rather than an absence: the column is there, and the
-    /// row says by having no buttons in it that there is nothing here to press.
+    /// A state that is nothing to act on offers nothing, which is an answer rather than an absence: the column
+    /// is there, and the row says by having no buttons in it that there is nothing here to press. A merge is
+    /// not one of those: it is settled by joining its variant in, which is what <c>rola track</c> is for, and
+    /// it is ended by cancelling it, which is this column's own.
     /// </remarks>
     /// <param name="state">The state a row is in.</param>
     /// <returns>What may be done about it.</returns>
@@ -93,6 +109,7 @@ internal static class OverviewOperations
             State.Modified => [Operation.RestoreContent],
             State.Stale => [Operation.RestoreContent],
             State.NotMine => [Operation.RestoreContent, Operation.TakeOwnership],
+            State.Merging or State.Broken => [Operation.CancelMerge],
             _ => [],
         };
 
@@ -137,6 +154,7 @@ internal static class OverviewOperations
             Operation.RestoreContent => "rorolala_vcs.operations.restore_content",
             Operation.ConfirmRename => "rorolala_vcs.operations.confirm_rename",
             Operation.Connect => "rorolala_vcs.operations.connect",
+            Operation.CancelMerge => "rorolala_vcs.operations.cancel_merge",
             _ => "rorolala_vcs.operations.take_ownership",
         };
 
@@ -215,6 +233,14 @@ internal static class OverviewOperations
             return;
         }
 
+        // Cancelling a merge is the one operation that is two runs rather than one, so it is taken before the
+        // one command the rest of them are spelled into (see `Cancel`).
+        if (operation is Operation.CancelMerge)
+        {
+            Cancel(path, directory, program, host);
+            return;
+        }
+
         var arguments = new List<string> { "--theme-choice=" + Theme, "align", path };
 
         switch (operation)
@@ -252,18 +278,80 @@ internal static class OverviewOperations
 
             if (!done)
             {
-                host.Dialogs.Present(
-                    RolaI18N.Get("rorolala_vcs.operations.failed"),
-                    () =>
-                        ReportView.Of(
-                            ReportLines.Parse(said),
-                            key => host.Icons.Find(key),
-                            colour => Ink(colour)
-                        )
-                );
+                Said(host, said);
             }
         });
     }
+
+    /// <summary>
+    /// Ends the merge a variant file is waiting for: the file is taken away, and the record with it.
+    /// </summary>
+    /// <remarks>
+    /// The file first and the record second, which is the order the command line insists on: `rola align
+    /// --delete` ends a merge whose variant file is gone and refuses while it is still there, so a run that
+    /// wants the record ended takes the file away first. A file already gone — a merge the reading calls
+    /// broken, which is most of them — is nothing to remove, and the record is ended either way.
+    /// <para>
+    /// Two runs are two chances to fail, and what the second says is what is reported: a removal that failed
+    /// has left the merge as it was, and the record that follows would refuse for a reason the first run's
+    /// own words already explain.
+    /// </para>
+    /// </remarks>
+    /// <param name="path">The variant file's path, read where the run is made.</param>
+    /// <param name="directory">Where the run is made, which is what the path is read from.</param>
+    /// <param name="program">The program to run.</param>
+    /// <param name="host">The host, for the report and for saying the files may have changed.</param>
+    private static void Cancel(string path, string directory, string program, IPluginHost host)
+    {
+        _ = Task.Run(() =>
+        {
+            // The listing names the file the way the system does and the run is made where the row was read,
+            // so the two answer the same question: whether there is a file here to take away.
+            if (File.Exists(Path.Combine(directory, path)))
+            {
+                var (removed, why) = Ask(
+                    program,
+                    ["--theme-choice=" + Theme, "fs-ops", "rm", path],
+                    directory
+                );
+
+                if (!removed)
+                {
+                    host.Files.Touch();
+                    Said(host, why);
+
+                    return;
+                }
+            }
+
+            var (done, said) = Ask(
+                program,
+                ["--theme-choice=" + Theme, "align", path, "--delete"],
+                directory
+            );
+
+            host.Files.Touch();
+
+            if (!done)
+            {
+                Said(host, said);
+            }
+        });
+    }
+
+    /// <summary>Reports what a command said about its own failure, in the window's own words for the frame.</summary>
+    /// <param name="host">The host, whose window the report is shown over.</param>
+    /// <param name="said">What the command said.</param>
+    private static void Said(IPluginHost host, string said) =>
+        host.Dialogs.Present(
+            RolaI18N.Get("rorolala_vcs.operations.failed"),
+            () =>
+                ReportView.Of(
+                    ReportLines.Parse(said),
+                    key => host.Icons.Find(key),
+                    colour => Ink(colour)
+                )
+        );
 
     /// <summary>
     /// What a colour named inside a message stands for.

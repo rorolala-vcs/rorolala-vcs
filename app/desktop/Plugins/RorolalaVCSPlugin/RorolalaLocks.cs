@@ -94,13 +94,15 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         // than from the badge.
         EntryLockProviders.Register(locks);
         EntryMarkProviders.Register(locks);
-        EntryColumns.Register(new RorolalaUpstream(readings));
 
         // The State mark and the column saying how far a path is from upstream are both read from the work
         // itself rather than from the Vault's copy the two above read, so they share a set of readings of
-        // their own: one reading of a directory answers both columns, and the badge too.
+        // their own: one reading of a directory answers both columns, and the badges too. The Upstream
+        // column reads it as well, because a variant file is the one file that column can name and the Vault
+        // cannot.
         var statuses = new StatusReadings(host.Log);
 
+        EntryColumns.Register(new RorolalaUpstream(readings, statuses));
         EntryColumns.Register(new RorolalaStates(statuses));
         EntryColumns.Register(new RorolalaStanding(statuses));
 
@@ -108,6 +110,11 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         // badge of its own, worn after the lock: a file may be somebody else's and be behind, and neither
         // answer may hide the other.
         EntryMarkProviders.Register(new RorolalaStandingBadge(statuses));
+
+        // And what a variant file is — content waiting to be joined into the file beside it — is the third,
+        // worn after both: it is the one answer that is about the file's own place in a merge rather than
+        // about the work around it.
+        EntryMarkProviders.Register(new RorolalaMergeBadge(statuses));
 
         // Nothing is subscribed to here for letting go of what was read: the File System plugin says
         // when the files may have changed — after an operation of its own, and when the window is come

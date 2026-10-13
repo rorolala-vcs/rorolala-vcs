@@ -5,6 +5,9 @@ using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using RorolalaVCSPlugin;
 using Vcs = global::RorolalaVCSPlugin.RorolalaVCSPlugin;
+// Both plugins publish an `Operation` — theirs are the file operations — so what a row of the Overview
+// offers is named by the one its buttons are.
+using Operation = RorolalaVCSPlugin.Operation;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -257,18 +260,12 @@ public sealed class RorolalaDockTests
             rows.Select(Pills)
         );
 
-        // What a row has to say that is not a state is written rather than coloured: the variant a merge waits
-        // for. A move that changed nothing has nothing to report beyond being a move, so it carries no note.
+        // What a row has to say that is not a state is written rather than coloured, and only a merge that
+        // cannot go on has anything: a move that changed nothing says nothing beyond being a move, and a merge
+        // that can go on says which variant it waits for on its pill and where its two files are in the two
+        // columns.
         Assert.Equal(
-            [
-                string.Empty,
-                string.Empty,
-                $"{RolaI18N.Get("rorolala_vcs.status.merge_variant")}1a2b3c4",
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-            ],
+            [string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty],
             rows.Select(Notes)
         );
 
@@ -277,8 +274,9 @@ public sealed class RorolalaDockTests
         Assert.Equal(("theirs.psd", string.Empty), (rows[0].From, rows[0].To));
         Assert.Equal(("stale.psd", string.Empty), (rows[1].From, rows[1].To));
 
-        // A merge has nothing to say about a content of its own, so the column carries the variant waiting.
-        Assert.Equal(("merge/file.txt", "merge/file.1a2b3c4.txt"), (rows[2].From, rows[2].To));
+        // A merge is read the way its content would move: the variant file it is joining comes first and the
+        // file the Layout names, which that content is to become part of, is what it goes to.
+        Assert.Equal(("merge/file.1a2b3c4.txt", "merge/file.txt"), (rows[2].From, rows[2].To));
 
         // What the Layout names and the tree has lost comes from a path and goes nowhere, and what the tree
         // holds and the Layout does not name is read the same way round rather than the other: an untagged
@@ -290,6 +288,63 @@ public sealed class RorolalaDockTests
         Assert.Equal(("a.txt", "b.txt"), (rows[5].From, rows[5].To));
 
         Assert.Equal(("kept.txt", string.Empty), (rows[6].From, rows[6].To));
+    }
+
+    /// <summary>A merge can be cancelled, and what is cancelled is read from the variant file.</summary>
+    /// <remarks>
+    /// A merge is the one row whose button acts on its <c>From</c> rather than on where its file is now: the
+    /// command that ends it is run on the variant file, and the file the variant is for is left as it holds.
+    /// What the pill is read by is the head of the variant's hash, which the row's columns do not carry.
+    /// </remarks>
+    [Fact]
+    public void AMergeCanBeCancelledFromTheVariantFile()
+    {
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: [],
+            Untagged: [],
+            Renamed: [],
+            Modified: [],
+            Unowned: [],
+            WrongBase: [],
+            Merging:
+            [
+                new Merge("merge/file.txt", "1a2b3c4d5e6f", "merge/file.txt.v", null),
+                new Merge("merge/other.psd", "abcdef0123456789", "merge/other.psd.v", "merge/that.psd.v"),
+            ],
+            Broken: []
+        );
+
+        var rows = OverviewView.Rows(facts);
+
+        Assert.Equal(2, rows.Count);
+
+        // The first variant file is where the record puts it, and the second is where the tree holds it: what
+        // the row reads is the file a reader can see rather than the place a record remembers.
+        Assert.Equal(("merge/file.txt.v", "merge/file.txt"), (rows[0].From, rows[0].To));
+        Assert.Equal(("merge/that.psd.v", "merge/other.psd"), (rows[1].From, rows[1].To));
+
+        // What ends a merge is the variant file, which is the path the row comes from rather than the one it
+        // goes to: the file the variant is for is left as it holds now.
+        Assert.Equal(rows[0].From, rows[0].Act);
+        Assert.Equal(rows[1].From, rows[1].Act);
+        Assert.Equal([Operation.CancelMerge], rows[0].Operations);
+        Assert.Equal([Operation.CancelMerge], rows[1].Operations);
+
+        // The pill is the merge's own, and the whole of what it means is which variant is waiting: the head of
+        // the hash, which is what a person recognises a variant by and what the row's columns do not carry.
+        Assert.Equal("J", Assert.Single(rows[0].Pills).Letters);
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.variant.pending", VariantFiles.Head("1a2b3c4d5e6f")),
+            Assert.Single(rows[0].Pills).Hint
+        );
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.variant.pending", VariantFiles.Head("abcdef0123456789")),
+            Assert.Single(rows[1].Pills).Hint
+        );
+        Assert.Empty(rows[0].Notes);
+        Assert.Empty(rows[1].Notes);
     }
 
     /// <summary>A move whose content is wrong is read among the wrong changes rather than among the moves.</summary>
@@ -383,7 +438,10 @@ public sealed class RorolalaDockTests
         var rows = OverviewView.Rows(facts);
 
         Assert.Equal(2, rows.Count);
-        Assert.Equal(("merge/hero.psd", "merge/hero.txt"), (rows[0].From, rows[0].To));
+
+        // Read the same way round as a merge that can go on: the reason names the variant file, which comes
+        // first, and the file it is for is what it goes to.
+        Assert.Equal(("merge/hero.txt", "merge/hero.psd"), (rows[0].From, rows[0].To));
 
         // A merge is one state whatever became of it, so the row wears one pill: the colour is what says that
         // this merge is a thing gone wrong, and the reason is in the note, where there is room to say it.
@@ -395,9 +453,16 @@ public sealed class RorolalaDockTests
             StringComparison.Ordinal
         );
 
+        // It can be cancelled like any other, from the variant file the reason named.
+        Assert.Equal(rows[0].From, rows[0].Act);
+        Assert.Equal([Operation.CancelMerge], rows[0].Operations);
+
         // The Layout naming no such file is a reason rather than a missing answer, so the row is there with its
-        // pill and its reason, and the columns that want a path are the ones left empty.
+        // pill and its reason, and the columns that want a path are the ones left empty — and a row with no
+        // path is one nothing can be done from, so it is offered no button.
         Assert.Equal((string.Empty, string.Empty), (rows[1].From, rows[1].To));
+        Assert.Null(rows[1].Act);
+        Assert.Empty(rows[1].Operations);
         Assert.Single(rows[1].Pills);
         Assert.True(
             Assert.Single(rows[1].Notes).Length > RolaI18N.Get("rorolala_vcs.status.merge_broken").Length,

@@ -116,15 +116,10 @@ rorolala_vcs:
       en: Its content has changed, but the version it is based on does not match.
       zh-CN: 文件内容产生了变化，但是它的基准版本并不匹配。
 
-    # What a merge says in the last column: the variant waiting, where its file went when it moved, and
-    # why a merge cannot go on. A merge has no content change of its own — what settles it is the two
-    # files being joined — so the column carries what the row would otherwise have to leave out.
-    merge_variant:
-      en: "variant "
-      zh-CN: 变体
-    merge_moved:
-      en: moved to %{path}
-      zh-CN: 移动至 %{path}
+    # What a merge says in the last column: why a merge cannot go on. A merge has no content change of its
+    # own — what settles it is the two files being joined — so the column carries what the row would
+    # otherwise have to leave out. Where the variant file moved to is not among these, because the row's
+    # own columns say where the two files are: a variant file is read from where the tree holds it.
     merge_broken:
       en: "cannot go on: "
       zh-CN: "无法继续："
@@ -250,6 +245,23 @@ rorolala_vcs:
       en: Merging
       zh-CN: 合并中
 
+  # What a variant file is called, and what is said about it. A variant file is one the Layout does not
+  # name — it holds content waiting to be joined into a file the Layout does name — so it has no name of
+  # its own in either Layout, and what names it is the variant it holds.
+  variant:
+    # What the Upstream column says where the file is one: a column that would name the path the Vault
+    # names it by names the variant instead, since that is the one thing about the file there is to say.
+    named:
+      en: "Variant: %{variant}"
+      zh-CN: "变体：%{variant}"
+
+    # What a merge in progress says when the pointer rests on it: the pill of a merge row, and the badge a
+    # variant file's tile wears. The head of the hash is what a person recognises a variant by, and the
+    # whole of it is in the Overview's reading for anything that wants it.
+    pending:
+      en: The variant %{variant} is being merged in
+      zh-CN: 该变体 %{variant} 正在合并中
+
   # What the Overview offers to do about a row, one line each: what a button says and what it is hovered for
   # are the same words, since a button's label is what it does. Every one of them is a mode of `rola align`,
   # except taking ownership, which is `rola hold` — the same command the grid's own menu runs, so that the two
@@ -273,6 +285,9 @@ rorolala_vcs:
     take_ownership:
       en: Take ownership
       zh-CN: 获取所有权
+    cancel_merge:
+      en: Cancel the merge
+      zh-CN: 取消该合并
 
     # What the two sides of a connection say while one is being made, in place of what they do. The button that
     # began it is waiting, and each one it could be finished on is an answer: three dots rather than a word,
@@ -293,13 +308,20 @@ rorolala_vcs:
       zh-CN: 操作无法执行
 
     # The one operation that is asked about before it runs, because putting content back writes over what the
-    # file holds now and what was changed between the two is work no command can recover.
+    # file holds now and what was changed between the two is work no command can recover; and the other one
+    # that is, because cancelling a merge takes a file away, and the content it held is not kept anywhere else.
     restore_confirm_title:
       en: Restore content?
       zh-CN: 要还原内容吗？
     restore_confirm_message:
       en: "`%{path}` will be overwritten with the version the Layout records. What it holds now cannot be recovered."
       zh-CN: "`%{path}` 会被布局所记录的版本覆盖。它现在的内容无法找回。"
+    cancel_merge_confirm_title:
+      en: Cancel this merge?
+      zh-CN: 要取消该合并吗？
+    cancel_merge_confirm_message:
+      en: "The variant file `%{path}` will be deleted and the merge ended. The file it was to be joined into is left as it holds now."
+      zh-CN: "变体文件 `%{path}` 会被删除，合并到此结束。它原本要并入的文件则维持现状。"
 
   ownership:
     mine:

@@ -187,9 +187,8 @@ internal sealed record StatusPill(State State, string Letters, Color Fill, strin
 /// carries as many pills as it has states — one or two, and more where a merge has something to add.
 /// </param>
 /// <param name="Notes">
-/// What the row has to say that is not a state: the variant a merge is waiting for, where a merge moved to,
-/// and why a merge cannot go on. A note is written rather than coloured, since it says what a row is about
-/// rather than what has to be done about it.
+/// What the row has to say that is not a state: why a merge cannot go on. A note is written rather than
+/// coloured, since it says what a row is about rather than what has to be done about it.
 /// </param>
 /// <param name="From">The path it comes from, or nothing when it comes from nowhere.</param>
 /// <param name="To">The path it goes to, or nothing when it goes nowhere.</param>
@@ -197,12 +196,17 @@ internal sealed record StatusPill(State State, string Letters, Color Fill, strin
 /// What may be done about it, which is what each of its states offers, once each: a row in two states has the
 /// buttons of both, because a file that moved and was edited is two things to act on.
 /// </param>
+/// <param name="Act">
+/// Which of the two paths the operations act on, where it is neither of the ones the rule picks — see
+/// <see cref="OverviewView.Path"/>. Nothing for every row whose operations act on where its file is now.
+/// </param>
 internal sealed record TableRow(
     IReadOnlyList<StatusPill> Pills,
     IReadOnlyList<string> Notes,
     string From,
     string To,
-    IReadOnlyList<Operation> Operations
+    IReadOnlyList<Operation> Operations,
+    string? Act = null
 );
 
 /// <summary>
@@ -279,9 +283,6 @@ internal sealed class OverviewView : UserControl
 
     /// <summary>The theme resource a band is drawn on, which is the ground a heading sits on.</summary>
     private const string BandGround = PaletteKeys.Dark;
-
-    /// <summary>How much of a variant's hash is shown.</summary>
-    private const int ShortVariant = 7;
 
     /// <summary>How often the work is read again while the dock is on screen.</summary>
     /// <remarks>
@@ -471,7 +472,6 @@ internal sealed class OverviewView : UserControl
         // word on every row it names. Every one is asked for by a literal so that the gate can see it — and the
         // letters are the pill's own, so what a state is known by is stated where the state is made rather than
         // read from the catalogue.
-        var variant = RolaI18N.Get("rorolala_vcs.status.merge_variant");
         var stopped = RolaI18N.Get("rorolala_vcs.status.merge_broken");
 
         List<TableRow> wrong = [];
@@ -528,35 +528,45 @@ internal sealed class OverviewView : UserControl
         merges.AddRange(
             facts.Merging.Select(item =>
                 new TableRow(
-                    [Pill(State.Merging)],
-                    [
-                        $"{variant}{Short(item.Variant)}",
-                        .. item.Moved is { Length: > 0 } to
-                            ? new[] { RolaI18N.Get("rorolala_vcs.status.merge_moved", to) }
-                            : [],
-                    ],
+                    [MergePill(item.Variant)],
+                    // The variant and the two files are on the pill and in the columns, so the row has nothing
+                    // left to note: what a reader wants of it is which variant is waiting, which is on the pill,
+                    // and where the two files are, which is in the columns.
+                    [],
+                    // The variant file comes first and the file it is for second, which is the direction the
+                    // content is to move: the variant's content is joined into the file the Layout names. What
+                    // the row's one button acts on is the variant file — the one a merge is ended at — so the
+                    // row says so rather than leaving the rule to pick the other column.
+                    VariantFiles.Place(item),
                     item.Target,
-                    item.Path,
-                    // A merge is settled by joining its variant, which is not an operation on a path: the row
-                    // says so by having nothing to press.
-                    []
+                    OverviewOperations.Of(State.Merging),
+                    Act: VariantFiles.Place(item)
                 )
             )
         );
 
         merges.AddRange(
             facts.Broken.Select(reason =>
-                new TableRow(
+            {
+                // The reason is what names the variant file, and a reason about the variant itself rather than
+                // about its file names none: a row with no path is one nothing can be done from, which is why
+                // it is offered no button.
+                var place = BrokenPlace(reason);
+
+                return new TableRow(
                     // A merge that cannot go on is a thing gone wrong rather than work under way, so its pill
                     // wears the colour of what is wrong rather than the colour of a merge that is — and what is
                     // wrong with it is in the note, where there is room for the reason.
                     [Pill(State.Broken)],
                     [$"{stopped}{BrokenSaid(reason)}"],
+                    // Read the same way round as a merge that can go on: the variant file first, and the file it
+                    // is for second.
+                    place,
                     reason.Target,
-                    BrokenPlace(reason),
-                    []
-                )
-            )
+                    place is { Length: > 0 } ? OverviewOperations.Of(State.Broken) : [],
+                    Act: place is { Length: > 0 } ? place : null
+                );
+            })
         );
 
         changes.AddRange(
@@ -597,7 +607,9 @@ internal sealed class OverviewView : UserControl
             );
     }
 
-    /// <summary>One state, as the pill a row wears for it.</summary>
+    /// <summary>
+    /// One state, as the pill a row wears for it.
+    /// </summary>
     /// <remarks>
     /// The letters are stated here rather than read from the catalogue, because they are not words: one or two
     /// characters a reader learns once and then scans for, and a translation that changed them would change what
@@ -615,9 +627,25 @@ internal sealed class OverviewView : UserControl
             State.Renamed => new StatusPill(state, "R", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")),
             State.RenamedLikely => new StatusPill(state, "R?", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")),
             State.Modified => new StatusPill(state, "M", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.change_modified")),
-            State.Merging => new StatusPill(state, "J", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
             _ => new StatusPill(state, "J", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
         };
+
+    /// <summary>The pill a merge in progress wears, which names the variant it is waiting for.</summary>
+    /// <remarks>
+    /// A pill of its own rather than <see cref="Pill(State)"/>, because what it is hovered for is the one
+    /// thing about a merge that the row's columns do not say: which variant it is. The columns carry the two
+    /// files and nothing carries the hash once the note is gone, and a reader who has stopped at the pill is
+    /// asking exactly that.
+    /// </remarks>
+    /// <param name="variant">The variant waiting, as the hash it is named by.</param>
+    /// <returns>The pill.</returns>
+    private static StatusPill MergePill(string variant) =>
+        new(
+            State.Merging,
+            "J",
+            UnsettledFill,
+            RolaI18N.Get("rorolala_vcs.variant.pending", VariantFiles.Head(variant))
+        );
 
     /// <summary>
     /// The states a row is in, read from the pills it wears.
@@ -811,10 +839,13 @@ internal sealed class OverviewView : UserControl
     /// Putting content back writes over what the file holds now, and what it held is not in the store: the
     /// Layout names a version, and what was changed between them is work that no command can recover. So it is
     /// asked about rather than done — the one operation of the six whose effect a reader might not have meant.
+    /// Cancelling a merge is asked about for the same reason and one of its own: it takes the variant file
+    /// away, and what that file holds is not kept anywhere the file is not — the record says which variant it
+    /// was checked in as, and the content that is to be joined comes back only from the Vault.
     /// <para>
-    /// The other five are not asked about, and that is deliberate: a move that is taken back is a move made
-    /// again, a loss that is confirmed is a record of what already happened, and a claim is answered by the
-    /// Vault. None of them destroys anything the reader has no other copy of.
+    /// The other operations are not asked about, and that is deliberate: a move that is taken back is a move
+    /// made again, a loss that is confirmed is a record of what already happened, and a claim is answered by
+    /// the Vault. None of them destroys anything the reader has no other copy of.
     /// </para>
     /// </remarks>
     /// <param name="operation">The operation.</param>
@@ -823,19 +854,28 @@ internal sealed class OverviewView : UserControl
     /// <param name="host">The host, whose window the question is put over.</param>
     private static void Ask(Operation operation, string path, string at, IPluginHost host)
     {
-        if (operation is not Operation.RestoreContent)
+        var asked = operation switch
+        {
+            Operation.RestoreContent => new Dialog(
+                RolaI18N.Get("rorolala_vcs.operations.restore_confirm_title"),
+                RolaI18N.Get("rorolala_vcs.operations.restore_confirm_message", path),
+                () => OverviewOperations.Run(operation, path, at, null, host)
+            ),
+            Operation.CancelMerge => new Dialog(
+                RolaI18N.Get("rorolala_vcs.operations.cancel_merge_confirm_title"),
+                RolaI18N.Get("rorolala_vcs.operations.cancel_merge_confirm_message", path),
+                () => OverviewOperations.Run(operation, path, at, null, host)
+            ),
+            _ => null,
+        };
+
+        if (asked is null)
         {
             OverviewOperations.Run(operation, path, at, null, host);
             return;
         }
 
-        host.Dialogs.Show(
-            new Dialog(
-                RolaI18N.Get("rorolala_vcs.operations.restore_confirm_title"),
-                RolaI18N.Get("rorolala_vcs.operations.restore_confirm_message", path),
-                () => OverviewOperations.Run(operation, path, at, null, host)
-            )
-        );
+        host.Dialogs.Show(asked);
     }
 
     /// <summary>
@@ -846,11 +886,19 @@ internal sealed class OverviewView : UserControl
     /// which of the two it is depends on the state: a loss is a path the Layout names, a gain is one the tree
     /// holds. A move is the one row with both, and what a move's operations act on is where the file is now —
     /// that is the path a reader is looking at, and the one the command can find.
+    /// <para>
+    /// A merge is the other row with both, and it is the other way round: the two columns read the variant
+    /// file being joined and the file it is being joined into, and what a merge's operation acts on is the
+    /// variant file — the one a merge is ended at, and the one the command is run on. That is why a row may
+    /// say which of its paths to act on rather than leaving it to the rule.
+    /// </para>
     /// </remarks>
     /// <param name="row">The row.</param>
     /// <returns>The path, or empty for a row that names none.</returns>
     private static string Path(TableRow row) =>
-        row.To is { Length: > 0 } to ? to : row.From;
+        row.Act is { Length: > 0 } act ? act
+        : row.To is { Length: > 0 } to ? to
+        : row.From;
 
     /// <summary>The states of the row a path is on, or none when no row names it.</summary>
     /// <param name="path">The path.</param>
@@ -1403,12 +1451,6 @@ internal sealed class OverviewView : UserControl
             BrokenKind.Changed => RolaI18N.Get("rorolala_vcs.status.broken_changed", reason.What),
             _ => RolaI18N.Get("rorolala_vcs.status.broken_unknown", reason.What),
         };
-
-    /// <summary>How much of a variant's hash is shown.</summary>
-    /// <param name="variant">The hash as the reading gives it.</param>
-    /// <returns>The head of it, which is what a person recognises a variant by.</returns>
-    private static string Short(string variant) =>
-        variant.Length > ShortVariant ? variant[..ShortVariant] : variant;
 
     /// <summary>What the dock is showing, which is what a reading is compared against.</summary>
     /// <param name="Said">The line said in place of a reading, or nothing when there is one.</param>

@@ -78,7 +78,10 @@ key = "rorolala_vcs"
 # in step — nothing is uploaded or downloaded by them, so the mark is of a direction rather than of an
 # action. `call_split` is the third answer: the two sides have each moved on, so neither is based on the
 # other and there is no direction the work could move in to settle it.
-icons = ["lock", "create", "lock_open", "error", "warning", "live_help", "refresh", "upload", "download", "call_split"]
+#
+# `merge` is what a variant file waiting to be joined wears: the set draws two lines coming together into
+# one, which is what the file is for — its content is to become part of the file beside it.
+icons = ["lock", "create", "lock_open", "error", "warning", "live_help", "refresh", "upload", "download", "call_split", "merge"]
 
 [[set]]
 plugin = "RorolalaDesktop"
