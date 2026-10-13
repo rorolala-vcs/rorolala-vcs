@@ -95,6 +95,25 @@ $ScriptsDir = "$BuildDir/scripts"
 $DesktopProject = 'app/desktop/Core/RorolalaDesktop.csproj'
 $DesktopDir = "$BuildDir/bin/desktop"
 
+# The platform the Desktop program is laid out for, as .NET spells one.
+#
+# A publish that names no platform carries the native libraries of every platform NuGet holds them for
+# — sixteen of them and half a gigabyte, of which one is ever loaded — so the layout names the one it is
+# for. It is the machine's own, asked of the SDK rather than worked out here, because the SDK is what
+# knows the machine: `win-x64` on Windows, `linux-musl-arm64` on the Alpine that spells it so.
+#
+# Nothing carries the .NET runtime either way: the program names the framework rather than including
+# it, so what a platform decides is which native libraries travel with it and not whether a runtime
+# does. Override it to lay out another platform, the way the toolchains above are overridden.
+$DotnetRid = ''
+if ($env:DOTNET_RID) {
+    $DotnetRid = $env:DOTNET_RID
+} else {
+    $said = & $DotnetProgram @DotnetFlags --info 2>$null
+    $rid = $said | Select-String -Pattern '^\s*RID:\s*(\S+)' | Select-Object -First 1
+    if ($rid) { $DotnetRid = $rid.Matches[0].Groups[1].Value }
+}
+
 # The plugins that ship with the Desktop program, taken from the tree rather than listed anywhere.
 #
 # A plugin is a project under `Plugins/`, one directory to one plugin, and the name of the directory is
@@ -159,10 +178,25 @@ function Invoke-Script {
 # Publishes the Desktop program into the directory named. `dotnet publish` is the form that produces
 # a program with everything beside it that running it needs, which is what an export holds; a plain
 # build leaves a program whose dependencies are still only in the build tree.
+#
+# One platform rather than all of them: published for a RID, what is laid down beside the program is
+# that platform's native libraries and no other's — the drawing and text-shaping libraries a window
+# needs, which NuGet otherwise carries for every platform it has ever been built for.
 function Publish-Desktop {
     param([Parameter(Mandatory = $true, Position = 0)][string] $Into)
 
-    & $DotnetProgram @DotnetFlags publish $DesktopProject -c Release --no-restore -o $Into
+    if (-not $DotnetRid) {
+        Write-Error "the host's RID could not be read; name the platform this layout is for in DOTNET_RID"
+        exit 1
+    }
+
+    # Restored for the RID before it is published: the restore `Build-Solution` made answers for the
+    # platform the build is made on, and a publish that names another one finds an assets file without
+    # a target for it.
+    & $DotnetProgram @DotnetFlags restore $DesktopProject -r $DotnetRid
+    Assert-Exit
+
+    & $DotnetProgram @DotnetFlags publish $DesktopProject -c Release --no-restore -r $DotnetRid --self-contained false -o $Into
     Assert-Exit
 
     # The native library the Desktop's own bindings reach for, beside the program that binds it: a

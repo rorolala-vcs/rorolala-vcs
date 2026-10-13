@@ -53,4 +53,11 @@ Publish-Plugins
 # for both.
 Publish-Rsharp
 
-icacls .\build /setintegritylevel '(OI)(CI)M' /T /C /Q
+# And the words that go with it: what the hand-off is, and what it is handed over under. They are the
+# tree's own at its top rather than files written for a layout, because a second copy is a copy that
+# goes stale — what an export carries is what the project says about itself, said once.
+Copy-Item -Force 'README.md', 'LICENSE' "$BuildDir/"
+
+# The export tree is handed to whoever runs it, so it is given the integrity level that lets it run
+# rather than being left at whatever the tree was checked out with.
+icacls $BuildDir /setintegritylevel '(OI)(CI)M' /T /C /Q

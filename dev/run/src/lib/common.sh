@@ -98,6 +98,21 @@ SCRIPTS_DIR="$BUILD_DIR/scripts"
 DESKTOP_PROJECT=app/desktop/Core/RorolalaDesktop.csproj
 DESKTOP_DIR="$BUILD_DIR/bin/desktop"
 
+# The platform the Desktop program is laid out for, as .NET spells one.
+#
+# A publish that names no platform carries the native libraries of every platform NuGet holds them for
+# — sixteen of them and half a gigabyte, of which one is ever loaded — so the layout names the one it is
+# for. It is the machine's own, asked of the SDK rather than worked out here, because the SDK is what
+# knows the machine: `win-x64` on Windows, `linux-musl-arm64` on the Alpine that spells it so, and the
+# answer is the one a program published here will find beside it.
+#
+# Nothing carries the .NET runtime either way: the program names the framework rather than including
+# it, so what a platform decides is which native libraries travel with it and not whether a runtime
+# does. Override it to lay out another platform, the way the toolchains above are overridden.
+DOTNET_RID="${DOTNET_RID:-$(
+	$DOTNET --info 2>/dev/null | sed -n 's/^[[:space:]]*RID:[[:space:]]*//p' | head -n 1 || true
+)}"
+
 # The plugins that ship with the Desktop program, taken from the tree rather than listed anywhere.
 #
 # A plugin is a project under `Plugins/`, one directory to one plugin, and the name of the directory is
@@ -150,9 +165,23 @@ build_solution() {
 # Publishes the Desktop program into the directory named. `dotnet publish` is the form that produces
 # a program with everything beside it that running it needs, which is what an export holds; a plain
 # build leaves a program whose dependencies are still only in the build tree.
+#
+# One platform rather than all of them: published for a RID, what is laid down beside the program is
+# that platform's native libraries and no other's — the drawing and text-shaping libraries a window
+# needs, which NuGet otherwise carries for every platform it has ever been built for.
 publish_desktop() {
+	if [ -z "$DOTNET_RID" ]; then
+		echo "the host's RID could not be read; name the platform this layout is for in DOTNET_RID" >&2
+		exit 1
+	fi
+
+	# Restored for the RID before it is published: the restore [`build_solution`] made answers for the
+	# platform the build is made on, and a publish that names another one finds an assets file without a
+	# target for it. The offline-first restore is the one used, so laying out a platform costs no feed.
+	restore "$DESKTOP_PROJECT" -r "$DOTNET_RID"
+
 	# shellcheck disable=SC2086
-	$DOTNET publish "$DESKTOP_PROJECT" -c Release --no-restore -o "$1"
+	$DOTNET publish "$DESKTOP_PROJECT" -c Release --no-restore -r "$DOTNET_RID" --self-contained false -o "$1"
 
 	# The native library the Desktop's own bindings reach for, beside the program that binds it: a
 	# plugin asks the C ABI through `RolaSharp`, which `DllImport`s `rorolala`, and the runtime looks

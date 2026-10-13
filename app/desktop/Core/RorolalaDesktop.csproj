@@ -76,4 +76,25 @@
     <ProjectReference Include="../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj" />
   </ItemGroup>
 
+  <!--
+    What a published layout is handed over without: debug symbols.
+
+    The drawing and text-shaping libraries travel in their packages with their symbols beside them —
+    SkiaSharp's alone is eighty megabytes — and the SDK copies what a package holds, with no property
+    that says otherwise: `CopyDebugSymbolFilesFromPackages` is about symbol *packages*, not about what
+    an ordinary package keeps in its `native` directory. So they are taken away after the publish,
+    which is the one place where that can be said.
+
+    Ours go with them, and deliberately: `dotnet build` writes them into the build tree, which is where
+    a program being debugged is run from, and what this layout is for is a program to hand over. A
+    layout carrying one set and not the other would be a layout whose reader has to wonder which they
+    have.
+  -->
+  <Target Name="NoDebugSymbols" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishedSymbols Include="$(PublishDir)**/*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(PublishedSymbols)" />
+  </Target>
+
 </Project>

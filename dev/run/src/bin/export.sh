@@ -53,3 +53,8 @@ publish_plugins
 # The C# bindings beside the native library they bind, under `lib/` where a consumer of the C ABI
 # looks for both.
 publish_rsharp
+
+# And the words that go with it: what the hand-off is, and what it is handed over under. They are the
+# tree's own at its top rather than files written for a layout, because a second copy is a copy that
+# goes stale — what an export carries is what the project says about itself, said once.
+cp README.md LICENSE "$BUILD_DIR/"
