@@ -1207,7 +1207,7 @@ dependencies = [
 [[package]]
 name = "mingling"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=3972930a83c1e7b998da60c5bd4cda93e666b020#3972930a83c1e7b998da60c5bd4cda93e666b020"
+source = "git+https://github.com/mingling-rs/mingling?rev=f5544992ba72000623f079c6eeefaefc7e2fa16f#f5544992ba72000623f079c6eeefaefc7e2fa16f"
 dependencies = [
  "arg-picker",
  "mingling_core",
@@ -1218,7 +1218,7 @@ dependencies = [
 [[package]]
 name = "mingling_core"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=3972930a83c1e7b998da60c5bd4cda93e666b020#3972930a83c1e7b998da60c5bd4cda93e666b020"
+source = "git+https://github.com/mingling-rs/mingling?rev=f5544992ba72000623f079c6eeefaefc7e2fa16f#f5544992ba72000623f079c6eeefaefc7e2fa16f"
 dependencies = [
  "just_fmt 0.2.1",
  "might_be_async",
@@ -1229,7 +1229,7 @@ dependencies = [
 [[package]]
 name = "mingling_macros"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=3972930a83c1e7b998da60c5bd4cda93e666b020#3972930a83c1e7b998da60c5bd4cda93e666b020"
+source = "git+https://github.com/mingling-rs/mingling?rev=f5544992ba72000623f079c6eeefaefc7e2fa16f#f5544992ba72000623f079c6eeefaefc7e2fa16f"
 dependencies = [
  "just_fmt 0.2.1",
  "just_template",
@@ -1242,7 +1242,7 @@ dependencies = [
 [[package]]
 name = "mingling_pathf"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=3972930a83c1e7b998da60c5bd4cda93e666b020#3972930a83c1e7b998da60c5bd4cda93e666b020"
+source = "git+https://github.com/mingling-rs/mingling?rev=f5544992ba72000623f079c6eeefaefc7e2fa16f#f5544992ba72000623f079c6eeefaefc7e2fa16f"
 dependencies = [
  "cargo_metadata",
  "just_fmt 0.2.1",

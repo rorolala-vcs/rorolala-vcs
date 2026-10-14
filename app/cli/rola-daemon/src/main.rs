@@ -8,11 +8,8 @@
 
 rust_i18n::i18n!("i18n", fallback = "en");
 
-use mingling::{
-    macros::{chain, gen_program},
-    setup::DefaultSetup,
-};
-use rorolala_cli_setups::RorolalaSetup;
+use mingling::macros::{chain, gen_program};
+use rorolala_cli_setups::{RorolalaDefaultSetup, RorolalaSetup};
 
 use crate::cmd_listen::EntryListen;
 
@@ -24,7 +21,7 @@ fn main() {
     colored::control::set_virtual_terminal(true).unwrap();
 
     let mut program = ThisProgram::new();
-    program.with_setup(DefaultSetup);
+    program.with_setup(RorolalaDefaultSetup);
     program.with_setup(RorolalaSetup);
     program.exec_and_exit();
 }

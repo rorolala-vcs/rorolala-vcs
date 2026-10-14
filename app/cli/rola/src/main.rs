@@ -14,9 +14,9 @@ use mingling::{
     hook::ProgramHook,
     macros::{buffer, gen_program, help, r_append, r_eprintln, renderer},
     res::ResExitCode,
-    setup::{ConfirmSetup, DefaultSetup},
+    setup::ConfirmSetup,
 };
-use rorolala_cli_setups::RorolalaSetup;
+use rorolala_cli_setups::{RorolalaDefaultSetup, RorolalaSetup};
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
@@ -92,7 +92,7 @@ fn main() {
     colored::control::set_virtual_terminal(true).unwrap();
 
     let mut program = ThisProgram::new();
-    program.with_setup(DefaultSetup);
+    program.with_setup(RorolalaDefaultSetup);
     program.with_setup(RorolalaSetup);
     program.with_setup(PagerSetup);
     program.with_setup(RebuildSetup);

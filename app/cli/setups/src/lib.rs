@@ -8,6 +8,7 @@
 use mingling::{ProgramCollect, setup::ProgramSetup};
 
 mod colorize;
+mod default;
 mod force_flag;
 mod global_flag;
 mod language;
@@ -20,6 +21,7 @@ mod vcs;
 mod workspace;
 
 pub use colorize::*;
+pub use default::*;
 pub use force_flag::*;
 pub use global_flag::*;
 pub use language::*;

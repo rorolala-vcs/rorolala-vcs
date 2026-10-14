@@ -25,8 +25,9 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use mingling::{
+    config::QueryMode,
     consts::HELP_FLAG,
-    hook::{ProgramControls, ProgramHook},
+    hook::{ProgramControlUnit, ProgramControls, ProgramHook},
     res::ResExitCode,
 };
 use rorolala_utils_cli_theme::{err_line, help_line};
@@ -49,7 +50,7 @@ const PREFIX: &str = "rola-";
 #[must_use]
 pub fn hook() -> ProgramHook<ThisProgram> {
     ProgramHook::empty().on_pre_dispatch(|info| {
-        if ThisProgram::this().user_context.help {
+        if ThisProgram::this().effective_query() == QueryMode::Usage {
             return ProgramControls::Empty;
         }
 
@@ -61,11 +62,15 @@ pub fn hook() -> ProgramHook<ThisProgram> {
         // is handed over is everything the run wrote after it.
         let code = hand_over(&program, &info.arguments[1..]);
 
-        // Ended where it stands rather than through a control, because the framework has no control
-        // that ends a run: every way out of a hook renders something, and a run that has given its
-        // whole output to another program has nothing of its own left to render. What a caller
-        // reads is that program's own code, which is what waiting for the run is waiting for.
-        std::process::exit(code);
+        // Ended here rather than through rendering: a run that has given its whole output to another
+        // program has nothing of its own left to render, and what a caller reads is that program's
+        // own code. The `Exit` unit is what ends the run without rendering anything; the code it
+        // ends with is the one just read.
+        vec![
+            ProgramControlUnit::OverrideExitCode(code),
+            ProgramControlUnit::Exit,
+        ]
+        .into()
     })
 }
 
