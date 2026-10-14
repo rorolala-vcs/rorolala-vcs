@@ -317,6 +317,29 @@ pub(crate) async fn remote_write<Input>(
 where
     Input: rorolala_protocol::Encodable + Send + Sync + 'static,
 {
+    remote_transact(ctx, input, decide).await
+}
+
+/// Runs one exchange against the Vault: the input there, the answer of `decide` back.
+///
+/// It is [`remote_write`] with the answer left to the caller, so an action that writes more than
+/// one thing — a sync's batch — carries them all in one exchange rather than one connection and
+/// handshake per entry.
+///
+/// # Errors
+///
+/// Returns [`ActionError::MissingValue`] if the Vault holds no member to act as,
+/// [`ActionError::Codec`] if the input or the answer will not cross, and whatever the exchange
+/// fails with.
+pub(crate) async fn remote_transact<Input, Output>(
+    ctx: &mut ActionContext<'_>,
+    input: OnlyWorkspace<Input>,
+    decide: impl FnOnce(&Layout, Input, &str, bool) -> Result<Output, ActionError>,
+) -> Result<Output, ActionError>
+where
+    Input: rorolala_protocol::Encodable + Send + Sync + 'static,
+    Output: rorolala_protocol::Encodable + Send + Sync + 'static,
+{
     let here = input.into_inner();
     let to_vault = here
         .as_ref()
@@ -352,10 +375,10 @@ where
     let bytes = arrived.or(mine).unwrap_or_default();
 
     if ctx.is_vault() {
-        // UNWRAP: the outcome above was made on exactly this side.
+        // UNWRAP: the answer above was made on exactly this side.
         Ok(outcome.unwrap())
     } else {
-        EntryWrite::decode(bytes).map_err(codec_failed)
+        Output::decode(bytes).map_err(codec_failed)
     }
 }
 

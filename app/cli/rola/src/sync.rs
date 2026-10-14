@@ -8,12 +8,12 @@
 //! kept, and a file changed here is read off the working tree, since that is what a pull would
 //! overwrite.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::storage::{Blake3Hash, Key};
 use librorolala::tree_analyze::tree_diff;
-use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSIndexReadingError, VCSWrite as _, Version};
+use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSIndexReadingError, Version};
 use librorolala::workspace::Workspace;
 use rorolala_errors::Failure as _;
 use serde::Serialize;
@@ -177,8 +177,15 @@ pub async fn plan(
     let diff = tree_diff(local, workspace, ALIKE).map_err(|error| error.to_string())?;
     let modified: BTreeSet<LayoutPath> = diff.modified.into_iter().collect();
 
-    let (mut entries, up_to_date) =
-        local_entries(local, remote, index, me, direction, &modified).await?;
+    let (mut entries, up_to_date) = local_entries(
+        local,
+        remote,
+        &mut Relations::new(index),
+        me,
+        direction,
+        &modified,
+    )
+    .await?;
     entries.extend(remote_only(local, remote, direction));
 
     entries.sort_by(|left, right| {
@@ -210,7 +217,7 @@ pub async fn plan(
 async fn local_entries(
     local: &Layout,
     remote: &Layout,
-    index: &VCSIndex,
+    relations: &mut Relations<'_>,
     me: &str,
     direction: Direction,
     modified: &BTreeSet<LayoutPath>,
@@ -256,7 +263,7 @@ async fn local_entries(
         let kind = if data.version() == held.version() {
             Kind::UpToDate
         } else {
-            let relation = relation(index, &data.version(), &held.version()).await?;
+            let relation = relations.relation(&data.version(), &held.version()).await?;
             decide(&data.version(), &held.version(), held.owner(), me, relation)
         };
         let kind = match kind {
@@ -382,54 +389,119 @@ enum Relation {
     Apart,
 }
 
-/// How the version this Layout is at stands beside the Vault's, read along the index.
+/// The relations between versions, read once and remembered for the whole plan.
 ///
-/// A version the index does not hold is one this side never had, so it can only have come from
-/// elsewhere: the Vault is ahead. Both being here, the chain below each is walked to see whether
-/// the other is on it.
-async fn relation(
-    index: &VCSIndex,
-    local_version: &[u8; 32],
-    remote_version: &[u8; 32],
-) -> Result<Relation, String> {
-    let Some(local) = version(index, local_version).await? else {
-        return Ok(Relation::Apart);
-    };
-    let Some(remote) = version(index, remote_version).await? else {
-        return Ok(Relation::RemoteAhead);
-    };
+/// A plan compares every entry both sides hold, and the chains those entries lie on share their
+/// ancestors: a version read to walk one entry's chain lies below the next entry's as well. What
+/// each read found is kept here, so a plan costs one index read per version rather than one per step
+/// of every walk.
+struct Relations<'a> {
+    /// The index the versions are read from.
+    index: &'a VCSIndex,
 
-    if descends(index, &local, remote_version).await? {
-        return Ok(Relation::LocalAhead);
-    }
-    if descends(index, &remote, local_version).await? {
-        return Ok(Relation::RemoteAhead);
-    }
+    /// What the index holds under a version digest, or nothing when it holds none.
+    versions: HashMap<Blake3Hash, Option<Version>>,
 
-    Ok(Relation::Apart)
+    /// The version below a version — its variant's base — or nothing when it is the root.
+    parents: HashMap<Blake3Hash, Option<Blake3Hash>>,
+
+    /// Whether one version is on the chain below another, by the pair of digests.
+    below: HashMap<(Blake3Hash, Blake3Hash), bool>,
 }
 
-/// Whether the version `ancestor` is on the chain below `descendant`.
-async fn descends(
-    index: &VCSIndex,
-    descendant: &Version,
-    ancestor: &[u8; 32],
-) -> Result<bool, String> {
-    let mut current = descendant.clone();
-
-    loop {
-        if current.hash().digest() == ancestor {
-            return Ok(true);
-        }
-        if current.is_root() {
-            return Ok(false);
-        }
-
-        current = read_version(
+impl<'a> Relations<'a> {
+    /// Reads relations against `index`, remembering nothing yet.
+    fn new(index: &'a VCSIndex) -> Self {
+        Self {
             index,
-            read_variant(index, current.variant()).await?.base_version(),
-        )
-        .await?;
+            versions: HashMap::new(),
+            parents: HashMap::new(),
+            below: HashMap::new(),
+        }
+    }
+
+    /// The version the index holds under `digest`, or nothing when it holds none.
+    async fn version(&mut self, digest: &Blake3Hash) -> Result<Option<Version>, String> {
+        if let Some(held) = self.versions.get(digest) {
+            return Ok(held.clone());
+        }
+
+        let read = version(self.index, digest).await?;
+        self.versions.insert(*digest, read.clone());
+
+        Ok(read)
+    }
+
+    /// The version below `digest`, or nothing when it is the root or holds no version.
+    async fn parent(&mut self, digest: &Blake3Hash) -> Result<Option<Blake3Hash>, String> {
+        if let Some(held) = self.parents.get(digest) {
+            return Ok(*held);
+        }
+
+        let parent = match self.version(digest).await? {
+            Some(version) if !version.is_root() => Some(
+                *read_variant(self.index, version.variant())
+                    .await?
+                    .base_version(),
+            ),
+            _ => None,
+        };
+        self.parents.insert(*digest, parent);
+
+        Ok(parent)
+    }
+
+    /// Whether `ancestor` is on the chain below `descendant`.
+    async fn descends(
+        &mut self,
+        descendant: &Blake3Hash,
+        ancestor: &Blake3Hash,
+    ) -> Result<bool, String> {
+        let key = (*descendant, *ancestor);
+        if let Some(held) = self.below.get(&key) {
+            return Ok(*held);
+        }
+
+        let mut at = *descendant;
+        let below = loop {
+            if at == *ancestor {
+                break true;
+            }
+            match self.parent(&at).await? {
+                Some(parent) => at = parent,
+                None => break false,
+            }
+        };
+        self.below.insert(key, below);
+
+        Ok(below)
+    }
+
+    /// How the version this Layout is at stands beside the Vault's.
+    ///
+    /// A version the index does not hold is one this side never had, so it can only have come from
+    /// elsewhere: the Vault is ahead. Both being here, the chain below each is walked to see whether
+    /// the other is on it.
+    async fn relation(
+        &mut self,
+        local_version: &Blake3Hash,
+        remote_version: &Blake3Hash,
+    ) -> Result<Relation, String> {
+        if self.version(local_version).await?.is_none() {
+            return Ok(Relation::Apart);
+        }
+        if self.version(remote_version).await?.is_none() {
+            return Ok(Relation::RemoteAhead);
+        }
+
+        if self.descends(local_version, remote_version).await? {
+            return Ok(Relation::LocalAhead);
+        }
+        if self.descends(remote_version, local_version).await? {
+            return Ok(Relation::RemoteAhead);
+        }
+
+        Ok(Relation::Apart)
     }
 }
 
@@ -440,19 +512,6 @@ async fn version(index: &VCSIndex, digest: &[u8; 32]) -> Result<Option<Version>,
         Ok(_) | Err(VCSIndexReadingError::NotFound { .. }) => Ok(None),
         Err(error) => Err(error.reason()),
     }
-}
-
-/// The version the index holds under `digest`.
-async fn read_version(index: &VCSIndex, digest: &Blake3Hash) -> Result<Version, String> {
-    version(index, digest).await?.map_or_else(
-        || {
-            Err(format!(
-                "the index holds no version {}",
-                Key::new(*digest).hex()
-            ))
-        },
-        Ok,
-    )
 }
 
 /// The store key the version `digest` names, when the index holds the chain to it.

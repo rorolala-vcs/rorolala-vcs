@@ -343,6 +343,28 @@ impl Layout {
         Ok(())
     }
 
+    /// Groups changes to this layout, so that many are written as few.
+    ///
+    /// A change on its own reads what others have written and flushes a write to the shard it
+    /// names, and a run that records many files pays that for each of them. A batch reads what
+    /// others wrote once and flushes one write per shard its changes fall in, and checks each
+    /// change against the layout and against the changes made in the same batch before it — so
+    /// the failures are the ones the single-change calls give, and a create is one record rather
+    /// than two.
+    ///
+    /// Nothing is written until [`Batch::commit`], and the batch is not a transaction: what each
+    /// shard is written is written whole and flushed there, so a batch that fails partway leaves
+    /// the shards it already wrote in place.
+    #[must_use]
+    pub fn batch(&self) -> Batch<'_> {
+        Batch {
+            layout: self,
+            records: Vec::new(),
+            data: HashMap::new(),
+            index: derived_index(&self.shards),
+        }
+    }
+
     /// The `Uuid` `path` names, if it names one.
     #[must_use]
     pub fn id_of(&self, path: &LayoutPath) -> Option<Uuid> {
@@ -456,6 +478,198 @@ impl Layout {
     }
 }
 
+/// A group of changes to a [`Layout`], written together by [`Batch::commit`].
+///
+/// Each change is checked as it is made, against the layout and against the changes already in the
+/// batch, so what it refuses is what the single-change calls on [`Layout`] refuse. What the batch
+/// keeps for that is what it has changed — the entries it has set, and the bindings it has made —
+/// on top of what the layout holds.
+pub struct Batch<'a> {
+    /// The layout being changed.
+    layout: &'a Layout,
+
+    /// The changes made so far, in the order they were made.
+    records: Vec<Record>,
+
+    /// What each `Uuid` the batch has set holds, as the batch leaves it. A `Uuid` not here holds
+    /// what the layout holds.
+    data: HashMap<Uuid, MutableData>,
+
+    /// Which path names which `Uuid` as the batch leaves it.
+    index: Index,
+}
+
+impl Batch<'_> {
+    /// Creates `id` with `data` at `path`, as one change.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::AlreadyExists`] if `id` holds something or `path` already names a
+    /// `Uuid` — as the layout stands and as the batch has left it.
+    pub fn create_file(
+        &mut self,
+        id: Uuid,
+        data: MutableData,
+        path: &LayoutPath,
+    ) -> Result<(), LayoutError> {
+        if self.holds(id) || self.names(path) {
+            return Err(LayoutError::AlreadyExists);
+        }
+
+        self.push(Record::Create {
+            id,
+            path: path.as_str().to_owned(),
+            data,
+        })
+    }
+
+    /// Creates the entry `id` with `data`, with no path to name it yet.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::AlreadyExists`] if `id` already holds something.
+    pub fn create_entry(&mut self, id: Uuid, data: MutableData) -> Result<(), LayoutError> {
+        if self.holds(id) {
+            return Err(LayoutError::AlreadyExists);
+        }
+
+        self.push(Record::CreateEntry { id, data })
+    }
+
+    /// Binds `path` to `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::AlreadyExists`] if `path` already names a `Uuid`.
+    pub fn create_path(&mut self, path: &LayoutPath, id: Uuid) -> Result<(), LayoutError> {
+        if self.names(path) {
+            return Err(LayoutError::AlreadyExists);
+        }
+
+        self.push(Record::CreatePath {
+            id,
+            path: path.as_str().to_owned(),
+        })
+    }
+
+    /// Changes the entry `id` to hold `data`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::NotFound`] if `id` holds nothing.
+    pub fn update_entry(&mut self, id: Uuid, data: MutableData) -> Result<(), LayoutError> {
+        if !self.holds(id) {
+            return Err(LayoutError::NotFound);
+        }
+
+        self.push(Record::UpdateEntry { id, data })
+    }
+
+    /// Moves the `Uuid` at `from` to `to`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::NotFound`] if `from` names nothing, and
+    /// [`LayoutError::AlreadyExists`] if `to` already names a `Uuid`.
+    pub fn move_path(&mut self, from: &LayoutPath, to: &LayoutPath) -> Result<(), LayoutError> {
+        let Some(id) = self.index.id_of.get(from).copied() else {
+            return Err(LayoutError::NotFound);
+        };
+        if self.names(to) {
+            return Err(LayoutError::AlreadyExists);
+        }
+
+        self.push(Record::MovePath {
+            id,
+            from: from.as_str().to_owned(),
+            to: to.as_str().to_owned(),
+        })
+    }
+
+    /// What `id` holds as the batch leaves it: what the batch has set, or what the layout holds.
+    #[must_use]
+    pub fn entry(&self, id: Uuid) -> Option<MutableData> {
+        self.data
+            .get(&id)
+            .cloned()
+            .or_else(|| self.layout.entry(id))
+    }
+
+    /// Whether `id` holds data as the batch leaves it.
+    fn holds(&self, id: Uuid) -> bool {
+        self.data.contains_key(&id) || self.layout.entry(id).is_some()
+    }
+
+    /// Whether `path` names a `Uuid` as the batch leaves it.
+    #[must_use]
+    pub fn names(&self, path: &LayoutPath) -> bool {
+        self.index.id_of.contains_key(path)
+    }
+
+    /// Adds `record` to the batch, and makes it true of what the checks read.
+    fn push(&mut self, record: Record) -> Result<(), LayoutError> {
+        update_data(&mut self.data, &record);
+        apply_index(&mut self.index, &record)?;
+        self.records.push(record);
+
+        Ok(())
+    }
+
+    /// Writes every change down: one read of what others wrote, one flushed write per shard.
+    ///
+    /// # Errors
+    ///
+    /// Returns whatever reading what others wrote, or writing a shard, fails with.
+    pub fn commit(self) -> Result<(), LayoutError> {
+        if self.records.is_empty() {
+            return Ok(());
+        }
+
+        let layout = self.layout;
+        layout.refresh()?;
+
+        let mut by_shard: Vec<Vec<Record>> = (0..SHARD_COUNT).map(|_| Vec::new()).collect();
+        for record in self.records {
+            by_shard[shard_of(record.id())].push(record);
+        }
+
+        for (shard, records) in by_shard.into_iter().enumerate() {
+            if records.is_empty() {
+                continue;
+            }
+
+            // The records fall in one shard, so they are written by one append — one write and one
+            // flush — rather than one each.
+            let mut bytes = Vec::new();
+            for record in &records {
+                bytes.extend_from_slice(&record.encode());
+            }
+            lock_write(&layout.shards[shard]).log.append(&bytes)?;
+
+            for record in &records {
+                layout.apply(record)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Makes what the batch has set true of `data`, which is what a change to an entry does.
+fn update_data(data: &mut HashMap<Uuid, MutableData>, record: &Record) {
+    match record {
+        Record::CreateEntry { id, data: held }
+        | Record::UpdateEntry { id, data: held }
+        | Record::Create { id, data: held, .. } => {
+            data.insert(*id, held.clone());
+        }
+        Record::CreatePath { .. }
+        | Record::RemovePath { .. }
+        | Record::MovePath { .. }
+        | Record::RemoveEntry { .. } => {}
+    }
+}
+
 /// Applies every record `bytes` holds from its front, up to one that is not all there.
 ///
 /// Stops where a record that is not whole begins rather than failing, since that is what a write a
@@ -500,6 +714,11 @@ fn apply_slot(slots: &mut HashMap<Uuid, Slot>, record: &Record) -> Result<(), La
         Record::CreateEntry { id, data } | Record::UpdateEntry { id, data } => {
             slots.entry(*id).or_default().data = Some(data.clone());
         }
+        Record::Create { id, path, data } => {
+            let slot = slots.entry(*id).or_default();
+            slot.path = Some(LayoutPath::new(path)?);
+            slot.data = Some(data.clone());
+        }
         Record::RemoveEntry { id } => {
             slots.remove(id);
         }
@@ -518,6 +737,7 @@ fn apply_index(index: &mut Index, record: &Record) -> Result<(), LayoutError> {
         }
         Record::RemoveEntry { id } => index.forget(*id),
         Record::CreateEntry { .. } | Record::UpdateEntry { .. } => {}
+        Record::Create { id, path, .. } => index.bind(LayoutPath::new(path)?, *id),
     }
 
     Ok(())

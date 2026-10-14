@@ -39,7 +39,7 @@ use rorolala_workspace::Workspace;
 use rust_i18n::t;
 use uuid::Uuid;
 
-use librorolala::layout::{Layout, LayoutError, LayoutPath, Layouts, MutableData};
+use librorolala::layout::{Batch, Layout, LayoutError, LayoutPath, Layouts, MutableData};
 use librorolala::storage::Key;
 
 use crate::Next;
@@ -688,36 +688,45 @@ pub fn set_cached_path(
     copy.move_path(from, to)
 }
 
-/// Adds the entry `id` to the fetched copy, at `path` and `version`, held by `owner`.
+/// Opens the fetched copy of `vault`'s Layout, if there is one.
 ///
-/// It is what a run that has just made an entry in the Vault writes down here, so that a reading
-/// command sees it without a `rola layout fetch` of its own. A copy that is not there, or one that
-/// already holds the `Uuid` or names the path, is left as it is: the Vault is the truth, and a
-/// fetch is what settles a copy that has drifted, not this.
+/// A copy that is not there is nothing rather than a failure: the Vault is the truth, and a run that
+/// has not fetched reads no copy here.
 ///
 /// # Errors
 ///
-/// Returns [`LayoutError`] if a copy that is there cannot be read back or written.
+/// Returns [`LayoutError`] if a copy that is there cannot be read back.
+pub fn cached_copy(workspace: &Workspace, vault: &str) -> Result<Option<Layout>, LayoutError> {
+    let dir = readonly_layout_dir(workspace, vault, VAULT_LAYOUT_NAME);
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+
+    Layout::open(&dir).map(Some)
+}
+
+/// Adds the entry `id` to the fetched copy, at `path` and `version`, held by `owner`.
+///
+/// It is what a run that has just made an entry in the Vault writes down here, so that a reading
+/// command sees it without a `rola layout fetch` of its own. A copy that already holds the `Uuid` or
+/// names the path is left as it is: the Vault is the truth, and a fetch is what settles a copy that
+/// has drifted, not this.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] if the change cannot be made in `copy`.
 pub fn add_cached_entry(
-    workspace: &Workspace,
-    vault: &str,
+    copy: &mut Batch<'_>,
     id: Uuid,
     path: &LayoutPath,
     version: [u8; 32],
     owner: Option<String>,
 ) -> Result<(), LayoutError> {
-    let dir = readonly_layout_dir(workspace, vault, VAULT_LAYOUT_NAME);
-    if !dir.is_dir() {
+    if copy.entry(id).is_some() || copy.names(path) {
         return Ok(());
     }
 
-    let copy = Layout::open(&dir)?;
-    if copy.entry(id).is_some() || copy.id_of(path).is_some() {
-        return Ok(());
-    }
-
-    copy.create_path(path, id)?;
-    copy.create_entry(id, MutableData::new(owner, version, String::new()))
+    copy.create_file(id, MutableData::new(owner, version, String::new()), path)
 }
 
 /// Moves the entry `id` of the fetched copy to `version`, leaving its path and holder alone.
@@ -727,19 +736,12 @@ pub fn add_cached_entry(
 ///
 /// # Errors
 ///
-/// Returns [`LayoutError`] if a copy that is there cannot be read back or written.
+/// Returns [`LayoutError`] if the change cannot be made in `copy`.
 pub fn set_cached_version(
-    workspace: &Workspace,
-    vault: &str,
+    copy: &mut Batch<'_>,
     id: Uuid,
     version: [u8; 32],
 ) -> Result<(), LayoutError> {
-    let dir = readonly_layout_dir(workspace, vault, VAULT_LAYOUT_NAME);
-    if !dir.is_dir() {
-        return Ok(());
-    }
-
-    let copy = Layout::open(&dir)?;
     let Some(data) = copy.entry(id) else {
         return Ok(());
     };

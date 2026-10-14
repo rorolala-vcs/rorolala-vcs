@@ -57,7 +57,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::checkout::remember;
+use crate::checkout::Checkout;
 use crate::complete::{
     IndexObject, filling_flag, flag_value, index_hashes, index_keys, offer, positional,
     strip_written, typing_flag,
@@ -984,6 +984,12 @@ fn bring_in(
     let mut entries = Vec::new();
     let mut failed = Vec::new();
 
+    // The readings are gathered in one cache and the Layout changes in one batch, so a checkin of
+    // many files reads what others wrote once, writes the Layout once per shard, and writes the
+    // cache once, rather than doing each of those for every file.
+    let mut checkout = Checkout::open(layout, held.get_root());
+    let mut batch = layout.batch();
+
     // Every version's content is named before anything is written, so what is missing is asked of
     // the Vaults in one go rather than one file at a time.
     let mut resolved = Vec::new();
@@ -1022,7 +1028,7 @@ fn bring_in(
 
             continue;
         }
-        if let Err(cause) = remember(layout, held.get_root(), path.as_str()) {
+        if let Err(cause) = checkout.remember(path.as_str()) {
             failed.push(format!("{id}: {cause}"));
 
             continue;
@@ -1035,10 +1041,7 @@ fn bring_in(
             data.version(),
             data.description().to_owned(),
         );
-        if let Err(error) = layout
-            .create_entry(id, data)
-            .and_then(|()| layout.create_path(&path, id))
-        {
+        if let Err(error) = batch.create_file(id, data, &path) {
             failed.push(format!("{id}: {error}"));
 
             continue;
@@ -1049,6 +1052,14 @@ fn bring_in(
             remote_path: remote.path_of(id).map(|path| path.as_str().to_owned()),
             local_path: path.as_str().to_owned(),
         });
+    }
+
+    if let Err(cause) = checkout.finish() {
+        failed.push(cause);
+    }
+
+    if let Err(error) = batch.commit() {
+        failed.push(error.to_string());
     }
 
     (entries, failed)

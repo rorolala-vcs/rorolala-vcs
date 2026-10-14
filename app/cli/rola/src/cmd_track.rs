@@ -21,12 +21,12 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::layout::{Batch, Layout, LayoutPath, MutableData};
 use librorolala::status::{tracked_vault, unowned};
-use librorolala::storage::{Key, RorolalaStorage, store_file};
+use librorolala::storage::{Key, Lockable as _, RorolalaStorage, store_file};
 use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
 use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
-use librorolala::workspace::{Merging, Pending};
+use librorolala::workspace::{DATA_DIR, Merging, Pending};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     macros::{
@@ -326,8 +326,35 @@ pub fn handle_track(
 
     // What goes into the store is decided before anything is asked, so that a file whose content is
     // already recorded is never asked for a message: it will not be given a version to carry one.
+    // What the tree says changed is what is worth reading again: a file the Layout agrees with
+    // holds content the store already has, so asking the disk for it here only repeats what the
+    // reading already worked out. A file the tree did not see change — and a move that did not
+    // change the file under it, which is not a recording of its own — is left alone, as before, and
+    // is what `rola align` is for. An amend reads and records regardless, since the words it changes
+    // are the change.
+    let recordable: BTreeSet<LayoutPath> = diff
+        .modified
+        .iter()
+        .chain(diff.untagged.iter())
+        .cloned()
+        .collect();
+
+    // A file the reading could not look at is not one it can say did not change, so it is read
+    // again here rather than skipped: what it then finds is either its content recorded or the
+    // failure the reading met.
+    let unreadable: BTreeSet<&str> = diff
+        .failed
+        .iter()
+        .map(|failed| failed.path.as_str())
+        .collect();
+
     let mut staged = Vec::with_capacity(prepared.len());
     for file in prepared {
+        if !replace && !recordable.contains(&file.path) && !unreadable.contains(file.path.as_str())
+        {
+            continue;
+        }
+
         let (storage, changed, recorded) = match stage(vcs, &runtime, store, &file, replace) {
             Ok(staged) => staged,
             Err(next) => return next,
@@ -383,6 +410,11 @@ pub fn handle_track(
     let mut at = 0;
     let mut committed = Vec::with_capacity(changing.len());
 
+    // What the run does to the Layout is gathered up and written when it is done, so a run that
+    // records many files pays one read of what others wrote and one flushed write per shard rather
+    // than the same for each file.
+    let mut batch = layout.batch();
+
     for file in &staged {
         if !file.changed {
             continue;
@@ -400,6 +432,7 @@ pub fn handle_track(
             vcs,
             &runtime,
             &creator_name,
+            &mut batch,
             file,
             text,
             replace,
@@ -441,6 +474,10 @@ pub fn handle_track(
     // What was recorded is what the tree and the Layout now agree on, so the reading remembers it —
     // only for the paths recorded, since remembering the whole tree would take every other change
     // with it and a later `rola status` would have nothing to say about them.
+    if let Err(error) = batch.commit() {
+        return failed(&error);
+    }
+
     if let Err(next) = remember(&layout, &root, &committed) {
         return next;
     }
@@ -449,7 +486,28 @@ pub fn handle_track(
         return fail(error.to_string());
     }
 
+    // What the run wrote into the index is laid out with it, so a Workspace does not gather a loose
+    // object per version it records. A run that recorded nothing has nothing to lay out.
+    if !committed.is_empty() {
+        pack_index(vcs, &runtime);
+    }
+
     ResultTrack { items }.into()
+}
+
+/// Lays the index's objects out as one pack, when this run wrote any.
+///
+/// A recording writes a variant and a version per file, and a run that never packed would gather a
+/// loose object for every one forever. It is best effort: the objects are valid loose, so a pack that
+/// cannot be made — because another run holds the lock, or the pack cannot be written — leaves an
+/// index that is correct and merely uncompacted, which a later `rola pack` settles. So a failure here
+/// does not fail a recording that is already durable.
+fn pack_index(index: &VCSIndex, runtime: &tokio::runtime::Runtime) {
+    let Ok(guard) = runtime.block_on(index.lock()) else {
+        return;
+    };
+
+    let _ = runtime.block_on(guard.repack());
 }
 
 /// Writes down what a recording left the tree and the Layout agreeing on.
@@ -462,7 +520,13 @@ fn remember(layout: &Layout, root: &Path, committed: &[(LayoutPath, PathBuf)]) -
     let mut cache = Cache::read(&path);
 
     for (layout_path, disk) in committed {
-        let entry = entry_of(disk).map_err(|error| fail(error.to_string()))?;
+        // The reading of the tree already wrote down what the file holds, and nothing in this run
+        // has touched the file since — so what it found is taken rather than the file read a third
+        // time, and the Layout is held to agree with the digest it wrote down.
+        let entry = match cache.get(layout_path) {
+            Some(read) => read.clone().with_agreed(Some(read.digest())),
+            None => entry_of(disk).map_err(|error| fail(error.to_string()))?,
+        };
         cache.insert(layout_path.clone(), entry);
     }
 
@@ -547,7 +611,12 @@ fn prepare(
         };
 
         if disk.is_dir() {
-            standing.push(Named::Directory(directory_prefix(relative, given)?));
+            // A directory is read where it is rather than by walking the whole Workspace and
+            // filtering, so naming `src/` reads `src/` alone. What the walk leaves out is left out
+            // just the same, since it is the same walk — see `reachable` for the one thing a walk
+            // started inside the tree does not see for itself.
+            check_directory(relative, given)?;
+            standing.push(Named::Directory(disk));
         } else if disk.is_file() {
             // A variant file is content waiting to be joined rather than work to record, so a run
             // that names one is asking for nothing and is answered with nothing.
@@ -564,29 +633,29 @@ fn prepare(
 
     // A directory is read through the same walk the tree reading uses, so what it leaves out — the
     // Workspace's own `.rola`, a Workspace nested inside it, a symbolic link — is left out here too,
-    // and so is every variant file among what it found.
-    let walked = if standing
-        .iter()
-        .any(|name| matches!(name, Named::Directory(_)))
-    {
-        walk(&root)
-            .0
-            .into_iter()
-            .filter(|found| !ignored.contains(&found.path))
-            .collect()
-    } else {
-        Vec::new()
-    };
-
+    // and so is every variant file among what it found. The walk starts at the directory named
+    // rather than at the Workspace root, so naming a directory reads that directory alone.
     let mut files: Vec<(LayoutPath, PathBuf)> = Vec::new();
     for name in standing {
         match name {
             Named::File(path, disk) => files.push((path, disk)),
-            Named::Directory(prefix) => {
-                let mut under: Vec<(LayoutPath, PathBuf)> = walked
-                    .iter()
-                    .filter(|found| under(&prefix, &found.path))
-                    .map(|found| (found.path.clone(), found.disk.clone()))
+            Named::Directory(disk) => {
+                // A walk started inside the tree does not see the directories above it, so whether
+                // the whole-tree walk would have descended into this one is told here; a directory
+                // it would not have reached holds work that is not this Workspace's.
+                if !reachable(&root, &disk) {
+                    continue;
+                }
+
+                let mut under: Vec<(LayoutPath, PathBuf)> = walk(&disk)
+                    .0
+                    .into_iter()
+                    .filter_map(|found| {
+                        let relative = found.disk.strip_prefix(&root).ok()?;
+                        let path = LayoutPath::from_relative(relative).ok()?;
+
+                        (!ignored.contains(&path)).then_some((path, found.disk))
+                    })
                     .collect();
                 under.sort_by(|left, right| left.0.cmp(&right.0));
                 files.extend(under);
@@ -636,9 +705,8 @@ fn prepare(
 enum Named {
     /// A file, and where it sits on disk.
     File(LayoutPath, PathBuf),
-    /// A directory, by the prefix its files share — empty for the Workspace root itself, which is
-    /// the one directory with no name of its own, and holds the whole of the work.
-    Directory(String),
+    /// A directory, and where it sits on disk.
+    Directory(PathBuf),
 }
 
 /// The path `given` names, made absolute against the directory the run was made in.
@@ -672,13 +740,16 @@ fn normalize(path: &Path) -> PathBuf {
     components.into_iter().collect()
 }
 
-/// The prefix a directory's files share, or the failure for why the directory cannot be named.
-fn directory_prefix(relative: &Path, given: &str) -> Result<String, Next> {
+/// Refuses a directory that cannot be named in the Layout: one outside the Workspace, or one that is
+/// part of the Workspace's own data. The Workspace root itself names nothing and is always allowed.
+fn check_directory(relative: &Path, given: &str) -> Result<(), Next> {
     if relative.as_os_str().is_empty() {
-        return Ok(String::new());
+        return Ok(());
     }
 
-    Ok(file_path(relative, given)?.as_str().to_owned())
+    file_path(relative, given)?;
+
+    Ok(())
 }
 
 /// The path `relative` names, or the failure for why it cannot be named in the Layout.
@@ -687,22 +758,34 @@ fn file_path(relative: &Path, given: &str) -> Result<LayoutPath, Next> {
         return Err(ErrorTrackFile::new(given, TrackFileError::OutsideWorkspace).into());
     };
 
-    if path.as_str().split('/').any(|part| part == ".rola") {
+    if path.as_str().split('/').any(|part| part == DATA_DIR) {
         return Err(ErrorTrackFile::new(given, TrackFileError::InsideData).into());
     }
 
     Ok(path)
 }
 
-/// Whether `path` sits under the directory whose prefix is `prefix`.
-fn under(prefix: &str, path: &LayoutPath) -> bool {
-    if prefix.is_empty() {
-        return true;
+/// Whether the whole-tree walk would have descended into `dir`.
+///
+/// The walk never descends into a directory that keeps a data directory of its own — that directory
+/// is a Workspace of its own — and a walk started inside the tree does not see the directories above
+/// it. So whether any of them is such a Workspace is asked here; a directory under one holds work
+/// that is not this Workspace's to record.
+fn reachable(root: &Path, dir: &Path) -> bool {
+    let mut at = Some(dir);
+
+    while let Some(current) = at {
+        if current == root {
+            return true;
+        }
+        if current.join(DATA_DIR).is_dir() {
+            return false;
+        }
+
+        at = current.parent();
     }
 
-    path.as_str()
-        .strip_prefix(prefix)
-        .is_some_and(|rest| rest.starts_with('/'))
+    false
 }
 
 /// Works out what each changing file's message is, asking an editor when it was not said.
@@ -1027,6 +1110,7 @@ fn commit(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     creator_name: &str,
+    batch: &mut Batch<'_>,
     file: &Staged,
     text: &str,
     replace: bool,
@@ -1122,29 +1206,24 @@ fn commit(
     // failure before it — writing the version the change is — leaves the Layout as it was. The
     // variant file waiting for it, if there is one, moves with it.
     if let Some(from) = &file.file.moved_from {
-        if let Err(error) = layout.move_path(from, &file.file.path) {
+        if let Err(error) = batch.move_path(from, &file.file.path) {
             return Err(failed(&error));
         }
 
-        if let Some(target) = layout.id_of(&file.file.path)
-            && let Err(error) = merging.follow(root, target, from, &file.file.path)
-        {
+        if let Err(error) = merging.follow(root, file.file.id, from, &file.file.path) {
             return Err(fail(error.to_string()));
         }
     }
 
     if file.file.data.is_some() {
-        if let Err(error) = layout.update_entry(file.file.id, data) {
+        if let Err(error) = batch.update_entry(file.file.id, data) {
             return Err(failed(&error));
         }
 
         return Ok(());
     }
 
-    if let Err(error) = layout.create_entry(file.file.id, data) {
-        return Err(failed(&error));
-    }
-    if let Err(error) = layout.create_path(&file.file.path, file.file.id) {
+    if let Err(error) = batch.create_file(file.file.id, data, &file.file.path) {
         return Err(failed(&error));
     }
 

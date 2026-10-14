@@ -33,6 +33,8 @@ pub enum Tag {
     RemoveEntry = 4,
     /// An entry's data was changed.
     UpdateEntry = 5,
+    /// An entry was created at a path, as one change.
+    Create = 6,
 }
 
 impl Tag {
@@ -52,6 +54,7 @@ impl Tag {
             3 => Some(Self::CreateEntry),
             4 => Some(Self::RemoveEntry),
             5 => Some(Self::UpdateEntry),
+            6 => Some(Self::Create),
             _ => None,
         }
     }
@@ -102,6 +105,16 @@ pub enum Record {
         /// What it holds now.
         data: MutableData,
     },
+    /// `id` was created, holding `data`, at `path` — one change rather than a create and a
+    /// binding, so a create is whole or not there at all.
+    Create {
+        /// The `Uuid` that was created.
+        id: Uuid,
+        /// The path it is at.
+        path: String,
+        /// What it holds.
+        data: MutableData,
+    },
 }
 
 impl Record {
@@ -114,7 +127,8 @@ impl Record {
             | Self::MovePath { id, .. }
             | Self::CreateEntry { id, .. }
             | Self::RemoveEntry { id }
-            | Self::UpdateEntry { id, .. } => *id,
+            | Self::UpdateEntry { id, .. }
+            | Self::Create { id, .. } => *id,
         }
     }
 
@@ -148,6 +162,12 @@ impl Record {
                 let mut fields = Vec::new();
                 put_data(&mut fields, data);
                 wrap(Tag::UpdateEntry, *id, fields)
+            }
+            Self::Create { id, path, data } => {
+                let mut fields = Vec::new();
+                put_str(&mut fields, path);
+                put_data(&mut fields, data);
+                wrap(Tag::Create, *id, fields)
             }
         }
     }
@@ -221,6 +241,16 @@ impl Record {
                 rest_empty(rest)?;
                 Self::UpdateEntry { id, data }
             }
+            Tag::Create => {
+                let (path, rest) = take_str(rest)?;
+                let (data, rest) = take_data(rest)?;
+                rest_empty(rest)?;
+                Self::Create {
+                    id,
+                    path: path.to_owned(),
+                    data,
+                }
+            }
         };
 
         Ok(Some((record, length)))
@@ -282,6 +312,11 @@ mod tests {
             },
             Record::RemoveEntry { id },
             Record::UpdateEntry { id, data },
+            Record::Create {
+                id,
+                path: "c/d".to_owned(),
+                data: MutableData::new(Some("bob".to_owned()), [4; 32], "second".to_owned()),
+            },
         ] {
             let bytes = record.encode();
             let (read, used) = Record::decode(&bytes).unwrap().unwrap();

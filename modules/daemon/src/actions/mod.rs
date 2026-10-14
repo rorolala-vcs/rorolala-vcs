@@ -45,3 +45,6 @@ pub use sync_index::*;
 
 mod sync_storage;
 pub use sync_storage::*;
+
+mod write_remote_entries;
+pub use write_remote_entries::*;

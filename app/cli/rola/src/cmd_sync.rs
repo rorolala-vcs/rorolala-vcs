@@ -23,10 +23,10 @@
 use std::str::FromStr as _;
 
 use librorolala::daemon::{
-    EntryWrite, action_create_remote_entry, action_fetch_layout, action_set_remote_version,
-    action_sync_index_all_async,
+    EntryWrite, RemoteWrites, action_fetch_layout, action_sync_index_all_async,
+    action_write_remote_entries,
 };
-use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::layout::{Batch, Layout, LayoutPath, MutableData};
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::{VCSIndex, VCSIndexObject};
 use mingling::{
@@ -54,7 +54,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::checkout::remember;
+use crate::checkout::Checkout;
 use crate::complete::{strip_written, typing_flag};
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_SYNC, EC_ERR_SYNC_ARGUMENT, EC_HELP};
@@ -63,7 +63,7 @@ use crate::fetch;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, ErrorLayoutNotCached,
-    add_cached_entry, failed, readonly_layout_dir, set_cached_version,
+    add_cached_entry, cached_copy, failed, readonly_layout_dir, set_cached_version,
 };
 use crate::progress::Reporting;
 use crate::sync::{self, Direction, Entry, Kind};
@@ -548,13 +548,29 @@ fn carry_with(
     let mut received = 0;
     let mut failed = Vec::new();
 
-    for entry in entries {
+    // Every path a pull writes is remembered in the one reading, which is written once at the end
+    // rather than read back and rewritten for each file brought down; the version each pulled
+    // entry names is written to the Layout in one batch for the same reason.
+    let mut checkout = Checkout::open(carry.layout, carry.workspace.get_root());
+    let mut batch = carry.layout.batch();
+
+    // What this side is ahead on is gathered and written in one exchange at the end, rather than
+    // one connection and handshake for each entry.
+    let mut ups: Vec<&Entry> = Vec::new();
+
+    for entry in entries.iter().copied() {
         if entry.kind == Kind::Receive {
             if let Some(task) = &mut down {
                 let _named = task.doing(name_of(entry));
             }
 
-            received += usize::from(receive(entry, carry, &mut failed)?);
+            received += usize::from(receive(
+                entry,
+                carry,
+                &mut checkout,
+                &mut batch,
+                &mut failed,
+            )?);
 
             if let Some(task) = &mut down {
                 task.advance_by(1);
@@ -564,22 +580,32 @@ fn carry_with(
                 let _named = task.doing(name_of(entry));
             }
 
-            apply_entry(
-                entry,
-                state.forced,
-                carry,
-                vault_name,
-                account_name,
-                &mut applied,
-                &mut failed,
-            )?;
-
-            if let Some(task) = &mut up {
-                task.advance_by(1);
-            }
+            ups.push(entry);
         }
 
         moves.advance_by(1);
+    }
+
+    apply_entries(
+        &ups,
+        state.forced,
+        carry,
+        vault_name,
+        account_name,
+        &mut applied,
+        &mut failed,
+    )?;
+
+    if let Some(task) = &mut up {
+        task.advance_by(up_total);
+    }
+
+    if let Err(cause) = checkout.finish() {
+        failed.push(cause);
+    }
+
+    if let Err(error) = batch.commit() {
+        failed.push(error.to_string());
     }
 
     if let Some(sources) = &sources {
@@ -703,6 +729,8 @@ enum PlanRefusal {
 fn receive(
     entry: &Entry,
     carry: &Carry<'_>,
+    checkout: &mut Checkout,
+    batch: &mut Batch<'_>,
     failed: &mut Vec<String>,
 ) -> Result<bool, ErrorSyncFailed> {
     let (Some(text), Ok(id)) = (entry.remote_version.as_deref(), Uuid::from_str(&entry.uuid))
@@ -764,7 +792,7 @@ fn receive(
 
         // What a pull wrote is what the Layout now names, so the reading has to be told; a path
         // left marked as disagreed would be reported as changed by the very next run.
-        if let Err(cause) = remember(carry.layout, carry.workspace.get_root(), path) {
+        if let Err(cause) = checkout.remember(path) {
             failed.push(format!("{}: {cause}", entry.uuid));
 
             return Ok(false);
@@ -781,7 +809,7 @@ fn receive(
         return Ok(false);
     };
 
-    if let Err(error) = carry.layout.update_entry(
+    if let Err(error) = batch.update_entry(
         id,
         MutableData::new(
             entry.owner.clone(),
@@ -797,18 +825,19 @@ fn receive(
     Ok(true)
 }
 
-/// Writes what one planned entry says, counting it done or naming why it was not.
+/// Writes what the Vault is behind on, in one exchange, counting each done or naming why it was not.
 ///
-/// What the Vault takes is written into the fetched copy as well, so that a reading command sees
-/// the Vault as this run left it rather than as it found it. That copy is what `--layout
-/// truth@<VAULT>` reads, and one that lagged behind would make a run look as though it had not
-/// happened.
+/// A run ahead on many entries asks for them all at once: each would otherwise be its own connection
+/// and handshake, and the writes have nothing to say to one another. What the Vault takes is written
+/// into the fetched copy as well, so that a reading command sees the Vault as this run left it rather
+/// than as it found it. That copy is what `--layout truth@<VAULT>` reads, and one that lagged behind
+/// would make a run look as though it had not happened.
 ///
 /// # Errors
 ///
-/// Returns the exchange's own failure, or the outcome that will not read.
-fn apply_entry(
-    entry: &Entry,
+/// Returns the exchange's own failure, or the outcomes that will not read.
+fn apply_entries(
+    ups: &[&Entry],
     forced: bool,
     carry: &Carry<'_>,
     vault_name: &str,
@@ -816,78 +845,150 @@ fn apply_entry(
     applied: &mut usize,
     failed: &mut Vec<String>,
 ) -> Result<(), ErrorSyncFailed> {
-    let answer = match entry.kind {
-        Kind::Create => {
-            let (Some(path), Some(version)) = (
-                entry.planned_path.as_deref(),
-                entry.local_version.as_deref(),
-            ) else {
-                return Ok(());
-            };
+    // What is asked for, paired with the entry it is asked for, so an answer can be put back to it.
+    let mut creates: Vec<(String, String, String)> = Vec::new();
+    let mut created: Vec<&Entry> = Vec::new();
+    let mut sets: Vec<(String, String)> = Vec::new();
+    let mut setting: Vec<&Entry> = Vec::new();
 
-            action_create_remote_entry(
-                carry.workspace,
-                carry.account,
-                carry.target.to_string(),
-                path.to_owned(),
-                entry.uuid.clone(),
-                version.to_owned(),
-            )
-            .map_err(|error| ErrorSyncFailed {
-                cause: error.to_string(),
-            })?
-        }
-        Kind::Send | Kind::Diverged => {
-            if entry.kind == Kind::Diverged && !forced {
-                failed.push(format!("{}: {}", entry.uuid, t!("sync.write_force").trim()));
+    for entry in ups {
+        match entry.kind {
+            Kind::Create => {
+                let (Some(path), Some(version)) = (
+                    entry.planned_path.as_deref(),
+                    entry.local_version.as_deref(),
+                ) else {
+                    continue;
+                };
 
-                return Ok(());
+                creates.push((path.to_owned(), entry.uuid.clone(), version.to_owned()));
+                created.push(entry);
             }
+            Kind::Send | Kind::Diverged => {
+                if entry.kind == Kind::Diverged && !forced {
+                    failed.push(format!("{}: {}", entry.uuid, t!("sync.write_force").trim()));
 
-            let Some(version) = entry.local_version.as_deref() else {
-                return Ok(());
-            };
+                    continue;
+                }
 
-            action_set_remote_version(
-                carry.workspace,
-                carry.account,
-                carry.target.to_string(),
-                entry.uuid.clone(),
-                version.to_owned(),
-            )
-            .map_err(|error| ErrorSyncFailed {
-                cause: error.to_string(),
-            })?
-        }
-        Kind::Refused => {
-            failed.push(format!(
-                "{}: {}",
-                entry.uuid,
-                t!("sync.write_refused").trim()
-            ));
+                let Some(version) = entry.local_version.as_deref() else {
+                    continue;
+                };
 
-            return Ok(());
-        }
-        _ => return Ok(()),
-    };
-
-    match serde_json::from_str::<EntryWrite>(&answer) {
-        Ok(EntryWrite::Written) => {
-            *applied += 1;
-
-            if let Err(cause) = remember_written(entry, carry, vault_name, account_name) {
-                failed.push(format!("{}: {cause}", entry.uuid));
+                sets.push((entry.uuid.clone(), version.to_owned()));
+                setting.push(entry);
             }
-        }
-        Ok(other) => failed.push(format!("{}: {}", entry.uuid, write_reason(other))),
-        Err(error) => {
-            return Err(ErrorSyncFailed {
-                cause: error.to_string(),
-            });
+            Kind::Refused => {
+                failed.push(format!(
+                    "{}: {}",
+                    entry.uuid,
+                    t!("sync.write_refused").trim()
+                ));
+            }
+            _ => {}
         }
     }
 
+    if creates.is_empty() && sets.is_empty() {
+        return Ok(());
+    }
+
+    let writes = serde_json::to_string(&RemoteWrites { creates, sets }).map_err(|error| {
+        ErrorSyncFailed {
+            cause: error.to_string(),
+        }
+    })?;
+
+    let answer = action_write_remote_entries(
+        carry.workspace,
+        carry.account,
+        carry.target.to_string(),
+        writes,
+    )
+    .map_err(|error| ErrorSyncFailed {
+        cause: error.to_string(),
+    })?;
+
+    let outcomes: Vec<EntryWrite> =
+        serde_json::from_str(&answer).map_err(|error| ErrorSyncFailed {
+            cause: error.to_string(),
+        })?;
+
+    // The outcomes come back in the order asked for: the creates first, then the sets.
+    let mut outcomes = outcomes.into_iter();
+    let mut written: Vec<&Entry> = Vec::new();
+    for &entry in &created {
+        let Some(outcome) = outcomes.next() else {
+            break;
+        };
+
+        record(entry, outcome, &mut written, applied, failed);
+    }
+    for &entry in &setting {
+        let Some(outcome) = outcomes.next() else {
+            break;
+        };
+
+        record(entry, outcome, &mut written, applied, failed);
+    }
+
+    write_fetched_copy(&written, carry, vault_name, account_name, failed);
+
     Ok(())
+}
+
+/// Puts one answer back to the entry it belongs to.
+fn record<'a>(
+    entry: &'a Entry,
+    outcome: EntryWrite,
+    written: &mut Vec<&'a Entry>,
+    applied: &mut usize,
+    failed: &mut Vec<String>,
+) {
+    match outcome {
+        EntryWrite::Written => {
+            *applied += 1;
+            written.push(entry);
+        }
+        other => failed.push(format!("{}: {}", entry.uuid, write_reason(other))),
+    }
+}
+
+/// Writes down in the fetched copy what the Vault took, in one go.
+///
+/// The copy is opened once and every change is gathered into one batch, so a run that writes many
+/// entries reads and writes the copy once rather than once per entry.
+fn write_fetched_copy(
+    entries: &[&Entry],
+    carry: &Carry<'_>,
+    vault_name: &str,
+    account_name: &str,
+    failed: &mut Vec<String>,
+) {
+    if entries.is_empty() {
+        return;
+    }
+
+    let copy = match cached_copy(carry.workspace, vault_name) {
+        Ok(Some(copy)) => copy,
+        Ok(None) => return,
+        Err(error) => {
+            failed.push(error.to_string());
+
+            return;
+        }
+    };
+
+    let mut batch = copy.batch();
+    for entry in entries {
+        if let Err(cause) = remember_written(&mut batch, entry, account_name) {
+            failed.push(format!("{}: {cause}", entry.uuid));
+        }
+    }
+
+    if let Err(error) = batch.commit() {
+        failed.push(error.to_string());
+    }
 }
 
 /// Writes down in the fetched copy what the Vault just took.
@@ -898,13 +999,8 @@ fn apply_entry(
 ///
 /// # Errors
 ///
-/// Returns a message when the entry does not read or the copy could not be written.
-fn remember_written(
-    entry: &Entry,
-    carry: &Carry<'_>,
-    vault_name: &str,
-    account_name: &str,
-) -> Result<(), String> {
+/// Returns a message when the entry does not read or the change cannot be made in `copy`.
+fn remember_written(copy: &mut Batch<'_>, entry: &Entry, account_name: &str) -> Result<(), String> {
     let Ok(id) = Uuid::from_str(&entry.uuid) else {
         return Err(t!("sync.write_malformed").trim().to_owned());
     };
@@ -925,8 +1021,7 @@ fn remember_written(
             };
 
             add_cached_entry(
-                carry.workspace,
-                vault_name,
+                copy,
                 id,
                 &path,
                 *version.digest(),
@@ -935,8 +1030,7 @@ fn remember_written(
             .map_err(|error| error.to_string())
         }
         Kind::Send | Kind::Diverged => {
-            set_cached_version(carry.workspace, vault_name, id, *version.digest())
-                .map_err(|error| error.to_string())
+            set_cached_version(copy, id, *version.digest()).map_err(|error| error.to_string())
         }
         _ => Ok(()),
     }
