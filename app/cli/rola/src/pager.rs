@@ -227,7 +227,7 @@ fn merge<S: AsRef<str>>(entries: &[S]) -> String {
 fn rows() -> usize {
     console::Term::stdout()
         .size_checked()
-        .map_or(ASSUMED_ROWS, |(_columns, rows)| usize::from(rows))
+        .map_or(ASSUMED_ROWS, |(rows, _columns)| usize::from(rows))
 }
 
 /// Writes the answer out where the run was made, the way the framework would have written it.
