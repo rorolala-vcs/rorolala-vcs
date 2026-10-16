@@ -76,15 +76,16 @@ impl Action for ActionSyncAll {
         // Everything either side holds, in one order both ends reach: the keys are taken as their
         // digests, which are what can cross, and put back into keys in the order digests sort in.
         let mut required: Vec<Key> = held_by_workspace
-            .chunks_exact(size_of::<Blake3Hash>())
-            .chain(held_by_vault.chunks_exact(size_of::<Blake3Hash>()))
-            .map(|digest| {
-                Key::new(
-                    digest
-                        .try_into()
-                        .expect("a run of digests is a whole number of them"),
-                )
-            })
+            .as_chunks::<{ size_of::<Blake3Hash>() }>()
+            .0
+            .iter()
+            .chain(
+                held_by_vault
+                    .as_chunks::<{ size_of::<Blake3Hash>() }>()
+                    .0
+                    .iter(),
+            )
+            .map(|digest| Key::new(*digest))
             .collect();
         required.sort_unstable();
         required.dedup();

@@ -881,7 +881,7 @@ mod tests {
 
     use super::{VCSIndex, VCSWrite, run};
     use crate::error::VCSIndexReadingError;
-    use crate::{Creator, Message, Variant, Version};
+    use crate::{Creator, Hash, Message, Variant, Version};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -1073,13 +1073,19 @@ mod tests {
         let other = Version::new_bare_version([3_u8; 32], 0);
         run(index.write(one.clone())).unwrap().unwrap();
         run(index.write(other.clone())).unwrap().unwrap();
-        assert!(!run(index.list_loose_keys()).unwrap().unwrap().is_empty());
+        assert_ne!(
+            run(index.list_loose_keys()).unwrap().unwrap(),
+            Vec::<Hash>::new()
+        );
 
         // The first repacking moves both loose objects into one pack; the second finds them there
         // already and changes nothing.
         assert!(run(index.repack()).unwrap().unwrap());
         assert_eq!(run(index.packs()).unwrap().unwrap(), vec![0]);
-        assert!(run(index.list_loose_keys()).unwrap().unwrap().is_empty());
+        assert_eq!(
+            run(index.list_loose_keys()).unwrap().unwrap(),
+            Vec::<Hash>::new()
+        );
         assert!(!run(index.repack()).unwrap().unwrap());
 
         // What each object is does not change: every read that worked before works after.

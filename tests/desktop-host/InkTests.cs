@@ -52,8 +52,8 @@ public sealed class InkTests
     [
         // The brighter primary a held or pointed-at button takes: the state it belongs to, and its ink, are
         // the ones it is a variation of.
-        "Button:not(.dock-title):not(.dock-close):is(Button).primary:pointerover",
-        "Button:not(.dock-title):not(.dock-close):is(Button).tool.on:pointerover",
+        "Button:not(.dock-title):not(.dock-close):not(.caption):is(Button).primary:pointerover",
+        "Button:not(.dock-title):not(.dock-close):not(.caption):is(Button).tool.on:pointerover",
 
         // A box that is chosen: the fill is the box and the words are beside it, and the ink inside the box is
         // the mark's, said where the mark is made.

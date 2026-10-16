@@ -30,7 +30,7 @@ pub fn from_hex(text: &str) -> Option<Blake3Hash> {
     }
 
     let mut hash = [0_u8; 32];
-    for (at, pair) in text.as_bytes().chunks_exact(2).enumerate() {
+    for (at, pair) in text.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         let pair = core::str::from_utf8(pair).ok()?;
         hash[at] = u8::from_str_radix(pair, 16).ok()?;
     }

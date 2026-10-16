@@ -485,7 +485,7 @@ fn layouts(rola: &Rola, ws: &Path, vault: &Path, checked: &mut Checked) {
     checked.stdout_has(
         "an unconfirmed removal says nothing was done",
         &ran,
-        "Nothing was done",
+        "No change was made",
     );
     checked.wants(
         "the Layout is still there",
@@ -717,7 +717,7 @@ fn accounts(rola: &Rola, plain: &Path, ws: &Path, checked: &mut Checked) {
     checked.stdout_has(
         "a place with no account says so",
         &ran,
-        "No account is installed",
+        "There are no available accounts on this machine",
     );
 
     let ran = rola.run(ws, &["account", "--json"]);
@@ -1007,7 +1007,7 @@ fn vaults(rola: &Rola, ws: &Path, checked: &mut Checked) {
     checked.stdout_has(
         "a Workspace that knows none says so",
         &ran,
-        "No Vault is bound",
+        "The current Workspace has not bound any Vault yet",
     );
 
     let ran = rola.run(ws, &["vault", "bind", "origin", "rola://127.0.0.1:7999/"]);
@@ -1112,13 +1112,13 @@ fn output(rola: &Rola, ws: &Path, checked: &mut Checked) {
 fn language(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["--lang", "en", "storage", "extract-file"]);
     checked.exits("a failure is the same failure in English", &ran, 84);
-    checked.stderr_has("English is spoken when named", &ran, "No hash was named");
+    checked.stderr_has("English is spoken when named", &ran, "No content hash was named");
 
     let ran = rola.run(ws, &["--lang", "zh-CN", "storage", "extract-file"]);
     checked.exits("a failure is the same failure in Chinese", &ran, 84);
     checked.wants(
         "Chinese is spoken when named",
-        ran.stderr.contains("未指定哈希"),
+        ran.stderr.contains("未指定内容哈希"),
         &said(&ran),
     );
 

@@ -76,19 +76,37 @@ mod tests {
     use super::{RolaStatus, Status, free_rola_status, locate_rola_status};
 
     /// A directory of its own, emptied first so a rerun starts clean.
+    ///
+    /// The system temp is used when it can be. A machine whose temp is not writable — a Windows
+    /// profile can be — falls back to the directory this test's own program sits in, which cargo has
+    /// just written there and so is writable wherever the temp is not.
     fn scratch(label: &str) -> PathBuf {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
 
-        let dir = std::env::temp_dir().join(format!(
+        let name = format!(
             "rorolala-locate-status-{}-{label}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        );
 
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        for base in [Some(std::env::temp_dir()), program_dir()] {
+            let Some(base) = base else {
+                continue;
+            };
+            let dir = base.join(&name);
+            let _ = fs::remove_dir_all(&dir);
 
-        dir
+            if fs::create_dir_all(&dir).is_ok() {
+                return dir;
+            }
+        }
+
+        panic!("no writable directory to make {name} in");
+    }
+
+    /// The directory this test's program sits in, or nothing when it cannot be found.
+    fn program_dir() -> Option<PathBuf> {
+        Some(std::env::current_exe().ok()?.parent()?.to_path_buf())
     }
 
     /// A Workspace working in one Layout that names `gone.txt`.

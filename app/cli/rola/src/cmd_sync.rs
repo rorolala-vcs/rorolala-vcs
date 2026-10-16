@@ -847,7 +847,7 @@ fn apply_entries(
 ) -> Result<(), ErrorSyncFailed> {
     // What is asked for, paired with the entry it is asked for, so an answer can be put back to it.
     let mut creates: Vec<(String, String, String)> = Vec::new();
-    let mut created: Vec<&Entry> = Vec::new();
+    let mut create_entries: Vec<&Entry> = Vec::new();
     let mut sets: Vec<(String, String)> = Vec::new();
     let mut setting: Vec<&Entry> = Vec::new();
 
@@ -862,7 +862,7 @@ fn apply_entries(
                 };
 
                 creates.push((path.to_owned(), entry.uuid.clone(), version.to_owned()));
-                created.push(entry);
+                create_entries.push(entry);
             }
             Kind::Send | Kind::Diverged => {
                 if entry.kind == Kind::Diverged && !forced {
@@ -917,7 +917,7 @@ fn apply_entries(
     // The outcomes come back in the order asked for: the creates first, then the sets.
     let mut outcomes = outcomes.into_iter();
     let mut written: Vec<&Entry> = Vec::new();
-    for &entry in &created {
+    for &entry in &create_entries {
         let Some(outcome) = outcomes.next() else {
             break;
         };

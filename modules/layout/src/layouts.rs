@@ -377,7 +377,7 @@ mod tests {
 
         set.remove("main").unwrap();
         assert!(!set.contains("main"));
-        assert!(set.names().unwrap().is_empty());
+        assert_eq!(set.names().unwrap(), Vec::<String>::new());
         assert!(matches!(set.remove("main"), Err(LayoutError::NotFound)));
     }
 

@@ -548,7 +548,7 @@ mod tests {
         let (line, column) = (source.line(), source.column());
         let carried = JsonError::from(source);
 
-        assert!(!carried.message().is_empty());
+        assert_ne!(carried.message(), "");
         // The two are distinct on this input, so a swap between them could not pass.
         assert_ne!(line, column);
         assert_eq!(carried.line(), line);

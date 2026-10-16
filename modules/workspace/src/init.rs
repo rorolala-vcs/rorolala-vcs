@@ -256,7 +256,7 @@ mod tests {
         // A name is the caller's to choose, so a Workspace that has just been made has none: what
         // makes one is adding a Layout, which is what also chooses the one being worked in.
         let layouts = Workspace::locate(&dir).unwrap().layouts();
-        assert!(layouts.names().unwrap().is_empty());
+        assert_eq!(layouts.names().unwrap(), Vec::<String>::new());
         assert_eq!(layouts.current().unwrap(), None);
 
         let _ = fs::remove_dir_all(&dir);

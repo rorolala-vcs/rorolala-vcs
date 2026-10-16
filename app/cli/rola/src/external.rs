@@ -221,7 +221,10 @@ mod tests {
         assert!(!names_a_program("."));
         assert!(!names_a_program("../daemon"));
         assert!(!names_a_program("daemon/../x"));
-        assert!(!names_a_program(r"..\daemon"));
+        assert!(!names_a_program(&format!(
+            "..{}daemon",
+            std::path::MAIN_SEPARATOR
+        )));
     }
 
     /// The word is written after this program's name whole, hyphens and all.

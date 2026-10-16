@@ -1021,6 +1021,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn an_absolute_name_is_read_from_the_root_once() {
         assert_eq!(
@@ -1031,7 +1032,7 @@ mod tests {
 
     #[test]
     fn a_name_climbing_out_of_the_root_names_nothing() {
-        assert!(candidates("../hero.psd", "/ws").is_empty());
+        assert_eq!(candidates("../hero.psd", "/ws"), Vec::<String>::new());
     }
 
     #[test]

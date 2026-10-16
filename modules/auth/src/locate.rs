@@ -482,7 +482,10 @@ mod tests {
             find_local: false,
             ..KeyLocateRule::new()
         };
-        assert!(super::account_scopes(&nowhere, &roots).is_empty());
+        assert_eq!(
+            super::account_scopes(&nowhere, &roots),
+            Vec::<PathBuf>::new()
+        );
     }
 
     #[test]

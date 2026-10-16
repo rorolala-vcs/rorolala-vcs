@@ -1578,9 +1578,9 @@ async fn main() {
     checked.wants(
         "status says where the file is mapped from and how it stands",
         said.success()
-            && chain.contains("Mapped from")
+            && chain.contains("The file is mapped from")
             && chain.contains("in origin")
-            && (chain.contains("You hold it") || chain.contains("Held by")),
+            && (chain.contains("You hold the file") || chain.contains("The file is held by")),
         &format!("it ended with {:?} and said {chain:?}", said.code),
     );
 
@@ -1592,7 +1592,7 @@ async fn main() {
     let hinted = clean(&said.stdout);
     checked.wants(
         "`--no-graph` says how the file stands and draws no chain",
-        said.success() && hinted.contains("Mapped from") && !hinted.contains('\\'),
+        said.success() && hinted.contains("The file is mapped from") && !hinted.contains('\\'),
         &format!("it ended with {:?} and said {hinted:?}", said.code),
     );
 

@@ -176,7 +176,7 @@ mod tests {
 
         let (text, rest) = take_str(&bytes).unwrap();
         assert_eq!(text, "a/b");
-        assert!(rest.is_empty());
+        assert_eq!(rest, [] as [u8; 0]);
     }
 
     #[test]

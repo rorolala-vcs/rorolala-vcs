@@ -199,7 +199,7 @@ async fn a_cut_content_is_told_from_a_whole_one() {
         .unwrap();
     assert_eq!(again, cut);
     assert!(!store.holds_manifest(&cut).await.unwrap());
-    assert!(store.list_manifest_keys().await.unwrap().is_empty());
+    assert_eq!(store.list_manifest_keys().await.unwrap(), Vec::new());
 
     let _ = fs::remove_dir_all(&parent);
 }

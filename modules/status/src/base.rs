@@ -151,7 +151,8 @@ pub fn every(
         .paths()
         .into_iter()
         .filter_map(|(path, id)| {
-            let (Some(local), Some(upstream)) = (version_of(local, id), version_of(copy, id)) else {
+            let (Some(local), Some(upstream)) = (version_of(local, id), version_of(copy, id))
+            else {
                 return None;
             };
 
@@ -387,8 +388,8 @@ mod tests {
             compare(
                 &index,
                 &runtime,
-                &versions[3].hash().digest(),
-                &versions[1].hash().digest()
+                versions[3].hash().digest(),
+                versions[1].hash().digest()
             ),
             Base {
                 relation: Relation::Ahead,
@@ -409,8 +410,8 @@ mod tests {
             compare(
                 &index,
                 &runtime,
-                &versions[1].hash().digest(),
-                &versions[3].hash().digest()
+                versions[1].hash().digest(),
+                versions[3].hash().digest()
             ),
             Base {
                 relation: Relation::Behind,
@@ -432,7 +433,7 @@ mod tests {
         let elsewhere: Blake3Hash = [0xE1; 32];
 
         assert_eq!(
-            compare(&index, &runtime, &versions[1].hash().digest(), &elsewhere),
+            compare(&index, &runtime, versions[1].hash().digest(), &elsewhere),
             Base {
                 relation: Relation::Behind,
                 distance: None,
@@ -456,7 +457,12 @@ mod tests {
         runtime.block_on(index.write(theirs.clone())).unwrap();
 
         assert_eq!(
-            compare(&index, &runtime, &ours.hash().digest(), &theirs.hash().digest()),
+            compare(
+                &index,
+                &runtime,
+                ours.hash().digest(),
+                theirs.hash().digest()
+            ),
             Base {
                 relation: Relation::Apart,
                 distance: None,
@@ -474,7 +480,7 @@ mod tests {
         let ours: Blake3Hash = [0xD1; 32];
 
         assert_eq!(
-            compare(&index, &runtime, &ours, &versions[1].hash().digest()),
+            compare(&index, &runtime, &ours, versions[1].hash().digest()),
             Base {
                 relation: Relation::Unknown,
                 distance: None,

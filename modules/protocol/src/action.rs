@@ -76,6 +76,8 @@ pub trait Action {
 
 #[cfg(test)]
 mod tests {
+    use std::future::Future;
+
     use super::Action;
     use crate::{ActionContext, ActionError, OnlyWorkspace};
 
@@ -87,11 +89,11 @@ mod tests {
         type Input = u64;
         type Output = u64;
 
-        async fn process(
+        fn process(
             input: OnlyWorkspace<Self::Input>,
             _ctx: ActionContext<'_>,
-        ) -> Result<Self::Output, ActionError> {
-            Ok(input.unwrap_or_default())
+        ) -> impl Future<Output = Result<Self::Output, ActionError>> {
+            std::future::ready(Ok(input.unwrap_or_default()))
         }
     }
 

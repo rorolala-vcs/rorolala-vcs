@@ -161,8 +161,10 @@ public sealed class ConfigurationTests
 
         var theme = ConfigurationLoader.LoadTheme();
 
-        Assert.Equal(ThemePalette.DefaultPrimary, theme.PrimaryOrDefault);
-        Assert.Equal(ThemePalette.DefaultAccent, theme.AccentOrDefault);
+        // The two the file names in its own spelling are read; the ten grounds and the nested `themes`
+        // object it does not name are not, and answer the defaults rather than refusing the file.
+        Assert.Equal(Color.FromRgb(0x33, 0x66, 0xFF), theme.PrimaryOrDefault);
+        Assert.Equal(Color.FromRgb(0xFF, 0x00, 0x00), theme.AccentOrDefault);
         Assert.Equal(ThemePalette.DefaultDark.Bright, theme.Theme.Bright);
         Assert.Equal(ThemePalette.DefaultLight.Mid, theme.LightTheme.Mid);
     }

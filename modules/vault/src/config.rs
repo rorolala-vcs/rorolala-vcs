@@ -447,7 +447,10 @@ mod tests {
         // ...and a list that names no place is a Vault nobody can call on, rather than one
         // that falls back to the places it would have had.
         let read: Config = toml::from_str("[daemon_config]\nkey_discovery = []\n").unwrap();
-        assert!(read.daemon_config().key_discovery().is_empty());
+        assert_eq!(
+            read.daemon_config().key_discovery(),
+            [] as [KeyDiscovery; 0]
+        );
     }
 
     #[test]
@@ -619,13 +622,13 @@ mod tests {
         // A file written before administrators existed, or emptied by hand, still reads.
         let read: Config = toml::from_str("").unwrap();
 
-        assert!(read.auth_config().admins().is_empty());
+        assert_eq!(read.auth_config().admins(), [] as [String; 0]);
         assert!(!read.auth_config().is_admin("alice"));
 
         // The same holds a table that is present but says nothing.
         let read: Config = toml::from_str("[auth]\n").unwrap();
 
-        assert!(read.auth_config().admins().is_empty());
+        assert_eq!(read.auth_config().admins(), [] as [String; 0]);
     }
 
     #[test]

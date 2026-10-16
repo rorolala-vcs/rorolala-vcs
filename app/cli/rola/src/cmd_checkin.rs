@@ -1466,7 +1466,10 @@ mod tests {
                 path("Installers/sub/extra.pkg")
             ]
         );
-        assert!(matching("Missing/*", &paths).unwrap().is_empty());
+        assert_eq!(
+            matching("Missing/*", &paths).unwrap(),
+            Vec::<LayoutPath>::new()
+        );
         assert!(matches!(
             matching("Installers/[", &paths),
             Err(Refusal::Argument)

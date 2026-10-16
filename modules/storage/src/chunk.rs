@@ -527,15 +527,15 @@ mod tests {
 
     #[test]
     fn an_empty_content_is_cut_into_nothing() {
-        assert!(Chunking::Fixed { size: 4 }.split(b"").is_empty());
-        assert!(
+        assert_eq!(Chunking::Fixed { size: 4 }.split(b""), Vec::new());
+        assert_eq!(
             Chunking::Cdc {
                 min: 4,
                 average: 8,
                 max: 16,
             }
-            .split(b"")
-            .is_empty()
+            .split(b""),
+            Vec::new()
         );
     }
 }

@@ -1042,7 +1042,7 @@ mod tests {
             serde_json::from_str("{\"daemon_config\":{\"key_discovery\":[]}}").unwrap();
         let (roots, _) = member_scopes(&config, &Vault::default(), &RootVault::default());
 
-        assert!(roots.is_empty());
+        assert_eq!(roots, Vec::<std::path::PathBuf>::new());
     }
 
     #[tokio::test]

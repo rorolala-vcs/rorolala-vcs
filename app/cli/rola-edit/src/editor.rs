@@ -222,6 +222,11 @@ impl Editor {
 
     /// Leaves the key as it is: no other platform sends a press and a release, or composes.
     #[cfg(not(windows))]
+    #[allow(
+        clippy::unused_self,
+        clippy::needless_pass_by_ref_mut,
+        reason = "the signature stands in for the Windows one it replaces, which needs `self`"
+    )]
     fn ignored(&mut self, _key: &KeyEvent) -> bool {
         false
     }

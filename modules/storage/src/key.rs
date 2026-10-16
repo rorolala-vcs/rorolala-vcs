@@ -201,7 +201,7 @@ impl FromStr for Key {
         }
 
         let mut digest = [0_u8; BLAKE3_HASH_LEN];
-        for (at, pair) in hex.as_bytes().chunks_exact(2).enumerate() {
+        for (at, pair) in hex.as_bytes().as_chunks::<2>().0.iter().enumerate() {
             let pair = std::str::from_utf8(pair).map_err(|_| Error::Malformed)?;
             digest[at] = u8::from_str_radix(pair, 16).map_err(|_| Error::Malformed)?;
         }

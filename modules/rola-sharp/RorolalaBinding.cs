@@ -1647,6 +1647,16 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult do_action_set_remote_version(nint workspace, nint account, nint target, nint uuid, nint version);
 
     /// <summary>
+    /// Runs the [`ActionWriteRemoteEntries`](crate::ActionWriteRemoteEntries) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_write_remote_entries(nint workspace, nint account, nint target, nint input);
+
+    /// <summary>
     /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
     ///
     /// `daemon_begin_async` is not supported for use on the FFI side; only the
@@ -2231,7 +2241,7 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// How the version recorded for a path stands beside the one upstream records.
     ///
-    /// A [`Standing`] by value, which is `Unknown` for a path this reading holds no standing for: one it is
+    /// A `Standing` by value, which is `Unknown` for a path this reading holds no standing for: one it is
     /// not about, one nothing was ever recorded for, and one upstream does not name. `Same` and `Unknown`
     /// are told apart by `rola_status_standing_distance_of`, which is zero for the first and negative for
     /// the second.

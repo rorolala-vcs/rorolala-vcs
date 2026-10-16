@@ -730,14 +730,15 @@ fn apply_slot(slots: &mut HashMap<Uuid, Slot>, record: &Record) -> Result<(), La
 /// Makes the index part of `record` true.
 fn apply_index(index: &mut Index, record: &Record) -> Result<(), LayoutError> {
     match record {
-        Record::CreatePath { id, path } => index.bind(LayoutPath::new(path)?, *id),
+        Record::CreatePath { id, path } | Record::Create { id, path, .. } => {
+            index.bind(LayoutPath::new(path)?, *id);
+        }
         Record::RemovePath { id, path } => index.unbind(&LayoutPath::new(path)?, *id),
         Record::MovePath { id, from, to } => {
             index.rename(*id, &LayoutPath::new(from)?, &LayoutPath::new(to)?);
         }
         Record::RemoveEntry { id } => index.forget(*id),
         Record::CreateEntry { .. } | Record::UpdateEntry { .. } => {}
-        Record::Create { id, path, .. } => index.bind(LayoutPath::new(path)?, *id),
     }
 
     Ok(())

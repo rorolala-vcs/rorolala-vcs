@@ -124,14 +124,16 @@ public sealed class ThemeTests
     /// A plugin reads a colour as a value through <c>IPalette</c> where it has to paint with it, and as a
     /// resource name where the variant has to answer for it. The two are one answer said twice, so what
     /// this checks is that they still say the same thing — which is the whole of what makes the interface
-    /// and the published names two spellings rather than two palettes.
+    /// and the published names two spellings rather than two palettes. A look is built from the variant in
+    /// force, so each variant's names are read from a look of its own.
     /// </remarks>
     [Fact]
     public void WhatAPluginReadsIsWhatTheLookPublishes()
     {
         var light = ThemePalette.DefaultLight;
         var dark = ThemePalette.DefaultDark;
-        var look = new RorolalaTheme(light, null, WindowStyle.Windows);
+        var lightLook = new RorolalaTheme(light, null, WindowStyle.Windows);
+        var darkLook = new RorolalaTheme(dark, null, WindowStyle.Windows);
 
         var names = new (string Key, Color Light, Color Dark)[]
         {
@@ -146,8 +148,8 @@ public sealed class ThemeTests
 
         foreach (var (key, onLight, onDark) in names)
         {
-            Assert.Equal(onLight, Fill(Variant(look, ThemeVariant.Light), key));
-            Assert.Equal(onDark, Fill(Variant(look, ThemeVariant.Dark), key));
+            Assert.Equal(onLight, Fill(Variant(lightLook, ThemeVariant.Light), key));
+            Assert.Equal(onDark, Fill(Variant(darkLook, ThemeVariant.Dark), key));
         }
     }
 
