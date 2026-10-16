@@ -205,6 +205,60 @@ async fn a_cut_content_is_told_from_a_whole_one() {
 }
 
 #[tokio::test]
+async fn what_a_key_is_carried_as_is_how_long_its_content_is() {
+    let (parent, store) = store("carried-len");
+
+    // A content kept whole is carried as the object itself, so it is as long as what was written.
+    let content = b"the same bytes, however they were kept";
+    let whole = store.write_object(content, Codec::Raw).await.unwrap();
+    assert_eq!(
+        store.carried_len(&whole).await.unwrap(),
+        content.len() as u64
+    );
+
+    // A content kept as chunks is carried as its manifest and then the chunks it names, so it is as
+    // long as the content plus the manifest that says how it was cut.
+    let cut_content: Vec<u8> = (0..1000_u32).map(|value| (value % 251) as u8).collect();
+    let file = parent.join("file");
+    fs::write(&file, &cut_content).unwrap();
+    let cut = store
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 64 }),
+        )
+        .await
+        .unwrap();
+    let manifest = store.read_manifest(&cut).await.unwrap().unwrap();
+    assert_eq!(
+        store.carried_len(&cut).await.unwrap(),
+        cut_content.len() as u64 + manifest.encode().len() as u64
+    );
+
+    // A key nothing is stored under is not one that can be measured.
+    assert!(matches!(
+        store.carried_len(&Key::new([0; 32])).await,
+        Err(Error::NotFound(_))
+    ));
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn what_a_key_is_carried_as_is_not_how_it_is_kept() {
+    let (parent, storage) = store("carried-len-codec");
+    let store = storage.with_codec(Codec::Zstd);
+
+    // Repetition compresses, but what crosses is the content rather than the encoding of it, so a
+    // key is carried as long as its content however the store chose to keep it.
+    let content = vec![0_u8; 4096];
+    let key = store.write_object(&content, Codec::Zstd).await.unwrap();
+
+    assert_eq!(store.carried_len(&key).await.unwrap(), content.len() as u64);
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
 async fn what_is_already_held_is_not_written_again() {
     let (parent, store) = store("rewrite");
     let content: Vec<u8> = (0..8 * 1024_u32).map(|value| (value % 251) as u8).collect();

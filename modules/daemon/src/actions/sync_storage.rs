@@ -28,7 +28,7 @@ use rorolala_protocol::{ActionContext, ActionError, Both, MAX_FRAME, OnlyVault, 
 use rorolala_storage::{
     Error as StoreError, Key, Manifest, Presence, RorolalaStorage, StorageBackend as _,
 };
-use rorolala_utils_progress::Direction;
+use rorolala_utils_progress::{Direction, Task};
 
 /// Which side a key is being carried to.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -150,35 +150,46 @@ pub async fn sync_storage(
     // The Workspace's keys go first, then the Vault's. The order is the same on both ends, and it is
     // what keeps the two in step: a key crosses in one direction only, and both know which.
     if !up.is_empty() {
-        let mut task = everything.spawn(
-            Direction::Up,
-            "",
-            Some(u64::try_from(up.len()).unwrap_or(u64::MAX)),
-        );
+        // Only the side sending a direction knows how long it is: it measures the keys it is about
+        // to carry and says the total, so both ends draw the same bar.
+        let announced = if ctx.is_workspace() {
+            sending_len(&local, &up).await?
+        } else {
+            0
+        };
+        let total = carry_value(ctx, Side::Vault, announced)
+            .await?
+            .unwrap_or(announced);
+
+        let mut task = everything.spawn(Direction::Up, "", Some(total));
 
         for key in &up {
             let working = task.doing(key.hex());
-            carry(ctx, &local, key, Side::Vault).await?;
+            carry(ctx, &local, key, Side::Vault, &mut task).await?;
             drop(working);
 
-            task.advance_by(1);
             everything.advance_by(1);
         }
     }
 
     if !down.is_empty() {
-        let mut task = everything.spawn(
-            Direction::Down,
-            "",
-            Some(u64::try_from(down.len()).unwrap_or(u64::MAX)),
-        );
+        // As above, told the other way round: the Vault is the side sending this direction.
+        let announced = if ctx.is_vault() {
+            sending_len(&local, &down).await?
+        } else {
+            0
+        };
+        let total = carry_value(ctx, Side::Workspace, announced)
+            .await?
+            .unwrap_or(announced);
+
+        let mut task = everything.spawn(Direction::Down, "", Some(total));
 
         for key in &down {
             let working = task.doing(key.hex());
-            carry(ctx, &local, key, Side::Workspace).await?;
+            carry(ctx, &local, key, Side::Workspace, &mut task).await?;
             drop(working);
 
-            task.advance_by(1);
             everything.advance_by(1);
         }
     }
@@ -194,6 +205,26 @@ pub async fn sync_storage(
     Ok(())
 }
 
+/// How many bytes the keys in `keys` are carried as, summed over all of them.
+///
+/// This is what a direction says it is about to move: the side that holds the keys can say how long
+/// they are without reading them — see [`RorolalaStorage::carried_len`] — and the side taking them
+/// cannot, so the length crosses rather than being worked out twice.
+///
+/// # Errors
+///
+/// Returns [`ActionError::Store`] or [`ActionError::MissingObject`] if a key that is about to cross
+/// can no longer be measured.
+async fn sending_len(local: &RorolalaStorage, keys: &[&Key]) -> Result<u64, ActionError> {
+    let mut total = 0_u64;
+
+    for key in keys {
+        total = total.saturating_add(local.carried_len(key).await.map_err(store_failed)?);
+    }
+
+    Ok(total)
+}
+
 /// Carries the whole of `key` to `to`, where it is written down.
 ///
 /// `local` is the store on this side: what it holds is read here when this is the side sending,
@@ -204,11 +235,16 @@ pub async fn sync_storage(
 /// names; a key that is one object has no manifest, and what crosses is the object. What is sent
 /// is never what is taken, so the two ends know which of the two they are from where the key is
 /// coming from.
+///
+/// `task` counts the bytes as they cross: a blob is as long as it was, whether this side wrote it
+/// or took it, so both ends move the same bar by the same amount and a content of many chunks is
+/// seen to move a chunk at a time rather than all at once at the end.
 async fn carry(
     ctx: &mut ActionContext<'_>,
     local: &RorolalaStorage,
     key: &Key,
     to: Side,
+    task: &mut Task,
 ) -> Result<(), ActionError> {
     // The side a key is going to is the side that does not have it, so the side sending is the
     // other one.
@@ -235,7 +271,8 @@ async fn carry(
     } else {
         None
     };
-    let manifest = carry_blob(ctx, to, outgoing).await?.unwrap_or(manifest);
+    let arrived = carry_blob_moving(ctx, to, outgoing, Some(&mut *task)).await?;
+    let manifest = arrived.unwrap_or(manifest);
 
     if manifest.is_empty() {
         // One object, and it follows.
@@ -245,7 +282,10 @@ async fn carry(
             .cloned()
             .unwrap_or_default();
 
-        if let Some(bytes) = carry_blob(ctx, to, sending.then_some(whole)).await? {
+        let arrived =
+            carry_blob_moving(ctx, to, sending.then_some(whole), Some(&mut *task)).await?;
+
+        if let Some(bytes) = arrived {
             local
                 .write_object(&bytes, local.codec())
                 .await
@@ -272,7 +312,9 @@ async fn carry(
         // As above: what one side sends, the other passes nothing for.
         let outgoing = chunks.and_then(|chunks| chunks.get(at).cloned());
 
-        if let Some(bytes) = carry_blob(ctx, to, outgoing).await? {
+        let arrived = carry_blob_moving(ctx, to, outgoing, Some(&mut *task)).await?;
+
+        if let Some(bytes) = arrived {
             local
                 .write_object(&bytes, local.codec())
                 .await
@@ -299,6 +341,22 @@ pub(crate) async fn carry_blob(
     to: Side,
     blob: Option<Vec<u8>>,
 ) -> Result<Option<Vec<u8>>, ActionError> {
+    carry_blob_moving(ctx, to, blob, None).await
+}
+
+/// Carries one blob as [`carry_blob`] does, and moves `task` along as each piece of it crosses.
+///
+/// A blob longer than one frame crosses as several pieces, and a reader watching one long content
+/// wants to see it move while it moves: with a task, every piece moves the bar by as many bytes as
+/// it holds. That number is the same on both ends — the side sending knows it before the piece
+/// goes, and the side taking learns it as the piece arrives — so both ends move the same bar by the
+/// same amount and neither runs ahead of the other.
+async fn carry_blob_moving(
+    ctx: &mut ActionContext<'_>,
+    to: Side,
+    blob: Option<Vec<u8>>,
+    mut task: Option<&mut Task>,
+) -> Result<Option<Vec<u8>>, ActionError> {
     let sending = blob.is_some();
 
     // How many bytes to expect comes first, and the pieces that follow are counted from it, so the
@@ -316,8 +374,16 @@ pub(crate) async fn carry_blob(
             .as_ref()
             .map(|bytes| bytes[start..bytes.len().min(start + PIECE)].to_vec());
 
+        // What this piece is long: the side sending cut it, so it knows; the side taking is handed
+        // what the other side cut, so it learns it here. The two are the same number of bytes.
+        let mut crossed = outgoing.as_ref().map_or(0, Vec::len);
         if let Some(piece) = carry_value(ctx, to, outgoing.unwrap_or_default()).await? {
+            crossed = piece.len();
             arrived.extend_from_slice(&piece);
+        }
+
+        if let Some(task) = task.as_deref_mut() {
+            task.advance_by(crossed as u64);
         }
     }
 

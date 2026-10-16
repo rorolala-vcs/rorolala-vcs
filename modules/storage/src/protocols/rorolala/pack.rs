@@ -782,6 +782,40 @@ impl RorolalaStorage {
         Ok(None)
     }
 
+    /// The first `want` bytes, or all of them when the entry is shorter, of the framed entry stored
+    /// under `key` in whichever pack of `kind` holds it, if any does.
+    ///
+    /// A caller wanting how an entry was written rather than what it holds reads only the head of
+    /// it: the frame is at the front, and reading the payload behind it would be paying for content
+    /// the caller is not asking for.
+    pub(super) async fn packed_head(
+        &self,
+        kind: PackKind,
+        key: &Key,
+        want: u64,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        let state = self.root_state();
+
+        for index in self.packs_of(kind).await? {
+            let Some(directory) = self.pack_index(&state, kind, index).await? else {
+                continue;
+            };
+
+            if let Some(entry) = directory.find(key) {
+                let pack_path = self.pack_path(index);
+
+                match read_range(&pack_path, entry.offset(), entry.len().min(want)).await {
+                    Ok(bytes) => return Ok(Some(bytes)),
+                    // As above: a pack taken away after its index was read holds nothing.
+                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error),
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
     /// Every key the packs of `kind` name.
     ///
     /// This is what tells a packing from a batch of keys already packed: a key a pack of its kind names

@@ -9,9 +9,10 @@ use std::collections::BTreeSet;
 
 use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, PackKind};
-use super::entry::{collect, exists, key_of, plain_len_of, verify};
+use super::entry::{collect, exists, key_of, plain_len_of, read_range, verify};
 use crate::{
-    AlgorithmChoice, Chunk, Chunker as _, Codec, Error, FRAME_VERSION, Frame, Key, Layout, Manifest,
+    AlgorithmChoice, Chunk, Chunker as _, Codec, Error, FRAME_HEADER_LEN, FRAME_VERSION, Frame,
+    Key, Layout, Manifest,
 };
 
 impl RorolalaStorage {
@@ -179,6 +180,52 @@ impl RorolalaStorage {
         }
 
         Ok(content)
+    }
+
+    /// How many bytes the content stored under `key` is carried to another store as, read without
+    /// taking the content apart.
+    ///
+    /// A content kept as chunks is carried as its manifest and then the chunks it names, whose
+    /// lengths the manifest already says; one kept whole is carried as the object itself, whose
+    /// length the frame in front of it records. Neither path reads the content, so a caller that
+    /// only wants to say how much is going to move does not pay for the moving.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotFound`] if nothing is stored under `key`, [`Error::Malformed`] if what
+    /// is stored is not framed as this build can read, and [`Error::Io`] if it cannot be read.
+    pub async fn carried_len(&self, key: &Key) -> Result<u64, Error> {
+        if let Some(manifest) = self.read_manifest(key).await? {
+            return Ok(manifest.content_len() + manifest.encode().len() as u64);
+        }
+
+        let Some(head) = self.entry_head(PackKind::Object, key).await? else {
+            return Err(Error::NotFound(*key));
+        };
+        let (frame, _) = Frame::decode(&head)?;
+
+        Ok(frame.plain_len)
+    }
+
+    /// The front of the entry of `kind` stored under `key`: enough of its frame to read its length.
+    ///
+    /// The entry is read loose where it is loose and out of a pack where it was packed, and only as
+    /// much of it as a frame takes — see [`FRAME_HEADER_LEN`] — so an object too small to hold one is
+    /// the whole of what is read.
+    async fn entry_head(&self, kind: PackKind, key: &Key) -> Result<Option<Vec<u8>>, Error> {
+        let path = self.entry_path(kind, key);
+
+        match tokio::fs::metadata(&path).await {
+            Ok(metadata) => {
+                let take = metadata.len().min(FRAME_HEADER_LEN as u64);
+
+                Ok(Some(read_range(&path, 0, take).await?))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                self.packed_head(kind, key, FRAME_HEADER_LEN as u64).await
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     /// Stores `content`, written with `choice`, and answers with its key.

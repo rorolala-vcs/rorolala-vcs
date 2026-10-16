@@ -68,7 +68,7 @@ impl Frame {
     /// Writes this frame as the header that goes in front of a payload.
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
-        let mut header = Vec::with_capacity(HEADER_LEN);
+        let mut header = Vec::with_capacity(FRAME_HEADER_LEN);
 
         header.extend_from_slice(&FRAME_MAGIC);
         header.push(self.version);
@@ -87,7 +87,7 @@ impl Frame {
     /// understands — the wrong magic, a version or a codec it does not know, or too few bytes to
     /// hold one.
     pub fn decode(bytes: &[u8]) -> Result<(Self, usize), Error> {
-        let header = bytes.get(..HEADER_LEN).ok_or(Error::Malformed)?;
+        let header = bytes.get(..FRAME_HEADER_LEN).ok_or(Error::Malformed)?;
 
         if header.get(..FRAME_MAGIC.len()) != Some(FRAME_MAGIC.as_slice()) {
             return Err(Error::Malformed);
@@ -111,13 +111,16 @@ impl Frame {
                 layout,
                 plain_len,
             },
-            HEADER_LEN,
+            FRAME_HEADER_LEN,
         ))
     }
 }
 
 /// How long the header every entry starts with is.
-const HEADER_LEN: usize = FRAME_MAGIC.len() + 3 + size_of::<u64>();
+///
+/// It is a caller's too, for the one read that wants how an entry was written rather than what it
+/// holds: the frame is at the front, so this much of an entry answers that without the content.
+pub const FRAME_HEADER_LEN: usize = FRAME_MAGIC.len() + 3 + size_of::<u64>();
 
 /// Reads the first eight bytes of `bytes` as a big-endian number.
 fn read_u64(bytes: &[u8]) -> Option<u64> {

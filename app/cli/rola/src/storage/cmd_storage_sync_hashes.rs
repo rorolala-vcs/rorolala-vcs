@@ -6,6 +6,11 @@
 //! of the two ends working them out between them. Because what it changes is only what was named, it
 //! does not ask first.
 
+// `#[chain]` copies the attributes of the function it is given onto the struct it generates, so a
+// lint allowed on the handler below is reported as defined twice. The allow lives here, where it
+// covers the one signature that needs it.
+#![allow(clippy::trivially_copy_pass_by_ref)]
+
 use librorolala::daemon::action_sync_hashes_async;
 use librorolala::protocol::ActionError;
 use mingling::{

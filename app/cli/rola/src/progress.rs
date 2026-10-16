@@ -37,11 +37,15 @@ const CHARS: &str = "=> ";
 /// The width is written into the template rather than named, since a template's widths are
 /// literal: the two bars below are 28 cells for the same reason — so that a task's bar begins
 /// where every other bar of the run does.
-const WHOLE_TEMPLATE: &str = "  [{bar:28}] {pos}/{len}";
+const WHOLE_TEMPLATE: &str = "  [{bar:28}] {pos}/{len} {percent}%";
 
-/// The bar one task of a run is drawn as: which way its work moves, how far it has got, and
-/// what it is moving right now.
-const TASK_TEMPLATE: &str = "{prefix} [{bar:28}] {pos}/{len}: {msg}";
+/// The bar one task of a run is drawn as: which way its work moves, how fast it is moving, how far
+/// it has got, and what it is moving right now.
+///
+/// How far is said as a percentage, and how fast as so many bytes a second, because a task here is
+/// a transfer and a transfer is counted in bytes: a content crosses a piece at a time, and a reader
+/// watching one long content wants to see it move while it moves rather than only when it is done.
+const TASK_TEMPLATE: &str = "{prefix} [{bar:28}] {bytes_per_sec} {percent}% {msg}";
 
 /// How much of the name of a piece being moved is shown.
 ///
