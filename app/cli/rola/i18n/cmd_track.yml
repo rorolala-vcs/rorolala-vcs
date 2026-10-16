@@ -16,39 +16,40 @@ track:
       zh-CN: 重做文件当前所在的版本，如同 `git commit --amend`
   help:
     en: |
-        Record files into the current Layout
+      Record files into the current Layout
 
-        **Usage**: rola track <FILE>...
-        **Flags**:
-            --message <MESSAGE>        Give the whole group one commit message
-            --file-message <MESSAGE>   Give each file its own commit message, one per file
+      **Usage**: rola track <FILE>...
+      **Flags**:
+          --message <MESSAGE>        Give the whole group one commit message
+          --file-message <MESSAGE>   Give each file its own commit message, one per file
 
-            --no-editor                Record only what is already known, without opening an editor
-            --replace                  Redo the version the file is at, like `git commit --amend`
-            --force                    Record files that belong to another account
-
-        The file's content goes into the store, a version is made, and the Layout is made to point at it
-        A directory is taken recursively
-        A moved file is recorded where it is now
-        `--message` covers the whole group, `--file-message` gives one per file, and with neither an editor opens
-        `--replace` redoes the version each file is at instead of adding one after it
+          --no-editor                Record only what is already known, without opening an editor
+          --replace                  Redo the version the file is at, like `git commit --amend`
+          --force                    Record files that belong to another account
     zh-CN: |
-        将文件记录到当前布局
+      将文件记录到当前布局
 
-        **用法**：rola track <路径>...
-        **标识**：
-            --message <信息>         为整组文件指定提交信息
-            --file-message <信息>    为单个文件指定提交信息，每个文件一个
+      **用法**：rola track <路径>...
+      **标识**：
+          --message <信息>         为整组文件指定提交信息
+          --file-message <信息>    为单个文件指定提交信息，每个文件一个
 
-            --no-editor              只记录已知信息，不打开编辑器
-            --replace                重做文件当前所在的版本，如同 `git commit --amend`
-            --force                  记录属于其他账户的文件
+          --no-editor              只记录已知信息，不打开编辑器
+          --replace                重做文件当前所在的版本，如同 `git commit --amend`
+          --force                  记录属于其他账户的文件
 
-        将文件内容写入仓库并建立版本，让布局指向该版本
-        目录会递归处理
-        被移动的文件在新位置记录
-        `--message` 描述整组，`--file-message` 逐个描述，都不给时打开编辑器
-        `--replace` 重做每个文件当前所在的版本，而非在其后新增
+  # What a recording says it is doing while it does it, one line each: the three parts of the run in the
+  # order it goes through them. They are said both to a person watching — on a bar — and to a program
+  # reading, so they are plain words rather than a bar's drawing.
+  enumerating:
+    en: Enumerating entries to track
+    zh-CN: 枚举待追踪条目中
+  writing:
+    en: Writing content
+    zh-CN: 写入内容中
+  recording:
+    en: Recording versions
+    zh-CN: 记录版本中
 
   description:
     en: Record files into the current Layout
@@ -56,15 +57,15 @@ track:
 
   editing_header:
     en: |
-        You are recording the files below, so write what each change was
+      You are recording the files below, so write what each change was
 
-        Lines starting with `#` are ignored
-        Every section needs a message
+      Lines starting with `#` are ignored
+      Every section needs a message
     zh-CN: |
-        你正在记录下列文件，请写出每一处更改的内容
+      你正在记录下列文件，请写出每一处更改的内容
 
-        以 `#` 开头的行会被忽略
-        每一节都需要填写信息
+      以 `#` 开头的行会被忽略
+      每一节都需要填写信息
 
   editing_global:
     en: "What this whole group did:"
@@ -108,9 +109,9 @@ track:
 
   err_replace_help:
     en: |
-        Please record the file first, and do not replace a merge
+      Please record the file first, and do not replace a merge
     zh-CN: |
-        请先记录该文件，也不要替换合并版本
+      请先记录该文件，也不要替换合并版本
 
   err_merge_changed:
     en: "the variant file `%{path}` no longer holds the variant's content"
@@ -118,9 +119,9 @@ track:
 
   err_merge_changed_help:
     en: |
-        Put the variant file back with `rola align --restore`, or end the merge with `rola align --delete`, then try again
+      Put the variant file back with `rola align --restore`, or end the merge with `rola align --delete`, then try again
     zh-CN: |
-        请用 `rola align --restore` 把变体文件放回，或用 `rola align --delete` 结束合并，然后重试
+      请用 `rola align --restore` 把变体文件放回，或用 `rola align --delete` 结束合并，然后重试
 
   err_no_files:
     en: No file was named to record
@@ -132,9 +133,9 @@ track:
 
   err_lost_help:
     en: |
-        Settle it first with `rola align <PATH> --delete`, `rola layout tree-diff` shows what is lost
+      Settle it first with `rola align <PATH> --delete`, `rola layout tree-diff` shows what is lost
     zh-CN: |
-        请先用 `rola align <路径> --delete` 处理，`rola layout tree-diff` 可查看丢失项
+      请先用 `rola align <路径> --delete` 处理，`rola layout tree-diff` 可查看丢失项
 
   err_unowned:
     en: "%{count} files named are not yours to record: %{paths}"
@@ -142,15 +143,15 @@ track:
 
   err_unowned_help:
     en: |
-        Record them anyway with `rola track --force`, or ask the holder to give ownership up with `rola layout giveup-ownership`
+      Record them anyway with `rola track --force`, or ask the holder to give ownership up with `rola layout giveup-ownership`
     zh-CN: |
-        请用 `rola track --force` 强制记录，或请持有者用 `rola layout giveup-ownership` 让出所有权
+      请用 `rola track --force` 强制记录，或请持有者用 `rola layout giveup-ownership` 让出所有权
 
   err_no_files_help:
     en: |
-        Name one or more files, see `rola track --help` for how they are recorded
+      Name one or more files, see `rola track --help` for how they are recorded
     zh-CN: |
-        请指定一个或多个文件，记录方式见 `rola track --help`
+      请指定一个或多个文件，记录方式见 `rola track --help`
 
   err_not_a_file:
     en: "`%{path}` is not a file"
@@ -166,9 +167,9 @@ track:
 
   err_file_help:
     en: |
-        Name files that sit inside the Workspace and are not under `.rola`
+      Name files that sit inside the Workspace and are not under `.rola`
     zh-CN: |
-        请指定位于工作区内且不在 `.rola` 之下的文件
+      请指定位于工作区内且不在 `.rola` 之下的文件
 
   err_message_mismatch:
     en: The files and `--file-message` values do not line up one to one
@@ -192,15 +193,15 @@ track:
 
   err_aborted_help:
     en: |
-        Write a message for the group, or for each file, and try again
+      Write a message for the group, or for each file, and try again
     zh-CN: |
-        请为整组或每个文件写入提交信息，然后重试
+      请为整组或每个文件写入提交信息，然后重试
 
   err_message_help:
     en: |
-        Give one `--file-message` per file, or write the messages in the editor
+      Give one `--file-message` per file, or write the messages in the editor
     zh-CN: |
-        请为每个文件各给一个 `--file-message`，或在编辑器中撰写提交信息
+      请为每个文件各给一个 `--file-message`，或在编辑器中撰写提交信息
 
   err_no_store:
     en: This run works on no store to put the content into
@@ -216,6 +217,6 @@ track:
 
   err_failed_help:
     en: |
-        Check that the store, the index and the Layout are writable, then try again
+      Check that the store, the index and the Layout are writable, then try again
     zh-CN: |
-        请检查仓库、索引与布局是否可写，然后重试
+      请检查仓库、索引与布局是否可写，然后重试

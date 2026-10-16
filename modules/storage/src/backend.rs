@@ -205,3 +205,19 @@ where
 
     backend.write_file(file, choice).await
 }
+
+/// The key content at `file` is stored under, without storing anything.
+///
+/// This is the same key [`store_file`] would answer with — the hash of the file's content — so a
+/// caller that has to know whether content is already recorded, before deciding whether to write
+/// it, can ask here and write only what is new. The whole file is read and nothing of it is kept,
+/// which is the same reading a write makes; what is saved is the write itself.
+///
+/// # Errors
+///
+/// Whatever reading `file` fails with.
+pub fn key_of_file(file: impl AsRef<Path>) -> std::io::Result<Key> {
+    let content = std::fs::read(file.as_ref())?;
+
+    Ok(Key::new(*blake3::hash(&content).as_bytes()))
+}

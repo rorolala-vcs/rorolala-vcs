@@ -36,8 +36,9 @@ const CHARS: &str = "=> ";
 ///
 /// The width is written into the template rather than named, since a template's widths are
 /// literal: the two bars below are 28 cells for the same reason — so that a task's bar begins
-/// where every other bar of the run does.
-const WHOLE_TEMPLATE: &str = "  [{bar:28}] {pos}/{len} {percent}%";
+/// where every other bar of the run does. The message is what the whole of the run calls itself
+/// — a recording names the part it is in — and is empty for a bar that has nothing to say.
+const WHOLE_TEMPLATE: &str = "  [{bar:28}] {pos}/{len} {percent}% {msg}";
 
 /// The bar one task of a run is drawn as: which way its work moves, how fast it is moving, how far
 /// it has got, and what it is moving right now.
@@ -82,12 +83,20 @@ pub struct Reporting {
 }
 
 impl Reporting {
-    /// Starts saying a run's progress the way `setting` asks.
-    ///
-    /// A run that asked to say nothing is given [`Progress::silent`], which is the same
-    /// progress as any other as far as the work is concerned and draws nothing at all.
+    /// Starts saying a run's progress, letting the bars out after the ordinary wait.
     #[must_use]
     pub fn start(setting: ResProgressSetting) -> Self {
+        Self::after(setting, DELAY)
+    }
+
+    /// Starts saying a run's progress, letting the bars out after `delay`.
+    ///
+    /// A run is asked for a wait of its own when what it does first is the slow part: a recording
+    /// reads the whole of every file it is to record before it writes anything, and a reader watching
+    /// for that wants the bar sooner than the ordinary wait allows — a bar that appeared only once the
+    /// reading was over would be a bar for nothing.
+    #[must_use]
+    pub fn after(setting: ResProgressSetting, delay: Duration) -> Self {
         if setting == ResProgressSetting::No {
             return Self {
                 progress: Progress::silent(),
@@ -102,7 +111,7 @@ impl Reporting {
 
         let mut watcher = match setting {
             ResProgressSetting::Jsonl => Watcher::Records,
-            _ => Watcher::Terminal(Terminal::new()),
+            _ => Watcher::Terminal(Terminal::new(delay)),
         };
 
         let watching = Some(std::thread::spawn(move || {
@@ -178,14 +187,17 @@ struct Terminal {
     bars: MultiProgress,
     /// What each bar is, by the id the task is named by.
     drawn: BTreeMap<u64, ProgressBar>,
+    /// How long a run goes unwatched before the bars are let out.
+    delay: Duration,
 }
 
 impl Terminal {
-    /// A terminal with nothing drawn on it yet, and nothing let out of it yet either.
-    fn new() -> Self {
+    /// A terminal with nothing drawn on it yet, holding the bars back for `delay`.
+    fn new(delay: Duration) -> Self {
         Self {
             bars: MultiProgress::with_draw_target(ProgressDrawTarget::hidden()),
             drawn: BTreeMap::new(),
+            delay,
         }
     }
 
@@ -205,7 +217,7 @@ impl Terminal {
     fn watch(&mut self, receiver: &mut mpsc::Receiver<Signal>) {
         let started = Instant::now();
 
-        while started.elapsed() < DELAY {
+        while started.elapsed() < self.delay {
             match receiver.try_recv() {
                 Ok(signal) => self.take(&signal),
                 Err(TryRecvError::Empty) => std::thread::sleep(LOOK),
@@ -259,6 +271,14 @@ impl Terminal {
             // The whole of the run: the bar every other bar is stacked under.
             (None, _) => {
                 let bar = self.bars.add(bar(total, WHOLE_TEMPLATE));
+
+                // What the whole of the run is, when it names itself: a recording says which part of
+                // itself it is in — reading, writing, recording — and the name is the whole of what
+                // says so on a bar that has no direction of its own.
+                if !what.is_empty() {
+                    bar.set_message(what.to_owned());
+                }
+
                 self.drawn.insert(id, bar);
             }
             // One direction of it: a bar of its own, saying which way its work moves.

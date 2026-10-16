@@ -9,21 +9,32 @@
 //! What is recorded about a change is a message, and a message covers a group: one for the whole run
 //! and, when a file wants its own words, one per file. A run is not always able to say them on the
 //! command line, so what it does not say is asked for in an editor. See [`crate::editor`].
+//!
+//! The order is read, ask, then write: every file that is to be recorded is read first, to find which
+//! of them changed, and the message is asked for those; only then is the content written and the
+//! versions made. So a run whose editor is left empty has written nothing, and the editor lists the
+//! files that will actually be recorded rather than a guess at them. What the run is doing while it
+//! does it is said through [`crate::progress`], on a bar or as one record per line.
 
 #![allow(clippy::too_many_lines)]
 // A recording of one file needs everything about it — where it is, what it holds, the version it is
 // at, the merge waiting for it and the move it confirms — and gathering them into one value would
 // only move the count somewhere else.
 #![allow(clippy::too_many_arguments)]
+// The progress setting is the resource the injection hands the handler and not something a recording
+// owns: taking a copy would read a state of its own, so it is taken by reference, which is what the
+// injection gives it and what every other handler that watches a run does.
+#![allow(clippy::trivially_copy_pass_by_ref)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 
 use librorolala::layout::{Batch, Layout, LayoutPath, MutableData};
 use librorolala::status::{tracked_vault, unowned};
-use librorolala::storage::{Key, Lockable as _, RorolalaStorage, store_file};
+use librorolala::storage::{Key, Lockable as _, RorolalaStorage, key_of_file, store_file};
 use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
 use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
 use librorolala::workspace::{DATA_DIR, Merging, Pending};
@@ -37,11 +48,14 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResForce, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{
+    ResForce, ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::WORKSPACE_EDITING_PATH;
 use rorolala_utils_location::Locate as _;
+use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 use uuid::Uuid;
 
@@ -54,6 +68,7 @@ use crate::exit_codes::{
 };
 use crate::failure::failure;
 use crate::layout::{ErrorLayoutShouldInWorkspace, chosen, failed};
+use crate::progress::Reporting;
 
 /// The longest a message may be, in bytes.
 ///
@@ -72,6 +87,13 @@ const DEFAULT_ALIKE: f32 = 0.6;
 /// refused; a few attempts tell apart a caller fixing it from one that cannot, which is a run that
 /// has to be stopped rather than reopened forever.
 const EDIT_ATTEMPTS: usize = 10;
+
+/// How long a recording goes unwatched before its bars are let out.
+///
+/// Shorter than the ordinary wait — see [`crate::progress`] — because a recording opens with the part a
+/// reader most wants to watch: the whole of every file it is to record is read before anything is
+/// written, and a bar that appeared only once that reading was over would be a bar for nothing.
+const WATCH_AFTER: Duration = Duration::from_secs(1);
 
 /// What the whole group did; the message every file carries unless it is given its own.
 const ARG_MESSAGE: PickerArg<'static, Option<String>> = arg![message: Option<String>];
@@ -124,9 +146,10 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 
 /// Records one or more files in the Layout being worked in
 ///
-/// Each `FILE` has its content put into the store and a version made of it, and the Layout is made
-/// to name that version. A file already recorded is skipped while its content has not changed, and
-/// given a new version when it has. A `FILE` that is a directory is taken recursively: every file
+/// Each `FILE` is read first, to find whether what it holds differs from what the Layout names — the
+/// files that changed and no others then go on to a message, a version and a Layout entry. A file
+/// already recorded and unchanged is skipped, and one that did change is given a new version. A
+/// `FILE` that is a directory is taken recursively: every file
 /// under it is recorded, read the way the tree reading reads them, so what the Workspace keeps for
 /// itself and what another Workspace holds are left out. A name is read against where the run was
 /// made, so `.` is the directory it is in — and, at the Workspace root, the whole of the work.
@@ -223,6 +246,35 @@ pub fn handle_track(
     index: &mut LazyRes<ResVCSIndex>,
     account: &mut LazyRes<ResCurrentAccount>,
     editor: &ResEditor,
+    progress: &ResProgressSetting,
+) -> Next {
+    let reporting = Reporting::after(*progress, WATCH_AFTER);
+
+    // The handle is let go of before the reader is waited for: the last handle dropping is what tells
+    // the reader there is nothing more to come, and waiting first would wait forever.
+    let next = {
+        let progress = reporting.progress();
+        record(state, workspace, vault, storage, index, account, editor, &progress)
+    };
+
+    reporting.finish();
+
+    next
+}
+
+/// The recording itself, with a running reader to say what it is doing.
+///
+/// Split from [`handle_track`] so that the reader is started and waited for around it exactly once,
+/// however many ways the recording has of returning.
+fn record(
+    state: StateTrack,
+    workspace: &mut LazyRes<ResWorkspace>,
+    vault: &mut LazyRes<ResVault>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    index: &mut LazyRes<ResVCSIndex>,
+    account: &mut LazyRes<ResCurrentAccount>,
+    editor: &ResEditor,
+    progress: &Progress,
 ) -> Next {
     let StateTrack {
         files,
@@ -324,14 +376,11 @@ pub fn handle_track(
         Err(error) => return fail(error.to_string()),
     };
 
-    // What goes into the store is decided before anything is asked, so that a file whose content is
-    // already recorded is never asked for a message: it will not be given a version to carry one.
-    // What the tree says changed is what is worth reading again: a file the Layout agrees with
-    // holds content the store already has, so asking the disk for it here only repeats what the
-    // reading already worked out. A file the tree did not see change — and a move that did not
-    // change the file under it, which is not a recording of its own — is left alone, as before, and
-    // is what `rola align` is for. An amend reads and records regardless, since the words it changes
-    // are the change.
+    // What is worth reading is what the tree says changed, plus what `--replace` names and what the
+    // reading could not look at: a file the Layout agrees with holds content the store already has, so
+    // it is not read at all. The reading happens before the message is asked and before anything is
+    // written — see `enumerate` — so a file the reading agrees with is neither asked about nor
+    // written, and a move that changed nothing under it is left to `rola align` as it always was.
     let recordable: BTreeSet<LayoutPath> = diff
         .modified
         .iter()
@@ -348,31 +397,28 @@ pub fn handle_track(
         .map(|failed| failed.path.as_str())
         .collect();
 
-    let mut staged = Vec::with_capacity(prepared.len());
-    for file in prepared {
-        if !replace && !recordable.contains(&file.path) && !unreadable.contains(file.path.as_str())
-        {
-            continue;
-        }
+    // The files worth reading are the ones the reading found changed, the ones `--replace` names
+    // whatever the reading found, and the ones the reading could not look at. Everything else holds
+    // content the store already has, so it is neither read nor written.
+    let candidates: Vec<Prepared> = prepared
+        .into_iter()
+        .filter(|file| {
+            replace || recordable.contains(&file.path) || unreadable.contains(file.path.as_str())
+        })
+        .collect();
 
-        let (storage, changed, recorded) = match stage(vcs, &runtime, store, &file, replace) {
-            Ok(staged) => staged,
-            Err(next) => return next,
-        };
-
-        staged.push(Staged {
-            file,
-            storage,
-            // A version being replaced is written even when its content did not move: the words it
-            // says, or the version it says them of, are the change.
-            changed: changed || replace,
-            recorded,
-        });
-    }
+    // What each file now holds, and whether that is a change, is worked out before anything is asked
+    // or written: the content is read here so that the message is asked for the files that will be
+    // recorded and no others, and a run whose editor is left empty has then written nothing at all.
+    let mut enumerated = match enumerate(vcs, &runtime, progress, candidates, replace) {
+        Ok(enumerated) => enumerated,
+        Err(next) => return next,
+    };
 
     // The files in the list are the ones that changed; one that did not is not recorded, so it is
     // not something a message stands for either — including when it was named on the command line.
-    let changing: Vec<&Staged> = staged.iter().filter(|file| file.changed).collect();
+    enumerated.retain(|file| file.changed);
+    let changing = enumerated;
     let files: Vec<&Prepared> = changing.iter().map(|file| &file.file).collect();
 
     if !file_messages.is_empty() && file_messages.len() != files.len() {
@@ -406,22 +452,28 @@ pub fn handle_track(
         }
     };
 
-    let mut items = Vec::with_capacity(changing.len());
-    let mut at = 0;
-    let mut committed = Vec::with_capacity(changing.len());
+    // The content of every file that is to be recorded goes into the store, read again as it goes — the
+    // price of having asked for the message first (see `enumerate`).
+    let staged = match write(store, &runtime, progress, changing) {
+        Ok(staged) => staged,
+        Err(next) => return next,
+    };
+
+    let mut items = Vec::with_capacity(staged.len());
+    let mut committed = Vec::with_capacity(staged.len());
+
+    // A version is one thing made per file, so the bar for making them counts files rather than the
+    // bytes the content above was measured in.
+    let mut placing = (!staged.is_empty())
+        .then(|| progress.begin(t!("track.recording").to_string(), Some(staged.len() as u64)));
 
     // What the run does to the Layout is gathered up and written when it is done, so a run that
     // records many files pays one read of what others wrote and one flushed write per shard rather
     // than the same for each file.
     let mut batch = layout.batch();
 
-    for file in &staged {
-        if !file.changed {
-            continue;
-        }
-
+    for (at, file) in staged.iter().enumerate() {
         let text = &messages[at];
-        at += 1;
 
         // A file a variant is waiting for is recorded as the merge it is, and the waiting is over
         // once it is: what the merge was is read here, where the version is made.
@@ -469,6 +521,10 @@ pub fn handle_track(
                 TrackAction::if_updated(&file.file)
             },
         });
+
+        if let Some(task) = &mut placing {
+            task.advance_by(1);
+        }
     }
 
     // What was recorded is what the tree and the Layout now agree on, so the reading remembers it —
@@ -477,6 +533,8 @@ pub fn handle_track(
     if let Err(error) = batch.commit() {
         return failed(&error);
     }
+
+    drop(placing);
 
     if let Err(next) = remember(&layout, &root, &committed) {
         return next;
@@ -559,7 +617,16 @@ struct Staged {
     file: Prepared,
     /// The key its content is stored under.
     storage: Key,
-    /// Whether that is a change from what the Layout already names.
+    /// The version it is at now, when it was recorded before.
+    recorded: Option<Recorded>,
+}
+
+/// One candidate file, read and weighed before anything is asked or written.
+struct Enumerated {
+    /// The file itself.
+    file: Prepared,
+    /// Whether what it holds is a change from what the Layout names: what decides whether a message is
+    /// asked for it and whether a version is made of it.
     changed: bool,
     /// The version it is at now, when it was recorded before.
     recorded: Option<Recorded>,
@@ -1047,56 +1114,133 @@ fn section_name(line: &str) -> Option<String> {
     (!name.is_empty()).then(|| name.to_owned())
 }
 
-/// Puts one file's content into the store, and says whether that is a change.
+/// Reads every candidate file and says which of them changed, before anything is asked or written.
 ///
-/// The content is written before anything else is decided because what the Layout names is a key
-/// the store answers with, not something the file on disk can be compared against directly: content
-/// kept as a manifest of chunks hashes to something no reading of the file alone produces.
+/// The content is read here — the whole of every candidate — because whether a file is worth a message
+/// and a version is whether what is on disk differs from what the Layout names, and that is only known by
+/// hashing it. The bar is drawn over that reading, since it is the part a reader has to wait through.
 ///
-/// The version the Layout names is read first when `--replace` was asked for, so a file with no
-/// version to replace, or one whose version is a merge, is refused before anything is put into the
-/// store.
-fn stage(
+/// What this is for is the order of the run: the message is asked for *after* this and *before* anything
+/// is written, so the editor lists exactly the files that will be recorded and a run whose editor is left
+/// empty has written nothing. Asking after the content was written would leave the store holding content
+/// no version names.
+///
+/// # Errors
+///
+/// Renders [`ErrorTrackReplace`] when `--replace` names a file the Layout records no version for or one
+/// whose version is a merge, and [`ErrorTrackFailed`] when a file cannot be read.
+fn enumerate(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
-    store: &RorolalaStorage,
-    file: &Prepared,
+    progress: &Progress,
+    candidates: Vec<Prepared>,
     replace: bool,
-) -> Result<(Key, bool, Option<Recorded>), Next> {
-    let recorded = match &file.data {
-        Some(data) => Some(read_recorded(index, runtime, data.version())?),
-        None => None,
-    };
+) -> Result<Vec<Enumerated>, Next> {
+    let bytes: u64 = candidates.iter().map(|file| size_of(&file.disk)).sum();
+    let mut task = (!candidates.is_empty())
+        .then(|| progress.begin(t!("track.enumerating").to_string(), Some(bytes)));
 
-    if replace {
-        let Some(recorded) = &recorded else {
-            return Err(ErrorTrackReplace {
-                path: file.path.as_str().to_owned(),
-                kind: ReplaceError::Unrecorded,
-            }
-            .into());
+    let mut enumerated = Vec::with_capacity(candidates.len());
+
+    for file in candidates {
+        let size = size_of(&file.disk);
+
+        let recorded = match &file.data {
+            Some(data) => Some(read_recorded(index, runtime, data.version())?),
+            None => None,
         };
 
-        // Replacing a merge would drop what was joined in: a version has one base, and a merge is
-        // the record of there being two.
-        if recorded.variant.join().is_some() {
-            return Err(ErrorTrackReplace {
-                path: file.path.as_str().to_owned(),
-                kind: ReplaceError::Merge,
+        if replace {
+            let Some(recorded) = &recorded else {
+                return Err(ErrorTrackReplace {
+                    path: file.path.as_str().to_owned(),
+                    kind: ReplaceError::Unrecorded,
+                }
+                .into());
+            };
+
+            // Replacing a merge would drop what was joined in: a version has one base, and a merge is
+            // the record of there being two.
+            if recorded.variant.join().is_some() {
+                return Err(ErrorTrackReplace {
+                    path: file.path.as_str().to_owned(),
+                    kind: ReplaceError::Merge,
+                }
+                .into());
             }
-            .into());
         }
+
+        let key = key_of_file(&file.disk).map_err(|error| fail(error.to_string()))?;
+        let changed =
+            replace || recorded.as_ref().is_none_or(|recorded| recorded.storage != *key.digest());
+
+        if let Some(task) = &mut task {
+            task.advance_by(size);
+        }
+
+        enumerated.push(Enumerated {
+            file,
+            changed,
+            recorded,
+        });
     }
 
-    let storage = runtime
-        .block_on(store_file(store, &file.disk))
-        .map_err(|error| fail(error.to_string()))?;
+    Ok(enumerated)
+}
 
-    let changed = recorded
-        .as_ref()
-        .is_none_or(|recorded| recorded.storage != *storage.digest());
+/// Puts the content of every file that is to be recorded into the store.
+///
+/// These are the files [`enumerate`] found changed, so nothing else is written: a file whose content the
+/// store already has has nothing to put there. Each is read again, which is what makes this a pass of its
+/// own and what its bar is drawn over — the price of having asked for the message before writing.
+///
+/// # Errors
+///
+/// Renders [`ErrorTrackFailed`] when the store refuses to write a file.
+fn write(
+    store: &RorolalaStorage,
+    runtime: &tokio::runtime::Runtime,
+    progress: &Progress,
+    changing: Vec<Enumerated>,
+) -> Result<Vec<Staged>, Next> {
+    let bytes: u64 = changing.iter().map(|file| size_of(&file.file.disk)).sum();
+    let mut task = (!changing.is_empty())
+        .then(|| progress.begin(t!("track.writing").to_string(), Some(bytes)));
 
-    Ok((storage, changed, recorded))
+    let mut staged = Vec::with_capacity(changing.len());
+
+    for Enumerated {
+        file,
+        recorded,
+        ..
+    } in changing
+    {
+        let size = size_of(&file.disk);
+
+        let storage = runtime
+            .block_on(store_file(store, &file.disk))
+            .map_err(|error| fail(error.to_string()))?;
+
+        if let Some(task) = &mut task {
+            task.advance_by(size);
+        }
+
+        staged.push(Staged {
+            file,
+            storage,
+            recorded,
+        });
+    }
+
+    Ok(staged)
+}
+
+/// How large a file is, or nothing when it cannot be looked at.
+///
+/// Used for the bars alone, which are measured in bytes: a size that cannot be read is nothing to draw
+/// rather than a failure, since the write that follows reports the failure in its own words.
+fn size_of(path: &Path) -> u64 {
+    fs::metadata(path).map_or(0, |data| data.len())
 }
 
 /// Makes a version of the staged content and makes the Layout name it.
@@ -1270,12 +1414,12 @@ fn verify_variant_file(
 fn replaced_messages(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
-    files: &[&Staged],
+    files: &[Enumerated],
 ) -> Result<Vec<String>, Next> {
     let mut messages = Vec::with_capacity(files.len());
 
     for file in files {
-        // UNWRAP: `stage` refuses a file the Layout records nothing for when `--replace` was asked
+        // UNWRAP: `enumerate` refuses a file the Layout records nothing for when `--replace` was asked
         // for, so every changing file here has a version whose words can be read.
         let recorded = file.recorded.as_ref().unwrap();
 
