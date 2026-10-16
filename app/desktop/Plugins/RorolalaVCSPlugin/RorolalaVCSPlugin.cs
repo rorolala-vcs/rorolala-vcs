@@ -50,14 +50,19 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // because who holds an entry is Rorolala's question and the answer comes through the C ABI.
         RorolalaLocks.Declare(host);
 
-        // What an entry's menu offers about who holds it: the two ownership commands, plain and forced.
-        OwnershipActions.Declare(host);
+        // What every command this plugin runs reports itself to: a card per command down the Overview, drawn by
+        // whoever reached for the command — the strip, an entry's menu — and read by the Overview's panel.
+        var hub = new ProgressHub();
 
         // And what the work is looked at through: the three docks, which are this plugin's own windows
         // rather than anything the File System plugin is asked for. What they will hold is Rorolala's,
         // while the base directory they are read against is that plugin's — which is why the two are one
         // plugin depending on another (see RorolalaDocks).
-        RorolalaDocks.Declare(host, Manifest.Id);
+        RorolalaDocks.Declare(host, Manifest.Id, hub);
+
+        // What an entry's menu offers about who holds it: the two ownership commands, plain and forced, each of
+        // which reports itself to the hub while it goes.
+        OwnershipActions.Declare(host, hub);
     }
 
     /// <summary>

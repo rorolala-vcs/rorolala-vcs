@@ -38,8 +38,9 @@ internal sealed class OverviewDock : IDockView
     /// <param name="log">Where a reading that could not be made is said.</param>
     /// <param name="files">What the files may have done, which the reading is made again for.</param>
     /// <param name="refocus">The host's windows being come back to, which the reading is made again for too.</param>
-    public OverviewDock(IPluginHost host, ILog log, IFileChanges files, IRefocus refocus) =>
-        _view = new OverviewView(host, log, files, refocus);
+    /// <param name="hub">What every command this plugin runs reports itself to.</param>
+    public OverviewDock(IPluginHost host, ILog log, IFileChanges files, IRefocus refocus, ProgressHub hub) =>
+        _view = new OverviewView(host, log, files, refocus, hub);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -347,12 +348,16 @@ internal sealed class OverviewView : UserControl
     /// <param name="log">Where a reading that could not be made is said.</param>
     /// <param name="files">What the files may have done.</param>
     /// <param name="refocus">The host's windows being come back to.</param>
-    public OverviewView(IPluginHost host, ILog log, IFileChanges files, IRefocus refocus)
+    /// <param name="hub">What every command this plugin runs reports itself to.</param>
+    public OverviewView(IPluginHost host, ILog log, IFileChanges files, IRefocus refocus, ProgressHub hub)
     {
+        ArgumentNullException.ThrowIfNull(hub);
+
         _host = host;
         _log = log;
         _files = files;
         _refocus = refocus;
+        _hub = hub;
 
         _notice = new TextBlock
         {
@@ -366,11 +371,12 @@ internal sealed class OverviewView : UserControl
 
         _blocks = new StackPanel();
 
-        // The sync's own state, which the strip in the dock's header and the panel down the right are two
-        // drawings of: the two are made here together, and neither of them keeps any of it.
-        _sync = new SyncWatcher(_host, _log);
+        // The sync's own state, which the strip in the dock's header draws from; what the runs of every command
+        // say is gathered in the hub, which the panel down the right draws from and which every place a command
+        // may be run from — the strip, an entry's menu — writes to.
+        _sync = new SyncWatcher(_host, _log, hub);
         _strip = new SyncStrip(_host, _sync, () => BaseDirectory.Current, Refresh);
-        _panel = new SyncPanel(_sync);
+        _panel = new ProgressPanel(hub);
 
         var root = new Grid();
 
@@ -417,14 +423,21 @@ internal sealed class OverviewView : UserControl
             // on: a plan costs a fetch of the Vault's Layout, and a listing left open would ask every five
             // seconds for as long as it was looked at.
             _sync.Plan(BaseDirectory.Current);
+
+            // The width follows what is running for as long as the dock is looked at: a hub outlives every dock,
+            // and a handler left on it when the dock closes would keep the whole view alive for nothing.
+            _hub.Changed += Sizing;
         };
 
-        DetachedFromVisualTree += (_, _) => Listen(false);
+        DetachedFromVisualTree += (_, _) =>
+        {
+            Listen(false);
+            _hub.Changed -= Sizing;
+        };
 
-        // What a run is doing decides whether the panel has anywhere to stand: with none going, the room down
-        // the right is given back to the table rather than left as an empty third of the dock.
-        _sync.Changed += (_, _) => Split(_sync.Running);
-        Split(_sync.Running);
+        // What a command is doing decides whether the panel has anywhere to stand: with nothing shown, the room
+        // down the right is given back to the table rather than left as an empty third of the dock.
+        Split(hub.Any);
 
         Draw();
     }
@@ -450,6 +463,17 @@ internal sealed class OverviewView : UserControl
         _panelColumn.Width = new GridLength(running ? PanelShare : 0, GridUnitType.Star);
     }
 
+    /// <summary>Redraws the width the panel stands in, which every change to the runs may have moved.</summary>
+    /// <param name="sender">What raised it.</param>
+    /// <param name="changed">The event.</param>
+    private void Sizing(object? sender, EventArgs changed)
+    {
+        _ = sender;
+        _ = changed;
+
+        Split(_hub.Any);
+    }
+
     /// <summary>What the dock's header carries, which is the sync strip with the reading's own refresh in it.</summary>
     /// <remarks>
     /// One control rather than a run of commands, because what is in it is more than buttons: three that belong
@@ -461,11 +485,14 @@ internal sealed class OverviewView : UserControl
     /// <summary>What the reading is drawn from, and what a sync is watched by.</summary>
     private readonly SyncWatcher _sync;
 
+    /// <summary>What every command this plugin runs reports itself to, which the width of the panel follows.</summary>
+    private readonly ProgressHub _hub;
+
     /// <summary>The strip the dock's header carries.</summary>
     private readonly SyncStrip _strip;
 
-    /// <summary>What a run that is going is drawn as, down the right of the reading.</summary>
-    private readonly SyncPanel _panel;
+    /// <summary>What every command this plugin runs is drawn as, down the right of the reading.</summary>
+    private readonly ProgressPanel _panel;
 
     /// <summary>The column the reading takes, which is the whole width while no run is going.</summary>
     private readonly ColumnDefinition _tableColumn = new(new GridLength(TableShare, GridUnitType.Star));

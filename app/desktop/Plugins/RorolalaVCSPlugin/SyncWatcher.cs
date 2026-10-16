@@ -1,4 +1,3 @@
-using Avalonia.Media;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -6,12 +5,13 @@ using RorolalaDesktop.I18n;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// What the sync buttons and the bar under them are drawn from.
+/// The sync's own state: what the buttons are drawn from, and what a run of theirs is begun as.
 /// </summary>
 /// <remarks>
-/// One of these belongs to a dock's view, and both the strip in the dock's header and the panel down the right
-/// of the view read it: whether there is work to carry, whether a run is going, and what that run has said of
-/// itself. The two are two drawings of one answer, so neither keeps any of it.
+/// One of these belongs to a dock's view, and the strip in the dock's header reads it: whether there is work to
+/// carry, whether a run is going, and why not when there is not. What the run says while it goes is not kept here
+/// but written to the <see cref="ProgressHub"/>, which is what the panel down the Overview's right draws from:
+/// the run's card stands beside the cards of every other command this plugin may be running.
 /// <para>
 /// The plan is asked for off the window's thread, because asking costs a fetch of the Vault's Layout: a dock
 /// that asked on its own thread would freeze while the network answered. Every change is said on the window's
@@ -20,22 +20,31 @@ namespace RorolalaVCSPlugin;
 /// </remarks>
 internal sealed class SyncWatcher
 {
+    /// <summary>The i18n key of what a sync run is called in the panel.</summary>
+    private const string TitleKey = "rorolala_vcs.progress.sync";
+
     /// <summary>The host, for the question a run is asked before it starts and for the files having changed.</summary>
     private readonly IPluginHost _host;
 
     /// <summary>Where a plan that could not be read is said, rather than in the window.</summary>
     private readonly ILog _log;
 
+    /// <summary>What every run this plugin makes is gathered in, which the sync's own run joins.</summary>
+    private readonly ProgressHub _hub;
+
     /// <summary>Makes the watcher.</summary>
     /// <param name="host">The host.</param>
     /// <param name="log">Where a reading that could not be made is said.</param>
-    public SyncWatcher(IPluginHost host, ILog log)
+    /// <param name="hub">What every run this plugin makes is gathered in.</param>
+    public SyncWatcher(IPluginHost host, ILog log, ProgressHub hub)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(hub);
 
         _host = host;
         _log = log;
+        _hub = hub;
     }
 
     /// <summary>Whether there is work to carry, which is what the three buttons are pressable for.</summary>
@@ -44,11 +53,8 @@ internal sealed class SyncWatcher
     /// <summary>Why there is none, which is what the strip says when the pointer rests on it.</summary>
     public string? Why { get; private set; }
 
-    /// <summary>Whether a run is going, which the buttons and the bar are drawn by.</summary>
+    /// <summary>Whether a run is going, which the buttons are drawn by.</summary>
     public bool Running { get; private set; }
-
-    /// <summary>What the run going now has said about itself.</summary>
-    public SyncProgress Progress { get; } = new();
 
     /// <summary>Whether a sync may be begun at all.</summary>
     public bool Pressable => Ready && !Running;
@@ -138,8 +144,11 @@ internal sealed class SyncWatcher
     private void Begin(string directory, SyncWay way, SyncScope scope, bool force)
     {
         Running = true;
-        Progress.Reset();
         Changed?.Invoke(this, EventArgs.Empty);
+
+        // The run's card is opened before the work is handed off, so that the panel has a card to draw for it the
+        // moment the run is said to be going — see the hub for why the runs are gathered there rather than here.
+        var run = _hub.Begin(TitleKey);
 
         _ = Task.Run(() =>
         {
@@ -148,16 +157,20 @@ internal sealed class SyncWatcher
                 way,
                 scope,
                 force,
-                // What the run says is read into the one progress the panel draws from, and every record says so
-                // on the window's thread: the run is on another one, and a control touched from there is a control
-                // touched by two threads at once.
-                Progress,
-                () => On(() => Changed?.Invoke(this, EventArgs.Empty))
+                // What the run says is read into the run's own records, and every record says so on the window's
+                // thread: the run is on another one, and a control touched from there is a control touched by two
+                // threads at once.
+                run.Records,
+                _hub.Touch
             );
 
             On(() =>
             {
                 Running = false;
+
+                // The card is let go of here rather than when the run is over, because the panel keeps it for a
+                // few seconds after: what ended is drawn as ended before it is taken away.
+                _hub.End(run);
 
                 if (!done)
                 {

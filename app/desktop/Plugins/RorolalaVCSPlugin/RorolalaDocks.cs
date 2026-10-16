@@ -58,11 +58,19 @@ internal static class RorolalaDocks
     /// </remarks>
     /// <param name="host">The host, whose dock registry they are registered with.</param>
     /// <param name="owner">This plugin, which is what the registrations are attributed to.</param>
-    public static void Declare(IPluginHost host, PluginId owner)
+    /// <param name="hub">What every command this plugin runs reports itself to, which the Overview draws.</param>
+    public static void Declare(IPluginHost host, PluginId owner, ProgressHub hub)
     {
         ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(hub);
 
-        Add(host, owner, OverviewNameId, OverviewKey, _ => new OverviewDock(host, host.Log, host.Files, host.Refocus));
+        Add(
+            host,
+            owner,
+            OverviewNameId,
+            OverviewKey,
+            _ => new OverviewDock(host, host.Log, host.Files, host.Refocus, hub)
+        );
         Add(host, owner, WorkspaceNameId, WorkspaceKey, _ => new RorolalaDock(host.Log));
         Add(host, owner, VersionGraphNameId, VersionGraphKey, _ => new RorolalaDock(host.Log));
     }

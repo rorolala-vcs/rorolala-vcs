@@ -278,18 +278,6 @@ rorolala_vcs:
     storage:
       en: Sync the storage
       zh-CN: 同步存储
-    working:
-      en: Syncing…
-      zh-CN: 正在同步……
-
-    # What a row of the sync panel calls a direction. The panel draws one row per bar a run reports, and a
-    # direction of a transfer is one of them; a task that has a name of its own is read by that name instead.
-    row_up:
-      en: Uploading
-      zh-CN: 上传中
-    row_down:
-      en: Updating
-      zh-CN: 更新中
     confirm_title:
       en: Sync with something left out?
       zh-CN: 要跳过一部分来同步吗？
@@ -347,6 +335,29 @@ rorolala_vcs:
     warn_nothing:
       en: The Layout, the index and the storage are all left out — so this run changes nothing at all. Confirm?
       zh-CN: 不同步布局、索引和仓库，这会使本次运行不做任何改动，请确认。
+
+  # What the Overview's progress panel says of the commands this plugin runs: a card per command, named for
+  # what the command does, and a bar per task the command reports. A task that names itself is read by that
+  # name, and one that does not is read by the direction its work moves — or as simply working.
+  progress:
+    sync:
+      en: Syncing
+      zh-CN: 同步数据
+    hold:
+      en: Taking ownership
+      zh-CN: 申请所有权
+    giveup:
+      en: Giving up ownership
+      zh-CN: 放弃所有权
+    row_up:
+      en: Uploading
+      zh-CN: 上传中
+    row_down:
+      en: Updating
+      zh-CN: 更新中
+    working:
+      en: Working…
+      zh-CN: 处理中……
 
   # What the Overview offers to do about a row, one line each: what a button says and what it is hovered for
   # are the same words, since a button's label is what it does. Every one of them is a mode of `rola align`,

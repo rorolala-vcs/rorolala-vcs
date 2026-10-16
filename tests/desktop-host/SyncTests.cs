@@ -196,7 +196,7 @@ public sealed class SyncTests
     [Fact]
     public void WhatARunSaysAboutItselfIsReadIntoTheTasks()
     {
-        var records = new SyncProgress();
+        var records = new ProgressRecords();
 
         Assert.Empty(records.Tasks);
 
@@ -224,7 +224,7 @@ public sealed class SyncTests
         );
 
         Assert.Equal(2, records.Tasks.Count);
-        Assert.Equal(SyncAim.Up, records.Tasks[1].Aim);
+        Assert.Equal(MoveAim.Up, records.Tasks[1].Aim);
 
         // A piece of the direction, which is not a bar: it is what the direction says it is moving.
         Assert.True(
@@ -242,11 +242,14 @@ public sealed class SyncTests
         Assert.True(records.Read("""{"signal":"advance","id":2,"done":4}"""));
         Assert.Equal(4, records.Tasks[1].Done);
 
-        // A task that finished is taken off, and what it said as it went goes with it.
+        // A task that finished is kept and marked full, what it was moving let go of: the panel's card outlives
+        // its run, so a bar that vanished the moment its work ended would leave the card with nothing to show.
         Assert.True(records.Read("""{"signal":"finish","id":2}"""));
 
-        Assert.Single(records.Tasks);
-        Assert.Equal(3, records.Tasks[0].Total);
+        Assert.Equal(2, records.Tasks.Count);
+        Assert.Equal(10, records.Tasks[1].Total);
+        Assert.Equal(10, records.Tasks[1].Done);
+        Assert.Null(records.Tasks[1].Moving);
 
         // And what a run said before is let go of, so that the next run's rows start at its own first record.
         records.Reset();
@@ -262,7 +265,7 @@ public sealed class SyncTests
     [Fact]
     public void ARecordThisDoesNotKnowIsIgnored()
     {
-        var records = new SyncProgress();
+        var records = new ProgressRecords();
 
         Assert.True(records.Read("""{"signal":"begin","id":7,"parent":null,"what":"","total":2}"""));
 

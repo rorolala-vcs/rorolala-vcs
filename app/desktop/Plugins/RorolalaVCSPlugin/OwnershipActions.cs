@@ -39,6 +39,16 @@ internal static class OwnershipActions
     private const string Program = "ROLA_EXE";
 
     /// <summary>
+    /// The flag that has the command write its progress as one JSON record per line on its error stream.
+    /// </summary>
+    /// <remarks>
+    /// The same flag the sync is run with: what is read here is the records the command writes about itself, and
+    /// they are written only when the run is being read by a program rather than watched by a person. The result
+    /// crosses as JSON too, which is no loss — nothing here reads it on the way through.
+    /// </remarks>
+    private const string Json = "--json";
+
+    /// <summary>
     /// Registers what an entry's menu offers about who holds it.
     /// </summary>
     /// <remarks>
@@ -47,19 +57,21 @@ internal static class OwnershipActions
     /// difference and the command does not.
     /// </remarks>
     /// <param name="host">The host, whose context menus they are registered with.</param>
-    public static void Declare(IPluginHost host)
+    /// <param name="hub">What every run this plugin makes is gathered in, which a run of these joins.</param>
+    public static void Declare(IPluginHost host, ProgressHub hub)
     {
         ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(hub);
 
-        Add(host, ContextMenuTarget.File, "hold_file", Icons.Lock, "hold", false, 10);
-        Add(host, ContextMenuTarget.File, "give_file", Icons.LockOpen, "giveup", false, 20);
-        Add(host, ContextMenuTarget.File, "hold_file_forced", Icons.Lock, "hold", true, 30);
-        Add(host, ContextMenuTarget.File, "give_file_forced", Icons.LockOpen, "giveup", true, 40);
+        Add(host, hub, ContextMenuTarget.File, "hold_file", Icons.Lock, "hold", false, 10);
+        Add(host, hub, ContextMenuTarget.File, "give_file", Icons.LockOpen, "giveup", false, 20);
+        Add(host, hub, ContextMenuTarget.File, "hold_file_forced", Icons.Lock, "hold", true, 30);
+        Add(host, hub, ContextMenuTarget.File, "give_file_forced", Icons.LockOpen, "giveup", true, 40);
 
-        Add(host, ContextMenuTarget.Directory, "hold_directory", Icons.Lock, "hold", false, 10);
-        Add(host, ContextMenuTarget.Directory, "give_directory", Icons.LockOpen, "giveup", false, 20);
-        Add(host, ContextMenuTarget.Directory, "hold_directory_forced", Icons.Lock, "hold", true, 30);
-        Add(host, ContextMenuTarget.Directory, "give_directory_forced", Icons.LockOpen, "giveup", true, 40);
+        Add(host, hub, ContextMenuTarget.Directory, "hold_directory", Icons.Lock, "hold", false, 10);
+        Add(host, hub, ContextMenuTarget.Directory, "give_directory", Icons.LockOpen, "giveup", false, 20);
+        Add(host, hub, ContextMenuTarget.Directory, "hold_directory_forced", Icons.Lock, "hold", true, 30);
+        Add(host, hub, ContextMenuTarget.Directory, "give_directory_forced", Icons.LockOpen, "giveup", true, 40);
     }
 
     /// <summary>Whether this plugin has anything to say about what a menu was opened on.</summary>
@@ -106,6 +118,7 @@ internal static class OwnershipActions
 
     /// <summary>Registers one of the eight.</summary>
     /// <param name="host">The host.</param>
+    /// <param name="hub">What the run's card is begun in.</param>
     /// <param name="target">Which kind of entry it is offered for.</param>
     /// <param name="label">The name of the label key, under the menu's own branch.</param>
     /// <param name="icon">The picture it wears.</param>
@@ -114,6 +127,7 @@ internal static class OwnershipActions
     /// <param name="order">Where it sits among the others of its kind.</param>
     private static void Add(
         IPluginHost host,
+        ProgressHub hub,
         ContextMenuTarget target,
         string label,
         string icon,
@@ -126,7 +140,7 @@ internal static class OwnershipActions
             new ContextMenuItem(
                 $"rorolala_vcs.ownership_menu.{label}",
                 order,
-                was => Run(verb, was, force, host),
+                was => Run(verb, was, force, host, hub),
                 icon,
                 force,
                 Knows
@@ -148,7 +162,14 @@ internal static class OwnershipActions
     /// <param name="target">What the menu was opened on, the entry right-clicked first.</param>
     /// <param name="force">Whether the checks are to be gone past.</param>
     /// <param name="host">The host, for the report and for saying the files may have changed.</param>
-    private static void Run(string verb, ContextTarget target, bool force, IPluginHost host)
+    /// <param name="hub">What every run this plugin makes is gathered in, which this run's card is begun in.</param>
+    private static void Run(
+        string verb,
+        ContextTarget target,
+        bool force,
+        IPluginHost host,
+        ProgressHub hub
+    )
     {
         var program = Environment.GetEnvironmentVariable(Program);
 
@@ -161,7 +182,7 @@ internal static class OwnershipActions
             return;
         }
 
-        var arguments = new List<string> { "--theme-choice=" + Theme, verb };
+        var arguments = new List<string> { "--theme-choice=" + Theme, Json, verb };
 
         if (force)
         {
@@ -180,9 +201,18 @@ internal static class OwnershipActions
             arguments.Add(Path.GetRelativePath(target.Directory, entry.Path));
         }
 
+        // The run's card down the Overview is opened before the work is handed off, so that it is there to be
+        // drawn from the moment the command begins — see the hub for why the runs are gathered rather than kept
+        // where they were begun.
+        var run = hub.Begin(TitleKey(verb));
+
         _ = Task.Run(() =>
         {
-            var (done, said) = Ask(program, arguments, target.Directory);
+            var (done, said) = Ask(program, arguments, target.Directory, run.Records, hub.Touch);
+
+            // The card is let go of here rather than when the command is over, because the panel keeps it for a
+            // few seconds after: what ended is drawn as ended before it is taken away.
+            hub.End(run);
 
             // Either way the files may have moved, which is what the listing reads again for.
             host.Files.Touch();
@@ -201,6 +231,12 @@ internal static class OwnershipActions
             }
         });
     }
+
+    /// <summary>What a run of one of the two commands is called in the Overview's panel.</summary>
+    /// <param name="verb">Which command it is.</param>
+    /// <returns>The i18n key of its name.</returns>
+    private static string TitleKey(string verb) =>
+        verb == "hold" ? "rorolala_vcs.progress.hold" : "rorolala_vcs.progress.giveup";
 
     /// <summary>
     /// What a colour named inside a message stands for.
@@ -229,15 +265,24 @@ internal static class OwnershipActions
     /// Both streams are drained while it runs, so that a command that fills one pipe while this waits on the
     /// other cannot block against itself. What it said on its error stream is what is reported, unphrased:
     /// the words are the command's own, and it is the one that knows what went wrong.
+    /// <para>
+    /// The error stream carries the command's progress as well as its words: a line that reads as a record is
+    /// what the run is drawn from, and what is left is what it said. The records are read line by line as they
+    /// are written, rather than the whole stream at once, so that the card moves while the command works.
+    /// </para>
     /// </remarks>
     /// <param name="program">The program to run.</param>
     /// <param name="arguments">What to run it with.</param>
     /// <param name="directory">Where to run it, which is where the names it was given are read from.</param>
+    /// <param name="records">What the run's records are read into, which the panel draws.</param>
+    /// <param name="progress">What is told that a record was said, which redraws on the window's thread.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
     private static (bool Done, string Said) Ask(
         string program,
         IReadOnlyList<string> arguments,
-        string directory
+        string directory,
+        ProgressRecords records,
+        Action progress
     )
     {
         var start = new ProcessStartInfo
@@ -265,24 +310,36 @@ internal static class OwnershipActions
             using var process =
                 Process.Start(start) ?? throw new InvalidOperationException("the process was not started");
 
-            var error = Task.Run(() => process.StandardError.ReadToEnd());
+            // The output is drained on a task of its own rather than read after the wait: a run that filled
+            // the pipe this side is not reading would wait for a reader that is waiting for it to end.
             var output = Task.Run(() => process.StandardOutput.ReadToEnd());
+            var said = new StringBuilder();
+
+            while (process.StandardError.ReadLine() is { } line)
+            {
+                if (!records.Read(line) && line.Length > 0)
+                {
+                    said.AppendLine(line);
+                }
+
+                progress();
+            }
 
             process.WaitForExit();
-
-            var said = error.GetAwaiter().GetResult().Trim();
 
             if (process.ExitCode == 0)
             {
                 return (true, string.Empty);
             }
 
-            if (said.Length == 0)
+            var told = said.ToString().Trim();
+
+            if (told.Length == 0)
             {
-                said = output.GetAwaiter().GetResult().Trim();
+                told = output.GetAwaiter().GetResult().Trim();
             }
 
-            return (false, said.Length == 0 ? $"the command ended with {process.ExitCode}" : said);
+            return (false, told.Length == 0 ? $"the command ended with {process.ExitCode}" : told);
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
