@@ -536,7 +536,9 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// Three grounds rather than one: content sits on the ground, chrome and a control sit on the
-    /// elevated one, and what is hovered, held or welled sits in the sunken one. The ramp of ink is
+    /// elevated one, and what is held or welled sits in the sunken one. A surface under the pointer is the
+    /// one that steps the other way — away from its own face — because which way a hover reads is which way
+    /// the ground lets it (see <see cref="Grounds.Hover"/>). The ramp of ink is
     /// three steps rather than an opacity, so that text is legible by construction rather than by
     /// arithmetic - and the two semantic pairs are the look's own, not the user's to choose, because
     /// what a failure is coloured is not a preference.
@@ -590,6 +592,28 @@ internal sealed class RorolalaTheme
         /// either ground and neither is a different colour.
         /// </remarks>
         public Color Strong => Mix(Border, Fg, 0.25);
+
+        /// <summary>
+        /// The colour a surface takes under the pointer.
+        /// </summary>
+        /// <remarks>
+        /// The step is taken from the face towards the ink, so that it goes whichever way reads on the
+        /// ground it is drawn on: a light look darkens under the pointer and a dark look brightens. What a
+        /// hover is for is being seen, and a step that only ever darkened — the hollow of the ground, say —
+        /// is barely there on a dark ground; a hover the eye cannot catch reads as lag even where there is
+        /// none to feel, which is the whole of what this token is for. Being a step rather than a colour of
+        /// its own, it also holds for whatever ink and ground the user chose.
+        /// </remarks>
+        public Color Hover => Mix(Elevated, Fg, HoverStep);
+
+        /// <summary>
+        /// How far towards the ink the pointer's step goes.
+        /// </summary>
+        /// <remarks>
+        /// A small part of the way: enough to be told from the face at a glance on either ground, and not
+        /// so far that it reads as a chosen surface, which is the primary's wash's to say.
+        /// </remarks>
+        private const double HoverStep = 0.15;
 
         /// <summary>What was added, which is the green on either ground rather than one chosen.</summary>
         /// <remarks>
@@ -700,8 +724,9 @@ internal sealed class RorolalaTheme
     /// The look's own names and <em>the base theme's</em> are both written, because the base theme
     /// draws most of what a control does from its own resources: naming those is what turns a whole
     /// program's selection, hover, border and ink with two colours rather than a rule per control. The
-    /// mapping is the design's: a control's surface is the elevated ground, what is hovered or held is
-    /// the sunken one, the two border weights are two of the three, and a chosen row is the primary
+    /// mapping is the design's: a control's surface is the elevated ground, what is held is the sunken
+    /// one, what the pointer is on steps away from that surface (see <see cref="Grounds.Hover"/>), the two
+    /// border weights are two of the three, and a chosen row is the primary
     /// wash the base theme's accent family is filled with.
     /// </remarks>
     /// <param name="grounds">The variant's own neutrals.</param>
@@ -730,10 +755,12 @@ internal sealed class RorolalaTheme
             ["ThemeControlVeryHighBrush"] = Fill(grounds.Strong),
             ["ThemeControlHighlightLowColor"] = grounds.Sunken,
             ["ThemeControlHighlightLowBrush"] = Fill(grounds.Sunken),
-            // A row under the pointer is the sunken ground, not the opaque grey the base theme ships:
-            // it is the one place where a hover would otherwise be the wrong colour entirely.
-            ["ThemeControlHighlightMidColor"] = grounds.Sunken,
-            ["ThemeControlHighlightMidBrush"] = Fill(grounds.Sunken),
+            // A row under the pointer steps away from its own face rather than sinking into the hollow the
+            // ground has: the hollow is the wrong way on a dark look, where a hover has to brighten to be
+            // seen — and a hover the eye does not catch is read as lag. See `Grounds.Hover` for which way the
+            // step goes and why.
+            ["ThemeControlHighlightMidColor"] = grounds.Hover,
+            ["ThemeControlHighlightMidBrush"] = Fill(grounds.Hover),
             ["ThemeControlHighlightHighColor"] = grounds.Strong,
             ["ThemeControlHighlightHighBrush"] = Fill(grounds.Strong),
             ["ThemeForegroundColor"] = grounds.Fg,
