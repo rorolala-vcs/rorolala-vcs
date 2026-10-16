@@ -9,15 +9,15 @@ using RorolalaDesktop.I18n;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// The three docks this plugin shows: what the work is looked at through.
+/// The docks this plugin shows: what the work is looked at through, and what the accounts are.
 /// </summary>
 /// <remarks>
 /// The Overview is the view of the work that is there — how it stands beside the Layout it works from,
-/// which is the reading `rola status` makes (see <see cref="OverviewDock"/>). The other two are empty
-/// for now, and what they carry while they are is the one thing that is already known about them:
-/// where the File System plugin is rooted. What Rorolala works on is a Workspace, and a base directory
-/// that no Workspace holds has nothing under it for any of them to look at, which is worth saying
-/// rather than leaving a blank view of the work to be read as a work with nothing in it.
+/// which is the reading `rola status` makes (see <see cref="OverviewDock"/>). The Workspace and Version
+/// Graph docks are still to be written, and what the two carry while they are is a line about where the
+/// tree is rooted. The Accounts dock is the machine's own key pairs — which account the work acts as, and
+/// what may be done about them (see <see cref="AccountsDock"/>) — which is not about one work but about
+/// the person, and so is a dock of its own rather than a part of the Overview.
 /// <para>
 /// The base is read through <see cref="BaseDirectory"/>, the File System plugin's published answer,
 /// because that plugin is the one that owns where the browser works: a dock of this one that went
@@ -40,6 +40,10 @@ internal static class RorolalaDocks
     /// <remarks>Written into dock layout, so it must not change once shipped.</remarks>
     public const string VersionGraphNameId = "rorolala.vcs.version_graph";
 
+    /// <summary>The stable name of the Accounts dock.</summary>
+    /// <remarks>Written into dock layout, so it must not change once shipped.</remarks>
+    public const string AccountsNameId = "rorolala.vcs.accounts";
+
     /// <summary>What the Window menu lists the Overview dock as.</summary>
     private const string OverviewKey = "rorolala_vcs.dock.overview";
 
@@ -49,12 +53,16 @@ internal static class RorolalaDocks
     /// <summary>What the Window menu lists the Version Graph dock as.</summary>
     private const string VersionGraphKey = "rorolala_vcs.dock.version_graph";
 
+    /// <summary>What the Window menu lists the Accounts dock as.</summary>
+    private const string AccountsKey = "rorolala_vcs.dock.accounts";
+
     /// <summary>
-    /// Registers the three, each under its own title.
+    /// Registers them, each under its own title.
     /// </summary>
     /// <remarks>
-    /// Two of the three are still a line saying that the base is not a Workspace, since what each will
-    /// hold is not written yet; the Overview is the view of the work that is there.
+    /// Two of them are still a line saying that the base is not a Workspace, since what each will
+    /// hold is not written yet; the Overview is the view of the work that is there, and the Accounts is
+    /// the machine's own key pairs.
     /// </remarks>
     /// <param name="host">The host, whose dock registry they are registered with.</param>
     /// <param name="owner">This plugin, which is what the registrations are attributed to.</param>
@@ -73,10 +81,11 @@ internal static class RorolalaDocks
         );
         Add(host, owner, WorkspaceNameId, WorkspaceKey, _ => new RorolalaDock(host.Log));
         Add(host, owner, VersionGraphNameId, VersionGraphKey, _ => new RorolalaDock(host.Log));
+        Add(host, owner, AccountsNameId, AccountsKey, _ => new AccountsDock(host));
     }
 
     /// <summary>
-    /// Registers one of the three.
+    /// Registers one of them.
     /// </summary>
     /// <remarks>
     /// A toggle, because what a view of the work is, is one view of it: asking for one that is already
@@ -117,6 +126,33 @@ internal sealed class RorolalaDock : IDockView
 
     /// <inheritdoc />
     public IReadOnlyList<DockHeaderItem> Header => [];
+}
+
+/// <summary>
+/// The accounts dock: the accounts on this machine, and what may be done about them.
+/// </summary>
+/// <remarks>
+/// A view of the person rather than of one work: which account the work acts as is Rorolala's own file for the
+/// user rather than any one Workspace's, so it is a dock of its own rather than a part of the Overview, which is
+/// about one tree. Everything about it is read through the command line, which is where the accounts are.
+/// </remarks>
+internal sealed class AccountsDock : IDockView
+{
+    /// <summary>The control the dock shows.</summary>
+    private readonly AccountsPanel _view;
+
+    /// <summary>Makes the dock.</summary>
+    /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
+    public AccountsDock(IPluginHost host) => _view = new AccountsPanel(host, host.Log);
+
+    /// <inheritdoc />
+    public Control View => _view;
+
+    /// <inheritdoc />
+    public IReadOnlyList<DockHeaderItem> Header =>
+        [
+            new DockHeaderCommand("rorolala_vcs.accounts.refresh", _view.Refresh, IconKey: Icons.Refresh),
+        ];
 }
 
 /// <summary>

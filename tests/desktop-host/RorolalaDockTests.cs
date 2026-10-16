@@ -12,7 +12,7 @@ using Operation = RorolalaVCSPlugin.Operation;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// The Rorolala plugin's own docks: which three there are, and what one says about where the work is.
+/// The Rorolala plugin's own docks: which there are, and what one says about where the work is.
 /// </summary>
 /// <remarks>
 /// Nothing here draws, and nothing here makes a window. What is exercised is what the <c>Window</c> menu
@@ -28,9 +28,9 @@ public sealed class RorolalaDockTests
         EntryMarkProviders.Clear();
     }
 
-    /// <summary>The plugin adds one dock for each view of the work, named and titled apart.</summary>
+    /// <summary>The plugin adds one dock for each view it shows, named and titled apart.</summary>
     [Fact]
-    public void ThePluginRegistersTheThreeViewsOfTheWork()
+    public void ThePluginRegistersADockForEachView()
     {
         var services = Host.Services();
         var plugin = new Vcs();
@@ -42,6 +42,7 @@ public sealed class RorolalaDockTests
                 ("rorolala.vcs.overview", "rorolala_vcs.dock.overview"),
                 ("rorolala.vcs.workspace", "rorolala_vcs.dock.workspace"),
                 ("rorolala.vcs.version_graph", "rorolala_vcs.dock.version_graph"),
+                ("rorolala.vcs.accounts", "rorolala_vcs.dock.accounts"),
             ],
             services.Docks.Registrations.Select(dock => (dock.DockNameId, dock.DisplayNameKey))
         );
@@ -115,7 +116,12 @@ public sealed class RorolalaDockTests
 
             Assert.NotNull(view.Content);
 
-            if (registration.DockNameId == RorolalaDocks.OverviewNameId)
+            // The two docks that show something of their own rather than a line about the base: the Overview's
+            // table and the Accounts dock, which is about the machine rather than about a base at all.
+            if (
+                registration.DockNameId == RorolalaDocks.OverviewNameId
+                || registration.DockNameId == RorolalaDocks.AccountsNameId
+            )
             {
                 continue;
             }
@@ -528,4 +534,3 @@ public sealed class RorolalaDockTests
         return string.Join(" + ", row.Notes);
     }
 }
-

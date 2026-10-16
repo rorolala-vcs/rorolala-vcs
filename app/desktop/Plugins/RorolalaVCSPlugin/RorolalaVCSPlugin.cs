@@ -6,11 +6,11 @@ namespace RorolalaVCSPlugin;
 
 /// <summary>
 /// The Rorolala plugin: it offers Rorolala's own file operations to the File System plugin, and shows
-/// the work through three docks of its own.
+/// the work through docks of its own.
 /// </summary>
 /// <remarks>
 /// What it contributes to the browser is a preset — the <c>rola fs-ops</c> commands — and what it adds
-/// beside it is the three views of the work: Overview, Workspace and Version Graph. Both are reached by
+/// beside it is the views of the work: Overview, Workspace, Version Graph and Accounts. Both are reached by
 /// depending on the File System plugin: the reference is what lets it name
 /// <see cref="FileOperationPresets"/>, and the manifest's dependency is what has the host start this one
 /// after it. A plugin of its own rather than a part of the browser, because Rorolala's operations and

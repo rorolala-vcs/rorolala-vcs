@@ -24,6 +24,9 @@ rorolala_vcs:
     version_graph:
       en: Version Graph
       zh-CN: 版本图
+    accounts:
+      en: Accounts
+      zh-CN: 账户管理
 
   # What each of the three says while the directory the tree is rooted at is not one a Workspace
   # holds: there is nothing under such a place for them to show, and a blank view of the work would
@@ -358,6 +361,72 @@ rorolala_vcs:
     working:
       en: Working…
       zh-CN: 处理中……
+
+  # The Accounts dock: which account the work acts as, and what may be done about them. The rows are the
+  # accounts `rola account` lists, and what a row offers is a run of `rola` — naming the account the work acts
+  # as, making a pair, exporting a public key, taking a pair away. The two names `rola account` reads as its own
+  # words cannot be an account, which is why making a pair under one of them is refused.
+  accounts:
+    refresh:
+      en: Read the accounts again
+      zh-CN: 重新读取账户
+    name_watermark:
+      en: New account name
+      zh-CN: 新账户名
+    create:
+      en: Create
+      zh-CN: 创建
+    none:
+      en: There are no accounts on this machine
+      zh-CN: 本机没有任何账户
+    current:
+      en: Current
+      zh-CN: 当前
+    use:
+      en: Use
+      zh-CN: 使用
+    export:
+      en: Export public key
+      zh-CN: 导出公钥
+    export_title:
+      en: Save the public key
+      zh-CN: 保存公钥
+    remove:
+      en: Remove
+      zh-CN: 移除
+    remove_title:
+      en: Remove this account?
+      zh-CN: 要移除该账户吗？
+    remove_message:
+      en: "The key pair of `%{name}` will be deleted, and the identity it is cannot be got back. Confirm?"
+      zh-CN: "`%{name}` 的密钥对将被删除，其身份无法找回。请确认。"
+    forbidden:
+      en: "`%{name}` is a command of `rola account`, so it cannot be an account name"
+      zh-CN: "`%{name}` 是 `rola account` 的子命令，不能作为账户名"
+    no_key:
+      en: "No key file was found for `%{name}`"
+      zh-CN: "没有找到 `%{name}` 的密钥文件"
+    no_picker:
+      en: This platform offers no file picker, so the key cannot be saved
+      zh-CN: 当前平台没有文件选择面板，无法保存密钥
+    no_program:
+      en: This window was not opened by the command line, so it cannot run one
+      zh-CN: 本窗口不是由命令行打开的，因此无法运行命令
+    failed_list:
+      en: The accounts could not be listed
+      zh-CN: 无法列出账户
+    failed_use:
+      en: The account could not be made current
+      zh-CN: 无法设为当前账户
+    failed_create:
+      en: The account could not be created
+      zh-CN: 无法创建账户
+    failed_export:
+      en: The public key could not be saved
+      zh-CN: 无法保存公钥
+    failed_remove:
+      en: The account could not be removed
+      zh-CN: 无法移除账户
 
   # What the Overview offers to do about a row, one line each: what a button says and what it is hovered for
   # are the same words, since a button's label is what it does. Every one of them is a mode of `rola align`,
