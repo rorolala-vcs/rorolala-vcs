@@ -18,12 +18,17 @@
 //! letting go insists the tree agrees with the version being handed over. `--force` moves past the
 //! version, never past the holder.
 
+// The handlers' parameters are the resources the framework injects, so how many of them there are is
+// what the commands need of the run rather than a signature this program shaped. The progress setting
+// is one of those resources and is taken by reference, which is what the injection gives it.
+#![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use librorolala::auth::Account;
 use librorolala::daemon::{
-    Ownership, action_fetch_layout, action_giveup_ownership, action_request_ownership,
+    Ownership, action_fetch_layout, action_giveup_ownership_async, action_request_ownership_async,
 };
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::protocol::VaultAddress;
@@ -39,12 +44,15 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResForce, ResOffline, ResWorkspace};
+use rorolala_cli_setups::{
+    ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting, ResWorkspace,
+};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_location::normalize;
+use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 use serde::Serialize;
 use uuid::Uuid;
@@ -60,6 +68,7 @@ use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNotCached, readonly_layout_dir,
     set_cached_owner,
 };
+use crate::progress::Reporting;
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const ALIKE: f32 = 0.6;
@@ -209,6 +218,7 @@ pub fn handle_hold(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    progress: &ResProgressSetting,
 ) -> Next {
     let StateHold {
         paths,
@@ -216,7 +226,7 @@ pub fn handle_hold(
         allow_partial,
     } = state;
 
-    change(
+    run(
         Own::Hold,
         &paths,
         force,
@@ -224,6 +234,7 @@ pub fn handle_hold(
         workspace,
         remote,
         current,
+        progress,
     )
 }
 
@@ -321,6 +332,7 @@ pub fn handle_giveup(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    progress: &ResProgressSetting,
 ) -> Next {
     let StateGiveup {
         paths,
@@ -328,7 +340,7 @@ pub fn handle_giveup(
         allow_partial,
     } = state;
 
-    change(
+    run(
         Own::Giveup,
         &paths,
         force,
@@ -336,7 +348,46 @@ pub fn handle_giveup(
         workspace,
         remote,
         current,
+        progress,
     )
+}
+
+/// Runs one of the two commands, with a reader watching what the Vault is asked for.
+///
+/// Split from the handlers so that the reader is started and waited for around the run exactly once,
+/// however many ways it has of returning — the ownership moves themselves are one exchange, but the
+/// gates before them are many ways out.
+fn run(
+    kind: Own,
+    paths: &[String],
+    force: bool,
+    allow_partial: bool,
+    workspace: &mut LazyRes<ResWorkspace>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    progress: &ResProgressSetting,
+) -> Next {
+    let reporting = Reporting::start(*progress);
+
+    // The handle is let go of before the reader is waited for: the last handle dropping is what tells
+    // the reader there is nothing more to come.
+    let next = {
+        let progress = reporting.progress();
+        change(
+            kind,
+            paths,
+            force,
+            allow_partial,
+            workspace,
+            remote,
+            current,
+            &progress,
+        )
+    };
+
+    reporting.finish();
+
+    next
 }
 
 /// Moves the ownership of every entry the names stand for, once the gates have all been read.
@@ -353,6 +404,7 @@ fn change(
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    progress: &Progress,
 ) -> Next {
     workspace.get_ref().check()?;
 
@@ -453,7 +505,7 @@ fn change(
         .into();
     }
 
-    let (entries, refused) = act(kind, wanted, held, &account, &target, &vault_name);
+    let (entries, refused) = act(kind, wanted, held, &account, &target, &vault_name, progress);
     failed.extend(refused);
 
     ResultOwnership {
@@ -665,6 +717,11 @@ fn free(kind: Own, path: &LayoutPath, upstream: &MutableData, me: &str) -> Resul
 }
 
 /// Moves the ownership of everything the gates allowed, and says what the Vault refused anyway.
+///
+/// The whole batch is one exchange, over one connection: the `Uuid`s cross together and the outcomes
+/// come back together, one per entry in the order they were asked for. That is what a run naming a
+/// directory wants — one handshake rather than one per file — and the bar is drawn over the entries
+/// as they are done, so a reader is shown which one the Vault is on now.
 fn act(
     kind: Own,
     wanted: Vec<Wanted>,
@@ -672,57 +729,104 @@ fn act(
     account: &Account,
     target: &VaultAddress,
     vault_name: &str,
+    progress: &Progress,
 ) -> (Vec<OwnershipItem>, Vec<Refusal>) {
+    if wanted.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    // What the bar is called belongs to whoever watches the run, so it is said here and crosses with
+    // the entries — as JSON, since a list is not a thing the C ABI can hand over and the action's
+    // input is one string: this crate has the words and the action, run on both ends, has none.
+    let name = match kind {
+        Own::Hold => t!("ownership.holding").trim().to_string(),
+        Own::Giveup => t!("ownership.giving").trim().to_string(),
+    };
+    let ids: Vec<String> = wanted.iter().map(|item| item.id.to_string()).collect();
+    let input = match ownership_input(name, ids) {
+        Ok(input) => input,
+        Err(error) => return (Vec::new(), vec![Refusal::Failed(error.to_string())]),
+    };
+    let target = target.to_string();
+
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => return (Vec::new(), vec![Refusal::Failed(error.to_string())]),
+    };
+
+    let answer = runtime.block_on(async {
+        match kind {
+            Own::Hold => {
+                action_request_ownership_async(
+                    held,
+                    account,
+                    target.clone(),
+                    input.clone(),
+                    progress.clone(),
+                )
+                .await
+            }
+            Own::Giveup => {
+                action_giveup_ownership_async(
+                    held,
+                    account,
+                    target.clone(),
+                    input.clone(),
+                    progress.clone(),
+                )
+                .await
+            }
+        }
+    });
+
+    let outcomes: Vec<Ownership> = match answer
+        .map_err(|error| Refusal::Failed(error.to_string()))
+        .and_then(|said| {
+            serde_json::from_str(&said).map_err(|error| Refusal::Failed(error.to_string()))
+        }) {
+        Ok(outcomes) => outcomes,
+        Err(refusal) => return (Vec::new(), vec![refusal]),
+    };
+
     let mut entries = Vec::with_capacity(wanted.len());
     let mut failed = Vec::new();
 
-    for item in wanted {
-        match move_one(kind, item.id, &item.path, held, account, target, vault_name) {
-            Ok(owner) => entries.push(OwnershipItem {
+    for (item, outcome) in wanted.into_iter().zip(outcomes) {
+        match outcome {
+            Ownership::Owner(owner) => {
+                if let Err(error) = set_cached_owner(held, vault_name, item.id, owner.clone()) {
+                    failed.push(Refusal::Failed(error.to_string()));
+                    continue;
+                }
+
+                entries.push(OwnershipItem {
+                    path: item.path.as_str().to_owned(),
+                    uuid: item.id.to_string(),
+                    owner,
+                });
+            }
+            Ownership::Missing => failed.push(Refusal::Upstream(item.path.as_str().to_owned())),
+            Ownership::HeldBy(owner) => failed.push(Refusal::Taken {
                 path: item.path.as_str().to_owned(),
-                uuid: item.id.to_string(),
                 owner,
             }),
-            Err(refusal) => failed.push(refusal),
         }
     }
 
     (entries, failed)
 }
 
-/// Asks the Vault to move one entry's ownership, and writes what it agrees to into the copy.
-fn move_one(
-    kind: Own,
-    id: Uuid,
-    path: &LayoutPath,
-    held: &Workspace,
-    account: &Account,
-    target: &VaultAddress,
-    vault_name: &str,
-) -> Result<Option<String>, Refusal> {
-    let uuid = id.to_string();
-    let answer = match kind {
-        Own::Hold => action_request_ownership(held, account, target.to_string(), uuid),
-        Own::Giveup => action_giveup_ownership(held, account, target.to_string(), uuid),
-    }
-    .map_err(|error| Refusal::Failed(error.to_string()))?;
-
-    let outcome: Ownership =
-        serde_json::from_str(&answer).map_err(|error| Refusal::Failed(error.to_string()))?;
-
-    match outcome {
-        Ownership::Owner(owner) => {
-            set_cached_owner(held, vault_name, id, owner.clone())
-                .map_err(|error| Refusal::Failed(error.to_string()))?;
-
-            Ok(owner)
-        }
-        Ownership::Missing => Err(Refusal::Upstream(path.as_str().to_owned())),
-        Ownership::HeldBy(owner) => Err(Refusal::Taken {
-            path: path.as_str().to_owned(),
-            owner,
-        }),
-    }
+/// The JSON an ownership action takes as its input: the words a bar is drawn under, and the entries.
+///
+/// A list is not a thing the C ABI can hand over, so the pair crosses as one JSON string. Both this
+/// command and the Vault's own doors build it here, so the shape is written once rather than guessed
+/// at wherever an action happens to be called.
+///
+/// # Errors
+///
+/// Whatever encoding the pair fails with, which is nothing a caller can bring about.
+pub fn ownership_input(name: String, ids: Vec<String>) -> Result<String, serde_json::Error> {
+    serde_json::to_string(&(name, ids))
 }
 
 /// What was refused, in the words the run is told it in.

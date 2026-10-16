@@ -56,53 +56,108 @@ pub(crate) fn local_layout(ctx: &ActionContext<'_>) -> Result<Layout, ActionErro
         .map_err(|error| ActionError::Store(error.to_string()))
 }
 
-/// Runs one ownership change against the Vault, carrying the `Uuid` there and the outcome back.
+/// Runs one ownership change per `Uuid`, all over the one session.
 ///
-/// Which change it is is `decide`'s to make: it is handed the Vault's Layout, the entry, and the
-/// name of the account the session was established as, and answers what became of it. The two
-/// actions that use this differ in nothing else.
+/// The batch is what makes a run that names many entries one connection rather than one per entry:
+/// each `Uuid` crosses to the Vault, `decide` runs there, and the outcome crosses back, one entry at a
+/// time so that a reader watching is shown them as they are done. The `Uuid`s are the Workspace's to
+/// name and the Vault's to be told, so the count crosses first and both ends loop the same number of
+/// times.
+///
+/// Which change it is is `decide`'s to make, as it was for one entry: it is handed the Vault's Layout,
+/// the entry, and the name of the account the session was established as. The two actions that use
+/// this differ in nothing else.
+///
+/// What the bar is called crosses with the input rather than being written here: the words for it
+/// belong to whoever asked the run for them, and this crate holds none of its own.
 ///
 /// # Errors
 ///
 /// Returns [`ActionError::MissingValue`] if the Vault holds no member to act as,
-/// [`ActionError::Codec`] if the `Uuid` or the outcome will not cross, and whatever the exchange
-/// fails with.
-pub(crate) async fn ownership_change(
+/// [`ActionError::Codec`] if an input or an outcome will not cross, and whatever the exchange fails
+/// with.
+pub(crate) async fn ownership_batch(
     ctx: &mut ActionContext<'_>,
     input: OnlyWorkspace<String>,
-    decide: impl FnOnce(&Layout, Uuid, &str) -> Result<Ownership, ActionError>,
-) -> Result<Ownership, ActionError> {
-    let id = carry_id(ctx, input).await?;
-
-    // Which account this runs as is the Vault's to say: the session was established as a member,
-    // and a name the caller sent would be one the Vault cannot hold itself to.
-    let outcome = if ctx.is_vault() {
-        let me = ctx
-            .get_member()
-            .into_inner()
-            .map(|member| member.name())
-            .ok_or(ActionError::MissingValue)?;
-
-        Some(decide(&local_layout(ctx)?, id, &me)?)
-    } else {
-        None
+    decide: impl Fn(&Layout, Uuid, &str) -> Result<Ownership, ActionError>,
+) -> Result<Vec<Ownership>, ActionError> {
+    // What to change crosses as JSON — the name the bar is drawn under, and the `Uuid`s — because a
+    // list is not a thing the C ABI can hand over, and JSON is how the other batched action carries
+    // its own. The Workspace holds it; the Vault holds nothing and is told each `Uuid` as it goes.
+    let (name, ids) = match input.into_inner() {
+        Some(json) => serde_json::from_str::<(String, Vec<String>)>(&json)
+            .map_err(|error| ActionError::Json(error.into()))?,
+        None => (String::new(), Vec::new()),
     };
 
-    let mine = outcome
-        .as_ref()
-        .map(rorolala_protocol::Encodable::encode)
-        .transpose()
-        .map_err(codec_failed)?;
-    let arrived = carry_blob(ctx, Side::Workspace, mine.clone()).await?;
-    let bytes = arrived.or(mine).unwrap_or_default();
+    // How many there are is the Workspace's to say and the Vault's to be told, since only the
+    // Workspace has the list: the count crosses first, and both ends loop that many times.
+    let count = u64::try_from(ids.len()).unwrap_or(u64::MAX);
+    let announced = ctx.is_workspace().then(|| count.to_be_bytes().to_vec());
+    let arrived = carry_blob(ctx, Side::Vault, announced.clone()).await?;
+    let bytes = arrived.or(announced).unwrap_or_default();
+    let count = u64::from_be_bytes(
+        bytes
+            .as_slice()
+            .try_into()
+            .map_err(|_| codec_failed("the count does not read"))?,
+    );
 
-    if ctx.is_vault() {
-        // UNWRAP: the outcome above was made on exactly this side, so the side that is a Vault has
-        // one to hand back rather than bytes to read.
-        Ok(outcome.unwrap())
-    } else {
-        Ownership::decode(bytes).map_err(codec_failed)
+    // Which account this runs as is the Vault's to say: the session was established as a member, and
+    // a name the caller sent would be one the Vault cannot hold itself to. The Workspace side holds no
+    // member at all, which is what the guard leaves alone.
+    let me = ctx
+        .get_member()
+        .into_inner()
+        .map(|member| member.name())
+        .unwrap_or_default();
+
+    if ctx.is_vault() && me.is_empty() {
+        return Err(ActionError::MissingValue);
     }
+
+    let mut task = ctx.progress().begin(name, Some(count));
+    let mut outcomes = Vec::new();
+
+    for at in 0..count {
+        // The `Uuid` crosses up: the Workspace names it, the Vault reads it.
+        let up = ids
+            .get(usize::try_from(at).unwrap_or(usize::MAX))
+            .map(|id| id.clone().into_bytes());
+        let arrived = carry_blob(ctx, Side::Vault, up.clone()).await?;
+        let named = arrived
+            .or(up)
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .unwrap_or_default();
+        let id = Uuid::parse_str(named.trim())
+            .map_err(|_| codec_failed("the uuid does not read"))?;
+
+        let outcome = if ctx.is_vault() {
+            Some(decide(&local_layout(ctx)?, id, &me)?)
+        } else {
+            None
+        };
+
+        // The outcome crosses back.
+        let mine = outcome
+            .as_ref()
+            .map(rorolala_protocol::Encodable::encode)
+            .transpose()
+            .map_err(codec_failed)?;
+        let arrived = carry_blob(ctx, Side::Workspace, mine.clone()).await?;
+        let bytes = arrived.or(mine).unwrap_or_default();
+
+        // UNWRAP is avoided: on the side that made it the outcome is taken as it is, and on the other
+        // it is read from what crossed.
+        outcomes.push(match outcome {
+            Some(outcome) => outcome,
+            None => Ownership::decode(bytes).map_err(codec_failed)?,
+        });
+
+        task.advance_by(1);
+    }
+
+    Ok(outcomes)
 }
 
 /// Names the entry `id` as held by `owner`, refusing when another account holds it.
@@ -249,28 +304,6 @@ fn is_remote_path(path: &LayoutPath) -> bool {
         .next()
         .is_some_and(|marker| MARKERS.contains(&marker))
         && components.next().is_some()
-}
-
-/// Carries the `Uuid` a change names from the Workspace to the Vault, and reads it on both ends.
-///
-/// # Errors
-///
-/// Returns [`ActionError::Codec`] if the text is not a `Uuid`, and whatever the exchange fails
-/// with.
-async fn carry_id(
-    ctx: &mut ActionContext<'_>,
-    input: OnlyWorkspace<String>,
-) -> Result<Uuid, ActionError> {
-    let here = input.into_inner();
-    let to_vault = here.map(String::into_bytes);
-    let arrived = carry_blob(ctx, Side::Vault, to_vault.clone()).await?;
-    let named = arrived
-        .or(to_vault)
-        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-        .unwrap_or_default();
-
-    Uuid::parse_str(named.trim())
-        .map_err(|_| ActionError::Codec(BincodeError::new("the uuid does not read".to_owned())))
 }
 
 /// What an encodable payload that will not cross means to an action.

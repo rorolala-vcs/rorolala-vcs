@@ -7,29 +7,29 @@ hold:
       zh-CN: 无法全部处理时，先处理可以处理的部分
   help:
     en: |
-        Claim entries for your account
+      Claim entries for your account
 
-        **Usage**: `rola hold <PATH>...`
-        **Flags**:
-            --allow-partial    Move what can be processed first when not everything can be processed
-            --force            Skip the version consistency check
+      **Usage**: `rola hold <PATH>...`
+      **Flags**:
+          --allow-partial    Move what can be processed first when not everything can be processed
+          --force            Skip the version consistency check
 
-        Each `PATH` is where a file sits in the Layout, `.` is the directory the run was made in, and directories are taken recursively
-        Before claiming, the Layout of the Vault the Layout tracks is fetched, and what it holds now is what is read
-        An entry can be claimed only when the Vault already holds it, local content is at the version the Vault records, and nobody holds it yet
-        When a batch cannot be done whole, nothing is changed
+      Each `PATH` is where a file sits in the Layout, `.` is the directory the run was made in, and directories are taken recursively
+      Before claiming, the Layout of the Vault the Layout tracks is fetched, and what it holds now is what is read
+      An entry can be claimed only when the Vault already holds it, local content is at the version the Vault records, and nobody holds it yet
+      When a batch cannot be done whole, nothing is changed
     zh-CN: |
-        为本机账户占有条目
+      为本机账户占有条目
 
-        **用法**：rola hold <路径>...
-        **标识**：
-            --allow-partial    无法全部处理时，先处理可以处理的部分
-            --force            跳过版本一致性的检查
+      **用法**：rola hold <路径>...
+      **标识**：
+          --allow-partial    无法全部处理时，先处理可以处理的部分
+          --force            跳过版本一致性的检查
 
-        每个 `PATH` 是文件在布局中的位置，`.` 为运行所在目录，目录按递归处理
-        占有前取回布局所追踪保险库的布局，并以它当前的内容为准
-        条目需为保险库已持有、本地内容与保险库版本一致且尚无人持有，才能占有
-        一次无法全部完成时不做任何改动
+      每个 `PATH` 是文件在布局中的位置，`.` 为运行所在目录，目录按递归处理
+      占有前取回布局所追踪保险库的布局，并以它当前的内容为准
+      条目需为保险库已持有、本地内容与保险库版本一致且尚无人持有，才能占有
+      一次无法全部完成时不做任何改动
 
   description:
     en: Claim entries for your account
@@ -38,44 +38,55 @@ hold:
 giveup:
   help:
     en: |
-        Let go of entries your account holds
+      Let go of entries your account holds
 
-        **Usage**: `rola giveup <PATH>...`
-        **Flags**:
-            --allow-partial    Move what can be processed first when not everything can be processed
-            --force            Skip the version consistency and unrecorded change checks
+      **Usage**: `rola giveup <PATH>...`
+      **Flags**:
+          --allow-partial    Move what can be processed first when not everything can be processed
+          --force            Skip the version consistency and unrecorded change checks
 
-        Each `PATH` is where a file sits in the Layout, `.` is the directory the run was made in, and directories are taken recursively
-        Before letting go, the Layout of the Vault the Layout tracks is fetched, and what it holds now is what is read
-        An entry can be let go of only when the Vault already holds it, local content is at the version the Vault records, there are no unrecorded changes, and this account holds it
-        When a batch cannot be done whole, nothing is changed
+      Each `PATH` is where a file sits in the Layout, `.` is the directory the run was made in, and directories are taken recursively
+      Before letting go, the Layout of the Vault the Layout tracks is fetched, and what it holds now is what is read
+      An entry can be let go of only when the Vault already holds it, local content is at the version the Vault records, there are no unrecorded changes, and this account holds it
+      When a batch cannot be done whole, nothing is changed
     zh-CN: |
-        放弃本机账户持有的条目
+      放弃本机账户持有的条目
 
-        **用法**：rola giveup <路径>...
-        **标识**：
-            --allow-partial    无法全部处理时，先处理可以处理的部分
-            --force            跳过版本一致性与未记录改动的检查
+      **用法**：rola giveup <路径>...
+      **标识**：
+          --allow-partial    无法全部处理时，先处理可以处理的部分
+          --force            跳过版本一致性与未记录改动的检查
 
-        每个 `PATH` 是文件在布局中的位置，`.` 为运行所在目录，目录按递归处理
-        放弃前取回布局所追踪保险库的布局，并以它当前的内容为准
-        条目需为保险库已持有、本地内容与保险库版本一致、无未记录改动并由本账户持有，才能放弃
-        一次无法全部完成时不做任何改动
+      每个 `PATH` 是文件在布局中的位置，`.` 为运行所在目录，目录按递归处理
+      放弃前取回布局所追踪保险库的布局，并以它当前的内容为准
+      条目需为保险库已持有、本地内容与保险库版本一致、无未记录改动并由本账户持有，才能放弃
+      一次无法全部完成时不做任何改动
 
   description:
     en: Let go of entries your account holds
     zh-CN: 放弃本机账户持有的条目
 
 ownership:
+  # What a claim or a release says it is doing while it does it: the bar that is drawn while the Vault
+  # is asked about each entry, one at a time over the one connection. The words are this crate's
+  # because the action is the daemon's and holds no language of its own — the name crosses with the
+  # entries so that the bar is not drawn without one.
+  holding:
+    en: Claiming ownership
+    zh-CN: 申请持有权中
+  giving:
+    en: Giving up ownership
+    zh-CN: 放弃所有权中
+
   err_argument:
     en: "`rola %{command}` received arguments it cannot use"
     zh-CN: "`rola %{command}` 收到了无法使用的参数"
 
   err_argument_help:
     en: |
-        Please name one or more files or directories in the current Layout
+      Please name one or more files or directories in the current Layout
     zh-CN: |
-        请给出当前布局中的一个或多个文件或目录
+      请给出当前布局中的一个或多个文件或目录
 
   err_name:
     en: "`%{name}` is not a file or a directory inside the Workspace, or the tree could not be read"
@@ -83,11 +94,11 @@ ownership:
 
   err_name_help:
     en: |
-        The path is read relative to the directory the run was made in, and `.` is that directory itself
-        At the Workspace root it is the whole of the workspace
+      The path is read relative to the directory the run was made in, and `.` is that directory itself
+      At the Workspace root it is the whole of the workspace
     zh-CN: |
-        路径相对于运行所在目录解读，`.` 就是这个目录本身
-        在工作区根目录即为整个工作区
+      路径相对于运行所在目录解读，`.` 就是这个目录本身
+      在工作区根目录即为整个工作区
 
   err_no_track:
     en: The current Layout tracks no Vault
@@ -95,9 +106,9 @@ ownership:
 
   err_no_track_help:
     en: |
-        Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then run the command again
+      Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then run the command again
     zh-CN: |
-        请用 `rola layout set-track <布局> <保险库>` 指定后再次运行该命令
+      请用 `rola layout set-track <布局> <保险库>` 指定后再次运行该命令
 
   err_path:
     en: "The current Layout names no entry at `%{path}`"
@@ -105,9 +116,9 @@ ownership:
 
   err_path_help:
     en: |
-        Please run `rola status` to see the current state, or use a path the Layout already names
+      Please run `rola status` to see the current state, or use a path the Layout already names
     zh-CN: |
-        请运行 `rola status` 查看当前状态，或改用一个布局中已有的路径
+      请运行 `rola status` 查看当前状态，或改用一个布局中已有的路径
 
   err_upstream:
     en: "The Vault's Layout records no entry for `%{path}`"
@@ -115,9 +126,9 @@ ownership:
 
   err_upstream_help:
     en: |
-        Please upload it first with `rola sync --up-only`, then try again
+      Please upload it first with `rola sync --up-only`, then try again
     zh-CN: |
-        请先用 `rola sync --up-only` 上传，然后重试
+      请先用 `rola sync --up-only` 上传，然后重试
 
   err_version:
     en: "`%{path}` is not at the version the Vault records"
@@ -125,9 +136,9 @@ ownership:
 
   err_version_help:
     en: |
-        Please update it with `rola sync --down-only`, or use `--force` to go on anyway
+      Please update it with `rola sync --down-only`, or use `--force` to go on anyway
     zh-CN: |
-        请用 `rola sync --down-only` 更新，或用 `--force` 强行继续
+      请用 `rola sync --down-only` 更新，或用 `--force` 强行继续
 
   err_changed:
     en: "`%{path}` has changes not yet recorded"
@@ -135,9 +146,9 @@ ownership:
 
   err_changed_help:
     en: |
-        Please record them with `rola track` first, or use `--force` to go on anyway
+      Please record them with `rola track` first, or use `--force` to go on anyway
     zh-CN: |
-        请先用 `rola track` 记录，或用 `--force` 强行继续
+      请先用 `rola track` 记录，或用 `--force` 强行继续
 
   err_held:
     en: "`%{path}` is already held by `%{owner}`"
@@ -145,9 +156,9 @@ ownership:
 
   err_held_help:
     en: |
-        The entry is already held by another, and only the holder can let it go with `rola layout giveup-ownership`
+      The entry is already held by another, and only the holder can let it go with `rola layout giveup-ownership`
     zh-CN: |
-        条目已由他人持有，只有持有者本人能用 `rola layout giveup-ownership` 放弃
+      条目已由他人持有，只有持有者本人能用 `rola layout giveup-ownership` 放弃
 
   err_not_yours:
     en: "`%{path}` is held by `%{owner}`, not yours, so it cannot be let go of"
@@ -159,9 +170,9 @@ ownership:
 
   err_not_held_help:
     en: |
-        Please run `rola layout ls-ownership` to see upstream ownership, then try again
+      Please run `rola layout ls-ownership` to see upstream ownership, then try again
     zh-CN: |
-        请运行 `rola layout ls-ownership` 查看上游的持有情况，然后重试
+      请运行 `rola layout ls-ownership` 查看上游的持有情况，然后重试
 
   err_refused:
     en: "`rola %{command}` refused %{count} of the named entries, so nothing was changed"
@@ -169,9 +180,9 @@ ownership:
 
   err_refused_help:
     en: |
-        Please settle the problems listed above, or use `--force` past the version and `--allow-partial` to do what passes
+      Please settle the problems listed above, or use `--force` past the version and `--allow-partial` to do what passes
     zh-CN: |
-        请先处理上面列出的问题，或用 `--force` 越过版本、用 `--allow-partial` 只做通过的部分
+      请先处理上面列出的问题，或用 `--force` 越过版本、用 `--allow-partial` 只做通过的部分
 
   err_failed:
     en: "The ownership could not be changed: %{cause}"
@@ -179,9 +190,9 @@ ownership:
 
   err_failed_help:
     en: |
-        Please check the Vault is reachable and the account is bound, then try again
+      Please check the Vault is reachable and the account is bound, then try again
     zh-CN: |
-        请检查保险库是否可达、账户是否已绑定，然后重试
+      请检查保险库是否可达、账户是否已绑定，然后重试
 
   why_path:
     en: the Layout names no entry there

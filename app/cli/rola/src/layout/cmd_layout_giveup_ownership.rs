@@ -156,8 +156,13 @@ pub fn handle_layout_giveup_ownership(
         let uuid = id.to_string();
 
         // What crosses back is the outcome as text, since an action's output is what the C ABI hands
-        // back; what a run was told is read here, where the words it is said in are.
-        let outcome = action_giveup_ownership(held, &account, target.to_string(), uuid.clone())?;
+        // back; what a run was told is read here, where the words it is said in are. What goes out is
+        // one `Uuid`, and the bar is unnamed because this door is not watched.
+        let input = match crate::cmd_ownership::ownership_input(String::new(), vec![uuid.clone()]) {
+            Ok(input) => input,
+            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+        };
+        let outcome = action_giveup_ownership(held, &account, target.to_string(), input)?;
         let outcome: Ownership = match serde_json::from_str(&outcome) {
             Ok(outcome) => outcome,
             Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
