@@ -1560,7 +1560,7 @@ internal static partial class RorolalaBinding
     /// Runs the [`ActionSyncHashes`](crate::ActionSyncHashes) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: nothing; the payload is null
+    /// - `Ok`: `char *`, owned; release it with `free_string`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

@@ -8,6 +8,7 @@
 use mingling::{ProgramCollect, setup::ProgramSetup};
 
 mod colorize;
+mod concurrency_flag;
 mod default;
 mod force_flag;
 mod global_flag;
@@ -21,6 +22,7 @@ mod vcs;
 mod workspace;
 
 pub use colorize::*;
+pub use concurrency_flag::*;
 pub use default::*;
 pub use force_flag::*;
 pub use global_flag::*;
@@ -55,6 +57,7 @@ where
         program.with_setup(GlobalFlagSetup);
         program.with_setup(ForceFlagSetup);
         program.with_setup(OfflineFlagSetup);
+        program.with_setup(ConcurrencySetup);
         program.with_setup(NoPagerFlagSetup);
         program.with_setup(VaultSetup);
         program.with_setup(WorkspaceSetup);

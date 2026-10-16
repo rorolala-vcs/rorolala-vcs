@@ -73,6 +73,22 @@ pub fn daemon_begin(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
 /// This function is intended for asynchronous use and is not exposed over the
 /// FFI boundary on its own; use [`daemon_begin`] for blocking/FFI callers.
 pub async fn daemon_begin_async(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
+    daemon_begin_with_async(cwd, config, None).await
+}
+
+/// As [`daemon_begin_async`], with the run's own bound on how much the daemon carries at once.
+///
+/// `max_concurrency` is what `--concurrency` named, or `None` to keep what the configuration names,
+/// so a Vault can be bounded for the length of one start without editing the file it reads.
+///
+/// # Standard Out
+///
+/// On error, error logs are written to `stderr`.
+pub async fn daemon_begin_with_async(
+    cwd: &Path,
+    config: &rorolala_vault::Config,
+    max_concurrency: Option<u16>,
+) -> DaemonExit {
     let cancel = init_close_channel();
 
     let (exit, ()) = tokio::join!(
@@ -80,6 +96,7 @@ pub async fn daemon_begin_async(cwd: &Path, config: &rorolala_vault::Config) -> 
         crate::begin::daemon(DaemonInput {
             cwd,
             config,
+            max_concurrency,
             signal: cancel.get_rx()
         }),
         // Ctrl + C
@@ -87,6 +104,26 @@ pub async fn daemon_begin_async(cwd: &Path, config: &rorolala_vault::Config) -> 
     );
 
     exit
+}
+
+/// As [`daemon_begin`], with the run's own bound on how much the daemon carries at once.
+///
+/// `max_concurrency` is what `--concurrency` named, or `None` to keep what the configuration names.
+///
+/// # Panics
+///
+/// Panics if the multi-threaded Tokio runtime fails to build.
+#[must_use]
+pub fn daemon_begin_with(
+    cwd: &Path,
+    config: &rorolala_vault::Config,
+    max_concurrency: Option<u16>,
+) -> DaemonExit {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to build the runtime")
+        .block_on(daemon_begin_with_async(cwd, config, max_concurrency))
 }
 
 /// A cancellation context that bundles the signalling channel together with

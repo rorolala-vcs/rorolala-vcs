@@ -38,6 +38,7 @@ sync:
             --no-storage        Leave the store alone; only the Layout and the index move
             --no-layout         Leave the Vault's Layout alone; only data and index move
             --force             Go on uploading when the version chain has moved apart
+            --concurrency <N>   Carry the content over N connections at once (default 4)
 
         Bring the local Layout and the Vault it tracks into agreement
         The Vault is named by the Layout's `TRACK`, and the Workspace binds it first
@@ -57,6 +58,7 @@ sync:
             --no-storage        不动仓库，只移动布局和索引
             --no-layout         不动保险库的布局，只移动数据和索引
             --force             版本链已分叉时仍然上传
+            --concurrency <N>   用 N 条连接同时传输内容（默认 4）
 
         让本地布局与它所追踪的保险库保持一致
         保险库由布局的 `TRACK` 指定，须先由工作区绑定

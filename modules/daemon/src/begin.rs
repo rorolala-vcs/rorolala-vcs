@@ -39,6 +39,9 @@ pub(crate) struct DaemonInput<'a> {
     pub(crate) cwd: &'a Path,
     /// The configuration used to run the daemon.
     pub(crate) config: &'a rorolala_vault::Config,
+    /// The most transfers the daemon carries at once, when the run named one: `None` keeps what the
+    /// configuration names.
+    pub(crate) max_concurrency: Option<u16>,
     /// The signal used to cancel the daemon.
     pub(crate) signal: CancelSignal,
 }
@@ -58,6 +61,7 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
     let DaemonInput {
         cwd,
         config,
+        max_concurrency,
         signal,
     } = input;
 
@@ -127,7 +131,7 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         rule,
         vault,
         root_vault,
-        vault_config: config.clone(),
+        vault_config: bound(config, max_concurrency),
         root_vault_config,
         // Built once: the list a caller's id is read against is the one this daemon runs.
         registry: build_action_registry(),
@@ -138,6 +142,21 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
     DaemonExit::default()
 }
 
+/// The configuration the daemon serves under: what it was read from, with the run's own bound on
+/// how much is carried at once applied over it.
+fn bound(config: &rorolala_vault::Config, max_concurrency: Option<u16>) -> rorolala_vault::Config {
+    let mut bound = config.clone();
+
+    if let Some(max_concurrency) = max_concurrency {
+        bound
+            .daemon_config_mut()
+            .set_max_concurrency(max_concurrency);
+    }
+
+    bound
+}
+
+/// Everything the daemon needs to answer a connection.
 /// The directories a member is looked for in, and the rule they are searched under.
 ///
 /// The Vault's configuration names the places — see [`KeyDiscovery`] — and each one is a
@@ -255,12 +274,26 @@ struct Host {
 /// itself. The loop itself does no work beyond accepting, which is what lets cancellation
 /// take effect between two connections rather than after the current one.
 async fn listen(listener: TcpListener, host: Arc<Host>, mut cancel: watch::Receiver<bool>) {
+    // How many connections are served at once. A client asks for a number of lanes and each lane is
+    // a connection, so this is what holds every caller together to what the Vault is set to serve:
+    // one run cannot spend the machine, and neither can many. See `DaemonConfig::max_concurrency`.
+    let serving = Arc::new(tokio::sync::Semaphore::new(
+        usize::from(host.vault_config.daemon_config().max_concurrency()).max(1),
+    ));
+
     loop {
         tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok((stream, peer)) => {
+                    // The permit is taken before the connection is spawned, so a Vault serving its
+                    // limit holds the next peer at the accept rather than admitting it to wait: what
+                    // a caller meets is backpressure, not a connection that does nothing.
+                    let Ok(permit) = Arc::clone(&serving).acquire_owned().await else {
+                        break;
+                    };
                     let host = Arc::clone(&host);
                     tokio::spawn(async move {
+                        let _permit = permit;
                         if let Err(error) = serve(stream, host).await {
                             eprintln!(
                                 "{}",
@@ -1069,6 +1102,7 @@ mod tests {
         let daemon = super::daemon(super::DaemonInput {
             cwd: &cwd,
             config: &config,
+            max_concurrency: None,
             signal: crate::CancelSignal { rx },
         });
 

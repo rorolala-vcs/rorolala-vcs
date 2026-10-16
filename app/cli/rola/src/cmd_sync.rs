@@ -40,8 +40,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting, ResRorolalaStorage,
-    ResVCSIndex, ResWorkspace,
+    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting,
+    ResRorolalaStorage, ResVCSIndex, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -146,7 +146,12 @@ pub fn complete_sync(ctx: ShellContext) -> Suggest {
 /// changed here is behind the Vault, [`ErrorSyncFailed`] when the exchange could not be made, and
 /// the exchange's own failures otherwise.
 #[command(node = "sync", entry = EntrySync)]
-pub fn sync(args: EntrySync, force: &ResForce, offline: &ResOffline) -> Next {
+pub fn sync(
+    args: EntrySync,
+    force: &ResForce,
+    offline: &ResOffline,
+    concurrency: &ResConcurrency,
+) -> Next {
     // A sync is the exchange with the Vault, whole: there is no local half of it an offline run
     // could be left with.
     if **offline {
@@ -184,6 +189,7 @@ pub fn sync(args: EntrySync, force: &ResForce, offline: &ResOffline) -> Next {
         direction,
         forced: **force,
         dry_run: matches!(dry_run, Flag::Active),
+        concurrency: **concurrency,
         skip: Skip {
             index: matches!(no_index, Flag::Active),
             storage: matches!(no_storage, Flag::Active),
@@ -200,6 +206,8 @@ pub struct StateSync {
     direction: Direction,
     /// Whether a version whose chain moved apart may go up anyway.
     forced: bool,
+    /// How many connections the content is carried over when there is more than one key to move.
+    concurrency: usize,
     /// Whether the plan is to be printed rather than carried out.
     dry_run: bool,
     /// What the run is told not to move.
@@ -515,7 +523,8 @@ fn carry_with(
         let sources =
             fetch::Sources::new(carry.workspace, carry.account, carry.remote, primary, false)
                 .map_err(|cause| ErrorSyncFailed { cause })?
-                .reporting(progress.clone());
+                .reporting(progress.clone())
+                .with_concurrency(state.concurrency);
 
         Some(sources)
     };
@@ -523,7 +532,7 @@ fn carry_with(
     if let Some(sources) = &sources {
         if let Some(keys) = &indexed {
             sources
-                .send(keys)
+                .send(carry.store, keys)
                 .map_err(|cause| ErrorSyncFailed { cause })?;
         } else {
             let (receive, send) = content_of(&entries, state, carry);
@@ -533,7 +542,7 @@ fn carry_with(
             }
 
             sources
-                .send(&send)
+                .send(carry.store, &send)
                 .map_err(|cause| ErrorSyncFailed { cause })?;
         }
     }

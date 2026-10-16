@@ -186,7 +186,8 @@ pub fn handle_storage_sync_hashes(
         reporting.progress(),
     ));
     reporting.finish();
-    outcome?;
+    // The answer is how many lanes it granted, which a caller of this command has no use for.
+    let _granted = outcome?;
 
     ResultSyncHashes.into()
 }

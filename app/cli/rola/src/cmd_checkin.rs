@@ -43,8 +43,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting, ResRorolalaStorage,
-    ResVCSIndex, ResWorkspace,
+    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting,
+    ResRorolalaStorage, ResVCSIndex, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -191,6 +191,7 @@ pub fn handle_checkin(
     progress: &ResProgressSetting,
     offline: &ResOffline,
     force: &ResForce,
+    concurrency: &ResConcurrency,
 ) -> Next {
     let StateCheckin { refs, to, join } = state;
 
@@ -232,6 +233,7 @@ pub fn handle_checkin(
             progress,
             offline,
             **force,
+            concurrency,
         );
     }
 
@@ -254,7 +256,8 @@ pub fn handle_checkin(
     // them, since a key is the hash of what it names.
     let primary = fetch::primary(remote.get_ref(), Some(vault_name.as_str()));
     let sources = Sources::new(held, &account, remote.get_ref(), primary, **offline)
-        .map_err(|cause| ErrorCheckinFailed { cause })?;
+        .map_err(|cause| ErrorCheckinFailed { cause })?
+        .with_concurrency(**concurrency);
 
     // What the Vault holds now is what the references are read against, so its copy is brought up
     // to date first — the same fetch `rola layout fetch` makes. Offline, the copy that is here is
@@ -366,6 +369,7 @@ fn checkin_variant(
     progress: &ResProgressSetting,
     offline: &ResOffline,
     force: bool,
+    concurrency: &ResConcurrency,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
@@ -452,7 +456,9 @@ fn checkin_variant(
         let tracked = tracked_vault(held, layout);
         let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
 
-        if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline) {
+        if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline)
+            .map(|sources| sources.with_concurrency(**concurrency))
+        {
             sources.bring(store, &[content]);
             sources.report();
         }

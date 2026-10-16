@@ -6,6 +6,8 @@ listen:
         Serve this Vault as its daemon
 
         **Usage**: `rola-daemon listen`
+        **Flags**:
+            --concurrency <N>   Serve at most N transfers at once, over the Vault's own `max_concurrency`
 
         The Vault the current directory is inside is served: the daemon binds the port in
         `vault.toml` — 7717 unless the Vault says otherwise — and runs every action a
@@ -14,6 +16,8 @@ listen:
         作为本保险库的守护进程持续服务
 
         **用法**：`rola-daemon listen`
+        **标识**：
+            --concurrency <N>   最多同时服务 N 个传输，覆盖保险库自身的 `max_concurrency`
 
         服务当前目录所在的保险库：守护进程绑定 `vault.toml` 中的端口（默认为 7717），
         并执行工作区请求的每一个动作。按 Ctrl-C 停止。

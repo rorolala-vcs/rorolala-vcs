@@ -3503,6 +3503,7 @@ dependencies = [
  "console",
  "dirs",
  "embed-resource",
+ "futures",
  "globset",
  "indicatif",
  "just_template",

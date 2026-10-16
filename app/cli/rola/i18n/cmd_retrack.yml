@@ -22,6 +22,7 @@ retrack:
             --allow-jump        Allow jumping to a version not on the way back
             --force             Discard unrecorded changes or end a merge, and forcibly switch the content
             --offline           Only use content already stored locally
+            --concurrency <N>   Carry the content over N connections at once (default 4)
 
         Move back the version pointer `PATH` records in the Layout, and that version's content is written back over the file with the pointer
         `PATH` must be a local path the Layout records, and `--until` names where it goes back to, one version back by default
@@ -37,6 +38,7 @@ retrack:
             --allow-jump        允许跳到不在回退路径上的版本
             --force             丢弃未记录的改动或结束合并，强制切换内容
             --offline           只使用本地已存储的内容
+            --concurrency <N>   用 N 条连接同时传输内容（默认 4）
 
         将 `路径` 在布局中记录的版本指针回退，该版本的内容会随指针写回文件
         `路径` 必须是布局记录过的本地路径，`--until` 指定回退到的位置，默认回退一个版本

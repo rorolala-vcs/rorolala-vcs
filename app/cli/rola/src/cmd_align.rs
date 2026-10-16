@@ -37,7 +37,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResOffline, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+    ResConcurrency, ResCurrentRemoteVault, ResOffline, ResRorolalaStorage, ResVCSIndex, ResVault,
+    ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -306,6 +307,7 @@ pub fn handle_align(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     offline: &ResOffline,
+    concurrency: &ResConcurrency,
 ) -> Next {
     let StateAlign {
         path,
@@ -338,7 +340,7 @@ pub fn handle_align(
             let tracked = tracked_vault(held, &layout);
             let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
             let sources = match Sources::new(held, account, remote.get_ref(), primary, **offline) {
-                Ok(sources) => sources,
+                Ok(sources) => sources.with_concurrency(**concurrency),
                 Err(cause) => return align_failed(cause),
             };
 

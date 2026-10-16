@@ -50,6 +50,51 @@ const PIECE: usize = MAX_FRAME - FRAMING;
 /// How much room the framing around one value is left.
 const FRAMING: usize = 1024;
 
+/// The byte that leads a discovery value which is a manifest.
+const MANIFEST_LEAD: u8 = 1;
+
+/// The byte that leads a discovery value which is an object.
+const OBJECT_LEAD: u8 = 0;
+
+/// How much of what a key names one unit carries.
+///
+/// A content kept as chunks is a manifest that names them: a caller that has the manifest can carry
+/// the manifest and each chunk as units of their own, so the chunks of one content travel over as
+/// many lanes as there are, rather than one behind another. A caller that does not have it asks for
+/// the whole, and the two ends expand it here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnitKind {
+    /// All of what the key names: the manifest and the chunks it names, or the object.
+    Whole,
+    /// Only the manifest the key names, which the taker records as a manifest.
+    Manifest,
+    /// Only the object the key names, which the taker writes as an object.
+    Object,
+    /// The manifest if the key has one and the object otherwise, which the taker asks for when it
+    /// does not know how the content is kept: it learns from what arrives, and a content kept as
+    /// chunks is then asked for a chunk at a time.
+    Discover,
+}
+
+/// One thing to carry: a key, and how much of it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Unit {
+    /// The key being carried.
+    pub(crate) key: Key,
+    /// How much of what it names is carried.
+    pub(crate) kind: UnitKind,
+}
+
+impl Unit {
+    /// The whole of what `key` names, left for the two ends to expand.
+    pub(crate) const fn whole(key: Key) -> Self {
+        Self {
+            key,
+            kind: UnitKind::Whole,
+        }
+    }
+}
+
 /// Makes two stores hold the same keys.
 ///
 /// `workspace` and `vault` are the stores each side works on: on the Workspace the first holds
@@ -86,16 +131,46 @@ pub async fn sync_storage(
     vault: OnlyVault<RorolalaStorage>,
     required_keys: Both<Vec<Key>>,
 ) -> Result<(), ActionError> {
+    let units = required_keys
+        .into_inner()
+        .into_iter()
+        .map(Unit::whole)
+        .collect();
+
+    sync_units(ctx, workspace, vault, Both::new(units)).await
+}
+
+/// Makes two stores hold the same units.
+///
+/// This is the whole of [`sync_storage`] with the expansion left to the caller: a required key is a
+/// unit naming the whole of what it holds, while a manifest and its chunks are units of their own,
+/// which is what lets the chunks of one content travel over as many lanes as the caller arranges.
+/// The presence each side reports is per unit, so a unit already held is passed over whichever way
+/// the content under its key is kept.
+///
+/// # Errors
+///
+/// Returns [`ActionError::NoChannel`] if there is nothing to exchange over,
+/// [`ActionError::MissingValue`] if the context did not say which store this side has or the
+/// answers did not come back, [`ActionError::MissingObject`] if a required unit is held by neither
+/// side, [`ActionError::Codec`] if a manifest from the peer does not read, and
+/// [`ActionError::Store`] or [`ActionError::Io`] if a store could not be read or written.
+pub(crate) async fn sync_units(
+    ctx: &mut ActionContext<'_>,
+    workspace: OnlyWorkspace<RorolalaStorage>,
+    vault: OnlyVault<RorolalaStorage>,
+    required: Both<Vec<Unit>>,
+) -> Result<(), ActionError> {
     // Whichever side this is, it named the store it has; the other wrapper is empty.
     let local = workspace
         .into_inner()
         .or_else(|| vault.into_inner())
         .ok_or(ActionError::MissingValue)?;
-    let keys = required_keys.into_inner();
+    let units = required.into_inner();
 
     // What this side holds of what was asked for, and then what the other side holds: the two are
-    // exchanged before anything moves, so both ends agree on which keys cross and which way.
-    let mine = local.contains_keys(&keys).await.map_err(store_failed)?;
+    // exchanged before anything moves, so both ends agree on which units cross and which way.
+    let mine = presence(&local, &units).await?;
 
     let handed: OnlyWorkspace<Vec<u8>> = ctx.only_workspace(|| mine.clone().into());
     let from_vault = ctx.transfer(handed).await?;
@@ -117,7 +192,7 @@ pub async fn sync_storage(
         (theirs, mine)
     };
 
-    for at in 0..keys.len() {
+    for at in 0..units.len() {
         if !workspace_holds.held(at) && !vault_holds.held(at) {
             return Err(ActionError::MissingObject);
         }
@@ -129,17 +204,17 @@ pub async fn sync_storage(
     // rather than one that fills up to a length it did not know it had.
     let progress = ctx.progress();
 
-    let up: Vec<&Key> = keys
+    let up: Vec<&Unit> = units
         .iter()
         .enumerate()
         .filter(|(at, _)| workspace_holds.held(*at) && !vault_holds.held(*at))
-        .map(|(_, key)| key)
+        .map(|(_, unit)| unit)
         .collect();
-    let down: Vec<&Key> = keys
+    let down: Vec<&Unit> = units
         .iter()
         .enumerate()
         .filter(|(at, _)| vault_holds.held(*at) && !workspace_holds.held(*at))
-        .map(|(_, key)| key)
+        .map(|(_, unit)| unit)
         .collect();
 
     let mut everything = progress.begin(
@@ -163,9 +238,9 @@ pub async fn sync_storage(
 
         let mut task = everything.spawn(Direction::Up, "", Some(total));
 
-        for key in &up {
-            let working = task.doing(key.hex());
-            carry(ctx, &local, key, Side::Vault, &mut task).await?;
+        for unit in &up {
+            let working = task.doing(unit.key.hex());
+            carry_unit(ctx, &local, **unit, Side::Vault, &mut task).await?;
             drop(working);
 
             everything.advance_by(1);
@@ -185,9 +260,9 @@ pub async fn sync_storage(
 
         let mut task = everything.spawn(Direction::Down, "", Some(total));
 
-        for key in &down {
-            let working = task.doing(key.hex());
-            carry(ctx, &local, key, Side::Workspace, &mut task).await?;
+        for unit in &down {
+            let working = task.doing(unit.key.hex());
+            carry_unit(ctx, &local, **unit, Side::Workspace, &mut task).await?;
             drop(working);
 
             everything.advance_by(1);
@@ -215,14 +290,56 @@ pub async fn sync_storage(
 ///
 /// Returns [`ActionError::Store`] or [`ActionError::MissingObject`] if a key that is about to cross
 /// can no longer be measured.
-async fn sending_len(local: &RorolalaStorage, keys: &[&Key]) -> Result<u64, ActionError> {
+async fn sending_len(local: &RorolalaStorage, units: &[&Unit]) -> Result<u64, ActionError> {
     let mut total = 0_u64;
 
-    for key in keys {
-        total = total.saturating_add(local.carried_len(key).await.map_err(store_failed)?);
+    for unit in units {
+        total = total.saturating_add(unit_len(local, unit).await?);
     }
 
     Ok(total)
+}
+
+/// How many bytes `unit` is carried as.
+///
+/// A manifest is measured by reading it, which is cheap because a manifest is small; a whole or an
+/// object is measured without reading, the way [`sync_storage`] has always measured a key.
+async fn unit_len(local: &RorolalaStorage, unit: &Unit) -> Result<u64, ActionError> {
+    match unit.kind {
+        UnitKind::Manifest => Ok(local
+            .manifest_of(&unit.key)
+            .await
+            .map_err(store_failed)?
+            .map_or(0, |manifest| manifest.encode().len() as u64)),
+        UnitKind::Whole | UnitKind::Object | UnitKind::Discover => {
+            local.carried_len(&unit.key).await.map_err(store_failed)
+        }
+    }
+}
+
+/// Which of `units` this side holds: a manifest unit by its manifest, anything else by its content.
+async fn presence(local: &RorolalaStorage, units: &[Unit]) -> Result<Presence, ActionError> {
+    let mut presence = Presence::all_missing(units.len());
+
+    for (at, unit) in units.iter().enumerate() {
+        let held = match unit.kind {
+            UnitKind::Manifest => local
+                .holds_manifest(&unit.key)
+                .await
+                .map_err(store_failed)?,
+            UnitKind::Whole | UnitKind::Object | UnitKind::Discover => local
+                .contains_keys(std::slice::from_ref(&unit.key))
+                .await
+                .map_err(store_failed)?
+                .held(0),
+        };
+
+        if held {
+            presence.set_held(at, true);
+        }
+    }
+
+    Ok(presence)
 }
 
 /// Carries the whole of `key` to `to`, where it is written down.
@@ -323,6 +440,105 @@ async fn carry(
     }
 
     Ok(())
+}
+
+/// Carries one unit to `to`, where it is written down.
+///
+/// A unit naming the whole is carried as [`carry`] carries a key, expanded here; a manifest unit
+/// carries only the manifest, which the taker records, and an object unit only the object, which the
+/// taker writes. What crosses is never what is taken, so the two ends know which they are from where
+/// the unit is coming from.
+async fn carry_unit(
+    ctx: &mut ActionContext<'_>,
+    local: &RorolalaStorage,
+    unit: Unit,
+    to: Side,
+    task: &mut Task,
+) -> Result<(), ActionError> {
+    let sending = match to {
+        Side::Vault => ctx.is_workspace(),
+        Side::Workspace => ctx.is_vault(),
+    };
+
+    match unit.kind {
+        UnitKind::Whole => carry(ctx, local, &unit.key, to, task).await,
+        UnitKind::Manifest => {
+            let manifest = if sending {
+                local.manifest_of(&unit.key).await.map_err(store_failed)?
+            } else {
+                None
+            };
+            let outgoing = manifest.as_ref().map(Manifest::encode);
+            let arrived = carry_blob_moving(ctx, to, outgoing, Some(&mut *task)).await?;
+
+            if let Some(bytes) = arrived {
+                let manifest = Manifest::decode(&bytes)
+                    .map_err(|error| ActionError::Codec(BincodeError::new(error.to_string())))?;
+                local
+                    .put_manifest(&unit.key, &manifest)
+                    .await
+                    .map_err(store_failed)?;
+            }
+
+            Ok(())
+        }
+        UnitKind::Object => {
+            let object = if sending {
+                Some(local.read_object(&unit.key).await.map_err(store_failed)?)
+            } else {
+                None
+            };
+            let arrived = carry_blob_moving(ctx, to, object, Some(&mut *task)).await?;
+
+            if let Some(bytes) = arrived {
+                local
+                    .write_object(&bytes, local.codec())
+                    .await
+                    .map_err(store_failed)?;
+            }
+
+            Ok(())
+        }
+        UnitKind::Discover => {
+            // What is sent is decided by what this side holds, and what arrives says which it was:
+            // a manifest is recorded as one, an object written as one, and the two are told apart by
+            // the byte that leads the value rather than by trying to read the bytes as either.
+            let (lead, bytes) = if sending {
+                match local.manifest_of(&unit.key).await.map_err(store_failed)? {
+                    Some(manifest) => (MANIFEST_LEAD, manifest.encode()),
+                    None => (
+                        OBJECT_LEAD,
+                        local.read_object(&unit.key).await.map_err(store_failed)?,
+                    ),
+                }
+            } else {
+                (OBJECT_LEAD, Vec::new())
+            };
+
+            let lead = carry_value(ctx, to, lead).await?.unwrap_or(lead);
+            let arrived =
+                carry_blob_moving(ctx, to, sending.then_some(bytes), Some(&mut *task)).await?;
+
+            if let Some(bytes) = arrived {
+                if lead == MANIFEST_LEAD {
+                    let manifest = Manifest::decode(&bytes).map_err(|error| {
+                        ActionError::Codec(BincodeError::new(error.to_string()))
+                    })?;
+                    local
+                        .put_manifest(&unit.key, &manifest)
+                        .await
+                        .map_err(store_failed)?;
+                } else {
+                    local
+                        .write_object(&bytes, local.codec())
+                        .await
+                        .map_err(store_failed)?;
+                }
+            }
+
+            Ok(())
+        }
+    }
 }
 
 /// Carries one blob in the direction `to` names, and answers what arrived here.

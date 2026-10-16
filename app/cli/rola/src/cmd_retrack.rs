@@ -47,8 +47,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResForce, ResOffline, ResRorolalaStorage, ResVCSIndex, ResVault,
-    ResWorkspace,
+    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResRorolalaStorage, ResVCSIndex,
+    ResVault, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -234,6 +234,7 @@ pub fn handle_retrack(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     offline: &ResOffline,
+    concurrency: &ResConcurrency,
 ) -> Next {
     let StateRetrack {
         file,
@@ -370,7 +371,8 @@ pub fn handle_retrack(
             let tracked = tracked_vault(held, &layout);
             let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
             let sources = Sources::new(held, account, remote.get_ref(), primary, **offline)
-                .map_err(failed)?;
+                .map_err(failed)?
+                .with_concurrency(**concurrency);
 
             Some(sources)
         }

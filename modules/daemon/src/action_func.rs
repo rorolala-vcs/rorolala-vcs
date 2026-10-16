@@ -197,7 +197,7 @@ pub async fn action_sync_hashes_async(
     target: String,
     input: String,
     progress: Progress,
-) -> Result<(), ActionError> {
+) -> Result<String, ActionError> {
     proc_action::<ActionSyncHashes>(workspace, account, target, input, progress).await
 }
 
@@ -220,7 +220,7 @@ pub fn action_sync_hashes(
     account: &Account,
     target: String,
     input: String,
-) -> Result<(), ActionError> {
+) -> Result<String, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(action_sync_hashes_async(workspace, account, target, input, Progress::silent()))
 }

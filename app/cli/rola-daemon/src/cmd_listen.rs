@@ -6,8 +6,8 @@ use mingling::{
     metadata::Description,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResVault, ResVaultConfig};
-use rorolala_daemon::daemon_begin;
+use rorolala_cli_setups::{ResConcurrency, ResVault, ResVaultConfig};
+use rorolala_daemon::daemon_begin_with;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_location::Locate;
 use rust_i18n::t;
@@ -29,7 +29,11 @@ pub fn desc_listen() -> Description {
 }
 
 #[command]
-pub fn listen(vault: &mut LazyRes<ResVault>, config: &mut LazyRes<ResVaultConfig>) -> Next {
+pub fn listen(
+    vault: &mut LazyRes<ResVault>,
+    config: &mut LazyRes<ResVaultConfig>,
+    concurrency: &ResConcurrency,
+) -> Next {
     let Some(vault) = vault.get_ref().as_ref() else {
         return ErrorVaultNotExist.into();
     };
@@ -48,7 +52,13 @@ pub fn listen(vault: &mut LazyRes<ResVault>, config: &mut LazyRes<ResVaultConfig
         }
     };
 
-    let _exit = daemon_begin(vault.get_root(), config);
+    // How much the daemon carries at once is what `--concurrency` names, or what the configuration
+    // names when the run named none: a Vault told nothing keeps the number the file holds.
+    let max_concurrency = concurrency
+        .explicit()
+        .then(|| u16::try_from(**concurrency).unwrap_or(u16::MAX));
+
+    let _exit = daemon_begin_with(vault.get_root(), config, max_concurrency);
     ResultStopped.into()
 }
 

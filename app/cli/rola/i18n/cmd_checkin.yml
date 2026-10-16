@@ -12,6 +12,7 @@ checkin:
             --join <FILE>    Name the file a checked-in variant is to be merged into
             --offline        Build the file only from content already stored locally
             --force          Skip the chain consistency check for a variant checkin
+            --concurrency <N>  Carry the content over N connections at once (default 4)
 
         **About merging**:
             When checking in a variant as a file, `--join` must be used to name the file to merge into
@@ -28,6 +29,7 @@ checkin:
             --join <本地文件>    为签入的变体指定待合入的文件
             --offline            仅使用本地已存储的内容来构建文件
             --force              跳过变体签入的链一致性检查
+            --concurrency <N>    用 N 条连接同时传输内容（默认 4）
 
         **关于合并**：
             签入变体作为文件时，必须使用 `--join` 来指定待合入的文件

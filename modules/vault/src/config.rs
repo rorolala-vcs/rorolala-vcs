@@ -298,6 +298,12 @@ const DEFAULT_KEY_DISCOVERY: &[KeyDiscovery] = &[
     KeyDiscovery::Env,
 ];
 
+/// The most a daemon carries at once when its configuration names none.
+///
+/// The default is deliberately larger than the `--concurrency` a run asks for on its own: a daemon
+/// serves several clients, and a cap is what keeps one caller from spending the whole machine.
+pub const VAULT_DEFAULT_MAX_CONCURRENCY: u16 = 16;
+
 /// Configuration for the Vault daemon.
 #[lazyffi(export = VaultDaemonConfig)]
 #[derive(Debug, Clone, Configure, Serialize, Deserialize)]
@@ -307,6 +313,8 @@ pub struct DaemonConfig {
     prefer_port: u16,
     /// The places the daemon looks for the keys of the members it admits.
     key_discovery: Vec<KeyDiscovery>,
+    /// The most transfers the daemon carries at once, across every connection it serves.
+    max_concurrency: u16,
 }
 
 impl Default for DaemonConfig {
@@ -314,6 +322,7 @@ impl Default for DaemonConfig {
         Self {
             prefer_port: VAULT_DEFAULT_PORT,
             key_discovery: DEFAULT_KEY_DISCOVERY.to_vec(),
+            max_concurrency: VAULT_DEFAULT_MAX_CONCURRENCY,
         }
     }
 }
@@ -334,6 +343,24 @@ impl DaemonConfig {
     #[must_use]
     pub fn key_discovery(&self) -> &[KeyDiscovery] {
         &self.key_discovery
+    }
+
+    /// The most transfers the daemon carries at once, across every connection it serves.
+    ///
+    /// What a run asks for with `--concurrency` is held to this: a Workspace asks, and the Vault
+    /// grants no more than it is set to serve, so a Vault keeps its own work bounded whatever its
+    /// callers ask for.
+    #[must_use]
+    pub const fn max_concurrency(&self) -> u16 {
+        self.max_concurrency
+    }
+
+    /// Chooses the most the daemon carries at once.
+    ///
+    /// What the daemon is started with overrides what the file names, so a Vault can be bounded for
+    /// the length of one start without editing the file it reads.
+    pub const fn set_max_concurrency(&mut self, max_concurrency: u16) {
+        self.max_concurrency = max_concurrency;
     }
 
     /// Chooses the places the daemon looks in, in the order it is to look in them.
