@@ -186,63 +186,71 @@ public sealed class SyncTests
         Assert.Null(none.Said);
     }
 
-    /// <summary>What a run says about itself is read into the bar and the line.</summary>
+    /// <summary>What a run says about itself is read into the tasks it reports.</summary>
     /// <remarks>
-    /// The records are the command line's, so what is checked is what this reads out of them: the run's own
-    /// length and progress come from the one task that is part of nothing else, the name of what is moving from
-    /// the tasks that are part of it, and anything that is not a record at all is ignored rather than drawn.
+    /// The records are the command line's, so what is checked is what this reads out of them: every task a
+    /// `begin` opens is kept — a bar of the run's own, and a direction under it — while a task that only names
+    /// what its parent is moving is that parent's line rather than a task of its own. Anything that is not a
+    /// record at all is ignored rather than drawn.
     /// </remarks>
     [Fact]
-    public void WhatARunSaysAboutItselfIsReadIntoTheBar()
+    public void WhatARunSaysAboutItselfIsReadIntoTheTasks()
     {
         var records = new SyncProgress();
 
-        Assert.Equal(0, records.Done);
-        Assert.Null(records.Total);
-        Assert.Null(records.Moving);
+        Assert.Empty(records.Tasks);
 
         // What is not a record is nothing to read: the error stream carries what the command said as well.
         Assert.False(records.Read("warning: something worth knowing"));
         Assert.False(records.Read(""));
         Assert.False(records.Read("{"));
 
-        // The run itself, which is the task with no parent: it is the bar.
+        // A bar of the run's own, which is a task with no parent.
         Assert.True(
             records.Read(
                 """{"signal":"begin","id":1,"parent":null,"what":"","direction":null,"total":3}"""
             )
         );
-        Assert.Equal(3, records.Total);
-        Assert.Null(records.Moving);
 
-        // A piece of it, which is what the line under the bar names.
+        var whole = Assert.Single(records.Tasks);
+        Assert.Equal(3, whole.Total);
+        Assert.Null(whole.Moving);
+
+        // A direction under it, which is a bar of its own because it says which way it moves.
         Assert.True(
             records.Read(
-                """{"signal":"begin","id":2,"parent":1,"what":"a key","direction":"up","total":1}"""
+                """{"signal":"begin","id":2,"parent":1,"what":"","direction":"up","total":10}"""
             )
         );
-        Assert.Equal("a key", records.Moving);
 
-        // The piece moving is not the bar moving: what is drawn of the run is the run's own count.
-        Assert.False(records.Read("""{"signal":"advance","id":2,"done":1}"""));
-        Assert.Equal(0, records.Done);
+        Assert.Equal(2, records.Tasks.Count);
+        Assert.Equal(SyncAim.Up, records.Tasks[1].Aim);
 
-        Assert.True(records.Read("""{"signal":"advance","id":1,"done":2}"""));
-        Assert.Equal(2, records.Done);
+        // A piece of the direction, which is not a bar: it is what the direction says it is moving.
+        Assert.True(
+            records.Read(
+                """{"signal":"begin","id":3,"parent":2,"what":"a key","direction":null,"total":null}"""
+            )
+        );
 
-        // A piece that finished leaves what it said as the last thing moved, which is what the line shows.
+        Assert.Equal(2, records.Tasks.Count);
+        Assert.Equal("a key", records.Tasks[1].Moving);
+
+        // A piece's own advance is not a bar's: only a task this keeps is moved by one.
+        Assert.False(records.Read("""{"signal":"advance","id":3,"done":1}"""));
+
+        Assert.True(records.Read("""{"signal":"advance","id":2,"done":4}"""));
+        Assert.Equal(4, records.Tasks[1].Done);
+
+        // A task that finished is taken off, and what it said as it went goes with it.
         Assert.True(records.Read("""{"signal":"finish","id":2}"""));
-        Assert.Equal("a key", records.Moving);
 
-        // The run finishing puts the bar at its end, which is not the same as the last count it gave.
-        Assert.True(records.Read("""{"signal":"finish","id":1}"""));
-        Assert.Equal(3, records.Done);
+        Assert.Single(records.Tasks);
+        Assert.Equal(3, records.Tasks[0].Total);
 
-        // And what a run said before is let go of, so that the next run's bar starts at its own first record.
+        // And what a run said before is let go of, so that the next run's rows start at its own first record.
         records.Reset();
-        Assert.Equal(0, records.Done);
-        Assert.Null(records.Total);
-        Assert.Null(records.Moving);
+        Assert.Empty(records.Tasks);
     }
 
     /// <summary>A record this does not model is ignored rather than refused.</summary>
@@ -257,11 +265,15 @@ public sealed class SyncTests
         var records = new SyncProgress();
 
         Assert.True(records.Read("""{"signal":"begin","id":7,"parent":null,"what":"","total":2}"""));
+
+        var task = Assert.Single(records.Tasks);
+
         Assert.False(records.Read("""{"signal":"something_new","id":7}"""));
         Assert.False(records.Read("""{"signal":"begin"}"""));
 
         Assert.True(records.Read("""{"signal":"advance","id":7,"done":1}"""));
-        Assert.Equal(1, records.Done);
-        Assert.Equal(2, records.Total);
+
+        Assert.Equal(1, task.Done);
+        Assert.Equal(2, task.Total);
     }
 }

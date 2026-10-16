@@ -12,12 +12,12 @@ using Vcs = RorolalaVCSPlugin.RorolalaVCSPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// The sync strip and the bar it draws under: what a reader sees of the two.
+/// The sync strip and the panel it draws beside: what a reader sees of the two.
 /// </summary>
 /// <remarks>
 /// What the strip does about a run is the command line's and is not run here, so what is checked is what it
 /// draws: the buttons a reader presses, the colour they turn to while the key that changes a run is held, and
-/// what the bar says about a run that has reported itself. The two are drawn inside a window with the look over
+/// what the panel makes of a run that has reported itself. The two are drawn inside a window with the look over
 /// them, because a mark's colour is the look's to answer and a tree that never reached one would answer nothing.
 /// <para>
 /// What a box leaves out is not checked here: what is carried is kept in the preference file, which a confined
@@ -144,14 +144,14 @@ public sealed class SyncStripTests
         Assert.Equal(rule, Colour(around.BorderBrush));
     }
 
-    /// <summary>The bar is drawn only while a run is going, and says what the run has said.</summary>
+    /// <summary>A row is drawn for every bar a run reports, and only while a run is going.</summary>
     /// <remarks>
-    /// What is drawn is the run's own record of itself: how long it is, how far it has got, and the name of the
-    /// piece it is moving. A run that has not said how long it is yet is drawn as a bar that moves rather than
-    /// as a bar at nothing done, which a reader would read as progress that had stopped.
+    /// What is drawn is what the run said of itself: one row per task, with how long it is, how far it has got,
+    /// and what it is moving right now. A task whose length was never said is drawn as a bar that moves rather
+    /// than as one at nothing done, which a reader would read as progress that had stopped.
     /// </remarks>
     [Fact]
-    public void TheBarIsDrawnOnlyWhileARunIsGoing()
+    public void ThePanelDrawsARowForEveryBarTheRunReports()
     {
         var services = Host.Services();
         var host = services.For(new PluginId(Identity), 0);
@@ -159,12 +159,11 @@ public sealed class SyncStripTests
         new Vcs().Initialize(host);
 
         var sync = new SyncWatcher(host, host.Log);
-        var band = new SyncBand(sync);
-        Assert.False(band.IsVisible);
+        var panel = new SyncPanel(sync);
+        Assert.False(panel.IsVisible);
 
-        var (bar, said) = Band(band);
-
-        // A run that has reported itself: the whole run's records are the ones with no parent.
+        // A bar of the run's own, a direction under it, and a piece the direction is moving: the run and the
+        // direction are bars of their own, and the piece is what the direction says it is moving.
         Assert.True(
             sync.Progress.Read(
                 """{"signal":"begin","id":1,"parent":null,"what":"","direction":null,"total":4}"""
@@ -172,29 +171,56 @@ public sealed class SyncStripTests
         );
         Assert.True(
             sync.Progress.Read(
-                """{"signal":"begin","id":2,"parent":1,"what":"a key","direction":"up","total":1}"""
+                """{"signal":"begin","id":2,"parent":1,"what":"","direction":"up","total":10}"""
             )
         );
-        Assert.True(sync.Progress.Read("""{"signal":"advance","id":1,"done":3}"""));
+        Assert.True(
+            sync.Progress.Read(
+                """{"signal":"begin","id":3,"parent":2,"what":"a/file.psd","direction":null,"total":null}"""
+            )
+        );
+        Assert.True(sync.Progress.Read("""{"signal":"advance","id":2,"done":3}"""));
 
-        band.Draw(sync.Progress, running: true);
+        panel.Draw(sync.Progress, running: true);
 
-        Assert.True(band.IsVisible);
-        Assert.False(bar.IsIndeterminate);
-        Assert.Equal(4, bar.Maximum);
-        Assert.Equal(3, bar.Value);
-        Assert.Equal("a key", said.Text);
+        Assert.True(panel.IsVisible);
 
-        // A run that has said nothing yet moves rather than sits at nothing.
-        band.Draw(new SyncProgress(), running: true);
+        var rows = Rows(panel);
 
-        Assert.True(bar.IsIndeterminate);
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.sync.working"), said.Text);
+        // Two rows, not three: the piece is not a bar of its own, it is what the direction is moving.
+        Assert.Equal(2, rows.Count);
 
-        // And once it is over there is nothing to draw, which is most of the time.
-        band.Draw(sync.Progress, running: false);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.sync.working"), Head(rows[0]));
+        Assert.Equal(4, Bar(rows[0]).Maximum);
+        Assert.Equal(0, Bar(rows[0]).Value);
 
-        Assert.False(band.IsVisible);
+        Assert.Equal("↑ " + RolaI18N.Get("rorolala_vcs.sync.row_up"), Head(rows[1]));
+        Assert.Equal("30%", Share(rows[1]));
+        Assert.Equal(10, Bar(rows[1]).Maximum);
+        Assert.Equal(3, Bar(rows[1]).Value);
+        Assert.Equal("a/file.psd", Moving(rows[1]));
+
+        // A task that has not said how long it is moves rather than sits at nothing done.
+        Assert.True(
+            sync.Progress.Read(
+                """{"signal":"begin","id":4,"parent":null,"what":"plan","direction":null,"total":null}"""
+            )
+        );
+        panel.Draw(sync.Progress, running: true);
+
+        Assert.True(Bar(Rows(panel)[2]).IsIndeterminate);
+
+        // A task that is over is taken off, the way the command line takes its bar off the terminal.
+        Assert.True(sync.Progress.Read("""{"signal":"finish","id":2}"""));
+        panel.Draw(sync.Progress, running: true);
+
+        Assert.DoesNotContain(Rows(panel), row => Head(row).StartsWith('↑'));
+
+        // And with the run over there is nothing to draw at all, which is most of the time.
+        panel.Draw(sync.Progress, running: false);
+
+        Assert.False(panel.IsVisible);
+        Assert.Empty(Rows(panel));
     }
 
     /// <summary>The plugin's identity, which is what its settings are kept under.</summary>
@@ -255,17 +281,41 @@ public sealed class SyncStripTests
             .ToArray();
     }
 
-    /// <summary>The bar and the line inside the band, which is what a run is drawn with.</summary>
-    /// <param name="band">The band.</param>
-    /// <returns>The bar and the words under it.</returns>
-    private static (ProgressBar Bar, TextBlock Said) Band(SyncBand band)
+    /// <summary>The rows a panel has drawn, in the order the run opened them.</summary>
+    /// <param name="panel">The panel.</param>
+    /// <returns>The rows.</returns>
+    private static IReadOnlyList<StackPanel> Rows(SyncPanel panel)
     {
-        var inside = Assert.IsType<StackPanel>(band.Child);
-        var said = Assert.IsType<TextBlock>(inside.Children[0]);
-        var bar = Assert.IsType<ProgressBar>(inside.Children[1]);
+        var scroll = Assert.IsType<ScrollViewer>(panel.Child);
+        var rows = Assert.IsType<StackPanel>(scroll.Content);
 
-        return (bar, said);
+        return rows.Children.OfType<StackPanel>().ToArray();
     }
+
+    /// <summary>What a row calls the task it is about.</summary>
+    /// <param name="row">The row.</param>
+    /// <returns>The words at the start of the row.</returns>
+    private static string Head(StackPanel row) =>
+        Assert.IsType<TextBlock>(Assert.IsType<Grid>(row.Children[0]).Children[0]).Text
+        ?? string.Empty;
+
+    /// <summary>What a row says of how far its task has got.</summary>
+    /// <param name="row">The row.</param>
+    /// <returns>The words at the end of the row.</returns>
+    private static string Share(StackPanel row) =>
+        Assert.IsType<TextBlock>(Assert.IsType<Grid>(row.Children[0]).Children[1]).Text
+        ?? string.Empty;
+
+    /// <summary>The bar of a row.</summary>
+    /// <param name="row">The row.</param>
+    /// <returns>The bar.</returns>
+    private static ProgressBar Bar(StackPanel row) => Assert.IsType<ProgressBar>(row.Children[1]);
+
+    /// <summary>What a row says it is moving, or nothing when it has not said.</summary>
+    /// <param name="row">The row.</param>
+    /// <returns>The name, or nothing.</returns>
+    private static string? Moving(StackPanel row) =>
+        row.Children.Count > 2 ? Assert.IsType<TextBlock>(row.Children[2]).Text : null;
 
     /// <summary>What one of the look's own names is drawn in.</summary>
     /// <param name="resources">The look's resources.</param>

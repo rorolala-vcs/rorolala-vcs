@@ -9,9 +9,9 @@ namespace RorolalaVCSPlugin;
 /// What the sync buttons and the bar under them are drawn from.
 /// </summary>
 /// <remarks>
-/// One of these belongs to a dock's view, and both the strip in the dock's header and the bar in the view read
-/// it: whether there is work to carry, whether a run is going, and what that run has said of itself. The two
-/// are two drawings of one answer, so neither keeps any of it.
+/// One of these belongs to a dock's view, and both the strip in the dock's header and the panel down the right
+/// of the view read it: whether there is work to carry, whether a run is going, and what that run has said of
+/// itself. The two are two drawings of one answer, so neither keeps any of it.
 /// <para>
 /// The plan is asked for off the window's thread, because asking costs a fetch of the Vault's Layout: a dock
 /// that asked on its own thread would freeze while the network answered. Every change is said on the window's
@@ -148,9 +148,11 @@ internal sealed class SyncWatcher
                 way,
                 scope,
                 force,
-                // Every record redraws, and they are drawn on the window's thread: the run is on another one,
-                // and a control touched from there is a control touched by two threads at once.
-                _ => On(() => Changed?.Invoke(this, EventArgs.Empty))
+                // What the run says is read into the one progress the panel draws from, and every record says so
+                // on the window's thread: the run is on another one, and a control touched from there is a control
+                // touched by two threads at once.
+                Progress,
+                () => On(() => Changed?.Invoke(this, EventArgs.Empty))
             );
 
             On(() =>

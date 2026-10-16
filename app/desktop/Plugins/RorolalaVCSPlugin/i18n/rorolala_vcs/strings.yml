@@ -281,6 +281,15 @@ rorolala_vcs:
     working:
       en: Syncing…
       zh-CN: 正在同步……
+
+    # What a row of the sync panel calls a direction. The panel draws one row per bar a run reports, and a
+    # direction of a transfer is one of them; a task that has a name of its own is read by that name instead.
+    row_up:
+      en: Uploading
+      zh-CN: 上传中
+    row_down:
+      en: Updating
+      zh-CN: 更新中
     confirm_title:
       en: Sync with something left out?
       zh-CN: 要跳过一部分来同步吗？

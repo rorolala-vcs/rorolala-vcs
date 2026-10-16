@@ -6,40 +6,122 @@ using RorolalaDesktop.I18n;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// What a run says it is doing, as much of it as a bar and a line need.
+/// Which way one task's work moves, when it moves any.
+/// </summary>
+/// <remarks>
+/// The command line's own two directions, read from a record's <c>direction</c> field: work leaving this side is
+/// up, and work arriving is down. A task that moves no data — reading the Layout, planning, writing the changes
+/// down — carries none, and is drawn without one.
+/// </remarks>
+internal enum SyncAim
+{
+    /// <summary>Work leaving this side.</summary>
+    Up,
+
+    /// <summary>Work arriving at this side.</summary>
+    Down,
+}
+
+/// <summary>
+/// One thing a run is doing, as much of it as a row needs.
+/// </summary>
+/// <remarks>
+/// A task is what one <c>begin</c> record opens and the records that name the same id are about: how long it is,
+/// how far it has got, and what it is moving right now. A task that is part of another is a bar of its own — the
+/// two directions of a transfer under the transfer — while a task that only names what its parent is moving is
+/// not: it is what the parent shows as a line of its own.
+/// </remarks>
+internal sealed class SyncTask
+{
+    /// <summary>Makes a task from the record that opened it.</summary>
+    /// <param name="what">What the record calls it.</param>
+    /// <param name="aim">Which way its work moves, or nothing when it moves no data.</param>
+    /// <param name="total">How long it is, or nothing when the record did not say.</param>
+    public SyncTask(string what, SyncAim? aim, long? total)
+    {
+        What = what;
+        Aim = aim;
+        Total = total;
+    }
+
+    /// <summary>What it is called, which is the command line's own word for it.</summary>
+    public string What { get; }
+
+    /// <summary>Which way its work moves, or nothing when it moves no data.</summary>
+    public SyncAim? Aim { get; }
+
+    /// <summary>How much of it there is in all, or nothing when the run has not said.</summary>
+    public long? Total { get; }
+
+    /// <summary>How much of it is behind it, counted the way its total is.</summary>
+    public long Done { get; private set; }
+
+    /// <summary>What it is moving right now, or nothing when it has not said.</summary>
+    public string? Moving { get; private set; }
+
+    /// <summary>Says how far it has got.</summary>
+    /// <param name="done">How much of it is behind it.</param>
+    public void Advance(long done) => Done = done;
+
+    /// <summary>Names the piece it is moving right now.</summary>
+    /// <param name="what">The name, or nothing when it has none.</param>
+    public void Name(string? what) => Moving = what is { Length: > 0 } ? what : null;
+}
+
+/// <summary>
+/// What a run says it is doing, as the tasks it reports.
 /// </summary>
 /// <remarks>
 /// The records are the command line's own — one JSON object per line on its error stream, written whenever a
-/// sync is asked for a structural renderer — and what is read out of them is the whole run's length, how far
-/// it has got, and the name of the piece being moved right now. What is drawn is a bar of the whole run rather
-/// than of one piece, because the pieces come and go while the run does not.
+/// sync is asked for a structural renderer — and every task one of them opens is kept, so that a run which draws
+/// several bars at once is read as several rather than as one. A run of `rola sync` is exactly that: reaching the
+/// Vault and planning, carrying the content, and writing the changes down each say a bar of their own, one after
+/// another, and a reader shown only the last would see a bar that jumped.
 /// <para>
-/// A record that is not one of these, or one that says something this does not model, is nothing to draw: the
-/// stream is the command line's to add to, and a reader that refused what it did not know would stop drawing
-/// the day a record was added.
+/// What is kept is the whole of what a task says, and nothing of it is guessed: how long it is and how far it
+/// has got are what its records said, and a task whose length was never said is drawn as one still moving rather
+/// than as one at nothing done.
+/// </para>
+/// <para>
+/// One of these crosses two threads: the run reads the records on the thread it runs on and the panel draws on
+/// the window's, so the tasks are written under a lock and handed out as they are rather than as the list itself.
 /// </para>
 /// </remarks>
 internal sealed class SyncProgress
 {
-    /// <summary>The id of the whole run, which is the one task that is part of nothing else.</summary>
-    private long? _whole;
+    /// <summary>What the tasks are written under, since the run writes them while the panel reads them.</summary>
+    private readonly object _gate = new();
 
-    /// <summary>How much of the whole run there is in all, when the run said so at the start.</summary>
-    public long? Total { get; private set; }
+    /// <summary>The tasks to draw, in the order the run opened them.</summary>
+    private readonly List<SyncTask> _tasks = [];
 
-    /// <summary>How much of the whole run is behind it.</summary>
-    public long Done { get; private set; }
+    /// <summary>The same tasks by id, which is what a later record is answered with.</summary>
+    private readonly Dictionary<long, SyncTask> _byId = [];
 
-    /// <summary>What is being moved right now, which is the last piece that began.</summary>
-    public string? Moving { get; private set; }
+    /// <summary>The tasks the run has opened and not yet finished, in the order it opened them.</summary>
+    /// <remarks>
+    /// A copy taken under the lock rather than the list itself: the run goes on adding and taking away while the
+    /// panel reads what is here, and a list read while it is changed is a list walked off its own end.
+    /// </remarks>
+    public IReadOnlyList<SyncTask> Tasks
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _tasks.ToArray();
+            }
+        }
+    }
 
-    /// <summary>Forgets a run that is over, so that the next one's bar starts where its own first record is.</summary>
+    /// <summary>Forgets a run that is over, so that the next one's rows start where its own records do.</summary>
     public void Reset()
     {
-        _whole = null;
-        Total = null;
-        Done = 0;
-        Moving = null;
+        lock (_gate)
+        {
+            _tasks.Clear();
+            _byId.Clear();
+        }
     }
 
     /// <summary>Reads one record, which is one line of the run's own progress stream.</summary>
@@ -84,61 +166,117 @@ internal sealed class SyncProgress
             return false;
         }
 
-        switch (signal.GetString())
+        return Held(record, at, signal.GetString());
+    }
+
+    /// <summary>
+    /// Takes one record's worth of change under the lock, since the run writes while the panel reads.
+    /// </summary>
+    /// <param name="record">The record.</param>
+    /// <param name="at">The id it names its task by.</param>
+    /// <param name="signal">What the record is.</param>
+    /// <returns>Whether it said anything this understands.</returns>
+    private bool Held(JsonElement record, long at, string? signal)
+    {
+        lock (_gate)
         {
-            case "begin":
-                // The one task with no parent is the run itself, and it is the one the bar is drawn of: what
-                // it says it is moving is nothing, since it is the thing the pieces are part of.
-                var parent = record.TryGetProperty("parent", out var above) ? above : default;
-
-                if (parent.ValueKind is JsonValueKind.Null || parent.ValueKind is JsonValueKind.Undefined)
-                {
-                    _whole = at;
-                    Done = 0;
-                    Total =
-                        record.TryGetProperty("total", out var length)
-                        && length.ValueKind is JsonValueKind.Number
-                            ? length.GetInt64()
-                            : null;
-
-                    return true;
-                }
-
-                Moving =
-                    record.TryGetProperty("what", out var what) && what.ValueKind is JsonValueKind.String
-                        ? what.GetString()
-                        : null;
-
-                return true;
-
-            case "advance":
-                if (
-                    _whole == at
-                    && record.TryGetProperty("done", out var done)
-                    && done.ValueKind is JsonValueKind.Number
-                )
-                {
-                    Done = done.GetInt64();
-
-                    return true;
-                }
-
-                // A piece's own advance is not the bar's: the bar is the whole run's, and a piece that
-                // finished is said by the next piece that begins rather than by a number of its own.
-                return false;
-
-            case "finish":
-                if (_whole == at)
-                {
-                    Done = Total ?? Done;
-                }
-
-                return true;
-
-            default:
-                return false;
+            return signal switch
+            {
+                "begin" => Began(record, at),
+                "advance" => Advanced(record, at),
+                "finish" => Ended(at),
+                _ => false,
+            };
         }
     }
+
+    /// <summary>Takes the task a begin record opens, or names the piece its parent is moving.</summary>
+    /// <param name="record">The record.</param>
+    /// <param name="at">The id it names the task by.</param>
+    /// <returns>Whether it said anything this understands, which a begin always does.</returns>
+    private bool Began(JsonElement record, long at)
+    {
+        var parent = Number(record, "parent");
+        var aim = Aim(Text(record, "direction"));
+
+        if (parent is { } above && aim is null)
+        {
+            // A task with a parent and no direction is not a bar of its own: it is the piece its parent is
+            // moving right now, which the parent says as a line rather than beside its own. A parent this has
+            // not kept — a piece of a task that has already ended — names nothing.
+            if (_byId.TryGetValue(above, out var moving))
+            {
+                moving.Name(Text(record, "what"));
+            }
+
+            return true;
+        }
+
+        var task = new SyncTask(
+            Text(record, "what") ?? string.Empty,
+            aim,
+            Number(record, "total")
+        );
+
+        _byId[at] = task;
+        _tasks.Add(task);
+
+        return true;
+    }
+
+    /// <summary>Says how far the task a record names has got.</summary>
+    /// <param name="record">The record.</param>
+    /// <param name="at">The id it names the task by.</param>
+    /// <returns>Whether it named a task this keeps.</returns>
+    private bool Advanced(JsonElement record, long at)
+    {
+        if (!_byId.TryGetValue(at, out var task) || Number(record, "done") is not { } done)
+        {
+            return false;
+        }
+
+        task.Advance(done);
+
+        return true;
+    }
+
+    /// <summary>Takes a task off the list, which is what its finish says.</summary>
+    /// <remarks>
+    /// A task that is over is taken off, the way the command line takes its bar off the terminal: what is left is
+    /// what is still going, and a row that stayed after its work had ended would be a row read for nothing.
+    /// </remarks>
+    /// <param name="at">The id it was named by.</param>
+    /// <returns>Whether it was a task this keeps.</returns>
+    private bool Ended(long at) => _byId.Remove(at, out var task) && _tasks.Remove(task);
+
+    /// <summary>The number a record states under <paramref name="name"/>, or nothing when it states none.</summary>
+    /// <param name="record">The record.</param>
+    /// <param name="name">The field's name.</param>
+    /// <returns>The number, or nothing.</returns>
+    private static long? Number(JsonElement record, string name) =>
+        record.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.Number
+            ? value.GetInt64()
+            : null;
+
+    /// <summary>The text a record states under <paramref name="name"/>, or nothing when it states none.</summary>
+    /// <param name="record">The record.</param>
+    /// <param name="name">The field's name.</param>
+    /// <returns>The text, or nothing.</returns>
+    private static string? Text(JsonElement record, string name) =>
+        record.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    /// <summary>Which way a record says its work moves, or nothing when it says none this knows.</summary>
+    /// <param name="said">What the record wrote for the direction.</param>
+    /// <returns>The direction, or nothing.</returns>
+    private static SyncAim? Aim(string? said) =>
+        said switch
+        {
+            "up" => SyncAim.Up,
+            "down" => SyncAim.Down,
+            _ => null,
+        };
 }
 
 /// <summary>
@@ -299,17 +437,20 @@ internal static class Sync
     /// <param name="way">Which way it carries.</param>
     /// <param name="scope">What it carries.</param>
     /// <param name="force">Whether history is to be changed rather than refused.</param>
-    /// <param name="progress">What is told each record, which the caller draws on its own thread.</param>
+    /// <param name="records">What the run's records are read into, which the caller keeps and draws.</param>
+    /// <param name="progress">What is told that a record was said, which the caller draws on its own thread.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
     public static (bool Done, string Said) Run(
         string directory,
         SyncWay way,
         SyncScope scope,
         bool force,
-        Action<SyncProgress> progress
+        SyncProgress records,
+        Action progress
     )
     {
         ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(progress);
 
         var program = Environment.GetEnvironmentVariable(Program);
@@ -345,7 +486,6 @@ internal static class Sync
             using var process =
                 Process.Start(start) ?? throw new InvalidOperationException("the process was not started");
 
-            var records = new SyncProgress();
             var said = new StringBuilder();
 
             // The output is drained on a task of its own rather than read after the wait: a run that filled
@@ -359,7 +499,7 @@ internal static class Sync
                     said.AppendLine(line);
                 }
 
-                progress(records);
+                progress();
             }
 
             process.WaitForExit();

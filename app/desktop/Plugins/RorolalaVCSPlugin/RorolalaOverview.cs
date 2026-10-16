@@ -366,21 +366,19 @@ internal sealed class OverviewView : UserControl
 
         _blocks = new StackPanel();
 
-        // The sync's own state, which the strip in the dock's header and the bar above the table are two
+        // The sync's own state, which the strip in the dock's header and the panel down the right are two
         // drawings of: the two are made here together, and neither of them keeps any of it.
         _sync = new SyncWatcher(_host, _log);
         _strip = new SyncStrip(_host, _sync, () => BaseDirectory.Current, Refresh);
-        _band = new SyncBand(_sync);
+        _panel = new SyncPanel(_sync);
 
         var root = new Grid();
 
-        // Two rows rather than one: what a sync is doing stands above the reading, and the reading fills what
-        // is left. The bar is nothing at all while no run is going, so the row it is in is nothing then too.
-        root.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        root.RowDefinitions.Add(new RowDefinition(GridLength.Star));
-
-        Grid.SetRow(_band, 0);
-        root.Children.Add(_band);
+        // Two columns rather than one: what a sync is doing stands down the right of the reading, so that the
+        // work and the run are read at once. The panel's column is nothing while no run is going, and the table
+        // has the whole width then — see `Split`.
+        root.ColumnDefinitions.Add(_tableColumn);
+        root.ColumnDefinitions.Add(_panelColumn);
 
         var body = new ScrollViewer
         {
@@ -388,11 +386,13 @@ internal sealed class OverviewView : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
 
-        Grid.SetRow(body, 1);
-        Grid.SetRow(_notice, 1);
+        // The reading and the words that stand in for one share the left column, one at a time: a work with
+        // changes is the table, and one without them is the words.
+        var reading = new Grid { Children = { body, _notice } };
 
-        root.Children.Add(body);
-        root.Children.Add(_notice);
+        Grid.SetColumn(_panel, 1);
+        root.Children.Add(reading);
+        root.Children.Add(_panel);
 
         Content = root;
 
@@ -421,7 +421,33 @@ internal sealed class OverviewView : UserControl
 
         DetachedFromVisualTree += (_, _) => Listen(false);
 
+        // What a run is doing decides whether the panel has anywhere to stand: with none going, the room down
+        // the right is given back to the table rather than left as an empty third of the dock.
+        _sync.Changed += (_, _) => Split(_sync.Running);
+        Split(_sync.Running);
+
         Draw();
+    }
+
+    /// <summary>How the width is shared while a run is going: the reading to the panel.</summary>
+    private const double TableShare = 7;
+
+    /// <summary>The panel's share of the width while a run is going, which is a third of the dock.</summary>
+    private const double PanelShare = 3;
+
+    /// <summary>
+    /// Gives the panel its share of the width while a run is going, and takes it back when none is.
+    /// </summary>
+    /// <remarks>
+    /// The share is a third of the dock, which is what a row of a bar and a path reads in, and the reading keeps
+    /// the rest. With no run going there is nothing down the right, so the reading has the whole width rather
+    /// than an empty third of it.
+    /// </remarks>
+    /// <param name="running">Whether a run is going.</param>
+    private void Split(bool running)
+    {
+        _tableColumn.Width = new GridLength(running ? TableShare : 1, GridUnitType.Star);
+        _panelColumn.Width = new GridLength(running ? PanelShare : 0, GridUnitType.Star);
     }
 
     /// <summary>What the dock's header carries, which is the sync strip with the reading's own refresh in it.</summary>
@@ -438,8 +464,14 @@ internal sealed class OverviewView : UserControl
     /// <summary>The strip the dock's header carries.</summary>
     private readonly SyncStrip _strip;
 
-    /// <summary>What a run that is going is drawn as, above the table.</summary>
-    private readonly SyncBand _band;
+    /// <summary>What a run that is going is drawn as, down the right of the reading.</summary>
+    private readonly SyncPanel _panel;
+
+    /// <summary>The column the reading takes, which is the whole width while no run is going.</summary>
+    private readonly ColumnDefinition _tableColumn = new(new GridLength(TableShare, GridUnitType.Star));
+
+    /// <summary>The column the panel takes, which is nothing while no run is going.</summary>
+    private readonly ColumnDefinition _panelColumn = new(new GridLength(0, GridUnitType.Star));
 
     /// <summary>Reads the work again and draws it, which is what the dock's own command asks for.</summary>
     /// <remarks>
