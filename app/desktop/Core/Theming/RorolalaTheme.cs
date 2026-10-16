@@ -1381,6 +1381,37 @@ internal sealed class RorolalaTheme
                 selector => selector.OfType<TemplatedControl>().Template().Name("PART_ContentPresenter"),
                 new Setter(ContentPresenter.TransitionsProperty, Fading())
             ),
+
+            // A step of a list or a grid is the one place the rule above is not wanted as it stands. A row or
+            // a tile the pointer is merely over takes its mark at once — a highlight that trailed the cursor
+            // would read as the program being slow, and a highlight is the last thing that may feel lagged —
+            // while what is *chosen* is a statement about the entry rather than a report of where the pointer
+            // is, so its wash is allowed to arrive as a fade. The two states are therefore told apart here: the
+            // unchosen one is given a set with nothing in it, which cancels the fade the rule above hands every
+            // presenter, and the chosen one keeps it. The chosen rule is the one that animates, because the
+            // transition is in place before the background it fades — the chosen ground comes from the base
+            // theme's own rule, which ranks below this one and so is applied after it.
+            //
+            // Both name the part, because the ground a step changes is the presenter's and not the step's: a
+            // rule on the item would set a property the template only binds from, not the one the base theme
+            // paints. Both are activated — by being unchosen, and by being chosen — and an activated setter
+            // outranks the plain rule above, which is what lets them be heard over it at all.
+            On(
+                selector => selector
+                    .OfType<ListBoxItem>()
+                    .Not(previous => previous.Class(":selected"))
+                    .Template()
+                    .Name("PART_ContentPresenter"),
+                new Setter(ContentPresenter.TransitionsProperty, Steady())
+            ),
+            On(
+                selector => selector
+                    .OfType<ListBoxItem>()
+                    .Class(":selected")
+                    .Template()
+                    .Name("PART_ContentPresenter"),
+                new Setter(ContentPresenter.TransitionsProperty, Fading())
+            ),
             On(
                 selector => selector.OfType<TemplatedControl>().Template().Name("PART_HeaderPresenter"),
                 new Setter(ContentPresenter.TransitionsProperty, Fading())
@@ -2200,6 +2231,16 @@ internal sealed class RorolalaTheme
 
     /// <summary>The fade a surface takes a new colour with.</summary>
     private static Transitions Fading() => Fading(Fade);
+
+    /// <summary>
+    /// No transition at all, for the one surface a change must reach at once.
+    /// </summary>
+    /// <remarks>
+    /// A hover has to land with the pointer rather than trail it, so the row or tile the pointer is merely
+    /// over is drawn with this: its ground still changes, but it changes where it is rather than fading in
+    /// behind the cursor. See where a list step is styled for the two states this tells apart.
+    /// </remarks>
+    private static Transitions Steady() => new();
 
     /// <summary>The fade a surface arrives with, over the given time.</summary>
     /// <param name="duration">How long it takes.</param>

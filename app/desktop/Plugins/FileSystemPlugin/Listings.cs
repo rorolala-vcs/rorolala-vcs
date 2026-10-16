@@ -358,7 +358,6 @@ internal abstract class EntryView : UserControl
             IsVisible = false,
             IsHitTestVisible = false,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5),
         };
 
         band[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Primary);
