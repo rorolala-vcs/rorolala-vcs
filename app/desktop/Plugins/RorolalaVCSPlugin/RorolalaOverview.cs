@@ -1438,15 +1438,15 @@ internal sealed class OverviewView : UserControl
     private const double ButtonGap = 4;
 
     /// <summary>
-    /// How wide the column of operations is: the widest button and the room for a second beside it.
+    /// How wide the column of operations is: three buttons and the room between them.
     /// </summary>
     /// <remarks>
-    /// The buttons wrap, so the column has to be wide enough for the two that most often stand together — a
-    /// loss wants rebuilding and connecting, and a file that is somebody else's wants its content put back and
-    /// itself claimed — rather than only for the widest one. A row with more than fits wraps onto a second line,
-    /// which is what the WrapPanel is for and what makes a row grow rather than lose a button.
+    /// Three because that is the most a row is ever offered — a loss wants rebuilding, connecting and confirming,
+    /// and a likely move wants confirming, taking back and connecting — so the column holds them all on one line
+    /// rather than wrapping the third under the others. A row with more than fits still wraps, which is what the
+    /// WrapPanel is for and what makes a row grow rather than lose a button.
     /// </remarks>
-    private const double OperationsColumn = (2 * ButtonWidth) + (2 * ButtonGap);
+    private const double OperationsColumn = (3 * ButtonWidth) + (3 * ButtonGap);
 
     /// <summary>One colour with the alpha a pill's ground is laid at, over whatever the row is drawn on.</summary>
     /// <param name="colour">The state's colour.</param>

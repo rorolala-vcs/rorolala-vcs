@@ -365,6 +365,9 @@ rorolala_vcs:
     confirm_rename:
       en: Confirm
       zh-CN: 确定重命名
+    confirm_lost:
+      en: Confirm
+      zh-CN: 确认
     connect:
       en: Connect
       zh-CN: 连接至

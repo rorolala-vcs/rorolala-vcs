@@ -40,6 +40,16 @@ internal enum Operation
     ConfirmRename,
 
     /// <summary>
+    /// Confirm that the path the Layout names is really gone, and drop the name.
+    /// </summary>
+    /// <remarks>
+    /// The one thing to do about a loss that keeps nothing: the command reads a path the Layout names but the
+    /// tree does not hold and takes the name away, which is the answer when the file is not coming back. It is
+    /// the other end of <see cref="Rebuild"/>, which brings the file back instead.
+    /// </remarks>
+    ConfirmLost,
+
+    /// <summary>
     /// Assert that a lost path moved to the file it is paired with, which is what connecting two rows does.
     /// </summary>
     /// <remarks>
@@ -102,7 +112,7 @@ internal static class OverviewOperations
     public static IReadOnlyList<Operation> Of(State state) =>
         state switch
         {
-            State.Lost => [Operation.Rebuild, Operation.Connect],
+            State.Lost => [Operation.Rebuild, Operation.Connect, Operation.ConfirmLost],
             State.Untagged => [Operation.Connect],
             State.RenamedLikely => [Operation.ConfirmRename, Operation.RestoreMove, Operation.Connect],
             State.Renamed => [Operation.ConfirmRename, Operation.RestoreMove],
@@ -153,6 +163,7 @@ internal static class OverviewOperations
             Operation.RestoreMove => "rorolala_vcs.operations.restore_move",
             Operation.RestoreContent => "rorolala_vcs.operations.restore_content",
             Operation.ConfirmRename => "rorolala_vcs.operations.confirm_rename",
+            Operation.ConfirmLost => "rorolala_vcs.operations.confirm_lost",
             Operation.Connect => "rorolala_vcs.operations.connect",
             Operation.CancelMerge => "rorolala_vcs.operations.cancel_merge",
             _ => "rorolala_vcs.operations.take_ownership",
@@ -256,6 +267,11 @@ internal static class OverviewOperations
                 break;
             case Operation.ConfirmRename:
                 arguments.Add("--rename");
+                break;
+            case Operation.ConfirmLost:
+                // The lost path's name is dropped from the record: the file is not coming back, so what the
+                // Layout says about it is taken away rather than put back.
+                arguments.Add("--delete");
                 break;
             case Operation.Connect:
                 // The lost path is the one that moved, so it is the one named first and the file it went to is
