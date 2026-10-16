@@ -296,6 +296,14 @@ internal sealed class RorolalaTheme
     /// <summary>How long a drop zone takes to light up.</summary>
     private static readonly TimeSpan Light = TimeSpan.FromMilliseconds(120);
 
+    /// <summary>How long a bar takes to reach a new step, which is long enough to be read as a slide.</summary>
+    /// <remarks>
+    /// Longer than a fade on purpose: a fill that slides is a movement the eye follows, while a colour that
+    /// takes as long would read as a lag. A run reports itself in jumps, so this is what makes the jumps one
+    /// movement rather than a stutter.
+    /// </remarks>
+    private static readonly TimeSpan ProgressSlide = TimeSpan.FromMilliseconds(280);
+
     /// <summary>
     /// The typeface the program is set in.
     /// </summary>
@@ -1161,10 +1169,19 @@ internal sealed class RorolalaTheme
                 selector => selector.OfType<ButtonSpinner>(),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small)
             ),
+            // A bar is a plain rectangle rather than a pill, drawn as one surface: the whole of it is outlined in
+            // the primary, the part that is done is the primary itself, and the part that is not is a wash of that
+            // same primary — the `selection` the design already spends on what is chosen. Which of the two the
+            // fill is comes from the base theme's own template, which paints `PART_Indicator` with the bar's
+            // `Foreground` and the track behind it with its `Background`.
             On(
                 selector => selector.OfType<ProgressBar>(),
                 new Setter(Layoutable.HeightProperty, 10.0),
-                new Setter(TemplatedControl.CornerRadiusProperty, Pill)
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
+                Brushed(TemplatedControl.BackgroundProperty, Selection),
+                Brushed(TemplatedControl.BorderBrushProperty, Primary),
+                new Setter(TemplatedControl.BorderThicknessProperty, Edge),
+                Brushed(TemplatedControl.ForegroundProperty, Primary)
             ),
             On(
                 selector => selector.OfType<Slider>(),
@@ -1348,6 +1365,14 @@ internal sealed class RorolalaTheme
             On(
                 selector => selector.OfType<TemplatedControl>().Template().Name("checkMark"),
                 new Setter(Shape.TransitionsProperty, Fading())
+            ),
+
+            // The fill of a bar is sized by the control rather than by the look: the width of `PART_Indicator`
+            // is written on every step, and this is what turns one written number into a movement. Read off the
+            // part rather than the bar, because it is the part the width is written on.
+            On(
+                selector => selector.OfType<ProgressBar>().Template().Name("PART_Indicator"),
+                new Setter(Border.TransitionsProperty, Tweening())
             ),
         ];
 
@@ -2167,6 +2192,21 @@ internal sealed class RorolalaTheme
             new DoubleTransition { Property = Visual.OpacityProperty, Duration = duration },
         };
 
+    /// <summary>
+    /// The tween a bar's fill moves with, so that a step of progress is a slide rather than a jump.
+    /// </summary>
+    /// <remarks>
+    /// Only the width is tweened, and only on the fill: the width is the number that means "how far", and it
+    /// is written by the control rather than by anything here — so a transition on it is the whole of the
+    /// animation, and a transition on the bar would have nothing of its own to move. The colour and the height
+    /// are the look's, and arrive at once.
+    /// </remarks>
+    private static Transitions Tweening() =>
+        new()
+        {
+            new DoubleTransition { Property = Layoutable.WidthProperty, Duration = ProgressSlide },
+        };
+
     /// <summary>A brush of one colour.</summary>
     /// <param name="colour">The colour.</param>
     private static IBrush Fill(Color colour) => new SolidColorBrush(colour);
@@ -2199,4 +2239,3 @@ internal sealed class RorolalaTheme
     private static Color WithAlpha(Color colour, byte alpha) =>
         Color.FromArgb(alpha, colour.R, colour.G, colour.B);
 }
-
