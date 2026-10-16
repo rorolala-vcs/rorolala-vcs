@@ -340,6 +340,17 @@ internal sealed class OverviewView : UserControl
     /// </remarks>
     private string? _connecting;
 
+    /// <summary>
+    /// Whether one of the table's operations is going, which is what every one of its buttons is held for.
+    /// </summary>
+    /// <remarks>
+    /// One flag rather than one per row, because what it is about is the tree: every operation button of the
+    /// table acts on the work under the base, and two modes over one work at once would be two runs the second
+    /// of which acts on what the first has half done. The buttons are drawn from it, so it is enough to draw the
+    /// table again when it changes.
+    /// </remarks>
+    private bool _busy;
+
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
 
@@ -864,9 +875,10 @@ internal sealed class OverviewView : UserControl
             Width = ButtonWidth,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, ButtonGap, 2),
-            // Everything is pressable while nothing is being connected; while one is, only the two sides of it
-            // are — which is the row's own button again, so that a second press takes it back.
-            IsEnabled = !running || begun || candidate,
+            // Everything is pressable while nothing is being connected or run; while a connection is in
+            // hand, only the two sides of it are — which is the row's own button again, so that a second
+            // press takes it back; and while an operation is going, nothing answers at all.
+            IsEnabled = !_busy && (!running || begun || candidate),
         };
 
         button.Click += (_, _) =>
@@ -944,12 +956,67 @@ internal sealed class OverviewView : UserControl
         var gain = lost == path ? from : path;
 
         _connecting = null;
-        OverviewOperations.Run(operation, lost, at, gain, host);
+        Perform(operation, lost, at, gain, host);
 
         // The run says the files may have changed, so the reading that follows will say something else. What is
         // drawn now is that reading and not these rows: the two rows of a connection are about to become one
         // move, and drawing them as they were would be drawing a question that has been answered.
+        //
+        // What is let go of after the run is begun rather than before, so that the table the run holds its
+        // buttons on is the one on screen: a table with nothing read under it is one no button could be held on.
         _shown = null;
+    }
+
+    /// <summary>
+    /// Runs one of a row's operations, holding every button of the table while it goes.
+    /// </summary>
+    /// <remarks>
+    /// The operations are the command line's and are not waited for. Two of them over one work at once would be
+    /// two runs whose effect is each other's to undo — a mode is not known to be safe against a second mode over
+    /// the same tree — so a run takes the whole table: its own row's buttons and every other row's, and the
+    /// button it was pressed on along with them. They answer again when it is over.
+    /// <para>
+    /// The busy flag is written and cleared on the window's thread, which is what draws: the run begins on the
+    /// thread that pressed the button, and ends on the one it was made on, so what is told it is over is posted.
+    /// </para>
+    /// </remarks>
+    /// <param name="operation">What is to be done.</param>
+    /// <param name="path">The path it is done to, read where the run is made.</param>
+    /// <param name="at">Where the run is made.</param>
+    /// <param name="paired">The other side of a connection, or nothing for an operation with one path.</param>
+    /// <param name="host">The host.</param>
+    private void Perform(Operation operation, string path, string at, string? paired, IPluginHost host)
+    {
+        Hold(true);
+
+        OverviewOperations.Run(
+            operation,
+            path,
+            at,
+            paired,
+            host,
+            () => Dispatcher.UIThread.Post(() => Hold(false))
+        );
+    }
+
+    /// <summary>
+    /// Draws the table's operation buttons pressable or not, which is every operation button while one is going.
+    /// </summary>
+    /// <remarks>
+    /// What the buttons say has not changed — only whether they answer — so the table is drawn from the rows
+    /// already on screen rather than read again: a reading spent on a button, and one that might disagree with
+    /// what the reader is looking at.
+    /// </remarks>
+    /// <param name="busy">Whether an operation is going.</param>
+    private void Hold(bool busy)
+    {
+        if (_busy == busy)
+        {
+            return;
+        }
+
+        _busy = busy;
+        Redraw();
     }
 
     /// <summary>
@@ -972,26 +1039,26 @@ internal sealed class OverviewView : UserControl
     /// <param name="path">The path it is done to.</param>
     /// <param name="at">Where the run is made.</param>
     /// <param name="host">The host, whose window the question is put over.</param>
-    private static void Ask(Operation operation, string path, string at, IPluginHost host)
+    private void Ask(Operation operation, string path, string at, IPluginHost host)
     {
         var asked = operation switch
         {
             Operation.RestoreContent => new Dialog(
                 RolaI18N.Get("rorolala_vcs.operations.restore_confirm_title"),
                 RolaI18N.Get("rorolala_vcs.operations.restore_confirm_message", path),
-                () => OverviewOperations.Run(operation, path, at, null, host)
+                () => Perform(operation, path, at, null, host)
             ),
             Operation.CancelMerge => new Dialog(
                 RolaI18N.Get("rorolala_vcs.operations.cancel_merge_confirm_title"),
                 RolaI18N.Get("rorolala_vcs.operations.cancel_merge_confirm_message", path),
-                () => OverviewOperations.Run(operation, path, at, null, host)
+                () => Perform(operation, path, at, null, host)
             ),
             _ => null,
         };
 
         if (asked is null)
         {
-            OverviewOperations.Run(operation, path, at, null, host);
+            Perform(operation, path, at, null, host);
             return;
         }
 

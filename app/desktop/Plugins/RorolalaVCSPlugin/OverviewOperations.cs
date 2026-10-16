@@ -220,15 +220,21 @@ internal static class OverviewOperations
     /// <param name="directory">Where the run is made, which is what the path is read from.</param>
     /// <param name="paired">The other side of a connection, or nothing for an operation that has one path.</param>
     /// <param name="host">The host, for the report and for saying the files may have changed.</param>
+    /// <param name="finished">
+    /// What is told the run is over, however it ended, which is what holds the table while one is going. Told on
+    /// the thread the run was made on rather than the window's, so whoever draws does so through the dispatcher.
+    /// </param>
     public static void Run(
         Operation operation,
         string path,
         string directory,
         string? paired,
-        IPluginHost host
+        IPluginHost host,
+        Action finished
     )
     {
         ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(finished);
 
         var program = Environment.GetEnvironmentVariable(Program);
 
@@ -241,6 +247,7 @@ internal static class OverviewOperations
                 )
             );
 
+            finished();
             return;
         }
 
@@ -248,7 +255,7 @@ internal static class OverviewOperations
         // one command the rest of them are spelled into (see `Cancel`).
         if (operation is Operation.CancelMerge)
         {
-            Cancel(path, directory, program, host);
+            Cancel(path, directory, program, host, finished);
             return;
         }
 
@@ -288,13 +295,22 @@ internal static class OverviewOperations
 
         _ = Task.Run(() =>
         {
-            var (done, said) = Ask(program, arguments, directory);
-
-            host.Files.Touch();
-
-            if (!done)
+            try
             {
-                Said(host, said);
+                var (done, said) = Ask(program, arguments, directory);
+
+                host.Files.Touch();
+
+                if (!done)
+                {
+                    Said(host, said);
+                }
+            }
+            finally
+            {
+                // The table is held for as long as the run is, so it is let go of however the run ended — a mode
+                // that failed has still stopped being one that is going.
+                finished();
             }
         });
     }
@@ -317,40 +333,54 @@ internal static class OverviewOperations
     /// <param name="directory">Where the run is made, which is what the path is read from.</param>
     /// <param name="program">The program to run.</param>
     /// <param name="host">The host, for the report and for saying the files may have changed.</param>
-    private static void Cancel(string path, string directory, string program, IPluginHost host)
+    /// <param name="finished">What is told the run is over, however it ended.</param>
+    private static void Cancel(
+        string path,
+        string directory,
+        string program,
+        IPluginHost host,
+        Action finished
+    )
     {
         _ = Task.Run(() =>
         {
-            // The listing names the file the way the system does and the run is made where the row was read,
-            // so the two answer the same question: whether there is a file here to take away.
-            if (File.Exists(Path.Combine(directory, path)))
+            try
             {
-                var (removed, why) = Ask(
+                // The listing names the file the way the system does and the run is made where the row was read,
+                // so the two answer the same question: whether there is a file here to take away.
+                if (File.Exists(Path.Combine(directory, path)))
+                {
+                    var (removed, why) = Ask(
+                        program,
+                        ["--theme-choice=" + Theme, "fs-ops", "rm", path],
+                        directory
+                    );
+
+                    if (!removed)
+                    {
+                        host.Files.Touch();
+                        Said(host, why);
+
+                        return;
+                    }
+                }
+
+                var (done, said) = Ask(
                     program,
-                    ["--theme-choice=" + Theme, "fs-ops", "rm", path],
+                    ["--theme-choice=" + Theme, "align", path, "--delete"],
                     directory
                 );
 
-                if (!removed)
-                {
-                    host.Files.Touch();
-                    Said(host, why);
+                host.Files.Touch();
 
-                    return;
+                if (!done)
+                {
+                    Said(host, said);
                 }
             }
-
-            var (done, said) = Ask(
-                program,
-                ["--theme-choice=" + Theme, "align", path, "--delete"],
-                directory
-            );
-
-            host.Files.Touch();
-
-            if (!done)
+            finally
             {
-                Said(host, said);
+                finished();
             }
         });
     }
