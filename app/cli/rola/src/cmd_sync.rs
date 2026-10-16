@@ -575,15 +575,11 @@ fn carry_with(
             if let Some(task) = &mut down {
                 task.advance_by(1);
             }
-        } else {
-            if let Some(task) = &mut up {
-                let _named = task.doing(name_of(entry));
-            }
 
+            moves.advance_by(1);
+        } else {
             ups.push(entry);
         }
-
-        moves.advance_by(1);
     }
 
     apply_entries(
@@ -596,9 +592,13 @@ fn carry_with(
         &mut failed,
     )?;
 
+    // What is written up is one exchange of many entries rather than a step each, so its share of
+    // the bars is taken once it is done: the whole bar must not read as finished while the exchange
+    // — the step that reaches the network — is still in front of the reader.
     if let Some(task) = &mut up {
         task.advance_by(up_total);
     }
+    moves.advance_by(up_total);
 
     if let Err(cause) = checkout.finish() {
         failed.push(cause);
