@@ -514,7 +514,8 @@ fn carry_with(
         // exchange with the Vault is the whole of what it does.
         let sources =
             fetch::Sources::new(carry.workspace, carry.account, carry.remote, primary, false)
-                .map_err(|cause| ErrorSyncFailed { cause })?;
+                .map_err(|cause| ErrorSyncFailed { cause })?
+                .reporting(progress.clone());
 
         Some(sources)
     };

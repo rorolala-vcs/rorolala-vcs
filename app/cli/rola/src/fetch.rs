@@ -77,6 +77,9 @@ pub struct Sources<'a> {
     candidates: Vec<Candidate>,
     /// What asking them has come to.
     asked: RefCell<Vec<Asked>>,
+    /// What the exchanges say about themselves while they run, which is nothing unless a caller
+    /// hands one in — see [`reporting`](Sources::reporting).
+    progress: Progress,
     /// The runtime the exchanges are waited on: a command is not asynchronous, and this one is made
     /// where the fetches are rather than borrowed, since a command that fetches has no other.
     runtime: tokio::runtime::Runtime,
@@ -152,8 +155,21 @@ impl<'a> Sources<'a> {
             offline,
             candidates,
             asked: RefCell::new(asked),
+            progress: Progress::silent(),
             runtime,
         })
+    }
+
+    /// Hands in the progress the exchanges say themselves to, so a watched run shows a bar while
+    /// content moves.
+    ///
+    /// A run that is not being watched hands nothing, and the exchanges say nothing: a transfer of
+    /// many keys is worth a bar, and leaving it silent is what a run that asked for no bars gets.
+    #[must_use]
+    pub fn reporting(mut self, progress: Progress) -> Self {
+        self.progress = progress;
+
+        self
     }
 
     /// Brings `keys` here from whichever Vaults hold them, so a read that wants one finds it.
@@ -224,7 +240,7 @@ impl<'a> Sources<'a> {
                 self.account,
                 primary.address.to_string(),
                 listing(keys),
-                Progress::silent(),
+                self.progress.clone(),
             ))
             .map_err(|error| error.to_string())
     }
@@ -283,7 +299,7 @@ impl<'a> Sources<'a> {
             self.account,
             address.to_string(),
             String::new(),
-            Progress::silent(),
+            self.progress.clone(),
         ));
 
         self.asked.borrow_mut()[index].held = Some(listing.map_or_else(
@@ -321,7 +337,7 @@ impl<'a> Sources<'a> {
             self.account,
             address.to_string(),
             listing(keys),
-            Progress::silent(),
+            self.progress.clone(),
         ));
     }
 }

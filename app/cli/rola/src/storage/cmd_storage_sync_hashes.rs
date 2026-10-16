@@ -18,10 +18,11 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResRorolalaStorage, ResWorkspace};
+use rorolala_cli_setups::{
+    ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResRorolalaStorage, ResWorkspace,
+};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 
 use crate::Next;
@@ -32,6 +33,7 @@ use crate::exit_codes::{EC_ERR_STORAGE_EXTRACT_FILE_BAD_HASH, EC_HELP};
 use crate::failure::failure;
 use crate::hash::{HashMiss, looks_like_hash, resolve_among};
 use crate::keys::account_named;
+use crate::progress::Reporting;
 
 #[help(buffer)]
 pub fn help_storage_sync_hashes(_: EntryStorageSyncHashes, ec: &mut ResExitCode) {
@@ -133,6 +135,7 @@ pub fn handle_storage_sync_hashes(
     storage: &mut LazyRes<ResRorolalaStorage>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
+    progress: &ResProgressSetting,
 ) -> Next {
     workspace.get_ref().check()?;
 
@@ -165,14 +168,20 @@ pub fn handle_storage_sync_hashes(
         }
     }
 
+    // The exchange is asynchronous and a command is not, so the two meet here: a runtime of this
+    // run's own waits for it, and the run's progress is said to a reader on a thread of its own —
+    // the bar fills as the keys cross, the way `storage sync-all` says its own.
     let runtime = tokio::runtime::Runtime::new().map_err(|error| ActionError::Io(error.into()))?;
-    runtime.block_on(action_sync_hashes_async(
+    let reporting = Reporting::start(*progress);
+    let outcome = runtime.block_on(action_sync_hashes_async(
         held,
         &account,
         target.to_string(),
         hashes.join("\n"),
-        Progress::silent(),
-    ))?;
+        reporting.progress(),
+    ));
+    reporting.finish();
+    outcome?;
 
     ResultSyncHashes.into()
 }
