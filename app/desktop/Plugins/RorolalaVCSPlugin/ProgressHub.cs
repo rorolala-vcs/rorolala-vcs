@@ -37,20 +37,13 @@ internal sealed class ProgressRun
 /// view that draws them: a run begun from a menu has to reach a panel that may not exist yet, and a panel opened
 /// after the run began has to see it.
 /// <para>
-/// A run is taken off a few seconds after its process ends rather than the moment it does: a command that is over
-/// in a moment would otherwise flash a card that was gone before it was read, and a reader wants to see that the
-/// work was done rather than only that it is no longer being done.
-/// </para>
-/// <para>
-/// The runs are written from whatever thread a command runs on and read from the window's, so the list is written
-/// under a lock and whoever draws is told on the window's thread — a control belongs to the thread that made it.
+/// A run is taken off the moment its process ends, so the panel is what is going and nothing else. The runs are
+/// written from whatever thread a command runs on and read from the window's, so the list is written under a lock
+/// and whoever draws is told on the window's thread — a control belongs to the thread that made it.
 /// </para>
 /// </remarks>
 internal sealed class ProgressHub
 {
-    /// <summary>How long a card stays after its process ends, before it is taken away.</summary>
-    private static readonly TimeSpan Linger = TimeSpan.FromSeconds(5);
-
     /// <summary>What the runs are written under, since a process writes while the panel reads.</summary>
     private readonly object _gate = new();
 
@@ -112,35 +105,18 @@ internal sealed class ProgressHub
     /// </remarks>
     public void Touch() => On(() => Changed?.Invoke(this, EventArgs.Empty));
 
-    /// <summary>Ends a run, which is a command that is over, and leaves its card for the linger.</summary>
+    /// <summary>Ends a run, which is a command that is over, and takes its card away at once.</summary>
     /// <param name="run">The run that has ended.</param>
     public void End(ProgressRun run)
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        On(() =>
+        lock (_gate)
         {
-            Changed?.Invoke(this, EventArgs.Empty);
+            _runs.Remove(run);
+        }
 
-            // The card is taken away on the window's own clock, since the timer belongs to the thread that made
-            // it: a run ended on another thread would otherwise make a timer on that thread, which no drawing
-            // would ever hear.
-            var linger = new DispatcherTimer { Interval = Linger };
-
-            linger.Tick += (_, _) =>
-            {
-                linger.Stop();
-
-                lock (_gate)
-                {
-                    _runs.Remove(run);
-                }
-
-                Changed?.Invoke(this, EventArgs.Empty);
-            };
-
-            linger.Start();
-        });
+        On(() => Changed?.Invoke(this, EventArgs.Empty));
     }
 
     /// <summary>Runs something on the window's thread, wherever it was called from.</summary>

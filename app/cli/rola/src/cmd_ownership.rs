@@ -452,8 +452,14 @@ fn change(
     let account = account_named(&account_name, Some(held), None)?;
 
     // Every gate is read against what the Vault holds now, so its copy is brought up to date first
-    // — and that copy is what is written afterwards, so a reading agrees with the Vault.
+    // — and that copy is what is written afterwards, so a reading agrees with the Vault. That fetch is
+    // the wait a reader watches for, and it is said as a bar of its own the way a sync says its plan:
+    // the ownership that follows is a second wait rather than the same one, and a reader shown only the
+    // second would see a bar that appeared when the slow half was already over.
+    let mut step = progress.begin("", Some(2));
+
     action_fetch_layout(held, &account, target.to_string(), vault_name.clone())?;
+    step.advance_by(1);
 
     let dir = readonly_layout_dir(held, &vault_name, VAULT_LAYOUT_NAME);
     if !dir.is_dir() {
@@ -490,6 +496,11 @@ fn change(
         &selected,
         diff.as_ref(),
     );
+    step.advance_by(1);
+
+    // The fetch is over before the ownership begins, so its bar is let go of here rather than left standing
+    // beside the one that follows: a sync lets go of its plan the same way.
+    step.finish();
 
     // A batch that cannot be done whole is not half done: every gate was read before any ownership
     // moved, and what did not pass is the whole of what the run is told about.

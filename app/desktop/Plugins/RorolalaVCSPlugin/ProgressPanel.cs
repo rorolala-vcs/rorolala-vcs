@@ -19,9 +19,8 @@ namespace RorolalaVCSPlugin;
 /// and a bar for every task it says it is doing. A reader watching the work sees which commands are going and
 /// how far each has got, rather than one bar that would have to stand for all of them at once.
 /// <para>
-/// A card outlives its command by a few seconds — see the hub — so a command that is over quickly is still read
-/// as having been done rather than as never having been seen. The room the panel stands in is given back to the
-/// table when the last card goes, so an Overview with nothing running is the table and nothing else.
+/// A card is taken away the moment its command ends, and the room the panel stands in is given back to the table
+/// when the last one goes, so an Overview with nothing running is the table and nothing else.
 /// </para>
 /// <para>
 /// A card is drawn once and brought up to date rather than rebuilt on every record: a bar is a control whose fill
@@ -182,13 +181,15 @@ internal sealed class ProgressPanel : Border
         {
             _root = new Border
             {
-                CornerRadius = new CornerRadius(6),
-                BorderThickness = new Thickness(1),
+                // A card is a section rather than a raised surface: nothing is rounded and nothing is inset, and
+                // the one line drawn is the rule under it, which is what tells one command's card from the next.
+                CornerRadius = new CornerRadius(0),
+                Margin = new Thickness(0),
+                BorderThickness = new Thickness(0, 0, 0, 1),
                 Padding = new Thickness(8),
                 Child = _rows,
             };
 
-            _root[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Dark);
             _root[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
 
             _rows.Children.Add(_whole.Root);

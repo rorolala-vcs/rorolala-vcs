@@ -73,10 +73,10 @@ internal sealed class ProgressTask
     /// Says the task is over, which is done rather than gone.
     /// </summary>
     /// <remarks>
-    /// A task the run has finished is kept and marked full rather than taken away: a card outlives its run by a
-    /// few seconds (see <see cref="ProgressHub"/>), and a card whose bars had all vanished the moment their work
-    /// ended would show nothing at the one moment it is kept for. The task is counted as spent even where the
-    /// run's last step was never said, since a finished task with a length is a task with nothing left to do.
+    /// A task the run has finished is kept and marked full rather than taken away: a card's bar for the whole of
+    /// a command is that command's own tasks added up, and a task that vanished the moment it was done would make
+    /// the sum smaller and the bar jump back. The task is counted as spent even where the run's last step was
+    /// never said, since a finished task with a length is a task with nothing left to do.
     /// </remarks>
     public void Finish()
     {
