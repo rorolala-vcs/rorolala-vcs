@@ -125,7 +125,17 @@ pub trait StorageBackend: Send + Sync {
     /// Whatever the backend itself fails with.
     fn list_exist_keys(&self) -> impl Future<Output = Result<Vec<Key>, Self::Error>> + Send;
 
-    /// Drops the object stored under `key`.
+    /// Drops every representation of the object stored under `key`.
+    ///
+    /// A key may be kept loose and in a pack at once, and may name an object and a manifest, so a
+    /// removal that stops at the first one it finds leaves something readable behind. What is
+    /// dropped is all of it, and `Ok` is a promise that nothing is stored under the key any more.
+    ///
+    /// **A chunk is an object like any other.** Nothing here keeps an account of which manifests
+    /// name which chunks, so dropping a chunk makes every manifest that names it impossible to put
+    /// back together. A caller that does not know a key is unreferenced wants a sweep of the objects
+    /// no manifest names rather than this: `remove` drops the key it is given, and deciding that the
+    /// key is no longer wanted is the caller's to have done.
     ///
     /// # Errors
     ///

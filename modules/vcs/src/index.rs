@@ -556,21 +556,40 @@ impl VCSIndex {
         Ok(keys.into_iter().collect())
     }
 
-    /// Drops the object stored under `key`, loose or in a pack.
+    /// Drops the object stored under `key`, loose and in a pack.
+    ///
+    /// Every representation is dropped rather than the first one found: an entry can be loose and
+    /// packed at once — an old pack beside a later loose write — and a removal that answered `Ok`
+    /// while a copy was still readable would be saying it had taken away what it had not. The loose
+    /// file goes first, then the packs are asked; `NotFound` from either only says that way of
+    /// keeping the object was not there.
     ///
     /// # Errors
     ///
     /// Returns [`VCSIndexError::NotFound`] if nothing is stored under `key`.
     pub(crate) async fn remove_object(&self, key: &Hash) -> Result<(), VCSIndexError> {
+        let mut found = false;
+
         match tokio::fs::remove_file(self.object_path(key)).await {
-            Ok(()) => return Ok(()),
+            Ok(()) => found = true,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
 
-        // Nothing loose under the key, so what is left is a pack, and taking it away means taking
-        // it out of the pack.
-        self.remove_object_packed(key).await
+        // Nothing may be loose under the key, and a pack may still name it, so the pack is asked
+        // whichever the loose tree said. Taking it out of a pack fails with `NotFound` when there is
+        // no packed copy, which is one more way of not being there rather than a failure.
+        match self.remove_object_packed(key).await {
+            Ok(()) => found = true,
+            Err(VCSIndexError::NotFound(_)) => {}
+            Err(error) => return Err(error),
+        }
+
+        if found {
+            Ok(())
+        } else {
+            Err(VCSIndexError::NotFound(*key))
+        }
     }
 
     /// The framed bytes of the entry stored under `key`, loose or in a pack, or `None` when there
@@ -1127,6 +1146,41 @@ mod tests {
         assert_eq!(
             run(index.read(kept_key)).unwrap().unwrap(),
             crate::VCSIndexObject::Variant(kept)
+        );
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn removing_an_object_takes_away_both_representations() {
+        let index = index("remove-both");
+        let kept = Version::new_bare_version([6_u8; 32], 0);
+        let removed = variant();
+        let kept_key = run(index.write(kept.clone())).unwrap().unwrap();
+        let removed_key = run(index.write(removed)).unwrap().unwrap();
+
+        // An object loose and packed at once: the framed entry is kept beside the pack, then laid
+        // down again where a loose copy lives.
+        let entry = fs::read(index.object_path(&removed_key)).unwrap();
+        run(index.repack()).unwrap().unwrap();
+        let loose = index.object_path(&removed_key);
+        fs::create_dir_all(loose.parent().unwrap()).unwrap();
+        fs::write(&loose, &entry).unwrap();
+        assert!(run(index.holds_object(&removed_key)).unwrap().unwrap());
+
+        run(index.remove_object(&removed_key)).unwrap().unwrap();
+
+        // `Ok` is a promise that nothing is stored under the key any more, whichever way it was kept.
+        assert!(!run(index.holds_object(&removed_key)).unwrap().unwrap());
+        assert!(!loose.exists());
+        assert!(matches!(
+            run(index.read(removed_key)).unwrap(),
+            Err(VCSIndexReadingError::NotFound { .. })
+        ));
+        // What removal did not name is still there.
+        assert_eq!(
+            run(index.read(kept_key)).unwrap().unwrap(),
+            crate::VCSIndexObject::Version(kept)
         );
 
         let _ = fs::remove_dir_all(index.get_root());

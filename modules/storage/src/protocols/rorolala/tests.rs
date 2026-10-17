@@ -421,6 +421,33 @@ async fn what_is_stored_is_listed_and_can_be_dropped() {
 }
 
 #[tokio::test]
+async fn removing_a_key_takes_away_what_is_loose_and_what_is_packed() {
+    let (parent, store) = store("remove-both");
+    let content = b"kept twice over";
+    let key = store.write_object(content, Codec::Raw).await.unwrap();
+    let entry = fs::read(store.object_path(&key)).unwrap();
+
+    // Packed, and then loose again: an old pack beside a later write leaves one key in both places,
+    // and a removal that stopped at the first would leave the content readable.
+    assert!(store.pack(&[key]).await.unwrap());
+    assert!(!store.object_path(&key).exists());
+    fs::create_dir_all(store.object_path(&key).parent().unwrap()).unwrap();
+    fs::write(store.object_path(&key), &entry).unwrap();
+
+    store.remove(&key).await.unwrap();
+
+    assert!(!store.holds_object(&key).await.unwrap());
+    assert!(!store.object_path(&key).exists());
+    assert_eq!(store.list_all_keys().await.unwrap(), Vec::<Key>::new());
+    assert!(matches!(
+        store.extract_file(&key, &parent.join("out")).await,
+        Err(Error::NotFound(_))
+    ));
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
 async fn content_written_in_any_codec_and_cut_comes_back_the_same() {
     let (parent, store) = store("codecs");
     let content = "the same words over and over, ".repeat(64).into_bytes();
