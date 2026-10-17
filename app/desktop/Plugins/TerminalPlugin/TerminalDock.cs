@@ -13,7 +13,7 @@ namespace TerminalPlugin;
 /// plugin publishes, since that is where the user is working; it is read once, when the shell is started, so
 /// that rooting the tree elsewhere afterwards does not pull a running shell out of its own directory.
 /// </remarks>
-internal sealed class TerminalDock : IDockView
+internal sealed class TerminalDock : IDockView, IDisposable
 {
     /// <summary>The control the dock shows.</summary>
     private readonly TerminalView _view;
@@ -41,4 +41,18 @@ internal sealed class TerminalDock : IDockView
 
     /// <inheritdoc />
     public IReadOnlyList<DockHeaderItem> Header => [];
+
+    /// <inheritdoc />
+    public void Restored(IDockState state) => _view.Restored(state);
+
+    /// <summary>
+    /// Ends the shell and stops drawing, which is what a dock that is gone leaves to do.
+    /// </summary>
+    /// <remarks>
+    /// The host lets go of a dock's view whenever the dock stops being one, whether it was closed by the user
+    /// or by its shell ending; the view holds a process, so it is ended there rather than left to the
+    /// garbage collector. Closing a dock whose shell already ended disposes it a second time, which the view
+    /// takes as nothing to do.
+    /// </remarks>
+    public void Dispose() => _view.Dispose();
 }

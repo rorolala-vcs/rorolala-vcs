@@ -63,6 +63,16 @@ public interface IDockState
     /// <param name="key">The key to keep it under.</param>
     /// <param name="value">What to keep.</param>
     void Write(string key, string value);
+
+    /// <summary>
+    /// Closes the dock, as its own close button does.
+    /// </summary>
+    /// <remarks>
+    /// What a dock that is over reaches for: a process that ended, a connection that dropped, a job with
+    /// nothing left to show. A window of its own is the host's to close with it, since what it holds is the
+    /// dock and nothing else.
+    /// </remarks>
+    void Close();
 }
 
 /// <summary>

@@ -25,7 +25,7 @@ namespace TerminalPlugin;
 /// be two as well.
 /// </para>
 /// </remarks>
-internal sealed class TerminalView : Control
+internal sealed class TerminalView : Control, IDisposable
 {
     /// <summary>How often the terminal is asked whether it has printed anything.</summary>
     private static readonly TimeSpan Every = TimeSpan.FromMilliseconds(16);
@@ -80,6 +80,12 @@ internal sealed class TerminalView : Control
 
     /// <summary>Whether the shell has ended, which stops the polling and the cursor.</summary>
     private bool _ended;
+
+    /// <summary>Whether the dock has been asked to close, which a process that ended does once.</summary>
+    private bool _closing;
+
+    /// <summary>What the dock is told by, which is how it closes itself when the shell is over.</summary>
+    private IDockState? _state;
 
     /// <summary>Whether the shell has been started, so that a later layout does not start a second one.</summary>
     private bool _started;
@@ -173,6 +179,27 @@ internal sealed class TerminalView : Control
             // open: what went wrong is said here, where it is looked for.
             _log.Error($"the terminal `{_program}` could not be started: {error.Message}");
         }
+    }
+
+    /// <summary>Takes the dock's own state, which is what a shell that ended closes it through.</summary>
+    /// <param name="state">Where the dock is closed from.</param>
+    public void Restored(IDockState state) => _state = state;
+
+    /// <summary>
+    /// Ends the shell and stops drawing, which is what closing the dock comes to.
+    /// </summary>
+    /// <remarks>
+    /// The host lets go of a dock's own view when the dock stops being one — closed by the user, or by the
+    /// shell ending — so this is where the process is ended rather than left until the garbage collector
+    /// finds it: a terminal whose dock is gone has no reason to keep a shell running.
+    /// </remarks>
+    public void Dispose()
+    {
+        _timer.Stop();
+        _screen.Respond -= Reply;
+
+        _pty?.Dispose();
+        _pty = null;
     }
 
     /// <summary>Starts polling when the view is on screen, which is when there is something to draw.</summary>
@@ -511,6 +538,10 @@ internal sealed class TerminalView : Control
                 _ended = true;
                 _timer.Stop();
 
+                // The dock closes after the turn rather than inside it: this runs from the timer's own
+                // tick, and closing a dock takes its view out of the tree — the control being ticked.
+                Dispatcher.UIThread.Post(Closed);
+
                 break;
             }
 
@@ -543,6 +574,23 @@ internal sealed class TerminalView : Control
         {
             InvalidateVisual();
         }
+    }
+
+    /// <summary>Closes the dock, which is what a shell that has ended leaves nothing to show in.</summary>
+    /// <remarks>
+    /// A dock in a window of its own takes that window with it, since the window is the dock and nothing
+    /// else. What a process that ended leaves behind is nothing to type into, so the dock is not kept as an
+    /// empty frame.
+    /// </remarks>
+    private void Closed()
+    {
+        if (_closing)
+        {
+            return;
+        }
+
+        _closing = true;
+        _state?.Close();
     }
 
     /// <summary>Writes an answer a program asked for back to it.</summary>

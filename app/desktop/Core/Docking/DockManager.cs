@@ -604,5 +604,8 @@ internal sealed class DockManager
                 _manager.StateChanged?.Invoke();
             }
         }
+
+        /// <inheritdoc />
+        public void Close() => _manager.Close(_instance);
     }
 }
