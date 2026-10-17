@@ -193,7 +193,11 @@ impl RorolalaStorage {
     /// manifest is the only place that is written down, and one that disagrees with the objects it
     /// names is a store that does not hold together rather than content to be handed on.
     async fn assemble(&self, manifest: &Manifest) -> Result<Vec<u8>, Error> {
-        let mut content = Vec::with_capacity(usize::try_from(manifest.content_len()).unwrap_or(0));
+        // Nothing is reserved from the total the manifest claims: a length is the manifest's to say
+        // and this is not a number an allocator should be handed on trust. A manifest that reads is
+        // bounded by `MAX_CONTENT_LEN` — see `Manifest::decode` — and what grows the buffer here is
+        // the bytes that really came back, one chunk at a time.
+        let mut content = Vec::new();
         for chunk in manifest.chunks() {
             let piece = self.read_object(&chunk.key()).await?;
             if piece.len() as u64 != chunk.len() {
@@ -220,7 +224,13 @@ impl RorolalaStorage {
     /// is stored is not framed as this build can read, and [`Error::Io`] if it cannot be read.
     pub async fn carried_len(&self, key: &Key) -> Result<u64, Error> {
         if let Some(manifest) = self.read_manifest(key).await? {
-            return Ok(manifest.content_len() + manifest.encode().len() as u64);
+            // The manifest and the content are carried one after the other, so the sum is checked
+            // rather than left to wrap: a manifest read here has lengths that add up, but what is
+            // being added to them is the manifest's own encoding, which is on top of that.
+            let content = manifest.checked_content_len().ok_or(Error::Malformed)?;
+            let encoded = u64::try_from(manifest.encode().len()).map_err(|_| Error::Malformed)?;
+
+            return content.checked_add(encoded).ok_or(Error::Malformed);
         }
 
         let Some(head) = self.entry_head(PackKind::Object, key).await? else {
