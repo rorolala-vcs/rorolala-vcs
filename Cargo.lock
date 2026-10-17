@@ -3802,6 +3802,7 @@ name = "rorolala-storage"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "futures",
  "lz4",
  "rorolala-utils-constants",
  "rorolala-utils-location",

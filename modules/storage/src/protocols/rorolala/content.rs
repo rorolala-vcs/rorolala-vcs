@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use super::RorolalaStorage;
-use super::consts::{MANIFEST_DIR, PackKind};
+use super::consts::{HOLDS_AT_ONCE, MANIFEST_DIR, PackKind};
 use super::entry::{collect, exists, key_of, plain_len_of, read_range, verify};
 use crate::{
     AlgorithmChoice, Chunk, Chunker as _, Codec, Error, FRAME_HEADER_LEN, FRAME_VERSION, Frame,
@@ -335,6 +335,8 @@ impl RorolalaStorage {
     /// whose chunks are not all there, does not decide anything either, so what the key promises
     /// rests on the object beside it — the same answer a read gives, and the same way round.
     pub(super) async fn holds_content(&self, key: &Key) -> Result<bool, Error> {
+        use futures::StreamExt as _;
+
         let manifest = match self.read_manifest(key).await {
             Ok(manifest) => manifest,
             Err(Error::Malformed) => None,
@@ -345,8 +347,15 @@ impl RorolalaStorage {
             return self.holds_object(key).await;
         };
 
-        for chunk in manifest.chunks() {
-            if !self.holds_object(&chunk.key()).await? {
+        // A content of many chunks is a run of lookups and nothing else, and this is the loop a
+        // large one spends its time in. They run a few at a time — see `HOLDS_AT_ONCE` — and a chunk
+        // that is not there ends the run rather than waiting for the rest to be asked about.
+        let mut checks = futures::stream::iter(manifest.chunks().iter().map(Chunk::key))
+            .map(|chunk| async move { self.holds_object(&chunk).await })
+            .buffered(HOLDS_AT_ONCE);
+
+        while let Some(held) = checks.next().await {
+            if !held? {
                 return self.holds_object(key).await;
             }
         }

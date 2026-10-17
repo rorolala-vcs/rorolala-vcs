@@ -44,6 +44,16 @@ pub(super) const DEFAULT_CODEC: Codec = Codec::Raw;
 /// a zero byte anywhere in it is what says content is not text.
 pub(super) const SNIFF_LEN: usize = 8000;
 
+/// How many presence lookups one run of lookups keeps going at a time.
+///
+/// A batch of keys and the chunks of one content are both a run of lookups that wait on the disk, so
+/// they are run a few at a time rather than one after another. The number is bounded rather than the
+/// run's own length: what is being asked about can be a content of thousands of chunks, and a store
+/// that opened a file for every one of them at once would be a store that ran out of them. It bounds
+/// a run and not the store — a batch of cut contents checks a run per content — so the work in flight
+/// is a small fixed multiple of this rather than the number of chunks.
+pub(super) const HOLDS_AT_ONCE: usize = 8;
+
 /// Text at or above this many bytes is cut as well as compressed.
 ///
 /// Compressing text pays wherever it is; cutting it needs enough of it for the manifest that

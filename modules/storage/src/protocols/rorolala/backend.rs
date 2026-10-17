@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::RorolalaStorage;
-use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PackKind, SNIFF_LEN};
+use super::consts::{HOLDS_AT_ONCE, MANIFEST_DIR, OBJECTS_DIR, PackKind, SNIFF_LEN};
 use super::entry::{collect, exists, verify};
 use crate::{
     AlgorithmChoice, Error, Key, Presence, ProtocolMagic, StorageBackend, TransferableBackend,
@@ -49,12 +49,21 @@ impl StorageBackend for RorolalaStorage {
     }
 
     async fn contains_keys(&self, keys: &[Key]) -> Result<Presence, Self::Error> {
-        let mut presence = Presence::all_missing(keys.len());
+        use futures::{StreamExt as _, TryStreamExt as _};
 
-        for (at, key) in keys.iter().enumerate() {
-            if self.holds_content(key).await? {
-                presence.set_held(at, true);
-            }
+        // A store is asked about a whole batch at once — a transfer asks about every key before it
+        // moves anything — and every key of it is at least one lookup, which is where the waiting
+        // is. They run a few at a time rather than one after another, and a few rather than all at
+        // once: see `HOLDS_AT_ONCE`.
+        let held: Vec<bool> = futures::stream::iter(keys.iter().copied())
+            .map(|key| async move { self.holds_content(&key).await })
+            .buffered(HOLDS_AT_ONCE)
+            .try_collect()
+            .await?;
+
+        let mut presence = Presence::all_missing(keys.len());
+        for (at, held) in held.into_iter().enumerate() {
+            presence.set_held(at, held);
         }
 
         Ok(presence)
@@ -87,10 +96,23 @@ impl StorageBackend for RorolalaStorage {
     }
 
     async fn list_exist_keys(&self) -> Result<Vec<Key>, Self::Error> {
-        let mut exist = Vec::new();
+        use futures::StreamExt as _;
 
-        for key in self.list_all_keys().await? {
-            if self.holds_content(&key).await? {
+        // The same lookups `contains_keys` makes, over every key the store names: one at a time
+        // through the whole store is what made a large listing slow, so they run a few at a time and
+        // the answer keeps the order the listing gave.
+        let mut exist = Vec::new();
+        let mut checks = futures::stream::iter(self.list_all_keys().await?)
+            .map(|key| async move {
+                let held = self.holds_content(&key).await?;
+
+                Ok::<_, Error>((key, held))
+            })
+            .buffered(HOLDS_AT_ONCE);
+
+        while let Some(checked) = checks.next().await {
+            let (key, held) = checked?;
+            if held {
                 exist.push(key);
             }
         }
