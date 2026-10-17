@@ -35,10 +35,17 @@ impl RorolalaStorage {
         // The frame and the payload go down as two writes rather than into one buffer first: the
         // payload is the whole encoded content, and joining it to the frame would be a copy of a file
         // that may be a gigabyte for the sake of a header of a few dozen bytes.
+        //
+        // The flush is what makes the move below safe: a write that has been taken is not yet a
+        // write that has landed — tokio's file hands the last stretch to a blocking task and answers
+        // before it is done — so moving the temporary first can move a file that is still short. A
+        // flush completes what is in flight, and is also what closes the handle before the rename,
+        // which a platform that will not rename an open file depends on.
         let temporary = temporary_beside(path)?;
         let mut file = tokio::fs::File::create(&temporary).await?;
         file.write_all(&frame.encode()).await?;
         file.write_all(payload).await?;
+        file.flush().await?;
         drop(file);
         tokio::fs::rename(&temporary, path).await?;
 

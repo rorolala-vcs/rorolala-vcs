@@ -664,11 +664,14 @@ impl VCSIndex {
 
         // The frame and the payload are written one after the other rather than joined into one
         // buffer first: index objects are small, but there is no reason for a copy of one to exist
-        // only to put a header in front of it.
+        // only to put a header in front of it. The flush completes the write that tokio's file has
+        // taken but not yet landed and closes the handle, so what the rename moves is the whole
+        // entry — see `RorolalaStorage::write_entry` for the same rule.
         let temporary = temporary_beside(path)?;
         let mut file = tokio::fs::File::create(&temporary).await?;
         file.write_all(&frame.encode()).await?;
         file.write_all(payload).await?;
+        file.flush().await?;
         drop(file);
         tokio::fs::rename(&temporary, path).await?;
 

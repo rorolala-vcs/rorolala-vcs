@@ -879,3 +879,22 @@ async fn extracting_makes_the_directory_the_path_is_in() {
 
     let _ = fs::remove_dir_all(&parent);
 }
+
+#[tokio::test]
+async fn content_larger_than_one_write_comes_back_whole() {
+    let (parent, store) = store("write-complete");
+
+    // Larger than the stretch tokio hands its blocking writer at once, so the entry is written in
+    // several writes: what a read gets back is the whole of it, frame and all. The flush in
+    // `write_entry` is what keeps the last of those writes from being in flight when the temporary
+    // is moved into place; a race that breaks it is not one a test can ask for on purpose, so this
+    // is the round trip rather than the race.
+    let content: Vec<u8> = (0..5 * 1024 * 1024_u32)
+        .map(|value| (value % 251) as u8)
+        .collect();
+    let key = store.write_object(&content, Codec::Raw).await.unwrap();
+
+    assert_eq!(store.read_object(&key).await.unwrap(), content);
+
+    let _ = fs::remove_dir_all(&parent);
+}
