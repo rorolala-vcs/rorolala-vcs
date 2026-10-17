@@ -225,7 +225,7 @@ internal static class OwnershipActions
                     ReportView.Of(
                         ReportLines.Parse(said),
                         key => host.Icons.Find(key),
-                        colour => Ink(colour)
+                        ReportView.Ink
                     )
             );
             }
@@ -237,28 +237,6 @@ internal static class OwnershipActions
     /// <returns>The i18n key of its name.</returns>
     private static string TitleKey(string verb) =>
         verb == "hold" ? "rorolala_vcs.progress.hold" : "rorolala_vcs.progress.giveup";
-
-    /// <summary>
-    /// What a colour named inside a message stands for.
-    /// </summary>
-    /// <remarks>
-    /// The three a level is reported in are answered with the look's own resources rather than with the terminal's
-    /// palette, so that a message says the same thing in a window as it says in a terminal while being drawn in
-    /// the colours the window is drawn in. A colour written as six digits is the colour it says, and a name
-    /// nothing answers to is left as it stands.
-    /// </remarks>
-    /// <param name="colour">The colour the message named.</param>
-    /// <returns>The colour or theme resource to draw it in, or nothing.</returns>
-    private static string? Ink(string colour) =>
-        colour.StartsWith('#')
-            ? colour
-            : colour.ToLowerInvariant() switch
-            {
-                "red" => PaletteKeys.Del,
-                "yellow" => PaletteKeys.Warn,
-                "green" => PaletteKeys.Add,
-                _ => null,
-            };
 
     /// <summary>Runs it and waits, answering whether it ended well and what it said.</summary>
     /// <remarks>

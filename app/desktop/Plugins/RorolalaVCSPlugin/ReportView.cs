@@ -49,6 +49,28 @@ internal static class ReportView
         return said;
     }
 
+    /// <summary>
+    /// What a colour named inside a message stands for.
+    /// </summary>
+    /// <remarks>
+    /// The three a level is reported in are answered with the look's own resources rather than with the
+    /// terminal's palette, so that a message says the same thing in a window as it says in a terminal while
+    /// being drawn in the colours the window is drawn in. A colour written as six digits is the colour it says,
+    /// and a name nothing answers to is left as it stands.
+    /// </remarks>
+    /// <param name="colour">The colour the message named.</param>
+    /// <returns>The colour or theme resource to draw it in, or nothing.</returns>
+    public static string? Ink(string colour) =>
+        colour.StartsWith('#')
+            ? colour
+            : colour.ToLowerInvariant() switch
+            {
+                "red" => PaletteKeys.Del,
+                "yellow" => PaletteKeys.Warn,
+                "green" => PaletteKeys.Add,
+                _ => null,
+            };
+
     /// <summary>Draws one thing said.</summary>
     /// <param name="block">What was said.</param>
     /// <param name="picture">Where a picture key is answered from.</param>

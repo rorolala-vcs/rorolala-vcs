@@ -351,6 +351,15 @@ internal sealed class OverviewView : UserControl
     /// </remarks>
     private bool _busy;
 
+    /// <summary>
+    /// Whether a fetch is going, which is what a refresh begins and what a second refresh is kept from.
+    /// </summary>
+    /// <remarks>
+    /// A fetch already running is the one a second press would be: what is fetched is the same copy, and two
+    /// exchanges for one reading are two where one answers.
+    /// </remarks>
+    private bool _fetching;
+
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
 
@@ -511,16 +520,96 @@ internal sealed class OverviewView : UserControl
     /// <summary>The column the panel takes, which is nothing while no run is going.</summary>
     private readonly ColumnDefinition _panelColumn = new(new GridLength(0, GridUnitType.Star));
 
-    /// <summary>Reads the work again and draws it, which is what the dock's own command asks for.</summary>
+    /// <summary>
+    /// Fetches the Vault's Layout and reads the work again, which is what the dock's own command asks for.
+    /// </summary>
     /// <remarks>
-    /// What a sync would carry is asked for as well, since the two are the same question to a reader: reading
-    /// the work again is what tells them what there is to do, and what there is to carry is the Vault's answer
-    /// to the same. It is asked on its own thread, so the reading is drawn while the Vault is being asked.
+    /// What is fetched is the copy every reading of the work is made from, so a reading made before it would say
+    /// what the Vault held when the copy was last brought over. The run is shown down the panel as a card of its
+    /// own, and the reading and what a sync would carry are asked for once it is over. A directory no Workspace
+    /// holds has nothing to fetch, so it is only read again.
     /// </remarks>
     public void Refresh()
     {
+        if (BaseDirectory.Current is { Length: > 0 } at && WorkspaceNotice.Holds(at, _log))
+        {
+            BeginFetch(at);
+
+            return;
+        }
+
         Draw();
         _sync.Plan(BaseDirectory.Current);
+    }
+
+    /// <summary>Runs a fetch, and reads the work again once it is over.</summary>
+    /// <remarks>
+    /// The card is opened before the work is handed off, so that the panel has it to draw from the first turn —
+    /// see the hub for why the runs are gathered rather than kept where they were begun. The run says nothing of
+    /// how far it is, so its card is drawn as one still moving: a fetch reports no progress of its own.
+    /// </remarks>
+    /// <param name="directory">Where the work is rooted.</param>
+    private void BeginFetch(string directory)
+    {
+        // A fetch already going is the one a second press would be, and a sync brings the same copy as it goes:
+        // what is on screen is read again either way, and the run in hand leaves the copy where it stands.
+        if (_fetching || _sync.Running)
+        {
+            Draw();
+
+            return;
+        }
+
+        // The window is told which program to run by the run that opened it, and a window opened on its own has
+        // none: there is nothing to fetch with, so what there is to read is read.
+        if (Environment.GetEnvironmentVariable(Sync.Program) is not { Length: > 0 } program)
+        {
+            Draw();
+            _sync.Plan(directory);
+
+            return;
+        }
+
+        _fetching = true;
+
+        var run = _hub.Begin("rorolala_vcs.progress.fetch");
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = Fetch.Run(program, directory);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _fetching = false;
+
+                // The card is let go of here rather than when the run is over, because the panel keeps it for a
+                // few seconds after: what ended is drawn as ended before it is taken away.
+                _hub.End(run);
+
+                // What was fetched is what every reading is made from, so what the columns answered about the
+                // entries is let go of with the files, and the listing and the reading are read again.
+                _host.Files.Touch();
+
+                if (!done)
+                {
+                    // Drawn as every other command's failure is, and not as one line of raw text: what the
+                    // command wrote says which of its lines went wrong and which can be acted on, and the window
+                    // draws those marks rather than the words they are written with.
+                    _host.Dialogs.Present(
+                        RolaI18N.Get("rorolala_vcs.fetch.failed"),
+                        () =>
+                            ReportView.Of(
+                                ReportLines.Parse(said),
+                                key => _host.Icons.Find(key),
+                                ReportView.Ink
+                            )
+                    );
+                }
+
+                Draw();
+                _sync.Plan(directory);
+            });
+        });
     }
 
     /// <summary>

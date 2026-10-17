@@ -28,10 +28,10 @@ internal sealed record SyncPlan(bool Ready, string? Said);
 internal static class Sync
 {
     /// <summary>The theme the output is asked for, which is the one this window reads.</summary>
-    private const string Theme = "desktop-friendly";
+    internal const string Theme = "desktop-friendly";
 
     /// <summary>The environment variable naming the program the window was opened by.</summary>
-    private const string Program = "ROLA_EXE";
+    internal const string Program = "ROLA_EXE";
 
     /// <summary>
     /// The flag that has the command answer in JSON and write its progress as one record per line.
@@ -259,7 +259,7 @@ internal static class Sync
     /// <param name="arguments">What to run it with.</param>
     /// <param name="directory">Where to run it.</param>
     /// <returns>Whether it ended well, what it said, and what it wrote.</returns>
-    private static (bool Done, string Said, string Output) Asked(
+    internal static (bool Done, string Said, string Output) Asked(
         string program,
         IReadOnlyList<string> arguments,
         string directory

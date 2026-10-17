@@ -395,30 +395,9 @@ internal static class OverviewOperations
                 ReportView.Of(
                     ReportLines.Parse(said),
                     key => host.Icons.Find(key),
-                    colour => Ink(colour)
+                    ReportView.Ink
                 )
         );
-
-    /// <summary>
-    /// What a colour named inside a message stands for.
-    /// </summary>
-    /// <remarks>
-    /// The three a level is reported in are answered with the look's own resources rather than with the
-    /// terminal's palette, so that a message says the same thing in a window as it says in a terminal while
-    /// being drawn in the colours the window is drawn in.
-    /// </remarks>
-    /// <param name="colour">The colour the message named.</param>
-    /// <returns>The colour or theme resource to draw it in, or nothing.</returns>
-    private static string? Ink(string colour) =>
-        colour.StartsWith('#')
-            ? colour
-            : colour.ToLowerInvariant() switch
-            {
-                "red" => PaletteKeys.Del,
-                "yellow" => PaletteKeys.Warn,
-                "green" => PaletteKeys.Add,
-                _ => null,
-            };
 
     /// <summary>Runs it and waits, answering whether it ended well and what it said.</summary>
     /// <remarks>

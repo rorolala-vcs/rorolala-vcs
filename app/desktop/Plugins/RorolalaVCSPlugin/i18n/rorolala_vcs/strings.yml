@@ -63,7 +63,8 @@ rorolala_vcs:
       zh-CN: 没有要确认的内容
 
     # What the command in the dock's own strip offers: read the work again now, rather than wait for the
-    # reading the dock makes by itself — which is what a reader wants after saving in another program.
+    # reading the dock makes by itself — which is what a reader wants after saving in another program. What it
+    # brings first is the Vault's Layout, so that what it reads is what upstream holds now.
     refresh:
       en: Refresh
       zh-CN: 刷新
@@ -339,6 +340,14 @@ rorolala_vcs:
       en: The Layout, the index and the storage are all left out — so this run changes nothing at all. Confirm?
       zh-CN: 不同步布局、索引和仓库，这会使本次运行不做任何改动，请确认。
 
+  # What the dock's own refresh does besides reading the work again: it brings the Vault's Layout here, so that
+  # what the columns and the reading say is what the Vault holds now rather than what it held when the copy was
+  # last fetched. The fetch is the command line's, and what is said when it cannot be finished is this dock's.
+  fetch:
+    failed:
+      en: The Vault's Layout could not be fetched
+      zh-CN: 未能取回保险库布局
+
   # What the Overview's progress panel says of the commands this plugin runs: a card per command, named for
   # what the command does, and a bar per task the command reports. A task that names itself is read by that
   # name, and one that does not is read by the direction its work moves — or as simply working.
@@ -346,6 +355,9 @@ rorolala_vcs:
     sync:
       en: Syncing
       zh-CN: 同步数据
+    fetch:
+      en: Fetching the Layout
+      zh-CN: 取回布局
     hold:
       en: Taking ownership
       zh-CN: 申请所有权
