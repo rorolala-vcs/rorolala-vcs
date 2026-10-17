@@ -138,6 +138,10 @@ impl RorolalaStorage {
     /// manifest that does not *read* does not decide anything either, and the object under the same
     /// key is the same content, so it is answered with rather than the key being lost to a stray
     /// file beside it.
+    ///
+    /// The content a manifest makes is checked against the key before it is handed over: a manifest
+    /// is not covered by the key, so it may name the right chunks in the wrong order — or chunks of
+    /// something else — and what a key promises is the content, not the reading of a manifest.
     pub(super) async fn read_content(&self, key: &Key) -> Result<Vec<u8>, Error> {
         let manifest = match self.read_manifest(key).await {
             Ok(Some(manifest)) => manifest,
@@ -153,13 +157,33 @@ impl RorolalaStorage {
         };
 
         match self.assemble(&manifest).await {
-            Ok(content) => Ok(content),
+            // Every chunk is whole in itself — `read_object` checked that — but the manifest that
+            // put them in order is not covered by the key, so the whole is checked on its own. A
+            // per-chunk check that passed is not the check a key promises.
+            Ok(content) if verify(key, &content).is_ok() => Ok(content),
+            Ok(_) => self.whole_or_corrupt(key).await,
             // The chunks cannot be put back together — one is gone, or longer than the manifest says.
             // The whole content may still be under the key, beside the manifest (see `write_content`),
             // and a key is the hash of the whole content, so what is there is the same content the
             // manifest would have made. If it is not there, what went wrong with the manifest is what
             // is reported.
             Err(error) => self.read_object(key).await.map_err(|_| error),
+        }
+    }
+
+    /// The object stored under `key`, or a corruption of it when no such object is there.
+    ///
+    /// This is what a manifest that does not make the content the key names is answered with: the
+    /// content may still be under the key as one object, and a whole write leaves it there beside a
+    /// manifest — see `write_content`. If it is not, what the key promises is not in the store, and
+    /// the key is corrupt rather than missing: a manifest for it is there, and says it was stored.
+    async fn whole_or_corrupt(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        match self.read_object(key).await {
+            Ok(content) => Ok(content),
+            // The fallback's own failure is the more telling one for an I/O problem: the store is
+            // failing rather than holding content that does not add up.
+            Err(Error::Io(error)) => Err(Error::Io(error)),
+            Err(_) => Err(Error::Corrupt(*key)),
         }
     }
 

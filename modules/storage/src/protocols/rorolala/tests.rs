@@ -15,7 +15,7 @@ use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
 use crate::{
     AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout, Manifest,
-    StorageBackend as _, store_file,
+    StorageBackend as _, TransferableBackend as _, store_file,
 };
 
 /// A directory of its own, emptied first so a rerun starts clean.
@@ -114,6 +114,27 @@ async fn holds(store: &RorolalaStorage, key: &Key) -> bool {
         .await
         .expect("the store answers")
         .held(0)
+}
+
+/// Lays `manifest` down under `key` straight through the filesystem.
+///
+/// What is being asked about in the tests that use this is a manifest that disagrees with the chunks
+/// it names, which a store gone wrong has and a store's own write never makes. Going through the
+/// filesystem is what leaves it there.
+fn lay_manifest(store: &RorolalaStorage, key: &Key, manifest: &Manifest) {
+    let plain = manifest.encode();
+    let frame = Frame {
+        version: FRAME_VERSION,
+        codec: Codec::Raw,
+        layout: Layout::Chunked,
+        plain_len: plain.len() as u64,
+    };
+    let mut bytes = frame.encode();
+    bytes.extend_from_slice(&plain);
+
+    let path = store.manifest_path(key);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, bytes).unwrap();
 }
 
 #[tokio::test]
@@ -626,6 +647,72 @@ async fn the_choice_is_a_container_taken_apart_or_the_content_itself() {
             max: 1024 * 1024,
         }
     );
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn a_manifest_that_puts_the_chunks_in_the_wrong_order_is_not_the_content() {
+    let (parent, store) = store("wrong-order");
+    let content: Vec<u8> = (0..1000_u32).map(|value| (value % 251) as u8).collect();
+    let file = parent.join("file");
+    fs::write(&file, &content).unwrap();
+
+    let key = store
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 64 }),
+        )
+        .await
+        .unwrap();
+    let manifest = store.read_manifest(&key).await.unwrap().unwrap();
+    assert!(manifest.len() >= 2);
+
+    // The same chunks, in the order that is not the content's. Every chunk is whole in itself, so
+    // only a check of the whole can tell that the key does not name what they make.
+    let mut shuffled = Manifest::default();
+    for held in manifest.chunks().iter().rev() {
+        shuffled.push(Chunk::new(held.key(), held.len()));
+    }
+    lay_manifest(&store, &key, &shuffled);
+
+    assert!(matches!(
+        store.content(&key).await,
+        Err(Error::Corrupt(corrupt)) if corrupt == key
+    ));
+
+    let out = parent.join("out");
+    assert!(matches!(
+        store.extract_file(&key, &out).await,
+        Err(Error::Corrupt(_))
+    ));
+    assert!(
+        !out.exists(),
+        "content that is not the key's was written out"
+    );
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn a_manifest_that_makes_another_content_falls_back_to_the_object() {
+    let (parent, store) = store("fallback-whole");
+    let content = b"the content the key names, kept whole";
+    let key = store.write_object(content, Codec::Raw).await.unwrap();
+
+    // A manifest naming a chunk of another content of the same length: it puts something back
+    // together, and what it puts back is not what the key promises. The object beside it is.
+    let other = vec![b'x'; content.len()];
+    let other_key = store.write_object(&other, Codec::Raw).await.unwrap();
+    let mut manifest = Manifest::default();
+    manifest.push(Chunk::new(other_key, other.len() as u64));
+    lay_manifest(&store, &key, &manifest);
+
+    assert_eq!(store.content(&key).await.unwrap().unwrap(), content);
+
+    let out = parent.join("out");
+    store.extract_file(&key, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), content);
 
     let _ = fs::remove_dir_all(&parent);
 }

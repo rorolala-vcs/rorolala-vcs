@@ -39,8 +39,9 @@ impl StorageBackend for RorolalaStorage {
     }
 
     async fn extract_file(&self, key: &Key, path: &Path) -> Result<(), Self::Error> {
+        // The content comes back checked against the key — `read_content` verifies the whole of it,
+        // whichever way it was laid down — so there is nothing left to verify here.
         let content = self.read_content(key).await?;
-        verify(key, &content)?;
 
         tokio::fs::write(path, &content).await?;
 
