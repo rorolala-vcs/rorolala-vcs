@@ -103,12 +103,23 @@ impl VCSIndex {
     }
 
     /// Where the object stored under `key` sits in a pack, if a pack holds it.
+    ///
+    /// A pack whose index does not read is passed over rather than failing the lookup: nothing can be
+    /// found through it, and one bad index answering for every pack is what a store with a hundred of
+    /// them must not do. It is not passed over in silence — [`broken_packs`](Self::broken_packs) names
+    /// it — and a pack taken away between the scan and the read is the same answer as an index that
+    /// was never there.
     pub(crate) async fn find_packed(&self, key: &Hash) -> Result<Option<Source>, VCSIndexError> {
         for index in self.packs().await? {
-            let directory = self.read_pack_index(index).await?;
-
-            if let Some(entry) = directory.find(key) {
-                return Ok(Some(Source::Packed(index, *entry)));
+            match self.read_pack_index(index).await {
+                Ok(directory) => {
+                    if let Some(entry) = directory.find(key) {
+                        return Ok(Some(Source::Packed(index, *entry)));
+                    }
+                }
+                Err(VCSIndexError::Malformed) => {}
+                Err(VCSIndexError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
             }
         }
 

@@ -1218,16 +1218,20 @@ mod tests {
         fs::write(&broken, b"not a pack index").unwrap();
 
         // The listing still answers with what it can see, and the pack it could not read is
-        // reported rather than silently gone.
+        // reported rather than silently gone. A lookup answers the same way: nothing can be found
+        // through that index, so the key it held is answered as one the index does not hold — one
+        // bad pack must not make every other answer an error.
         assert_eq!(
             run(index.list_object_keys()).unwrap().unwrap(),
             vec![loose_key]
         );
         assert_eq!(run(index.broken_packs()).unwrap().unwrap(), vec![0]);
+        assert!(!run(index.holds_object(&packed_key)).unwrap().unwrap());
         assert!(matches!(
             run(index.read(packed_key)).unwrap(),
-            Err(VCSIndexReadingError::Malformed)
+            Err(VCSIndexReadingError::NotFound { .. })
         ));
+        assert_eq!(run(index.content(&packed_key)).unwrap().unwrap(), None);
         assert_eq!(
             run(index.read(loose_key)).unwrap().unwrap(),
             crate::VCSIndexObject::Version(loose)
