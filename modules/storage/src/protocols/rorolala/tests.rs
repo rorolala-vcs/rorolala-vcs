@@ -15,7 +15,7 @@ use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
 use crate::{
     AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout, Manifest,
-    StorageBackend as _, TransferableBackend as _, store_file,
+    StorageBackend as _, TransferableBackend as _, store_file, transfer,
 };
 
 /// A directory of its own, emptied first so a rerun starts clean.
@@ -924,6 +924,54 @@ async fn an_extract_that_cannot_land_leaves_no_temporary() {
         .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
         .count();
     assert_eq!(strays, 0, "a failed extract left a temporary behind");
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn content_a_manifest_does_not_make_is_not_sent() {
+    let (parent, from) = store("send-corrupt");
+    let (_, to) = store("send-corrupt-to");
+
+    let content: Vec<u8> = (0..1000_u32).map(|value| (value % 251) as u8).collect();
+    let file = parent.join("file");
+    fs::write(&file, &content).unwrap();
+    let key = from
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 64 }),
+        )
+        .await
+        .unwrap();
+
+    // The chunks are the right ones, in the wrong order: the content the manifest makes is not the
+    // content the key names, so there is nothing this end may put on the wire for it.
+    let manifest = from.read_manifest(&key).await.unwrap().unwrap();
+    let mut shuffled = Manifest::default();
+    for held in manifest.chunks().iter().rev() {
+        shuffled.push(Chunk::new(held.key(), held.len()));
+    }
+    lay_manifest(&from, &key, &shuffled);
+
+    let (mut mine, mut theirs) = tokio::io::duplex(64 * 1024);
+    let answering_with = to.clone();
+    let answering =
+        tokio::spawn(async move { transfer::respond(&answering_with, &mut theirs).await });
+
+    let sent = transfer::initiate(&from, &mut mine, &[key]).await;
+
+    // The exchange ends with the store's account of what is wrong, rather than reading the key as
+    // "not there" or handing over bytes that are not what it names.
+    assert!(matches!(
+        sent,
+        Err(transfer::Error::Store(Error::Corrupt(corrupt))) if corrupt == key
+    ));
+
+    // The peer is waiting for content that is not coming; closing this end tells it so.
+    drop(mine);
+    let _ = answering.await;
+
+    assert!(!holds(&to, &key).await);
 
     let _ = fs::remove_dir_all(&parent);
 }
