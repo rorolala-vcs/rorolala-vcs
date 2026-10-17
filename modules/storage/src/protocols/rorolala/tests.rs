@@ -898,3 +898,32 @@ async fn content_larger_than_one_write_comes_back_whole() {
 
     let _ = fs::remove_dir_all(&parent);
 }
+
+#[tokio::test]
+async fn an_extract_that_cannot_land_leaves_no_temporary() {
+    let (parent, store) = store("extract-failed");
+    let key = store
+        .write_object(b"content that never lands", Codec::Raw)
+        .await
+        .unwrap();
+
+    // Something where the file is to go that the move cannot land on: the target is left as it was,
+    // and what was written beside it is taken back rather than left for a caller to find.
+    let out = parent.join("out");
+    fs::create_dir_all(&out).unwrap();
+
+    assert!(matches!(
+        store.extract_file(&key, &out).await,
+        Err(Error::Io(_))
+    ));
+    assert!(out.is_dir());
+
+    let strays = fs::read_dir(&parent)
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+        .count();
+    assert_eq!(strays, 0, "a failed extract left a temporary behind");
+
+    let _ = fs::remove_dir_all(&parent);
+}

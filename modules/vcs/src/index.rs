@@ -1275,6 +1275,32 @@ mod tests {
     }
 
     #[test]
+    fn an_extract_that_cannot_land_leaves_no_temporary() {
+        let index = index("extract-failed");
+        let key = run(index.write(variant())).unwrap().unwrap();
+
+        // Something where the file is to go that the move cannot land on: the target is left as it
+        // was, and what was written beside it is taken back rather than left behind.
+        let out = index.get_root().join("out");
+        fs::create_dir_all(&out).unwrap();
+
+        assert!(matches!(
+            run(index.extract_file(&key, &out)).unwrap(),
+            Err(VCSIndexError::Io(_))
+        ));
+        assert!(out.is_dir());
+
+        let strays = fs::read_dir(index.get_root())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(strays, 0, "a failed extract left a temporary behind");
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
     fn a_directory_where_an_object_belongs_is_not_an_object() {
         let index = index("object-dir");
         let object = variant();

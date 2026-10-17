@@ -248,8 +248,9 @@ pub(super) async fn write_whole_durably(path: &Path, bytes: &[u8]) -> Result<(),
 /// Writes `bytes` to `path` whole, laid down beside it and moved into place.
 ///
 /// This is for a caller's own file — what `extract_file` hands back — rather than for an entry the
-/// store reads back afterwards, so nothing is synced and nothing is promised to outlive a crash. What is kept is the promise every write here keeps: the whole file or no file at
-/// all, and a directory that is not there made rather than complained about.
+/// store reads back afterwards, so nothing is synced and nothing is promised to outlive a crash.
+/// What is kept is the promise every write here keeps: the whole file or no file at all, and a
+/// directory that is not there made rather than complained about.
 pub(super) async fn write_whole(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     let parent = path.parent().ok_or(Error::Malformed)?;
     tokio::fs::create_dir_all(parent).await?;
