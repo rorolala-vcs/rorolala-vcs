@@ -1153,6 +1153,14 @@ mod tests {
         .unwrap();
 
         assert!(run(right.holds_object(&key)).unwrap().unwrap());
+
+        // What the index wrote is the object's canonical encoding, the same bytes a file write puts
+        // down: the key is the meaning, and the bytes under it are one spelling of that meaning
+        // whatever spelling a peer happened to send.
+        assert_eq!(
+            run(right.read_object(&key)).unwrap().unwrap(),
+            variant.encode()
+        );
         assert_eq!(
             run(right.read(key)).unwrap().unwrap(),
             crate::VCSIndexObject::Variant(variant)

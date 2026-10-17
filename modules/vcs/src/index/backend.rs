@@ -127,6 +127,9 @@ impl TransferableBackend for VCSIndex {
             return Err(VCSIndexError::Corrupt(*key));
         }
 
-        self.write_object(key, &content, Codec::Raw).await
+        // What is written is the canonical encoding, the same as a file write puts down, and not the
+        // bytes that crossed: the key is the object's meaning, so the bytes under it have to be the
+        // one spelling of that meaning rather than whichever spelling a peer happened to send.
+        self.write_object(key, &object.encode(), Codec::Raw).await
     }
 }
