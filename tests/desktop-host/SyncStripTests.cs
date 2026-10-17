@@ -232,6 +232,16 @@ public sealed class SyncStripTests
 
         Assert.Equal(10, Bar(Rows(card)[1]).Value);
         Assert.Equal("100%", Share(rows[1]));
+
+        // The two columns the bars line up by are fixed rather than sized to what a row currently says: a name of
+        // another length and a percentage of another width move neither end of the bar, which is what keeps every
+        // bar of a card as long as every other and keeps them from twitching as a run works.
+        var cells = rows.Select(row => Assert.IsType<Border>(row.Children[0])).ToArray();
+        var shares = rows.Select(row => Assert.IsType<TextBlock>(row.Children[2])).ToArray();
+
+        Assert.All(cells, cell => Assert.Equal(cells[0].Width, cell.Width));
+        Assert.All(shares, share => Assert.Equal(shares[0].Width, share.Width));
+        Assert.All(shares, share => Assert.Equal(TextAlignment.Right, share.TextAlignment));
     }
 
     /// <summary>The plugin's identity, which is what its settings are kept under.</summary>
@@ -317,7 +327,7 @@ public sealed class SyncStripTests
     /// <param name="row">The bar's line.</param>
     /// <returns>The words at the start of the line.</returns>
     private static string Name(Grid row) =>
-        Assert.IsType<TextBlock>(row.Children[0]).Text ?? string.Empty;
+        Assert.IsType<TextBlock>(Assert.IsType<Border>(row.Children[0]).Child).Text ?? string.Empty;
 
     /// <summary>What a bar says of how far its task has got.</summary>
     /// <param name="row">The bar's line.</param>

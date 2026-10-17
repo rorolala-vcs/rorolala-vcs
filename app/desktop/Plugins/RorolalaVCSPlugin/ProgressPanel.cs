@@ -33,6 +33,23 @@ internal sealed class ProgressPanel : Border
     /// <summary>How tall a row's bar is, which is tall enough to hold the line drawn inside it.</summary>
     private const double BarHeight = 18;
 
+    /// <summary>How wide the name column is, fixed so that every bar of a card starts at the same place.</summary>
+    private const double NameWidth = 140;
+
+    /// <summary>
+    /// How wide the percentage column is, fixed so that a percentage changing its number of digits does not
+    /// change the length of the bar beside it.
+    /// </summary>
+    /// <remarks>
+    /// Wide enough for `100%` in the look's own type: the column is not sized to what a row currently says, since
+    /// what it says changes as the run works and a bar that grew and shrank with it would be a bar a reader cannot
+    /// read at a glance.
+    /// </remarks>
+    private const double ShareWidth = 48;
+
+    /// <summary>How far a name is inset where its bar stands under another's.</summary>
+    private const double Indent = 12;
+
     /// <summary>Where the cards go, one per run the hub holds, in the order they began.</summary>
     private readonly StackPanel _cards = new() { Spacing = 10 };
 
@@ -284,13 +301,26 @@ internal sealed class ProgressPanel : Border
         {
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 140,
         };
 
+        /// <summary>The name's column, which is the width every bar of a card lines up by.</summary>
+        /// <remarks>
+        /// A fixed width rather than the text's: a name sized to its own content would put the bar after it
+        /// wherever the name ended, and no two rows of a card would start their bars together. The indent of a bar
+        /// under another is this cell's padding, so that it moves the name and not the columns beside it.
+        /// </remarks>
+        private readonly Border _cell;
+
         /// <summary>How far it has got, at the end of the line.</summary>
+        /// <remarks>
+        /// Right-aligned in a column of its own width, so that one digit more or fewer moves nothing: the bar's
+        /// other edge is the column's, not the text's.
+        /// </remarks>
         private readonly TextBlock _share = new()
         {
             Classes = { "muted" },
+            Width = ShareWidth,
+            TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
@@ -333,17 +363,20 @@ internal sealed class ProgressPanel : Border
                 ColumnSpacing = 6,
             };
 
-            Grid.SetColumn(_name, 0);
+            _cell = new Border
+            {
+                Width = NameWidth,
+                VerticalAlignment = VerticalAlignment.Center,
+                Padding = indent ? new Thickness(Indent, 0, 0, 0) : default,
+                Child = _name,
+            };
+
+            Grid.SetColumn(_cell, 0);
             Grid.SetColumn(inside, 1);
             Grid.SetColumn(_share, 2);
-            _root.Children.Add(_name);
+            _root.Children.Add(_cell);
             _root.Children.Add(inside);
             _root.Children.Add(_share);
-
-            if (indent)
-            {
-                _root.Margin = new Thickness(12, 0, 0, 0);
-            }
         }
 
         /// <summary>The line, for the card to hold.</summary>
