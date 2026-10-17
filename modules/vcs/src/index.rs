@@ -356,10 +356,13 @@ impl VCSIndex {
 
     /// Reads the object under `key`, as the kind it is.
     ///
-    /// The object has already been checked against the key by [`read_object`](Self::read_object),
-    /// which every read goes through, so what is left here is to name it as one kind or another.
+    /// The object is checked against the key by [`read_object_checked`](Self::read_object_checked),
+    /// which every read goes through, and the object that check decoded is the one answered with —
+    /// so a chain of reads does not pay for the same decode twice.
     async fn read_object_typed(&self, key: Hash) -> Result<VCSIndexObject, VCSIndexError> {
-        VCSIndexObject::decode(&self.read_object(&key).await?)
+        self.read_object_checked(&key)
+            .await
+            .map(|(_, object)| object)
     }
 
     /// The number of `version` in its chain, worked out by tracing back to the root
@@ -512,6 +515,19 @@ impl VCSIndex {
     /// [`VCSIndexError::Malformed`] if what is there does not read as an object, and
     /// [`VCSIndexError::Corrupt`] if what came back does not hash to `key`.
     pub(crate) async fn read_object(&self, key: &Hash) -> Result<Vec<u8>, VCSIndexError> {
+        self.read_object_checked(key).await.map(|(plain, _)| plain)
+    }
+
+    /// The object stored under `key`, as the bytes it is kept as and as the kind they name.
+    ///
+    /// The key is checked here, once, and both readings are answered from the same decode: a typed
+    /// read used to decode the object again after this had already decoded it to check it, which is
+    /// two decodes of every object a chain walk asks for. What is left in the two callers is naming
+    /// which of the two they want.
+    async fn read_object_checked(
+        &self,
+        key: &Hash,
+    ) -> Result<(Vec<u8>, VCSIndexObject), VCSIndexError> {
         let bytes = self
             .entry_bytes(key)
             .await?
@@ -527,12 +543,13 @@ impl VCSIndex {
         let payload = bytes.get(header..).ok_or(VCSIndexError::Malformed)?;
         let plain_len = usize::try_from(frame.plain_len).map_err(|_| VCSIndexError::Malformed)?;
         let plain = frame.codec.decode(payload, plain_len)?;
+        let object = VCSIndexObject::decode(&plain)?;
 
-        if VCSIndexObject::decode(&plain)?.hash() != *key {
+        if object.hash() != *key {
             return Err(VCSIndexError::Corrupt(*key));
         }
 
-        Ok(plain)
+        Ok((plain, object))
     }
 
     /// Whether an object is stored under `key`, loose or in a pack.
