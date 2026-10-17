@@ -1,6 +1,15 @@
 _version: 2
 
 rola:
+  welcome:
+    en: |
+      Welcome to Rorolala CLI
+
+      Run `rola -h` to see the available commands
+    zh-CN: |
+        欢迎使用 Rorolala CLI
+
+        使用 `rola -h` 查看可用的命令
   help:
     en: |
         **Usage**: rola <COMMAND> [ARGS]

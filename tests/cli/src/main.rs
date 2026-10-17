@@ -105,7 +105,12 @@ fn identity(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &[]);
     checked.exits("a run that names nothing ends with the help code", &ran, 2);
     checked.stdout_empty("a run that names nothing writes no result", &ran);
-    checked.stderr_has("the help is what it is shown", &ran, "rola");
+    checked.stderr_has("a run that names nothing is greeted", &ran, "Welcome");
+    checked.stderr_has(
+        "a run that names nothing points at the help",
+        &ran,
+        "rola -h",
+    );
 
     let ran = rola.run(dir, &["-h"]);
     checked.exits("`-h` shows the help", &ran, 2);
@@ -1112,7 +1117,11 @@ fn output(rola: &Rola, ws: &Path, checked: &mut Checked) {
 fn language(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["--lang", "en", "storage", "extract-file"]);
     checked.exits("a failure is the same failure in English", &ran, 84);
-    checked.stderr_has("English is spoken when named", &ran, "No content hash was named");
+    checked.stderr_has(
+        "English is spoken when named",
+        &ran,
+        "No content hash was named",
+    );
 
     let ran = rola.run(ws, &["--lang", "zh-CN", "storage", "extract-file"]);
     checked.exits("a failure is the same failure in Chinese", &ran, 84);
@@ -1164,11 +1173,7 @@ fn held_by_another(rola: &Rola, dir: &Path, checked: &mut Checked) {
         );
 
         let ran = rola.run(dir, &["layout", "path", "create", path, uuid]);
-        checked.exits(
-            &format!("the entry is named at a path: `{path}`"),
-            &ran,
-            0,
-        );
+        checked.exits(&format!("the entry is named at a path: `{path}`"), &ran, 0);
 
         fs::write(dir.join(path), "art\n").expect("the file an entry is about");
     }
@@ -1207,10 +1212,7 @@ fn held_by_another(rola: &Rola, dir: &Path, checked: &mut Checked) {
     );
     checked.wants(
         "the Layout no longer names the path it was moved from",
-        !ran
-            .stdout
-            .lines()
-            .any(|line| line.starts_with("hero.psd ")),
+        !ran.stdout.lines().any(|line| line.starts_with("hero.psd ")),
         &said(&ran),
     );
 
@@ -1244,11 +1246,7 @@ fn ownership(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     for verb in ["hold", "giveup"] {
         let ran = rola.run(&dir.join("art"), &[verb, "hero.psd"]);
-        checked.exits(
-            &format!("`{verb}` reads a file it was named"),
-            &ran,
-            193,
-        );
+        checked.exits(&format!("`{verb}` reads a file it was named"), &ran, 193);
         checked.stderr_has(
             &format!("`{verb}` is refused for the Vault it tracks, and not for its arguments"),
             &ran,
@@ -1273,7 +1271,11 @@ fn ownership(rola: &Rola, dir: &Path, checked: &mut Checked) {
     );
 
     let ran = rola.run(dir, &["hold"]);
-    checked.exits("while `hold` with nothing named is still refused", &ran, 191);
+    checked.exits(
+        "while `hold` with nothing named is still refused",
+        &ran,
+        191,
+    );
 }
 
 /// Copies a directory and everything under it, which is the shape a fetched Layout is laid down in.

@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 
 use mingling::{
     hook::ProgramHook,
-    macros::{buffer, gen_program, help, r_append, r_eprintln, renderer},
+    macros::{buffer, gen_program, help, r_eprintln, renderer},
     res::ResExitCode,
     setup::ConfirmSetup,
 };
@@ -156,11 +156,10 @@ fn asks_for_version(word: &str) -> bool {
     matches!(word, "-V" | "--version")
 }
 
-/// Prints the help a run falls back to when no command is named.
+/// Prints the help a run asks for.
 ///
-/// A run whose arguments name no command — `rola`, or `rola -h` — reaches no entry of its
-/// own, so it lands on the fallback. What it is shown there is this: the whole of what the
-/// program can do.
+/// `-h` and `--help` are taken out of the arguments before a command is dispatched, and what they
+/// ask for is this: the whole of what the program can do.
 ///
 /// A run that named a program beside this one is the exception: `rola daemon --help` is a question
 /// about the daemon, which is the only thing that can answer it, so the question is handed over and
@@ -177,16 +176,17 @@ pub(crate) fn help_rola(args: EntryFallback, ec: &mut ResExitCode) {
 
 /// Reports a run whose arguments named no command the program has.
 ///
-/// A run that named nothing asked for nothing in particular, so it is shown what there is to
-/// ask for, the way `rola -h` shows it. One that named something is told there is no such
+/// A run that named nothing asked for nothing in particular, so it is greeted and pointed at the
+/// help rather than shown the help itself. One that named something is told there is no such
 /// command, and offered the ones it may have meant: a mistyped command costs one word to try
 /// again with, so guessing at it is worth more than a list is.
 #[renderer(buffer)]
 pub(crate) fn render_fallback(args: EntryFallback, ec: &mut ResExitCode) {
-    // Naming nothing is not a mistake to report, so it is answered the way asking for help
-    // is, and nothing else is said after it.
+    // Naming nothing is not a mistake to report, so it is a greeting and a way onward rather
+    // than a command's failure, and nothing else is said after it.
     if args.is_empty() {
-        r_append!(help_rola(args, ec));
+        r_eprintln!("{}", trd!(t!("rola.welcome")).trim());
+        ec.exit_code = EC_HELP;
     } else {
         // What was typed is reported as it was typed; a command, though, is named by the
         // first word, which is the one that failed to match.
