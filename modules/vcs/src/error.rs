@@ -104,6 +104,12 @@ pub enum VCSIndexError {
     Malformed,
     /// What came back does not hash to the key it was read under.
     Corrupt(Key),
+    /// The choice of how to write asked for something the index does not write.
+    ///
+    /// An index object is small and fixed in shape, so it is written whole and raw; there is no
+    /// manifest of its own in which a cutting of one could be recorded. A caller that asked for a
+    /// different chunking is told so rather than being quietly given a whole object instead.
+    UnsupportedChoice,
     /// The index itself failed.
     Io(io::Error),
 }
@@ -115,6 +121,9 @@ impl fmt::Display for VCSIndexError {
             Self::Malformed => formatter.write_str("what is stored is not an index object"),
             Self::Corrupt(key) => {
                 write!(formatter, "what is stored under {key} does not hash to it")
+            }
+            Self::UnsupportedChoice => {
+                formatter.write_str("the index writes whole objects and cannot be told to cut one")
             }
             Self::Io(source) => write!(formatter, "the index failed: {source}"),
         }
@@ -222,10 +231,12 @@ impl From<VCSIndexError> for VCSIndexReadingError {
             VCSIndexError::NotFound(key) => Self::NotFound {
                 key: key.to_string(),
             },
-            VCSIndexError::Malformed => Self::Malformed,
             VCSIndexError::Corrupt(key) => Self::Corrupt {
                 key: key.to_string(),
             },
+            // A read chooses nothing about how an object is written, so it has no way to have refused
+            // a choice; carried this far, it is a malformed request rather than a state of the index.
+            VCSIndexError::Malformed | VCSIndexError::UnsupportedChoice => Self::Malformed,
             VCSIndexError::Io(source) => Self::Io(source.into()),
         }
     }

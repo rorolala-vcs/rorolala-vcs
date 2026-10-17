@@ -44,11 +44,18 @@ pub trait StorageBackend: Send + Sync {
     ///
     /// A caller that has no opinion about the choice wants [`store_file`], which makes it.
     ///
+    /// A backend may write only part of what a choice can say — one that keeps objects small and
+    /// fixed, such as an index, has nowhere to record a cutting of one — and is expected to refuse
+    /// the rest rather than quietly write something else. [`choose_algorithm`] is what asks for a
+    /// choice the backend will accept.
+    ///
+    /// [`choose_algorithm`]: StorageBackend::choose_algorithm
+    ///
     /// # Errors
     ///
     /// [`Io`](crate::Error::Io) if `file` cannot be read — a file that is not there is an I/O
     /// failure like any other, since it names no key to be [`NotFound`](crate::Error::NotFound)
-    /// under — and whatever the backend itself fails with.
+    /// under — and whatever the backend itself fails with, including a choice it does not write.
     fn write_file(
         &self,
         file: &Path,

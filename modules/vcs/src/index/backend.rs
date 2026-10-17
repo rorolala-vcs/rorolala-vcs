@@ -35,6 +35,13 @@ impl StorageBackend for VCSIndex {
         file: &Path,
         choice: Self::AlgorithmChoice,
     ) -> Result<Key, Self::Error> {
+        // The choice says how the file is to be kept, and an index object is only ever kept whole:
+        // there is nowhere to record a cutting of one, so a caller asking for one is refused rather
+        // than quietly given a whole object and told nothing.
+        if choice.chunking() != Chunking::Whole {
+            return Err(VCSIndexError::UnsupportedChoice);
+        }
+
         let plain = tokio::fs::read(file).await?;
         let object = VCSIndexObject::decode(&plain)?;
         let key = object.hash();

@@ -878,7 +878,9 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use rorolala_storage::{StorageBackend as _, TransferableBackend as _, transfer};
+    use rorolala_storage::{
+        AlgorithmChoice, Chunking, Codec, StorageBackend as _, TransferableBackend as _, transfer,
+    };
     use rorolala_utils_constants::{
         VAULT_CONFIG_PATH, VAULT_INDEX_DIR, WORKSPACE_DATA_DIR, WORKSPACE_INDEX_DIR,
     };
@@ -1160,6 +1162,35 @@ mod tests {
             run(index.content(&key)).unwrap(),
             Err(VCSIndexError::Corrupt(_))
         ));
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_choice_the_index_does_not_write_is_refused() {
+        let index = index("unsupported-choice");
+        let file = index.get_root().join("object");
+        fs::create_dir_all(index.get_root()).unwrap();
+        fs::write(&file, variant().encode()).unwrap();
+
+        // An index object is kept whole; a caller asking for it to be cut asked for something the
+        // index has nowhere to record, and is told so rather than written a whole object quietly.
+        let cut = run(index.write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 64 }),
+        ))
+        .unwrap();
+        assert!(matches!(cut, Err(VCSIndexError::UnsupportedChoice)));
+        assert_eq!(
+            run(index.list_object_keys()).unwrap().unwrap(),
+            Vec::<Hash>::new()
+        );
+
+        // The same bytes with the choice the index makes are written.
+        let whole = run(index.write_file(&file, AlgorithmChoice::new(Codec::Raw, Chunking::Whole)))
+            .unwrap()
+            .unwrap();
+        assert_eq!(whole, variant().hash());
 
         let _ = fs::remove_dir_all(index.get_root());
     }
