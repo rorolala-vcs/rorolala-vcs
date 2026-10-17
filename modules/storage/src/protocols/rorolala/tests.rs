@@ -716,3 +716,53 @@ async fn a_manifest_that_makes_another_content_falls_back_to_the_object() {
 
     let _ = fs::remove_dir_all(&parent);
 }
+
+#[tokio::test]
+async fn a_store_that_cannot_read_is_not_a_store_with_a_bad_manifest() {
+    let (parent, store) = store("malformed-manifest-io");
+    let key = Key::new([7; 32]);
+
+    // A manifest that does not read, and something where the object would be that is not a file at
+    // all: the object is the fallback, and what went wrong reading it is what a caller needs to be
+    // told. Reporting "malformed" would send them looking at the manifest and not at the disk.
+    let manifest = store.manifest_path(&key);
+    fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+    fs::write(&manifest, b"not a manifest").unwrap();
+    fs::create_dir_all(store.object_path(&key)).unwrap();
+
+    assert!(matches!(
+        store.extract_file(&key, &parent.join("out")).await,
+        Err(Error::Io(_))
+    ));
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn a_store_that_cannot_read_the_whole_is_not_content_that_does_not_add_up() {
+    let (parent, store) = store("assemble-io");
+    let content: Vec<u8> = (0..1000_u32).map(|value| (value % 251) as u8).collect();
+    let file = parent.join("file");
+    fs::write(&file, &content).unwrap();
+
+    let key = store
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 64 }),
+        )
+        .await
+        .unwrap();
+
+    // The chunks cannot be put back together, so the whole object is asked for — and what is at its
+    // path is not an object that can be read. The failure of that read is a disk's, not a manifest's.
+    let manifest = store.read_manifest(&key).await.unwrap().unwrap();
+    store.remove(&manifest.chunks()[0].key()).await.unwrap();
+    fs::create_dir_all(store.object_path(&key)).unwrap();
+
+    assert!(matches!(
+        store.extract_file(&key, &parent.join("out")).await,
+        Err(Error::Io(_))
+    ));
+
+    let _ = fs::remove_dir_all(&parent);
+}

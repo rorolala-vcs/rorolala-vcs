@@ -142,17 +142,24 @@ impl RorolalaStorage {
     /// The content a manifest makes is checked against the key before it is handed over: a manifest
     /// is not covered by the key, so it may name the right chunks in the wrong order — or chunks of
     /// something else — and what a key promises is the content, not the reading of a manifest.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotFound`] if no manifest and no object is stored under `key`,
+    /// [`Error::Corrupt`] if what is stored does not make the content the key names,
+    /// [`Error::Malformed`] if a manifest will not read and there is no object to answer with, and
+    /// [`Error::Io`] if the store cannot be read at all.
     pub(super) async fn read_content(&self, key: &Key) -> Result<Vec<u8>, Error> {
         let manifest = match self.read_manifest(key).await {
             Ok(Some(manifest)) => manifest,
             // No manifest at all: the content is whatever is under the key as an object.
             Ok(None) => return self.read_object(key).await,
             // A manifest that will not read is one nothing can be put back together from; the object
-            // under the key is the same content, so it is answered with. If none is there, the
-            // manifest's failure is what is reported rather than a not-found that hides it.
-            Err(Error::Malformed) => {
-                return self.read_object(key).await.map_err(|_| Error::Malformed);
-            }
+            // under the key is the same content, so it is answered with. What the fallback fails
+            // with decides what is reported: only a key with nothing under it leaves the manifest's
+            // own failure as the account, while a store that cannot be read and an object that does
+            // not hash are both more telling than "malformed".
+            Err(Error::Malformed) => return self.whole_or_malformed(key).await,
             Err(error) => return Err(error),
         };
 
@@ -166,8 +173,29 @@ impl RorolalaStorage {
             // The whole content may still be under the key, beside the manifest (see `write_content`),
             // and a key is the hash of the whole content, so what is there is the same content the
             // manifest would have made. If it is not there, what went wrong with the manifest is what
-            // is reported.
-            Err(error) => self.read_object(key).await.map_err(|_| error),
+            // is reported — unless the fallback itself failed in a way that says more: a store that
+            // cannot be read is not content that does not add up, and an object that does not hash is
+            // not a manifest that reads wrong.
+            Err(error) => match self.read_object(key).await {
+                Ok(content) => Ok(content),
+                Err(Error::Io(failure)) => Err(Error::Io(failure)),
+                Err(Error::Corrupt(corrupt)) => Err(Error::Corrupt(corrupt)),
+                Err(_) => Err(error),
+            },
+        }
+    }
+
+    /// The object stored under `key`, or the malformed manifest there is nothing else to report.
+    ///
+    /// This is what a manifest that will not read is answered with. The object beside it is the same
+    /// content, so a read that works answers the key; a read that fails for its own reason is the
+    /// better account of the store — an unreadable disk, or an object that does not hash — and only
+    /// a key with no object under it leaves the manifest's failure as what is reported.
+    async fn whole_or_malformed(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        match self.read_object(key).await {
+            Ok(content) => Ok(content),
+            Err(Error::NotFound(_)) => Err(Error::Malformed),
+            Err(error) => Err(error),
         }
     }
 
