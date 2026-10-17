@@ -975,3 +975,34 @@ async fn content_a_manifest_does_not_make_is_not_sent() {
 
     let _ = fs::remove_dir_all(&parent);
 }
+
+#[tokio::test]
+async fn a_key_a_pack_names_but_cannot_produce_does_not_stall_an_exchange() {
+    let (parent, from) = store("send-gone-pack");
+    let (_, to) = store("send-gone-pack-to");
+
+    let key = from
+        .write_object(b"packed and then gone", Codec::Raw)
+        .await
+        .unwrap();
+    assert!(from.pack(&[key]).await.unwrap());
+
+    // The index still names the key and the pack file is gone: this end answers that it holds it,
+    // and cannot produce it. The exchange says "nothing here" for it and ends — the case the empty
+    // frame in `send` exists for.
+    let (pack, _) = from.pack_paths(0);
+    fs::remove_file(&pack).unwrap();
+
+    let (mut mine, mut theirs) = tokio::io::duplex(64 * 1024);
+    let answering_with = to.clone();
+    let answering =
+        tokio::spawn(async move { transfer::respond(&answering_with, &mut theirs).await });
+
+    transfer::initiate(&from, &mut mine, &[key]).await.unwrap();
+    answering.await.unwrap().unwrap();
+
+    assert!(holds(&from, &key).await, "held is the index's answer");
+    assert!(!holds(&to, &key).await, "nothing crossed for it");
+
+    let _ = fs::remove_dir_all(&parent);
+}
