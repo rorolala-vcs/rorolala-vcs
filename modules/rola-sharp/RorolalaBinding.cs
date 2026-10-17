@@ -2262,6 +2262,35 @@ internal static partial class RorolalaBinding
     internal static extern long rola_status_standing_distance_of(nint self, nint path);
 
     /// <summary>
+    /// How many paths the reading holds a standing for.
+    ///
+    /// How many entries `rola_status_standing_path` and `rola_status_standing_relation` answer for. It is every
+    /// path this Layout records a version for, whether or not the Vault names it, which is what a caller wanting
+    /// the whole picture of the work reads once rather than asking about each path it already holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_standing_count(nint self);
+
+    /// <summary>
+    /// The path at index `index` of the standings.
+    ///
+    /// The path relative to the root, as the reading names it. The caller owns the string and releases it with
+    /// `free_string`, and answers an empty string for an index the reading does not hold.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_standing_path(nint self, nuint index);
+
+    /// <summary>
+    /// Where the version at index `index` of the standings is beside the one upstream records.
+    ///
+    /// A `Standing` by value, which is `Unknown` for an index the reading does not hold — the same answer a
+    /// path that is not known is given. How far apart the two are is not part of it; that is
+    /// `rola_status_standing_distance_of`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaStanding rola_status_standing_relation(nint self, nuint index);
+
+    /// <summary>
     /// Creates a Vault in the specified directory
     ///
     /// Returns a result:

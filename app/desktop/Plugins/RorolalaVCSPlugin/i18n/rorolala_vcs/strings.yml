@@ -109,6 +109,32 @@ rorolala_vcs:
       en: A variant is waiting to be joined in.
       zh-CN: 有一个变体等待合并。
 
+    # What a sync would do about a path, which is the last group of the table: a file that is in step with nothing
+    # wrong about it is still one a sync would send or fetch, and a reader wants to know which before pressing it.
+    # The letters are the pill's, and what is held here is what it is hovered for.
+    #
+    # The two that carry a count are said with it where the index can count the versions between the two sides, and
+    # without it otherwise: what the Vault is at is ordinarily a version this side never fetched, so the count is the
+    # ordinary exception rather than the rule, and a zero would read as being in step.
+    kind_send:
+      en: This file's version is ahead of upstream. Sync to bring it into step with upstream.
+      zh-CN: 该文件的当前版本领先于上游，同步以和上游保持一致
+    kind_receive:
+      en: This file's version is behind upstream. Sync to bring it into step with upstream.
+      zh-CN: 该文件的当前版本落后于上游，同步以和上游保持一致
+    kind_create:
+      en: The entry is new here. Sync to bring it into step with upstream.
+      zh-CN: 该文件为新建条目，同步以和上游保持一致
+    kind_diverged:
+      en: The two versions have diverged from each other. A forced sync in that direction settles it.
+      zh-CN: 版本产生了分叉，定向强制同步以解决冲突
+    sync_ahead:
+      en: This file's version is %{count} version(s) ahead of upstream. Sync to bring it into step with upstream.
+      zh-CN: 该文件的当前版本领先于上游 %{count} 个版本，同步以和上游保持一致
+    sync_behind:
+      en: This file's version is %{count} version(s) behind upstream. Sync to bring it into step with upstream.
+      zh-CN: 该文件的当前版本落后于上游 %{count} 个版本，同步以和上游保持一致
+
     # What became of a row's content.
     change_modified:
       en: Its content has changed.

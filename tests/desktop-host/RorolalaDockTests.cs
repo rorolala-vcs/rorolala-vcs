@@ -209,7 +209,10 @@ public sealed class RorolalaDockTests
             Unowned: [],
             WrongBase: [],
             Merging: [],
-            Broken: []
+            Broken: [],
+            Sends: [],
+            Receives: [],
+            Apart: []
         );
 
         OverviewReading read = new(facts, null);
@@ -246,7 +249,10 @@ public sealed class RorolalaDockTests
             Unowned: ["theirs.psd"],
             WrongBase: ["stale.psd"],
             Merging: [new Merge("merge/file.txt", "1a2b3c4d5e6f", "merge/file.1a2b3c4.txt", null)],
-            Broken: []
+            Broken: [],
+            Sends: [],
+            Receives: [],
+            Apart: []
         );
 
         var rows = OverviewView.Rows(facts);
@@ -291,6 +297,51 @@ public sealed class RorolalaDockTests
         Assert.Equal(("kept.txt", string.Empty), (rows[6].From, rows[6].To));
     }
 
+    /// <summary>A path a sync would move is a row of the last group, with no button of its own.</summary>
+    /// <remarks>
+    /// What is in step with nothing wrong about it is still a file a sync would carry, and the Overview is where it
+    /// is read which way the work moves: sent, fetched, created, or settled only by a forced sync. The path is a row
+    /// of its own only where no other row already names it — a path that changed here and is behind is on the row of
+    /// its change, wearing the one pill saying its base is wrong — and the row offers no button, because the run that
+    /// settles it is the strip's sync rather than one entry of the table.
+    /// </remarks>
+    [Fact]
+    public void WhatASyncWouldMoveIsReadLastAndOffersNoButton()
+    {
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: [],
+            Untagged: [],
+            Renamed: [],
+            Modified: [],
+            Unowned: [],
+            WrongBase: [],
+            Merging: [],
+            Broken: [],
+            Sends: ["ahead.psd", "edited.psd"],
+            Receives: ["behind.psd"],
+            Apart: ["apart.psd"]
+        );
+
+        // The edited path is in the reading as a change as well, and the change is the row it is read on.
+        var rows = OverviewView.Rows(facts with { Modified = ["edited.psd"] });
+
+        // The change is one group above, and the three the reading says nothing else about are the last.
+        Assert.Equal(
+            ["M", "S↑", "S↓", "Sx"],
+            rows.Select(Pills)
+        );
+
+        // Each is written where it comes from, with nothing on the other side, and none of the sync rows is a
+        // button: what settles them is the strip's sync rather than a run of one entry. The change above keeps its.
+        Assert.Equal(("edited.psd", string.Empty), (rows[0].From, rows[0].To));
+        Assert.Equal(("ahead.psd", string.Empty), (rows[1].From, rows[1].To));
+        Assert.Equal(("behind.psd", string.Empty), (rows[2].From, rows[2].To));
+        Assert.Equal(("apart.psd", string.Empty), (rows[3].From, rows[3].To));
+        Assert.All(rows.Skip(1), row => Assert.Empty(row.Operations));
+    }
+
     /// <summary>A merge can be cancelled, and what is cancelled is read from the variant file.</summary>
     /// <remarks>
     /// A merge is the one row whose button acts on its <c>From</c> rather than on where its file is now: the
@@ -314,7 +365,10 @@ public sealed class RorolalaDockTests
                 new Merge("merge/file.txt", "1a2b3c4d5e6f", "merge/file.txt.v", null),
                 new Merge("merge/other.psd", "abcdef0123456789", "merge/other.psd.v", "merge/that.psd.v"),
             ],
-            Broken: []
+            Broken: [],
+            Sends: [],
+            Receives: [],
+            Apart: []
         );
 
         var rows = OverviewView.Rows(facts);
@@ -370,7 +424,10 @@ public sealed class RorolalaDockTests
             Unowned: [],
             WrongBase: ["b.txt"],
             Merging: [],
-            Broken: []
+            Broken: [],
+            Sends: [],
+            Receives: [],
+            Apart: []
         );
 
         var rows = OverviewView.Rows(facts);
@@ -399,7 +456,10 @@ public sealed class RorolalaDockTests
             Unowned: [],
             WrongBase: [],
             Merging: [],
-            Broken: []
+            Broken: [],
+            Sends: [],
+            Receives: [],
+            Apart: []
         );
 
         var row = Assert.Single(OverviewView.Rows(facts));
@@ -433,7 +493,10 @@ public sealed class RorolalaDockTests
             [
                 new BrokenReason(BrokenKind.FileGone, "merge/hero.txt", "merge/hero.psd"),
                 new BrokenReason(BrokenKind.NoTarget, "1a2b3c4d5e6f", string.Empty),
-            ]
+            ],
+            Sends: [],
+            Receives: [],
+            Apart: []
         );
 
         var rows = OverviewView.Rows(facts);
@@ -492,7 +555,10 @@ public sealed class RorolalaDockTests
             Unowned: ["theirs.psd"],
             WrongBase: [],
             Merging: [new Merge("merge/file.txt", "1a2b3c4d5e6f", "merge/file.txt.v", null)],
-            Broken: []
+            Broken: [],
+            Sends: [],
+            Receives: [],
+            Apart: []
         );
 
         var once = OverviewView.Rows(facts);

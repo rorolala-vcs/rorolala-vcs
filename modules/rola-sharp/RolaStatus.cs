@@ -160,6 +160,30 @@ public enum StandingRelation
 public sealed record Standing(StandingRelation Relation, ulong? Distance);
 
 /// <summary>
+/// Whether one path's version stands ahead of, behind, or apart from the one upstream records.
+/// </summary>
+/// <remarks>
+/// What <see cref="RolaStatus.StandingOf"/> answers, less the count: the count is what a column says, and this is
+/// what a plan would do about the path — a sync sends one that is ahead and brings one that is behind, and
+/// <c>--force</c> is what sends one that is apart. The two are told apart from <see cref="StandingRelation"/> by
+/// asking whether the path's base is wrong: that is every path behind or apart from upstream, and not one ahead.
+/// </remarks>
+public enum SyncStanding
+{
+    /// <summary>Nothing says: the path is in step, upstream does not name it, or the chain does not say.</summary>
+    None,
+
+    /// <summary>This side's version is further on, so a sync sends it.</summary>
+    Send,
+
+    /// <summary>The Vault's version is further on, so a sync brings it down.</summary>
+    Receive,
+
+    /// <summary>The two have each moved on, so only a forced sync sends this one.</summary>
+    Diverged,
+}
+
+/// <summary>
 /// How the working tree stands beside the Layout it works from.
 /// </summary>
 /// <remarks>
@@ -191,6 +215,7 @@ public sealed class RolaStatus : IDisposable
         List<string> modified;
         List<string> unowned;
         List<string> wrongBase;
+        List<string> ahead;
         List<Rename> renamed;
         List<Merge> merging;
         List<BrokenReason> broken;
@@ -224,6 +249,17 @@ public sealed class RolaStatus : IDisposable
                 RorolalaBinding.rola_status_wrong_base_count,
                 RorolalaBinding.rola_status_wrong_base_at
             );
+
+            // What is ahead is read out of the list of standings rather than walked again: every path the
+            // Layout records a version for is in it, with where that version stands, and this is the one list
+            // a reading gives whole.
+            ahead =
+            [
+                .. Standings(handle)
+                    .Where(ahead => ahead.Relation == StandingRelation.Ahead)
+                    .Select(ahead => ahead.Path),
+            ];
+
             renamed = Renames(handle);
             merging = Merges(handle);
             broken = BrokenReasons(handle);
@@ -244,6 +280,7 @@ public sealed class RolaStatus : IDisposable
         Modified = modified;
         Unowned = unowned;
         WrongBase = wrongBase;
+        Ahead = ahead;
         Renamed = renamed;
         Merging = merging;
         Broken = broken;
@@ -291,6 +328,13 @@ public sealed class RolaStatus : IDisposable
     /// could say how the two versions stand.
     /// </remarks>
     public IReadOnlyList<string> WrongBase { get; }
+
+    /// <summary>Paths whose version is further on than the one upstream records.</summary>
+    /// <remarks>
+    /// The other side of <see cref="WrongBase"/>: a path ahead is ordinary work, so it is not a base gone wrong,
+    /// and it is the one of the three standings that records nothing to act on but a sync.
+    /// </remarks>
+    public IReadOnlyList<string> Ahead { get; }
 
     /// <summary>Paths that moved.</summary>
     public IReadOnlyList<Rename> Renamed { get; }
@@ -407,6 +451,57 @@ public sealed class RolaStatus : IDisposable
         }
     }
 
+    /// <summary>
+    /// What a sync would do about the entry at a path: send it, bring it down, or only send it when forced.
+    /// </summary>
+    /// <remarks>
+    /// It is <see cref="StandingOf"/> read the way a plan reads it — ahead is a send, behind is a receive, and two
+    /// chains that have each moved on are sent only by <c>--force</c> — with the two lists of the reading telling
+    /// the last two apart. Being behind and being apart are both a base gone wrong, so what is asked is
+    /// <see cref="WrongBase"/> rather than the relation: a path of neither is one whose chain this side could not
+    /// read, and a plan would not act on it either.
+    /// </remarks>
+    /// <param name="path">The path of the entry, as the program names it.</param>
+    /// <returns>What a sync would do about it, which is <see cref="SyncStanding.None"/> where there is nothing.
+    /// </returns>
+    public SyncStanding SyncOf(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ObjectDisposedException.ThrowIf(_handle == 0, this);
+
+        if (!WrongBase.Any(named => Named(named, path)))
+        {
+            return Ahead.Any(named => Named(named, path)) ? SyncStanding.Send : SyncStanding.None;
+        }
+
+        return StandingOf(path).Relation switch
+        {
+            StandingRelation.Apart => SyncStanding.Diverged,
+
+            // Behind is the answer whether or not a count comes with it, since what the Vault is at is
+            // ordinarily a version this side never fetched: the direction is known and the chain is not.
+            StandingRelation.Behind => SyncStanding.Receive,
+
+            _ => SyncStanding.None,
+        };
+    }
+
+    /// <summary>Whether a path a reading named is the file at `path`.</summary>
+    /// <remarks>
+    /// A list of the reading's is relative to the Workspace it was made of, and a caller's path is whatever the
+    /// system names — so the two are joined and both made absolute before they are compared, which is the same
+    /// comparison every reader of these lists makes (see the File System plugin's columns).
+    /// </remarks>
+    /// <param name="named">The path the reading named.</param>
+    /// <param name="path">The path the caller names.</param>
+    /// <returns>Whether they are the same file.</returns>
+    private bool Named(string named, string path) =>
+        string.Equals(
+            Path.GetFullPath(Path.Combine(Root, named)),
+            Path.GetFullPath(path),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
+        );
+
 /// <summary>Gives the native reading back.</summary>
     public void Dispose()
     {
@@ -441,6 +536,27 @@ public sealed class RolaStatus : IDisposable
         }
 
         return paths;
+    }
+
+    /// <summary>Reads the standings out of a native status, which is every path the Layout records a version for.</summary>
+    /// <param name="handle">The native status.</param>
+    /// <returns>The paths and where each version stands, in the order the reading gives them.</returns>
+    private static List<(string Path, StandingRelation Relation)> Standings(nint handle)
+    {
+        var many = RorolalaBinding.rola_status_standing_count(handle);
+        var standings = new List<(string, StandingRelation)>();
+
+        for (nuint index = 0; index < many; index++)
+        {
+            standings.Add(
+                (
+                    NativeText.Taken(RorolalaBinding.rola_status_standing_path(handle, index)),
+                    (StandingRelation)RorolalaBinding.rola_status_standing_relation(handle, index)
+                )
+            );
+        }
+
+        return standings;
     }
 
     /// <summary>Reads the moves out of a native status.</summary>

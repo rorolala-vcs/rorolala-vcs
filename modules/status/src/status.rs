@@ -378,6 +378,17 @@ impl Status {
             })
     }
 
+    /// Every path a standing was read for, and where that version stands beside the one the Vault's copy
+    /// records.
+    ///
+    /// It is the whole of what [`standing_of`](Self::standing_of) answers one path at a time, in the order the
+    /// reading made it, for a caller that wants the picture of the whole work rather than one file: what a
+    /// listing shows one cell for is what this is the source of.
+    #[must_use]
+    pub fn standings(&self) -> &[(String, base::Standing)] {
+        &self.standing
+    }
+
     /// What the reading says about the entry at `path`, in one word.
     ///
     /// The path is one a caller names — a file of a listing, an entry of a table, as the system spells it —

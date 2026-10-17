@@ -435,6 +435,50 @@ impl Status {
             .1
             .map_or(-1, |distance| i64::try_from(distance).unwrap_or(i64::MAX))
     }
+
+    /// How many paths the reading holds a standing for.
+    ///
+    /// # FFI
+    ///
+    /// How many entries `rola_status_standing_path` and `rola_status_standing_relation` answer for. It is every
+    /// path this Layout records a version for, whether or not the Vault names it, which is what a caller wanting
+    /// the whole picture of the work reads once rather than asking about each path it already holds.
+    #[must_use]
+    #[lazyffi(export = rola_status_standing_count)]
+    pub fn standing_count(&self) -> usize {
+        self.standings().len()
+    }
+
+    /// The path at index `index` of the standings.
+    ///
+    /// # FFI
+    ///
+    /// The path relative to the root, as the reading names it. The caller owns the string and releases it with
+    /// `free_string`, and answers an empty string for an index the reading does not hold.
+    #[must_use]
+    #[lazyffi(export = rola_status_standing_path)]
+    pub fn standing_path(&self, index: usize) -> String {
+        self.standings()
+            .get(index)
+            .map_or_else(String::new, |(path, _)| path.clone())
+    }
+
+    /// Where the version at index `index` of the standings is beside the one upstream records.
+    ///
+    /// # FFI
+    ///
+    /// A `Standing` by value, which is `Unknown` for an index the reading does not hold — the same answer a
+    /// path that is not known is given. How far apart the two are is not part of it; that is
+    /// `rola_status_standing_distance_of`.
+    #[must_use]
+    #[lazyffi(export = rola_status_standing_relation)]
+    pub fn standing_relation_at(&self, index: usize) -> Standing {
+        self.standings()
+            .get(index)
+            .map_or(Standing::Unknown, |(_, standing)| {
+                Standing::of(standing.relation)
+            })
+    }
 }
 
 /// The string at `index`, or an empty one when there is no such entry.

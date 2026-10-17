@@ -75,7 +75,8 @@ internal sealed class OverviewDock : IDockView
 /// <summary>What where the tree is rooted comes to, as the Overview reads it.</summary>
 /// <param name="Facts">The reading to draw, when there is one.</param>
 /// <param name="Said">What to say instead, when there is not.</param>
-internal sealed record OverviewReading(StatusFacts? Facts, string? Said);
+/// <param name="Status">The reading itself, which what a sync would move is read out of, or nothing.</param>
+internal sealed record OverviewReading(StatusFacts? Facts, string? Said, RolaStatus? Status = null);
 
 /// <summary>
 /// A reading as the table reads it: what to show, without the reading itself.
@@ -93,6 +94,9 @@ internal sealed record OverviewReading(StatusFacts? Facts, string? Said);
 /// <param name="WrongBase">Paths whose version is behind or apart from the one upstream is at.</param>
 /// <param name="Merging">Files a variant is waiting to be joined into.</param>
 /// <param name="Broken">Merges that cannot go on, one reason each.</param>
+/// <param name="Sends">Paths a sync would send the version of, being further on than the Vault.</param>
+/// <param name="Receives">Paths a sync would bring the Vault's version down to.</param>
+/// <param name="Apart">Paths whose two chains have each moved on, which only a forced sync sends.</param>
 internal sealed record StatusFacts(
     IReadOnlyList<string> Lost,
     IReadOnlyList<string> Untagged,
@@ -101,7 +105,10 @@ internal sealed record StatusFacts(
     IReadOnlyList<string> Unowned,
     IReadOnlyList<string> WrongBase,
     IReadOnlyList<Merge> Merging,
-    IReadOnlyList<BrokenReason> Broken
+    IReadOnlyList<BrokenReason> Broken,
+    IReadOnlyList<string> Sends,
+    IReadOnlyList<string> Receives,
+    IReadOnlyList<string> Apart
 )
 {
     /// <summary>Takes the facts out of a reading.</summary>
@@ -119,7 +126,14 @@ internal sealed record StatusFacts(
             status.Unowned,
             status.WrongBase,
             status.Merging,
-            status.Broken
+            status.Broken,
+            // The three what a sync would do are read one path at a time, because where a path is ahead is the one
+            // answer the reading keeps only as a whole: what is behind and what is apart are the reading's own
+            // lists, and what is ahead is a walk of that list. A reading is a snapshot, so the three are the same
+            // answer however often they are asked.
+            [.. status.Ahead],
+            [.. status.WrongBase.Where(path => status.StandingOf(path).Relation is StandingRelation.Behind)],
+            [.. status.WrongBase.Where(path => status.StandingOf(path).Relation is StandingRelation.Apart)]
         );
     }
 }
@@ -166,6 +180,18 @@ internal enum State
 
     /// <summary>A variant that cannot be joined in.</summary>
     Broken,
+
+    /// <summary>This side's version is further on than the Vault's, so a sync sends it.</summary>
+    Send,
+
+    /// <summary>The Vault's version is further on, so a sync brings it down.</summary>
+    Receive,
+
+    /// <summary>The tree holds it and the Layout does not name it, so a sync creates it upstream.</summary>
+    Create,
+
+    /// <summary>The two chains have each moved on, so only a forced sync sends it.</summary>
+    Diverged,
 }
 
 /// <summary>
@@ -358,7 +384,29 @@ internal sealed class OverviewView : UserControl
     /// A fetch already running is the one a second press would be: what is fetched is the same copy, and two
     /// exchanges for one reading are two where one answers.
     /// </remarks>
+    /// <summary>Whether a running command is one whose end needs a reading, which is what a fetch and a sync are.</summary>
+    /// <remarks>
+    /// Either of them writes the copy every reading of the work is made from, while the other commands this plugin
+    /// runs — a claim, a release, a mode of <c>rola align</c> — write the Layout and are followed by the files being
+    /// said to have changed. A reading taken while a sync is carrying content down would say what the tree held in
+    /// the middle of it, which is neither what it held nor what it holds.
+    /// </remarks>
     private bool _fetching;
+
+    /// <summary>Whether the hub had something going when it last said it had changed.</summary>
+    /// <remarks>
+    /// What tells a run ending from a run saying what it is doing: the hub says both the same way, and the reading
+    /// is held for the first and not the second.
+    /// </remarks>
+    private bool _running;
+
+    /// <summary>The reading the rows on screen were made from, or nothing before one was made.</summary>
+    /// <remarks>
+    /// The count a sync row is hovered for is the one thing about it the reading keeps per path, so it is read from
+    /// here as the row is drawn rather than carried in the row: a row built by <see cref="Rows"/> has no reading to
+    /// ask, and the reading is a snapshot that is the same one however many rows are drawn from it.
+    /// </remarks>
+    private RolaStatus? _reading;
 
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
@@ -458,6 +506,7 @@ internal sealed class OverviewView : UserControl
         // What a command is doing decides whether the panel has anywhere to stand: with nothing shown, the room
         // down the right is given back to the table rather than left as an empty third of the dock.
         Split(hub.Any);
+        _running = hub.Any;
 
         Draw();
     }
@@ -492,6 +541,17 @@ internal sealed class OverviewView : UserControl
         _ = changed;
 
         Split(_hub.Any);
+
+        // A run that has just ended is the fetch or the sync the reading was held for: what it wrote is what the
+        // work is read from now, and nothing else will say so — see <see cref="Drawn"/>.
+        if (_running && !_hub.Any)
+        {
+            _running = false;
+            Draw();
+            _sync.Plan(BaseDirectory.Current);
+        }
+
+        _running = _hub.Any;
     }
 
     /// <summary>What the dock's header carries, which is the sync strip with the reading's own refresh in it.</summary>
@@ -642,7 +702,7 @@ internal sealed class OverviewView : UserControl
 
             if (status is not null)
             {
-                return new OverviewReading(StatusFacts.Of(status), null);
+                return new OverviewReading(StatusFacts.Of(status), null, status);
             }
 
             return new OverviewReading(
@@ -698,9 +758,21 @@ internal sealed class OverviewView : UserControl
         List<TableRow> merges = [];
         List<TableRow> structural = [];
         List<TableRow> changes = [];
+        List<TableRow> syncing = [];
 
         var destinations = facts.Renamed.Select(rename => rename.To).ToHashSet(StringComparer.Ordinal);
         var behind = facts.WrongBase.ToHashSet(StringComparer.Ordinal);
+        var apart = facts.Apart.ToHashSet(StringComparer.Ordinal);
+
+        // Every path the three above speak of, so that what a sync would move is read for the rest: a path two of
+        // them name is one row, and a row is what says what is to be done about it.
+        var moving = new HashSet<string>(StringComparer.Ordinal);
+        moving.UnionWith(facts.Lost);
+        moving.UnionWith(facts.Untagged);
+        moving.UnionWith(facts.Renamed.Select(rename => rename.From));
+        moving.UnionWith(destinations);
+        moving.UnionWith(facts.Modified);
+        moving.UnionWith(facts.Unowned);
 
         wrong.AddRange(
             facts.Unowned.Select(path =>
@@ -797,7 +869,45 @@ internal sealed class OverviewView : UserControl
                 )
         );
 
-        return [.. wrong, .. merges, .. structural, .. changes];
+        // What a sync would do with a path already named above is on the row it is already on; what is left is
+        // the work that is in step with nothing wrong about it — which is the ordinary state of a file, and the
+        // one a reader opens the Overview to see is safe to sync.
+        syncing.AddRange(
+            facts
+                .Sends.Where(path => !moving.Contains(path))
+                .Select(path => Sync(State.Send, path, behind))
+        );
+        syncing.AddRange(
+            facts
+                .Receives.Where(path => !moving.Contains(path))
+                .Select(path => Sync(State.Receive, path, behind))
+        );
+        syncing.AddRange(
+            facts
+                .Apart.Where(path => !moving.Contains(path))
+                .Select(path => Sync(State.Diverged, path, behind))
+        );
+
+        return [.. wrong, .. merges, .. structural, .. changes, .. syncing];
+
+        // One path of what a sync would move, as a row of its own. It offers no button: what is to be done about it
+        // is the sync the strip in the header runs, and a button here would be a second way to ask for the same
+        // run — one that would have to say what it carries, which the strip already says.
+        //
+        // The path is written where it comes from rather than where it goes: nothing goes anywhere here, and the
+        // two columns are the sides of a change rather than a direction, so a path with nothing on the other side
+        // of it is in the first. What is behind is a base gone wrong as well, so it wears the pill saying so beside
+        // the one saying which way the work moves.
+        TableRow Sync(State move, string path, HashSet<string> stale) =>
+            new(
+                stale.Contains(path) && move != State.Diverged
+                    ? new[] { Pill(move), Pill(State.Stale) }
+                    : new[] { Pill(move) },
+                [],
+                path,
+                string.Empty,
+                []
+            );
 
         // Whether a move's content is a change that has to be acted on rather than one that is simply to be
         // recorded, which is what decides the group it is read in.
@@ -847,8 +957,62 @@ internal sealed class OverviewView : UserControl
             State.Renamed => new StatusPill(state, "R", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_strong")),
             State.RenamedLikely => new StatusPill(state, "R?", MovedFill, RolaI18N.Get("rorolala_vcs.status.kind_rename_weak")),
             State.Modified => new StatusPill(state, "M", UnsettledFill, RolaI18N.Get("rorolala_vcs.status.change_modified")),
+            State.Send => new StatusPill(state, "S↑", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_send")),
+            State.Receive => new StatusPill(state, "S↓", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_receive")),
+            State.Create => new StatusPill(state, "S+", AppearedFill, RolaI18N.Get("rorolala_vcs.status.kind_create")),
+            State.Diverged => new StatusPill(state, "Sx", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_diverged")),
             _ => new StatusPill(state, "J", WrongFill, RolaI18N.Get("rorolala_vcs.status.kind_merge")),
         };
+
+    /// <summary>
+    /// What a path a sync would move is hovered for: which way the work moves, how far apart the two versions are
+    /// where the index says, and what a sync comes to afterwards.
+    /// </summary>
+    /// <remarks>
+    /// The count is asked of the reading rather than taken from the row, because it is the one thing about a
+    /// standing that the reading keeps per path: what a pill carries is the direction, and how far is in the words.
+    /// A count the chain does not give is not said at all — what the Vault is at is ordinarily a version this side
+    /// never fetched — since a zero would read as being in step, which is the one thing the row is not about.
+    /// </remarks>
+    /// <param name="state">Which of the four the path is in.</param>
+    /// <param name="path">The path.</param>
+    /// <param name="at">Where the reading was made, whose paths are relative to it.</param>
+    /// <param name="reading">The reading, or nothing when it could not be made.</param>
+    /// <returns>The words for the pointer resting on it.</returns>
+    internal static string SyncSaid(State state, string path, string? at, RolaStatus? reading)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        ulong? distance = null;
+
+        if (reading is not null && at is { Length: > 0 })
+        {
+            try
+            {
+                // The path is joined to the root the way every other path of this table is: what a reading names
+                // is relative to the Workspace, and what a row carries is as the system spells it.
+                distance = RorolalaSync.Distance(reading, System.IO.Path.Combine(at, path));
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                // A count that could not be read is a count not said: what the pill carries is the direction,
+                // and that is read whether or not the chain is here to add to it.
+                _ = error;
+            }
+        }
+
+        return state switch
+        {
+            State.Send => distance is { } ahead
+                ? RolaI18N.Get("rorolala_vcs.status.sync_ahead", ahead)
+                : RolaI18N.Get("rorolala_vcs.status.kind_send"),
+            State.Receive => distance is { } behind
+                ? RolaI18N.Get("rorolala_vcs.status.sync_behind", behind)
+                : RolaI18N.Get("rorolala_vcs.status.kind_receive"),
+            State.Diverged => RolaI18N.Get("rorolala_vcs.status.kind_diverged"),
+            _ => RolaI18N.Get("rorolala_vcs.status.kind_create"),
+        };
+    }
 
     /// <summary>The pill a merge in progress wears, which names the variant it is waiting for.</summary>
     /// <remarks>
@@ -1217,7 +1381,7 @@ internal sealed class OverviewView : UserControl
     {
         if (_shown is { } shown)
         {
-            Show(shown.Said, shown.Rows);
+            Show(shown.Said, shown.Rows, _reading);
         }
     }
 
@@ -1228,6 +1392,15 @@ internal sealed class OverviewView : UserControl
     private void Drawn()
     {
         var reading = Of(BaseDirectory.Current, _log);
+
+        // A reading made while a sync is carrying content down says what the tree held in the middle of the run, and
+        // the rows drawn from it would be out of step with the copy the same run is writing. What is on screen is
+        // read again after it, which the hub's own event says.
+        if (_sync.Running)
+        {
+            return;
+        }
+
         var rows = reading.Facts is { } facts ? Rows(facts) : [];
         var said = Line(reading, rows.Count);
 
@@ -1249,7 +1422,7 @@ internal sealed class OverviewView : UserControl
             return;
         }
 
-        Show(said, rows);
+        Show(said, rows, reading.Status);
     }
 
     /// <summary>
@@ -1262,9 +1435,11 @@ internal sealed class OverviewView : UserControl
     /// </remarks>
     /// <param name="said">What is said in the middle, or nothing when the table is what is shown.</param>
     /// <param name="rows">The rows to show.</param>
-    private void Show(string? said, IReadOnlyList<TableRow> rows)
+    /// <param name="reading">The reading the rows were made from, which a sync row's count is read from.</param>
+    private void Show(string? said, IReadOnlyList<TableRow> rows, RolaStatus? reading)
     {
         _shown = new Shown(said, rows);
+        _reading = reading;
 
         // A connection whose row is no longer in the table is nothing to finish, and a reader is not told about
         // it: the work moved under them, and what the button was about is gone. What is left is the table as the
@@ -1420,7 +1595,7 @@ internal sealed class OverviewView : UserControl
     {
         var cells = new Grid { ColumnDefinitions = Definitions() };
 
-        Place(cells, States(row), 0);
+        Place(cells, States(row, at, view), 0);
         Place(cells, Cell(row.From), 1);
         Place(cells, Cell(row.To), 2);
         Place(cells, Cell(row, at, host, view), 3);
@@ -1457,8 +1632,10 @@ internal sealed class OverviewView : UserControl
     /// </para>
     /// </remarks>
     /// <param name="row">The row.</param>
+    /// <param name="at">Where the reading was made, whose paths a sync row's count is read against.</param>
+    /// <param name="view">The control the row belongs to, which is what a sync row's words are read from.</param>
     /// <returns>The pills to show.</returns>
-    private static Control States(TableRow row)
+    private static Control States(TableRow row, string at, OverviewView view)
     {
         var state = new WrapPanel
         {
@@ -1468,7 +1645,11 @@ internal sealed class OverviewView : UserControl
 
         foreach (var pill in row.Pills)
         {
-            state.Children.Add(Pill(pill));
+            state.Children.Add(
+                pill.State is State.Send or State.Receive or State.Create or State.Diverged
+                    ? Pill(pill, SyncSaid(pill.State, row.From, at, view._reading))
+                    : Pill(pill)
+            );
         }
 
         // What the row says that is not a state is written rather than coloured, and written after the states:
@@ -1521,8 +1702,9 @@ internal sealed class OverviewView : UserControl
     /// </para>
     /// </remarks>
     /// <param name="pill">The pill.</param>
+    /// <param name="said">What the pointer rests on it for, where it is not what the pill was made with.</param>
     /// <returns>The pill to show.</returns>
-    private static Border Pill(StatusPill pill)
+    private static Border Pill(StatusPill pill, string? said = null)
     {
         var words = new TextBlock
         {
@@ -1558,7 +1740,7 @@ internal sealed class OverviewView : UserControl
 
         // What the letters stand for is on the pill, at once: a reader who has stopped at one is asking what it
         // is, and nothing is said by making them wait that the pill's own colour has not said already.
-        ToolTip.SetTip(made, pill.Hint);
+        ToolTip.SetTip(made, said ?? pill.Hint);
         ToolTip.SetShowDelay(made, 0);
 
         return made;
