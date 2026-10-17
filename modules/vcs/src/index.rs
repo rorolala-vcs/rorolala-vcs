@@ -530,6 +530,10 @@ impl VCSIndex {
     }
 
     /// Whether an object is stored under `key`, loose or in a pack.
+    ///
+    /// A packed object is held when a pack's index names it, whether or not the pack's file is still
+    /// there: the index is what a lookup reads, and a pack that has gone is found on the read rather
+    /// than here. See [`StorageBackend::contains_keys`](rorolala_storage::StorageBackend::contains_keys).
     pub(crate) async fn holds_object(&self, key: &Hash) -> Result<bool, VCSIndexError> {
         match tokio::fs::metadata(self.object_path(key)).await {
             Ok(_) => return Ok(true),
@@ -609,13 +613,25 @@ impl VCSIndex {
 
     /// The framed bytes of the entry stored under `key`, loose or in a pack, or `None` when there
     /// is none.
+    ///
+    /// A pack that its index names but that is not there is answered as `None` rather than as a
+    /// failure: nothing can be read out of a pack that has gone, which is the same answer as a pack
+    /// that was never there. The key is still *held* — an index record is what held means, see
+    /// [`StorageBackend::contains_keys`](rorolala_storage::StorageBackend::contains_keys) — so this
+    /// is where "held but not producible" is turned into the `None` a caller can act on.
     async fn entry_bytes(&self, key: &Hash) -> Result<Option<Vec<u8>>, VCSIndexError> {
         if let Some(bytes) = self.read_entry(key).await? {
             return Ok(Some(bytes));
         }
 
         match self.find_packed(key).await? {
-            Some(source) => Ok(Some(self.read_source(&source).await?)),
+            Some(source) => match self.read_source(&source).await {
+                Ok(bytes) => Ok(Some(bytes)),
+                Err(VCSIndexError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+                    Ok(None)
+                }
+                Err(error) => Err(error),
+            },
             None => Ok(None),
         }
     }
@@ -1172,6 +1188,25 @@ mod tests {
             run(index.read(loose_key)).unwrap().unwrap(),
             crate::VCSIndexObject::Version(loose)
         );
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_key_a_pack_names_is_held_though_the_pack_file_is_gone() {
+        let index = index("pack-gone");
+        let key = run(index.write(variant())).unwrap().unwrap();
+        run(index.repack()).unwrap().unwrap();
+
+        // The index still names the key; the pack file is what a read opens. Held is the index's
+        // answer, so the key is held and not producible — a transfer asks for it and is told there
+        // is nothing to send rather than being failed a lookup.
+        let pack = index.get_root().join("packed").join("packed_0.pack");
+        fs::remove_file(&pack).unwrap();
+
+        assert!(run(index.holds_object(&key)).unwrap().unwrap());
+        assert_eq!(run(index.list_exist_keys()).unwrap().unwrap(), vec![key]);
+        assert_eq!(run(index.content(&key)).unwrap().unwrap(), None);
 
         let _ = fs::remove_dir_all(index.get_root());
     }

@@ -355,6 +355,11 @@ impl RorolalaStorage {
     }
 
     /// Whether an object is stored under `key`, loose or in a pack.
+    ///
+    /// A packed object is held when a pack's index names it, whether or not the pack's file is still
+    /// there: the index is what a lookup reads, and what a read does with a pack that has gone is
+    /// answer with nothing rather than claim the object is there. See
+    /// [`StorageBackend::contains_keys`](crate::StorageBackend::contains_keys).
     pub(super) async fn holds_object(&self, key: &Key) -> Result<bool, Error> {
         if exists(&self.object_path(key)).await? {
             return Ok(true);

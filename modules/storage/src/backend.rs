@@ -92,6 +92,14 @@ pub trait StorageBackend: Send + Sync {
     /// that they *read* — content that is there but does not hold together is found on the read that
     /// asks for it, not here, since finding it would mean reading everything this is asked about.
     ///
+    /// "There" is an entry rather than a byte that can be produced: an entry a pack's index names is
+    /// held whether or not the pack's file is still beside the index, because an index is what a
+    /// lookup reads and checking every pack's file as well would cost a stat per pack per key. So a
+    /// key answered as held may still not be producible, and
+    /// [`content`](TransferableBackend::content) answers `None` for it — which is the case a
+    /// transfer's "nothing to send" frame is for. A pack whose index is missing or does not read has
+    /// no entries to be held at all.
+    ///
     /// The answer is a [`Presence`] **exactly as long as `keys`**, one byte per key in the order it
     /// was asked about.
     ///

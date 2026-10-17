@@ -448,6 +448,29 @@ async fn removing_a_key_takes_away_what_is_loose_and_what_is_packed() {
 }
 
 #[tokio::test]
+async fn a_key_a_pack_names_is_held_though_the_pack_file_is_gone() {
+    let (parent, store) = store("pack-gone");
+    let key = store
+        .write_object(b"packed and then lost", Codec::Raw)
+        .await
+        .unwrap();
+    assert!(store.pack(&[key]).await.unwrap());
+
+    // The index is what a lookup reads, and it still names the key; the pack file is what a read
+    // opens. Held is the index's answer, so the key is held and not producible — which is the case a
+    // transfer answers with "nothing to send" rather than by failing.
+    let (pack, index) = store.pack_paths(0);
+    fs::remove_file(&pack).unwrap();
+    assert!(index.is_file());
+
+    assert!(holds(&store, &key).await);
+    assert_eq!(store.list_exist_keys().await.unwrap(), [key]);
+    assert!(matches!(store.content(&key).await, Ok(None)));
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
 async fn content_written_in_any_codec_and_cut_comes_back_the_same() {
     let (parent, store) = store("codecs");
     let content = "the same words over and over, ".repeat(64).into_bytes();
