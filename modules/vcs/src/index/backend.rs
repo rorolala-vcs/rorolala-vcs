@@ -87,8 +87,10 @@ impl StorageBackend for VCSIndex {
     }
 
     async fn list_exist_keys(&self) -> Result<Vec<Key>, Self::Error> {
-        // Everything listed is a loose file that is there, so being named and being held are the
-        // same answer for the index.
+        // What is listed is the loose objects and the entries of the packs' indexes, and an index
+        // record is what "held" means here — see `StorageBackend::contains_keys`. So the two
+        // listings agree today, and would part only if held came to mean "readable", which costs a
+        // lookup per key and is not the answer a transfer needs.
         self.list_object_keys().await
     }
 
