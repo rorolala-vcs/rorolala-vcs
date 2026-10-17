@@ -31,7 +31,8 @@ impl StorageBackend for VCSIndex {
     ///
     /// An index object is small and structured, so there is nothing in it worth compressing and
     /// nothing worth cutting. The choice is still a choice rather than a constant the caller
-    /// cannot reach, since it is what the boundary asks for.
+    /// cannot reach, since it is what the boundary asks for. Nothing is read from the file, so the
+    /// boundary being synchronous costs a caller nothing here.
     fn choose_algorithm(&self, _file: &Path) -> Self::AlgorithmChoice {
         AlgorithmChoice::new(Codec::Raw, Chunking::Whole)
     }

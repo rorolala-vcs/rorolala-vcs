@@ -42,6 +42,13 @@ pub trait StorageBackend: Send + Sync {
     /// it is worth compressing, whether it is big enough to cut. Nothing about the answer is
     /// written down except the result of it, so the same file may be written differently on
     /// another day without any key changing.
+    ///
+    /// Deciding is synchronous where writing is not. A backend that decides from the content reads
+    /// the opening of the file and nothing else — a few thousand bytes, and the filesystem's own
+    /// answer for how long it is — so a caller on an async task blocks it for about as long as a
+    /// small read takes. It is left that way rather than made `async` because the read is bounded and
+    /// happens once, in front of a write that reads the whole file anyway, while an `async` choice
+    /// would put an `await` in front of every decision including the ones that read nothing at all.
     fn choose_algorithm(&self, file: &Path) -> Self::AlgorithmChoice;
 
     /// Stores the content of `file`, written with `choice`, and answers with its key.

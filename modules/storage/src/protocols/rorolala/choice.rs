@@ -22,6 +22,12 @@ impl RorolalaStorage {
     /// This is the choice made from a file: enough of its opening is read to tell what it is, and how
     /// long it is is asked of the filesystem rather than of the content — nothing here reads the whole
     /// of anything.
+    ///
+    /// The opening is read with a blocking `std` handle rather than through `tokio::fs`, which is what
+    /// [`choose_algorithm`](crate::StorageBackend::choose_algorithm) is synchronous for: one read of
+    /// at most [`SNIFF_LEN`] bytes, in front of a write that reads the whole file. A caller on a task
+    /// blocks it for about as long as that read takes, which is the same order as the metadata
+    /// lookup beside it.
     pub(super) fn choose_for_file(&self, file: &Path) -> AlgorithmChoice {
         let mut magic = [0_u8; SNIFF_LEN];
         let filled = read_magic(file, &mut magic);
