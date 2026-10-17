@@ -81,6 +81,17 @@ internal sealed class TerminalView : Control
     /// <summary>Whether the shell has ended, which stops the polling and the cursor.</summary>
     private bool _ended;
 
+    /// <summary>Whether the shell has been started, so that a later layout does not start a second one.</summary>
+    private bool _started;
+
+    /// <summary>Where a shell that could not be started is said.</summary>
+    private readonly ILog _log;
+
+    /// <summary>What the shell is started with, kept until the view has a size to start it at.</summary>
+    private readonly string _program;
+    private readonly IReadOnlyList<string> _arguments;
+    private readonly string _directory;
+
     /// <summary>Makes one terminal.</summary>
     /// <param name="log">Where a shell that could not be started is said.</param>
     /// <param name="program">The program to run.</param>
@@ -120,37 +131,47 @@ internal sealed class TerminalView : Control
         ClipToBounds = true;
         Cursor = new Cursor(StandardCursorType.Ibeam);
 
-        _pty = Started(log, program, arguments, directory);
+        _log = log;
+        _program = program;
+        _arguments = arguments;
+        _directory = directory;
         _why = RolaI18N.Get("rorolala_terminal.cannot_start", program);
 
         _timer.Tick += (_, _) => Pump();
+
+        // The cursor is solid while the terminal has the keyboard and an outline while it does not, so a
+        // reader can tell whether what they type goes here.
+        GotFocus += (_, _) => InvalidateVisual();
+        LostFocus += (_, _) => InvalidateVisual();
     }
 
     /// <summary>Starts the shell, saying in the log why it could not be when it could not.</summary>
-    /// <param name="log">Where a shell that could not be started is said.</param>
-    /// <param name="program">The program to run.</param>
-    /// <param name="arguments">Its arguments.</param>
-    /// <param name="directory">Where it is run.</param>
-    /// <returns>The terminal, or nothing.</returns>
-    private static RolaDesktopPty? Started(
-        ILog log,
-        string program,
-        IReadOnlyList<string> arguments,
-        string directory
-    )
+    /// <remarks>
+    /// It is started once the view has a size, because the size is what a program lays its screen out by and
+    /// a shell that started at another size has a screen of that other size: a clear that erases the screen
+    /// erases as many lines as the shell was told, and one line too many scrolls the prompt away.
+    /// </remarks>
+    /// <param name="columns">How many columns the view is.</param>
+    /// <param name="rows">How many rows the view is.</param>
+    private void Open(int columns, int rows)
     {
+        if (_started)
+        {
+            return;
+        }
+
+        _started = true;
+
         try
         {
-            return RolaDesktopPty.Open(program, arguments, directory, 80, 24);
+            _pty = RolaDesktopPty.Open(_program, _arguments, _directory, columns, rows);
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             // A machine without the native library beside the program is one no terminal can be opened on,
             // and the line in the middle of the dock is what a reader sees rather than a dock that failed to
             // open: what went wrong is said here, where it is looked for.
-            log.Error($"the terminal `{program}` could not be started: {error.Message}");
-
-            return null;
+            _log.Error($"the terminal `{_program}` could not be started: {error.Message}");
         }
     }
 
@@ -190,6 +211,8 @@ internal sealed class TerminalView : Control
     {
         var columns = Math.Max(1, (int)(finalSize.Width / _cellWidth));
         var rows = Math.Max(1, (int)(finalSize.Height / _cellHeight));
+
+        Open(columns, rows);
 
         if (columns != _screen.Columns || rows != _screen.Rows)
         {
@@ -301,17 +324,56 @@ internal sealed class TerminalView : Control
 
         if (_screen.CursorVisible && _scrolled == 0 && !_ended)
         {
-            context.DrawRectangle(
-                null,
-                new Pen(_cursorBrush, 1.5),
-                new Rect(
-                    _screen.CursorX * _cellWidth,
-                    _screen.CursorY * _cellHeight,
-                    _cellWidth,
-                    _cellHeight
-                )
-            );
+            DrawCursor(context);
         }
+    }
+
+    /// <summary>
+    /// Draws the cursor: a filled block while the terminal has the keyboard, an outline while it does not.
+    /// </summary>
+    /// <remarks>
+    /// A block cursor is drawn over the character rather than beside it, so the character is drawn again in
+    /// the ground's own colour: a cursor that covered the letter it is on would be a cursor that hides what it
+    /// is pointing at. The outline is the same rectangle without the fill, which is what says that the typing
+    /// goes somewhere else.
+    /// </remarks>
+    /// <param name="context">What to draw into.</param>
+    private void DrawCursor(DrawingContext context)
+    {
+        var cell = new Rect(
+            _screen.CursorX * _cellWidth,
+            _screen.CursorY * _cellHeight,
+            _cellWidth,
+            _cellHeight
+        );
+
+        if (!IsFocused)
+        {
+            context.DrawRectangle(null, new Pen(_cursorBrush, 1.5), cell);
+
+            return;
+        }
+
+        context.FillRectangle(_cursorBrush, cell);
+
+        var line = _screen.Line(_screen.CursorY, 0);
+
+        if (_screen.CursorX >= line.Length || line[_screen.CursorX].Blank)
+        {
+            return;
+        }
+
+        context.DrawText(
+            new FormattedText(
+                Character(line[_screen.CursorX]),
+                CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                Face(line[_screen.CursorX].Marks),
+                _size,
+                _groundBrush
+            ),
+            cell.TopLeft
+        );
     }
 
     /// <summary>Draws the ground behind the cells that have one of their own.</summary>
@@ -462,10 +524,19 @@ internal sealed class TerminalView : Control
 
         // A reader looking at what has already scrolled past keeps looking at it while the shell goes on:
         // the window into the scrollback is moved by every line that is added, which is what the count it is
-        // measured from does.
+        // measured from does. A scrollback a clear took away is a window with nowhere to be, so the place it
+        // was scrolled to is given back to the screen.
         if (_scrolled > 0)
         {
             _scrolled += _screen.Scrolled - before;
+        }
+
+        var clamped = Math.Clamp(_scrolled, 0, _screen.Scrolled);
+
+        if (clamped != _scrolled)
+        {
+            _scrolled = clamped;
+            changed = true;
         }
 
         if (changed)

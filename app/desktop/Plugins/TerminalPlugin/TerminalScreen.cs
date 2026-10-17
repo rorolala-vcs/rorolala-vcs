@@ -141,6 +141,16 @@ internal sealed class TerminalScreen
     /// <summary>Decodes the bytes into characters, since one character may arrive in several bytes.</summary>
     private readonly Decoder _decoder = Encoding.UTF8.GetDecoder();
 
+    /// <summary>
+    /// The rows that have been erased since the cursor was last put somewhere.
+    /// </summary>
+    /// <remarks>
+    /// A screen cleared by a program is cleared by erasing each line in turn — PowerShell's
+    /// <c>Clear-Host</c> is exactly that — so a cursor put somewhere after every row has been erased is
+    /// a screen that was cleared, and the lines above it are not the reader's to keep.
+    /// </remarks>
+    private readonly HashSet<int> _erased = [];
+
     /// <summary>What the decoder made of the bytes it was given.</summary>
     private readonly char[] _text = new char[8192];
 
@@ -223,6 +233,7 @@ internal sealed class TerminalScreen
         _cursorY = Math.Min(_cursorY, _rows - 1);
         _scrollTop = 0;
         _scrollBottom = _rows - 1;
+        _erased.Clear();
     }
 
     /// <summary>Reads bytes the program wrote, drawing and acting on them.</summary>
@@ -576,6 +587,14 @@ internal sealed class TerminalScreen
 
             case 'H':
             case 'f':
+                // A cursor moved after every row was erased is a screen that was cleared, and what was
+                // above the screen before it is not what the reader is looking at any more.
+                if (_erased.Count >= _rows)
+                {
+                    _scrollback.Clear();
+                }
+
+                _erased.Clear();
                 _cursorY = Math.Clamp(Count(0, 1) - 1, 0, _rows - 1);
                 _cursorX = Math.Clamp(Count(1, 1) - 1, 0, _columns - 1);
 
@@ -1002,6 +1021,8 @@ internal sealed class TerminalScreen
     /// <param name="count">How many lines.</param>
     private void ScrollUp(int count)
     {
+        _erased.Clear();
+
         for (var move = 0; move < count; move++)
         {
             // Only a scroll of the whole screen goes into the scrollback: a program that scrolls inside a
@@ -1068,9 +1089,12 @@ internal sealed class TerminalScreen
                     Wipe(x, _cursorY);
                 }
 
+                _erased.Add(_cursorY);
+
                 for (var y = _cursorY + 1; y < _rows; y++)
                 {
                     WipeRow(y);
+                    _erased.Add(y);
                 }
 
                 break;
@@ -1079,6 +1103,7 @@ internal sealed class TerminalScreen
                 for (var y = 0; y < _cursorY; y++)
                 {
                     WipeRow(y);
+                    _erased.Add(y);
                 }
 
                 for (var x = 0; x <= _cursorX && x < _columns; x++)
@@ -1086,10 +1111,34 @@ internal sealed class TerminalScreen
                     Wipe(x, _cursorY);
                 }
 
+                _erased.Add(_cursorY);
+
+                break;
+
+            // Two is the screen and three is the lines above it, which a shell's `clear` sends to say that
+            // what was read is not there to scroll back to: two is answered with both, since a screen
+            // cleared under a reader is a screen whose history went with it.
+            case 2:
+                Clear();
+                _scrollback.Clear();
+
+                break;
+
+            case 3:
+                _scrollback.Clear();
+
                 break;
 
             default:
-                Clear();
+                for (var x = _cursorX; x < _columns; x++)
+                {
+                    Wipe(x, _cursorY);
+                }
+
+                for (var y = _cursorY + 1; y < _rows; y++)
+                {
+                    WipeRow(y);
+                }
 
                 break;
         }
@@ -1122,6 +1171,8 @@ internal sealed class TerminalScreen
 
                 break;
         }
+
+        _erased.Add(_cursorY);
     }
 
     /// <summary>Clears characters from the cursor on, without moving anything.</summary>
@@ -1237,6 +1288,7 @@ internal sealed class TerminalScreen
         _scrollTop = 0;
         _scrollBottom = _rows - 1;
         _wrapPending = false;
+        _erased.Clear();
     }
 
     /// <summary>Puts everything back as a terminal starts.</summary>
