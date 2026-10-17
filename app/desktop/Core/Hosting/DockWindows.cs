@@ -43,6 +43,15 @@ internal sealed class DockWindows : IWindows
     /// <summary>What a dock's own menus were registered with.</summary>
     private readonly DockMenuRegistry _menus;
 
+    /// <summary>
+    /// Where the window the host's own commands act on is named.
+    /// </summary>
+    /// <remarks>
+    /// Named here rather than by whoever makes a window, because a window going away is this set's to hear
+    /// about: a name left on a window that has closed would have every question asked nowhere.
+    /// </remarks>
+    private readonly Shell _shell;
+
     /// <summary>The picture the program is known by, or nothing when the platform has none.</summary>
     private readonly WindowIcon? _icon;
 
@@ -90,6 +99,7 @@ internal sealed class DockWindows : IWindows
     /// <param name="log">Where a failure to open a window is reported.</param>
     /// <param name="icons">The pictures a tab menu's marks are read from.</param>
     /// <param name="menus">What a dock's own menus were registered with.</param>
+    /// <param name="shell">Where the window the host's own commands act on is named.</param>
     /// <param name="icon">The picture the program is known by.</param>
     public DockWindows(
         DockManager docks,
@@ -98,6 +108,7 @@ internal sealed class DockWindows : IWindows
         LogService log,
         IIconLibrary icons,
         DockMenuRegistry menus,
+        Shell shell,
         WindowIcon? icon
     )
     {
@@ -107,6 +118,7 @@ internal sealed class DockWindows : IWindows
         _log = log;
         _icons = icons;
         _menus = menus;
+        _shell = shell;
         _icon = icon;
 
         // A detached window whose dock is gone is a window of nothing, so it goes with it. Subscribed here
@@ -622,9 +634,11 @@ internal sealed class DockWindows : IWindows
     /// looked for from.
     /// </para>
     /// </remarks>
-    /// <param name="key">The window's key, or nothing for the main one.</param>
-    private void Gone(string? key)
+    /// <param name="window">The window that closed.</param>
+    private void Gone(Window window)
     {
+        var key = window.Tag as string;
+
         if (key is null)
         {
             _main = null;
@@ -657,6 +671,16 @@ internal sealed class DockWindows : IWindows
         }
 
         _held.Remove(key ?? string.Empty);
+
+        // The shell must not keep naming a window that is gone: a question put over one is a question asked
+        // nowhere. The main window is where a dock comes back to, so it is named first when it is up, and any
+        // window still drawn is a window to ask over when it is not. Nothing is named only when none is left.
+        if (ReferenceEquals(_shell.Window, window))
+        {
+            _shell.Window =
+                _main is { IsVisible: true } main ? main
+                : _windows.Values.FirstOrDefault(one => one.IsVisible);
+        }
 
         if (Count > 0 || _ending)
         {
@@ -691,12 +715,18 @@ internal sealed class DockWindows : IWindows
         // The key is read back off the window rather than closed over, so that every window of the set is
         // one window's answer to what it is: a list of keys beside a list of windows is a second truth to
         // keep in step, and the one thing that can disagree with it is the window itself.
-        window.Closed += (_, _) => Gone(window.Tag as string);
+        window.Closed += (_, _) => Gone(window);
 
         if (key is not null)
         {
             _windows[key] = window;
         }
+
+        // The shell names the window the host's own commands act on, which is where a question or a notice
+        // is put: a window that is made is one that is up, and one the user comes back to is the one they
+        // are working in. A window going away is heard about below, so the name never outlives it.
+        _shell.Window = window;
+        window.Activated += (_, _) => _shell.Window = window;
 
         window.Show();
 
@@ -707,10 +737,11 @@ internal sealed class DockWindows : IWindows
     /// <remarks>
     /// Activated rather than focused, because what is being asked for is the window being come back to
     /// rather than the keyboard being moved into one control of it: a window that is behind another is
-    /// brought forward, and a window that is minimized is restored.
+    /// brought forward, and a window that is minimized is restored. It is named as the shell's window as
+    /// well, since what the user asked for is where the next question is to be put.
     /// </remarks>
     /// <param name="window">The window to bring forward.</param>
-    private static void Bring(Window window)
+    private void Bring(Window window)
     {
         if (!window.IsVisible)
         {
@@ -722,6 +753,7 @@ internal sealed class DockWindows : IWindows
             window.WindowState = WindowState.Normal;
         }
 
+        _shell.Window = window;
         window.Activate();
     }
 

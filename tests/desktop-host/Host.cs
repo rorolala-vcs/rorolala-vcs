@@ -80,7 +80,7 @@ internal static class Host
             // A headless test has no platform and no window, so nothing here makes one: a request to open a
             // window is answered as nothing having been asked for, which is what the bookkeeping under it is
             // checked through.
-            Windows = new DockWindows(docks, i18n, refocus, log, icons, dockMenus, icon),
+            Windows = new DockWindows(docks, i18n, refocus, log, icons, dockMenus, shell, icon),
         };
     }
 }

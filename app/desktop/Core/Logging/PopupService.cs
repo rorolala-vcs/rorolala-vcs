@@ -17,6 +17,8 @@ internal sealed record Notice(LogLevel Level, string Source, string Message);
 /// <remarks>
 /// Nothing is shown before the window exists: a failure while plugins are loaded happens before
 /// there is anywhere to put a dialog, so what is raised is held and shown once the window is up.
+/// What is raised after a window is up is announced as it is queued, so a failure that happens
+/// while the program is running does not wait for the next window to be opened.
 /// <para>
 /// The deduplication service is shared with the log, and so is the count: an identical line and an
 /// identical popup are one notification seen twice. What each holds is its own, though — the log
@@ -42,6 +44,13 @@ internal sealed class PopupService
     /// <param name="notifications">Where distinctness and the count are decided.</param>
     public PopupService(NotificationService notifications) => _notifications = notifications;
 
+    /// <summary>Raised when something has been queued and is waiting to be shown.</summary>
+    /// <remarks>
+    /// Raised on the thread that raised the notification, which may be a plugin's. What is listening
+    /// moves the showing onto the window's own thread, and takes what it needs from the queue there.
+    /// </remarks>
+    public event EventHandler? Raised;
+
     /// <summary>
     /// Raises a notification, which is shown once however often its content is raised.
     /// </summary>
@@ -63,6 +72,10 @@ internal sealed class PopupService
 
             _pending.Add(new Notice(level, source, message));
         }
+
+        // Announced outside the lock: a listener runs on whatever thread raised this, and holding the
+        // queue while it does would make every other raiser wait for one window to be reached.
+        Raised?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

@@ -155,18 +155,14 @@ internal sealed class Desktop
             Icons = icons,
             // The set of windows is made over the services rather than handed them, and how one is made is
             // written onto it here: what a window is drawn from is this object, which does not exist until
-            // this line is done.
-            Windows = new DockWindows(docks, i18n, refocus, log, icons, dockMenus, icon),
+            // this line is done. The shell is named by the set itself, which is the one that hears a window
+            // close and can move the name to one that is still up.
+            Windows = new DockWindows(docks, i18n, refocus, log, icons, dockMenus, shell, icon),
         };
 
         services.Windows.Make = (key, dock) =>
         {
             var window = new MainWindow(services, key, dock);
-
-            // The shell names the window the host's own commands act on, which is the one that is up: a
-            // plugin's question is put over the window the run is being used in, and a window that is made
-            // is the one that is.
-            shell.Window = window;
 
             // Every window of the host's, and not only the main one: a dock in a window of its own is come
             // back to as much as the main window is, and a plugin's reading of the world outside is the same

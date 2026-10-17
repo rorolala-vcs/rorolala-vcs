@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Threading;
 using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
@@ -121,6 +122,9 @@ public partial class MainWindow : Window
     /// what <see cref="DockDrag"/> is.
     /// </remarks>
     private DockDrag? _drag;
+
+    /// <summary>Whether a notice is on screen, so that a second one is shown after it rather than over it.</summary>
+    private bool _noticing;
 
     /// <summary>Makes the window over what was registered.</summary>
     /// <param name="services">Everything the host holds.</param>
@@ -246,6 +250,10 @@ public partial class MainWindow : Window
 
         Opened += (_, _) => ShowPopups();
 
+        // What is raised once this window is up is shown as it is raised, rather than waiting for another
+        // window to be opened: a failure met while the program is running is one to act on then.
+        _services.Popups.Raised += PopupsRaised;
+
         // The layout is what the main window's regions were, so it is written when the main window is the one
         // going: a window of a dock's own has no regions to remember, and writing the layout from it would be
         // writing the main window's arrangement from a window that is not the main one.
@@ -260,7 +268,11 @@ public partial class MainWindow : Window
         // And a window that has gone stops being told about the docks: it has no regions to keep in step, and
         // what is left of it needs no waking — a window that kept listening would be one the dock manager
         // holds for the rest of the run, and one that answered a change by rebuilding a row nobody can see.
-        Closed += (_, _) => _services.Docks.Changed -= DocksChanged;
+        Closed += (_, _) =>
+        {
+            _services.Docks.Changed -= DocksChanged;
+            _services.Popups.Raised -= PopupsRaised;
+        };
     }
 
     /// <summary>
@@ -680,16 +692,25 @@ public partial class MainWindow : Window
         _services.Docks.Instances.Any(instance => instance.DockNameId == nameId && instance.IsOpen);
 
     /// <summary>
-    /// Shows what was raised before the window existed, all in one dialog.
+    /// Shows what has been raised and not yet shown, all in one dialog.
     /// </summary>
     /// <remarks>
     /// A plugin that was not loaded, or a skin that could not be read, is raised while there is
     /// nowhere to put a dialog. It is held and shown here, once, all together — one dialog listing
     /// the trouble is easier to take in than a stack of them, and deduplication has already removed
-    /// the repeats.
+    /// the repeats. What is raised after the window is up comes by the same road: the queue announces
+    /// it, and this takes it when there is a window to put it over and no card already on screen.
     /// </remarks>
     private void ShowPopups()
     {
+        // A window that is not shown has nowhere to put a card, so what is waiting is left for the window
+        // that is up — this one once it is opened, or another of the host's. A card already on screen is
+        // waited for rather than covered: what was raised meanwhile is taken when that one is dismissed.
+        if (_noticing || !IsVisible)
+        {
+            return;
+        }
+
         var pending = _services.Popups.Take();
 
         if (pending.Count == 0)
@@ -697,7 +718,30 @@ public partial class MainWindow : Window
             return;
         }
 
+        _noticing = true;
+
         _ = Notice(pending);
+    }
+
+    /// <summary>
+    /// Shows a notice as it is raised, on the window's own thread.
+    /// </summary>
+    /// <remarks>
+    /// A plugin may raise from any thread, as it may ask a question from any one. What it does here is
+    /// only start the showing; whether there is anywhere to show it is <see cref="ShowPopups"/>'s to say.
+    /// </remarks>
+    /// <param name="sender">The queue.</param>
+    /// <param name="e">Not read.</param>
+    private void PopupsRaised(object? sender, EventArgs e)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ShowPopups();
+
+            return;
+        }
+
+        Dispatcher.UIThread.Post(ShowPopups);
     }
 
     /// <summary>
@@ -712,60 +756,71 @@ public partial class MainWindow : Window
     /// <param name="pending">What was raised and not yet shown.</param>
     private async Task Notice(IReadOnlyList<Notice> pending)
     {
-        var lines = new StackPanel();
-
-        foreach (var notice in pending)
+        try
         {
-            lines.Children.Add(NoticeLine(notice));
+            var lines = new StackPanel();
+
+            foreach (var notice in pending)
+            {
+                lines.Children.Add(NoticeLine(notice));
+            }
+
+            var dismiss = new Button
+            {
+                Content = _services.I18n.Get("window.dismiss"),
+                Classes = { "primary" },
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+
+            var heading = new TextBlock
+            {
+                Text = _services.I18n.Get("window.notice"),
+                Classes = { "title" },
+                Margin = new Thickness(16, 16, 16, 8),
+            };
+
+            var foot = new Border
+            {
+                Padding = new Thickness(12, 12, 16, 16),
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Child = dismiss,
+            };
+            foot[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
+
+            var body = new ScrollViewer { Content = lines };
+
+            var panel = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(heading, Dock.Top);
+            DockPanel.SetDock(foot, Dock.Bottom);
+            panel.Children.Add(heading);
+            panel.Children.Add(foot);
+            panel.Children.Add(body);
+
+            var dialog = new Window
+            {
+                Title = _services.I18n.Get("window.notice"),
+                Icon = _services.ProgramIcon,
+                Width = 560,
+                MaxHeight = 640,
+                SizeToContent = SizeToContent.Height,
+                Content = panel,
+            };
+
+            // The dialog is a card of its own, so it takes the elevated ground the design puts a card on
+            // rather than the ground the window behind it is drawn on.
+            dialog[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+            dismiss.Click += (_, _) => dialog.Close();
+
+            await dialog.ShowDialog(this);
         }
-
-        var dismiss = new Button
+        finally
         {
-            Content = _services.I18n.Get("window.dismiss"),
-            Classes = { "primary" },
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
+            // What was raised while the card was up is shown next, once the card is gone: the queue was
+            // left alone for as long as this one held it.
+            _noticing = false;
 
-        var heading = new TextBlock
-        {
-            Text = _services.I18n.Get("window.notice"),
-            Classes = { "title" },
-            Margin = new Thickness(16, 16, 16, 8),
-        };
-
-        var foot = new Border
-        {
-            Padding = new Thickness(12, 12, 16, 16),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            Child = dismiss,
-        };
-        foot[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
-
-        var body = new ScrollViewer { Content = lines };
-
-        var panel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(heading, Dock.Top);
-        DockPanel.SetDock(foot, Dock.Bottom);
-        panel.Children.Add(heading);
-        panel.Children.Add(foot);
-        panel.Children.Add(body);
-
-        var dialog = new Window
-        {
-            Title = _services.I18n.Get("window.notice"),
-            Icon = _services.ProgramIcon,
-            Width = 560,
-            MaxHeight = 640,
-            SizeToContent = SizeToContent.Height,
-            Content = panel,
-        };
-
-        // The dialog is a card of its own, so it takes the elevated ground the design puts a card on
-        // rather than the ground the window behind it is drawn on.
-        dialog[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-        dismiss.Click += (_, _) => dialog.Close();
-
-        await dialog.ShowDialog(this);
+            ShowPopups();
+        }
     }
 
     /// <summary>One notification: a stripe in the colour of its level, and what it was and said.</summary>

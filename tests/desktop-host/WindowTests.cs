@@ -133,6 +133,45 @@ public sealed class WindowTests
     }
 
     /// <summary>
+    /// The shell names a window that is still up when the one it named closes.
+    /// </summary>
+    /// <remarks>
+    /// What a question put after a dock's own window is closed depends on: the shell must not keep naming
+    /// the window that went away, or the question is asked nowhere. The main window is what a dock comes
+    /// back to, so it is what is named once the window of its own is gone.
+    /// </remarks>
+    [Fact]
+    public void TheShellNamesAWindowThatIsUpWhenTheOneItNamedCloses()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.browser");
+        var kept = New("it.dock.kept");
+        services.Docks.Register(registration);
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
+        services.Windows.OpenMain();
+
+        var main = services.Shell.Window;
+
+        Assert.NotNull(main);
+
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        services.Windows.ToOwnWindow(instance);
+
+        var own = services.Shell.Window;
+
+        Assert.NotNull(own);
+        Assert.NotSame(main, own);
+
+        own.Close();
+
+        Assert.Same(main, services.Shell.Window);
+    }
+
+    /// <summary>
     /// The main window stands when the last dock leaves it, empty rather than closed.
     /// </summary>
     /// <remarks>
@@ -917,7 +956,6 @@ public sealed class WindowTests
         {
             var window = new MainWindow(services, key, dock);
 
-            services.Shell.Window = window;
             made.Add(window);
 
             return window;
