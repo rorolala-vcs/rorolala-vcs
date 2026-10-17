@@ -541,6 +541,11 @@ impl VCSIndex {
     }
 
     /// Every key the index holds an object under, loose or in a pack.
+    ///
+    /// A pack whose index does not read is skipped rather than failing the whole listing: one index
+    /// gone wrong must not hide every other pack, and what the store holds is what can be found. It
+    /// is not skipped silently — [`broken_packs`](Self::broken_packs) is where it is reported, which
+    /// is what keeps a pack a listing cannot see from disappearing without a word.
     pub(crate) async fn list_object_keys(&self) -> Result<Vec<Hash>, VCSIndexError> {
         let mut keys = BTreeSet::new();
         collect(&self.path.join(OBJECTS_DIR), &mut keys).await?;
@@ -548,8 +553,18 @@ impl VCSIndex {
         // A pack holds objects too, so what a caller listing the index wants is every key in it
         // whichever way the object happens to be kept.
         for index in self.packs().await? {
-            for entry in self.read_pack_index(index).await?.entries() {
-                keys.insert(entry.key());
+            match self.read_pack_index(index).await {
+                Ok(directory) => {
+                    for entry in directory.entries() {
+                        keys.insert(entry.key());
+                    }
+                }
+                // An index that does not decode is one nothing can be found in; `broken_packs`
+                // names it. A pack taken away between the scan and the read holds nothing, which is
+                // the same answer as an index that was never there.
+                Err(VCSIndexError::Malformed) => {}
+                Err(VCSIndexError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
             }
         }
 
@@ -1122,6 +1137,40 @@ mod tests {
         assert_eq!(
             run(index.read(other.hash())).unwrap().unwrap(),
             crate::VCSIndexObject::Version(other)
+        );
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_pack_whose_index_does_not_read_does_not_hide_the_other_keys() {
+        let index = index("broken-pack");
+        let packed = variant();
+        let packed_key = run(index.write(packed)).unwrap().unwrap();
+        run(index.repack()).unwrap().unwrap();
+
+        // Something loose written after the pack, so a listing has something it must still find.
+        let loose = Version::new_bare_version([8_u8; 32], 0);
+        let loose_key = run(index.write(loose.clone())).unwrap().unwrap();
+
+        // The index of the pack, overwritten with bytes that do not decode.
+        let broken = index.get_root().join("packed").join("packed_0.idx");
+        fs::write(&broken, b"not a pack index").unwrap();
+
+        // The listing still answers with what it can see, and the pack it could not read is
+        // reported rather than silently gone.
+        assert_eq!(
+            run(index.list_object_keys()).unwrap().unwrap(),
+            vec![loose_key]
+        );
+        assert_eq!(run(index.broken_packs()).unwrap().unwrap(), vec![0]);
+        assert!(matches!(
+            run(index.read(packed_key)).unwrap(),
+            Err(VCSIndexReadingError::Malformed)
+        ));
+        assert_eq!(
+            run(index.read(loose_key)).unwrap().unwrap(),
+            crate::VCSIndexObject::Version(loose)
         );
 
         let _ = fs::remove_dir_all(index.get_root());

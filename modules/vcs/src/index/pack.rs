@@ -73,6 +73,35 @@ impl VCSIndex {
         Ok(PackIndex::decode(&bytes)?)
     }
 
+    /// The packs whose index does not read.
+    ///
+    /// A listing skips a pack it cannot read rather than failing whole — what `list_object_keys`
+    /// does — which is the right answer for a reader and a poor one for whoever looks after the
+    /// index: nothing on the ordinary path says the pack is there at all. This is where that is
+    /// asked, and it reads each index for itself rather than being answered from a memory a lookup
+    /// kept.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VCSIndexError::Io`] if an index cannot be read at all, which is an index that is
+    /// failing rather than one holding a file that does not decode.
+    pub async fn broken_packs(&self) -> Result<Vec<u64>, VCSIndexError> {
+        let mut broken = Vec::new();
+
+        for index in self.packs().await? {
+            match self.read_pack_index(index).await {
+                Ok(_) => {}
+                Err(VCSIndexError::Malformed) => broken.push(index),
+                // Gone between the scan and the read: a pack that is not there holds nothing, and
+                // there is no index left to report.
+                Err(VCSIndexError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+
+        Ok(broken)
+    }
+
     /// Where the object stored under `key` sits in a pack, if a pack holds it.
     pub(crate) async fn find_packed(&self, key: &Hash) -> Result<Option<Source>, VCSIndexError> {
         for index in self.packs().await? {
