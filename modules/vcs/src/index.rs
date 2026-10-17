@@ -1196,6 +1196,31 @@ mod tests {
     }
 
     #[test]
+    fn a_key_is_the_object_and_not_the_bytes_it_was_written_as() {
+        let index = index("semantic-key");
+        let object = crate::VCSIndexObject::Variant(variant());
+        let plain = object.encode();
+
+        let file = index.get_root().join("object");
+        fs::create_dir_all(index.get_root()).unwrap();
+        fs::write(&file, &plain).unwrap();
+        let key = run(index.write_file(&file, AlgorithmChoice::new(Codec::Raw, Chunking::Whole)))
+            .unwrap()
+            .unwrap();
+
+        // The key is what the object says, taken through the salt its kind is hashed with — not the
+        // hash of the bytes the file held. That is what a variant or a version can point at.
+        assert_eq!(key, object.hash());
+        assert_ne!(key, Hash::new(*blake3::hash(&plain).as_bytes()));
+
+        // And one key still names one byte string: what is filed is the object's canonical
+        // encoding, which is what makes the read-back check meaningful.
+        assert_eq!(run(index.read_object(&key)).unwrap().unwrap(), plain);
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
     fn a_creator_and_a_message_round_trip_through_the_index() {
         let index = index("text");
         let creator = Creator::try_from("Wei Cao").unwrap();

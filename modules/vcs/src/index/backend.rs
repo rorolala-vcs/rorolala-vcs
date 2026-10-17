@@ -2,9 +2,15 @@
 //!
 //! The two traits are the boundary a store is reached through — [`StorageBackend`] for a local
 //! caller and [`TransferableBackend`] for a peer — and the index implements both, so that the
-//! transfer two ends speak is the very one storage's is rather than a second of its own. What
-//! the index keeps under a key is an index object's bytes, and the key is the hash those bytes
-//! are named by.
+//! transfer two ends speak is the very one storage's is rather than a second of its own.
+//!
+//! The key an index object is kept under is the object's **semantic** hash — the hash of what it
+//! says, taken through the salt its kind is hashed with — and not the hash of the bytes filed under
+//! it. The two differ on purpose: the key is what a variant or a version points at, so it has to be
+//! the object's meaning rather than an accident of how that meaning was written down. What is
+//! stored is the object's canonical encoding — see
+//! [`StorageBackend::write_file`] — so one key still names exactly one byte string, which is what
+//! makes reading it back checkable.
 
 use std::path::Path;
 
@@ -46,7 +52,13 @@ impl StorageBackend for VCSIndex {
         let object = VCSIndexObject::decode(&plain)?;
         let key = object.hash();
 
-        self.write_object(&key, &plain, choice.codec()).await?;
+        // What is written is the encoding of the object that was read, not the bytes the file
+        // happened to hold: the key is the object's meaning, so two spellings of one meaning would
+        // otherwise be two byte strings under one key. The decoders are strict enough today that the
+        // two are the same bytes, and what makes that a property rather than a coincidence is
+        // writing the canonical form here.
+        self.write_object(&key, &object.encode(), choice.codec())
+            .await?;
 
         Ok(key)
     }

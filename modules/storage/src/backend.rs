@@ -12,8 +12,15 @@ use crate::{Key, Presence};
 ///
 /// What a backend does decide is everything about how content is *kept*: where the bytes go,
 /// whether they are compressed, and how they are cut. None of it is visible above, since a key is
-/// the hash of the original content rather than of the stored bytes — and none of it is part of
-/// the key, so a file re-written another way keeps the name it had.
+/// the hash of the content rather than of the stored bytes — and none of it is part of the key, so
+/// a file re-written another way keeps the name it had.
+///
+/// "The content" is the backend's to define, and it is the bytes at the boundary for every backend
+/// whose content is a file. A backend whose content is structured — the index is one, and keeps
+/// index objects — says a key is the hash of the object's canonical encoding rather than of
+/// whatever bytes a file held before it was read, so that one key still names one byte string.
+/// What no backend may do is name content by the hash of how it was *stored*: a key outlives a
+/// re-encoding and a re-cutting, and a hash of the stored bytes would not.
 ///
 /// The trait is deliberately not object safe — `impl Future` in a trait cannot be reached
 /// through `dyn` — because which backend a caller uses is decided where the backend is instead
