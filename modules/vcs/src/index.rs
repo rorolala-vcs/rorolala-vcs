@@ -354,18 +354,12 @@ impl VCSIndex {
         Ok(key)
     }
 
-    /// Reads the object under `key`, checked against the key it was read under.
+    /// Reads the object under `key`, as the kind it is.
+    ///
+    /// The object has already been checked against the key by [`read_object`](Self::read_object),
+    /// which every read goes through, so what is left here is to name it as one kind or another.
     async fn read_object_typed(&self, key: Hash) -> Result<VCSIndexObject, VCSIndexError> {
-        let plain = self.read_object(&key).await?;
-        let object = VCSIndexObject::decode(&plain)?;
-
-        // The key is the object's own hash, so what came back is checked against it rather
-        // than taken for what the key names.
-        if object.hash() != key {
-            return Err(VCSIndexError::Corrupt(key));
-        }
-
-        Ok(object)
+        VCSIndexObject::decode(&self.read_object(&key).await?)
     }
 
     /// The number of `version` in its chain, worked out by tracing back to the root
@@ -501,10 +495,16 @@ impl VCSIndex {
 
     /// The object stored under `key`, framed as this build writes it.
     ///
+    /// The object is checked against the key it was read under before it is handed back: a key is
+    /// an object's own hash, so bytes that do not hash to it are not the object that was asked for,
+    /// however well they frame and decode. The check belongs here, on the one read every path goes
+    /// through, rather than on the callers that happen to remember it.
+    ///
     /// # Errors
     ///
-    /// Returns [`VCSIndexError::NotFound`] if nothing is stored under `key`, and
-    /// [`VCSIndexError::Malformed`] if what is there does not read as an object.
+    /// Returns [`VCSIndexError::NotFound`] if nothing is stored under `key`,
+    /// [`VCSIndexError::Malformed`] if what is there does not read as an object, and
+    /// [`VCSIndexError::Corrupt`] if what came back does not hash to `key`.
     pub(crate) async fn read_object(&self, key: &Hash) -> Result<Vec<u8>, VCSIndexError> {
         let bytes = self
             .entry_bytes(key)
@@ -520,8 +520,13 @@ impl VCSIndex {
 
         let payload = bytes.get(header..).ok_or(VCSIndexError::Malformed)?;
         let plain_len = usize::try_from(frame.plain_len).map_err(|_| VCSIndexError::Malformed)?;
+        let plain = frame.codec.decode(payload, plain_len)?;
 
-        Ok(frame.codec.decode(payload, plain_len)?)
+        if VCSIndexObject::decode(&plain)?.hash() != *key {
+            return Err(VCSIndexError::Corrupt(*key));
+        }
+
+        Ok(plain)
     }
 
     /// Whether an object is stored under `key`, loose or in a pack.
@@ -873,14 +878,14 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use rorolala_storage::transfer;
+    use rorolala_storage::{StorageBackend as _, TransferableBackend as _, transfer};
     use rorolala_utils_constants::{
         VAULT_CONFIG_PATH, VAULT_INDEX_DIR, WORKSPACE_DATA_DIR, WORKSPACE_INDEX_DIR,
     };
     use rorolala_utils_location::Locate;
 
     use super::{VCSIndex, VCSWrite, run};
-    use crate::error::VCSIndexReadingError;
+    use crate::error::{VCSIndexError, VCSIndexReadingError};
     use crate::{Creator, Hash, Message, Variant, Version};
 
     /// A directory of its own, emptied first so a rerun starts clean.
@@ -1121,6 +1126,40 @@ mod tests {
             run(index.read(kept_key)).unwrap().unwrap(),
             crate::VCSIndexObject::Variant(kept)
         );
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn an_object_that_is_not_what_its_key_names_is_corrupt() {
+        let index = index("corrupt-object");
+        let key = run(index.write(variant())).unwrap().unwrap();
+
+        // Another object, whole and readable, laid where the first one belongs. Every read that
+        // hands bytes back has to refuse it: the key is the object's own hash, so bytes that hash
+        // to something else are not the object that was asked for.
+        let other = Version::new_bare_version([5_u8; 32], 0);
+        let other_key = run(index.write(other)).unwrap().unwrap();
+        fs::copy(index.object_path(&other_key), index.object_path(&key)).unwrap();
+
+        assert!(matches!(
+            run(index.read(key)).unwrap(),
+            Err(VCSIndexReadingError::Corrupt { .. })
+        ));
+
+        let out = index.get_root().join("out");
+        assert!(matches!(
+            run(index.extract_file(&key, &out)).unwrap(),
+            Err(VCSIndexError::Corrupt(_))
+        ));
+        assert!(
+            !out.exists(),
+            "an object that is not the key's was written out"
+        );
+        assert!(matches!(
+            run(index.content(&key)).unwrap(),
+            Err(VCSIndexError::Corrupt(_))
+        ));
 
         let _ = fs::remove_dir_all(index.get_root());
     }
