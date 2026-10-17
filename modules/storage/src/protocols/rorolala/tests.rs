@@ -640,6 +640,54 @@ async fn content_that_does_not_hash_to_its_key_is_refused() {
 }
 
 #[tokio::test]
+async fn an_object_that_is_there_is_taken_as_whole_and_not_written_again() {
+    let (parent, store) = store("trust-exists");
+    let content = b"the content that was written";
+    let key = store.write_object(content, Codec::Raw).await.unwrap();
+
+    // Something else laid where the key says and framed as an object. A write takes existence for
+    // completeness: repairing it here would mean reading and hashing every object the store already
+    // holds, on every write, so the damage is what the read reports instead.
+    let frame = Frame {
+        version: FRAME_VERSION,
+        codec: Codec::Raw,
+        layout: Layout::Single,
+        plain_len: 5,
+    };
+    let mut bytes = frame.encode();
+    bytes.extend_from_slice(b"other");
+    fs::write(store.object_path(&key), bytes).unwrap();
+
+    assert_eq!(store.write_object(content, Codec::Raw).await.unwrap(), key);
+    assert!(matches!(
+        store.read_object(&key).await,
+        Err(Error::Corrupt(_))
+    ));
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn a_directory_where_an_object_belongs_is_not_an_object() {
+    let (parent, store) = store("object-dir");
+    let content = b"the content a directory is not";
+    let key = Key::new(*blake3::hash(content).as_bytes());
+
+    // Something that is not a file where the object belongs. It is not held, so the write goes
+    // ahead rather than answering `Ok` over something no read could ever open — and it fails,
+    // because a file cannot be moved over a directory.
+    fs::create_dir_all(store.object_path(&key)).unwrap();
+    assert!(!holds(&store, &key).await);
+
+    assert!(matches!(
+        store.write_object(content, Codec::Raw).await,
+        Err(Error::Io(_))
+    ));
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
 async fn the_choice_is_a_container_taken_apart_or_the_content_itself() {
     let (parent, store) = store("choice");
 

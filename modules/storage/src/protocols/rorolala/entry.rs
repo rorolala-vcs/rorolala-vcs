@@ -99,10 +99,15 @@ pub(super) fn verify(key: &Key, content: &[u8]) -> Result<(), Error> {
     }
 }
 
-/// Whether there is something at `path`.
+/// Whether there is a regular file at `path`.
+///
+/// An entry is a file, so a directory where one belongs is not one the store holds: answering that
+/// it is would let a write skip content the store cannot read back, and the directory would keep the
+/// entry's place for as long as the store lived. `metadata` follows a symlink, so a link to a file
+/// counts as the file it reaches — which is what a read does with it.
 pub(super) async fn exists(path: &Path) -> Result<bool, Error> {
     match tokio::fs::metadata(path).await {
-        Ok(_) => Ok(true),
+        Ok(metadata) => Ok(metadata.is_file()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error.into()),
     }

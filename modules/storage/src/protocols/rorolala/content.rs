@@ -21,6 +21,14 @@ impl RorolalaStorage {
     /// The key is the hash of `plain`, so writing the same content twice writes the same object
     /// and answers with the same key either time.
     ///
+    /// What is already there is taken as whole. An object that exists is not read and hashed back
+    /// before a write is skipped: repairing damage here would mean paying for a read and a hash of
+    /// every object the store already holds, on every write, for a case that a content-addressed
+    /// store meets only once something else has damaged it. What is not taken as whole is a path
+    /// that is not a file — a directory where an object belongs is not the object — so the write
+    /// goes ahead and fails loudly instead of reporting a success no read could open. Damage found
+    /// later is [`Error::Corrupt`] on the read, and repairing it is a cleanup's job.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Io`] if the object cannot be written.

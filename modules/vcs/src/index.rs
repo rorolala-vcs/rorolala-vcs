@@ -471,6 +471,12 @@ impl VCSIndex {
     ///
     /// The key is the object's own hash, so an object that is already held is the very object
     /// in hand and writing it again would only put a second copy beside the first.
+    ///
+    /// What is there is taken as whole: an existing object is not read and hashed back before a
+    /// write is skipped, so damage is found on the read that asks for it rather than repaired here —
+    /// see [`RorolalaStorage::write_object`](rorolala_storage::RorolalaStorage::write_object) for
+    /// the same bargain. A path that is not a file is not an object, so a directory where one belongs
+    /// makes the write go ahead and fail rather than be skipped.
     pub(crate) async fn write_object(
         &self,
         key: &Hash,
@@ -534,9 +540,14 @@ impl VCSIndex {
     /// A packed object is held when a pack's index names it, whether or not the pack's file is still
     /// there: the index is what a lookup reads, and a pack that has gone is found on the read rather
     /// than here. See [`StorageBackend::contains_keys`](rorolala_storage::StorageBackend::contains_keys).
+    ///
+    /// A loose object is held when there is a file at its path. A directory where one belongs is not
+    /// an object, the same rule [`write_object`](Self::write_object) goes by, so the two do not
+    /// disagree about what the index holds.
     pub(crate) async fn holds_object(&self, key: &Hash) -> Result<bool, VCSIndexError> {
         match tokio::fs::metadata(self.object_path(key)).await {
-            Ok(_) => return Ok(true),
+            Ok(metadata) if metadata.is_file() => return Ok(true),
+            Ok(_) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
@@ -1227,6 +1238,24 @@ mod tests {
         let out = index.get_root().join("deeper").join("out");
         run(index.extract_file(&key, &out)).unwrap().unwrap();
         assert_eq!(fs::read(&out).unwrap(), object.encode());
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_directory_where_an_object_belongs_is_not_an_object() {
+        let index = index("object-dir");
+        let object = variant();
+        let key = object.hash();
+
+        // Something that is not a file where the object belongs: not held, so a write tries rather
+        // than skipping, and the failure says the entry could not be put there.
+        fs::create_dir_all(index.object_path(&key)).unwrap();
+        assert!(!run(index.holds_object(&key)).unwrap().unwrap());
+        assert!(matches!(
+            run(index.write_object(&key, &object.encode(), Codec::Raw)).unwrap(),
+            Err(VCSIndexError::Io(_))
+        ));
 
         let _ = fs::remove_dir_all(index.get_root());
     }
