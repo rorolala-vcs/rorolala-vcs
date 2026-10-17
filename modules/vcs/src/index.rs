@@ -646,14 +646,19 @@ impl VCSIndex {
         frame: &Frame,
         payload: &[u8],
     ) -> Result<(), VCSIndexError> {
+        use tokio::io::AsyncWriteExt as _;
+
         let parent = path.parent().ok_or(VCSIndexError::Malformed)?;
         tokio::fs::create_dir_all(parent).await?;
 
-        let mut bytes = frame.encode();
-        bytes.extend_from_slice(payload);
-
+        // The frame and the payload are written one after the other rather than joined into one
+        // buffer first: index objects are small, but there is no reason for a copy of one to exist
+        // only to put a header in front of it.
         let temporary = temporary_beside(path)?;
-        tokio::fs::write(&temporary, &bytes).await?;
+        let mut file = tokio::fs::File::create(&temporary).await?;
+        file.write_all(&frame.encode()).await?;
+        file.write_all(payload).await?;
+        drop(file);
         tokio::fs::rename(&temporary, path).await?;
 
         Ok(())

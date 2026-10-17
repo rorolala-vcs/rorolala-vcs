@@ -22,18 +22,24 @@ impl RorolalaStorage {
         frame: &Frame,
         payload: &[u8],
     ) -> Result<(), Error> {
+        use tokio::io::AsyncWriteExt as _;
+
         let parent = path.parent().ok_or(Error::Malformed)?;
         tokio::fs::create_dir_all(parent).await?;
-
-        let mut bytes = frame.encode();
-        bytes.extend_from_slice(payload);
 
         // Written beside where it belongs and moved into place, so a write that is cut short
         // leaves a store that is what it was rather than one holding half an entry. The temporary
         // name is one no other write is using, so two writers of one path never write through each
         // other's file — see `temporary_beside`.
+        //
+        // The frame and the payload go down as two writes rather than into one buffer first: the
+        // payload is the whole encoded content, and joining it to the frame would be a copy of a file
+        // that may be a gigabyte for the sake of a header of a few dozen bytes.
         let temporary = temporary_beside(path)?;
-        tokio::fs::write(&temporary, &bytes).await?;
+        let mut file = tokio::fs::File::create(&temporary).await?;
+        file.write_all(&frame.encode()).await?;
+        file.write_all(payload).await?;
+        drop(file);
         tokio::fs::rename(&temporary, path).await?;
 
         Ok(())
