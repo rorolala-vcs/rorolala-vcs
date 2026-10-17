@@ -50,6 +50,26 @@ public sealed class LoggingTests
         Assert.Equal(3, log.Entries[0].Count);
     }
 
+    /// <summary>A popup is announced when it is queued, and a repeat is not announced again.</summary>
+    /// <remarks>
+    /// What lets one raised while the program is running be shown then rather than waiting for another
+    /// window: the queue says it has one, and what is listening takes it. A repeat is nothing new to show,
+    /// so it says nothing.
+    /// </remarks>
+    [Fact]
+    public void APopupIsAnnouncedWhenItIsQueuedAndNotWhenItIsRepeated()
+    {
+        var popups = new PopupService(new NotificationService());
+        var announced = 0;
+
+        popups.Raised += (_, _) => announced++;
+
+        popups.Raise(LogLevel.Warn, "kernel", "something to see");
+        popups.Raise(LogLevel.Warn, "kernel", "something to see");
+
+        Assert.Equal(1, announced);
+    }
+
     /// <summary>A log for one plugin names that plugin on every line it writes.</summary>
     [Fact]
     public void ALogForOnePluginNamesItOnEveryLine()

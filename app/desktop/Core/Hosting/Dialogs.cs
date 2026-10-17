@@ -16,10 +16,10 @@ namespace RorolalaDesktop.Hosting;
 /// rather than to whoever asked: the window is the host's, and which plugin wrote the words says nothing
 /// about where the question is shown.
 /// <para>
-/// Shown on the window the shell names, which is the one the host last made: a question put from a dock that
-/// has been torn out into a window of its own is asked over that window, and one asked before any window
-/// exists is asked over the first one there is. A plugin may ask from any thread, so the showing is moved
-/// onto the loop's own.
+/// Shown on the window the shell names, which is the one the user is in: a question put from a dock that
+/// has been torn out into a window of its own is asked over that window, and when that window closes the
+/// shell moves to one still up, so a question is never put over a window that is gone. A plugin may ask
+/// from any thread, so the showing is moved onto the loop's own.
 /// </para>
 /// </remarks>
 internal sealed class Dialogs : IDialogs
