@@ -127,13 +127,13 @@ internal sealed record StatusFacts(
             status.WrongBase,
             status.Merging,
             status.Broken,
-            // The three what a sync would do are read one path at a time, because where a path is ahead is the one
-            // answer the reading keeps only as a whole: what is behind and what is apart are the reading's own
-            // lists, and what is ahead is a walk of that list. A reading is a snapshot, so the three are the same
-            // answer however often they are asked.
+            // The three what a sync would do are the reading's whole list of standings, asked once each: every
+            // path the Layout records a version for is in it, whether or not the tree changed it. They are not
+            // read from `WrongBase`, which is the changes the tree has made against a base upstream moved past —
+            // a file nobody touched but the Vault has moved past is a receive too, and would otherwise have no row.
             [.. status.Ahead],
-            [.. status.WrongBase.Where(path => status.StandingOf(path).Relation is StandingRelation.Behind)],
-            [.. status.WrongBase.Where(path => status.StandingOf(path).Relation is StandingRelation.Apart)]
+            [.. status.Behind],
+            [.. status.Apart]
         );
     }
 }

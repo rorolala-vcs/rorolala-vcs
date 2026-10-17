@@ -165,8 +165,8 @@ public sealed record Standing(StandingRelation Relation, ulong? Distance);
 /// <remarks>
 /// What <see cref="RolaStatus.StandingOf"/> answers, less the count: the count is what a column says, and this is
 /// what a plan would do about the path — a sync sends one that is ahead and brings one that is behind, and
-/// <c>--force</c> is what sends one that is apart. The two are told apart from <see cref="StandingRelation"/> by
-/// asking whether the path's base is wrong: that is every path behind or apart from upstream, and not one ahead.
+/// <c>--force</c> is what sends one that is apart. The three are the relations a plan acts on; a version in step
+/// and a chain that cannot be read are <see cref="SyncStanding.None"/>.
 /// </remarks>
 public enum SyncStanding
 {
@@ -216,6 +216,8 @@ public sealed class RolaStatus : IDisposable
         List<string> unowned;
         List<string> wrongBase;
         List<string> ahead;
+        List<string> behind;
+        List<string> apart;
         List<Rename> renamed;
         List<Merge> merging;
         List<BrokenReason> broken;
@@ -250,14 +252,30 @@ public sealed class RolaStatus : IDisposable
                 RorolalaBinding.rola_status_wrong_base_at
             );
 
-            // What is ahead is read out of the list of standings rather than walked again: every path the
-            // Layout records a version for is in it, with where that version stands, and this is the one list
-            // a reading gives whole.
+            // The three directions are read out of the list of standings rather than walked again: every path
+            // the Layout records a version for is in it, with where that version stands, and this is the one
+            // list a reading gives whole. Being behind and being apart are not asked of `wrong_base`, which is
+            // about the changes the tree has made: a file nobody touched but the Vault has moved past is a
+            // receive all the same.
+            var standings = Standings(handle);
+
             ahead =
             [
-                .. Standings(handle)
-                    .Where(ahead => ahead.Relation == StandingRelation.Ahead)
-                    .Select(ahead => ahead.Path),
+                .. standings
+                    .Where(one => one.Relation == StandingRelation.Ahead)
+                    .Select(one => one.Path),
+            ];
+            behind =
+            [
+                .. standings
+                    .Where(one => one.Relation == StandingRelation.Behind)
+                    .Select(one => one.Path),
+            ];
+            apart =
+            [
+                .. standings
+                    .Where(one => one.Relation == StandingRelation.Apart)
+                    .Select(one => one.Path),
             ];
 
             renamed = Renames(handle);
@@ -281,6 +299,8 @@ public sealed class RolaStatus : IDisposable
         Unowned = unowned;
         WrongBase = wrongBase;
         Ahead = ahead;
+        Behind = behind;
+        Apart = apart;
         Renamed = renamed;
         Merging = merging;
         Broken = broken;
@@ -331,10 +351,27 @@ public sealed class RolaStatus : IDisposable
 
     /// <summary>Paths whose version is further on than the one upstream records.</summary>
     /// <remarks>
-    /// The other side of <see cref="WrongBase"/>: a path ahead is ordinary work, so it is not a base gone wrong,
-    /// and it is the one of the three standings that records nothing to act on but a sync.
+    /// The other side of <see cref="Behind"/>: a path ahead is ordinary work, so it is not a base gone wrong, and
+    /// it is the one of the three standings that records nothing to act on but a sync. It is every path the
+    /// standings have, whether or not the tree changed it — the changes the tree made are <see cref="Modified"/>.
     /// </remarks>
     public IReadOnlyList<string> Ahead { get; }
+
+    /// <summary>Paths whose version is behind the one upstream records.</summary>
+    /// <remarks>
+    /// These are the ones a sync brings down, and they are read from the standings rather than from
+    /// <see cref="WrongBase"/>: a base gone wrong is a <em>change</em> made against a version upstream moved past,
+    /// and a file nobody touched is still one to bring down. A path the tree changed is in both this and
+    /// <see cref="Modified"/>, which is the one a plan refuses to overwrite.
+    /// </remarks>
+    public IReadOnlyList<string> Behind { get; }
+
+    /// <summary>Paths whose two chains have each moved on from the other.</summary>
+    /// <remarks>
+    /// What only a forced sync sends, and read the same way as <see cref="Behind"/>: the version is apart whether
+    /// or not the tree changed the file.
+    /// </remarks>
+    public IReadOnlyList<string> Apart { get; }
 
     /// <summary>Paths that moved.</summary>
     public IReadOnlyList<Rename> Renamed { get; }
@@ -455,11 +492,12 @@ public sealed class RolaStatus : IDisposable
     /// What a sync would do about the entry at a path: send it, bring it down, or only send it when forced.
     /// </summary>
     /// <remarks>
-    /// It is <see cref="StandingOf"/> read the way a plan reads it — ahead is a send, behind is a receive, and two
-    /// chains that have each moved on are sent only by <c>--force</c> — with the two lists of the reading telling
-    /// the last two apart. Being behind and being apart are both a base gone wrong, so what is asked is
-    /// <see cref="WrongBase"/> rather than the relation: a path of neither is one whose chain this side could not
-    /// read, and a plan would not act on it either.
+    /// It is the path's standing read the way a plan reads it — ahead is a send, behind is a receive, and two
+    /// chains that have each moved on are sent only by <c>--force</c> — and it is read from the relation rather
+    /// than from <see cref="WrongBase"/>, because a base gone wrong is a <em>change</em> the tree has made while a
+    /// version the Vault moved past is a receive whether or not the tree touched the file. Two things a run adds
+    /// are not said here: a send is only where this account holds the entry, and bringing a version down where the
+    /// tree changed the file is refused rather than done.
     /// </remarks>
     /// <param name="path">The path of the entry, as the program names it.</param>
     /// <returns>What a sync would do about it, which is <see cref="SyncStanding.None"/> where there is nothing.
@@ -469,21 +507,17 @@ public sealed class RolaStatus : IDisposable
         ArgumentNullException.ThrowIfNull(path);
         ObjectDisposedException.ThrowIf(_handle == 0, this);
 
-        if (!WrongBase.Any(named => Named(named, path)))
+        if (Ahead.Any(named => Named(named, path)))
         {
-            return Ahead.Any(named => Named(named, path)) ? SyncStanding.Send : SyncStanding.None;
+            return SyncStanding.Send;
         }
 
-        return StandingOf(path).Relation switch
+        if (Apart.Any(named => Named(named, path)))
         {
-            StandingRelation.Apart => SyncStanding.Diverged,
+            return SyncStanding.Diverged;
+        }
 
-            // Behind is the answer whether or not a count comes with it, since what the Vault is at is
-            // ordinarily a version this side never fetched: the direction is known and the chain is not.
-            StandingRelation.Behind => SyncStanding.Receive,
-
-            _ => SyncStanding.None,
-        };
+        return Behind.Any(named => Named(named, path)) ? SyncStanding.Receive : SyncStanding.None;
     }
 
     /// <summary>Whether a path a reading named is the file at `path`.</summary>
