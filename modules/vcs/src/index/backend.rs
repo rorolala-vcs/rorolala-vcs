@@ -65,7 +65,10 @@ impl StorageBackend for VCSIndex {
 
     async fn extract_file(&self, key: &Key, path: &Path) -> Result<(), Self::Error> {
         let plain = self.read_object(key).await?;
-        tokio::fs::write(path, &plain).await?;
+
+        // Laid down beside the target and moved into place, making the directory it is in: an
+        // extract that fails leaves no half file, and a caller does not have to have made the way.
+        super::pack::write_whole(path, &plain).await?;
 
         Ok(())
     }

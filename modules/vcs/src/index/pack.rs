@@ -290,23 +290,36 @@ async fn read_range(
 /// The temporary is named so no two writes in this process share one, so two of them writing a
 /// pack and its index never write through each other's file.
 async fn write_whole_durably(path: &std::path::Path, bytes: &[u8]) -> Result<(), VCSIndexError> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    /// How many temporaries this process has named, so that no two are the same.
-    static NAMED: AtomicU64 = AtomicU64::new(0);
-
     let parent = path.parent().ok_or(VCSIndexError::Malformed)?;
     tokio::fs::create_dir_all(parent).await?;
 
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or(VCSIndexError::Malformed)?;
-    let unique = NAMED.fetch_add(1, Ordering::Relaxed);
-    let temporary = path.with_file_name(format!("{name}.{}.{unique}.tmp", std::process::id()));
-
+    let temporary = super::temporary_beside(path)?;
     tokio::fs::write(&temporary, bytes).await?;
     tokio::fs::rename(&temporary, path).await?;
+
+    Ok(())
+}
+
+/// Writes `bytes` to `path` whole, beside it and moved into place, making the directory it is in.
+///
+/// This is for a caller's own file — what `extract_file` hands back — rather than for an entry the
+/// index reads back, so nothing is promised to outlive a crash. What is kept is that a failed write
+/// leaves the target as it was rather than half written.
+pub(super) async fn write_whole(path: &std::path::Path, bytes: &[u8]) -> Result<(), VCSIndexError> {
+    let parent = path.parent().ok_or(VCSIndexError::Malformed)?;
+    tokio::fs::create_dir_all(parent).await?;
+
+    let temporary = super::temporary_beside(path)?;
+    tokio::fs::write(&temporary, bytes).await?;
+
+    // A move that fails — the target is a directory, or on another filesystem — leaves the written
+    // temporary beside it, which nothing will ever read. Dropping it keeps a failed extract from
+    // costing space every time it is tried.
+    if let Err(error) = tokio::fs::rename(&temporary, path).await {
+        let _ = tokio::fs::remove_file(&temporary).await;
+
+        return Err(error.into());
+    }
 
     Ok(())
 }

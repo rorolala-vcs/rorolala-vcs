@@ -816,3 +816,18 @@ async fn a_store_that_cannot_read_the_whole_is_not_content_that_does_not_add_up(
 
     let _ = fs::remove_dir_all(&parent);
 }
+
+#[tokio::test]
+async fn extracting_makes_the_directory_the_path_is_in() {
+    let (parent, store) = store("extract-dir");
+    let content = b"written somewhere new";
+    let key = store.write_object(content, Codec::Raw).await.unwrap();
+
+    // A caller names a path, not a path whose way has been made: the extract makes it, and what
+    // lands there is whole.
+    let out = parent.join("deeper").join("still").join("out");
+    store.extract_file(&key, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), content);
+
+    let _ = fs::remove_dir_all(&parent);
+}

@@ -233,6 +233,30 @@ pub(super) async fn write_whole_durably(path: &Path, bytes: &[u8]) -> Result<(),
     sync_directory(parent).await
 }
 
+/// Writes `bytes` to `path` whole, laid down beside it and moved into place.
+///
+/// This is for a caller's own file — what `extract_file` hands back — rather than for an entry the
+/// store reads back afterwards, so nothing is synced and nothing is promised to outlive a crash. What is kept is the promise every write here keeps: the whole file or no file at
+/// all, and a directory that is not there made rather than complained about.
+pub(super) async fn write_whole(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    let parent = path.parent().ok_or(Error::Malformed)?;
+    tokio::fs::create_dir_all(parent).await?;
+
+    let temporary = temporary_beside(path)?;
+    tokio::fs::write(&temporary, bytes).await?;
+
+    // A move that fails — the target is a directory, or on another filesystem — leaves the written
+    // temporary beside it, which nothing will ever read. Dropping it keeps a failed extract from
+    // costing space every time it is tried.
+    if let Err(error) = tokio::fs::rename(&temporary, path).await {
+        let _ = tokio::fs::remove_file(&temporary).await;
+
+        return Err(error.into());
+    }
+
+    Ok(())
+}
+
 /// Makes the names in `directory` durable, so that a file moved into or out of it survives a crash.
 ///
 /// A directory is synced by opening it and syncing the handle, which is how the systems this store is

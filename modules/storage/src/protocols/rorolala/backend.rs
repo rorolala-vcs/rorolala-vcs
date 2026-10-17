@@ -9,7 +9,7 @@ use std::path::Path;
 
 use super::RorolalaStorage;
 use super::consts::{HOLDS_AT_ONCE, MANIFEST_DIR, OBJECTS_DIR, PackKind, SNIFF_LEN};
-use super::entry::{collect, exists, verify};
+use super::entry::{collect, exists, verify, write_whole};
 use crate::{
     AlgorithmChoice, Error, Key, Presence, ProtocolMagic, StorageBackend, TransferableBackend,
 };
@@ -43,7 +43,10 @@ impl StorageBackend for RorolalaStorage {
         // whichever way it was laid down — so there is nothing left to verify here.
         let content = self.read_content(key).await?;
 
-        tokio::fs::write(path, &content).await?;
+        // Laid down beside the target and moved into place, and a directory that is not there is
+        // made: a failed extract leaves no half file, which is what lets a caller tell "nothing was
+        // written" from "a file is half written".
+        write_whole(path, &content).await?;
 
         Ok(())
     }

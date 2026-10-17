@@ -1217,6 +1217,21 @@ mod tests {
     }
 
     #[test]
+    fn extracting_an_object_makes_the_directory_it_is_written_into() {
+        let index = index("extract-dir");
+        let object = variant();
+        let key = run(index.write(object.clone())).unwrap().unwrap();
+
+        // A caller names a path, not a path whose way has been made: the extract makes it, and what
+        // lands there is the object whole.
+        let out = index.get_root().join("deeper").join("out");
+        run(index.extract_file(&key, &out)).unwrap().unwrap();
+        assert_eq!(fs::read(&out).unwrap(), object.encode());
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
     fn removing_a_packed_object_takes_it_out_of_the_pack() {
         let index = index("remove-packed");
         let kept = variant();
