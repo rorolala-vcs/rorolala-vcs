@@ -1926,13 +1926,18 @@ internal sealed class ListBrowser : EntryView
     private const string Placeholder = "-";
 
     /// <summary>
-    /// Which column the name is in.
+    /// How wide the column of names starts.
     /// </summary>
     /// <remarks>
-    /// The name is the column that is as wide as what is left over, so it is the one that takes a move for
-    /// free and the one that keeps the table as wide as the dock.
+    /// A width of its own rather than what is left over, which is what the room the table is read in is for: the
+    /// dock's spare width is kept after the name and what is read with it, so that a reader finds the two together
+    /// rather than a name at one edge of the dock and its other name at the other. It is taken hold of by its edge
+    /// like the rest, so a reader who wants more of a name drags it open.
     /// </remarks>
-    private const int NameColumn = 1;
+    private const double NameColumnWidth = 200;
+
+    /// <summary>The contributed columns read with the name, which stand in front of the room the table is read in.</summary>
+    private readonly Column[] _beside;
 
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
     private readonly Column[] _values;
@@ -1942,6 +1947,19 @@ internal sealed class ListBrowser : EntryView
 
     /// <summary>How wide every column is, the grabs between them included.</summary>
     private readonly GridLength[] _widths;
+
+    /// <summary>Which of the table's columns is the one that takes what is left over, and holds nothing.</summary>
+    private readonly int _star;
+
+    /// <summary>
+    /// Where every edge between two columns is, as the grab column and the pair it is between.
+    /// </summary>
+    /// <remarks>
+    /// Kept as the columns were laid out rather than read off the widths, because a grab is a column of the
+    /// table rather than a shape of the measure: the pair a grab moves is settled where the table is built, and
+    /// the room the table is read in means the edges are no longer evenly spaced.
+    /// </remarks>
+    private readonly Dictionary<int, (int Left, int Right)> _grabs;
 
     /// <summary>The row of column names, which every row is kept in step with.</summary>
     private readonly Grid _header = new();
@@ -1983,9 +2001,18 @@ internal sealed class ListBrowser : EntryView
                 .Select(Contributed),
         ];
 
+        // What is read with the name is kept with it, before the room the table is read in: a second name of
+        // the entry is read where the entry is named rather than at the far side of the dock.
+        _beside =
+        [
+            .. contributed
+                .Where(provider => provider.Placement == ColumnPlacement.BesideName)
+                .Select(Contributed),
+        ];
+
         values.AddRange(
             contributed
-                .Where(provider => provider.Placement == ColumnPlacement.BesideName)
+                .Where(provider => provider.Placement == ColumnPlacement.BeforeValues)
                 .Select(Contributed)
         );
         values.AddRange(Values());
@@ -2003,7 +2030,11 @@ internal sealed class ListBrowser : EntryView
         }
 
         _values = [.. values];
-        _widths = Widths();
+
+        var (widths, star, grabs) = Lay();
+        _widths = widths;
+        _star = star;
+        _grabs = grabs;
 
         // The list's own border and inset are taken off: what draws the table is the view, and a border and a
         // padding of the list's own would be a second edge and a second inset inside it.
@@ -2243,10 +2274,32 @@ internal sealed class ListBrowser : EntryView
         return dot;
     }
 
-    /// <summary>How wide every column starts, in the order they are laid out.</summary>
-    private GridLength[] Widths()
+    /// <summary>
+    /// How wide every column starts, in the order they are laid out, together with the column that takes what
+    /// is left over and where every edge between two columns is.
+    /// </summary>
+    /// <remarks>
+    /// The order is what a row is read in: the columns read with the name, then the room the table is read in,
+    /// then what is read about the entry. The room is a column of its own rather than the name's own slack, since
+    /// a table whose rows are one grid each keeps every column but the one that takes what is left over at a width
+    /// they all share.
+    /// </remarks>
+    private (GridLength[] Widths, int Star, Dictionary<int, (int Left, int Right)> Grabs) Lay()
     {
         var widths = new List<GridLength>();
+        var grabs = new Dictionary<int, (int Left, int Right)>();
+
+        // A contributed column is taken hold of by its own edge, which is the grab in front of it: the grab moves
+        // that column and the one before it, and the pair is settled here rather than read off the widths.
+        void Add(IReadOnlyList<Column> columns)
+        {
+            foreach (var column in columns)
+            {
+                grabs.Add(widths.Count, (widths.Count - 1, widths.Count + 1));
+                widths.Add(new GridLength(GrabColumn));
+                widths.Add(new GridLength(column.Width));
+            }
+        }
 
         foreach (var column in _leads)
         {
@@ -2255,15 +2308,19 @@ internal sealed class ListBrowser : EntryView
         }
 
         widths.Add(new GridLength(IconColumn));
+        widths.Add(new GridLength(NameColumnWidth));
+
+        Add(_beside);
+
+        var star = widths.Count;
+
+        // The room the table is read in: it holds nothing and takes what is left over, so that the columns after
+        // it stand against the dock's far edge however wide the dock is.
         widths.Add(new GridLength(1, GridUnitType.Star));
 
-        foreach (var column in _values)
-        {
-            widths.Add(new GridLength(GrabColumn));
-            widths.Add(new GridLength(column.Width));
-        }
+        Add(_values);
 
-        return [.. widths];
+        return ([.. widths], star, grabs);
     }
 
     /// <summary>The columns of the table, as the widths stand.</summary>
@@ -2304,6 +2361,16 @@ internal sealed class ListBrowser : EntryView
 
         cells.Add(Head(string.Empty));
         cells.Add(Head("rorolala_file_system.column_name"));
+
+        foreach (var column in _beside)
+        {
+            cells.Add(Grip());
+            cells.Add(Head(column.Header, column.Align));
+        }
+
+        // The room the table is read in is headed by nothing: it is the dock's own width rather than a column
+        // of the entry, and there is no word that would name it.
+        cells.Add(null);
 
         foreach (var column in _values)
         {
@@ -2350,6 +2417,17 @@ internal sealed class ListBrowser : EntryView
 
         cells.Add(icon);
         cells.Add(Named(entry, name.Length > 0 ? name : entry.Path));
+
+        foreach (var column in _beside)
+        {
+            cells.Add(null);
+            cells.Add(
+                column.Draw is { } draw ? draw(entry) : Cell(column.Value(facts), column.Align)
+            );
+        }
+
+        // The room the table is read in holds nothing: a row has no cell there.
+        cells.Add(null);
 
         foreach (var column in _values)
         {
@@ -2455,8 +2533,9 @@ internal sealed class ListBrowser : EntryView
     /// The column edge a point in the view falls on, as the pair of columns it is between.
     /// </summary>
     /// <remarks>
-    /// An edge is the centre of a grab column, which the layout knows and a fixed measurement would not: the
-    /// name column takes what is left, so where every other edge stands depends on the dock.
+    /// An edge is the centre of a grab column, and which pair a grab moves is the layout's answer rather than a
+    /// measurement of the table: the room the table is read in is not where a fixed share of the dock would put
+    /// it, so where every other edge stands moves with the dock.
     /// </remarks>
     /// <param name="at">Where the pointer is, in the view's own coordinates.</param>
     /// <returns>The pair the edge is between, or nothing when no edge is within reach.</returns>
@@ -2479,15 +2558,12 @@ internal sealed class ListBrowser : EntryView
         {
             var width = _header.ColumnDefinitions[column].ActualWidth;
 
-            // A grab column is every other one after the name, which is the table's own shape rather than a
-            // measurement of it.
             if (
-                column > NameColumn
-                && (column - NameColumn) % 2 == 1
+                _grabs.TryGetValue(column, out var pair)
                 && Math.Abs(header.X - (left + (width / 2))) <= GrabZone / 2
             )
             {
-                return (column - 1, column + 1);
+                return pair;
             }
 
             left += width;
@@ -2501,12 +2577,12 @@ internal sealed class ListBrowser : EntryView
     /// </summary>
     /// <remarks>
     /// The pair taking the move is what makes the border land where the pointer is and leaves every other
-    /// border in the table where it was. Where one of the pair is the name — the column that is as wide as
-    /// what is left over — that one is skipped rather than moved: it takes the move for free, which is also
-    /// what keeps the table as wide as the dock.
+    /// border in the table where it was. Where one of the pair is the room the table is read in — the column
+    /// that takes what is left over — that one is skipped rather than moved: it takes the move for free, which
+    /// is also what keeps the table as wide as the dock.
     /// <para>
     /// Neither column is dragged away entirely: the move is taken as far as the narrower of the two allows,
-    /// and the name counts as a column here, which is why its width is asked of the layout.
+    /// and the room counts as a column here, which is why its width is asked of the layout.
     /// </para>
     /// </remarks>
     /// <param name="e">The move.</param>
@@ -2556,8 +2632,8 @@ internal sealed class ListBrowser : EntryView
 
     /// <summary>How wide the column that takes what is left is, as the layout has it.</summary>
     private double Room() =>
-        _header.ColumnDefinitions.Count > NameColumn
-            ? _header.ColumnDefinitions[NameColumn].ActualWidth
+        _star >= 0 && _header.ColumnDefinitions.Count > _star
+            ? _header.ColumnDefinitions[_star].ActualWidth
             : 0;
 
     /// <summary>Puts the widths into the header and into every row that is on screen.</summary>

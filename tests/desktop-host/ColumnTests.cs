@@ -149,6 +149,29 @@ public sealed class ColumnTests
         Assert.True(upstream.Width > 0);
     }
 
+    /// <summary>
+    /// Rorolala contributes the Standing column with the listing's own values, in front of them.
+    /// </summary>
+    /// <remarks>
+    /// How far a file is from upstream is read once what the entry is has been, beside the time it was written and
+    /// its size rather than beside the name: what is read with the name is where the entry is named elsewhere,
+    /// which is the Upstream column's business and not this one's.
+    /// </remarks>
+    [Fact]
+    public void ThePluginContributesTheStandingColumnWithTheValues()
+    {
+        var services = Host.Services();
+        var plugin = new Vcs();
+
+        plugin.Initialize(services.For(plugin.Manifest.Id, 1));
+
+        var standing = Assert.Single(EntryColumns.All, column => column.Id == "rorolala.standing");
+
+        Assert.Equal("rorolala_vcs.column_standing", standing.ColumnKey);
+        Assert.Equal(ColumnPlacement.BeforeValues, standing.Placement);
+        Assert.True(standing.Width > 0);
+    }
+
     /// <summary>Rorolala contributes the State mark at the left, with no heading of its own.</summary>
     /// <remarks>
     /// The mark is about the entry rather than a value of it, so it stands before everything, the picture

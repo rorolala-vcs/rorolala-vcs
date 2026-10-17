@@ -56,14 +56,15 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     public double Width => ColumnWidth;
 
     /// <summary>
-    /// The column sits beside the name, which is where what an entry is called is read.
+    /// The column stands with the listing's own columns, in front of them.
     /// </summary>
     /// <remarks>
-    /// How far a file is from upstream is read as part of reading the name rather than after everything else
-    /// about the row: a reader scanning a listing is asking "is this one mine, and is it in step", and the
-    /// answer to the second is a number they want against the name rather than at the far end of the row.
+    /// How far a file is from upstream is read once what the entry is has been, alongside the listing's own
+    /// columns — the time it was written, its size — and it stands before them because it is Rorolala's answer
+    /// about the file rather than a fact of the filesystem. What is read with the name is where the entry is
+    /// named elsewhere, which is the Upstream column's business and not this one's.
     /// </remarks>
-    public ColumnPlacement Placement => ColumnPlacement.BesideName;
+    public ColumnPlacement Placement => ColumnPlacement.BeforeValues;
 
     /// <summary>
     /// The column is one of values: what it says about a file is a number.

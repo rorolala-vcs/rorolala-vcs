@@ -201,7 +201,7 @@ rorolala_vcs:
 
   # What the cell of that column says when the pointer rests on it, and what a tile's badge says when it does:
   # one answer about one file, so the two read alike. What it says is what the count means and what to do about
-  # it, since a number beside a name is a fact a reader has to know how to act on; the count is the one the cell
+  # it, since a number in a listing is a fact a reader has to know how to act on; the count is the one the cell
   # holds, written out in words.
   #
   # The count is not always there: a fetch brings the Vault's Layout and never its versions, so being behind is

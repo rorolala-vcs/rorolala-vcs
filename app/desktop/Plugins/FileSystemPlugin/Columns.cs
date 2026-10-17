@@ -8,7 +8,9 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// The place is the contribution's rather than the listing's, because what a column says decides how it is
 /// read: a column saying where an entry is is read with the name, and one saying something about the entry
-/// is read once what it is has been read.
+/// is read once what it is has been read. The room the table is read in falls between the two — after what
+/// is read with the name and before what is read about the entry — so that the dock's spare width is spent
+/// in one place rather than scattered between the columns.
 /// </remarks>
 public enum ColumnPlacement
 {
@@ -22,8 +24,21 @@ public enum ColumnPlacement
     /// </remarks>
     Leftmost,
 
-    /// <summary>Right after the name, before the listing's own columns.</summary>
+    /// <summary>Right after the name, before the room the table is read in.</summary>
+    /// <remarks>
+    /// A column here is the entry's second name — where it is named elsewhere — so it stands with the name
+    /// rather than after the listing's own columns: the name and what is read with it are one thing, and the
+    /// room the table has to spare is left after them rather than between them.
+    /// </remarks>
     BesideName,
+
+    /// <summary>After the room the table is read in, before the listing's own columns.</summary>
+    /// <remarks>
+    /// A column here is about what the entry is rather than what it is called, so it is read with the
+    /// listing's own columns — the time it was written, its size — which it stands in front of, being the
+    /// same kind of answer about the same entry.
+    /// </remarks>
+    BeforeValues,
 
     /// <summary>After the listing's own columns, which is where what an entry is has been said.</summary>
     AfterValues,
