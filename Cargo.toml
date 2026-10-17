@@ -13,6 +13,7 @@ members = [
     "dev/rsharp-bindgen",
     "modules/auth",
     "modules/daemon",
+    "modules/desktop-pty",
     "modules/errors",
     "modules/inverse-index",
     "modules/layout",
@@ -33,7 +34,7 @@ members = [
     "utils/lazyffi-macros",
     "utils/location",
     "utils/progress",
-    "utils/sandbox"
+    "utils/sandbox",
 ]
 
 [workspace.package]
@@ -63,6 +64,7 @@ jj-lib = { version = "0.46.0", default-features = false }
 librorolala = { path = "." }
 rola = { path = "app/cli/rola" }
 rola-daemon = { path = "app/cli/rola-daemon" }
+rola-desktop-pty = { path = "modules/desktop-pty" }
 rola-edit = { path = "app/cli/rola-edit" }
 rola-jj = { path = "app/cli/rola-jj" }
 rorolala-auth = { path = "modules/auth" }
@@ -187,6 +189,11 @@ x25519-dalek = { version = "2.0.1", features = ["getrandom"] }
 dirs = "6.0.0"
 size = "0.5.0"
 
+# A terminal's other half: the pseudo-terminal a shell is run in. Windows is ConPTY and Unix is
+# `openpty`, and the differences between the two — the process group, `TERM`, the window size — are
+# what this crate is for rather than something a window that draws a terminal should carry.
+portable-pty = "0.9.0"
+
 # Unix signal handling. The default disposition of `SIGPIPE` can only be restored through the
 # C library, which Rust does not expose on its own.
 libc = "0.2.189"
@@ -233,6 +240,7 @@ rorolala-utils-location.workspace = true
 rorolala-vault.workspace = true
 rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
+rola-desktop-pty.workspace = true
 
 [build-dependencies]
 image.workspace = true

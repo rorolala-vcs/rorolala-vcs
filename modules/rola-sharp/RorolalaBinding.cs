@@ -2532,6 +2532,55 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_ownership_upstream_of(nint self, nint path);
 
     /// <summary>
+    /// Opens a terminal and the program in it.
+    ///
+    /// `program` is the program to run, `arguments` its arguments as a NUL-separated list ended by an
+    /// empty one (so no arguments is a single NUL), and `directory` where it is run. `cols` and `rows`
+    /// are the size the view is, which is what the program reads as its window.
+    ///
+    /// Returns the handle, or null when the terminal or the program could not be started; the caller
+    /// releases it with `rola_desktop_pty_close`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_desktop_pty_open(nint program, nint arguments, nint directory, ushort cols, ushort rows);
+
+    /// <summary>
+    /// What the shell has printed since the last ask.
+    ///
+    /// Writes at most `capacity` bytes into `buffer`, and answers how many: zero when nothing has been
+    /// printed just now (ask again), and `-1` when the shell has ended and nothing is left. The bytes are
+    /// the terminal's own, escape sequences and all.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_desktop_pty_read(nint handle, nint buffer, nuint capacity);
+
+    /// <summary>
+    /// Sends what a user typed to the shell.
+    ///
+    /// Answers whether it was written. A shell that has ended takes nothing, which is the false.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_desktop_pty_write(nint handle, nint data, nuint length);
+
+    /// <summary>
+    /// Says how large the view is, which is what the program lays its screen out by.
+    ///
+    /// Answers whether it was said. A shell that has ended takes nothing, which is the false.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_desktop_pty_resize(nint handle, ushort cols, ushort rows);
+
+    /// <summary>
+    /// Ends the terminal and the shell in it.
+    ///
+    /// The handle is freed. A null pointer is nothing to close and does nothing.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void rola_desktop_pty_close(nint handle);
+
+    /// <summary>
     /// Whether the Vault is locked.
     ///
     /// Answers whether the Vault's lock file is there. A Vault locked by another run and one whose lock

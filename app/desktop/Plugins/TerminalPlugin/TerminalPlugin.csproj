@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TerminalPlugin</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- As every plugin builds its UI: against the host's own Avalonia copy, which the load context
+         delegates to. -->
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The File System plugin for where the tree is rooted, which is where a shell starts; the contract
+         and the translations, as every plugin; and the C ABI's bindings, since the pseudo-terminal is the
+         Rust side's and this is the half that draws it. -->
+    <ProjectReference Include="../../Contract/RorolalaDesktop.Contract.csproj" />
+    <ProjectReference Include="../../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <ProjectReference Include="../../../../modules/rola-sharp/RolaSharp.csproj" />
+    <ProjectReference Include="../FileSystemPlugin/FileSystemPlugin.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The plugin's own words, laid beside its assembly so that what it registers is found the
+         moment the host starts it. -->
+    <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

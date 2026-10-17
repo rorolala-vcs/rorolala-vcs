@@ -1,0 +1,7 @@
+[package]
+name = "rola-desktop-pty"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+portable-pty.workspace = true

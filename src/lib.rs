@@ -54,6 +54,9 @@ pub use rorolala_vault as vault;
 /// Version control
 pub use rorolala_vcs as vcs;
 
+/// A terminal's other half: the pseudo-terminal a shell is run in
+pub use rola_desktop_pty as desktop_pty;
+
 /// The local key roots the current directory sits inside, highest priority first.
 ///
 /// The Workspace comes before the Vault, since it is the copy being worked in, so a key

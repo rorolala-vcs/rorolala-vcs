@@ -1,0 +1,25 @@
+# What the Terminal plugin is called, and what it says when a shell cannot be started.
+rorolala_terminal:
+  name:
+    en: Terminal
+    zh-CN: 终端
+  cannot_start:
+    en: The terminal could not start %{program}.
+    zh-CN: 终端无法启动 %{program}。
+
+  # What the preference panel calls the four settings a terminal is started with. The two of the shell are
+  # the program and the words it is run with, which are split the way a shell's own words are; the two of the
+  # drawing are the face and its size, which a monospaced family is wanted for.
+  setting:
+    shell:
+      en: Shell program
+      zh-CN: Shell 程序
+    arguments:
+      en: Shell arguments
+      zh-CN: Shell 参数
+    font:
+      en: Font
+      zh-CN: 字体
+    font_size:
+      en: Font size
+      zh-CN: 字号
