@@ -32,12 +32,21 @@ internal sealed class VersionGraphDock : IDockView
     /// icons the node menu is drawn with, and whose windows being come back to is a reading too.
     /// </param>
     /// <param name="statuses">What the work says about the file, for the edit it may be standing at.</param>
-    public VersionGraphDock(IPluginHost host, StatusReadings statuses) => _view = new VersionGraphView(
+    /// <param name="sync">What a sync would carry, which a fetch is not made over.</param>
+    /// <param name="fetch">The one fetch of the Vault's Layout, which the header's Refresh makes.</param>
+    public VersionGraphDock(
+        IPluginHost host,
+        StatusReadings statuses,
+        SyncWatcher sync,
+        VaultFetch fetch
+    ) => _view = new VersionGraphView(
         host.Log,
         host.Files,
         host.Icons,
         statuses,
-        host.Refocus
+        host.Refocus,
+        sync,
+        fetch
     );
 
     /// <inheritdoc />
@@ -48,7 +57,7 @@ internal sealed class VersionGraphDock : IDockView
         [
             new DockHeaderCommand(
                 "rorolala_vcs.status.refresh",
-                _view.Refresh,
+                _view.RefreshWithFetch,
                 IconKey: Icons.Refresh
             ),
         ];
@@ -146,6 +155,12 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The host's windows being come back to, which the graph is read again for.</summary>
     private readonly IRefocus _refocus;
 
+    /// <summary>What a sync would carry, which is the run a fetch would wait for.</summary>
+    private readonly SyncWatcher _sync;
+
+    /// <summary>The one fetch of the Vault's Layout, which the header's Refresh makes.</summary>
+    private readonly VaultFetch _fetch;
+
     /// <summary>The chain on screen, or nothing while a read is going or when there is none.</summary>
     private VersionGraphDrawing? _drawing;
 
@@ -226,12 +241,16 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="icons">The pictures a node's menu is drawn with.</param>
     /// <param name="statuses">What the work says about the file on screen.</param>
     /// <param name="refocus">The host's windows being come back to.</param>
+    /// <param name="sync">What a sync would carry.</param>
+    /// <param name="fetch">The one fetch of the Vault's Layout.</param>
     public VersionGraphView(
         ILog log,
         IFileChanges files,
         IIconLibrary icons,
         StatusReadings statuses,
-        IRefocus refocus
+        IRefocus refocus,
+        SyncWatcher sync,
+        VaultFetch fetch
     )
     {
         _log = log;
@@ -239,6 +258,8 @@ internal sealed partial class VersionGraphView : Control
         _icons = icons;
         _statuses = statuses;
         _refocus = refocus;
+        _sync = sync;
+        _fetch = fetch;
         _settle.Tick += Settled;
         Focusable = true;
         ClipToBounds = true;
@@ -299,6 +320,37 @@ internal sealed partial class VersionGraphView : Control
             double.IsInfinity(availableSize.Width) ? 640 : availableSize.Width,
             double.IsInfinity(availableSize.Height) ? 480 : availableSize.Height
         );
+
+    /// <summary>
+    /// Fetches the Vault's Layout under the file's work, then reads the graph again, which is what the dock's
+    /// own Refresh asks for.
+    /// </summary>
+    /// <remarks>
+    /// A graph's marked version and its edit are read from the copy the Vault's Layout is kept in, so a graph
+    /// made before a fetch would say where the Vault stood when the copy was last brought over. A directory no
+    /// Workspace holds has nothing to fetch; a sync is what brings the same copy, so its end is what reads the
+    /// graph then, rather than a second exchange made over it.
+    /// </remarks>
+    public void RefreshWithFetch()
+    {
+        if (_sync.Running)
+        {
+            return;
+        }
+
+        if (
+            ChosenEntry.Current is { } entry
+            && Path.GetDirectoryName(entry.Path) is { Length: > 0 } at
+            && WorkspaceNotice.Holds(at, _log)
+        )
+        {
+            _fetch.Fetch(at, Refresh);
+
+            return;
+        }
+
+        Refresh();
+    }
 
     /// <summary>
     /// Says that what the graph shows may have changed, and leaves the reading to a quiet moment.

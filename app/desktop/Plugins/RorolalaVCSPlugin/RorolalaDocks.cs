@@ -70,26 +70,38 @@ internal static class RorolalaDocks
     /// <param name="owner">This plugin, which is what the registrations are attributed to.</param>
     /// <param name="hub">What every command this plugin runs reports itself to, which the Overview draws.</param>
     /// <param name="statuses">What the work says about a file, which the graph reads an edit from.</param>
+    /// <param name="sync">What a sync would carry, read by both views of the work.</param>
+    /// <param name="fetch">The one fetch of the Vault's Layout, asked for by both views.</param>
     public static void Declare(
         IPluginHost host,
         PluginId owner,
         ProgressHub hub,
-        StatusReadings statuses
+        StatusReadings statuses,
+        SyncWatcher sync,
+        VaultFetch fetch
     )
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
         ArgumentNullException.ThrowIfNull(statuses);
+        ArgumentNullException.ThrowIfNull(sync);
+        ArgumentNullException.ThrowIfNull(fetch);
 
         Add(
             host,
             owner,
             OverviewNameId,
             OverviewKey,
-            _ => new OverviewDock(host, host.Log, host.Files, host.Refocus, hub)
+            _ => new OverviewDock(host, host.Log, host.Files, host.Refocus, hub, sync, fetch)
         );
         Add(host, owner, WorkspaceNameId, WorkspaceKey, _ => new RorolalaDock(host.Log));
-        Add(host, owner, VersionGraphNameId, VersionGraphKey, _ => new VersionGraphDock(host, statuses));
+        Add(
+            host,
+            owner,
+            VersionGraphNameId,
+            VersionGraphKey,
+            _ => new VersionGraphDock(host, statuses, sync, fetch)
+        );
         Add(host, owner, AccountsNameId, AccountsKey, _ => new AccountsDock(host));
     }
 

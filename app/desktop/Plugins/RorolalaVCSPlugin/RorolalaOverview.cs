@@ -39,8 +39,17 @@ internal sealed class OverviewDock : IDockView
     /// <param name="files">What the files may have done, which the reading is made again for.</param>
     /// <param name="refocus">The host's windows being come back to, which the reading is made again for too.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
-    public OverviewDock(IPluginHost host, ILog log, IFileChanges files, IRefocus refocus, ProgressHub hub) =>
-        _view = new OverviewView(host, log, files, refocus, hub);
+    /// <param name="sync">What a sync would carry, shared with the Version Graph.</param>
+    /// <param name="fetch">The one fetch of the Vault's Layout, shared with the Version Graph.</param>
+    public OverviewDock(
+        IPluginHost host,
+        ILog log,
+        IFileChanges files,
+        IRefocus refocus,
+        ProgressHub hub,
+        SyncWatcher sync,
+        VaultFetch fetch
+    ) => _view = new OverviewView(host, log, files, refocus, hub, sync, fetch);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -380,21 +389,8 @@ internal sealed class OverviewView : UserControl
     /// </remarks>
     private bool _busy;
 
-    /// <summary>
-    /// Whether a fetch is going, which is what a refresh begins and what a second refresh is kept from.
-    /// </summary>
-    /// <remarks>
-    /// A fetch already running is the one a second press would be: what is fetched is the same copy, and two
-    /// exchanges for one reading are two where one answers.
-    /// </remarks>
-    /// <summary>Whether a running command is one whose end needs a reading, which is what a fetch and a sync are.</summary>
-    /// <remarks>
-    /// Either of them writes the copy every reading of the work is made from, while the other commands this plugin
-    /// runs — a claim, a release, a mode of <c>rola align</c> — write the Layout and are followed by the files being
-    /// said to have changed. A reading taken while a sync is carrying content down would say what the tree held in
-    /// the middle of it, which is neither what it held nor what it holds.
-    /// </remarks>
-    private bool _fetching;
+    /// <summary>The one fetch of the Vault's Layout, shared with the Version Graph.</summary>
+    private readonly VaultFetch _fetch;
 
     /// <summary>Whether the hub had something going when it last said it had changed.</summary>
     /// <remarks>
@@ -427,15 +423,29 @@ internal sealed class OverviewView : UserControl
     /// <param name="files">What the files may have done.</param>
     /// <param name="refocus">The host's windows being come back to.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
-    public OverviewView(IPluginHost host, ILog log, IFileChanges files, IRefocus refocus, ProgressHub hub)
+    /// <param name="sync">What a sync would carry, shared with the Version Graph.</param>
+    /// <param name="fetch">The one fetch of the Vault's Layout, shared with the Version Graph.</param>
+    public OverviewView(
+        IPluginHost host,
+        ILog log,
+        IFileChanges files,
+        IRefocus refocus,
+        ProgressHub hub,
+        SyncWatcher sync,
+        VaultFetch fetch
+    )
     {
         ArgumentNullException.ThrowIfNull(hub);
+        ArgumentNullException.ThrowIfNull(sync);
+        ArgumentNullException.ThrowIfNull(fetch);
 
         _host = host;
         _log = log;
         _files = files;
         _refocus = refocus;
         _hub = hub;
+        _sync = sync;
+        _fetch = fetch;
 
         _notice = new TextBlock
         {
@@ -452,7 +462,6 @@ internal sealed class OverviewView : UserControl
         // The sync's own state, which the strip in the dock's header draws from; what the runs of every command
         // say is gathered in the hub, which the panel down the right draws from and which every place a command
         // may be run from — the strip, an entry's menu — writes to.
-        _sync = new SyncWatcher(_host, _log, hub);
         _strip = new SyncStrip(_host, _sync, () => BaseDirectory.Current, Refresh);
         _panel = new ProgressPanel(hub);
 
@@ -598,94 +607,34 @@ internal sealed class OverviewView : UserControl
     /// what the Vault held when the copy was last brought over. The run is shown down the panel as a card of its
     /// own, and the reading and what a sync would carry are asked for once it is over. A directory no Workspace
     /// holds has nothing to fetch, so it is only read again.
+    /// <para>
+    /// A sync is what brings the same copy, so a refresh while one is going asks nothing: the run's own end is
+    /// what reads the work again.
+    /// </para>
     /// </remarks>
     public void Refresh()
     {
-        // A fetch or a sync is what reads the work already: a second press while one is going is the one that is
-        // going, and its own completion is what draws. Asking again would be a reading of the state the run is
-        // halfway through, and would be drawn as if it were the state after it.
-        if (_fetching || _sync.Running)
+        if (_sync.Running)
         {
             return;
         }
 
         if (BaseDirectory.Current is { Length: > 0 } at && WorkspaceNotice.Holds(at, _log))
         {
-            BeginFetch(at);
+            _fetch.Fetch(
+                at,
+                () =>
+                {
+                    Draw();
+                    _sync.Plan(at);
+                }
+            );
 
             return;
         }
 
         Draw();
         _sync.Plan(BaseDirectory.Current);
-    }
-
-    /// <summary>Runs a fetch, and reads the work again once it is over.</summary>
-    /// <remarks>
-    /// The card is opened before the work is handed off, so that the panel has it to draw from the first turn —
-    /// see the hub for why the runs are gathered rather than kept where they were begun. The run says nothing of
-    /// how far it is, so its card is drawn as one still moving: a fetch reports no progress of its own.
-    /// </remarks>
-    /// <param name="directory">Where the work is rooted.</param>
-    private void BeginFetch(string directory)
-    {
-        // A fetch already going is the one a second press would be, and a sync brings the same copy as it goes:
-        // what is on screen is read again either way, and the run in hand leaves the copy where it stands.
-        if (_fetching || _sync.Running)
-        {
-            return;
-        }
-
-        // The window is told which program to run by the run that opened it, and a window opened on its own has
-        // none: there is nothing to fetch with, so what there is to read is read.
-        if (Environment.GetEnvironmentVariable(Sync.Program) is not { Length: > 0 } program)
-        {
-            Draw();
-            _sync.Plan(directory);
-
-            return;
-        }
-
-        _fetching = true;
-
-        var run = _hub.Begin("rorolala_vcs.progress.fetch");
-
-        _ = Task.Run(() =>
-        {
-            var (done, said) = Fetch.Run(program, directory);
-
-            Dispatcher.UIThread.Post(() =>
-            {
-                _fetching = false;
-
-                // The card is let go of here rather than when the run is over, because the panel keeps it for a
-                // few seconds after: what ended is drawn as ended before it is taken away.
-                _hub.End(run);
-
-                // What was fetched is what every reading is made from, so what the columns answered about the
-                // entries is let go of with the files, and the listing and the reading are read again.
-                _host.Files.Touch();
-
-                if (!done)
-                {
-                    // Drawn as every other command's failure is, and not as one line of raw text: what the
-                    // command wrote says which of its lines went wrong and which can be acted on, and the window
-                    // draws those marks rather than the words they are written with.
-                    _host.Dialogs.Present(
-                        RolaI18N.Get("rorolala_vcs.fetch.failed"),
-                        () =>
-                            ReportView.Of(
-                                ReportLines.Parse(said),
-                                key => _host.Icons.Find(key),
-                                ReportView.Ink
-                            )
-                    );
-                }
-
-                Draw();
-                _sync.Plan(directory);
-            });
-        });
     }
 
     /// <summary>
@@ -1376,20 +1325,36 @@ internal sealed class OverviewView : UserControl
     {
         if (on)
         {
-            BaseDirectory.Changed += Draw;
-            _files.Changed += Draw;
-            _refocus.Regained += Draw;
+            BaseDirectory.Changed += Touched;
+            _files.Changed += Touched;
+            _refocus.Regained += Touched;
             _again.Start();
         }
         else
         {
-            BaseDirectory.Changed -= Draw;
-            _files.Changed -= Draw;
-            _refocus.Regained -= Draw;
+            BaseDirectory.Changed -= Touched;
+            _files.Changed -= Touched;
+            _refocus.Regained -= Touched;
             _again.Stop();
         }
 
         Draw();
+    }
+
+    /// <summary>
+    /// Reads the work again and asks what there is to carry, which a change of the files may have moved.
+    /// </summary>
+    /// <remarks>
+    /// What the sync buttons offer is the Vault's answer beside this side's, and a version recorded here is
+    /// one the Vault has not been told of: the plan is asked again with the reading, or a work that has gained
+    /// something to send keeps the buttons of the answer before it — grey, and saying there is nothing to
+    /// carry. The reading on the timer asks nothing of the Vault, so this is the only ask a change makes;
+    /// <see cref="SyncWatcher.Plan"/> coalesces, so a burst of changes is one run of the command.
+    /// </remarks>
+    private void Touched()
+    {
+        Draw();
+        _sync.Plan(BaseDirectory.Current);
     }
 
     /// <summary>
