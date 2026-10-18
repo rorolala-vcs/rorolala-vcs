@@ -1,10 +1,17 @@
 #Requires -Version 5.1
-# Lays the build out for hand-off under `$BuildDir`, under the names a consumer links, includes and
-# sources. That is also what puts the Desktop program where `rola desktop` reaches for it, so an
-# export is what makes that command work.
+# Builds the tree and lays the result out for hand-off under `$BuildDir`, under the names a consumer
+# links, includes and sources. That is also what puts the Desktop program where `rola desktop` reaches
+# for it, so an export is what makes that command work.
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/../lib/common.ps1"
+
+# Any running `rola` is stopped before anything is built: a process would hold the binaries the build
+# is about to write, and a file that is still in use cannot be overwritten.
+Get-Process -Name 'rola' -ErrorAction SilentlyContinue | ForEach-Object {
+    Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+}
+Get-Process -Name 'rola' -ErrorAction SilentlyContinue | ForEach-Object { $_.WaitForExit(5000) }
 
 # The plugin's own pictures first, and deliberately: they are drawn from the pinned icon set rather
 # than carried, so what is laid out below is what the pin holds rather than whatever was last in the
