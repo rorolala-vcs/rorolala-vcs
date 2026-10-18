@@ -417,6 +417,12 @@ internal sealed class OverviewView : UserControl
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
 
+    /// <summary>
+    /// The directory and the sync-relevant standings the last plan was asked over, so a reading that moves
+    /// either asks again.
+    /// </summary>
+    private string? _plannedFor;
+
     /// <summary>Makes the control.</summary>
     /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
     /// <param name="log">Where a reading that could not be made is said.</param>
@@ -522,6 +528,10 @@ internal sealed class OverviewView : UserControl
             _hub.Changed -= Sizing;
         };
 
+        // A dock in a tab that is shown again is being looked at again, which is a moment to ask what
+        // there is to carry — see `BecameVisible`.
+        PropertyChanged += BecameVisible;
+
         // What a command is doing decides whether the panel has anywhere to stand: with nothing shown, the room
         // down the right is given back to the table rather than left as an empty third of the dock.
         Split(hub.Any);
@@ -549,6 +559,30 @@ internal sealed class OverviewView : UserControl
     {
         _tableColumn.Width = new GridLength(running ? TableShare : 1, GridUnitType.Star);
         _panelColumn.Width = new GridLength(running ? PanelShare : 0, GridUnitType.Star);
+    }
+
+    /// <summary>Asks what there is to carry when the dock is shown again, and reads the work again with it.</summary>
+    /// <remarks>
+    /// A dock in a tab that was not shown is not being looked at, and the timer that reads the work does not run
+    /// for it. A command run elsewhere — the terminal's <c>rola track</c>, say — is not one this plugin is told
+    /// about by the files, so coming back to the Overview is the moment what a sync would carry is asked again
+    /// rather than left as it was when the tab was left. It is one ask per becoming visible rather than a second
+    /// timer: a plan costs a fetch of the Vault's Layout, and one made while nobody is looking is work for
+    /// nothing.
+    /// </remarks>
+    /// <param name="sender">What raised it.</param>
+    /// <param name="changed">The property and its values.</param>
+    private void BecameVisible(object? sender, AvaloniaPropertyChangedEventArgs changed)
+    {
+        _ = sender;
+
+        if (changed.Property != IsVisibleProperty || changed.NewValue is not true)
+        {
+            return;
+        }
+
+        Draw();
+        _sync.Plan(BaseDirectory.Current);
     }
 
     /// <summary>Redraws the width the panel stands in, which every change to the runs may have moved.</summary>
@@ -1412,8 +1446,25 @@ internal sealed class OverviewView : UserControl
         }
 
         var reading = Of(BaseDirectory.Current, _log);
-        var rows = reading.Facts is { } facts ? Rows(facts) : [];
+        var facts = reading.Facts;
+        var rows = facts is null ? [] : Rows(facts);
         var said = Line(reading, rows.Count);
+
+        // What a sync would carry is asked whenever the reading says the standings it is about have moved — see
+        // `PlanIfMoved`. It is asked before the same-answer check below, since the plan may be stale even when
+        // the rows are not.
+        if (facts is not null)
+        {
+            PlanIfMoved(facts);
+        }
+
+        // What the reading itself names is work the buttons may be pressed for, whatever a plan has or has
+        // not been able to say: a table that says "Sync Down" beside three grey buttons is the one thing
+        // this must not draw.
+        _sync.Observe(
+            facts is { } read
+                && (read.Sends.Count > 0 || read.Receives.Count > 0 || read.Apart.Count > 0)
+        );
 
         // What would be drawn is what is already drawn, so nothing is drawn: the table is the whole of the
         // dock, and building it again throws away what the reader has scrolled to, chosen and is pointing at.
@@ -1438,6 +1489,34 @@ internal sealed class OverviewView : UserControl
         }
 
         Show(said, rows, reading.Status);
+    }
+
+    /// <summary>Asks what a sync would carry when the reading says the standings it is about have moved.</summary>
+    /// <remarks>
+    /// The reading is made on a timer and sees the copy of the Vault's Layout that a command run elsewhere — the
+    /// terminal's <c>rola fetch</c> or <c>rola track</c>, say — may have moved without telling this plugin that
+    /// the files changed. What a plan is about is those standings, so a reading that changes them is the moment
+    /// to ask; a reading that says what it said before costs nothing, and a plan costs a fetch of the Vault's
+    /// Layout.
+    /// </remarks>
+    /// <param name="facts">The reading's standings.</param>
+    private void PlanIfMoved(StatusFacts facts)
+    {
+        var signature = string.Join(
+            '\u0001',
+            BaseDirectory.Current ?? string.Empty,
+            string.Join('\u0000', facts.Sends),
+            string.Join('\u0000', facts.Receives),
+            string.Join('\u0000', facts.Apart)
+        );
+
+        if (string.Equals(signature, _plannedFor, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _plannedFor = signature;
+        _sync.Plan(BaseDirectory.Current);
     }
 
     /// <summary>

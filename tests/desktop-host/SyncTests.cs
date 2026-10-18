@@ -1,3 +1,4 @@
+using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using RorolalaVCSPlugin;
 
@@ -61,6 +62,52 @@ public sealed class SyncTests
         // And what is left out is asked for as well: a run with everything on asks for nothing.
         Assert.Contains("--no-storage", Sync.Arguments(SyncWay.Up, new SyncScope(true, true, false), true));
         Assert.DoesNotContain("--no-storage", Sync.Arguments(SyncWay.Up, SyncScope.All, true));
+    }
+
+    /// <summary>A plan asks whether there is work, not what a run is told to leave behind.</summary>
+    /// <remarks>
+    /// `--no-layout` makes the command print no plan at all, since it is the Layout comparison the plan is
+    /// made from. A run that leaves the Layout itself behind still carries the index and the storage, so the
+    /// plan must leave the flag out or the buttons are drawn unpressable however much there is to move.
+    /// </remarks>
+    [Fact]
+    public void APlanLeavesTheLayoutInEvenWhenARunDoesNot()
+    {
+        _ = Host.Services();
+
+        foreach (var scope in new[] { new SyncScope(true, false, true), new SyncScope(false, true, false), SyncScope.All })
+        {
+            Assert.DoesNotContain("--no-layout", Sync.PlanArguments(scope));
+        }
+
+        // The other two omissions do not stop a plan being made, and are passed through as a run is told them.
+        Assert.Contains("--no-storage", Sync.PlanArguments(new SyncScope(true, true, false)));
+        Assert.Contains("--no-index", Sync.PlanArguments(new SyncScope(false, true, true)));
+    }
+
+    /// <summary>A reading that names work is enough to press for, whether or not a plan has answered.</summary>
+    /// <remarks>
+    /// The table and the buttons read the work two ways: the plan is the command line's whole answer, and the
+    /// reading names where each recorded version stands. They can disagree while one is stale, and the table
+    /// saying "Sync Down" beside three grey buttons is the disagreement a reader must not meet — so what the
+    /// reading names is pressable on its own.
+    /// </remarks>
+    [Fact]
+    public void AReadingThatNamesWorkLeavesTheButtonsPressable()
+    {
+        var host = Host.Services().For(new PluginId("rorolala.vcs"), 0);
+        var hub = new ProgressHub();
+        var sync = new SyncWatcher(host, host.Log, hub, new VaultFetch(host, hub));
+
+        Assert.False(sync.Pressable);
+
+        sync.Observe(true);
+
+        Assert.True(sync.Pressable);
+
+        sync.Observe(false);
+
+        Assert.False(sync.Pressable);
     }
 
     /// <summary>A run that carries everything is confirmed with nothing, and one that does not says what.</summary>

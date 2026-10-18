@@ -99,12 +99,36 @@ internal static class Sync
             return new SyncPlan(false, RolaI18N.Get("rorolala_vcs.sync.no_program"));
         }
 
-        var arguments = new List<string> { "--theme-choice=" + Theme, Json, "sync", "--dry-run" };
-        arguments.AddRange(SyncSettings.Chosen().Flags);
+        var scope = SyncSettings.Chosen();
 
-        var (done, said, output) = Asked(program, arguments, directory);
+        // Every part left behind is a run that changes nothing, which is nothing to press a button
+        // for. The command would make no plan for it either, so this says the same answer without
+        // asking.
+        if (!scope.Index && !scope.Layout && !scope.Storage)
+        {
+            return new SyncPlan(false, null);
+        }
+
+        var (done, said, output) = Asked(program, PlanArguments(scope), directory);
 
         return done ? Planned(output) : new SyncPlan(false, said);
+    }
+
+    /// <summary>The arguments a plan is asked with.</summary>
+    /// <remarks>
+    /// <c>--no-layout</c> is left out on purpose. A run that leaves the Layout itself behind still
+    /// carries the index and the storage, and the plan is what says whether there is any of that to
+    /// move; the command makes no plan at all when it is told not to carry the Layout, so passing
+    /// the flag here would draw every such run unpressable however much there is to carry.
+    /// </remarks>
+    /// <param name="scope">What a run is told to carry.</param>
+    /// <returns>The arguments, after the program's name.</returns>
+    internal static IReadOnlyList<string> PlanArguments(SyncScope scope)
+    {
+        var arguments = new List<string> { "--theme-choice=" + Theme, Json, "sync", "--dry-run" };
+        arguments.AddRange(scope.Flags.Where(flag => flag != "--no-layout"));
+
+        return arguments;
     }
 
     /// <summary>

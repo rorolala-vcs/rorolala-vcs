@@ -253,7 +253,10 @@ internal sealed class SyncStrip : StackPanel
             return $"{said} — {held}";
         }
 
-        if (!_sync.Pressable && !_sync.Running && _sync.Why is { Length: > 0 } why)
+        // A plan that could not be made says why, whether or not that leaves the buttons pressable: an
+        // unknown is drawn pressable so that the command can be asked, and the reason is still the one
+        // thing a reader wants from it.
+        if (!_sync.Running && _sync.Why is { Length: > 0 } why)
         {
             return $"{said} — {why}";
         }

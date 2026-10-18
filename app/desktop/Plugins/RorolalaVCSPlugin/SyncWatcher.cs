@@ -54,16 +54,50 @@ internal sealed class SyncWatcher
     }
 
     /// <summary>Whether there is work to carry, which is what the three buttons are pressable for.</summary>
+    /// <remarks>
+    /// It is the last plan's answer and nothing more: false says the plan found nothing to move, and says
+    /// nothing about whether a plan could be made at all — that is <see cref="Why"/>, which is stated where
+    /// the command or its answer could not be read.
+    /// </remarks>
     public bool Ready { get; private set; }
 
-    /// <summary>Why there is none, which is what the strip says when the pointer rests on it.</summary>
+    /// <summary>Why the plan could not be made or read, or nothing when it could.</summary>
     public string? Why { get; private set; }
 
     /// <summary>Whether a run is going, which the buttons are drawn by.</summary>
     public bool Running { get; private set; }
 
+    /// <summary>Whether a reading of the work itself says there is something to send or bring down.</summary>
+    /// <remarks>
+    /// It is the other hand of <see cref="Ready"/>: the plan is the command line's answer about everything a
+    /// run may move — including a local entry the Vault does not name — while a reading of the work names only
+    /// where the Layout's versions stand. A reading that says one side is ahead of, behind, or apart from the
+    /// other is work whatever a plan could or could not say about it, so the buttons are not left unpressable
+    /// while the table beside them says there is something to carry.
+    /// </remarks>
+    public bool Observed { get; private set; }
+
     /// <summary>Whether a sync may be begun at all.</summary>
-    public bool Pressable => Ready && !Running;
+    /// <remarks>
+    /// A plan that could not be made is not a plan that found nothing: the command may still have work to
+    /// carry, and a button that refused to ask it would hide the only thing the reader can be told — why the
+    /// plan was not made. So an answer that is not known is drawn pressable and says its reason on hover;
+    /// only a run's going, or both a plan and a reading that found nothing, leaves the buttons unpressable.
+    /// </remarks>
+    public bool Pressable => !Running && (Ready || Observed || Why is { Length: > 0 });
+
+    /// <summary>Says what a reading of the work found, which is whether there is something to move.</summary>
+    /// <param name="work">Whether the reading names a path that is ahead of, behind, or apart from the Vault.</param>
+    public void Observe(bool work)
+    {
+        if (Observed == work)
+        {
+            return;
+        }
+
+        Observed = work;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>What is told to draw again when any of this changes.</summary>
     public event EventHandler? Changed;
@@ -74,8 +108,17 @@ internal sealed class SyncWatcher
     /// <summary>Whether a plan was asked for while one was being asked, so the newest answer is asked after it.</summary>
     private bool _planAgain;
 
-    /// <summary>Where the plan that will be asked for after the one in flight is rooted.</summary>
+    /// <summary>
+    /// Where the newest ask is rooted, which is the plan asked after the one in flight and the one a run's
+    /// end makes.
+    /// </summary>
     private string? _planFor;
+
+    /// <summary>
+    /// Whether any ask has been made, so that a run ending before the first one falls back to its own
+    /// directory while an ask for no directory at all is left as that.
+    /// </summary>
+    private bool _asked;
 
     /// <summary>
     /// Asks what a sync would carry, which decides whether the buttons may be pressed.
@@ -89,26 +132,51 @@ internal sealed class SyncWatcher
     /// is the one about the work as it is now. An ask made while one is going is remembered and made once after
     /// it, rather than run beside it and racing it to say what the answer is.
     /// </para>
+    /// <para>
+    /// A run's going leaves what the last plan said standing: the buttons are already unpressable while one is
+    /// going, and the run's own end asks again. Clearing it here would make a run that has just ended leave the
+    /// buttons grey until another plan has been made over the network, which is the moment a reader is most
+    /// likely to press one.
+    /// </para>
     /// </remarks>
     /// <param name="directory">Where the work is rooted, or nothing where the tree is not rooted anywhere.</param>
     public void Plan(string? directory)
     {
-        if (directory is not { Length: > 0 } at || Running)
+        // A plugin may say that the files changed from the thread the command ran on, and this is
+        // reached from that saying: what is kept here is what the window's thread draws from, so it
+        // is touched there alone.
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => Plan(directory));
+
+            return;
+        }
+
+        // The newest ask, whatever state this is in: a change made while a run is going is asked about
+        // when the run ends rather than dropped, and a plan already in flight is answered by asking
+        // this one after it.
+        _planFor = directory;
+        _asked = true;
+
+        if (directory is not { Length: > 0 } at)
         {
             Settled(false, null);
+            return;
+        }
+
+        if (Running)
+        {
             return;
         }
 
         if (_planning)
         {
             _planAgain = true;
-            _planFor = at;
 
             return;
         }
 
         _planning = true;
-        _planFor = at;
 
         _ = Task.Run(() =>
         {
@@ -124,16 +192,30 @@ internal sealed class SyncWatcher
                 plan = new SyncPlan(false, null);
             }
 
+            // A plan that could not be made is said in the log as well as on the buttons: the strip answers
+            // with the reason on hover, and this is where a reader who has gone looking for it reads the
+            // whole of what the command said.
+            if (plan.Said is { Length: > 0 } said)
+            {
+                _log.Warn($"what a sync would carry could not be read: {said}");
+            }
+
             On(() =>
             {
                 _planning = false;
-                Settled(plan.Ready, plan.Said);
 
+                // An ask that arrived while this was going is about work newer than this answer: drawing
+                // this one would say what the work held before that change, and leave the buttons as it
+                // said until the newer plan answers.
                 if (_planAgain)
                 {
                     _planAgain = false;
                     Plan(_planFor);
+
+                    return;
                 }
+
+                Settled(plan.Ready, plan.Said);
             });
         });
     }
@@ -228,13 +310,18 @@ internal sealed class SyncWatcher
                 // nothing new, and is answered by the plan it would have made anyway.
                 _host.Files.Touch();
 
+                // The newest ask is the one about where the work is now: a base moved while the run was
+                // going is one whose plan was not made at the time. The run's own directory answers when
+                // nothing has been asked yet.
+                var next = _asked ? _planFor : directory;
+
                 if (done)
                 {
-                    _fetch.Fetch(directory, () => Plan(directory));
+                    _fetch.Fetch(directory, () => Plan(next));
                 }
                 else
                 {
-                    Plan(directory);
+                    Plan(next);
                 }
             });
         });
