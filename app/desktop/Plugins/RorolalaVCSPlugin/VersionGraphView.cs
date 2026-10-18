@@ -34,11 +34,13 @@ internal sealed class VersionGraphDock : IDockView
     /// <param name="statuses">What the work says about the file, for the edit it may be standing at.</param>
     /// <param name="sync">What a sync would carry, which a fetch is not made over.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout, which the header's Refresh makes.</param>
+    /// <param name="hub">What every command this plugin runs reports itself to, which a retrack joins.</param>
     public VersionGraphDock(
         IPluginHost host,
         StatusReadings statuses,
         SyncWatcher sync,
-        VaultFetch fetch
+        VaultFetch fetch,
+        ProgressHub hub
     ) => _view = new VersionGraphView(
         host.Log,
         host.Files,
@@ -46,7 +48,9 @@ internal sealed class VersionGraphDock : IDockView
         statuses,
         host.Refocus,
         sync,
-        fetch
+        fetch,
+        host.Dialogs,
+        hub
     );
 
     /// <inheritdoc />
@@ -161,6 +165,12 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The one fetch of the Vault's Layout, which the header's Refresh makes.</summary>
     private readonly VaultFetch _fetch;
 
+    /// <summary>Where a question is put to the user, and a run that failed is reported.</summary>
+    private readonly IDialogs _dialogs;
+
+    /// <summary>What every command this plugin runs reports itself to, which a retrack's card is begun in.</summary>
+    private readonly ProgressHub _hub;
+
     /// <summary>The chain on screen, or nothing while a read is going or when there is none.</summary>
     private VersionGraphDrawing? _drawing;
 
@@ -243,6 +253,8 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="refocus">The host's windows being come back to.</param>
     /// <param name="sync">What a sync would carry.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout.</param>
+    /// <param name="dialogs">Where a question is put to the user, and a failure reported.</param>
+    /// <param name="hub">What every command this plugin runs reports itself to.</param>
     public VersionGraphView(
         ILog log,
         IFileChanges files,
@@ -250,7 +262,9 @@ internal sealed partial class VersionGraphView : Control
         StatusReadings statuses,
         IRefocus refocus,
         SyncWatcher sync,
-        VaultFetch fetch
+        VaultFetch fetch,
+        IDialogs dialogs,
+        ProgressHub hub
     )
     {
         _log = log;
@@ -260,6 +274,8 @@ internal sealed partial class VersionGraphView : Control
         _refocus = refocus;
         _sync = sync;
         _fetch = fetch;
+        _dialogs = dialogs;
+        _hub = hub;
         _settle.Tick += Settled;
         Focusable = true;
         ClipToBounds = true;
@@ -634,7 +650,7 @@ internal sealed partial class VersionGraphView : Control
         {
             if (HitTest(e.GetPosition(this)) is { } hit)
             {
-                ShowCopyMenu(hit);
+                ShowNodeMenu(hit);
                 e.Handled = true;
             }
 
@@ -771,9 +787,14 @@ internal sealed partial class VersionGraphView : Control
         e.Handled = true;
     }
 
-    /// <summary>Offers to copy the hash of the node under the pointer.</summary>
+    /// <summary>Offers what can be done with the node under the pointer.</summary>
+    /// <remarks>
+    /// The hash is always there to copy. A version adds the two retracks: the one that writes the version's
+    /// content back over the file as well as moving the record, and the one that moves the record and leaves
+    /// the file alone. A variant has neither, because a variant is not a position a record may be put at.
+    /// </remarks>
     /// <param name="node">The node that was right-clicked.</param>
-    private void ShowCopyMenu(Hover node)
+    private void ShowNodeMenu(Hover node)
     {
         var hash = node.Version?.Hash ?? node.Variant?.Hash ?? string.Empty;
         var key = node.Version is not null
@@ -796,7 +817,137 @@ internal sealed partial class VersionGraphView : Control
 
         copy.Click += (_, _) => CopyHash(hash);
         menu.Items.Add(copy);
+
+        // A retrack is about a version the track records, and the file the graph is of is where it is
+        // written: a node the index has no hash for is a placeholder, and one with no file on screen
+        // has nothing to move.
+        if (node.Version is { Hash.Length: > 0 } version && _target is not null)
+        {
+            menu.Items.Add(new Avalonia.Controls.Separator());
+            menu.Items.Add(RetrackItem(version, onlyIndex: false));
+            menu.Items.Add(RetrackItem(version, onlyIndex: true));
+        }
+
         menu.Open(this);
+    }
+
+    /// <summary>One of the two retrack items, which differ in whether the file on disk follows the record.</summary>
+    /// <param name="version">The version the record is to be moved to.</param>
+    /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
+    /// <returns>The item, ready to be added to a menu.</returns>
+    private Avalonia.Controls.MenuItem RetrackItem(
+        VersionGraphDrawing.VersionNode version,
+        bool onlyIndex
+    )
+    {
+        var item = new Avalonia.Controls.MenuItem
+        {
+            Header = RolaI18N.Get(
+                onlyIndex
+                    ? "rorolala_vcs.version_graph.retrack_only_index"
+                    : "rorolala_vcs.version_graph.retrack"
+            ),
+        };
+
+        if (_icons.Find(onlyIndex ? Icons.ArrowRightAlt : Icons.EditNote) is { } picture)
+        {
+            item.Icon = Icons.Inked(picture);
+        }
+
+        item.Click += (_, _) => AskRetrack(version, onlyIndex);
+
+        return item;
+    }
+
+    /// <summary>Puts the retrack to the user, asking first when the work on disk is to be rewritten.</summary>
+    /// <remarks>
+    /// The record alone moves without a question: nothing the user has is touched. The version's content
+    /// written back over the file is a change to what is on disk, so it is confirmed with the file and the
+    /// version named rather than begun from one right-click.
+    /// </remarks>
+    /// <param name="version">The version the record is to be moved to.</param>
+    /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
+    private void AskRetrack(VersionGraphDrawing.VersionNode version, bool onlyIndex)
+    {
+        if (
+            _target is not { Length: > 0 } path
+            || Path.GetDirectoryName(path) is not { Length: > 0 } directory
+        )
+        {
+            return;
+        }
+
+        if (onlyIndex)
+        {
+            BeginRetrack(path, directory, version.Hash, onlyIndex: true);
+
+            return;
+        }
+
+        _dialogs.Show(
+            new Dialog(
+                RolaI18N.Get("rorolala_vcs.version_graph.retrack_confirm_title"),
+                RolaI18N.Get(
+                    "rorolala_vcs.version_graph.retrack_confirm_message",
+                    Path.GetFileName(path),
+                    version.Label
+                ),
+                () => BeginRetrack(path, directory, version.Hash, onlyIndex: false)
+            )
+        );
+    }
+
+    /// <summary>Runs the retrack, and reads the work again once it is over.</summary>
+    /// <remarks>
+    /// The run is the command line's and is made off the window's thread: it may reach for a Vault when the
+    /// content of the version it goes to is not held here. What it wrote is what every reading is made from,
+    /// so the files are said to have changed, and the Vault's Layout is fetched as well — the graph's marked
+    /// version and its edit are read from the copy that fetch brings over.
+    /// </remarks>
+    /// <param name="path">The file the record is of.</param>
+    /// <param name="directory">The directory the run is made in.</param>
+    /// <param name="version">The version the record is to be moved to.</param>
+    /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
+    private void BeginRetrack(string path, string directory, string version, bool onlyIndex)
+    {
+        var run = _hub.Begin("rorolala_vcs.progress.retrack");
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = RetrackCommand.Run(directory, path, version, onlyIndex);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hub.End(run);
+                _files.Touch();
+
+                if (!done)
+                {
+                    _dialogs.Present(
+                        RolaI18N.Get("rorolala_vcs.version_graph.retrack_failed"),
+                        () =>
+                            ReportView.Of(
+                                ReportLines.Parse(said),
+                                key => _icons.Find(key),
+                                ReportView.Ink
+                            )
+                    );
+
+                    return;
+                }
+
+                // The graph is read again for the record that moved, and the Vault's Layout is fetched so that
+                // what is read is what the Vault holds now rather than the copy the last fetch brought.
+                Refresh();
+
+                // A sync writes the copy a fetch brings and is followed by one of its own, so a fetch made
+                // beside it would be two exchanges for one file.
+                if (!_sync.Running)
+                {
+                    _fetch.Fetch(directory, Refresh);
+                }
+            });
+        });
     }
 
     /// <summary>Puts a hash on the clipboard.</summary>

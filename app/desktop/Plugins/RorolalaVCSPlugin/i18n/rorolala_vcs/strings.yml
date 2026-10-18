@@ -48,6 +48,25 @@ rorolala_vcs:
       en: Copy variant hash
       zh-CN: 复制变体哈希
 
+    # What a right-click on a version offers besides the hash: moving the file's recorded version to
+    # the node it was opened on. The plain one writes that version's content back over the file as
+    # well, so it is confirmed first; the second moves the record and leaves the work alone.
+    retrack:
+      en: Retrack
+      zh-CN: 重新追踪
+    retrack_only_index:
+      en: Retrack (version only)
+      zh-CN: 重新追踪（仅版本）
+    retrack_confirm_title:
+      en: Retrack this file?
+      zh-CN: 要重新追踪该文件吗？
+    retrack_confirm_message:
+      en: "`%{file}` will be replaced with the content of version %{version}. Confirm?"
+      zh-CN: "`%{file}` 的内容将被替换为版本 %{version} 的内容。请确认。"
+    retrack_failed:
+      en: The file could not be retracked
+      zh-CN: 未能重新追踪该文件
+
   # What each of the three says while the directory the tree is rooted at is not one a Workspace
   # holds: there is nothing under such a place for them to show, and a blank view of the work would
   # read as a work with nothing in it. The base is the File System plugin's, which is why the words
@@ -410,6 +429,9 @@ rorolala_vcs:
     giveup:
       en: Giving up ownership
       zh-CN: 放弃所有权
+    retrack:
+      en: Retracking
+      zh-CN: 重新追踪
     row_up:
       en: Uploading
       zh-CN: 上传中

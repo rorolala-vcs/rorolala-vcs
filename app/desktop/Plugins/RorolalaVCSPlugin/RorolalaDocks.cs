@@ -100,7 +100,7 @@ internal static class RorolalaDocks
             owner,
             VersionGraphNameId,
             VersionGraphKey,
-            _ => new VersionGraphDock(host, statuses, sync, fetch)
+            _ => new VersionGraphDock(host, statuses, sync, fetch, hub)
         );
         Add(host, owner, AccountsNameId, AccountsKey, _ => new AccountsDock(host));
     }
