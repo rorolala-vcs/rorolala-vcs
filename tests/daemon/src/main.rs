@@ -125,6 +125,40 @@ fn main() {
     let said = run(&mut daemon(&data, &["list"]));
     said.expect_success();
     assert_eq!(said.stdout.trim(), "", "the removed row is not listed");
+
+    // A path may be left out when the run is inside the Vault it means: the nearest Vault above
+    // the working directory is the one registered.
+    let auto = sandbox.join("vaults/auto");
+    make_vault(&auto);
+    fs::create_dir_all(auto.join("nested")).expect("a directory inside the Vault");
+
+    let said = run(&mut daemon_in(
+        &data,
+        &auto.join("nested"),
+        &["register", "auto"],
+    ));
+    said.expect_success();
+
+    let said = run(&mut daemon(&data, &["list", "--json"]));
+    said.expect_success();
+    assert!(
+        said.stdout.contains("\"auto\""),
+        "the namespace was expected in the JSON, got {:?}",
+        said.stdout
+    );
+    assert!(
+        said.stdout.contains(&text(&auto)),
+        "the Vault the run was inside was expected, got {:?}",
+        said.stdout
+    );
+
+    // A run that is inside no Vault has nothing to look up, and says so rather than guessing.
+    let said = run(&mut daemon_in(&data, &plain, &["register", "elsewhere"]));
+    assert!(
+        !said.success(),
+        "registering with no path outside a Vault should fail, got {:?}",
+        said.code
+    );
 }
 
 /// A directory that is a Vault, as far as the registry is concerned.
@@ -141,6 +175,13 @@ fn make_vault(dir: &Path) {
 fn daemon(data: &Path, args: &[&str]) -> Command {
     let mut command = command("rola-daemon");
     command.env("XDG_DATA_HOME", data).args(args);
+    command
+}
+
+/// As [`daemon`], working in `dir`, which is what a run with no path looks from.
+fn daemon_in(data: &Path, dir: &Path, args: &[&str]) -> Command {
+    let mut command = daemon(data, args);
+    command.current_dir(dir);
     command
 }
 

@@ -8,11 +8,11 @@ daemon:
       **Usage**: `rola-daemon [--port <PORT>] [--concurrency <N>] [COMMAND]`
       **Commands**:
           list                           List the namespaces this machine serves
-          register <NAMESPACE> <PATH>    Serve the Vault at PATH under NAMESPACE
+          register <NAMESPACE> [PATH]    Serve the Vault at PATH, or the one here, under NAMESPACE
           remove <NAMESPACE>             Stop serving a namespace
           check                          Check that every namespace reaches a Vault
       **Flags**:
-          --port <PORT>                  Listen on PORT (default 7717, or `ROLA_DEFAULT_PORT`)
+          --port <PORT>                  Listen on PORT
           --concurrency <N>              Carry at most N transfers at once
           --json                         Write the result as data
           --format="..."                 Draw the result through a template
@@ -22,11 +22,11 @@ daemon:
       **用法**：`rola-daemon [--port <端口>] [--concurrency <N>] [命令]`
       **命令**：
           list                          列出本机服务的所有命名空间
-          register <命名空间> <路径>    将位于路径的保险库以该命名空间注册
+          register <命名空间> [路径]    将位于路径的保险库以该命名空间注册
           remove <命名空间>             停止服务某个命名空间
           check                         检查每个命名空间是否仍指向保险库
       **标识**：
-          --port <端口>                 监听该端口（默认 7717，或 `ROLA_DEFAULT_PORT`）
+          --port <端口>                 监听该端口
           --concurrency <N>             同时最多承载 N 个传输
           --json                        以数据形式输出结果
           --format="..."                通过模板绘制结果
@@ -108,11 +108,11 @@ register:
     en: |
       Serve the Vault at PATH under NAMESPACE
 
-      **Usage**: `rola-daemon register <NAMESPACE> <PATH>`
+      **Usage**: `rola-daemon register <NAMESPACE> [PATH]`
     zh-CN: |
       将位于路径的保险库以该命名空间提供服务
 
-      **用法**：`rola-daemon register <命名空间> <路径>`
+      **用法**：`rola-daemon register <命名空间> [路径]`
 
   description:
     en: Serve a Vault under a namespace
@@ -128,10 +128,15 @@ remove:
       Stop serving a namespace
 
       **Usage**: `rola-daemon remove <NAMESPACE>`
+
+      Only the row is removed: the Vault stays where it is, and registering it again is all
+      it takes to have it served once more.
     zh-CN: |
       停止服务某个命名空间
 
       **用法**：`rola-daemon remove <命名空间>`
+
+      只移除表中的一行：保险库仍留在原处，再次注册即可重新服务。
 
   description:
     en: Stop serving a namespace
@@ -208,6 +213,14 @@ error:
   not_a_vault:
     en: "%{path} does not hold a Vault"
     zh-CN: "%{path} 中没有保险库"
+
+  not_in_vault:
+    en: No path was given, and the current directory is not inside a Vault
+    zh-CN: 没有给出路径，而当前目录不在任何保险库中
+
+  not_in_vault_help:
+    en: Please give a path, or run this inside the Vault it should serve
+    zh-CN: 请给出路径，或在它应当服务的保险库中运行
 
   not_a_vault_help:
     en: A path names a Vault when it holds a `vault.toml`; `rola init` makes one

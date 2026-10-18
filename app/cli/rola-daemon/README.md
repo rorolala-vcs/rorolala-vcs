@@ -3,12 +3,16 @@
 Serve the Vaults registered for this user, as the machine's daemon.
 
 ```bash
-rola-daemon                              # start the daemon
-rola-daemon list                         # list the registered namespaces
-rola-daemon register <NAMESPACE> <PATH>  # serve the Vault at PATH under NAMESPACE
-rola-daemon remove <NAMESPACE>           # stop serving a namespace
-rola-daemon check                        # check every namespace reaches a Vault
+rola-daemon                              start the daemon
+rola-daemon list                         list the registered namespaces
+rola-daemon register <NAMESPACE> [PATH]  serve the Vault at PATH, or the one here
+rola-daemon remove <NAMESPACE>           stop serving a namespace
+rola-daemon check                        check every namespace reaches a Vault
 ```
+
+Naming no `PATH` registers the Vault the current directory is inside — the nearest one above
+it — which is the shortest way to serve a Vault from within it. A run that is inside no Vault
+and names no path is refused rather than guessed at.
 
 The daemon is independent of the working directory. What it serves is the table at
 `~/.local/share/rola/daemon/registry.toml` — one namespace per Vault — and the port is named

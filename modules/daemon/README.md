@@ -16,10 +16,13 @@ beta = "/home/me/vaults/beta"
 ```text
 rola-daemon                              start the daemon
 rola-daemon list                         list the registered namespaces
-rola-daemon register <NAMESPACE> <PATH>  serve the Vault at PATH under NAMESPACE
+rola-daemon register <NAMESPACE> [PATH]  serve the Vault at PATH, or the one here
 rola-daemon remove <NAMESPACE>           stop serving a namespace
 rola-daemon check                        check every namespace reaches a Vault
 ```
+
+A `register` that names no path registers the Vault the run is inside: the nearest Vault above
+the working directory. A run inside none is refused rather than guessed at.
 
 `check` prints `[OK] NAMESPACE (PATH)` or `[FAIL] NAMESPACE (PATH)` and ends non-zero when any
 row fails. `list` and `check` answer `--json` and `--format`.

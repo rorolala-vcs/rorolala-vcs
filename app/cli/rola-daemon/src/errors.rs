@@ -230,6 +230,29 @@ pub fn render_error_not_registered(error: ErrorNotRegistered, ec: &mut ResExitCo
     ec.exit_code = EC_NOT_EXIST;
 }
 
+/// Error: no path was named and the run is not inside a Vault.
+#[derive(Grouped)]
+pub struct ErrorNotInVault;
+
+impl Failure for ErrorNotInVault {
+    fn name(&self) -> &'static str {
+        "error_not_in_vault"
+    }
+
+    fn reason(&self) -> String {
+        t!("error.not_in_vault").to_string()
+    }
+}
+
+failure!(ErrorNotInVault);
+
+#[renderer(buffer)]
+pub fn render_error_not_in_vault(_: ErrorNotInVault, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("error.not_in_vault").trim()));
+    r_eprintln!("{}", help_line!(t!("error.not_in_vault_help").trim()));
+    ec.exit_code = EC_ERR_ARGUMENT;
+}
+
 /// Error: the path a namespace was pointed at holds no Vault.
 #[derive(Grouped)]
 pub struct ErrorNotAVault {
