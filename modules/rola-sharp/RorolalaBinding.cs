@@ -2431,6 +2431,68 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_version_graph_origin_vault(nint self);
 
     /// <summary>
+    /// How many versions of the tracked Vault's chain the index here holds.
+    ///
+    /// Zero when the Vault's version is not held here, which is the ordinary state after a fetch:
+    /// a fetch brings the Vault's Layout and never its index.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_version_graph_upstream_count(nint self);
+
+    /// <summary>
+    /// The number of the upstream version at `index`, the highest first.
+    ///
+    /// Zero when there is no such version.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_version_graph_upstream_level(nint self, nuint index);
+
+    /// <summary>
+    /// The full hash of the upstream version at `index`, as hex.
+    ///
+    /// An empty string when there is no such version. The caller owns the string and releases it
+    /// with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_upstream_hash(nint self, nuint index);
+
+    /// <summary>
+    /// Who made the variant that produced the upstream version at `index`.
+    ///
+    /// An empty string when there is no such version, or when the index does not hold the maker.
+    /// The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_upstream_creator(nint self, nuint index);
+
+    /// <summary>
+    /// What the variant that produced the upstream version at `index` says.
+    ///
+    /// An empty string when there is no such version, or when the index does not hold the message.
+    /// The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_upstream_message(nint self, nuint index);
+
+    /// <summary>
+    /// The version the tracked Vault records, as the index names it by.
+    ///
+    /// An empty string when the Layout tracks no Vault or the Vault's Layout does not name the
+    /// entry. The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_upstream_head(nint self);
+
+    /// <summary>
+    /// The Vault whose recorded version [`Self::upstream_head`] is.
+    ///
+    /// An empty string when no Vault is tracked. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_upstream_vault(nint self);
+
+    /// <summary>
     /// Creates a Vault in the specified directory
     ///
     /// Returns a result:

@@ -63,6 +63,13 @@ public sealed class RolaVersionGraph : IDisposable
         {
             Versions = VersionsOf(handle);
             Variants = VariantsOf(handle);
+            Upstream = UpstreamOf(handle);
+            UpstreamHead = NativeText.Taken(
+                RorolalaBinding.rola_version_graph_upstream_head(handle)
+            );
+            UpstreamVault = NativeText.Taken(
+                RorolalaBinding.rola_version_graph_upstream_vault(handle)
+            );
 
             var origin = RorolalaBinding.rola_version_graph_origin_level(handle);
             OriginLevel = origin < 0 ? null : (ulong)origin;
@@ -81,6 +88,25 @@ public sealed class RolaVersionGraph : IDisposable
 
     /// <summary>The versions, the highest first.</summary>
     public IReadOnlyList<GraphVersion> Versions { get; }
+
+    /// <summary>
+    /// The tracked Vault's versions the index here holds, the highest first, or none when it holds none.
+    /// </summary>
+    /// <remarks>
+    /// A fetch brings the Vault's Layout and never its index, so this is empty in the ordinary state of
+    /// being behind upstream: what the Vault records is known from <see cref="UpstreamHead"/> alone. When
+    /// it is not empty, the levels are numbered from the same root as <see cref="Versions"/>, so a version
+    /// both chains hold stands at the same level in each.
+    /// </remarks>
+    public IReadOnlyList<GraphVersion> Upstream { get; }
+
+    /// <summary>
+    /// The version the tracked Vault records for the file, as hex, or an empty string when none is tracked.
+    /// </summary>
+    public string UpstreamHead { get; }
+
+    /// <summary>The Vault whose version <see cref="UpstreamHead"/> is, or an empty string when none is tracked.</summary>
+    public string UpstreamVault { get; }
 
     /// <summary>
     /// The variants in the chain's order: level by level, the spine before the variants merged in
@@ -164,6 +190,37 @@ public sealed class RolaVersionGraph : IDisposable
                     ),
                     NativeText.Taken(
                         RorolalaBinding.rola_version_graph_version_message(handle, index)
+                    )
+                )
+            );
+        }
+
+        return versions;
+    }
+
+    /// <summary>Reads the upstream versions out of the native reading.</summary>
+    /// <param name="handle">The native graph.</param>
+    /// <returns>The versions, the highest first.</returns>
+    private static List<GraphVersion> UpstreamOf(nint handle)
+    {
+        var count = (int)RorolalaBinding.rola_version_graph_upstream_count(handle);
+        var versions = new List<GraphVersion>(count);
+
+        for (var at = 0; at < count; at++)
+        {
+            var index = (nuint)at;
+
+            versions.Add(
+                new GraphVersion(
+                    RorolalaBinding.rola_version_graph_upstream_level(handle, index),
+                    NativeText.Taken(
+                        RorolalaBinding.rola_version_graph_upstream_hash(handle, index)
+                    ),
+                    NativeText.Taken(
+                        RorolalaBinding.rola_version_graph_upstream_creator(handle, index)
+                    ),
+                    NativeText.Taken(
+                        RorolalaBinding.rola_version_graph_upstream_message(handle, index)
                     )
                 )
             );

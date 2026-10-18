@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Media;
+using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
@@ -35,12 +36,17 @@ internal sealed partial class VersionGraphView
         DrawGrid(context, ink);
         DrawArcs(context, ink);
         DrawVersions(context, ink, metrics);
+        DrawUpstream(context, ink, metrics);
         DrawVariants(context, ink, metrics);
         DrawBubbles(context, ink, metrics);
 
         if (_hover?.Variant is { } hovered)
         {
             DrawVariantTooltip(context, ink, hovered);
+        }
+        else if (_hover?.Upstream is { Unknown: true } upstream)
+        {
+            DrawUpstreamTooltip(context, ink, upstream);
         }
 
         DrawZoom(context, ink);
@@ -183,6 +189,7 @@ internal sealed partial class VersionGraphView
     private void DrawArcs(DrawingContext context, Ink ink)
     {
         DrawVersionAxis(context, ink);
+        DrawUpstreamAxis(context, ink);
 
         var pen = new Pen(
             new SolidColorBrush(ink.Muted),
@@ -373,6 +380,76 @@ internal sealed partial class VersionGraphView
         context.DrawGeometry(null, pen, geometry);
     }
 
+    /// <summary>Draws the dashed line down the Vault's chain, and — where it parted — the branch from the common ancestor.</summary>
+    /// <remarks>
+    /// A Vault that is only ahead continues the work's own chain, so its versions stand in the same column
+    /// and the line is that axis continued. Once both sides have moved on they stand in a column of their
+    /// own to the right, and the line from the common ancestor to the lowest version only the Vault has is
+    /// the branch. Either way it is broken like the version axis, so a line between two versions is read as
+    /// the chain they are part of rather than as a variant's edge.
+    /// </remarks>
+    private void DrawUpstreamAxis(DrawingContext context, Ink ink)
+    {
+        if (_drawing is null || _drawing.Upstream.Count == 0)
+        {
+            return;
+        }
+
+        var pen = new Pen(new SolidColorBrush(ink.Muted), Math.Max(1, 1 * _zoom))
+        {
+            DashStyle = new DashStyle([4, 5], 0),
+        };
+        var x = _panX + _drawing.UpstreamX * _zoom;
+
+        for (var at = 0; at + 1 < _drawing.Upstream.Count; at++)
+        {
+            var above = _drawing.Upstream[at];
+            var below = _drawing.Upstream[at + 1];
+
+            context.DrawLine(
+                pen,
+                new Point(x, _panY + above.Y * _zoom),
+                new Point(x, _panY + below.Y * _zoom)
+            );
+        }
+
+        if (
+            _drawing.BranchFrom is { } level
+            && _drawing.VersionByLevel.TryGetValue(level, out var from)
+        )
+        {
+            var to = _drawing.Upstream[^1];
+            var start = new Point(_panX + from.X * _zoom, _panY + from.Y * _zoom);
+            var end = new Point(x, _panY + to.Y * _zoom);
+
+            // A chain that is only the work's own, continued upstream, is one line joining the two
+            // columns. The arc is for a divergence, where both sides have moved on from the common
+            // ancestor and the two rows are read as a fork rather than as one chain.
+            if (!_drawing.Diverged)
+            {
+                context.DrawLine(pen, start, end);
+
+                return;
+            }
+
+            var dx = end.X - start.X;
+            var dy = end.Y - start.Y;
+            var branch = new StreamGeometry();
+
+            using (var path = branch.Open())
+            {
+                path.BeginFigure(start, false);
+                path.CubicBezierTo(
+                    new Point(start.X + dx * 0.55, start.Y),
+                    new Point(end.X, end.Y - dy * 0.55),
+                    end
+                );
+            }
+
+            context.DrawGeometry(null, pen, branch);
+        }
+    }
+
     /// <summary>Draws the version nodes, their labels and the Vault's ring.</summary>
     private void DrawVersions(
         DrawingContext context,
@@ -413,6 +490,61 @@ internal sealed partial class VersionGraphView
             }
 
             var label = metrics.Versions[version.Level].Label;
+            context.DrawText(
+                label,
+                new Point(cx - label.Width / 2, cy - label.Height / 2)
+            );
+        }
+    }
+
+    /// <summary>Draws the Vault's versions that the work's own chain does not hold.</summary>
+    /// <remarks>
+    /// They are hollow rather than filled, which is what tells them from the work's own versions at a
+    /// glance: the work is what the reader acts on, and the Vault's chain is what it stands beside. A
+    /// version only the Layout names — one this index never fetched — is drawn broken, since no level
+    /// or words are known for it.
+    /// </remarks>
+    private void DrawUpstream(DrawingContext context, Ink ink, Metrics metrics)
+    {
+        if (_drawing is null || _drawing.Upstream.Count == 0)
+        {
+            return;
+        }
+
+        var fill = new SolidColorBrush(ink.Elevated);
+        var muted = new SolidColorBrush(ink.Muted);
+        var pen = new Pen(muted, Math.Max(1, 1.25 * _zoom));
+        var broken = new Pen(muted, Math.Max(1, 1 * _zoom))
+        {
+            DashStyle = new DashStyle([3, 3], 0),
+        };
+
+        for (var at = 0; at < _drawing.Upstream.Count; at++)
+        {
+            var version = _drawing.Upstream[at];
+            var cx = _panX + version.X * _zoom;
+            var cy = _panY + version.Y * _zoom;
+            var radius = VersionGraphDrawing.Radius * _zoom;
+
+            if (
+                cx + radius < 0
+                || cx - radius > Bounds.Width
+                || cy + radius < 0
+                || cy - radius > Bounds.Height
+            )
+            {
+                continue;
+            }
+
+            context.DrawEllipse(
+                fill,
+                version.Unknown ? broken : pen,
+                new Point(cx, cy),
+                radius,
+                radius
+            );
+
+            var label = metrics.Upstream[at].Label;
             context.DrawText(
                 label,
                 new Point(cx - label.Width / 2, cy - label.Height / 2)
@@ -479,11 +611,13 @@ internal sealed partial class VersionGraphView
     {
         var fill = new SolidColorBrush(ink.Elevated);
 
-        foreach (var version in _drawing!.Versions)
+        // The Vault's bubbles are drawn first, so a version of the work's own that is hovered in the
+        // same row can be read over the one that stands there instead of it.
+        for (var at = 0; at < _drawing!.Upstream.Count; at++)
         {
-            var bubble = metrics.Versions[version.Level].Bubble;
+            var version = _drawing.Upstream[at];
 
-            if (bubble is null)
+            if (version.Unknown || metrics.Upstream[at].Bubble is not { } bubble)
             {
                 continue;
             }
@@ -492,9 +626,47 @@ internal sealed partial class VersionGraphView
                 context,
                 ink,
                 fill,
-                version,
+                version.X,
+                version.Y,
+                false,
                 bubble,
-                ReferenceEquals(_hover?.Version, version)
+                ReferenceEquals(_hover?.Upstream, version)
+            );
+        }
+
+        foreach (var version in _drawing.Versions)
+        {
+            var bubble = metrics.Versions[version.Level].Bubble;
+
+            if (bubble is null)
+            {
+                continue;
+            }
+
+            var hovered = ReferenceEquals(_hover?.Version, version);
+
+            // A version of the work's and one of the Vault's are in the same row only where the two
+            // chains have parted: there the Vault's bubble is the one drawn, and the work's is left
+            // for the pointer. Rows the Vault has no version in keep their own bubble.
+            if (
+                !hovered
+                && _drawing.Upstream.Any(
+                    one => !one.Unknown && one.Level == version.Level
+                )
+            )
+            {
+                continue;
+            }
+
+            DrawBubble(
+                context,
+                ink,
+                fill,
+                version.X,
+                version.Y,
+                version.Origin,
+                bubble,
+                hovered
             );
         }
     }
@@ -504,25 +676,27 @@ internal sealed partial class VersionGraphView
         DrawingContext context,
         Ink ink,
         IBrush fill,
-        VersionGraphDrawing.VersionNode version,
+        double nodeX,
+        double nodeY,
+        bool origin,
         BubbleMetrics bubble,
         bool hovered
     )
     {
         var x =
             _panX
-            + (version.X + VersionGraphDrawing.Radius + VersionGraphDrawing.BubbleGap)
+            + (nodeX + VersionGraphDrawing.Radius + VersionGraphDrawing.BubbleGap)
                 * _zoom;
-        var cy = _panY + version.Y * _zoom;
+        var cy = _panY + nodeY * _zoom;
         var width = hovered ? bubble.Width : bubble.RestWidth;
         var height = hovered
             ? bubble.RestHeight + bubble.HashGap + (bubble.Hash?.Height ?? 0)
             : bubble.RestHeight;
         var y = cy - height / 2;
-        var border = version.Origin ? ink.Primary : ink.Splitter;
+        var border = origin ? ink.Primary : ink.Splitter;
         var pen = new Pen(
             new SolidColorBrush(border),
-            Math.Max(1, (version.Origin ? 1.5 : 1.25) * _zoom)
+            Math.Max(1, (origin ? 1.5 : 1.25) * _zoom)
         );
         var tail = VersionGraphDrawing.BubbleTail * _zoom;
         var half = VersionGraphDrawing.BubbleTailHalf * _zoom;
@@ -615,10 +789,10 @@ internal sealed partial class VersionGraphView
             textY += message.Height;
         }
 
-        if (hovered && bubble.Hash is { } hash)
+        if (hovered && bubble.Hash is { } hashText)
         {
             textY += bubble.HashGap;
-            context.DrawText(hash, new Point(x + bubble.PaddingX, textY));
+            context.DrawText(hashText, new Point(x + bubble.PaddingX, textY));
         }
     }
 
@@ -736,6 +910,133 @@ internal sealed partial class VersionGraphView
         if (message is not null)
         {
             context.DrawText(message, new Point(x + padding, textY));
+        }
+    }
+
+    /// <summary>Draws the words for a version only the Vault holds.</summary>
+    /// <param name="context">Where to draw.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <param name="version">The upstream version under the pointer.</param>
+    private void DrawUpstreamTooltip(
+        DrawingContext context,
+        Ink ink,
+        VersionGraphDrawing.UpstreamNode version
+    )
+    {
+        var padding = 9 * _zoom;
+        var contentWidth = TooltipMaxWidth * _zoom - padding * 2;
+        var vault = _drawing!.UpstreamVault;
+        var head = version.Unknown
+            ? Text(
+                RolaI18N.Get("rorolala_vcs.version_graph.upstream_unknown"),
+                FaceNormal,
+                11.5 * _zoom,
+                ink.Muted
+            )
+            : Text(
+                vault.Length > 0
+                    ? $"{RolaI18N.Get("rorolala_vcs.column_upstream")}: {vault}"
+                    : RolaI18N.Get("rorolala_vcs.column_upstream"),
+                FaceMedium,
+                11 * _zoom,
+                ink.Muted
+            );
+        head.MaxTextWidth = contentWidth;
+
+        var creator = version.Creator.Length > 0
+            ? Text($"({version.Creator})", FaceMedium, 11.5 * _zoom, ink.Muted)
+            : null;
+        FormattedText? message = null;
+
+        if (version.Message.Length > 0)
+        {
+            var lineHeight = 18 * _zoom;
+
+            message = Text(version.Message, FaceNormal, 12.5 * _zoom, ink.Front);
+            message.MaxTextWidth = contentWidth;
+            message.MaxTextHeight = 4 * lineHeight;
+            message.LineHeight = lineHeight;
+            message.Trimming = TextTrimming.CharacterEllipsis;
+        }
+
+        var hash = version.Hash.Length > 0
+            ? Text(version.Hash, MonoMedium, 10 * _zoom, ink.Muted)
+            : null;
+
+        if (hash is not null)
+        {
+            hash.MaxTextWidth = contentWidth;
+        }
+
+        var gap = 3 * _zoom;
+        var width =
+            Math.Max(
+                head.Width,
+                Math.Max(
+                    creator?.Width ?? 0,
+                    Math.Max(message?.Width ?? 0, hash?.Width ?? 0)
+                )
+            )
+            + padding * 2;
+        var height =
+            padding * 2
+            + head.Height
+            + (creator is null ? 0 : gap + creator.Height)
+            + (message is null ? 0 : gap + message.Height)
+            + (hash is null ? 0 : gap + hash.Height);
+        var cx = _panX + version.X * _zoom;
+        var cy = _panY + version.Y * _zoom;
+        var radius = VersionGraphDrawing.Radius * _zoom;
+        var x = cx + radius + 10 * _zoom;
+
+        if (x + width > Bounds.Width - 8)
+        {
+            x = cx - radius - 10 * _zoom - width;
+        }
+
+        var maxX = Math.Max(8, Bounds.Width - width - 8);
+        var maxY = Math.Max(8, Bounds.Height - height - 8);
+
+        x = Math.Clamp(x, 8, maxX);
+
+        var y = Math.Clamp(cy - height / 2, 8, maxY);
+        var fill = new SolidColorBrush(ink.Elevated);
+        var pen = new Pen(
+            new SolidColorBrush(ink.Splitter),
+            Math.Max(1, 1.25 * _zoom)
+        );
+
+        context.DrawRectangle(
+            fill,
+            pen,
+            new Rect(x, y, width, height),
+            8 * _zoom,
+            8 * _zoom
+        );
+
+        var textY = y + padding;
+
+        context.DrawText(head, new Point(x + padding, textY));
+        textY += head.Height;
+
+        if (creator is not null)
+        {
+            textY += gap;
+            context.DrawText(creator, new Point(x + padding, textY));
+            textY += creator.Height;
+        }
+
+        if (message is not null)
+        {
+            textY += gap;
+            context.DrawText(message, new Point(x + padding, textY));
+            textY += message.Height;
+        }
+
+        if (hash is not null)
+        {
+            textY += gap;
+            context.DrawText(hash, new Point(x + padding, textY));
         }
     }
 

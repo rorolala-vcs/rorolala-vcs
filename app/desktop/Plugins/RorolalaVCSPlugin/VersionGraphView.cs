@@ -796,10 +796,14 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="node">The node that was right-clicked.</param>
     private void ShowNodeMenu(Hover node)
     {
-        var hash = node.Version?.Hash ?? node.Variant?.Hash ?? string.Empty;
-        var key = node.Version is not null
-            ? "rorolala_vcs.version_graph.copy_version_hash"
-            : "rorolala_vcs.version_graph.copy_variant_hash";
+        var hash =
+            node.Version?.Hash
+            ?? node.Upstream?.Hash
+            ?? node.Variant?.Hash
+            ?? string.Empty;
+        var key = node.Variant is not null
+            ? "rorolala_vcs.version_graph.copy_variant_hash"
+            : "rorolala_vcs.version_graph.copy_version_hash";
         var copy = new Avalonia.Controls.MenuItem
         {
             Header = RolaI18N.Get(key),
@@ -820,23 +824,55 @@ internal sealed partial class VersionGraphView : Control
 
         // A retrack is about a version the track records, and the file the graph is of is where it is
         // written: a node the index has no hash for is a placeholder, and one with no file on screen
-        // has nothing to move.
-        if (node.Version is { Hash.Length: > 0 } version && _target is not null)
+        // has nothing to move. A version only the Vault has may be gone to as well: the command brings
+        // its chain here first, when it can, and then moves the record onto it.
+        if (_target is not null)
         {
-            menu.Items.Add(new Avalonia.Controls.Separator());
-            menu.Items.Add(RetrackItem(version, onlyIndex: false));
-            menu.Items.Add(RetrackItem(version, onlyIndex: true));
+            if (node.Version is { Hash.Length: > 0 } version)
+            {
+                menu.Items.Add(new Avalonia.Controls.Separator());
+                menu.Items.Add(
+                    RetrackItem(version.Hash, version.Label, allowJump: false, onlyIndex: false)
+                );
+                menu.Items.Add(
+                    RetrackItem(version.Hash, version.Label, allowJump: false, onlyIndex: true)
+                );
+            }
+            else if (node.Upstream is { Hash.Length: > 0 } upstream)
+            {
+                var label = LabelOf(upstream);
+
+                menu.Items.Add(new Avalonia.Controls.Separator());
+                menu.Items.Add(
+                    RetrackItem(upstream.Hash, label, allowJump: true, onlyIndex: false)
+                );
+                menu.Items.Add(
+                    RetrackItem(upstream.Hash, label, allowJump: true, onlyIndex: true)
+                );
+            }
         }
 
         menu.Open(this);
     }
 
+    /// <summary>What a retrack item names an upstream version by.</summary>
+    /// <param name="version">The Vault's version.</param>
+    /// <returns>Its version number, or the head of the hash for one the index does not hold.</returns>
+    private static string LabelOf(VersionGraphDrawing.UpstreamNode version) =>
+        version.Unknown
+            ? version.Hash[..Math.Min(7, version.Hash.Length)]
+            : version.Label;
+
     /// <summary>One of the two retrack items, which differ in whether the file on disk follows the record.</summary>
-    /// <param name="version">The version the record is to be moved to.</param>
+    /// <param name="hash">The version the record is to be moved to.</param>
+    /// <param name="label">What the version is called in the question.</param>
+    /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
     /// <returns>The item, ready to be added to a menu.</returns>
     private Avalonia.Controls.MenuItem RetrackItem(
-        VersionGraphDrawing.VersionNode version,
+        string hash,
+        string label,
+        bool allowJump,
         bool onlyIndex
     )
     {
@@ -854,7 +890,7 @@ internal sealed partial class VersionGraphView : Control
             item.Icon = Icons.Inked(picture);
         }
 
-        item.Click += (_, _) => AskRetrack(version, onlyIndex);
+        item.Click += (_, _) => AskRetrack(hash, label, allowJump, onlyIndex);
 
         return item;
     }
@@ -865,9 +901,11 @@ internal sealed partial class VersionGraphView : Control
     /// written back over the file is a change to what is on disk, so it is confirmed with the file and the
     /// version named rather than begun from one right-click.
     /// </remarks>
-    /// <param name="version">The version the record is to be moved to.</param>
+    /// <param name="hash">The version the record is to be moved to.</param>
+    /// <param name="label">What the version is called in the question.</param>
+    /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
-    private void AskRetrack(VersionGraphDrawing.VersionNode version, bool onlyIndex)
+    private void AskRetrack(string hash, string label, bool allowJump, bool onlyIndex)
     {
         if (
             _target is not { Length: > 0 } path
@@ -879,7 +917,7 @@ internal sealed partial class VersionGraphView : Control
 
         if (onlyIndex)
         {
-            BeginRetrack(path, directory, version.Hash, onlyIndex: true);
+            BeginRetrack(path, directory, hash, allowJump, onlyIndex: true);
 
             return;
         }
@@ -890,9 +928,9 @@ internal sealed partial class VersionGraphView : Control
                 RolaI18N.Get(
                     "rorolala_vcs.version_graph.retrack_confirm_message",
                     Path.GetFileName(path),
-                    version.Label
+                    label
                 ),
-                () => BeginRetrack(path, directory, version.Hash, onlyIndex: false)
+                () => BeginRetrack(path, directory, hash, allowJump, onlyIndex: false)
             )
         );
     }
@@ -900,21 +938,34 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>Runs the retrack, and reads the work again once it is over.</summary>
     /// <remarks>
     /// The run is the command line's and is made off the window's thread: it may reach for a Vault when the
-    /// content of the version it goes to is not held here. What it wrote is what every reading is made from,
-    /// so the files are said to have changed, and the Vault's Layout is fetched as well — the graph's marked
-    /// version and its edit are read from the copy that fetch brings over.
+    /// version it goes to is not held here, which takes as long as a network takes. What it wrote is what
+    /// every reading is made from, so the files are said to have changed, and the Vault's Layout is fetched
+    /// as well — the graph's marked version and its edit are read from the copy that fetch brings over.
     /// </remarks>
     /// <param name="path">The file the record is of.</param>
     /// <param name="directory">The directory the run is made in.</param>
     /// <param name="version">The version the record is to be moved to.</param>
+    /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
-    private void BeginRetrack(string path, string directory, string version, bool onlyIndex)
+    private void BeginRetrack(
+        string path,
+        string directory,
+        string version,
+        bool allowJump,
+        bool onlyIndex
+    )
     {
         var run = _hub.Begin("rorolala_vcs.progress.retrack");
 
         _ = Task.Run(() =>
         {
-            var (done, said) = RetrackCommand.Run(directory, path, version, onlyIndex);
+            var (done, said) = RetrackCommand.Run(
+                directory,
+                path,
+                version,
+                onlyIndex,
+                allowJump
+            );
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -978,7 +1029,8 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>Whether two hover answers are the same node.</summary>
     private static bool SameHover(Hover? left, Hover? right) =>
         ReferenceEquals(left?.Version, right?.Version)
-        && ReferenceEquals(left?.Variant, right?.Variant);
+        && ReferenceEquals(left?.Variant, right?.Variant)
+        && ReferenceEquals(left?.Upstream, right?.Upstream);
 
     /// <summary>The node under a point, or nothing.</summary>
     private Hover? HitTest(Point at)
@@ -998,7 +1050,21 @@ internal sealed partial class VersionGraphView : Control
 
             if (dx * dx + dy * dy <= radius * radius)
             {
-                return new Hover(version, null);
+                return new Hover(version, null, null);
+            }
+        }
+
+        foreach (var upstream in _drawing.Upstream)
+        {
+            var cx = _panX + upstream.X * _zoom;
+            var cy = _panY + upstream.Y * _zoom;
+            var radius = (VersionGraphDrawing.Radius + 5) * _zoom;
+            var dx = at.X - cx;
+            var dy = at.Y - cy;
+
+            if (dx * dx + dy * dy <= radius * radius)
+            {
+                return new Hover(null, null, upstream);
             }
         }
 
@@ -1016,7 +1082,7 @@ internal sealed partial class VersionGraphView : Control
                     <= (VersionGraphDrawing.CapsuleHeight / 2 + 3) * _zoom
             )
             {
-                return new Hover(null, variant);
+                return new Hover(null, variant, null);
             }
         }
 
@@ -1043,10 +1109,12 @@ internal sealed partial class VersionGraphView : Control
     }
 
     /// <summary>A node the pointer is on.</summary>
-    /// <param name="Version">The version it is on, when it is a version.</param>
+    /// <param name="Version">The version it is on, when it is one of the work's own.</param>
     /// <param name="Variant">The variant it is on, when it is a variant.</param>
+    /// <param name="Upstream">The Vault's version it is on, when it is one the work's chain does not hold.</param>
     private sealed record Hover(
         VersionGraphDrawing.VersionNode? Version,
-        VersionGraphDrawing.VariantNode? Variant
+        VersionGraphDrawing.VariantNode? Variant,
+        VersionGraphDrawing.UpstreamNode? Upstream
     );
 }

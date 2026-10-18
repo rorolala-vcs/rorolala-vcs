@@ -60,6 +60,11 @@ internal sealed class VersionGraphDrawing
         IReadOnlyDictionary<ulong, VariantNode> spineByLevel,
         double versionX,
         double variantX,
+        IReadOnlyList<UpstreamNode> upstream,
+        double upstreamX,
+        ulong? branchFrom,
+        bool diverged,
+        string upstreamVault,
         double height,
         ulong top
     )
@@ -70,6 +75,11 @@ internal sealed class VersionGraphDrawing
         SpineByLevel = spineByLevel;
         VersionX = versionX;
         VariantX = variantX;
+        Upstream = upstream;
+        UpstreamX = upstreamX;
+        BranchFrom = branchFrom;
+        Diverged = diverged;
+        UpstreamVault = upstreamVault;
         Height = height;
         Top = top;
     }
@@ -91,6 +101,43 @@ internal sealed class VersionGraphDrawing
 
     /// <summary>The column the spine variants stand on.</summary>
     public double VariantX { get; }
+
+    /// <summary>
+    /// The tracked Vault's versions that are not part of the local chain, the highest first.
+    /// </summary>
+    /// <remarks>
+    /// Only what is local is drawn: a version the index here holds is walked, and one it does not is
+    /// the one placeholder a reader gets instead — see <see cref="Upstream"/> and
+    /// <see cref="UpstreamVault"/>. Versions both chains hold are drawn once, on the local axis.
+    /// </remarks>
+    public IReadOnlyList<UpstreamNode> Upstream { get; }
+
+    /// <summary>The column the upstream nodes stand on.</summary>
+    /// <remarks>
+    /// It is the local versions' own column while the Vault is only ahead, and a second column to its
+    /// right once the chains have parted.
+    /// </remarks>
+    public double UpstreamX { get; }
+
+    /// <summary>The local level the upstream branch starts from, or nothing when there is no upstream node.</summary>
+    /// <remarks>
+    /// It is the highest level both chains hold the same version at — the common ancestor — or the
+    /// local head when nothing is shared.
+    /// </remarks>
+    public ulong? BranchFrom { get; }
+
+    /// <summary>
+    /// Whether the two chains have each moved on from the common ancestor, which is what puts the Vault's
+    /// versions in a column of their own and joins them with an arc.
+    /// </summary>
+    /// <remarks>
+    /// A Vault that is merely ahead is the local chain continued: its versions stand in the same column,
+    /// above the work's head. Only a divergence is a branch.
+    /// </remarks>
+    public bool Diverged { get; }
+
+    /// <summary>The Vault whose versions <see cref="Upstream"/> is, or an empty string when none is tracked.</summary>
+    public string UpstreamVault { get; }
 
     /// <summary>How tall the drawing is, in content units.</summary>
     public double Height { get; }
@@ -119,8 +166,69 @@ internal sealed class VersionGraphDrawing
         ArgumentNullException.ThrowIfNull(graph);
 
         var versions = graph.Versions;
-        var top = versions.Count == 0 ? 0UL : versions.Max(version => version.Level);
+        var localTop = versions.Count == 0 ? 0UL : versions.Max(version => version.Level);
+        var localByLevel = versions.ToDictionary(version => version.Level);
+
+        // The highest level both chains hold the same version at. The versions under it are the
+        // common ancestors and are already drawn on the local axis; only what is above it belongs to
+        // the branch.
+        var shared = -1L;
+
+        foreach (var one in graph.Upstream)
+        {
+            if (
+                localByLevel.TryGetValue(one.Level, out var local)
+                && string.Equals(local.Hash, one.Hash, StringComparison.Ordinal)
+            )
+            {
+                shared = Math.Max(shared, (long)one.Level);
+            }
+        }
+
+        var upstream = new List<UpstreamNode>();
+
+        foreach (var one in graph.Upstream)
+        {
+            if ((long)one.Level > shared)
+            {
+                upstream.Add(
+                    new UpstreamNode(
+                        one.Level,
+                        $"V{one.Level}",
+                        0,
+                        0,
+                        one.Hash,
+                        one.Creator,
+                        one.Message,
+                        false
+                    )
+                );
+            }
+        }
+
+        // A Vault's version the index does not hold — the ordinary state after a fetch — is one
+        // node with the hash the Layout names it by, set above the local chain. It is not a level
+        // anything here knows, so its label says that rather than naming a version number.
+        if (upstream.Count == 0 && graph.Upstream.Count == 0 && graph.UpstreamHead.Length > 0)
+        {
+            upstream.Add(
+                new UpstreamNode(
+                    localTop + 1,
+                    "?",
+                    0,
+                    0,
+                    graph.UpstreamHead,
+                    string.Empty,
+                    string.Empty,
+                    true
+                )
+            );
+        }
+
+        var upstreamTop = upstream.Count == 0 ? localTop : upstream.Max(one => one.Level);
+        var top = Math.Max(localTop, upstreamTop);
         var shift = editing is null ? 0 : VersionToVariant;
+        var localTopY = TopY + shift + (double)(top - localTop) * VersionStep;
         var merged = graph
             .Variants.Where(variant => !variant.Spine)
             .GroupBy(variant => variant.Level)
@@ -128,8 +236,15 @@ internal sealed class VersionGraphDrawing
             .DefaultIfEmpty(0)
             .Max();
 
+        // Both sides have moved on from the common ancestor only then is there a branch to draw: a
+        // Vault that is merely ahead continues the work's own chain in one column. A version only the
+        // Layout names — the `?` node — is not a chain, so it is drawn in that one column as well.
+        var diverged =
+            upstream.Any(one => !one.Unknown)
+            && (shared < 0 || localTop > (ulong)shared);
         var variantX = VariantStart + MergedGap * merged;
         var versionX = variantX + AxisGap;
+        var upstreamX = diverged ? versionX + AxisGap : versionX;
         var versionNodes = new List<VersionNode>(versions.Count);
         var versionByLevel = new Dictionary<ulong, VersionNode>();
 
@@ -160,6 +275,19 @@ internal sealed class VersionGraphDrawing
             versionByLevel[version.Level] = node;
         }
 
+        var upstreamNodes = new List<UpstreamNode>(upstream.Count);
+
+        foreach (var one in upstream)
+        {
+            upstreamNodes.Add(
+                one with
+                {
+                    X = upstreamX,
+                    Y = TopY + shift + (double)(top - one.Level) * VersionStep,
+                }
+            );
+        }
+
         var variantNodes = new List<VariantNode>(graph.Variants.Count);
         var spineByLevel = new Dictionary<ulong, VariantNode>();
         var mergedOrder = new Dictionary<ulong, int>();
@@ -180,7 +308,9 @@ internal sealed class VersionGraphDrawing
                 : variantX - MergedGap * (order + 1);
             var y = versionByLevel.TryGetValue(variant.Level + 1, out var above)
                 ? above.Y + VersionToVariant
-                : TopY;
+                : top > localTop || editing is not null
+                    ? localTopY - VersionToVariant
+                    : TopY;
             var node = new VariantNode(
                 index,
                 variant.Label,
@@ -211,11 +341,11 @@ internal sealed class VersionGraphDrawing
                     variantNodes.Count,
                     "???",
                     string.Empty,
-                    top,
+                    localTop,
                     false,
                     null,
                     variantX,
-                    TopY,
+                    localTopY - VersionToVariant,
                     string.Empty,
                     string.Empty,
                     edit.Words,
@@ -231,6 +361,15 @@ internal sealed class VersionGraphDrawing
             spineByLevel,
             versionX,
             variantX,
+            upstreamNodes,
+            upstreamX,
+            upstreamNodes.Count == 0
+                ? null
+                : shared >= 0
+                    ? (ulong)shared
+                    : localTop,
+            diverged,
+            graph.UpstreamVault,
             TopY + shift + (double)top * VersionStep + BottomMargin,
             top
         );
@@ -254,6 +393,26 @@ internal sealed class VersionGraphDrawing
         string Creator,
         string Message,
         bool Origin
+    );
+
+    /// <summary>One version of the tracked Vault's chain that the local chain does not hold.</summary>
+    /// <param name="Level">The version's number, numbered from the same root as the local chain.</param>
+    /// <param name="Label">The word drawn in its node, or <c>?</c> for a version the index here does not hold.</param>
+    /// <param name="X">The column of its centre.</param>
+    /// <param name="Y">The row of its centre.</param>
+    /// <param name="Hash">The full hash the Vault's Layout names it by.</param>
+    /// <param name="Creator">Who made the variant that produced it, or an empty string when unknown.</param>
+    /// <param name="Message">What that variant says, or an empty string when unknown.</param>
+    /// <param name="Unknown">Whether the version is one only the Layout names, so that no level is known.</param>
+    internal sealed record UpstreamNode(
+        ulong Level,
+        string Label,
+        double X,
+        double Y,
+        string Hash,
+        string Creator,
+        string Message,
+        bool Unknown
     );
 
     /// <summary>One variant, where it stands, and what it says.</summary>

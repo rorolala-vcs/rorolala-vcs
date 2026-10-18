@@ -24,8 +24,17 @@ internal static class RetrackCommand
     /// Whether the pointer moves and the file on disk is left alone, which is
     /// <c>--only-index</c>.
     /// </param>
+    /// <param name="allowJump">
+    /// Whether a version that is not on the way back may be gone to, which is <c>--allow-jump</c>.
+    /// It is given for a Vault version the work's own chain does not hold.
+    /// </param>
     /// <returns>The arguments.</returns>
-    public static IReadOnlyList<string> Arguments(string file, string version, bool onlyIndex)
+    public static IReadOnlyList<string> Arguments(
+        string file,
+        string version,
+        bool onlyIndex,
+        bool allowJump
+    )
     {
         var arguments = new List<string>
         {
@@ -39,6 +48,11 @@ internal static class RetrackCommand
         if (onlyIndex)
         {
             arguments.Add("--only-index");
+        }
+
+        if (allowJump)
+        {
+            arguments.Add("--allow-jump");
         }
 
         arguments.Add(file);
@@ -55,12 +69,14 @@ internal static class RetrackCommand
     /// <param name="file">The one file to move the record of.</param>
     /// <param name="version">The version the pointer goes to, as the index names it.</param>
     /// <param name="onlyIndex">Whether the pointer moves and the file on disk is left alone.</param>
+    /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
     public static (bool Done, string Said) Run(
         string directory,
         string file,
         string version,
-        bool onlyIndex
+        bool onlyIndex,
+        bool allowJump
     )
     {
         ArgumentNullException.ThrowIfNull(directory);
@@ -76,7 +92,7 @@ internal static class RetrackCommand
 
         var (done, said, _) = Sync.Asked(
             program,
-            Arguments(file, version, onlyIndex),
+            Arguments(file, version, onlyIndex, allowJump),
             directory
         );
 

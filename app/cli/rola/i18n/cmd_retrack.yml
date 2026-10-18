@@ -9,8 +9,8 @@ retrack:
       en: Only move the pointer, leave the file on disk as it is
       zh-CN: 只移动指针，磁盘上的文件保持原样
     allow_jump:
-      en: Allow jumping to a version not on the way back
-      zh-CN: 允许跳到不在回退路径上的版本
+      en: Allow jumping to a version not on the way back, including one only the Vault holds
+      zh-CN: 允许跳到不在回退路径上的版本，包括仅上游持有的版本
   help:
     en: |
         Move a file's recorded version back in the Layout
@@ -19,13 +19,14 @@ retrack:
         **Flags**:
             --until <TARGET>    Where the version pointer goes back to, one version back by default
             --only-index        Only move the pointer, leave the file on disk as it is
-            --allow-jump        Allow jumping to a version not on the way back
+            --allow-jump        Allow jumping to a version not on the way back, including one only the Vault holds
             --force             Discard unrecorded changes or end a merge, and forcibly switch the content
-            --offline           Only use content already stored locally
+            --offline           Do not reach for a Vault: use only what is already here
             --concurrency <N>   Carry the content over N connections at once (default 4)
 
         Move back the version pointer `PATH` records in the Layout, and that version's content is written back over the file with the pointer
         `PATH` must be a local path the Layout records, and `--until` names where it goes back to, one version back by default
+        A version this index does not hold is brought from the Vault the Layout tracks before the pointer moves; `--offline` refuses that
         `--only-index` only moves the pointer and does not touch the file on disk
         `--force` says the opposite, and cannot be given together
     zh-CN: |
@@ -35,13 +36,14 @@ retrack:
         **标识**：
             --until <目标>      版本指针回退到的位置，默认回退一个版本
             --only-index        只移动指针，磁盘上的文件保持原样
-            --allow-jump        允许跳到不在回退路径上的版本
+            --allow-jump        允许跳到不在回退路径上的版本，包括仅上游持有的版本
             --force             丢弃未记录的改动或结束合并，强制切换内容
-            --offline           只使用本地已存储的内容
+            --offline           不连接保险库，只使用本地已有的内容与版本
             --concurrency <N>   用 N 条连接同时传输内容（默认 4）
 
         将 `路径` 在布局中记录的版本指针回退，该版本的内容会随指针写回文件
         `路径` 必须是布局记录过的本地路径，`--until` 指定回退到的位置，默认回退一个版本
+        本地索引没有的版本会先从布局所跟踪的保险库取回，再移动指针；`--offline` 时拒绝这样做
         `--only-index` 只移动指针、不碰磁盘上的文件
         `--force` 与它语义相反，不能同时给出
 
@@ -224,6 +226,10 @@ retrack:
   err_no_index:
     en: This run has no version control index to read the version from
     zh-CN: 本运行没有可用于读取版本的版本控制索引
+
+  err_no_vault:
+    en: The Layout tracks no Vault, so the version cannot be brought here
+    zh-CN: 布局未跟踪任何保险库，无法取回该版本
 
   err_failed:
     en: "The version pointer could not be moved: %{reason}"

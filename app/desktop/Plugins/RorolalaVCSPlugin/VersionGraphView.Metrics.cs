@@ -31,6 +31,9 @@ internal sealed partial class VersionGraphView
     /// <summary>One variant's label, and how wide its capsule is.</summary>
     private sealed record VariantMetrics(FormattedText Label, double Width);
 
+    /// <summary>One upstream version's label and bubble, laid out at the current zoom.</summary>
+    private sealed record UpstreamMetrics(FormattedText Label, BubbleMetrics? Bubble);
+
     /// <summary>A version's words, laid out at the zoom in force.</summary>
     /// <remarks>
     /// The creator is a pill rather than a line of text: the pill is sized here as well, because
@@ -60,12 +63,14 @@ internal sealed partial class VersionGraphView
         public Metrics(
             double maxRight,
             IReadOnlyDictionary<ulong, VersionMetrics> versions,
-            IReadOnlyDictionary<int, VariantMetrics> variants
+            IReadOnlyDictionary<int, VariantMetrics> variants,
+            IReadOnlyList<UpstreamMetrics> upstream
         )
         {
             MaxRight = maxRight;
             Versions = versions;
             Variants = variants;
+            Upstream = upstream;
         }
 
         /// <summary>The furthest any node or bubble reaches, in screen units.</summary>
@@ -76,6 +81,9 @@ internal sealed partial class VersionGraphView
 
         /// <summary>Each variant's label and capsule width.</summary>
         public IReadOnlyDictionary<int, VariantMetrics> Variants { get; }
+
+        /// <summary>The upstream nodes' labels and bubbles, in the drawing's own order.</summary>
+        public IReadOnlyList<UpstreamMetrics> Upstream { get; }
     }
 
     /// <summary>The colours in force, read once per look.</summary>
@@ -146,10 +154,24 @@ internal sealed partial class VersionGraphView
         var maxRight =
             (drawing.VersionX + VersionGraphDrawing.Radius) * zoom;
 
+        if (drawing.Upstream.Count > 0)
+        {
+            maxRight = Math.Max(
+                maxRight,
+                (drawing.UpstreamX + VersionGraphDrawing.Radius) * zoom
+            );
+        }
+
         foreach (var version in drawing.Versions)
         {
             var label = Text(version.Label, FaceSemiBold, 12 * zoom, ink.PrimaryText);
-            var bubble = BuildBubble(version, ink);
+            var bubble = BuildBubble(
+                version.Creator,
+                version.Message,
+                version.Hash,
+                version.Origin,
+                ink
+            );
 
             versions[version.Level] = new VersionMetrics(label, bubble);
 
@@ -184,16 +206,42 @@ internal sealed partial class VersionGraphView
             );
         }
 
-        return new Metrics(maxRight, versions, variants);
+        var upstream = new List<UpstreamMetrics>(drawing.Upstream.Count);
+
+        foreach (var one in drawing.Upstream)
+        {
+            var label = Text(one.Label, FaceSemiBold, 12 * zoom, ink.Muted);
+            var bubble = one.Unknown
+                ? null
+                : BuildBubble(one.Creator, one.Message, one.Hash, false, ink);
+
+            upstream.Add(new UpstreamMetrics(label, bubble));
+
+            if (bubble is not null)
+            {
+                var left =
+                    (one.X
+                        + VersionGraphDrawing.Radius
+                        + VersionGraphDrawing.BubbleGap)
+                    * zoom;
+
+                maxRight = Math.Max(maxRight, left + bubble.Width);
+            }
+        }
+
+        return new Metrics(maxRight, versions, variants, upstream);
     }
 
     /// <summary>Lays a version's words out, or answers nothing when it has none.</summary>
     private BubbleMetrics? BuildBubble(
-        VersionGraphDrawing.VersionNode version,
+        string creatorText,
+        string messageText,
+        string hashText,
+        bool origin,
         Ink ink
     )
     {
-        if (version.Creator.Length == 0 && version.Message.Length == 0)
+        if (creatorText.Length == 0 && messageText.Length == 0)
         {
             return null;
         }
@@ -202,28 +250,28 @@ internal sealed partial class VersionGraphView
         var paddingX = BubblePaddingX * zoom;
         var paddingY = BubblePaddingY * zoom;
         var contentWidth = BubbleMaxWidth * zoom - paddingX * 2;
-        var creatorText = version.Creator.Length > 0
-            ? $"({version.Creator})"
+        var creatorLabel = creatorText.Length > 0
+            ? $"({creatorText})"
             : null;
-        var creator = creatorText is null
+        var creator = creatorLabel is null
             ? null
             : Text(
-                creatorText,
-                version.Origin ? FaceSemiBold : FaceMedium,
+                creatorLabel,
+                origin ? FaceSemiBold : FaceMedium,
                 11.5 * zoom,
                 ink.Muted
             );
         FormattedText? message = null;
 
-        if (version.Message.Length > 0)
+        if (messageText.Length > 0)
         {
             var lineHeight = BubbleLineHeight * zoom;
 
             message = Text(
-                version.Message,
-                version.Origin ? FaceSemiBold : FaceNormal,
+                messageText,
+                origin ? FaceSemiBold : FaceNormal,
                 13 * zoom,
-                version.Origin ? ink.Primary : ink.Front
+                origin ? ink.Primary : ink.Front
             );
             message.MaxTextWidth = contentWidth;
             message.MaxTextHeight = 3 * lineHeight;
@@ -233,11 +281,11 @@ internal sealed partial class VersionGraphView
 
         FormattedText? hash = null;
 
-        if (version.Hash.Length > 0)
+        if (hashText.Length > 0)
         {
             var lineHeight = BubbleHashLineHeight * zoom;
 
-            hash = Text(version.Hash, MonoMedium, 10 * zoom, ink.Muted);
+            hash = Text(hashText, MonoMedium, 10 * zoom, ink.Muted);
             hash.MaxTextWidth = contentWidth;
             hash.MaxTextHeight = 2 * lineHeight;
             hash.LineHeight = lineHeight;

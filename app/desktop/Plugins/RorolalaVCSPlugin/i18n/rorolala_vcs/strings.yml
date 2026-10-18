@@ -67,6 +67,13 @@ rorolala_vcs:
       en: The file could not be retracked
       zh-CN: 未能重新追踪该文件
 
+    # What the Vault's version says on hover when the version itself is not in this index: a fetch
+    # brings the Vault's Layout and never its versions, so there is a hash to name but no chain or
+    # words to draw.
+    upstream_unknown:
+      en: This version is recorded by the Vault, but it is not in the local index
+      zh-CN: 该版本由上游记录，但不在本地索引中
+
   # What each of the three says while the directory the tree is rooted at is not one a Workspace
   # holds: there is nothing under such a place for them to show, and a blank view of the work would
   # read as a work with nothing in it. The base is the File System plugin's, which is why the words

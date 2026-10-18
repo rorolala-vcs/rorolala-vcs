@@ -8,26 +8,46 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// The movement itself is the command line's and is not run here — it needs a Workspace and an index — so
 /// what is checked is what this plugin decides: which version the record is moved to, which file it is moved
-/// for, and whether the work on disk follows it.
+/// for, and whether the work on disk follows it or the record is allowed to jump to it.
 /// </remarks>
 public sealed class RetrackTests
 {
-    /// <summary>A retrack names the version, and says so when the file on disk is to be left alone.</summary>
+    /// <summary>A retrack names the version, and says whether the work follows or the record jumps.</summary>
     [Fact]
     public void ARetrackNamesTheVersionAndWhetherTheWorkFollows()
     {
-        var moved = RetrackCommand.Arguments("/work/logo.psd", "abc123", onlyIndex: false);
+        var moved = RetrackCommand.Arguments(
+            "/work/logo.psd",
+            "abc123",
+            onlyIndex: false,
+            allowJump: false
+        );
 
         Assert.Contains("retrack", moved);
         Assert.Contains("/work/logo.psd", moved);
         Assert.Contains("--until", moved);
         Assert.Contains("abc123", moved);
         Assert.DoesNotContain("--only-index", moved);
+        Assert.DoesNotContain("--allow-jump", moved);
 
         // The two items differ in one flag, which is the whole of what tells them apart.
-        var indexOnly = RetrackCommand.Arguments("/work/logo.psd", "abc123", onlyIndex: true);
+        var indexOnly = RetrackCommand.Arguments(
+            "/work/logo.psd",
+            "abc123",
+            onlyIndex: true,
+            allowJump: false
+        );
 
         Assert.Contains("--only-index", indexOnly);
-        Assert.Equal(moved.Where(argument => argument != "--only-index"), indexOnly.Where(argument => argument != "--only-index"));
+
+        // A Vault version the work's own chain does not hold is a jump, and says so.
+        var jump = RetrackCommand.Arguments(
+            "/work/logo.psd",
+            "abc123",
+            onlyIndex: false,
+            allowJump: true
+        );
+
+        Assert.Contains("--allow-jump", jump);
     }
 }

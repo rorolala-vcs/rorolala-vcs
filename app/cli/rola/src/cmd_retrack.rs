@@ -29,12 +29,13 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr as _;
 
-use librorolala::daemon::action_fetch_layout;
+use librorolala::auth::Account;
+use librorolala::daemon::{action_fetch_layout, action_read_remote_index_async};
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::status::{tracked_vault, variant_moves};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
 use librorolala::tree_analyze::{Cache, cache_path, entry_of, tree_diff};
-use librorolala::vcs::{VCSIndex, VCSWrite as _, Variant, Version};
+use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
 use librorolala::workspace::{Merging, Pending, Workspace};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
@@ -54,6 +55,7 @@ use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
+use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 use serde::Serialize;
 use uuid::Uuid;
@@ -65,6 +67,7 @@ use crate::complete::{
     IndexObject, filling_flag, index_hashes, index_keys, offer, positional, strip_written,
     typing_flag, vault_names,
 };
+use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_ERR_RETRACK_DIRTY, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
@@ -149,6 +152,10 @@ pub fn complete_retrack(
 /// records for the file. A hash that is not on the way back is refused unless `--allow-jump` is
 /// given; `~N` and `N` past either end of the chain are always refused.
 ///
+/// A version this index does not hold is brought from the Vault the Layout tracks before the
+/// pointer moves, so a run may go to a version this side never fetched and leave a chain that can
+/// be read behind. `--offline` refuses that instead of reaching for it.
+///
 /// The version's content is written back over the file with the pointer, so the two agree again.
 /// `--only-index` moves the pointer and leaves the file alone, which is what a run wants when the
 /// work on disk is not to be touched: `rola status` then reports the file as changed.
@@ -166,7 +173,8 @@ pub fn complete_retrack(
 /// can reach, [`ErrorRetrackNothing`] when the entry was never recorded, [`ErrorRetrackModified`]
 /// when the file has changes the Layout does not name, [`ErrorRetrackMerging`] when a variant is
 /// waiting for the file, [`ErrorRetrackUpstream`] when the Vault's Layout records no version for
-/// it, [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and
+/// it, [`ErrorOffline`] when the version is not here and the run is offline,
+/// [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and
 /// [`ErrorRetrackFailed`] when the store, the index or the Layout refuses.
 #[command(node = "retrack", entry = EntryRetrack)]
 pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
@@ -299,6 +307,49 @@ pub fn handle_retrack(
         )?),
         _ => None,
     };
+
+    // The version the pointer goes to may be one this index never fetched. It is checked here
+    // before the level is resolved, so that a hash the Vault holds is a version to go to rather
+    // than one this side cannot name, and so that the chain left behind is one that can be read.
+    let wanted = match &level {
+        Until::Hash(key) => Some((None, *key.digest())),
+        Until::Vault(alias) => {
+            // UNWRAP: the Vault's version is read for exactly this level just above.
+            let hash = upstream.expect("the Vault's version is read for the Vault level");
+
+            Some((Some(alias.as_str()), hash))
+        }
+        _ => None,
+    };
+
+    if let Some((vault, hash)) = wanted {
+        match presence(vcs, &runtime, hash) {
+            Presence::Version => {}
+            Presence::Elsewhere => {
+                return ErrorRetrackLevel {
+                    until: text,
+                    kind: RetrackLevelError::NotAVersion,
+                }
+                .into();
+            }
+            Presence::Missing => {
+                // Nothing the run asked for is here, and an offline run may not go looking for it.
+                if **offline {
+                    return ErrorOffline.into();
+                }
+
+                let bringer = Bringer {
+                    workspace: held,
+                    index: vcs,
+                    runtime: &runtime,
+                    end: vault_end(held, &layout, remote, current, vault)?,
+                    text: &text,
+                };
+
+                bringer.bring(hash)?;
+            }
+        }
+    }
 
     let asked = Asked {
         text: &text,
@@ -692,6 +743,164 @@ fn upstream_version(
     }
 
     Ok(data.version())
+}
+
+/// Whether this index holds the version under a hash, holds something else there, or holds nothing.
+enum Presence {
+    /// The version is here, so a run that goes to it needs nothing brought.
+    Version,
+    /// The index holds an object under the hash, and it is not a version.
+    Elsewhere,
+    /// The index holds nothing under the hash.
+    Missing,
+}
+
+/// What a version this index does not hold is read through: the Vault, and the account it is read as.
+struct VaultEnd {
+    /// The address the Vault is reached at.
+    address: String,
+    /// The account the read is spoken as.
+    account: Account,
+}
+
+/// Reads the chain a version is the top of into this index, from the Vault that holds it.
+///
+/// A retrack may go to a version the Vault holds and this side never fetched. The version, the
+/// variant that produced it and the words they are named by are read one object at a time, until
+/// the walk reaches a version this index already holds: what is left behind is then a chain as
+/// readable here as one a sync brought.
+struct Bringer<'a> {
+    /// The Workspace the exchange is spoken from.
+    workspace: &'a Workspace,
+    /// The index the chain is written to.
+    index: &'a VCSIndex,
+    /// The runtime the exchange is waited on.
+    runtime: &'a tokio::runtime::Runtime,
+    /// Where the objects are read from.
+    end: VaultEnd,
+    /// The level as the run wrote it, for the refusal that names it.
+    text: &'a str,
+}
+
+impl Bringer<'_> {
+    /// Walks the chain from `hash` down to a version this index already holds, writing each object.
+    ///
+    /// # Errors
+    ///
+    /// [`ErrorRetrackLevel`] when the Vault answers with something that is not a version, and
+    /// [`ErrorRetrackFailed`] when the exchange, the index or the chain refuses.
+    fn bring(&self, hash: Blake3Hash) -> Result<(), Next> {
+        let mut key = hash;
+
+        loop {
+            if matches!(
+                self.runtime.block_on(self.index.read(Key::new(key))),
+                Ok(VCSIndexObject::Version(_))
+            ) {
+                return Ok(());
+            }
+
+            let read = |hash: Blake3Hash| {
+                self.runtime
+                    .block_on(action_read_remote_index_async(
+                        self.workspace,
+                        &self.end.account,
+                        self.end.address.clone(),
+                        Key::new(hash).hex(),
+                        Progress::silent(),
+                    ))
+                    .map_err(|error| failed(error.to_string()))
+            };
+
+            let VCSIndexObject::Version(version) = read(key)? else {
+                return Err(ErrorRetrackLevel {
+                    until: self.text.to_owned(),
+                    kind: RetrackLevelError::NotAVersion,
+                }
+                .into());
+            };
+            let variant_hash = *version.variant();
+            let VCSIndexObject::Variant(variant) = read(variant_hash)? else {
+                return Err(failed(format!(
+                    "the object {} is not the variant of the version",
+                    Key::new(variant_hash).hex()
+                )));
+            };
+
+            // The words are not what the chain is made of, but a version a reader is moved to is
+            // drawn with them: they are brought when this index does not hold them.
+            for word in [*variant.creator(), *variant.message()] {
+                if self
+                    .runtime
+                    .block_on(self.index.read(Key::new(word)))
+                    .is_ok()
+                {
+                    continue;
+                }
+
+                let object = read(word)?;
+
+                self.runtime
+                    .block_on(self.index.write(object))
+                    .map_err(|error| failed(error.reason()))?;
+            }
+
+            self.runtime
+                .block_on(self.index.write(version))
+                .map_err(|error| failed(error.reason()))?;
+            self.runtime
+                .block_on(self.index.write(variant.clone()))
+                .map_err(|error| failed(error.reason()))?;
+
+            key = *variant.base_version();
+        }
+    }
+}
+
+/// Whether this index holds a version under `hash`.
+fn presence(vcs: &VCSIndex, runtime: &tokio::runtime::Runtime, hash: Blake3Hash) -> Presence {
+    match runtime.block_on(vcs.read(Key::new(hash))) {
+        Ok(VCSIndexObject::Version(_)) => Presence::Version,
+        Ok(_) => Presence::Elsewhere,
+        Err(_) => Presence::Missing,
+    }
+}
+
+/// Reads where a version missing here is brought from, and as whom.
+///
+/// The Vault named is the one the version came from; a hash names none, so the Vault the Layout
+/// tracks is the one asked.
+///
+/// # Errors
+///
+/// [`ErrorRetrackFailed`] when the Layout tracks no Vault or the Vault or account cannot be read.
+fn vault_end(
+    held: &Workspace,
+    layout: &Layout,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    vault: Option<&str>,
+) -> Result<VaultEnd, Next> {
+    let name = match vault {
+        Some(name) => name.to_owned(),
+        None => tracked_vault(held, layout)
+            .ok_or_else(|| failed(t!("retrack.err_no_vault").trim().to_owned()))?,
+    };
+    let name = remote
+        .get_ref()
+        .name_or_default(name)
+        .map_err(mingling::Routable::to_chain)?;
+    let address = remote
+        .get_ref()
+        .vault_or_default(name)
+        .map_err(mingling::Routable::to_chain)?;
+    let account_name = current.get_ref().must_bind().map_err(Into::<Next>::into)?;
+    let account = account_named(&account_name, Some(held), None).map_err(Into::<Next>::into)?;
+
+    Ok(VaultEnd {
+        address: address.to_string(),
+        account,
+    })
 }
 
 /// Writes the version's content back over the file, and remembers that the two agree.

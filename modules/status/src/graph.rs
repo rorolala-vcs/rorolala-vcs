@@ -71,6 +71,18 @@ pub struct VersionGraph {
     variants: Vec<VariantNode>,
     /// The version the tracked Vault records, and the Vault's name, when the chain holds it.
     origin: Option<(u64, String)>,
+    /// The Vault's chain, when the index here holds the versions it is made of.
+    ///
+    /// It is the chain from the version the tracked Vault records back to the root, the highest
+    /// first, and its numbers are the same as the local chain's where the two share a version. It
+    /// is empty when the Vault's version is not held here — a fetch brings its Layout and never its
+    /// versions — and then only [`Self::upstream_head`] is known.
+    upstream: Vec<VersionNode>,
+    /// The version the tracked Vault records, as the index names it by, or an empty string when the
+    /// Layout tracks no Vault or the Vault's Layout does not name the entry.
+    upstream_head: String,
+    /// The Vault whose version [`Self::upstream_head`] is, or an empty string when none is tracked.
+    upstream_vault: String,
 }
 
 /// Reads the chain of the file `target` as the Version Graph shows it.
@@ -87,20 +99,40 @@ pub fn locate_version_graph(directory: &Path, target: &Path) -> Option<VersionGr
     let layout = working_layout(&workspace)?;
     let index = VCSIndex::locate(directory)?;
     let found = found(&workspace, &layout, target)?;
-    let origin = vault_origin(&workspace, found.id);
+    let tracked = vault_origin(&workspace, found.id);
 
     let runtime = tokio::runtime::Runtime::new().ok()?;
     let chain = read_chain(
         &index,
         &runtime,
         Key::new(found.version),
-        origin
+        tracked
             .as_ref()
             .map(|(vault, version)| (vault.as_str(), *version)),
     )
     .ok()?;
 
-    Some(VersionGraph::of(&chain))
+    // The Vault's own chain is read only when its versions are here: a fetch brings the Vault's
+    // Layout and never its index, so a Vault ahead of this side normally has nothing to walk. What
+    // is known either way is the version it records, which is what the Desktop marks when there is
+    // no chain to draw beside the work's own.
+    let (upstream, upstream_head, upstream_vault) = match tracked {
+        Some((vault, version)) => (
+            read_chain(&index, &runtime, Key::new(version), None)
+                .ok()
+                .map_or_else(Vec::new, |lookback| versions_of(&lookback)),
+            Key::new(version).hex(),
+            vault,
+        ),
+        None => (Vec::new(), String::new(), String::new()),
+    };
+
+    Some(VersionGraph::of(
+        &chain,
+        upstream,
+        upstream_head,
+        upstream_vault,
+    ))
 }
 
 /// The version `target` is recorded at, and the `Uuid` its path names.
@@ -113,51 +145,17 @@ struct Found {
 
 impl VersionGraph {
     /// Reads the chain into the structure the Desktop draws.
-    fn of(lookback: &Lookback) -> Self {
-        let levels = lookback.levels.len();
-        let has_first = lookback.first.is_some();
-        let top = u64::try_from(
-            levels
-                .saturating_add(usize::from(has_first))
-                .saturating_sub(1),
-        )
-        .unwrap_or(u64::MAX);
-
-        // A version's words are the producing variant's: the spine of the level below it, or the
-        // root-based variant for the oldest version.
-        let mut words: HashMap<u64, (String, String)> = HashMap::new();
-
-        for level in &lookback.levels {
-            words.insert(
-                level.number.saturating_add(1),
-                (level.variant.creator.clone(), level.variant.message.clone()),
-            );
-        }
-
-        if let Some(first) = &lookback.first {
-            words.insert(0, (first.creator.clone(), first.message.clone()));
-        }
-
-        let mut versions = Vec::new();
-
-        for level in (0..=top).rev() {
-            let (creator, message) = words.get(&level).cloned().unwrap_or_default();
-
-            versions.push(VersionNode {
-                level,
-                hash: lookback
-                    .version_hashes
-                    .get(&level)
-                    .cloned()
-                    .unwrap_or_default(),
-                creator,
-                message,
-            });
-        }
+    fn of(
+        lookback: &Lookback,
+        upstream: Vec<VersionNode>,
+        upstream_head: String,
+        upstream_vault: String,
+    ) -> Self {
+        let versions = versions_of(lookback);
 
         // The nodes are in the same order as the level views: one spine and then the variants
         // merged in beside it, level by level, the highest first.
-        let chain = chain_of(&lookback.levels, lookback.top, has_first);
+        let chain = chain_of(&lookback.levels, lookback.top, lookback.first.is_some());
         let nodes = chain.nodes();
         let mut views: Vec<&VariantView> = Vec::with_capacity(nodes.len());
 
@@ -205,8 +203,57 @@ impl VersionGraph {
             versions,
             variants,
             origin,
+            upstream,
+            upstream_head,
+            upstream_vault,
         }
     }
+}
+
+/// The versions a lookback names, the highest first, with the words of the variant that made each.
+fn versions_of(lookback: &Lookback) -> Vec<VersionNode> {
+    let levels = lookback.levels.len();
+    let has_first = lookback.first.is_some();
+    let top = u64::try_from(
+        levels
+            .saturating_add(usize::from(has_first))
+            .saturating_sub(1),
+    )
+    .unwrap_or(u64::MAX);
+
+    // A version's words are the producing variant's: the spine of the level below it, or the
+    // root-based variant for the oldest version.
+    let mut words: HashMap<u64, (String, String)> = HashMap::new();
+
+    for level in &lookback.levels {
+        words.insert(
+            level.number.saturating_add(1),
+            (level.variant.creator.clone(), level.variant.message.clone()),
+        );
+    }
+
+    if let Some(first) = &lookback.first {
+        words.insert(0, (first.creator.clone(), first.message.clone()));
+    }
+
+    let mut versions = Vec::new();
+
+    for level in (0..=top).rev() {
+        let (creator, message) = words.get(&level).cloned().unwrap_or_default();
+
+        versions.push(VersionNode {
+            level,
+            hash: lookback
+                .version_hashes
+                .get(&level)
+                .cloned()
+                .unwrap_or_default(),
+            creator,
+            message,
+        });
+    }
+
+    versions
 }
 
 #[lazyffi(export = rola_version_graph_)]
@@ -398,6 +445,95 @@ impl VersionGraph {
         self.origin
             .as_ref()
             .map_or_else(String::new, |origin| origin.1.clone())
+    }
+
+    /// How many versions of the tracked Vault's chain the index here holds.
+    ///
+    /// # FFI
+    ///
+    /// Zero when the Vault's version is not held here, which is the ordinary state after a fetch:
+    /// a fetch brings the Vault's Layout and never its index.
+    #[must_use]
+    #[lazyffi(export = rola_version_graph_upstream_count)]
+    pub const fn upstream_count(&self) -> usize {
+        self.upstream.len()
+    }
+
+    /// The number of the upstream version at `index`, the highest first.
+    ///
+    /// # FFI
+    ///
+    /// Zero when there is no such version.
+    #[must_use]
+    #[lazyffi(export = rola_version_graph_upstream_level)]
+    pub fn upstream_level(&self, index: usize) -> u64 {
+        self.upstream.get(index).map_or(0, |version| version.level)
+    }
+
+    /// The full hash of the upstream version at `index`, as hex.
+    ///
+    /// # FFI
+    ///
+    /// An empty string when there is no such version. The caller owns the string and releases it
+    /// with `free_string`.
+    #[must_use]
+    #[lazyffi(export = rola_version_graph_upstream_hash)]
+    pub fn upstream_hash(&self, index: usize) -> String {
+        self.upstream
+            .get(index)
+            .map_or_else(String::new, |version| version.hash.clone())
+    }
+
+    /// Who made the variant that produced the upstream version at `index`.
+    ///
+    /// # FFI
+    ///
+    /// An empty string when there is no such version, or when the index does not hold the maker.
+    /// The caller owns the string and releases it with `free_string`.
+    #[must_use]
+    #[lazyffi(export = rola_version_graph_upstream_creator)]
+    pub fn upstream_creator(&self, index: usize) -> String {
+        self.upstream
+            .get(index)
+            .map_or_else(String::new, |version| version.creator.clone())
+    }
+
+    /// What the variant that produced the upstream version at `index` says.
+    ///
+    /// # FFI
+    ///
+    /// An empty string when there is no such version, or when the index does not hold the message.
+    /// The caller owns the string and releases it with `free_string`.
+    #[must_use]
+    #[lazyffi(export = rola_version_graph_upstream_message)]
+    pub fn upstream_message(&self, index: usize) -> String {
+        self.upstream
+            .get(index)
+            .map_or_else(String::new, |version| version.message.clone())
+    }
+
+    /// The version the tracked Vault records, as the index names it by.
+    ///
+    /// # FFI
+    ///
+    /// An empty string when the Layout tracks no Vault or the Vault's Layout does not name the
+    /// entry. The caller owns the string and releases it with `free_string`.
+    #[must_use]
+    #[lazyffi(export = rola_version_graph_upstream_head)]
+    pub fn upstream_head(&self) -> String {
+        self.upstream_head.clone()
+    }
+
+    /// The Vault whose recorded version [`Self::upstream_head`] is.
+    ///
+    /// # FFI
+    ///
+    /// An empty string when no Vault is tracked. The caller owns the string and releases it with
+    /// `free_string`.
+    #[must_use]
+    #[lazyffi(export = rola_version_graph_upstream_vault)]
+    pub fn upstream_vault(&self) -> String {
+        self.upstream_vault.clone()
     }
 }
 
