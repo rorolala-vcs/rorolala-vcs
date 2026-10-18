@@ -45,6 +45,7 @@ internal sealed class VersionGraphDock : IDockView
         host.Log,
         host.Files,
         host.Icons,
+        host.Palette,
         statuses,
         host.Refocus,
         sync,
@@ -153,6 +154,9 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The pictures a node's menu is drawn with.</summary>
     private readonly IIconLibrary _icons;
 
+    /// <summary>The colours the program is drawn in, answered afresh each time they are read.</summary>
+    private readonly IPalette _palette;
+
     /// <summary>What the work says about the file on screen, for the edit it may be standing at.</summary>
     private readonly StatusReadings _statuses;
 
@@ -249,6 +253,7 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="log">Where a reading that failed is said.</param>
     /// <param name="files">What says that the files may have changed.</param>
     /// <param name="icons">The pictures a node's menu is drawn with.</param>
+    /// <param name="palette">The colours the program is drawn in.</param>
     /// <param name="statuses">What the work says about the file on screen.</param>
     /// <param name="refocus">The host's windows being come back to.</param>
     /// <param name="sync">What a sync would carry.</param>
@@ -259,6 +264,7 @@ internal sealed partial class VersionGraphView : Control
         ILog log,
         IFileChanges files,
         IIconLibrary icons,
+        IPalette palette,
         StatusReadings statuses,
         IRefocus refocus,
         SyncWatcher sync,
@@ -270,6 +276,7 @@ internal sealed partial class VersionGraphView : Control
         _log = log;
         _files = files;
         _icons = icons;
+        _palette = palette;
         _statuses = statuses;
         _refocus = refocus;
         _sync = sync;

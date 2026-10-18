@@ -36,4 +36,13 @@ internal sealed class LivePalette : IPalette
 
     /// <inheritdoc />
     public Color Splitter => _inForce().Splitter;
+
+    /// <inheritdoc />
+    public Color Primary => _inForce().Primary;
+
+    /// <inheritdoc />
+    public Color Accent => _inForce().Accent;
+
+    /// <inheritdoc />
+    public Color PrimaryText => RorolalaTheme.InkOn(_inForce().Primary);
 }

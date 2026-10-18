@@ -89,34 +89,57 @@ internal sealed partial class VersionGraphView
     /// <summary>The colours in force, read once per look.</summary>
     private Ink CurrentInk()
     {
-        if (_ink is null || _inkVersion != _themeVersion)
+        if (_ink is not { } ink || _inkVersion != _themeVersion || !Matches(ink))
         {
-            _ink = ReadInk();
+            ink = ReadInk();
+            _ink = ink;
             _inkVersion = _themeVersion;
         }
 
-        return _ink;
+        return ink;
     }
+
+    /// <summary>Whether an ink was made from the palette values in force now.</summary>
+    /// <remarks>
+    /// The look's resources raise a change of their own, but the primary, the accent and what is written on
+    /// the primary are read through the live palette and a change to one of them is not something this
+    /// control is told. Asking the palette again as the ink is taken is what makes a primary chosen in the
+    /// preference panel the one the next drawing uses.
+    /// </remarks>
+    /// <param name="ink">The colours last made.</param>
+    /// <returns>Whether they are still the ones the palette holds.</returns>
+    private bool Matches(Ink ink) =>
+        ink.Ground == _palette.Mid
+        && ink.Primary == _palette.Primary
+        && ink.PrimaryText == _palette.PrimaryText
+        && ink.Accent == _palette.Accent
+        && ink.Elevated == _palette.Bright
+        && ink.Front == _palette.Front
+        && ink.Splitter == _palette.Splitter;
 
     /// <summary>Reads the look's colours, and works out the two derived from it.</summary>
     private Ink ReadInk()
     {
-        var ground = Colour(PaletteKeys.Mid, Color.FromRgb(0x14, 0x14, 0x14));
-        var primary = Colour(PaletteKeys.Primary, Color.FromRgb(0x44, 0x6D, 0xD6));
-        var accent = Colour(PaletteKeys.Accent, Color.FromRgb(0xFF, 0x7E, 0xA2));
-        var front = Colour(PaletteKeys.Front, Color.FromRgb(0xE6, 0xE6, 0xE6));
+        // The five a surface is made of, the primary, the accent and the ink on the primary are the live
+        // palette's own, so a colour changed while the program runs is the next one this drawing is made of.
+        // The two step colours of the ink are resources because the look publishes them and no role names
+        // them.
+        var ground = _palette.Mid;
+        var primary = _palette.Primary;
+        var accent = _palette.Accent;
+        var front = _palette.Front;
         var light = ground.R + ground.G + ground.B > 3 * 0x80;
 
         return new Ink(
             ground,
             primary,
-            Colour(PaletteKeys.PrimaryText, Colors.White),
+            _palette.PrimaryText,
             accent,
             light ? Mix(accent, front, 0.4) : accent,
-            Colour(PaletteKeys.Bright, Color.FromRgb(0x1C, 0x1C, 0x1C)),
+            _palette.Bright,
             front,
             Colour(PaletteKeys.Muted, Color.FromRgb(0xAB, 0xAB, 0xAB)),
-            Colour(PaletteKeys.Splitter, Color.FromRgb(0x2C, 0x2C, 0x2C)),
+            _palette.Splitter,
             WithAlpha(accent, light ? (byte)26 : (byte)15),
             WithAlpha(accent, light ? (byte)13 : (byte)8),
             Colour(PaletteKeys.Add, Color.FromRgb(0x5F, 0xD0, 0x7A)),
