@@ -205,7 +205,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// <param name="reading">The reading.</param>
     /// <param name="path">The path of the entry, as the program names it.</param>
     /// <returns>What to say.</returns>
-    private static string Wrong(RolaStatus reading, string path)
+    internal static string Wrong(RolaStatus reading, string path)
     {
         if (reading.Unowned.Any(named => StatusReadings.Names(reading.Root, named, path)))
         {

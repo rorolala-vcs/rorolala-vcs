@@ -1388,6 +1388,9 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_standing(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_version_graph(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_path_state(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1672,6 +1675,18 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint locate_rola_inverse_index(nint dir);
+
+    /// <summary>
+    /// Reads the chain of the file `target` as the Version Graph shows it.
+    ///
+    /// A `RolaVersionGraph` the caller releases with `free_rola_version_graph`, or null when the file
+    /// has no version history: no Workspace holds the directory, the Workspace works in no Layout, the
+    /// Layout does not name `target`, nothing was ever recorded for it, or the chain cannot be read.
+    ///
+    /// Returns an owned `RolaVersionGraph *`, or `NULL` when there is nothing; release it with `free_rola_version_graph`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint locate_rola_version_graph(nint directory, nint target);
 
     /// <summary>
     /// Locates a [`Vault`] by searching upwards from the given directory
@@ -2289,6 +2304,131 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RolaStanding rola_status_standing_relation(nint self, nuint index);
+
+    /// <summary>
+    /// How many versions the chain has.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_version_graph_version_count(nint self);
+
+    /// <summary>
+    /// The number of the version at `index`, the highest first.
+    ///
+    /// Zero when there is no such version.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_version_graph_version_level(nint self, nuint index);
+
+    /// <summary>
+    /// The full hash of the version at `index`, as hex.
+    ///
+    /// An empty string when there is no such version. The caller owns the string and releases it
+    /// with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_version_hash(nint self, nuint index);
+
+    /// <summary>
+    /// Who made the variant that produced the version at `index`.
+    ///
+    /// An empty string when there is no such version, or when the index does not hold the maker.
+    /// The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_version_creator(nint self, nuint index);
+
+    /// <summary>
+    /// What the variant that produced the version at `index` says.
+    ///
+    /// An empty string when there is no such version, or when the index does not hold the message.
+    /// The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_version_message(nint self, nuint index);
+
+    /// <summary>
+    /// How many variants the chain draws.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_version_graph_variant_count(nint self);
+
+    /// <summary>
+    /// The label the variant at `index` is drawn by.
+    ///
+    /// An empty string when there is no such variant. The caller owns the string and releases it
+    /// with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_variant_label(nint self, nuint index);
+
+    /// <summary>
+    /// The full hash of the variant at `index`, as hex.
+    ///
+    /// An empty string when there is no such variant, or when it is a placeholder the drawing has
+    /// no hash for. The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_variant_hash(nint self, nuint index);
+
+    /// <summary>
+    /// The number of the version the variant at `index` is based on.
+    ///
+    /// Zero when there is no such variant.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_version_graph_variant_level(nint self, nuint index);
+
+    /// <summary>
+    /// Whether the variant at `index` is the one the version above points at.
+    ///
+    /// False when there is no such variant.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_version_graph_variant_spine(nint self, nuint index);
+
+    /// <summary>
+    /// The index of the variant the variant at `index` merges into.
+    ///
+    /// A negative number when it merges none, or when there is no such variant.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern long rola_version_graph_variant_join(nint self, nuint index);
+
+    /// <summary>
+    /// Who made the variant at `index`.
+    ///
+    /// An empty string when there is no such variant, or when the index does not hold the maker.
+    /// The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_variant_creator(nint self, nuint index);
+
+    /// <summary>
+    /// What the variant at `index` says.
+    ///
+    /// An empty string when there is no such variant, or when the index does not hold the message.
+    /// The caller owns the string and releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_variant_message(nint self, nuint index);
+
+    /// <summary>
+    /// The number of the version the tracked Vault records, when the chain marks one.
+    ///
+    /// A negative number when there is no such version.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern long rola_version_graph_origin_level(nint self);
+
+    /// <summary>
+    /// The name of the Vault whose version is marked, when one is.
+    ///
+    /// An empty string when there is no such Vault. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_version_graph_origin_vault(nint self);
 
     /// <summary>
     /// Creates a Vault in the specified directory

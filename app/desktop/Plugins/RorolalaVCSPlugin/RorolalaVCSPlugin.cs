@@ -48,7 +48,11 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // And what the work holds: the Ownership column of a directory listing, and the badge a
         // locked tile wears. It is this plugin's to answer rather than the File System plugin's,
         // because who holds an entry is Rorolala's question and the answer comes through the C ABI.
-        RorolalaLocks.Declare(host);
+        // The same set of status readings is handed on to the docks: the Version Graph reads a file's
+        // edit from it, and a reading shared is a reading not made twice.
+        var statuses = new StatusReadings(host.Log);
+
+        RorolalaLocks.Declare(host, statuses);
 
         // What every command this plugin runs reports itself to: a card per command down the Overview, drawn by
         // whoever reached for the command — the strip, an entry's menu — and read by the Overview's panel.
@@ -58,7 +62,7 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // rather than anything the File System plugin is asked for. What they will hold is Rorolala's,
         // while the base directory they are read against is that plugin's — which is why the two are one
         // plugin depending on another (see RorolalaDocks).
-        RorolalaDocks.Declare(host, Manifest.Id, hub);
+        RorolalaDocks.Declare(host, Manifest.Id, hub, statuses);
 
         // What an entry's menu offers about who holds it: the two ownership commands, plain and forced, each of
         // which reports itself to the hub while it goes.

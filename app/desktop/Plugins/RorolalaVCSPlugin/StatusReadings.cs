@@ -7,10 +7,10 @@ namespace RorolalaVCSPlugin;
 /// What a reading of the work says about the directories being listed, read once each and kept.
 /// </summary>
 /// <remarks>
-/// It is shared by the two columns read from the work — the State mark and the column saying how far a path
-/// is from upstream — because a reading is not a cheap question: it walks the tree beside the Layout and,
-/// for every path that records a version, walks the version chain as well. One reading per directory between
-/// the two of them is the difference between a listing that costs what it costs and one that costs it twice.
+/// It is shared by the views read from the work — the two columns, the badges, and the Version Graph's
+/// edit — because a reading is not a cheap question: it walks the tree beside the Layout and, for every
+/// path that records a version, walks the version chain as well. One reading per directory between them
+/// is the difference between a listing that costs what it costs and one that costs it several times.
 /// <para>
 /// A directory both providers were asked about is read the first time and the same reading is handed over
 /// after that, which is what makes the sharing worth having. Nothing is reached for: a reading is a snapshot
@@ -21,7 +21,16 @@ namespace RorolalaVCSPlugin;
 internal sealed class StatusReadings
 {
     /// <summary>What was read for each directory, so a listing costs one read rather than one per row.</summary>
+    /// <remarks>
+    /// Guarded because the reading is shared by views that ask from different threads: the listing asks on
+    /// the window's, and the Version Graph asks from the thread it reads a chain on. What is read is held
+    /// outside the lock, since reading the work is the expensive part and two asks racing for one directory
+    /// may both read rather than one wait for the other.
+    /// </remarks>
     private readonly Dictionary<string, RolaStatus?> _readings = new(StringComparer.Ordinal);
+
+    /// <summary>What guards <see cref="_readings"/> and <see cref="_warned"/>.</summary>
+    private readonly object _gate = new();
 
     /// <summary>Where what could not be read is said, once.</summary>
     private readonly ILog _log;
@@ -38,9 +47,12 @@ internal sealed class StatusReadings
     /// <returns>The reading, or nothing when the directory is not inside a Workspace that works in a Layout.</returns>
     public RolaStatus? Reading(string directory)
     {
-        if (_readings.TryGetValue(directory, out var known))
+        lock (_gate)
         {
-            return known;
+            if (_readings.TryGetValue(directory, out var known))
+            {
+                return known;
+            }
         }
 
         RolaStatus? status = null;
@@ -54,9 +66,21 @@ internal sealed class StatusReadings
             Warn($"how the work under `{directory}` stands", error);
         }
 
-        _readings[directory] = status;
+        lock (_gate)
+        {
+            // Another ask read the same directory in the meantime: its reading is the one that stands,
+            // and this one is given back rather than kept beside it.
+            if (_readings.TryGetValue(directory, out var raced))
+            {
+                status?.Dispose();
 
-        return status;
+                return raced;
+            }
+
+            _readings[directory] = status;
+
+            return status;
+        }
     }
 
     /// <summary>
@@ -98,12 +122,18 @@ internal sealed class StatusReadings
     /// </remarks>
     public void Forget()
     {
-        foreach (var status in _readings.Values)
+        RolaStatus?[] statuses;
+
+        lock (_gate)
+        {
+            statuses = [.. _readings.Values];
+            _readings.Clear();
+        }
+
+        foreach (var status in statuses)
         {
             status?.Dispose();
         }
-
-        _readings.Clear();
     }
 
     /// <summary>
@@ -118,12 +148,16 @@ internal sealed class StatusReadings
     /// <param name="error">Why it could not be read.</param>
     private void Warn(string what, Exception error)
     {
-        if (_warned)
+        lock (_gate)
         {
-            return;
+            if (_warned)
+            {
+                return;
+            }
+
+            _warned = true;
         }
 
-        _warned = true;
         _log.Warn($"{what} could not be read: {error.Message}");
     }
 }

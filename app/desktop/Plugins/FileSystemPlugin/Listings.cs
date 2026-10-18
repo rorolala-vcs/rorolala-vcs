@@ -1390,6 +1390,14 @@ internal abstract class EntryView : UserControl
             return;
         }
 
+        // The file a press landed on is the one the rest of the program may be asked about: a view
+        // of its version chain follows this, and a directory says nothing here because no chain
+        // hangs from one.
+        if (at >= 0 && at < Browser.Shown.Count)
+        {
+            ChosenEntry.Publish(Browser.Shown[at]);
+        }
+
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
 

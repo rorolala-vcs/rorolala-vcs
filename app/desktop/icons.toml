@@ -96,6 +96,9 @@ key = "rorolala_vcs"
 #
 # `more_vert` is the button that opens what the three of them are told to leave out: three vertical beads,
 # which is what this set draws for a menu of a few more choices.
+#
+# `content_copy` is what the Version Graph's node menu wears: two sheets, one in front of the other,
+# which is the set's mark for copying something and the same picture the browser's own copy uses.
 icons = [
     "lock",
     "create",
@@ -116,6 +119,7 @@ icons = [
     "cloud_download",
     "sync",
     "more_vert",
+    "content_copy",
 ]
 
 [[set]]

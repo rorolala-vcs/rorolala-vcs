@@ -13,7 +13,7 @@ build. It lists every export the header declares as a `[DllImport]` on
 
 The public shape — the more OOP layer a caller is meant to use, which owns the marshalling and the
 releases the raw surface leaves open — is hand-written over these bindings, one file per thing it is
-about: `RolaWorkspace`, `RolaOwnership`, `RolaUser`.
+about: `RolaWorkspace`, `RolaOwnership`, `RolaUser`, `RolaStatus` and `RolaVersionGraph`.
 
 ## What it needs
 

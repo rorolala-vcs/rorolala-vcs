@@ -28,6 +28,26 @@ rorolala_vcs:
       en: Accounts
       zh-CN: 账户管理
 
+  # What the Version Graph says when it has nothing to draw: no file has been clicked yet, or the
+  # file that was has no chain of versions recorded for it. The two are different answers — one is
+  # waiting for a click and the other is the click's whole answer — so they are two keys.
+  version_graph:
+    no_file:
+      en: Click a file in Directories to see its version history
+      zh-CN: 在“目录”中点击一个文件以查看其版本历史
+    no_history:
+      en: This file has no version history
+      zh-CN: 该文件没有版本历史
+
+    # What a right-click on a node offers: the index's name for it, copied whole. Versions and
+    # variants are words of their own, so the two are two items rather than one.
+    copy_version_hash:
+      en: Copy version hash
+      zh-CN: 复制版本哈希
+    copy_variant_hash:
+      en: Copy variant hash
+      zh-CN: 复制变体哈希
+
   # What each of the three says while the directory the tree is rooted at is not one a Workspace
   # holds: there is nothing under such a place for them to show, and a blank view of the work would
   # read as a work with nothing in it. The base is the File System plugin's, which is why the words

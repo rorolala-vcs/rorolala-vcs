@@ -1,10 +1,10 @@
 //! The `rola vcs-index lookback` command: draw the chain an object sits at the top of.
 //!
-//! The drawing is made of two halves: [`gather`] walks the chain and says what is there — one level
-//! a version, each with the variant its version points at and the variants merged in beside it, and
-//! the variant itself at the top when the hash named one — and the renderer turns that into the
-//! grid `rorolala_vcs::draw` lays out. What `--json` prints is [`ResultVcsIndexLookback`], which is
-//! the same thing the drawing is made from.
+//! The drawing is made of two halves: [`read_chain`] walks the chain and says what is there — one
+//! level a version, each with the variant its version points at and the variants merged in beside
+//! it, and the variant itself at the top when the hash named one — and [`draw_chain`] turns that
+//! into a grid. What `--json` prints is [`ResultVcsIndexLookback`], which is the same thing the
+//! drawing is made from.
 //!
 //! A version is what a message belongs to: it points at one variant, and that variant carries who
 //! made it and what it says — both by hash, at a [`Creator`](librorolala::vcs::Creator) and a
@@ -17,8 +17,8 @@ use std::collections::HashMap;
 
 use librorolala::storage::{Blake3Hash, Key};
 use librorolala::vcs::{
-    Cell, Chain, Node, Role, Top, VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version,
-    draw as draw_chain,
+    Cell, LevelView, LookbackError, Origin, Role, TopKind, VCSIndex, VariantView, chain_of,
+    draw as draw_chain, read_chain, short_hash,
 };
 use mingling::{
     Grouped, LazyRes, ProgramCollect, ShellContext, StructuralData, Suggest,
@@ -44,7 +44,7 @@ use crate::complete::{
 };
 use crate::exit_codes::EC_HELP;
 use crate::vcs_index::{
-    ErrorVcsIndexArgument, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hash_of, hex, runtime,
+    ErrorVcsIndexArgument, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hash_of, runtime,
 };
 
 /// How much of a message a drawing shows before it is cut short, when the run names no length.
@@ -310,163 +310,19 @@ pub fn from_object(
     key: Key,
     origin: Option<(&str, Blake3Hash)>,
 ) -> Result<ResultVcsIndexLookback, String> {
-    let (start, head) = match runtime.block_on(index.read(key)) {
-        Ok(VCSIndexObject::Version(version)) => (version, None),
-        Ok(VCSIndexObject::Variant(variant)) => {
-            match runtime.block_on(index.read(Key::new(*variant.base_version()))) {
-                Ok(VCSIndexObject::Version(version)) => (version, Some(variant)),
-                _ => return Err(not_a_chain()),
-            }
-        }
-        Ok(_) => return Err(not_a_chain()),
-        Err(error) => return Err(error.reason()),
-    };
-
-    gather(index, runtime, start, head.as_ref(), origin)
-}
-
-/// Why a hash that is not the top of a chain is not one.
-fn not_a_chain() -> String {
-    t!("vcs_index_lookback.err_not_a_chain").trim().to_string()
-}
-
-/// Walks the chain back from `start`, gathering every variant the graph draws.
-///
-/// The versions come first, one to a level, each with the variant it points at; then the variants
-/// merged in, reached by following each variant's `join` and placed at the level of the version
-/// they are based on. The variant in `head`, when one is given, is the version `start`'s own
-/// variant: it is the variant of the version above `start`, whose number nothing here knows.
-fn gather(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    start: Version,
-    head: Option<&Variant>,
-    origin: Option<(&str, Blake3Hash)>,
-) -> Result<ResultVcsIndexLookback, String> {
-    let mut versions = Vec::new();
-    let mut variants = Vec::new();
-    let mut current = start;
-
-    while !current.is_root() {
-        let variant = read_variant(index, runtime, current.variant())?;
-        let base = read_version(index, runtime, variant.base_version())?;
-        variants.push(variant);
-        versions.push(current);
-        current = base;
-    }
-
-    // The number of the highest version, one less than the number of versions down to the first.
-    let count = u64::try_from(versions.len()).unwrap_or(u64::MAX);
-    let top = count.saturating_sub(1);
-    let levels = usize::try_from(top).unwrap_or(usize::MAX);
-
-    // The number each version carries, so a merged variant can be placed by its base version.
-    let mut number_of: HashMap<Blake3Hash, u64> = HashMap::new();
-    for (at, version) in versions.iter().enumerate() {
-        let at = u64::try_from(at).unwrap_or(0);
-        number_of.insert(*version.hash().digest(), top.saturating_sub(at));
-    }
-
-    // Where the Vault being tracked stands: the version it records, when this chain holds it too.
-    // A Vault ahead of the work, or one never told of the entry, records a version that is not here,
-    // and there is nothing to mark.
-    let origin = origin.and_then(|(vault, version)| {
-        number_of.get(&version).map(|number| Origin {
-            number: *number,
-            vault: vault.to_owned(),
-        })
-    });
-
-    // The words of the oldest version come from the variant that made it, which is based on the root
-    // — a version that is never drawn — so it hangs from no level. It is kept apart here so that
-    // version is drawn saying what it was, like every other.
-    let first = variants.last().map(|variant| view(index, runtime, variant));
-
-    // The spine of each level, highest first, and the level each variant sits at.
-    let mut level_of: HashMap<Blake3Hash, u64> = HashMap::new();
-    let mut spine = Vec::with_capacity(levels);
-    for (at, variant) in variants.into_iter().take(levels).enumerate() {
-        let at = u64::try_from(at).unwrap_or(0);
-        let level = top.saturating_sub(1).saturating_sub(at);
-        level_of.insert(*variant.hash().digest(), level);
-        spine.push((variant, level));
-    }
-
-    // What to follow the joins of: the spine variants, and the head variant when there is one —
-    // it is the variant of the level above the spine.
-    let mut queue = spine.clone();
-    if let Some(head) = head {
-        level_of.insert(*head.hash().digest(), top);
-        queue.push((head.clone(), top));
-    }
-
-    // The variants merged in, reached by following each variant's `join`, and the level that merges
-    // each of them in — the latest merge sets where it stands.
-    let mut merged_at: HashMap<u64, Vec<Variant>> = HashMap::new();
-    let mut merged_by: HashMap<Blake3Hash, u64> = HashMap::new();
-    while let Some((variant, level)) = queue.pop() {
-        let Some(join) = variant.join() else {
-            continue;
-        };
-        merged_by
-            .entry(*join)
-            .and_modify(|highest| *highest = (*highest).max(level))
-            .or_insert(level);
-
-        // A variant that is already drawn — a spine, the head, or one merged in before — is
-        // reached, not gathered a second time.
-        if level_of.contains_key(join) {
-            continue;
-        }
-        let Ok(merged) = read_variant(index, runtime, join) else {
-            continue;
-        };
-        // Its place is the level of its base version. A variant based on the root has no version
-        // above it to sit under, so it has no level and is left out — the root is never drawn.
-        let Some(&at) = number_of.get(merged.base_version()) else {
-            continue;
-        };
-        level_of.insert(*merged.hash().digest(), at);
-        merged_at.entry(at).or_default().push(merged.clone());
-        queue.push((merged, at));
-    }
-
-    // One level a version, the highest first: its spine variant, then the variants merged into it,
-    // left to right, the one merged in latest furthest out. The head, when there is one, is the
-    // level above them all.
-    let mut built = Vec::new();
-    if let Some(head) = head {
-        let merged = merged_at.remove(&top).unwrap_or_default();
-        built.push(level_view(index, runtime, head, top, merged, &merged_by));
-    }
-    for (variant, level) in &spine {
-        let merged = merged_at.remove(level).unwrap_or_default();
-        built.push(level_view(
-            index, runtime, variant, *level, merged, &merged_by,
-        ));
-    }
+    let chain = read_chain(index, runtime, key, origin).map_err(|error| match error {
+        LookbackError::NotAChain => t!("vcs_index_lookback.err_not_a_chain").trim().to_string(),
+        LookbackError::Broken => t!("vcs_index_lookback.err_broken").trim().to_string(),
+        LookbackError::Read(error) => error.reason(),
+    })?;
 
     Ok(ResultVcsIndexLookback {
-        levels: built,
-        top: if head.is_some() {
-            TopKind::Unknown
-        } else {
-            TopKind::Version
-        },
-        origin,
-        first,
+        levels: chain.levels,
+        top: chain.top,
+        origin: chain.origin,
+        first: chain.first,
         standing: None,
     })
-}
-
-/// Where a Vault's own Layout stands in the chain being drawn: the version it records for the entry
-/// and the Vault's name.
-#[derive(Serialize)]
-pub struct Origin {
-    /// The number the version has in this chain.
-    number: u64,
-    /// The Vault the version is recorded in.
-    vault: String,
 }
 
 /// How the file a chain was drawn for stands, as `rola status` reads it.
@@ -523,120 +379,6 @@ pub enum StandingRelation {
     Unknown,
 }
 
-/// One level, its merged variants put in draw order: the one merged in latest furthest out.
-fn level_view(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    variant: &Variant,
-    level: u64,
-    mut merged: Vec<Variant>,
-    merged_by: &HashMap<Blake3Hash, u64>,
-) -> LevelView {
-    merged.sort_by_cached_key(|merged| {
-        (
-            merged_by.get(merged.hash().digest()).copied().unwrap_or(0),
-            hex(merged.hash().digest()),
-        )
-    });
-
-    LevelView {
-        number: level,
-        variant: view(index, runtime, variant),
-        merged: merged
-            .iter()
-            .map(|merged| view(index, runtime, merged))
-            .collect(),
-    }
-}
-
-/// Reads the variant `hash` names.
-fn read_variant(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    hash: &Blake3Hash,
-) -> Result<Variant, String> {
-    match runtime.block_on(index.read(Key::new(*hash))) {
-        Ok(VCSIndexObject::Variant(variant)) => Ok(variant),
-        Ok(_) => Err(t!("vcs_index_lookback.err_broken").trim().to_string()),
-        Err(error) => Err(error.reason()),
-    }
-}
-
-/// Reads the version `hash` names.
-fn read_version(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    hash: &Blake3Hash,
-) -> Result<Version, String> {
-    match runtime.block_on(index.read(Key::new(*hash))) {
-        Ok(VCSIndexObject::Version(version)) => Ok(version),
-        Ok(_) => Err(t!("vcs_index_lookback.err_broken").trim().to_string()),
-        Err(error) => Err(error.reason()),
-    }
-}
-
-/// The text the object `hash` names says, or nothing when the index does not hold it.
-///
-/// A variant names who made it and what it says by hash, so a drawing that says either has to read
-/// the object behind it. One the index does not hold is left empty rather than failing the drawing:
-/// what the chain is made of is what is being looked at, and the words beside it are what may be
-/// missing — a copy of an index that came over without them still has a chain to draw.
-fn read_text(index: &VCSIndex, runtime: &tokio::runtime::Runtime, hash: &Blake3Hash) -> String {
-    match runtime.block_on(index.read(Key::new(*hash))) {
-        Ok(VCSIndexObject::Creator(creator)) => creator.read_to_string().to_owned(),
-        Ok(VCSIndexObject::Message(message)) => message.read_to_string().to_owned(),
-        _ => String::new(),
-    }
-}
-
-/// A variant as the graph draws it: the hashes it is named by, and the words that go with it.
-fn view(index: &VCSIndex, runtime: &tokio::runtime::Runtime, variant: &Variant) -> VariantView {
-    VariantView {
-        hash: hex(variant.hash().digest()),
-        join: variant.join().map(hex),
-        creator: read_text(index, runtime, variant.creator()),
-        message: read_text(index, runtime, variant.message()),
-    }
-}
-
-/// One variant, as much of it as a drawing needs: the hash it is named by, the variant it merges
-/// in when it is a merge, and the words it carries.
-#[derive(Serialize)]
-pub struct VariantView {
-    /// The variant's hash, as hex.
-    hash: String,
-    /// The hash of the variant it merges in, as hex, when it is a merge.
-    join: Option<String>,
-    /// Who made it, as text; empty when the index does not hold it.
-    creator: String,
-    /// What it says, as text; empty when the index does not hold it.
-    message: String,
-}
-
-/// What the top of a chain is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TopKind {
-    /// The highest version's number is known.
-    Version,
-    /// The highest version's number is unknown: the chain was started from a variant.
-    Unknown,
-    /// The highest version is being edited: changes to it were never recorded.
-    Editing,
-}
-
-/// One level of the chain: a version's number, the variant the version points at, and the variants
-/// merged into the chain at this level, left to right.
-#[derive(Serialize)]
-pub struct LevelView {
-    /// The number of the version this level stands for.
-    number: u64,
-    /// The spine variant: the one the version points at, or the variant the chain was started at.
-    variant: VariantView,
-    /// The variants merged in at this level, left to right, the one merged in latest furthest out.
-    merged: Vec<VariantView>,
-}
-
 /// Result: the chain, one level a version, the highest version's first.
 ///
 /// It is what a drawing needs and no more — a level's number, the variant its version points at,
@@ -675,11 +417,6 @@ impl ResultVcsIndexLookback {
     }
 }
 
-/// The 7 hex characters a hash is drawn by in the graph.
-fn short(hash: &str) -> &str {
-    &hash[..hash.len().min(7)]
-}
-
 #[renderer(buffer)]
 pub fn render_result_vcs_index_lookback(result: ResultVcsIndexLookback, lookback: &ResLookback) {
     let hints = if lookback.hint() {
@@ -703,7 +440,7 @@ pub fn render_result_vcs_index_lookback(result: ResultVcsIndexLookback, lookback
             r_println!("");
         }
 
-        let chain = chain_of(&result);
+        let chain = chain_of(&result.levels, result.top, result.first.is_some());
         let drawing = draw_chain(&chain);
         let notes = notes(&result, lookback);
         let mut level_of: HashMap<usize, u64> = drawing
@@ -774,7 +511,7 @@ fn hints(result: &ResultVcsIndexLookback) -> Vec<String> {
         lines.push(
             t!(
                 "status.merging_into",
-                variant = short(&merging.variant),
+                variant = short_hash(&merging.variant),
                 path = &merging.path
             )
             .trim()
@@ -1043,68 +780,6 @@ fn truncate(text: &str, longest: usize) -> String {
     let kept: String = text.chars().take(longest - ELLIPSIS.len()).collect();
 
     format!("{kept}{ELLIPSIS}")
-}
-
-/// The chain the drawing is made from: the levels turned into the nodes the layout reaches for.
-fn chain_of(result: &ResultVcsIndexLookback) -> Chain {
-    // Where each variant is drawn, so a join can be turned into the node it reaches.
-    let mut at: HashMap<&str, usize> = HashMap::new();
-    let mut count = 0;
-    for level in &result.levels {
-        at.insert(level.variant.hash.as_str(), count);
-        count += 1;
-        for merged in &level.merged {
-            at.insert(merged.hash.as_str(), count);
-            count += 1;
-        }
-    }
-
-    let mut nodes = Vec::with_capacity(count);
-    for level in &result.levels {
-        nodes.push(node_of(&level.variant, level.number, true, &at));
-        for merged in &level.merged {
-            nodes.push(node_of(merged, level.number, false, &at));
-        }
-    }
-
-    // The number the highest recorded version carries: one version is number 0, and every version
-    // over the oldest — a level of the drawing, or the head a chain was started from — adds one.
-    // The levels alone do not count them, since the oldest version's variant is based on the root
-    // and hangs from no level.
-    let recorded = recorded_top(result);
-
-    // The version a chain is looked back from a variant is one the index does not number, and one
-    // being edited is a version it does not have at all: both are a level of their own over the
-    // highest one drawn, so `V{n}` numbers what was recorded and the placeholder stands above it.
-    let top = match result.top {
-        TopKind::Editing => recorded.saturating_add(1),
-        _ => recorded,
-    };
-    let top_kind = match result.top {
-        TopKind::Version => Top::Numbered,
-        TopKind::Unknown => Top::Unknown,
-        TopKind::Editing => {
-            // The variant the work is on its way to is not one the index has either, so the level
-            // it will be made by is drawn as a placeholder of its own.
-            nodes.push(Node::new(
-                "??".to_owned(),
-                top.saturating_sub(1),
-                true,
-                None,
-            ));
-            Top::Editing
-        }
-    };
-
-    Chain::new(top, top_kind, nodes)
-}
-
-/// One node of the drawing: its label the leading characters of the variant's hash, its join the
-/// node that hash names.
-fn node_of(view: &VariantView, level: u64, spine: bool, at: &HashMap<&str, usize>) -> Node {
-    let join = view.join.as_deref().and_then(|hash| at.get(hash).copied());
-
-    Node::new(short(&view.hash).to_owned(), level, spine, join)
 }
 
 #[cfg(test)]

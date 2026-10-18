@@ -7,6 +7,7 @@
 
 mod base;
 mod ffi;
+mod graph;
 mod merge;
 mod ownership;
 mod status;
@@ -15,6 +16,7 @@ mod status;
 // crosses is the standing itself, so the reader beside it is named here rather than re-exported.
 pub use base::{Base, Relation, Standing, compare, wrong_base};
 pub use ffi::*;
+pub use graph::*;
 pub use merge::*;
 pub use ownership::*;
 pub use status::*;

@@ -13,11 +13,13 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// The Overview is the view of the work that is there — how it stands beside the Layout it works from,
-/// which is the reading `rola status` makes (see <see cref="OverviewDock"/>). The Workspace and Version
-/// Graph docks are still to be written, and what the two carry while they are is a line about where the
-/// tree is rooted. The Accounts dock is the machine's own key pairs — which account the work acts as, and
-/// what may be done about them (see <see cref="AccountsDock"/>) — which is not about one work but about
-/// the person, and so is a dock of its own rather than a part of the Overview.
+/// which is the reading `rola status` makes (see <see cref="OverviewDock"/>). The Version Graph is the
+/// chain of the file clicked most recently in a directory listing, drawn as `rola status &lt;file&gt;` draws
+/// it (see <see cref="VersionGraphDock"/>). The Workspace dock is still to be written, and what it
+/// carries while it is is a line about where the tree is rooted. The Accounts dock is the machine's own
+/// key pairs — which account the work acts as, and what may be done about them (see
+/// <see cref="AccountsDock"/>) — which is not about one work but about the person, and so is a dock of
+/// its own rather than a part of the Overview.
 /// <para>
 /// The base is read through <see cref="BaseDirectory"/>, the File System plugin's published answer,
 /// because that plugin is the one that owns where the browser works: a dock of this one that went
@@ -60,17 +62,24 @@ internal static class RorolalaDocks
     /// Registers them, each under its own title.
     /// </summary>
     /// <remarks>
-    /// Two of them are still a line saying that the base is not a Workspace, since what each will
-    /// hold is not written yet; the Overview is the view of the work that is there, and the Accounts is
-    /// the machine's own key pairs.
+    /// The Workspace is still a line saying that the base is not a Workspace, since what it will hold
+    /// is not written yet; the Overview is the view of the work that is there, the Version Graph is
+    /// one file's chain, and the Accounts is the machine's own key pairs.
     /// </remarks>
     /// <param name="host">The host, whose dock registry they are registered with.</param>
     /// <param name="owner">This plugin, which is what the registrations are attributed to.</param>
     /// <param name="hub">What every command this plugin runs reports itself to, which the Overview draws.</param>
-    public static void Declare(IPluginHost host, PluginId owner, ProgressHub hub)
+    /// <param name="statuses">What the work says about a file, which the graph reads an edit from.</param>
+    public static void Declare(
+        IPluginHost host,
+        PluginId owner,
+        ProgressHub hub,
+        StatusReadings statuses
+    )
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
+        ArgumentNullException.ThrowIfNull(statuses);
 
         Add(
             host,
@@ -80,7 +89,7 @@ internal static class RorolalaDocks
             _ => new OverviewDock(host, host.Log, host.Files, host.Refocus, hub)
         );
         Add(host, owner, WorkspaceNameId, WorkspaceKey, _ => new RorolalaDock(host.Log));
-        Add(host, owner, VersionGraphNameId, VersionGraphKey, _ => new RorolalaDock(host.Log));
+        Add(host, owner, VersionGraphNameId, VersionGraphKey, _ => new VersionGraphDock(host, statuses));
         Add(host, owner, AccountsNameId, AccountsKey, _ => new AccountsDock(host));
     }
 
@@ -110,14 +119,14 @@ internal static class RorolalaDocks
 }
 
 /// <summary>
-/// The dock itself: the view, and nothing the header offers.
+/// The Workspace dock: the view, and nothing the header offers.
 /// </summary>
 internal sealed class RorolalaDock : IDockView
 {
     /// <summary>The control the dock shows.</summary>
     private readonly WorkspaceNotice _view;
 
-    /// <summary>Makes one of the two views that are still a line about where the tree is rooted.</summary>
+    /// <summary>Makes the Workspace view, which is still a line about where the tree is rooted.</summary>
     /// <param name="log">Where a base that could not be read is said.</param>
     public RorolalaDock(ILog log) => _view = new WorkspaceNotice(log);
 

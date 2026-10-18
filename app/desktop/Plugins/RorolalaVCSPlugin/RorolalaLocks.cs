@@ -86,9 +86,11 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// Contributes this plugin's pictures, its column and its provider to the host.
     /// </summary>
     /// <param name="host">The host, for the icon library and the log.</param>
-    public static void Declare(IPluginHost host)
+    /// <param name="statuses">The readings of the work, shared with the docks.</param>
+    public static void Declare(IPluginHost host, StatusReadings statuses)
     {
         ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(statuses);
 
         Icons.Declare(host.Icons);
 
@@ -104,12 +106,10 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         EntryMarkProviders.Register(locks);
 
         // The State mark and the column saying how far a path is from upstream are both read from the work
-        // itself rather than from the Vault's copy the two above read, so they share a set of readings of
-        // their own: one reading of a directory answers both columns, and the badges too. The Upstream
-        // column reads it as well, because a variant file is the one file that column can name and the Vault
-        // cannot.
-        var statuses = new StatusReadings(host.Log);
-
+        // itself rather than from the Vault's copy the two above read, so they share the set the plugin made
+        // and handed in: one reading of a directory answers both columns, the badges, and the Version Graph's
+        // edit. The Upstream column reads it as well, because a variant file is the one file that column can
+        // name and the Vault cannot.
         EntryColumns.Register(new RorolalaUpstream(readings, statuses));
         EntryColumns.Register(new RorolalaStates(statuses));
         EntryColumns.Register(new RorolalaStanding(statuses));

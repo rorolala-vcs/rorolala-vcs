@@ -65,6 +65,9 @@ internal static partial class Icons
     /// <summary>The key the `more_vert` picture is held under.</summary>
     public const string MoreVert = "rorolala_vcs.more_vert";
 
+    /// <summary>The key the `content_copy` picture is held under.</summary>
+    public const string ContentCopy = "rorolala_vcs.content_copy";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -87,5 +90,6 @@ internal static partial class Icons
         (CloudDownload, "cloud_download"),
         (Sync, "sync"),
         (MoreVert, "more_vert"),
+        (ContentCopy, "content_copy"),
     ];
 }

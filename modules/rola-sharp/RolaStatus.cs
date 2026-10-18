@@ -204,6 +204,18 @@ public sealed class RolaStatus : IDisposable
     /// <summary>The native reading, until it is given back.</summary>
     private nint _handle;
 
+    /// <summary>
+    /// What guards <see cref="_handle"/>.
+    /// </summary>
+    /// <remarks>
+    /// A reading is shared: a listing asks it on the window's thread, and the Version Graph asks the same
+    /// reading from the thread it reads a chain on. The native handle is what one of them may give back
+    /// while the other is asking a question of it, so a question and the giving back take the same lock:
+    /// a path asked after its reading was let go is answered with <see cref="ObjectDisposedException"/>,
+    /// which is an answer, rather than by reaching into freed memory.
+    /// </remarks>
+    private readonly object _gate = new();
+
     /// <summary>Makes a reading from a native status, which is read out and kept.</summary>
     /// <param name="handle">The native status, which must not be null.</param>
     private RolaStatus(nint handle)
@@ -432,17 +444,21 @@ public sealed class RolaStatus : IDisposable
     public PathState StateOf(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        ObjectDisposedException.ThrowIf(_handle == 0, this);
 
-        var utf8 = Marshal.StringToCoTaskMemUTF8(path);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_handle == 0, this);
 
-        try
-        {
-            return (PathState)RorolalaBinding.rola_status_state_of(_handle, utf8);
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(utf8);
+            var utf8 = Marshal.StringToCoTaskMemUTF8(path);
+
+            try
+            {
+                return (PathState)RorolalaBinding.rola_status_state_of(_handle, utf8);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(utf8);
+            }
         }
     }
 
@@ -465,26 +481,30 @@ public sealed class RolaStatus : IDisposable
     public Standing StandingOf(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        ObjectDisposedException.ThrowIf(_handle == 0, this);
 
-        var utf8 = Marshal.StringToCoTaskMemUTF8(path);
-
-        try
+        lock (_gate)
         {
-            // The distance is a signed number on the other side, where a negative one is "nothing says how
-            // far": C has no `Option`, so the two answers are told apart by the sign rather than by a second
-            // value. Zero is kept as a distance rather than read as "none", since it is what says the two are
-            // the same version where the relation alone would have said the standing is not known.
-            var distance = RorolalaBinding.rola_status_standing_distance_of(_handle, utf8);
+            ObjectDisposedException.ThrowIf(_handle == 0, this);
 
-            return new Standing(
-                (StandingRelation)RorolalaBinding.rola_status_standing_of(_handle, utf8),
-                distance < 0 ? null : (ulong)distance
-            );
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(utf8);
+            var utf8 = Marshal.StringToCoTaskMemUTF8(path);
+
+            try
+            {
+                // The distance is a signed number on the other side, where a negative one is "nothing says how
+                // far": C has no `Option`, so the two answers are told apart by the sign rather than by a second
+                // value. Zero is kept as a distance rather than read as "none", since it is what says the two are
+                // the same version where the relation alone would have said the standing is not known.
+                var distance = RorolalaBinding.rola_status_standing_distance_of(_handle, utf8);
+
+                return new Standing(
+                    (StandingRelation)RorolalaBinding.rola_status_standing_of(_handle, utf8),
+                    distance < 0 ? null : (ulong)distance
+                );
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(utf8);
+            }
         }
     }
 
@@ -539,12 +559,15 @@ public sealed class RolaStatus : IDisposable
 /// <summary>Gives the native reading back.</summary>
     public void Dispose()
     {
-        // Nothing to give back the second time, and nothing was lost the first: the handle is forgotten as
-        // soon as it is released, so a double `Dispose` releases nothing twice.
-        if (_handle != 0)
+        lock (_gate)
         {
-            RorolalaBinding.free_rola_status(_handle);
-            _handle = 0;
+            // Nothing to give back the second time, and nothing was lost the first: the handle is forgotten
+            // as soon as it is released, so a double `Dispose` releases nothing twice.
+            if (_handle != 0)
+            {
+                RorolalaBinding.free_rola_status(_handle);
+                _handle = 0;
+            }
         }
 
         GC.SuppressFinalize(this);
