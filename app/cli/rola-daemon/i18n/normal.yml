@@ -1,51 +1,214 @@
 _version: 2
 
-listen:
+daemon:
   help:
     en: |
-        Serve this Vault as its daemon
+      Serve every Vault registered for this user
 
-        **Usage**: `rola-daemon listen`
-        **Flags**:
-            --concurrency <N>   Serve at most N transfers at once, over the Vault's own `max_concurrency`
-
-        The Vault the current directory is inside is served: the daemon binds the port in
-        `vault.toml` — 7717 unless the Vault says otherwise — and runs every action a
-        Workspace asks for. It stops on Ctrl-C.
+      **Usage**: `rola-daemon [--port <PORT>] [--concurrency <N>] [COMMAND]`
+      **Commands**:
+          list                           List the namespaces this machine serves
+          register <NAMESPACE> <PATH>    Serve the Vault at PATH under NAMESPACE
+          remove <NAMESPACE>             Stop serving a namespace
+          check                          Check that every namespace reaches a Vault
+      **Flags**:
+          --port <PORT>                  Listen on PORT (default 7717, or `ROLA_DEFAULT_PORT`)
+          --concurrency <N>              Carry at most N transfers at once
+          --json                         Write the result as data
+          --format="..."                 Draw the result through a template
     zh-CN: |
-        作为本保险库的守护进程持续服务
+      为本用户注册的每一个保险库服务
 
-        **用法**：`rola-daemon listen`
-        **标识**：
-            --concurrency <N>   最多同时服务 N 个传输，覆盖保险库自身的 `max_concurrency`
+      **用法**：`rola-daemon [--port <端口>] [--concurrency <N>] [命令]`
+      **命令**：
+          list                          列出本机服务的所有命名空间
+          register <命名空间> <路径>    将位于路径的保险库以该命名空间注册
+          remove <命名空间>             停止服务某个命名空间
+          check                         检查每个命名空间是否仍指向保险库
+      **标识**：
+          --port <端口>                 监听该端口（默认 7717，或 `ROLA_DEFAULT_PORT`）
+          --concurrency <N>             同时最多承载 N 个传输
+          --json                        以数据形式输出结果
+          --format="..."                通过模板绘制结果
 
-        服务当前目录所在的保险库：守护进程绑定 `vault.toml` 中的端口（默认为 7717），
-        并执行工作区请求的每一个动作。按 Ctrl-C 停止。
+  err_unknown_command:
+    en: "`%{command}` is not a command this program has"
+    zh-CN: "本程序没有 `%{command}` 这个命令"
 
-  cmd_listen_description:
-    en: Serve this Vault as a daemon
-    zh-CN: 作为守护进程服务本保险库
+  err_unknown_command_help:
+    en: Run `rola-daemon --help` to see what it can do
+    zh-CN: 运行 `rola-daemon --help` 查看它可以做什么
 
-  err_vault_not_exist:
-    en: Vault does not exist
-    zh-CN: 保险库不存在
+start:
+  err_port_not_a_number:
+    en: The port is not a number a daemon can listen on
+    zh-CN: 该端口不是守护进程可以监听的数字
 
-  err_vault_not_exist_help:
-    en: |
-        Please check whether this directory has been initialized using `rola create` or `rola init`
-    zh-CN: |
-        请检查该目录是否已经使用 `rola create` 或 `rola init` 初始化
+  err_port_zero:
+    en: "`0` names no port"
+    zh-CN: "`0` 不指向任何端口"
 
-  err_config_unreadable:
-    en: Failed to read the vault configuration at %{path}
-    zh-CN: 无法读取位于 %{path} 的保险库配置
+  err_port_help:
+    en: Please give a port between 1 and 65535, for example `--port 7727`
+    zh-CN: 请给出 1 到 65535 之间的端口，例如 `--port 7727`
 
-  err_config_unreadable_help:
-    en: |
-        Please check that the vault configuration file exists and is readable
-    zh-CN: |
-        请检查保险库配置文件是否存在且可读
+  err_no_data_dir:
+    en: This machine names no place for the user's own files
+    zh-CN: 本机没有指定用户自身文件的目录
+
+  err_no_data_dir_help:
+    en: Please set `XDG_DATA_HOME` (or the equivalent on this platform) and try again
+    zh-CN: 请设置 `XDG_DATA_HOME`（或本平台上的等价项）后重试
+
+  err_no_identity:
+    en: The daemon holds no account to prove itself with
+    zh-CN: 守护进程没有可用于证明自身身份的账户
+
+  err_no_identity_help:
+    en: Run `rola key generate <name> --install` to write an account into the user's key directory
+    zh-CN: 运行 `rola key generate <名字> --install` 将一个账户写入用户密钥目录
+
+  err_registry:
+    en: The namespace table at %{path} could not be read
+    zh-CN: 无法读取位于 %{path} 的命名空间表
+
+  err_registry_help:
+    en: Please check that the file exists and parses, or remove it to start with an empty table
+    zh-CN: 请检查该文件存在且可解析，或删除它以从空表开始
+
+  err_port_taken:
+    en: The daemon could not listen on port %{port}
+    zh-CN: 守护进程无法监听端口 %{port}
+
+  err_port_taken_help:
+    en: Another program is using it; stop that program or choose another port with `--port`
+    zh-CN: 该端口已被其他程序占用；请停止该程序，或用 `--port` 选择其他端口
 
   result_stopped:
     en: Daemon stopped
     zh-CN: 守护进程已停止
+
+list:
+  help:
+    en: |
+      List the namespaces this machine serves
+
+      **Usage**: `rola-daemon list`
+    zh-CN: |
+      列出本机服务的所有命名空间
+
+      **用法**：`rola-daemon list`
+
+  description:
+    en: List the namespaces this machine serves
+    zh-CN: 列出本机服务的全部命名空间
+
+register:
+  help:
+    en: |
+      Serve the Vault at PATH under NAMESPACE
+
+      **Usage**: `rola-daemon register <NAMESPACE> <PATH>`
+    zh-CN: |
+      将位于路径的保险库以该命名空间提供服务
+
+      **用法**：`rola-daemon register <命名空间> <路径>`
+
+  description:
+    en: Serve a Vault under a namespace
+    zh-CN: 以命名空间注册并服务一个保险库
+
+  result:
+    en: "Registered `%{namespace}` at %{path}"
+    zh-CN: "已将 `%{namespace}` 注册到 %{path}"
+
+remove:
+  help:
+    en: |
+      Stop serving a namespace
+
+      **Usage**: `rola-daemon remove <NAMESPACE>`
+    zh-CN: |
+      停止服务某个命名空间
+
+      **用法**：`rola-daemon remove <命名空间>`
+
+  description:
+    en: Stop serving a namespace
+    zh-CN: 停止服务某个命名空间
+
+  result:
+    en: "Removed `%{namespace}`; %{path} is left where it is"
+    zh-CN: "已移除 `%{namespace}`；%{path} 保留在原处"
+
+check:
+  help:
+    en: |
+      Check that every namespace still reaches a Vault
+
+      **Usage**: `rola-daemon check`
+    zh-CN: |
+      检查每个命名空间是否仍指向保险库
+
+      **用法**：`rola-daemon check`
+
+  description:
+    en: Check that every namespace reaches a Vault
+    zh-CN: 检查每个命名空间是否可达
+
+error:
+  no_data_dir:
+    en: This machine names no place for the user's own files
+    zh-CN: 本机没有指定用户自身文件的目录
+
+  no_data_dir_help:
+    en: Please set `XDG_DATA_HOME` (or the equivalent on this platform) and try again
+    zh-CN: 请设置 `XDG_DATA_HOME`（或本平台上的等价项）后重试
+
+  registry:
+    en: "The namespace table at %{path} could not be reached: %{reason}"
+    zh-CN: "无法访问位于 %{path} 的命名空间表：%{reason}"
+
+  registry_help:
+    en: Please check that the file and the directory holding it are readable and writable
+    zh-CN: 请检查该文件及其所在目录是否可读写
+
+  argument:
+    en: "The run named no %{argument}"
+    zh-CN: "本次运行没有给出 %{argument}"
+
+  argument_help:
+    en: Please give every argument the command's usage line names
+    zh-CN: 请给出命令用法行中列出的每一个参数
+
+  namespace_invalid:
+    en: "`%{namespace}` is not a namespace a Vault may be registered under"
+    zh-CN: "`%{namespace}` 不是可用来注册保险库的命名空间"
+
+  namespace_invalid_help:
+    en: A namespace is letters, digits, `-` and `_`, starting with a letter or a digit
+    zh-CN: 命名空间由字母、数字、`-` 与 `_` 组成，并以字母或数字开头
+
+  already_registered:
+    en: "A Vault is already registered under `%{namespace}`"
+    zh-CN: "已经有保险库注册在 `%{namespace}` 下"
+
+  already_registered_help:
+    en: Remove it first if another Vault should take the name
+    zh-CN: 如果另一个保险库要使用该名字，请先移除原有的注册
+
+  not_registered:
+    en: "No Vault is registered under `%{namespace}`"
+    zh-CN: "没有保险库注册在 `%{namespace}` 下"
+
+  not_registered_help:
+    en: Run `rola-daemon list` to see the namespaces this machine serves
+    zh-CN: 运行 `rola-daemon list` 查看本机服务的命名空间
+
+  not_a_vault:
+    en: "%{path} does not hold a Vault"
+    zh-CN: "%{path} 中没有保险库"
+
+  not_a_vault_help:
+    en: A path names a Vault when it holds a `vault.toml`; `rola init` makes one
+    zh-CN: 目录中有 `vault.toml` 才是保险库；`rola init` 可以创建一个

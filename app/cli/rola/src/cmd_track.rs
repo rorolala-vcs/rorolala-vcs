@@ -254,7 +254,9 @@ pub fn handle_track(
     // the reader there is nothing more to come, and waiting first would wait forever.
     let next = {
         let progress = reporting.progress();
-        record(state, workspace, vault, storage, index, account, editor, &progress)
+        record(
+            state, workspace, vault, storage, index, account, editor, &progress,
+        )
     };
 
     reporting.finish();
@@ -1171,8 +1173,10 @@ fn enumerate(
         }
 
         let key = key_of_file(&file.disk).map_err(|error| fail(error.to_string()))?;
-        let changed =
-            replace || recorded.as_ref().is_none_or(|recorded| recorded.storage != *key.digest());
+        let changed = replace
+            || recorded
+                .as_ref()
+                .is_none_or(|recorded| recorded.storage != *key.digest());
 
         if let Some(task) = &mut task {
             task.advance_by(size);
@@ -1209,12 +1213,7 @@ fn write(
 
     let mut staged = Vec::with_capacity(changing.len());
 
-    for Enumerated {
-        file,
-        recorded,
-        ..
-    } in changing
-    {
+    for Enumerated { file, recorded, .. } in changing {
         let size = size_of(&file.disk);
 
         let storage = runtime

@@ -1280,7 +1280,13 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_ROOT_SUB_VAULT();
 
     /// <summary>
-    /// The port a Vault's daemon listens on when its configuration names no other.
+    /// The port a daemon listens on when neither the run nor the environment names one.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_PORT_ENV_VAR();
+
+    /// <summary>
+    /// Keys of a global (machine-wide) scope, under the filesystem root
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_GLOBAL_KEYS_DIR();
@@ -1290,6 +1296,18 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_USER_KEYS_DIR();
+
+    /// <summary>
+    /// The directory, under [`USER_DATA_DIR`], the machine's daemon keeps its files in.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_DAEMON_DIR();
+
+    /// <summary>
+    /// The file, under [`DAEMON_DIR`], naming the Vaults the daemon serves.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_DAEMON_REGISTRY_FILE();
 
     /// <summary>
     /// Keys named by the environment, under [`HOME_ENV_VAR`]
@@ -1663,10 +1681,12 @@ internal static partial class RorolalaBinding
     /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
     ///
     /// `daemon_begin_async` is not supported for use on the FFI side; only the
-    /// blocking (block-on) mode is supported.
+    /// blocking (block-on) mode is supported. `registry` is a UTF-8 path the
+    /// caller keeps; `port` is the port to listen on, and the daemon binds every
+    /// address on it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_daemon_begin(nint cwd, nint config);
+    internal static extern nint rola_daemon_begin(nint registry, ushort port);
 
     /// <summary>
     /// The inverse index of the Vault or Workspace `dir` is inside, if it is inside one.

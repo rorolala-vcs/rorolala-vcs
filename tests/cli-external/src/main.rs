@@ -7,9 +7,9 @@
 //! sit beside the built one.
 //!
 //! The companion is `rola-daemon`, copied under names of its own: the hand-over is not a rule about
-//! the word `daemon`, and a name with hyphens in it is reached as one word. Its `listen --help` is
+//! the word `daemon`, and a name with hyphens in it is reached as one word. Its `--help` is
 //! asked for because it is an answer nothing else gives — `rola`'s own help does not name
-//! `vault.toml` — so what comes back says which program answered.
+//! `registry.toml` — so what comes back says which program answered.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,7 +24,7 @@ const WORD: &str = "probe";
 const HYPHENS: &str = "aa-bb-cc";
 
 /// What only the daemon's own help says, in either language it is written in.
-const ITS_OWN_WORDS: &str = "vault.toml";
+const ITS_OWN_WORDS: &str = "registry.toml";
 
 fn main() {
     let sandbox = Guard::new("cli-external");
@@ -36,9 +36,9 @@ fn main() {
     lay(&here, "rola-daemon", &format!("rola-{HYPHENS}"));
 
     // A word naming the program beside this one, with the program's own arguments after it: the word
-    // is the name and not an argument, so what the program is asked about is `listen`.
+    // is the name and not an argument, so what the program is asked about is its help.
     for word in [WORD, HYPHENS] {
-        let handed = run(Command::new(&rola).args([word, "listen", "--help"]));
+        let handed = run(Command::new(&rola).args([word, "--help"]));
 
         assert!(
             handed.stderr.contains(ITS_OWN_WORDS),
@@ -52,7 +52,7 @@ fn main() {
             handed.stdout
         );
 
-        // The code is the program's own. `listen --help` is help, which is 2 where the daemon is
+        // The code is the program's own. `--help` is help, which is 2 where the daemon is
         // concerned — and the same 2 where this program is — so what says which program answered is
         // the words above and not this number.
         assert_eq!(

@@ -1,0 +1,46 @@
+_version: 2
+
+exit_codes:
+  help:
+    en: Help was asked for rather than a command run
+    zh-CN: 请求的是帮助而不是运行命令
+
+  already_exist:
+    en: The resource is already there
+    zh-CN: 资源已存在
+
+  not_exist:
+    en: The resource is not there
+    zh-CN: 资源不存在
+
+  unknown_command:
+    en: The run named a command the program does not have
+    zh-CN: 本程序没有这个命令
+
+  daemon_config:
+    en: The daemon's namespace table could not be read or written
+    zh-CN: 守护进程的命名空间表无法读写
+
+  argument:
+    en: An argument a command needs was missing or would not read
+    zh-CN: 命令需要的参数缺失或无法读取
+
+  port:
+    en: The port is not one the daemon can listen on, or is already taken
+    zh-CN: 该端口无法监听，或已被占用
+
+  no_data_dir:
+    en: This machine names no place for the user's own files
+    zh-CN: 本机没有指定用户自身文件的目录
+
+  identity:
+    en: The daemon has no account to prove itself with
+    zh-CN: 守护进程没有可用于证明自身身份的账户
+
+  check_failed:
+    en: At least one namespace does not reach a Vault
+    zh-CN: 至少有一个命名空间无法到达保险库
+
+  format:
+    en: The result could not be drawn through `--format`
+    zh-CN: 无法通过 `--format` 绘制该结果

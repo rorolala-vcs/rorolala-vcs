@@ -18,12 +18,15 @@ use std::process::Command;
 use std::time::Duration;
 
 use librorolala::storage::{Codec, Key, RorolalaStorage, StorageBackend as _};
-use librorolala::vault::{CONFIG_PATH, KEYS_DIR, Vault, locate_vault};
+use librorolala::vault::{KEYS_DIR, Vault, locate_vault};
 use librorolala::workspace::{Workspace, locate_workspace};
 use rorolala_utils_sandbox::{Guard, Serving, command, run, serve};
 
 /// The port the Vault serves on.
 const PORT: u16 = 7931;
+
+/// The namespace the Vault is registered under.
+const NAMESPACE: &str = "vault";
 
 /// The account the client acts as, which is a member of the Vault.
 const NAME: &str = "rootuser";
@@ -43,8 +46,8 @@ async fn main() {
     let root = sandbox.join("root");
     let workspace = sandbox.join("ws");
 
-    // The Vault, with the port it listens on and a key of its own to prove itself with.
-    serveable(&root, PORT);
+    // The Vault, with the namespace it is reached under.
+    serveable(&root);
 
     // The Workspace: a place to work in, the account it acts as, and the Vault it knows.
     Workspace::create(&workspace)
@@ -134,7 +137,7 @@ async fn main() {
     // with `--json` as well, which is how a run says it is being read by a program rather than watched
     // by a person: what it is doing while it does it is then written down a record at a time, which is
     // what the questions below read back.
-    let serving = serve_vault(&root, PORT);
+    let serving = serve_vault(&data, &root, PORT);
 
     let said = run(&mut client(
         &workspace,
@@ -310,23 +313,12 @@ fn store_of_vault(dir: &Path) -> RorolalaStorage {
 
 /// The address a Vault serving on `port` is reached at.
 fn address(port: u16) -> String {
-    format!("127.0.0.1:{port}")
+    format!("127.0.0.1:{port}/{NAMESPACE}")
 }
 
-/// Makes `dir` a Vault that can be served: a Vault of its own, listening on `port`, holding the
-/// account it proves itself with.
-fn serveable(dir: &Path, port: u16) {
+/// Makes `dir` a Vault that can be served: a Vault of its own.
+fn serveable(dir: &Path) {
     Vault::create(dir).unwrap_or_else(|error| panic!("making {}: {error:?}", dir.display()));
-
-    // The port is the one thing a Vault cannot be talked into, so it is written down before it is
-    // served rather than asked for afterwards.
-    fs::write(
-        dir.join(CONFIG_PATH),
-        format!("[daemon_config]\nprefer_port = {port}\n"),
-    )
-    .expect("writing the Vault's configuration");
-
-    pair(&dir.join(KEYS_DIR), "vault");
 }
 
 /// Puts the public half of the pair `name` names, kept under `keys`, where `vault` admits it.
@@ -364,16 +356,36 @@ fn pair(dir: &Path, name: &str) {
     .expect_success();
 }
 
-/// Serves the Vault rooted at `dir`, and waits until it is listening on `port`.
-fn serve_vault(dir: &Path, port: u16) -> Serving {
+/// Serves the Vault rooted at `dir` under the namespace, and waits until it is listening.
+///
+/// The daemon belongs to the machine, so it is told where it sits through the user's own data
+/// directory: the sandbox's `XDG_DATA_HOME` holds both the table and the account it proves
+/// itself with.
+fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
+    register(data, dir);
+
     serve(
         command("rola-daemon")
-            .arg("--vault-dir")
-            .arg(dir)
-            .arg("listen"),
+            .arg("--port")
+            .arg(port.to_string())
+            .env("XDG_DATA_HOME", data),
         ("127.0.0.1", port),
         STARTUP,
     )
+}
+
+/// Writes the table naming `dir` as [`NAMESPACE`], and gives the daemon an account of its own.
+fn register(data: &Path, dir: &Path) {
+    let registry = data.join("rola").join("daemon").join("registry.toml");
+
+    fs::create_dir_all(registry.parent().expect("the daemon's directory"))
+        .expect("the daemon's directory");
+    fs::write(&registry, format!("{NAMESPACE} = {dir:?}\n")).expect("the namespace table");
+
+    let keys = data.join("rola").join("keys");
+    if !keys.join("daemon.pem").is_file() {
+        pair(&keys, "daemon");
+    }
 }
 
 /// What was asked of the two stores, and how many of the questions were answered as they should be.

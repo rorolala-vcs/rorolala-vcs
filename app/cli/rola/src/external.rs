@@ -79,7 +79,7 @@ pub fn hook() -> ProgramHook<ThisProgram> {
 /// A program's help is the program's own to give: this program can say nothing about what another
 /// one does, so a run naming one and asking for help is handed over with the question, and the
 /// program answers in its own words. What was written after the word is handed over with it, so
-/// `rola daemon listen --help` asks the daemon about `listen`.
+/// `rola daemon list --help` asks the daemon about `list`.
 ///
 /// Returns whether the run was answered this way, which is what says this program has nothing of
 /// its own to add.

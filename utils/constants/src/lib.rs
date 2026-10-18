@@ -157,21 +157,27 @@ pub const VAULT_INDEX_DIR: &str = "./index/";
 
 /// The sub-vault an address names when it names none
 ///
-/// An address is `rola://ip:port/sub`, and the Vault at the root of a tree holds the others
-/// rather than being one of them. Naming it is what an address written without a `/sub`
-/// means, and what says so is the empty name: the root is the Vault a path naming nothing
-/// resolves to, which is the same answer `RootVault` gives an empty path.
+/// An address is `rola://ip:port/namespace`, and a request with no namespace names the daemon
+/// itself rather than any Vault it serves. Naming none is what an address written without a
+/// path says, and what says so is the empty name.
 #[lazyffi(export = ROLA_ROOT_SUB_VAULT)]
 pub const ROOT_SUB_VAULT: &str = "";
 
-/// The port a Vault's daemon listens on when its configuration names no other.
+/// The port a daemon listens on when neither the run nor the environment names one.
 ///
-/// It is a port of its own rather than an ephemeral one, so that a Vault has one address to
+/// It is a port of its own rather than an ephemeral one, so that a machine has one address to
 /// be reached at without being told it every time. It is also what an address written without
 /// a port means, which is why it lives here beside the rest of the layout rather than only in
-/// the configuration that happens to read it.
+/// the daemon that happens to bind it.
 #[lazyffi(export = ROLA_VAULT_DEFAULT_PORT)]
 pub const VAULT_DEFAULT_PORT: u16 = 7717;
+
+/// The variable that names the port a daemon listens on.
+///
+/// It is consulted only where `--port` named none, and what it says is the same number
+/// [`VAULT_DEFAULT_PORT`] would otherwise be.
+#[lazyffi(export = ROLA_PORT_ENV_VAR)]
+pub const PORT_ENV_VAR: &str = "ROLA_DEFAULT_PORT";
 
 /// Keys of a global (machine-wide) scope, under the filesystem root
 #[lazyffi(export = ROLA_GLOBAL_KEYS_DIR)]
@@ -185,8 +191,20 @@ pub const USER_KEYS_DIR: &str = "rola/keys";
 ///
 /// These belong to no Vault and no Workspace: they are the user's own, and they are small enough
 /// to be plain files rather than configurations. It is the parent of [`USER_KEYS_DIR`], which
-/// keeps the one thing here that is a directory rather than a file.
+/// keeps the one thing here that is a directory rather than a file, and of
+/// [`DAEMON_DIR`], which is what the machine's daemon keeps.
 pub const USER_DATA_DIR: &str = "rola";
+
+/// The directory, under [`USER_DATA_DIR`], the machine's daemon keeps its files in.
+#[lazyffi(export = ROLA_DAEMON_DIR)]
+pub const DAEMON_DIR: &str = "daemon";
+
+/// The file, under [`DAEMON_DIR`], naming the Vaults the daemon serves.
+///
+/// It is a flat table of namespace to the path the Vault sits at, written the way any other
+/// Rorolala configuration is.
+#[lazyffi(export = ROLA_DAEMON_REGISTRY_FILE)]
+pub const DAEMON_REGISTRY_FILE: &str = "registry.toml";
 
 /// The file, under [`USER_DATA_DIR`], naming the account the work acts as
 pub const USER_ACCOUNT_FILE: &str = "user";

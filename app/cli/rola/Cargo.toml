@@ -16,7 +16,6 @@ colored.workspace = true
 console.workspace = true
 globset.workspace = true
 mingling.workspace = true
-minijinja.workspace = true
 minus.workspace = true
 rust-i18n.workspace = true
 dirs.workspace = true

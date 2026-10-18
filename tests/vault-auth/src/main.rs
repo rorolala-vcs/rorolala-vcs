@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use librorolala::auth::{Account, KeyLocateRule, find_account};
 use librorolala::daemon::action_handshake;
-use librorolala::vault::{CONFIG_PATH, KEYS_DIR, VAULTS_DIR, Vault};
+use librorolala::vault::{KEYS_DIR, VAULTS_DIR, Vault};
 use librorolala::workspace::{Workspace, locate_workspace};
 use rorolala_utils_sandbox::{Guard, Serving, command, run, serve};
 
@@ -28,20 +28,30 @@ const ROOT_PORT: u16 = 7911;
 /// The port the Vault under it serves on.
 const ALPHA_PORT: u16 = 7912;
 
+/// The namespaces the two Vaults are registered under.
+const ROOT_NAME: &str = "root";
+const ALPHA_NAME: &str = "alpha";
+
 /// How long a Vault is waited for before it is given up on.
 const STARTUP: Duration = Duration::from_secs(10);
 
 fn main() {
     let sandbox = Guard::new("vault-auth");
+    let data = sandbox.join("data");
     let root = sandbox.join("root");
     let alpha = root.join(VAULTS_DIR).join("alpha");
     let workspace = sandbox.join("ws");
 
-    // The two Vaults, each with its own identity and with members kept in one place or the
-    // other: the root keeps `rootuser`, the Vault under it keeps `subuser`, and `nobody` is a
-    // name neither has ever heard of.
-    serveable(&root, ROOT_PORT);
-    serveable(&alpha, ALPHA_PORT);
+    // The two Vaults, registered under namespaces of their own, and with members kept in one
+    // place or the other: the root keeps `rootuser`, the Vault under it keeps `subuser`, and
+    // `nobody` is a name neither has ever heard of.
+    serveable(&root);
+    serveable(&alpha);
+    register(&data, &[(ROOT_NAME, &root), (ALPHA_NAME, &alpha)]);
+
+    // The daemon proves itself with the user's own account, so one is made where the user keeps
+    // theirs.
+    pair(&data.join("rola").join("keys"), "daemon");
 
     // The client's own side: the pairs it can act as, and a place to keep them. Its accounts are
     // looked up the way the program looks them up, from the Workspace's keys.
@@ -63,8 +73,8 @@ fn main() {
     // What the root Vault admits. Its own keys hold `rootuser` and nothing else, and there is
     // no Vault above it to look in.
     {
-        let serving = serve_vault(&root, ROOT_PORT);
-        let address = address(ROOT_PORT);
+        let serving = serve_vault(&data, ROOT_PORT);
+        let address = address(ROOT_PORT, ROOT_NAME);
 
         checked.wants_admitted(&workspace, "rootuser", &address, "the root holds it");
         checked.wants_refused(
@@ -78,7 +88,7 @@ fn main() {
         // The same daemon serves the Vault it holds when the request names one, so a link to it
         // is answered by the Vault below — under that Vault's own rules, which reach up into the
         // root's keys and no further.
-        let alpha_link = link(ROOT_PORT, "alpha");
+        let alpha_link = link(ROOT_PORT, ROOT_NAME, ALPHA_NAME);
 
         checked.wants_admitted(
             &workspace,
@@ -93,7 +103,7 @@ fn main() {
         checked.wants_refused(
             &workspace,
             "rootuser",
-            &link(ROOT_PORT, "nowhere"),
+            &link(ROOT_PORT, ROOT_NAME, "nowhere"),
             "no Vault is served there",
         );
 
@@ -103,8 +113,8 @@ fn main() {
     // What the Vault under it admits. Its own keys hold `subuser`, and the search goes outward
     // from there into the root's, so both names are known to it.
     {
-        let serving = serve_vault(&alpha, ALPHA_PORT);
-        let address = address(ALPHA_PORT);
+        let serving = serve_vault(&data, ALPHA_PORT);
+        let address = address(ALPHA_PORT, ALPHA_NAME);
 
         checked.wants_admitted(&workspace, "rootuser", &address, "the root above holds it");
         checked.wants_admitted(&workspace, "subuser", &address, "it holds it itself");
@@ -198,30 +208,35 @@ fn local_only() -> KeyLocateRule {
     }
 }
 
-/// The address a Vault serving on `port` is reached at.
-fn address(port: u16) -> String {
-    format!("127.0.0.1:{port}")
+/// The address a Vault serving on `port` is reached at, under `namespace`.
+fn address(port: u16, namespace: &str) -> String {
+    format!("127.0.0.1:{port}/{namespace}")
 }
 
-/// The link a Vault serving on `port` is reached at, naming the Vault `sub` holds.
-fn link(port: u16, sub: &str) -> String {
-    format!("rola://127.0.0.1:{port}/{sub}")
+/// The link a Vault serving on `port` is reached at, naming `sub` under `namespace`.
+fn link(port: u16, namespace: &str, sub: &str) -> String {
+    format!("rola://127.0.0.1:{port}/{namespace}/{sub}")
 }
 
-/// Makes `dir` a Vault that can be served: a Vault of its own, listening on `port`, holding
-/// the account it proves itself with.
-fn serveable(dir: &Path, port: u16) {
+/// Makes `dir` a Vault that can be served.
+fn serveable(dir: &Path) {
     Vault::create(dir).unwrap_or_else(|error| panic!("making {}: {error:?}", dir.display()));
+}
 
-    // The port is the one thing a Vault cannot be talked into, so it is written down before it
-    // is served rather than asked for afterwards.
-    fs::write(
-        dir.join(CONFIG_PATH),
-        format!("[daemon_config]\nprefer_port = {port}\n"),
-    )
-    .expect("writing the Vault's configuration");
+/// Writes the table naming each of `entries`, under the namespace beside it.
+fn register(data: &Path, entries: &[(&str, &Path)]) {
+    let registry = data.join("rola").join("daemon").join("registry.toml");
 
-    pair(&dir.join(KEYS_DIR), "vault");
+    fs::create_dir_all(registry.parent().expect("the daemon's directory"))
+        .expect("the daemon's directory");
+
+    let mut text = String::new();
+    for (namespace, path) in entries {
+        use std::fmt::Write as _;
+        writeln!(text, "{namespace} = {path:?}").expect("the namespace table");
+    }
+
+    fs::write(&registry, text).expect("the namespace table");
 }
 
 /// Puts the public half of the pair `name` names, kept under `keys`, where `vault` admits it.
@@ -260,13 +275,13 @@ fn pair(dir: &Path, name: &str) {
     .expect_success();
 }
 
-/// Serves the Vault rooted at `dir`, and waits until it is listening on `port`.
-fn serve_vault(dir: &Path, port: u16) -> Serving {
+/// Serves the Vaults registered for the sandbox, and waits until it is listening on `port`.
+fn serve_vault(data: &Path, port: u16) -> Serving {
     serve(
         command("rola-daemon")
-            .arg("--vault-dir")
-            .arg(dir)
-            .arg("listen"),
+            .arg("--port")
+            .arg(port.to_string())
+            .env("XDG_DATA_HOME", data),
         ("127.0.0.1", port),
         STARTUP,
     )

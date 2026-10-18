@@ -3556,7 +3556,6 @@ dependencies = [
  "libc",
  "librorolala",
  "mingling",
- "minijinja",
  "minus",
  "rorolala-cli-setups",
  "rorolala-errors",
@@ -3583,13 +3582,16 @@ dependencies = [
  "mingling",
  "rorolala-cli-setups",
  "rorolala-daemon",
+ "rorolala-errors",
  "rorolala-utils-cli-theme",
  "rorolala-utils-configure",
+ "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vault",
  "rust-i18n",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3644,17 +3646,20 @@ version = "0.1.0"
 dependencies = [
  "librorolala",
  "mingling",
+ "minijinja",
  "rorolala-errors",
  "rorolala-utils-cli-theme",
  "rorolala-utils-configure",
  "rorolala-utils-location",
  "rust-i18n",
+ "serde_json",
 ]
 
 [[package]]
 name = "rorolala-daemon"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "ed25519-dalek",
  "just_template",
  "rorolala-auth",

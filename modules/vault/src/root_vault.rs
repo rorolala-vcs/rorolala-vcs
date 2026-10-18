@@ -90,6 +90,16 @@ impl DerefMut for RootVault {
     }
 }
 
+impl From<Vault> for RootVault {
+    /// The root seen from `vault`.
+    ///
+    /// Nothing about the directory is looked at: this is the root a caller has already decided
+    /// is the one to hold the Vaults below it, which is what a registry entry names.
+    fn from(vault: Vault) -> Self {
+        Self { vault }
+    }
+}
+
 impl From<RootVault> for Vault {
     fn from(root: RootVault) -> Self {
         root.vault

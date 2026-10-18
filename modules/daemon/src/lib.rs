@@ -16,14 +16,20 @@ use crate::begin::DaemonInput;
 
 mod action;
 mod begin;
-mod exit;
+pub mod exit;
+mod namespaces;
 mod wire;
 
 pub use action::*;
 pub use exit::*;
+pub use namespaces::*;
 
 /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
 /// runtime.
+///
+/// The daemon serves the Vaults registered under `registry`, on `port`. It belongs to the
+/// machine rather than to a directory, so neither the working directory nor any one Vault is
+/// part of what starts it.
 ///
 /// This function builds a new multi-threaded Tokio runtime with all features
 /// enabled ([`tokio::runtime::Builder::enable_all`]) and then blocks the
@@ -34,22 +40,20 @@ pub use exit::*;
 ///
 /// Panics if the multi-threaded Tokio runtime fails to build.
 ///
-/// # Standard Out
-///
-/// On error, error logs are written to `stderr`.
-///
 /// # FFI
 ///
 /// `daemon_begin_async` is not supported for use on the FFI side; only the
-/// blocking (block-on) mode is supported.
+/// blocking (block-on) mode is supported. `registry` is a UTF-8 path the
+/// caller keeps; `port` is the port to listen on, and the daemon binds every
+/// address on it.
 #[lazyffi(export = rola_daemon_begin)]
 #[must_use]
-pub fn daemon_begin(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
+pub fn daemon_begin(registry: &Path, port: u16) -> DaemonExit {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("Failed to build the runtime")
-        .block_on(daemon_begin_async(cwd, config))
+        .block_on(daemon_begin_async(registry, port))
 }
 
 /// Asynchronous entry point for the Rorolala Daemon, driven by the Tokio
@@ -61,7 +65,7 @@ pub fn daemon_begin(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
 /// embedding the daemon's logic into an application that already manages its
 /// own async executor.
 ///
-/// The Vault's own identity is resolved as the daemon starts, before anything is
+/// The daemon's own identity is resolved as it starts, before anything is
 /// served: a daemon that cannot prove itself cannot serve at all.
 ///
 /// # Standard Out
@@ -72,21 +76,21 @@ pub fn daemon_begin(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
 ///
 /// This function is intended for asynchronous use and is not exposed over the
 /// FFI boundary on its own; use [`daemon_begin`] for blocking/FFI callers.
-pub async fn daemon_begin_async(cwd: &Path, config: &rorolala_vault::Config) -> DaemonExit {
-    daemon_begin_with_async(cwd, config, None).await
+pub async fn daemon_begin_async(registry: &Path, port: u16) -> DaemonExit {
+    daemon_begin_with_async(registry, port, None).await
 }
 
 /// As [`daemon_begin_async`], with the run's own bound on how much the daemon carries at once.
 ///
-/// `max_concurrency` is what `--concurrency` named, or `None` to keep what the configuration names,
-/// so a Vault can be bounded for the length of one start without editing the file it reads.
+/// `max_concurrency` is what `--concurrency` named, or `None` to keep the number a machine-wide
+/// daemon serves with.
 ///
 /// # Standard Out
 ///
 /// On error, error logs are written to `stderr`.
 pub async fn daemon_begin_with_async(
-    cwd: &Path,
-    config: &rorolala_vault::Config,
+    registry: &Path,
+    port: u16,
     max_concurrency: Option<u16>,
 ) -> DaemonExit {
     let cancel = init_close_channel();
@@ -94,8 +98,8 @@ pub async fn daemon_begin_with_async(
     let (exit, ()) = tokio::join!(
         // Daemon core logic
         crate::begin::daemon(DaemonInput {
-            cwd,
-            config,
+            registry,
+            port,
             max_concurrency,
             signal: cancel.get_rx()
         }),
@@ -108,22 +112,19 @@ pub async fn daemon_begin_with_async(
 
 /// As [`daemon_begin`], with the run's own bound on how much the daemon carries at once.
 ///
-/// `max_concurrency` is what `--concurrency` named, or `None` to keep what the configuration names.
+/// `max_concurrency` is what `--concurrency` named, or `None` to keep the number a machine-wide
+/// daemon serves with.
 ///
 /// # Panics
 ///
 /// Panics if the multi-threaded Tokio runtime fails to build.
 #[must_use]
-pub fn daemon_begin_with(
-    cwd: &Path,
-    config: &rorolala_vault::Config,
-    max_concurrency: Option<u16>,
-) -> DaemonExit {
+pub fn daemon_begin_with(registry: &Path, port: u16, max_concurrency: Option<u16>) -> DaemonExit {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("Failed to build the runtime")
-        .block_on(daemon_begin_with_async(cwd, config, max_concurrency))
+        .block_on(daemon_begin_with_async(registry, port, max_concurrency))
 }
 
 /// A cancellation context that bundles the signalling channel together with

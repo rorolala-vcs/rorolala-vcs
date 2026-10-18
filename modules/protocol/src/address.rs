@@ -1,16 +1,17 @@
-//! Addressing the daemon an action is spoken to, and the Vault an address names.
+//! Addressing the daemon an action is spoken to, and the namespace a request names.
 //!
 //! There are two spellings for where a Vault is. One is a bare address — a host, a host and a
-//! port, or a port alone — which says where a daemon answers and nothing about which Vault
+//! port, or a port alone — which says where a daemon answers and nothing about which namespace
 //! under it is meant. The other is the `rola://` link, which says both:
 //!
 //! ```text
-//! rola://<host>[:<port>]/<sub-vault>
+//! rola://<host>[:<port>]/<namespace>[/<sub-vault>]
 //! ```
 //!
 //! A [`VaultAddress`] is the second, and every form the first takes reads as one: what is left
 //! out is filled from what it would otherwise have to be, so an address written without a port
-//! takes the port a Vault listens on, and one written without a sub-vault names the root.
+//! takes the port a daemon listens on. The namespace is the first path segment; anything after
+//! it names a Vault under the one the namespace was registered for.
 //!
 //! A host is an ip or a name — `127.0.0.1`, `[::1]`, `localhost`, `example.com`. A name is not
 //! resolved here: it is kept as the name it is and left to whatever dials the daemon, so an
@@ -39,7 +40,8 @@ const SCHEME: &str = "rola://";
 /// A Vault named by the link it answers at.
 ///
 /// The parts say where to knock and which Vault is being asked for: `addr` and `port` are the
-/// daemon, and `sub_vault` is the Vault under the one it serves. `raw` is what the caller wrote,
+/// daemon, and `sub_vault` is what a request names under it — a namespace, or a namespace and a
+/// Vault below the one that namespace was registered for. `raw` is what the caller wrote,
 /// kept so that what was asked for can be handed back as it was asked, and it is not what the
 /// other three are read from once this has been built.
 ///
@@ -56,7 +58,11 @@ pub struct VaultAddress {
     addr: String,
     /// The port the daemon answers at.
     port: u16,
-    /// The Vault under the daemon's own, or [`ROOT_SUB_VAULT`] for the one it serves.
+    /// The namespace under the daemon that is being addressed, and the Vault below it when one
+    /// is named.
+    ///
+    /// It is the first path segment of the link and whatever follows it: `alpha` names the
+    /// namespace, `alpha/vaults/beta` names the Vault that namespace holds under `beta`.
     sub_vault: String,
 }
 
@@ -81,30 +87,32 @@ impl VaultAddress {
     ///
     /// | written                  | taken as                                          |
     /// | ------------------------ | ------------------------------------------------- |
-    /// | `host`                   | that host, the default port, the root Vault       |
-    /// | `port`                   | `127.0.0.1`, that port, the root Vault            |
-    /// | `host:port`              | that host and port, the root Vault                |
-    /// | `rola://host:port/sub`   | all of it                                         |
-    /// | `rola://host/sub`        | that host, the default port, that sub-vault       |
-    /// | `rola://host:port`       | that host and port, the root Vault                |
+    /// | `host`                   | that host, the default port, no namespace         |
+    /// | `port`                   | `127.0.0.1`, that port, no namespace              |
+    /// | `host:port`              | that host and port, no namespace                  |
+    /// | `rola://host:port/ns`    | all of it                                         |
+    /// | `rola://host/ns/sub`     | that host, the default port, namespace and Vault  |
+    /// | `host:port/ns`           | the bare authority, then the namespace            |
+    /// | `host/ns/sub`            | the same, with the default port                   |
     ///
     /// A host is an ip or a name, and a name is kept as it was written rather than resolved.
     ///
     /// # Errors
     ///
-    /// Returns an [`AddrError`] naming `text` when it names neither: what is left of a link
-    /// after the scheme is a host, a host and a port, or a port, and anything else is refused
+    /// Returns an [`AddrError`] naming `text` when it names no daemon: what is left of a link
+    /// before its first `/` is a host, a host and a port, or a port, and anything else is refused
     /// rather than guessed at.
     pub fn parse(text: &str) -> Result<Self, AddrError> {
-        // A link says which sub-vault and an address does not; without the scheme the whole of
-        // it is the authority, and what is under it is the Vault the daemon serves.
-        let (authority, sub_vault) =
-            text.strip_prefix(SCHEME)
-                .map_or((text, ROOT_SUB_VAULT), |link| match link.split_once('/') {
-                    Some((authority, sub)) if !sub.is_empty() => (authority, sub),
-                    Some((authority, _)) => (authority, ROOT_SUB_VAULT),
-                    None => (link, ROOT_SUB_VAULT),
-                });
+        // The first `/` separates the daemon from what is named under it, whether or not the
+        // scheme was written: `host:port` and `rola://host:port` are the same authority, and
+        // `host:port/ns` says what `rola://host:port/ns` says. What has no `/` names the daemon
+        // and no namespace at all.
+        let (authority, sub_vault) = match text.strip_prefix(SCHEME).unwrap_or(text).split_once('/')
+        {
+            Some((authority, sub)) if !sub.is_empty() => (authority, sub),
+            Some((authority, _)) => (authority, ROOT_SUB_VAULT),
+            None => (text.strip_prefix(SCHEME).unwrap_or(text), ROOT_SUB_VAULT),
+        };
 
         let (addr, port) =
             read_authority(authority).ok_or_else(|| AddrError::new(text.to_string()))?;
@@ -135,7 +143,8 @@ impl VaultAddress {
         self.port
     }
 
-    /// The Vault under the daemon's own that is being addressed.
+    /// The namespace under the daemon that is being addressed, and the Vault below it when one
+    /// is named.
     #[must_use]
     pub fn sub(&self) -> &str {
         &self.sub_vault
@@ -155,7 +164,8 @@ impl VaultAddress {
         self.port = port;
     }
 
-    /// Names the Vault under the daemon's own that is being addressed.
+    /// Names the namespace under the daemon that is being addressed, and the Vault below it
+    /// when one is named.
     pub fn set_sub(&mut self, sub_vault: impl Into<String>) {
         self.sub_vault = sub_vault.into();
     }
@@ -413,29 +423,65 @@ mod tests {
     }
 
     #[test]
-    fn a_link_says_the_sub_vault_beside_the_address() {
+    fn a_link_says_the_namespace_beside_the_address() {
         assert_eq!(
-            parts("rola://10.0.0.1:7000/vaults/alpha"),
-            ("10.0.0.1".to_string(), 7000, "vaults/alpha".to_string())
+            parts("rola://10.0.0.1:7000/alpha"),
+            ("10.0.0.1".to_string(), 7000, "alpha".to_string())
         );
 
         // A link without a port takes the default one...
         assert_eq!(
-            parts("rola://10.0.0.1/vaults/alpha"),
+            parts("rola://10.0.0.1/alpha/vaults/beta"),
             (
                 "10.0.0.1".to_string(),
                 VAULT_DEFAULT_PORT,
-                "vaults/alpha".to_string()
+                "alpha/vaults/beta".to_string()
             )
         );
 
-        // ...and one without a sub-vault names the root, as an empty one does.
+        // ...and one without a namespace names the daemon and nothing under it, as an empty one
+        // does.
         assert_eq!(
             parts("rola://10.0.0.1:7000"),
             ("10.0.0.1".to_string(), 7000, ROOT_SUB_VAULT.to_string())
         );
         assert_eq!(
             parts("rola://10.0.0.1:7000/"),
+            ("10.0.0.1".to_string(), 7000, ROOT_SUB_VAULT.to_string())
+        );
+    }
+
+    #[test]
+    fn an_address_written_without_a_scheme_names_the_namespace_too() {
+        // The first `/` is where the daemon ends whether or not the scheme was written.
+        assert_eq!(
+            parts("10.0.0.1:7000/alpha"),
+            ("10.0.0.1".to_string(), 7000, "alpha".to_string())
+        );
+        assert_eq!(
+            parts("10.0.0.1/alpha/vaults/beta"),
+            (
+                "10.0.0.1".to_string(),
+                VAULT_DEFAULT_PORT,
+                "alpha/vaults/beta".to_string()
+            )
+        );
+        assert_eq!(
+            parts("7000/alpha"),
+            ("127.0.0.1".to_string(), 7000, "alpha".to_string())
+        );
+        assert_eq!(
+            parts("localhost/alpha"),
+            (
+                "localhost".to_string(),
+                VAULT_DEFAULT_PORT,
+                "alpha".to_string()
+            )
+        );
+
+        // A trailing separator names the daemon, not a namespace called nothing.
+        assert_eq!(
+            parts("10.0.0.1:7000/"),
             ("10.0.0.1".to_string(), 7000, ROOT_SUB_VAULT.to_string())
         );
     }

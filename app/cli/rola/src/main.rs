@@ -100,7 +100,7 @@ fn main() {
     program.with_setup(CurrentAccountSetup);
     program.with_setup(LastExitCodeRecordSetup);
     program.with_setup(ConfirmSetup);
-    program.with_setup(FormatSetup);
+    program.with_setup(FormatSetup::new(t!("format.conflict_json").to_string()));
     program.with_setup(LookbackSetup);
     program.with_setup(EditorSetup);
 

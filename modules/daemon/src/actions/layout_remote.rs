@@ -129,8 +129,8 @@ pub(crate) async fn ownership_batch(
             .or(up)
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
             .unwrap_or_default();
-        let id = Uuid::parse_str(named.trim())
-            .map_err(|_| codec_failed("the uuid does not read"))?;
+        let id =
+            Uuid::parse_str(named.trim()).map_err(|_| codec_failed("the uuid does not read"))?;
 
         let outcome = if ctx.is_vault() {
             Some(decide(&local_layout(ctx)?, id, &me)?)
