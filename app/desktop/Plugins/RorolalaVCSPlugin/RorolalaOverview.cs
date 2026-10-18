@@ -75,7 +75,10 @@ internal sealed class OverviewDock : IDockView
 /// <summary>What where the tree is rooted comes to, as the Overview reads it.</summary>
 /// <param name="Facts">The reading to draw, when there is one.</param>
 /// <param name="Said">What to say instead, when there is not.</param>
-/// <param name="Status">The reading itself, which what a sync would move is read out of, or nothing.</param>
+/// <param name="Status">
+/// The reading itself, which what a sync would move is read out of, or nothing. It is the owner's to give
+/// back: the view keeps it for as long as its rows are on screen.
+/// </param>
 internal sealed record OverviewReading(StatusFacts? Facts, string? Said, RolaStatus? Status = null);
 
 /// <summary>
@@ -405,8 +408,15 @@ internal sealed class OverviewView : UserControl
     /// The count a sync row is hovered for is the one thing about it the reading keeps per path, so it is read from
     /// here as the row is drawn rather than carried in the row: a row built by <see cref="Rows"/> has no reading to
     /// ask, and the reading is a snapshot that is the same one however many rows are drawn from it.
+    /// <para>
+    /// It is owned here: a reading that is replaced — or one a newer reading says the same as, and so is not drawn
+    /// — is given back rather than left to the native side.
+    /// </para>
     /// </remarks>
     private RolaStatus? _reading;
+
+    /// <summary>Whether a reading is already waiting to be made, so a burst of asks is one reading.</summary>
+    private bool _drawAsked;
 
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
@@ -591,6 +601,14 @@ internal sealed class OverviewView : UserControl
     /// </remarks>
     public void Refresh()
     {
+        // A fetch or a sync is what reads the work already: a second press while one is going is the one that is
+        // going, and its own completion is what draws. Asking again would be a reading of the state the run is
+        // halfway through, and would be drawn as if it were the state after it.
+        if (_fetching || _sync.Running)
+        {
+            return;
+        }
+
         if (BaseDirectory.Current is { Length: > 0 } at && WorkspaceNotice.Holds(at, _log))
         {
             BeginFetch(at);
@@ -615,8 +633,6 @@ internal sealed class OverviewView : UserControl
         // what is on screen is read again either way, and the run in hand leaves the copy where it stands.
         if (_fetching || _sync.Running)
         {
-            Draw();
-
             return;
         }
 
@@ -694,11 +710,14 @@ internal sealed class OverviewView : UserControl
             return new OverviewReading(null, RolaI18N.Get("rorolala_vcs.not_a_workspace"));
         }
 
+        RolaStatus? status = null;
+
         try
         {
-            // The native reading is given back as soon as what it said has been taken out of it: the panel
-            // wants the lists, and a handle kept for questions nobody asks is a handle kept for nothing.
-            using var status = RolaStatus.Locate(at);
+            // What is read is handed back to the caller rather than given back here: a row's count is asked of
+            // the reading as it is drawn, so the reading has to live as long as the rows do. It is given back
+            // when the reading is replaced or discarded — see <see cref="Show"/> and <see cref="Drawn"/>.
+            status = RolaStatus.Locate(at);
 
             if (status is not null)
             {
@@ -714,6 +733,10 @@ internal sealed class OverviewView : UserControl
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
+            // A reading that could not be taken out whole is not one to keep: what is left would be a handle
+            // nobody can reach, and a row asking it a question would be asking nothing.
+            status?.Dispose();
+
             // A run without the native library beside it reads the same as one whose work could not be
             // read, so the two are said in the log rather than by a second line on the window: only one
             // of them is a reason to go looking.
@@ -1386,21 +1409,44 @@ internal sealed class OverviewView : UserControl
     }
 
     /// <summary>Reads the work again and draws it, on the thread the control belongs to.</summary>
-    private void Draw() => Dispatcher.UIThread.Post(Drawn);
+    /// <remarks>
+    /// Asks for one reading at a time: the timer, a change of the files and a press of the Refresh button are
+    /// all the same question, and a press beside a tick would otherwise be two readings of one work. A call
+    /// that arrives while one is waiting is the one that is waiting.
+    /// </remarks>
+    private void Draw()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(Draw);
+
+            return;
+        }
+
+        if (_drawAsked)
+        {
+            return;
+        }
+
+        _drawAsked = true;
+        Dispatcher.UIThread.Post(Drawn);
+    }
 
     /// <summary>Reads the work again and draws it.</summary>
     private void Drawn()
     {
-        var reading = Of(BaseDirectory.Current, _log);
+        _drawAsked = false;
 
         // A reading made while a sync is carrying content down says what the tree held in the middle of the run, and
         // the rows drawn from it would be out of step with the copy the same run is writing. What is on screen is
-        // read again after it, which the hub's own event says.
+        // read again after it, which the hub's own event says — and nothing is read here at all, since it would be a
+        // reading spent on an answer that cannot be drawn.
         if (_sync.Running)
         {
             return;
         }
 
+        var reading = Of(BaseDirectory.Current, _log);
         var rows = reading.Facts is { } facts ? Rows(facts) : [];
         var said = Line(reading, rows.Count);
 
@@ -1419,6 +1465,10 @@ internal sealed class OverviewView : UserControl
             && _connecting is null
         )
         {
+            // The reading was made for a table that is already on screen: what it holds is given back rather
+            // than kept beside the one the rows were drawn from.
+            reading.Status?.Dispose();
+
             return;
         }
 
@@ -1438,8 +1488,17 @@ internal sealed class OverviewView : UserControl
     /// <param name="reading">The reading the rows were made from, which a sync row's count is read from.</param>
     private void Show(string? said, IReadOnlyList<TableRow> rows, RolaStatus? reading)
     {
+        var previous = _reading;
+
         _shown = new Shown(said, rows);
         _reading = reading;
+
+        // The rows the old reading answered for are being replaced, so its handle is given back with them.
+        // A redraw of the same rows passes the same reading, which is still the one on screen.
+        if (!ReferenceEquals(previous, reading))
+        {
+            previous?.Dispose();
+        }
 
         // A connection whose row is no longer in the table is nothing to finish, and a reader is not told about
         // it: the work moved under them, and what the button was about is gone. What is left is the table as the

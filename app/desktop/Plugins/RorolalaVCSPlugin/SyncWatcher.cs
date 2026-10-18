@@ -62,6 +62,15 @@ internal sealed class SyncWatcher
     /// <summary>What is told to draw again when any of this changes.</summary>
     public event EventHandler? Changed;
 
+    /// <summary>Whether a plan is being asked for, so a burst of asks is one run of the command.</summary>
+    private bool _planning;
+
+    /// <summary>Whether a plan was asked for while one was being asked, so the newest answer is asked after it.</summary>
+    private bool _planAgain;
+
+    /// <summary>Where the plan that will be asked for after the one in flight is rooted.</summary>
+    private string? _planFor;
+
     /// <summary>
     /// Asks what a sync would carry, which decides whether the buttons may be pressed.
     /// </summary>
@@ -69,6 +78,11 @@ internal sealed class SyncWatcher
     /// Asked rather than remembered, and asked again after a run and after what is carried is changed: what
     /// there is to carry is the Vault's answer rather than this side's, and a button left pressable after the
     /// work was carried would be a button that offered a run with nothing to do.
+    /// <para>
+    /// One plan is in flight at a time: asking costs a fetch of the Vault's Layout, and the answer that matters
+    /// is the one about the work as it is now. An ask made while one is going is remembered and made once after
+    /// it, rather than run beside it and racing it to say what the answer is.
+    /// </para>
     /// </remarks>
     /// <param name="directory">Where the work is rooted, or nothing where the tree is not rooted anywhere.</param>
     public void Plan(string? directory)
@@ -79,20 +93,42 @@ internal sealed class SyncWatcher
             return;
         }
 
+        if (_planning)
+        {
+            _planAgain = true;
+            _planFor = at;
+
+            return;
+        }
+
+        _planning = true;
+        _planFor = at;
+
         _ = Task.Run(() =>
         {
+            SyncPlan plan;
+
             try
             {
-                var plan = Sync.Plan(at);
-
-                On(() => Settled(plan.Ready, plan.Said));
+                plan = Sync.Plan(at);
             }
             catch (Exception error) when (error is not OutOfMemoryException)
             {
                 _log.Warn($"what a sync would carry could not be read: {error.Message}");
-
-                On(() => Settled(false, null));
+                plan = new SyncPlan(false, null);
             }
+
+            On(() =>
+            {
+                _planning = false;
+                Settled(plan.Ready, plan.Said);
+
+                if (_planAgain)
+                {
+                    _planAgain = false;
+                    Plan(_planFor);
+                }
+            });
         });
     }
 
