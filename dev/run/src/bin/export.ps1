@@ -6,12 +6,12 @@ $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/../lib/common.ps1"
 
-# Any running `rola` is stopped before anything is built: a process would hold the binaries the build
-# is about to write, and a file that is still in use cannot be overwritten.
-Get-Process -Name 'rola' -ErrorAction SilentlyContinue | ForEach-Object {
+# Any running `rola` or `rola-daemon` is stopped before anything is built: a process would hold the
+# binaries the build is about to write, and a file that is still in use cannot be overwritten.
+Get-Process -Name 'rola', 'rola-daemon' -ErrorAction SilentlyContinue | ForEach-Object {
     Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
 }
-Get-Process -Name 'rola' -ErrorAction SilentlyContinue | ForEach-Object { $_.WaitForExit(5000) }
+Get-Process -Name 'rola', 'rola-daemon' -ErrorAction SilentlyContinue | ForEach-Object { $_.WaitForExit(5000) }
 
 # The plugin's own pictures first, and deliberately: they are drawn from the pinned icon set rather
 # than carried, so what is laid out below is what the pin holds rather than whatever was last in the
