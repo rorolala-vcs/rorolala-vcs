@@ -32,19 +32,25 @@ internal sealed class SyncWatcher
     /// <summary>What every run this plugin makes is gathered in, which the sync's own run joins.</summary>
     private readonly ProgressHub _hub;
 
+    /// <summary>What brings the Vault's Layout over once a run has carried work.</summary>
+    private readonly VaultFetch _fetch;
+
     /// <summary>Makes the watcher.</summary>
     /// <param name="host">The host.</param>
     /// <param name="log">Where a reading that could not be made is said.</param>
     /// <param name="hub">What every run this plugin makes is gathered in.</param>
-    public SyncWatcher(IPluginHost host, ILog log, ProgressHub hub)
+    /// <param name="fetch">The one fetch of the Vault's Layout, which a carried run is followed by.</param>
+    public SyncWatcher(IPluginHost host, ILog log, ProgressHub hub, VaultFetch fetch)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(log);
         ArgumentNullException.ThrowIfNull(hub);
+        ArgumentNullException.ThrowIfNull(fetch);
 
         _host = host;
         _log = log;
         _hub = hub;
+        _fetch = fetch;
     }
 
     /// <summary>Whether there is work to carry, which is what the three buttons are pressable for.</summary>
@@ -216,9 +222,20 @@ internal sealed class SyncWatcher
                 }
 
                 // What the run carried is what the tree now holds, and what is left to carry is the Vault's
-                // answer again: both are read rather than guessed at.
+                // answer again: both are read rather than guessed at. A run that ended well is followed by
+                // one explicit fetch, so what the readings are made from is the Layout as the Vault holds it
+                // after the run, rather than the copy the run had when it planned. A run that failed fetched
+                // nothing new, and is answered by the plan it would have made anyway.
                 _host.Files.Touch();
-                Plan(directory);
+
+                if (done)
+                {
+                    _fetch.Fetch(directory, () => Plan(directory));
+                }
+                else
+                {
+                    Plan(directory);
+                }
             });
         });
     }

@@ -60,9 +60,9 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         // One sync and one fetch between the two views of the work: a fetch brings the copy both read, and a
         // sync carries it, so two docks each holding their own would be two runs of the same thing. The graph
-        // asks for a fetch when its own Refresh is pressed, and a sync already going is what it waits for.
-        var watch = new SyncWatcher(host, host.Log, hub);
+        // asks for a fetch when its own Refresh is pressed, and a carried sync is followed by one.
         var fetch = new VaultFetch(host, hub);
+        var watch = new SyncWatcher(host, host.Log, hub, fetch);
 
         // And what the work is looked at through: the three docks, which are this plugin's own windows
         // rather than anything the File System plugin is asked for. What they will hold is Rorolala's,
