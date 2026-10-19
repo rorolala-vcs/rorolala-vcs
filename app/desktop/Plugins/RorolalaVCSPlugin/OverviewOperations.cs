@@ -385,18 +385,15 @@ internal static class OverviewOperations
         });
     }
 
-    /// <summary>Reports what a command said about its own failure, in the window's own words for the frame.</summary>
-    /// <param name="host">The host, whose window the report is shown over.</param>
+    /// <summary>Reports what a command said about its own failure, in the notification stack.</summary>
+    /// <param name="host">The host, whose stack the report is shown in.</param>
     /// <param name="said">What the command said.</param>
     private static void Said(IPluginHost host, string said) =>
-        host.Dialogs.Present(
+        FailureNotice.Show(
+            host.Dialogs,
+            host.Icons,
             RolaI18N.Get("rorolala_vcs.operations.failed"),
-            () =>
-                ReportView.Of(
-                    ReportLines.Parse(said),
-                    key => host.Icons.Find(key),
-                    ReportView.Ink
-                )
+            said
         );
 
     /// <summary>Runs it and waits, answering whether it ended well and what it said.</summary>

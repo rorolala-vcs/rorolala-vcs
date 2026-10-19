@@ -308,8 +308,11 @@ internal sealed class AccountsPanel : UserControl
 
                 if (!done)
                 {
-                    _host.Dialogs.Report(
-                        new Report(RolaI18N.Get("rorolala_vcs.accounts.failed_create"), Said(said))
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
+                        RolaI18N.Get("rorolala_vcs.accounts.failed_create"),
+                        Said(said)
                     );
 
                     return;
@@ -342,8 +345,11 @@ internal sealed class AccountsPanel : UserControl
 
                 if (!done)
                 {
-                    _host.Dialogs.Report(
-                        new Report(RolaI18N.Get("rorolala_vcs.accounts.failed_use"), Said(said))
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
+                        RolaI18N.Get("rorolala_vcs.accounts.failed_use"),
+                        Said(said)
                     );
 
                     return;
@@ -394,7 +400,12 @@ internal sealed class AccountsPanel : UserControl
                 On(() =>
                 {
                     Hold(false);
-                    _host.Dialogs.Report(new Report(RolaI18N.Get("rorolala_vcs.accounts.failed_remove"), Said(said)));
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
+                        RolaI18N.Get("rorolala_vcs.accounts.failed_remove"),
+                        Said(said)
+                    );
                 });
 
                 return;
@@ -482,12 +493,24 @@ internal sealed class AccountsPanel : UserControl
         {
             Hold(false);
 
-            _host.Dialogs.Report(
-                new Report(
+            if (!done)
+            {
+                FailureNotice.Show(
+                    _host.Dialogs,
+                    _host.Icons,
                     RolaI18N.Get("rorolala_vcs.accounts.failed_export"),
-                    done ? RolaI18N.Get("rorolala_vcs.accounts.no_key", name) : Said(said)
-                )
-            );
+                    Said(said)
+                );
+            }
+            else
+            {
+                _host.Dialogs.Report(
+                    new Report(
+                        RolaI18N.Get("rorolala_vcs.accounts.failed_export"),
+                        RolaI18N.Get("rorolala_vcs.accounts.no_key", name)
+                    )
+                );
+            }
 
             return;
         }

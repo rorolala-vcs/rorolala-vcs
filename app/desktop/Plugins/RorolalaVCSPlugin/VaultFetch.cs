@@ -96,16 +96,13 @@ internal sealed class VaultFetch
                 if (!done_well)
                 {
                     // Drawn as every other command's failure is, and not as one line of raw text: what the
-                    // command wrote says which of its lines went wrong and which can be acted on, and the window
-                    // draws those marks rather than the words they are written with.
-                    _host.Dialogs.Present(
+                    // command wrote says which of its lines went wrong and which can be acted on, and the
+                    // notification draws those marks rather than the words they are written with.
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
                         RolaI18N.Get("rorolala_vcs.fetch.failed"),
-                        () =>
-                            ReportView.Of(
-                                ReportLines.Parse(said),
-                                key => _host.Icons.Find(key),
-                                ReportView.Ink
-                            )
+                        said
                     );
                 }
 

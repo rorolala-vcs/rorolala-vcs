@@ -447,6 +447,9 @@ rorolala_vcs:
     failed:
       en: The sync could not be finished
       zh-CN: 同步未能完成
+    plan_failed:
+      en: The sync plan failed
+      zh-CN: 同步计划失败
     no_program:
       en: This window was not opened by the command line, so it cannot run one.
       zh-CN: 这个窗口不是由命令行打开的，因此无法运行命令。

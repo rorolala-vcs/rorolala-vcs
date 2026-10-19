@@ -1,8 +1,11 @@
 using System.Text;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using RorolalaDesktop.Contract;
 
 namespace RorolalaVCSPlugin;
 
@@ -105,15 +108,31 @@ internal static class ReportLines
     /// link, bold or italic, a code span or a fenced block, and a backslash that takes the meaning away from the
     /// character after it. What a report is not read for — a heading, a quotation, a rule, a table, a named alert
     /// — is drawn as it was written, which is what a reader sees rather than nothing.
+    /// <para>
+    /// A code span is drawn as the words inside it on a pill rather than with its backticks on screen: the window
+    /// already says what the marks mean by drawing it, and a pair of backticks beside a surface of its own would
+    /// be saying it twice.
+    /// </para>
     /// </remarks>
     /// <param name="into">Where the words go.</param>
     /// <param name="text">What was written.</param>
     /// <param name="ink">The colour or theme resource a named colour in it is drawn in, or nothing to leave it as it stands.</param>
-    public static void Draw(TextBlock into, string text, Func<string, string?> ink)
+    /// <param name="codeInk">What a code span is written in, or the accent when nothing is stated.</param>
+    /// <param name="codeGround">What a code span is filled with, or the ground when nothing is stated.</param>
+    public static void Draw(
+        TextBlock into,
+        string text,
+        Func<string, string?> ink,
+        string? codeInk = null,
+        string? codeGround = null
+    )
     {
         ArgumentNullException.ThrowIfNull(into);
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(ink);
+
+        codeInk ??= PaletteKeys.Accent;
+        codeGround ??= PaletteKeys.Mid;
 
         var inlines = into.Inlines ??= new InlineCollection();
         var fenced = false;
@@ -135,8 +154,39 @@ internal static class ReportLines
                 continue;
             }
 
-            Words(into, line, null, ink);
+            Words(into, line, null, ink, codeInk, codeGround);
         }
+    }
+
+    /// <summary>One code span, drawn on a wash of the colour its box is written in.</summary>
+    /// <param name="text">What the span says, without its backticks.</param>
+    /// <param name="ink">What its words are drawn in.</param>
+    /// <param name="ground">What its surface is filled with.</param>
+    /// <returns>The inline that holds it.</returns>
+    private static InlineUIContainer Code(string text, string ink, string ground)
+    {
+        var words = new TextBlock
+        {
+            Text = text,
+            FontFamily = Mono,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        words[!TextElement.ForegroundProperty] = new DynamicResourceExtension(ink);
+
+        var pill = new Border
+        {
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = words,
+        };
+        pill[!Border.BackgroundProperty] = new DynamicResourceExtension(ground);
+
+        return new InlineUIContainer
+        {
+            Child = pill,
+            BaselineAlignment = BaselineAlignment.Bottom,
+        };
     }
 
     /// <summary>What the three marks are written as, so that a line can be read for its level.</summary>
@@ -195,7 +245,16 @@ internal static class ReportLines
     /// <param name="text">The line to read.</param>
     /// <param name="strong">The marks already in force around it, or nothing.</param>
     /// <param name="ink">The colour or the theme resource a named colour is drawn in.</param>
-    private static void Words(TextBlock into, string text, Marks? strong, Func<string, string?> ink)
+    /// <param name="codeInk">What a code span is written in.</param>
+    /// <param name="codeGround">What a code span is filled with.</param>
+    private static void Words(
+        TextBlock into,
+        string text,
+        Marks? strong,
+        Func<string, string?> ink,
+        string codeInk,
+        string codeGround
+    )
     {
         var inlines = into.Inlines ??= new InlineCollection();
         var written = new StringBuilder();
@@ -229,12 +288,12 @@ internal static class ReportLines
                 continue;
             }
 
-            // A code span and a flag keep their markers, as a terminal is drawn them: what they say is that the
-            // characters between them are to be taken as they are written.
+            // A code span is a surface of its own rather than another run of text: what it says is literal,
+            // and the pill is what tells the reader that without keeping the backticks on screen.
             if (found == '`' && Pair(text, at, '`') is { } code)
             {
                 Settle();
-                inlines.Add(new Run(text[at..(code + 1)]) { FontFamily = Mono });
+                inlines.Add(Code(text[(at + 1)..code], codeInk, codeGround));
                 at = code;
 
                 continue;
@@ -251,7 +310,7 @@ internal static class ReportLines
                         : inside with { Link = directive.Link };
 
                     Settle();
-                    Words(into, directive.Body, inside, ink);
+                    Words(into, directive.Body, inside, ink, codeInk, codeGround);
                     at = directive.End;
 
                     continue;
@@ -265,7 +324,14 @@ internal static class ReportLines
                 if (Pair(text, at + length - 1, found) is { } closed && closed > at + length)
                 {
                     Settle();
-                    Words(into, text[(at + length)..closed], (strong ?? new Marks()).And(found, length), ink);
+                    Words(
+                        into,
+                        text[(at + length)..closed],
+                        (strong ?? new Marks()).And(found, length),
+                        ink,
+                        codeInk,
+                        codeGround
+                    );
                     at = closed;
 
                     continue;

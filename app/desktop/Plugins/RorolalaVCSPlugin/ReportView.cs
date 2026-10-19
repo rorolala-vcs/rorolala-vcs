@@ -84,10 +84,10 @@ internal static class ReportView
     {
         var words = new TextBlock { TextWrapping = TextWrapping.Wrap };
 
-        ReportLines.Draw(words, string.Join('\n', block.Lines), ink);
-
         if (block.Kind == ReportKind.Plain)
         {
+            ReportLines.Draw(words, string.Join('\n', block.Lines), ink);
+
             return words;
         }
 
@@ -102,30 +102,43 @@ internal static class ReportView
             _ => (Icons.LiveHelp, PaletteKeys.Add, PaletteKeys.AddBackground),
         };
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        // A code span inside a help box belongs to the box rather than to the program's accent: the green is
+        // what the reader knows the advice by, and the pale wash behind it is the same colour laid thinner.
+        var codeInk = block.Kind == ReportKind.Help ? inkKey : PaletteKeys.Accent;
+        var codeGround =
+            block.Kind == ReportKind.Help ? groundKey ?? PaletteKeys.AddBackground : PaletteKeys.Mid;
 
-        if (picture(key) is { } bitmap)
+        ReportLines.Draw(words, string.Join('\n', block.Lines), ink, codeInk, codeGround);
+
+        if (picture(key) is not { } bitmap)
         {
-            var mark = new Border
-            {
-                Width = Mark,
-                Height = Mark,
-                Margin = new Thickness(0, 3, 8, 0),
-                VerticalAlignment = VerticalAlignment.Top,
-                OpacityMask = new ImageBrush(bitmap) { Stretch = Stretch.Uniform },
-            };
-
-            // The picture is drawn much larger than the mark it is shown as, so it is reduced here: the
-            // high filter is what keeps a thin stroke whole on the way down.
-            Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
-                mark,
-                Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
-            );
-            mark[!Border.BackgroundProperty] = new DynamicResourceExtension(inkKey);
-
-            row.Children.Add(mark);
+            return words;
         }
 
+        // A grid rather than a row of a horizontal stack: the words have to be measured against what is
+        // left of the width rather than against no width at all, or a sentence longer than the card would
+        // stay on one line and be cut off instead of wrapping.
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var mark = new Border
+        {
+            Width = Mark,
+            Height = Mark,
+            Margin = new Thickness(0, 3, 8, 0),
+            VerticalAlignment = VerticalAlignment.Top,
+            OpacityMask = new ImageBrush(bitmap) { Stretch = Stretch.Uniform },
+        };
+
+        // The picture is drawn much larger than the mark it is shown as, so it is reduced here: the
+        // high filter is what keeps a thin stroke whole on the way down.
+        Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
+            mark,
+            Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
+        );
+        mark[!Border.BackgroundProperty] = new DynamicResourceExtension(inkKey);
+
+        Grid.SetColumn(mark, 0);
+        Grid.SetColumn(words, 1);
+        row.Children.Add(mark);
         row.Children.Add(words);
 
         if (groundKey is null)

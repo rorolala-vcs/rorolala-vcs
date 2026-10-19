@@ -4,6 +4,7 @@ using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Logging;
+using RorolalaDesktop.Notifications;
 using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -28,6 +29,7 @@ internal static class Host
         var i18n = new I18nService();
         var log = new LogService(notifications);
         var popups = new PopupService(notifications);
+        var notices = new NotificationCenter();
         var preference = new PreferenceConfiguration();
 
         // A window is drawn with a picture the platform makes, and a headless test has no platform and
@@ -38,7 +40,7 @@ internal static class Host
         // The shell is made before the object it is put in, because a dialog is shown on the window the shell
         // names, which is the one place both sides agree on.
         var shell = new Shell();
-        var dialogs = new Dialogs(shell, i18n, icon);
+        var dialogs = new Dialogs(shell, i18n, icon, notices);
 
         var docks = new DockManager(new DockRegistry(), i18n, log, popups);
         var dockMenus = new DockMenuRegistry();
@@ -53,6 +55,7 @@ internal static class Host
         {
             Log = log,
             Popups = popups,
+            Notifications = notices,
             I18n = i18n,
             ProgramIcon = icon,
             Theme = making.Service,

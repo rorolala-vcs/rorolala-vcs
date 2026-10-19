@@ -1443,14 +1443,11 @@ internal sealed partial class VersionGraphView : Control
 
                 if (!done)
                 {
-                    _dialogs.Present(
+                    FailureNotice.Show(
+                        _dialogs,
+                        _icons,
                         RolaI18N.Get("rorolala_vcs.version_graph.delete_changes_failed"),
-                        () =>
-                            ReportView.Of(
-                                ReportLines.Parse(said),
-                                key => _icons.Find(key),
-                                ReportView.Ink
-                            )
+                        said
                     );
 
                     return;
@@ -1502,14 +1499,11 @@ internal sealed partial class VersionGraphView : Control
 
                 if (!done)
                 {
-                    _dialogs.Present(
+                    FailureNotice.Show(
+                        _dialogs,
+                        _icons,
                         RolaI18N.Get("rorolala_vcs.version_graph.cancel_merge_failed"),
-                        () =>
-                            ReportView.Of(
-                                ReportLines.Parse(said),
-                                key => _icons.Find(key),
-                                ReportView.Ink
-                            )
+                        said
                     );
 
                     return;
@@ -1552,14 +1546,11 @@ internal sealed partial class VersionGraphView : Control
 
                 if (!done)
                 {
-                    _dialogs.Present(
+                    FailureNotice.Show(
+                        _dialogs,
+                        _icons,
                         RolaI18N.Get("rorolala_vcs.version_graph.join_failed"),
-                        () =>
-                            ReportView.Of(
-                                ReportLines.Parse(said),
-                                key => _icons.Find(key),
-                                ReportView.Ink
-                            )
+                        said
                     );
 
                     return;
@@ -1614,14 +1605,11 @@ internal sealed partial class VersionGraphView : Control
 
                 if (!done)
                 {
-                    _dialogs.Present(
+                    FailureNotice.Show(
+                        _dialogs,
+                        _icons,
                         RolaI18N.Get("rorolala_vcs.version_graph.retrack_failed"),
-                        () =>
-                            ReportView.Of(
-                                ReportLines.Parse(said),
-                                key => _icons.Find(key),
-                                ReportView.Ink
-                            )
+                        said
                     );
 
                     return;

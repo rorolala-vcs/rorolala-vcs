@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
@@ -208,7 +209,7 @@ internal static class OwnershipActions
 
         _ = Task.Run(() =>
         {
-            var (done, said) = Ask(program, arguments, target.Directory, run.Records, hub.Touch);
+            var (done, said, output) = Ask(program, arguments, target.Directory, run.Records, hub.Touch);
 
             // The card is let go of here rather than when the command is over, because the panel keeps it for a
             // few seconds after: what ended is drawn as ended before it is taken away.
@@ -217,19 +218,69 @@ internal static class OwnershipActions
             // Either way the files may have moved, which is what the listing reads again for.
             host.Files.Touch();
 
-            if (!done)
+            // A run given --json has its result serialized rather than drawn, so the renderer that would set a
+            // non-zero code for a refused entry never runs. What was refused is therefore read from the result's
+            // `failed` list: --allow-partial makes a batch with refusals a successful run, and the exit code alone
+            // would call that success.
+            IReadOnlyList<string> failed = done ? Failures(output) : [];
+
+            if (!done || failed.Count > 0)
             {
-                host.Dialogs.Present(
-                RolaI18N.Get("rorolala_vcs.ownership_failed"),
-                () =>
-                    ReportView.Of(
-                        ReportLines.Parse(said),
-                        key => host.Icons.Find(key),
-                        ReportView.Ink
-                    )
-            );
+                FailureNotice.Show(
+                    host.Dialogs,
+                    host.Icons,
+                    RolaI18N.Get("rorolala_vcs.ownership_failed"),
+                    done ? string.Join('\n', failed) : said
+                );
             }
         });
+    }
+
+    /// <summary>Reads the entries a successful result says were not moved.</summary>
+    /// <remarks>
+    /// The successful result of `hold` or `giveup` carries what it refused as plainly as what it did. Its exit
+    /// code cannot: with `--json` the structural renderer is what answers, and the buffer renderer that would
+    /// turn a refusal into a failure is not reached. What this reads is only that list, because what moved is
+    /// not a question the notification asks.
+    /// </remarks>
+    /// <param name="output">What the command wrote, which is one JSON object when it was asked for one.</param>
+    /// <returns>What was not moved, one line each, or nothing when there was none.</returns>
+    private static IReadOnlyList<string> Failures(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(output);
+
+            if (
+                document.RootElement.ValueKind is not JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("failed", out var failed)
+                || failed.ValueKind is not JsonValueKind.Array
+            )
+            {
+                return [];
+            }
+
+            return
+            [
+                .. failed
+                    .EnumerateArray()
+                    .Where(item => item.ValueKind is JsonValueKind.String)
+                    .Select(item => item.GetString())
+                    .Where(line => line is { Length: > 0 })
+                    .Select(line => line!),
+            ];
+        }
+        catch (JsonException)
+        {
+            // A run that answered something else is not one whose refusals can be read. The exit code said it
+            // ended well, so there is nothing here to report rather than a second guess at its words.
+            return [];
+        }
     }
 
     /// <summary>What a run of one of the two commands is called in the Overview's panel.</summary>
@@ -254,8 +305,8 @@ internal static class OwnershipActions
     /// <param name="directory">Where to run it, which is where the names it was given are read from.</param>
     /// <param name="records">What the run's records are read into, which the panel draws.</param>
     /// <param name="progress">What is told that a record was said, which redraws on the window's thread.</param>
-    /// <returns>Whether it ended well, and what to say when it did not.</returns>
-    private static (bool Done, string Said) Ask(
+    /// <returns>Whether it ended well, what to say when it did not, and what it wrote.</returns>
+    private static (bool Done, string Said, string Output) Ask(
         string program,
         IReadOnlyList<string> arguments,
         string directory,
@@ -305,23 +356,25 @@ internal static class OwnershipActions
 
             process.WaitForExit();
 
+            var written = output.GetAwaiter().GetResult().Trim();
+
             if (process.ExitCode == 0)
             {
-                return (true, string.Empty);
+                return (true, string.Empty, written);
             }
 
             var told = said.ToString().Trim();
 
             if (told.Length == 0)
             {
-                told = output.GetAwaiter().GetResult().Trim();
+                told = written;
             }
 
-            return (false, told.Length == 0 ? $"the command ended with {process.ExitCode}" : told);
+            return (false, told.Length == 0 ? $"the command ended with {process.ExitCode}" : told, written);
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            return (false, error.Message);
+            return (false, error.Message, string.Empty);
         }
     }
 }

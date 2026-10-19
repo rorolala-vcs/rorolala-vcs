@@ -1,13 +1,18 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
-        x:Class="RorolalaDesktop.MainWindow"
-        Width="1100" Height="720"
-        Title="Rorolala Desktop"
-        ExtendClientAreaToDecorationsHint="True"
-        WindowDecorations="BorderOnly">
+<Window
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DesignWidth="1100"
+    d:DesignHeight="720"
+    x:Class="RorolalaDesktop.MainWindow"
+    Width="1100"
+    Height="720"
+    Title="Rorolala Desktop"
+    ExtendClientAreaToDecorationsHint="True"
+    WindowDecorations="BorderOnly"
+>
     <!-- The frame is the program's own rather than the desktop's, and `BorderOnly` is how the desktop is
          told so: the toolkit asks for a window with no title bar of the desktop's, keeps the resize
          border, and leaves the whole of the top to this program. `Full` would ask the desktop for a
@@ -22,35 +27,46 @@
          decorations are told to reserve, which the window says in code rather than here — one number for
          every window, so that the row of a window that is one dock is the row of the main window — and the
          look is what draws the row and the buttons. -->
-    <DockPanel>
-        <!-- The row's own surface, and what the row is made of: the look fills it with the elevated ground and
-             draws the one line along its foot that separates the row from the dock area below. It
-             is the container rather than a layer beside the menu, because a sibling of the menu has no width to
-             be drawn in — the menu takes what is left of the row, and a border next to it would be a surface of
-             no pixels, which is a line nobody can see.
+    <Grid>
+        <DockPanel>
+            <!-- The row's own surface, and what the row is made of: the look fills it with the elevated ground and
+                 draws the one line along its foot that separates the row from the dock area below. It
+                 is the container rather than a layer beside the menu, because a sibling of the menu has no width to
+                 be drawn in — the menu takes what is left of the row, and a border next to it would be a surface of
+                 no pixels, which is a line nobody can see.
 
-             It carries no element role, and that is deliberate rather than left out: `ElementRole.TitleBar` is
-             not a name for the row but a non-client hit test — the whole of the element's bounds is taken as the
-             window's drag area, whatever is drawn inside it — so a row carrying it would answer for its own
-             menu, and a press on a menu item would move the window instead of opening the menu. What a press
-             here reaches is the window's own handler, and the drag area the framework reads is the one the
-             decorations theme draws. -->
-        <Border x:Name="TitleBar"
-                Classes="title-bar"
-                DockPanel.Dock="Top">
-            <!-- The room the window's own buttons take is reserved by the row's own padding, which the look
-                 states, rather than by laying them out here: the frame draws them over the row, so a button
-                 that was a child of it would be a second one. What is left is the menu's.
+                 It carries no element role, and that is deliberate rather than left out: `ElementRole.TitleBar` is
+                 not a name for the row but a non-client hit test — the whole of the element's bounds is taken as the
+                 window's drag area, whatever is drawn inside it — so a row carrying it would answer for its own
+                 menu, and a press on a menu item would move the window instead of opening the menu. What a press
+                 here reaches is the window's own handler, and the drag area the framework reads is the one the
+                 decorations theme draws. -->
+            <Border x:Name="TitleBar" Classes="title-bar" DockPanel.Dock="Top">
+                <!-- The room the window's own buttons take is reserved by the row's own padding, which the look
+                     states, rather than by laying them out here: the frame draws them over the row, so a button
+                     that was a child of it would be a second one. What is left is the menu's.
 
-                 The name of the one dock a window holds is added to this panel in code, because only the
-                 window knows whether it is one — and it is put over the menu rather than beside it, since a
-                 dock's name belongs in the room the row keeps clear of its menus. -->
-            <Grid x:Name="TitleRow">
-                <Menu x:Name="MainMenu"
-                      Classes="menu-bar"
-                      Background="Transparent" />
-            </Grid>
-        </Border>
-        <ContentControl x:Name="DockAreaHost" />
-    </DockPanel>
+                     The name of the one dock a window holds is added to this panel in code, because only the
+                     window knows whether it is one — and it is put over the menu rather than beside it, since a
+                     dock's name belongs in the room the row keeps clear of its menus. -->
+                <Grid x:Name="TitleRow">
+                    <Menu
+                        x:Name="MainMenu"
+                        Classes="menu-bar"
+                        Background="Transparent"
+                    />
+                </Grid>
+            </Border>
+            <ContentControl x:Name="DockAreaHost" />
+        </DockPanel>
+
+        <!-- Notifications stand over the docks rather than in a region, because they belong to the window and
+             not to whatever is under them. The layer itself takes no room and no press; only the cards in it do. -->
+        <Panel
+            x:Name="NotificationLayer"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Margin="0,0,16,16"
+        />
+    </Grid>
 </Window>

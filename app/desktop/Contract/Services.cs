@@ -289,6 +289,32 @@ public sealed record Dialog(string Title, string Message, Action Confirmed);
 /// <param name="Message">What happened, in the words of whoever knows.</param>
 public sealed record Report(string Title, string Message);
 
+/// <summary>How a notification is marked, which decides the colour it is drawn with.</summary>
+public enum NotificationLevel
+{
+    /// <summary>What happened, with nothing to act on.</summary>
+    Message,
+
+    /// <summary>Something that may need attention.</summary>
+    Warning,
+
+    /// <summary>Something that went wrong.</summary>
+    Error,
+}
+
+/// <summary>
+/// Something said without asking, shown in the host's notification stack.
+/// </summary>
+/// <remarks>
+/// The content is made where it is shown rather than handed over ready-made, because a control belongs to the
+/// thread that made it: what a plugin has to say usually comes from work it did off the window's thread, and a
+/// tree built there cannot be put on a window. What is handed over is therefore how to build it.
+/// </remarks>
+/// <param name="Level">How serious it is.</param>
+/// <param name="Title">What it is called.</param>
+/// <param name="Content">How to build what to show, which is called on the window's own thread.</param>
+public sealed record Notification(NotificationLevel Level, string Title, Func<Control> Content);
+
 /// <summary>
 /// Where a plugin asks the user something over the host's windows, and tells them something.
 /// </summary>
@@ -315,19 +341,13 @@ public interface IDialogs
     void Report(Report report);
 
     /// <summary>
-    /// Shows what a plugin has to say, in a window of the host's.
+    /// Shows what a plugin has to say in the host's notification stack.
     /// </summary>
     /// <remarks>
     /// For what a line of text cannot say: a command's own report, read into the shapes its lines mean. The
-    /// window, its chrome, and where it stands are the host's, so a plugin brings only the content — which is
-    /// the same division as everywhere else, a plugin saying what and the host saying how.
-    /// <para>
-    /// The content is made where it is shown rather than handed over ready-made, because a control belongs to the
-    /// thread that made it: what a plugin has to say usually comes from work it did off the window's thread, and
-    /// a tree built there cannot be put on a window. What is handed over is therefore how to build it.
-    /// </para>
+    /// stack, its look, and where it stands are the host's, so a plugin brings only the content — which is the
+    /// same division as everywhere else, a plugin saying what and the host saying how.
     /// </remarks>
-    /// <param name="title">What the window is called.</param>
-    /// <param name="content">How to build what to show in it, which is called on the window's own thread.</param>
-    void Present(string title, Func<Control> content);
+    /// <param name="notification">What to say.</param>
+    void Notify(Notification notification);
 }

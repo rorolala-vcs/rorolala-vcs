@@ -1,6 +1,7 @@
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Logging;
+using RorolalaDesktop.Notifications;
 using RorolalaDesktop.Theming;
 // The one Avalonia type named here is aliased rather than taken wholesale: `Avalonia.Controls`
 // carries a `MenuItem` of its own, and the menu items this file registers are the contract's.
@@ -23,6 +24,9 @@ internal sealed class HostServices
 
     /// <summary>Notifications the user must act on, shown once there is a window.</summary>
     public required PopupService Popups { get; init; }
+
+    /// <summary>The notifications waiting to be shown in the main window's stack.</summary>
+    public required NotificationCenter Notifications { get; init; }
 
     /// <summary>The host's translations.</summary>
     public required I18nService I18n { get; init; }

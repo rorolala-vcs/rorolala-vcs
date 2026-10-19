@@ -121,6 +121,12 @@ internal sealed class SyncWatcher
     private bool _asked;
 
     /// <summary>
+    /// The plan failure last shown, so that a dock asking again about work that has not changed does not
+    /// put the same card up again.
+    /// </summary>
+    private string? _told;
+
+    /// <summary>
     /// Asks what a sync would carry, which decides whether the buttons may be pressed.
     /// </summary>
     /// <remarks>
@@ -189,7 +195,7 @@ internal sealed class SyncWatcher
             catch (Exception error) when (error is not OutOfMemoryException)
             {
                 _log.Warn($"what a sync would carry could not be read: {error.Message}");
-                plan = new SyncPlan(false, null);
+                plan = new SyncPlan(false, error.Message);
             }
 
             // A plan that could not be made is said in the log as well as on the buttons: the strip answers
@@ -215,9 +221,44 @@ internal sealed class SyncWatcher
                     return;
                 }
 
+                Told(plan);
                 Settled(plan.Ready, plan.Said);
             });
         });
+    }
+
+    /// <summary>
+    /// Shows what a plan run said when it failed, once for one answer.
+    /// </summary>
+    /// <remarks>
+    /// A plan is asked again whenever the work or the scope may have changed, so a failure that is still the
+    /// same one would otherwise put up a card every time the dock was looked at. This is the same reason the
+    /// strip keeps the reason on hover: the answer is the reader's to find, and a stack of identical cards is
+    /// not where they look for it.
+    /// </remarks>
+    /// <param name="plan">The answer the command gave.</param>
+    private void Told(SyncPlan plan)
+    {
+        if (plan.Said is not { Length: > 0 } said)
+        {
+            _told = null;
+
+            return;
+        }
+
+        if (string.Equals(_told, said, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _told = said;
+
+        FailureNotice.Show(
+            _host.Dialogs,
+            _host.Icons,
+            RolaI18N.Get("rorolala_vcs.sync.plan_failed"),
+            said
+        );
     }
 
     /// <summary>
@@ -298,8 +339,11 @@ internal sealed class SyncWatcher
 
                 if (!done)
                 {
-                    _host.Dialogs.Report(
-                        new Report(RolaI18N.Get("rorolala_vcs.sync.failed"), said)
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
+                        RolaI18N.Get("rorolala_vcs.sync.failed"),
+                        said
                     );
                 }
 

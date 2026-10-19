@@ -4,13 +4,13 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Threading;
 using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Logging;
+using RorolalaDesktop.Notifications;
 // Named rather than imported whole, because the contract has a menu item of its own and the toolkit has one
 // too: what a window's menu is built from is the toolkit's, and only these two are the contract's.
 using DockHeaderCommand = RorolalaDesktop.Contract.DockHeaderCommand;
@@ -19,6 +19,8 @@ using RorolalaDesktop.Theming;
 using ContractMenuItem = RorolalaDesktop.Contract.MenuItem;
 using DockOpenMode = RorolalaDesktop.Contract.DockOpenMode;
 using DockRegistration = RorolalaDesktop.Contract.DockRegistration;
+using Notification = RorolalaDesktop.Contract.Notification;
+using NotificationLevel = RorolalaDesktop.Contract.NotificationLevel;
 using PluginId = RorolalaDesktop.Contract.PluginId;
 
 namespace RorolalaDesktop;
@@ -110,6 +112,16 @@ public partial class MainWindow : Window
     /// </remarks>
     private readonly RorolalaTheme.Frame _frame;
 
+    /// <summary>
+    /// The stack notifications are shown in, or nothing for a window that is one dock.
+    /// </summary>
+    /// <remarks>
+    /// Notifications belong to the program's main window rather than to every window the host may open: a
+    /// dock torn into a window of its own is a view of one part of the work, and a failure reported while the
+    /// user is there is still the program's, not that dock's.
+    /// </remarks>
+    private readonly NotificationStack? _notifications;
+
     /// <summary>The docks as they appear in the Window menu, so their checks can be kept in step.</summary>
     private readonly List<(DockRegistration Registration, MenuItem Entry)> _docks = [];
 
@@ -123,8 +135,6 @@ public partial class MainWindow : Window
     /// </remarks>
     private DockDrag? _drag;
 
-    /// <summary>Whether a notice is on screen, so that a second one is shown after it rather than over it.</summary>
-    private bool _noticing;
 
     /// <summary>Makes the window over what was registered.</summary>
     /// <param name="services">Everything the host holds.</param>
@@ -239,6 +249,12 @@ public partial class MainWindow : Window
             _key
         );
 
+        if (_key is null)
+        {
+            _notifications = new NotificationStack();
+            NotificationLayer.Children.Add(_notifications);
+        }
+
         // A dock can be closed, opened, or dragged to another region by hand as well as from the
         // menu, so the checks are refreshed and the layout written whenever the docks change — a
         // dock moved by hand is remembered from then on, not only if the run ends tidily.
@@ -248,11 +264,20 @@ public partial class MainWindow : Window
         // a plugin reads, so what the host is told about it is said on to the plugins here.
         Activated += (_, _) => _services.Refocus.Regain();
 
-        Opened += (_, _) => ShowPopups();
+        Opened += (_, _) =>
+        {
+            ShowPopups();
+            ShowNotifications();
+        };
 
         // What is raised once this window is up is shown as it is raised, rather than waiting for another
         // window to be opened: a failure met while the program is running is one to act on then.
         _services.Popups.Raised += PopupsRaised;
+
+        if (_key is null)
+        {
+            _services.Notifications.Posted += NotificationsPosted;
+        }
 
         // The layout is what the main window's regions were, so it is written when the main window is the one
         // going: a window of a dock's own has no regions to remember, and writing the layout from it would be
@@ -272,6 +297,11 @@ public partial class MainWindow : Window
         {
             _services.Docks.Changed -= DocksChanged;
             _services.Popups.Raised -= PopupsRaised;
+
+            if (_key is null)
+            {
+                _services.Notifications.Posted -= NotificationsPosted;
+            }
         };
     }
 
@@ -692,35 +722,38 @@ public partial class MainWindow : Window
         _services.Docks.Instances.Any(instance => instance.DockNameId == nameId && instance.IsOpen);
 
     /// <summary>
-    /// Shows what has been raised and not yet shown, all in one dialog.
+    /// Shows what has been raised and not yet shown, in the notification stack.
     /// </summary>
     /// <remarks>
-    /// A plugin that was not loaded, or a skin that could not be read, is raised while there is
-    /// nowhere to put a dialog. It is held and shown here, once, all together — one dialog listing
-    /// the trouble is easier to take in than a stack of them, and deduplication has already removed
-    /// the repeats. What is raised after the window is up comes by the same road: the queue announces
-    /// it, and this takes it when there is a window to put it over and no card already on screen.
+    /// A plugin that was not loaded, or a skin that could not be read, is raised while there is nowhere to
+    /// put a notification. It is held and shown here, once, all together. What is raised after the window is
+    /// up comes by the same road: the queue announces it, and this takes it when there is a window to show
+    /// it in.
     /// </remarks>
     private void ShowPopups()
     {
         // A window that is not shown has nowhere to put a card, so what is waiting is left for the window
-        // that is up — this one once it is opened, or another of the host's. A card already on screen is
-        // waited for rather than covered: what was raised meanwhile is taken when that one is dismissed.
-        if (_noticing || !IsVisible)
+        // that is up — this one once it is opened.
+        if (_notifications is null || !IsVisible)
         {
             return;
         }
 
-        var pending = _services.Popups.Take();
-
-        if (pending.Count == 0)
+        foreach (var notice in _services.Popups.Take())
         {
-            return;
+            Add(
+                new Notification(
+                    Level(notice.Level),
+                    notice.Source,
+                    () =>
+                        new TextBlock
+                        {
+                            Text = notice.Message,
+                            TextWrapping = TextWrapping.Wrap,
+                        }
+                )
+            );
         }
-
-        _noticing = true;
-
-        _ = Notice(pending);
     }
 
     /// <summary>
@@ -744,134 +777,50 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.Post(ShowPopups);
     }
 
-    /// <summary>
-    /// Shows what was raised as one card: a title, a stripe per line, and one way out.
-    /// </summary>
-    /// <remarks>
-    /// One card rather than a dialog per notification, because trouble is usually one thing met many times
-    /// and a stack of identical dialogs is the one shape a notice must not have. It is drawn from the same
-    /// tokens as everything else — one border, one radius, a soft shadow, and a stripe rather than an icon
-    /// — so a failure reads as part of the program rather than as something the toolkit put on top of it.
-    /// </remarks>
-    /// <param name="pending">What was raised and not yet shown.</param>
-    private async Task Notice(IReadOnlyList<Notice> pending)
+    /// <summary>Shows every notification posted and not yet shown, on the window's own thread.</summary>
+    private void ShowNotifications()
     {
-        try
+        if (_notifications is null || !IsVisible)
         {
-            var lines = new StackPanel();
-
-            foreach (var notice in pending)
-            {
-                lines.Children.Add(NoticeLine(notice));
-            }
-
-            var dismiss = new Button
-            {
-                Content = _services.I18n.Get("window.dismiss"),
-                Classes = { "primary" },
-                HorizontalAlignment = HorizontalAlignment.Right,
-            };
-
-            var heading = new TextBlock
-            {
-                Text = _services.I18n.Get("window.notice"),
-                Classes = { "title" },
-                Margin = new Thickness(16, 16, 16, 8),
-            };
-
-            var foot = new Border
-            {
-                Padding = new Thickness(12, 12, 16, 16),
-                BorderThickness = new Thickness(0, 1, 0, 0),
-                Child = dismiss,
-            };
-            foot[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
-
-            var body = new ScrollViewer { Content = lines };
-
-            var panel = new DockPanel { LastChildFill = true };
-            DockPanel.SetDock(heading, Dock.Top);
-            DockPanel.SetDock(foot, Dock.Bottom);
-            panel.Children.Add(heading);
-            panel.Children.Add(foot);
-            panel.Children.Add(body);
-
-            var dialog = new Window
-            {
-                Title = _services.I18n.Get("window.notice"),
-                Icon = _services.ProgramIcon,
-                Width = 560,
-                MaxHeight = 640,
-                SizeToContent = SizeToContent.Height,
-                Content = panel,
-            };
-
-            // The dialog is a card of its own, so it takes the elevated ground the design puts a card on
-            // rather than the ground the window behind it is drawn on.
-            dialog[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-            dismiss.Click += (_, _) => dialog.Close();
-
-            await dialog.ShowDialog(this);
+            return;
         }
-        finally
-        {
-            // What was raised while the card was up is shown next, once the card is gone: the queue was
-            // left alone for as long as this one held it.
-            _noticing = false;
 
-            ShowPopups();
+        foreach (var notification in _services.Notifications.Take())
+        {
+            Add(notification);
         }
     }
 
-    /// <summary>One notification: a stripe in the colour of its level, and what it was and said.</summary>
-    /// <remarks>
-    /// The stripe is left unstained for a level that is not trouble, so that the line still has room for
-    /// it: a mark that appears only sometimes is a line that shifts under the eye when it does.
-    /// </remarks>
-    /// <param name="notice">What to draw.</param>
-    private static Control NoticeLine(Notice notice)
+    /// <summary>Shows a notification posted since the window was last looked at.</summary>
+    /// <param name="sender">The center.</param>
+    /// <param name="e">Not read.</param>
+    private void NotificationsPosted(object? sender, EventArgs e)
     {
-        var stripe = new Border { Width = 3 };
-
-        if (Severity(notice.Level) is { } severity)
+        if (Dispatcher.UIThread.CheckAccess())
         {
-            stripe[!Border.BackgroundProperty] = new DynamicResourceExtension(severity);
+            ShowNotifications();
+
+            return;
         }
 
-        var text = new StackPanel
-        {
-            Margin = new Thickness(16, 8, 16, 8),
-            Spacing = 2,
-            Children =
-            {
-                new TextBlock { Text = notice.Source, Classes = { "label" } },
-                new TextBlock { Text = notice.Message, TextWrapping = TextWrapping.Wrap },
-            },
-        };
-
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3,*") };
-        Grid.SetColumn(stripe, 0);
-        Grid.SetColumn(text, 1);
-        grid.Children.Add(stripe);
-        grid.Children.Add(text);
-
-        var line = new Border
-        {
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = grid,
-        };
-        line[!Border.BorderBrushProperty] = new DynamicResourceExtension("rorolala.border");
-
-        return line;
+        Dispatcher.UIThread.Post(ShowNotifications);
     }
 
-    /// <summary>What a level is marked with: the one red, the one amber, or nothing at all.</summary>
+    /// <summary>Puts one notification in the stack.</summary>
+    /// <param name="notification">What to show.</param>
+    private void Add(Notification notification)
+    {
+        _notifications?.Push(new NotificationCard(notification, _services.I18n, _services.Icons));
+    }
+
+    /// <summary>What a log level is marked as in the notification stack.</summary>
     /// <param name="level">How serious it is.</param>
-    private static string? Severity(LogLevel level) =>
+    /// <returns>The level the card is drawn with.</returns>
+    private static NotificationLevel Level(LogLevel level) =>
         level switch
         {
-            LogLevel.Error => "rorolala.del",
-            LogLevel.Warn => "rorolala.warn",
-            _ => null,
+            LogLevel.Error => NotificationLevel.Error,
+            LogLevel.Warn => NotificationLevel.Warning,
+            _ => NotificationLevel.Message,
         };
 }

@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Media;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -315,13 +316,12 @@ internal static class FileOps
     }
 
     /// <summary>
-    /// Says, over the window the run was started from, what the commands that did not finish cleanly
-    /// said.
+    /// Says, in the notification stack, what the commands that did not finish cleanly said.
     /// </summary>
     /// <remarks>
     /// The programs are the user's own, so their error streams are not this plugin's to phrase; what
-    /// the plugin brings is a heading that says what they are and one window for all of them, since a
-    /// batch that failed for one reason should not put up one window per item.
+    /// the plugin brings is a heading that says what they are and one notification for all of them, since
+    /// a batch that failed for one reason should not put up one card per item.
     /// </remarks>
     /// <param name="refusals">What the commands that did not finish cleanly said.</param>
     private static void CommandFailed(IReadOnlyList<CommandFailure> refusals)
@@ -333,6 +333,17 @@ internal static class FileOps
 
         var said = string.Join("\n\n", refusals.Select(refusal => refusal.Note));
 
-        _dialogs.Show(new Dialog(RolaI18N.Get("rorolala_file_system.command_failed"), said, () => { }));
+        _dialogs.Notify(
+            new Notification(
+                NotificationLevel.Error,
+                RolaI18N.Get("rorolala_file_system.command_failed"),
+                () =>
+                    new TextBlock
+                    {
+                        Text = said,
+                        TextWrapping = TextWrapping.Wrap,
+                    }
+            )
+        );
     }
 }

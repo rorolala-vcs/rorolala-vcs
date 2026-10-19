@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.Notifications;
 
 namespace RorolalaDesktop.Hosting;
 
@@ -33,15 +34,20 @@ internal sealed class Dialogs : IDialogs
     /// <summary>The picture the program is known by, or nothing when the platform has none.</summary>
     private readonly WindowIcon? _icon;
 
+    /// <summary>Where a notification is put so that the window shows it.</summary>
+    private readonly NotificationCenter _notifications;
+
     /// <summary>Makes the dialogs over the window they are shown on and the words they use.</summary>
     /// <param name="shell">The window a question is shown on.</param>
     /// <param name="i18n">Where the two answers are written.</param>
     /// <param name="icon">The picture the program is known by, for the window a question is put in.</param>
-    public Dialogs(Shell shell, I18nService i18n, WindowIcon? icon)
+    /// <param name="notifications">Where a notification is put for the window's stack.</param>
+    public Dialogs(Shell shell, I18nService i18n, WindowIcon? icon, NotificationCenter notifications)
     {
         _shell = shell;
         _i18n = i18n;
         _icon = icon;
+        _notifications = notifications;
     }
 
     /// <inheritdoc />
@@ -60,15 +66,29 @@ internal sealed class Dialogs : IDialogs
     /// <inheritdoc />
     public void Report(Report report)
     {
-        if (Dispatcher.UIThread.CheckAccess())
-        {
-            Told(report);
+        ArgumentNullException.ThrowIfNull(report);
 
-            return;
-        }
+        // A report is one line of what happened, so it is drawn as one: the same card as every other
+        // notification, with the failure's red rather than a window that has to be closed before the
+        // work can go on.
+        var message = report.Message;
 
-        Dispatcher.UIThread.Post(() => Told(report));
+        _notifications.Post(
+            new Notification(
+                NotificationLevel.Error,
+                report.Title,
+                () =>
+                    new TextBlock
+                    {
+                        Text = message,
+                        TextWrapping = TextWrapping.Wrap,
+                    }
+            )
+        );
     }
+
+    /// <inheritdoc />
+    public void Notify(Notification notification) => _notifications.Post(notification);
 
     /// <summary>Puts one question to the user.</summary>
     /// <remarks>
@@ -156,145 +176,5 @@ internal sealed class Dialogs : IDialogs
         {
             dialog.Confirmed();
         }
-    }
-
-    /// <inheritdoc />
-    public void Present(string title, Func<Control> content)
-    {
-        if (Dispatcher.UIThread.CheckAccess())
-        {
-            Presented(title, content);
-
-            return;
-        }
-
-        Dispatcher.UIThread.Post(() => Presented(title, content));
-    }
-
-    /// <summary>
-    /// Shows what a plugin built, in the window a report is shown in.
-    /// </summary>
-    /// <remarks>
-    /// The content is scrolled rather than the window grown to fit it, because what a command says can be as long
-    /// as it likes and a window taller than the screen has nowhere to put its own button.
-    /// </remarks>
-    /// <param name="title">What the window is called.</param>
-    /// <param name="content">How to build what to show in it.</param>
-    private async void Presented(string title, Func<Control> content)
-    {
-        if (_shell.Window is not { IsVisible: true } owner)
-        {
-            return;
-        }
-
-        var close = new Button
-        {
-            Content = _i18n.Get("window.dialog.confirm"),
-            Classes = { "primary" },
-            IsDefault = true,
-            IsCancel = true,
-            MinWidth = 88,
-        };
-
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(16, 8, 16, 16),
-            Children = { close },
-        };
-
-        // Built here, on the thread the window belongs to: what a plugin has to say was usually worked out on
-        // another one, and a tree built there is not this thread's to put anywhere.
-        var body = new ScrollViewer
-        {
-            Content = content(),
-            MaxHeight = 460,
-            Padding = new Thickness(16, 16, 16, 8),
-        };
-
-        var panel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        panel.Children.Add(buttons);
-        panel.Children.Add(body);
-
-        var window = new Window
-        {
-            Title = title,
-            Icon = _icon,
-            Width = 560,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = panel,
-        };
-
-        window[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-
-        close.Click += (_, _) => window.Close();
-
-        await window.ShowDialog(owner);
-    }
-
-    /// <summary>Puts something that has happened, which is read and closed.</summary>
-    /// <remarks>
-    /// The same window as a question with one button rather than two: there is nothing to agree to, so there
-    /// is nothing to call off either, and a "cancel" would be offering to undo what has already been done.
-    /// </remarks>
-    /// <param name="report">What to say.</param>
-    private async void Told(Report report)
-    {
-        if (_shell.Window is not { IsVisible: true } owner)
-        {
-            return;
-        }
-
-        var message = new TextBlock
-        {
-            Text = report.Message,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 8),
-        };
-
-        var close = new Button
-        {
-            Content = _i18n.Get("window.dialog.confirm"),
-            Classes = { "primary" },
-            IsDefault = true,
-            IsCancel = true,
-            MinWidth = 88,
-        };
-
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(16, 8, 16, 16),
-            Children = { close },
-        };
-
-        var panel = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        panel.Children.Add(buttons);
-        panel.Children.Add(message);
-
-        var window = new Window
-        {
-            Title = report.Title,
-            Icon = _icon,
-            Width = 480,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = panel,
-        };
-
-        window[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
-
-        close.Click += (_, _) => window.Close();
-
-        await window.ShowDialog(owner);
     }
 }

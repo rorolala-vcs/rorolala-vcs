@@ -276,14 +276,11 @@ internal sealed class VersionGraphTrackBar : Border
 
                 if (!done)
                 {
-                    _dialogs.Present(
+                    FailureNotice.Show(
+                        _dialogs,
+                        _icons,
                         RolaI18N.Get("rorolala_vcs.version_graph.track_failed"),
-                        () =>
-                            ReportView.Of(
-                                ReportLines.Parse(said),
-                                key => _icons.Find(key),
-                                ReportView.Ink
-                            )
+                        said
                     );
 
                     Paint();

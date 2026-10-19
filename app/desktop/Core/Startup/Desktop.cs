@@ -5,6 +5,7 @@ using RorolalaDesktop.CoreDocks;
 using RorolalaDesktop.Docking;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.Logging;
+using RorolalaDesktop.Notifications;
 using RorolalaDesktop.Plugins;
 using RorolalaDesktop.Theming;
 
@@ -101,6 +102,7 @@ internal sealed class Desktop
         var i18n = new I18nService();
         var log = new LogService(notifications);
         var popups = new PopupService(notifications);
+        var notices = new NotificationCenter();
 
         // Made here and not by a window, because the windows it is for are not all the host's: a plugin
         // reaches it through the contract, so the one picture is decoded once and every window — the
@@ -111,7 +113,7 @@ internal sealed class Desktop
         // named once it exists: the shell is the one place both sides agree on, so it is made here and
         // handed to each.
         var shell = new Shell();
-        var dialogs = new Dialogs(shell, i18n, icon);
+        var dialogs = new Dialogs(shell, i18n, icon, notices);
 
         // The look has to be applied before anything is drawn, so the service that applies it is made
         // here, with the rest of what a run is assembled from, rather than in the window. It is made by
@@ -134,6 +136,7 @@ internal sealed class Desktop
         {
             Log = log,
             Popups = popups,
+            Notifications = notices,
             I18n = i18n,
             ProgramIcon = icon,
             Theme = theme,
