@@ -28,12 +28,18 @@ internal static class RetrackCommand
     /// Whether a version that is not on the way back may be gone to, which is <c>--allow-jump</c>.
     /// It is given for a Vault version the work's own chain does not hold.
     /// </param>
+    /// <param name="force">
+    /// Whether changes that were never recorded are to be discarded, which is <c>--force</c>. It is
+    /// given only where the reader has been asked and has agreed, since the content written back is
+    /// what replaces them.
+    /// </param>
     /// <returns>The arguments.</returns>
     public static IReadOnlyList<string> Arguments(
         string file,
         string version,
         bool onlyIndex,
-        bool allowJump
+        bool allowJump,
+        bool force
     )
     {
         var arguments = new List<string>
@@ -55,6 +61,13 @@ internal static class RetrackCommand
             arguments.Add("--allow-jump");
         }
 
+        // `--force` and `--only-index` say opposite things about the file on disk, so the two are
+        // never given together.
+        if (force && !onlyIndex)
+        {
+            arguments.Add("--force");
+        }
+
         arguments.Add(file);
 
         return arguments;
@@ -70,13 +83,15 @@ internal static class RetrackCommand
     /// <param name="version">The version the pointer goes to, as the index names it.</param>
     /// <param name="onlyIndex">Whether the pointer moves and the file on disk is left alone.</param>
     /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
+    /// <param name="force">Whether unrecorded changes are to be discarded.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
     public static (bool Done, string Said) Run(
         string directory,
         string file,
         string version,
         bool onlyIndex,
-        bool allowJump
+        bool allowJump,
+        bool force
     )
     {
         ArgumentNullException.ThrowIfNull(directory);
@@ -92,7 +107,7 @@ internal static class RetrackCommand
 
         var (done, said, _) = Sync.Asked(
             program,
-            Arguments(file, version, onlyIndex, allowJump),
+            Arguments(file, version, onlyIndex, allowJump, force),
             directory
         );
 

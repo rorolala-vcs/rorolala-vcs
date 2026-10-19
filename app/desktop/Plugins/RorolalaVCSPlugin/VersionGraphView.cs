@@ -970,11 +970,13 @@ internal sealed partial class VersionGraphView : Control
         return item;
     }
 
-    /// <summary>Puts the retrack to the user, asking first when the work on disk is to be rewritten.</summary>
+    /// <summary>Puts the retrack to the user, asking first only when there is work on disk to lose.</summary>
     /// <remarks>
-    /// The record alone moves without a question: nothing the user has is touched. The version's content
-    /// written back over the file is a change to what is on disk, so it is confirmed with the file and the
-    /// version named rather than begun from one right-click.
+    /// The record alone moves without a question: nothing the user has is touched. Writing the version's
+    /// content back over the file is confirmed only where the file holds a change that was never recorded:
+    /// content that already stands as recorded is being replaced by another recorded content, which is what
+    /// the reader asked for, and nothing is lost. An agreed question is what lets the run discard the
+    /// changes it named — the command refuses to write over them without <c>--force</c>.
     /// </remarks>
     /// <param name="hash">The version the record is to be moved to.</param>
     /// <param name="label">What the version is called in the question.</param>
@@ -990,9 +992,9 @@ internal sealed partial class VersionGraphView : Control
             return;
         }
 
-        if (onlyIndex)
+        if (onlyIndex || !Changed(path))
         {
-            BeginRetrack(path, directory, hash, allowJump, onlyIndex: true);
+            BeginRetrack(path, directory, hash, allowJump, onlyIndex, force: false);
 
             return;
         }
@@ -1005,9 +1007,40 @@ internal sealed partial class VersionGraphView : Control
                     Path.GetFileName(path),
                     label
                 ),
-                () => BeginRetrack(path, directory, hash, allowJump, onlyIndex: false)
+                () => BeginRetrack(path, directory, hash, allowJump, onlyIndex: false, force: true)
             )
         );
+    }
+
+    /// <summary>Whether the working file holds a change that was never recorded.</summary>
+    /// <remarks>
+    /// The judgement is the one the graph draws its `???` node from: a change of content, and the two states
+    /// that answer why one must not be recorded. A file that stands as recorded — moved, perhaps, but holding
+    /// the content the Layout agreed with — has nothing to lose to a retrack. A reading that cannot answer is
+    /// answered as a change, so that the one thing not known is a question asked rather than a write made.
+    /// </remarks>
+    /// <param name="path">The file, as the program names it.</param>
+    /// <returns>Whether the file's content is more than the record says.</returns>
+    private bool Changed(string path)
+    {
+        if (
+            Path.GetDirectoryName(path) is not { Length: > 0 } directory
+            || _statuses.Reading(directory) is not { } status
+        )
+        {
+            return true;
+        }
+
+        try
+        {
+            return status.StateOf(path) is PathState.Modified or PathState.Wrong;
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _log.Warn($"how `{path}` stands could not be read: {error.Message}");
+
+            return true;
+        }
     }
 
     /// <summary>Runs the retrack, and reads the work again once it is over.</summary>
@@ -1022,12 +1055,16 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="version">The version the record is to be moved to.</param>
     /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
+    /// <param name="force">
+    /// Whether unrecorded changes are to be discarded, which is what a reader agreed to in the question.
+    /// </param>
     private void BeginRetrack(
         string path,
         string directory,
         string version,
         bool allowJump,
-        bool onlyIndex
+        bool onlyIndex,
+        bool force
     )
     {
         var run = _hub.Begin("rorolala_vcs.progress.retrack");
@@ -1039,7 +1076,8 @@ internal sealed partial class VersionGraphView : Control
                 path,
                 version,
                 onlyIndex,
-                allowJump
+                allowJump,
+                force
             );
 
             Dispatcher.UIThread.Post(() =>
