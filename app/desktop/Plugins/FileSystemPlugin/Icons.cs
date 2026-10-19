@@ -111,7 +111,7 @@ internal static partial class Icons
         }
 
         var directory = entry.Kind == EntryKind.Directory;
-        var icon = directory ? SysIcons.Directory(size) : SysIcons.File(size);
+        var icon = directory ? SysIcons.Directory(size) : SysIcons.File(entry.Path, size);
 
         return icon is null
             ? Marked(directory, size)

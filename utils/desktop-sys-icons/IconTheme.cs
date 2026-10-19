@@ -24,14 +24,21 @@ internal static class IconTheme
     /// <summary>The names a directory may be drawn under, most specific first.</summary>
     private static readonly string[] Directories = ["inode-directory", "folder"];
 
-    /// <summary>The names a plain file may be drawn under, most specific first.</summary>
-    private static readonly string[] Files = ["text-plain", "text-x-generic", "application-x-generic"];
-
     /// <summary>The contexts an icon may be kept in, the likeliest first.</summary>
     private static readonly string[] Contexts = ["places", "mimetypes"];
 
     /// <summary>The sizes a theme may keep an icon at.</summary>
     private static readonly int[] Sizes = [16, 22, 24, 32, 48, 64, 128];
+
+    /// <summary>
+    /// The names a file of no known kind may be drawn under, most specific first.
+    /// </summary>
+    /// <remarks>
+    /// A theme names a file by its MIME type — <c>image-png</c>, <c>application-pdf</c> — and by the
+    /// generic name of its top-level kind. These are the generic names, which are what is left when the
+    /// type is not known or the theme has no picture for it.
+    /// </remarks>
+    private static readonly string[] Generic = ["application-x-generic", "text-x-generic"];
 
     /// <summary>Where themes are installed, most specific first, as the specification lays them out.</summary>
     private static readonly string[] Roots =
@@ -48,16 +55,17 @@ internal static class IconTheme
 
     /// <summary>The icon for one kind of thing, at a size, or nothing when the desktop has none.</summary>
     /// <param name="kind">The kind of thing the icon is for.</param>
+    /// <param name="name">The file's name, which is what says what kind of file it is.</param>
     /// <param name="size">How many pixels wide the icon is wanted.</param>
-    public static Bitmap? Drawn(Kind kind, int size)
+    public static Bitmap? Drawn(Kind kind, string name, int size)
     {
-        var names = kind == Kind.Directory ? Directories : Files;
+        var names = kind == Kind.Directory ? Directories : Files(name);
 
         foreach (var theme in Themes())
         {
-            foreach (var name in names)
+            foreach (var candidate in names)
             {
-                if (Picture(theme, name, size) is { } picture)
+                if (Picture(theme, candidate, size) is { } picture)
                 {
                     return picture;
                 }
@@ -65,6 +73,129 @@ internal static class IconTheme
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The names a file may be drawn under, most specific first: its MIME type, then the generic picture of
+    /// its kind, then the generic file.
+    /// </summary>
+    /// <remarks>
+    /// The MIME type is what the system's own glob table says the name is, so a PSD is asked for as
+    /// <c>application-vnd.adobe.photoshop</c> and a PDF as <c>application-pdf</c>. A type no theme has a
+    /// picture for falls back to the generic picture of its top-level kind — an image, a sound, a
+    /// document — which is still a better answer than calling every file text.
+    /// </remarks>
+    /// <param name="name">The file's name or path.</param>
+    /// <returns>The names to look for, in the order they are worth trying.</returns>
+    private static IReadOnlyList<string> Files(string name)
+    {
+        var names = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var mime = MimeGlobs.TypeOf(name);
+
+        if (mime is { Length: > 0 })
+        {
+            Adding(mime.Replace('/', '-'));
+
+            foreach (var generic in Generics(mime))
+            {
+                Adding(generic);
+            }
+        }
+
+        foreach (var generic in Generic)
+        {
+            Adding(generic);
+        }
+
+        return names;
+
+        void Adding(string candidate)
+        {
+            if (seen.Add(candidate))
+            {
+                names.Add(candidate);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The generic pictures a MIME type may be drawn under, most specific first.
+    /// </summary>
+    /// <param name="mime">The MIME type.</param>
+    /// <returns>The names to look for after the type's own.</returns>
+    private static IEnumerable<string> Generics(string mime)
+    {
+        var top = mime.Split('/', 2)[0];
+
+        switch (top)
+        {
+            case "text":
+                yield return "text-x-generic";
+                break;
+            case "image":
+                yield return "image-x-generic";
+                break;
+            case "audio":
+                yield return "audio-x-generic";
+                break;
+            case "video":
+                yield return "video-x-generic";
+                break;
+            case "font":
+                yield return "font-x-generic";
+                break;
+            case "model":
+                yield return "model-x-generic";
+                break;
+        }
+
+        if (
+            mime
+            is "application/zip"
+                or "application/x-tar"
+                or "application/gzip"
+                or "application/x-gzip"
+                or "application/x-7z-compressed"
+                or "application/x-rar"
+                or "application/x-rar-compressed"
+                or "application/x-bzip2"
+                or "application/x-xz"
+        )
+        {
+            yield return "package-x-generic";
+        }
+
+        if (
+            mime
+            is "application/pdf"
+                or "application/msword"
+                or "application/vnd.oasis.opendocument.text"
+                or "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        {
+            yield return "x-office-document";
+        }
+
+        if (
+            mime
+            is "application/vnd.ms-excel"
+                or "application/vnd.oasis.opendocument.spreadsheet"
+                or "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        {
+            yield return "x-office-spreadsheet";
+        }
+
+        if (
+            mime
+            is "application/vnd.ms-powerpoint"
+                or "application/vnd.oasis.opendocument.presentation"
+                or "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
+        {
+            yield return "x-office-presentation";
+        }
     }
 
     /// <summary>The themes to look in: the one in use, what it inherits, and hicolor last.</summary>

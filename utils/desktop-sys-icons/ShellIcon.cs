@@ -14,8 +14,10 @@ namespace RorolalaDesktop.SysIcons;
 /// icon handle rather than with a picture, so the handle is turned into pixels here.
 /// <para>
 /// The shell is asked about a name and an attribute rather than about a path, which is what makes it
-/// answer with the icon for a folder as such and for a plain file as such: nothing has to exist on
-/// disk, and every directory gets the same picture, which is what an icon for a kind of thing is.
+/// answer with the icon for a folder as such and for the kind of file the name's extension says: nothing
+/// has to exist on disk, and every file of one kind gets the same picture, which is what an icon for a
+/// kind of thing is. The name is still the file's own name rather than a made-up <c>file.txt</c>, because
+/// the shell reads the extension from it — a fixed name would make every file a text file.
 /// </para>
 /// <para>
 /// The shell keeps that picture at four sizes and the one wanted is read from the list that holds it,
@@ -35,13 +37,14 @@ internal static class ShellIcon
 {
     /// <summary>The shell's icon for one kind of thing, at a size, or nothing.</summary>
     /// <param name="kind">The kind of thing the icon is for.</param>
+    /// <param name="name">The file's name or path, which is what says what kind of file it is.</param>
     /// <param name="size">How many pixels wide and tall the icon is wanted.</param>
-    public static Bitmap? Drawn(Kind kind, int size)
+    public static Bitmap? Drawn(Kind kind, string name, int size)
     {
         var info = default(SHFILEINFO);
 
         var answered = SHGetFileInfo(
-            kind == Kind.Directory ? "directory" : "file.txt",
+            kind == Kind.Directory ? "directory" : Named(name),
             kind == Kind.Directory ? FileAttributeDirectory : FileAttributeNormal,
             ref info,
             (uint)Marshal.SizeOf<SHFILEINFO>(),
@@ -61,6 +64,25 @@ internal static class ShellIcon
         {
             DestroyIcon(info.Icon);
         }
+    }
+
+    /// <summary>
+    /// The name the shell is asked about: the file's own name, or a name that says nothing when there is
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// The directory part is taken off first because the shell is asked about a kind of thing rather than
+    /// about a path — a path would make it look at the disk when the attributes are not used, and the
+    /// answer does not depend on where the file sits. A name that is empty is asked as <c>file</c>, which
+    /// is the shell's own word for a file that is nothing in particular.
+    /// </remarks>
+    /// <param name="name">The file's name or path.</param>
+    /// <returns>The name to ask the shell about.</returns>
+    private static string Named(string name)
+    {
+        var file = Path.GetFileName(name);
+
+        return file.Length == 0 ? "file" : file;
     }
 
     /// <summary>
