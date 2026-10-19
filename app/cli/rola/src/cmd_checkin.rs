@@ -78,6 +78,14 @@ use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
 /// bringing a `Uuid` the Vault holds into this Layout.
 const ARG_JOIN: PickerArg<'static, Option<String>> = arg![join: Option<String>];
 
+/// The mark the Vault puts in front of a path that is not placed: `@/new/a.fbx` is an entry the
+/// Vault holds no path for yet, and `@/removed/a.fbx` one that was taken out of the work.
+///
+/// It is the Vault's own arrangement, so nothing is written under it here: what comes in lands by
+/// the name below the mark, and a run that kept the mark would make a directory of it that says
+/// something about the Vault's bookkeeping rather than about the work.
+const UNPLACED: &str = "@/";
+
 #[help(buffer)]
 pub fn help_checkin(_: EntryCheckin, ec: &mut ResExitCode) {
     r_eprintln!("{}", trd!(t!("checkin.help")).trim());
@@ -132,8 +140,15 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
 /// references name is brought in once.
 ///
 /// With no destination each reference lands at the path the Vault's Layout names it by. A
-/// destination that is an existing directory takes each reference under it by the name the Vault
-/// gives it; any other destination names the whole landing path, so it takes exactly one reference.
+/// destination that is an existing directory is a prefix: a reference that is a path keeps its whole
+/// path under it, so `Assets/hero.psd` lands at `<TO>/Assets/hero.psd` and a folder brought in keeps
+/// the structure it has in the Vault; a reference that is a glob is rebased on the directory it
+/// selects from, so `Assets/*` lands its matches directly under `<TO>`. Any other destination names
+/// the whole landing path, so it takes exactly one reference.
+///
+/// A reference that names a folder of the Vault's Layout — whether an entry stands at that path or
+/// only things below it — brings everything that stands under it as well, at the paths they have
+/// there: checking a folder in is bringing in the tree it is.
 ///
 /// What a reference names has to be something this Layout does not already hold, and every landing
 /// has to be somewhere nothing is: a name this Layout already gives, a file already at the path, or
@@ -719,25 +734,21 @@ fn resolve(
         return Err(Refusal::Argument);
     }
 
-    let matched = expand(remote, refs)?;
+    let matched = expand(remote, refs, &destination)?;
 
     // A destination that is not a directory names one landing, so it can take only one entry.
     if matches!(destination, Destination::Exact(_)) && matched.len() > 1 {
         return Err(Refusal::Argument);
     }
 
-    let mut wanted = Vec::new();
+    let mut wanted = Vec::with_capacity(matched.len());
     let mut landings = BTreeSet::new();
 
-    for (id, data) in matched {
+    for Wanted { id, data, path } in matched {
         // What is to come in is something this Layout does not hold.
         if layout.entry(id).is_some() {
             return Err(Refusal::Known(id.to_string()));
         }
-
-        let Some(path) = landing(&destination, remote.path_of(id).as_ref()) else {
-            return Err(Refusal::Unnamed(id));
-        };
 
         // Where it lands is somewhere nothing is: not a name this Layout gives, not a file already
         // there, and not where an earlier reference of this run is to land.
@@ -754,74 +765,132 @@ fn resolve(
     Ok(wanted)
 }
 
-/// Everything the references name, each entry once and in the order the references name them.
+/// Everything the references name, each entry once and in the order the references name them, with
+/// where each of them lands.
 ///
-/// An entry several references name — a glob and a path that reaches into what it matched — is one
-/// request rather than a clash, so it is brought in once.
-fn expand(layout: &Layout, refs: &[String]) -> Result<Vec<(Uuid, MutableData)>, Refusal> {
-    let mut entries = Vec::new();
+/// A reference that names a folder of the copy brings what stands under it as well: checking a
+/// folder in is bringing in the tree it is, and a path that names only the directory — no entry
+/// stands there — names what is under it rather than nothing. An entry several references name — a
+/// glob and a path that reaches into what it matched — is one request rather than a clash, so it is
+/// brought in once.
+fn expand(
+    remote: &Layout,
+    refs: &[String],
+    destination: &Destination,
+) -> Result<Vec<Wanted>, Refusal> {
+    let mut paths: Vec<LayoutPath> = remote.paths().into_iter().map(|(path, _)| path).collect();
+    paths.sort_unstable();
+
+    let mut wanted = Vec::new();
     let mut seen = BTreeSet::new();
 
     for reference in refs {
-        for (id, data) in named(layout, reference)? {
-            if seen.insert(id) {
-                entries.push((id, data));
+        let (base, seeds) = seeds(remote, &paths, reference)?;
+
+        for seed in seeds {
+            let mut candidates = vec![seed.clone()];
+            candidates.extend(
+                paths
+                    .iter()
+                    .filter(|path| under(path.as_str(), seed.as_str()))
+                    .cloned(),
+            );
+
+            for path in candidates {
+                let Some(id) = remote.id_of(&path) else {
+                    continue;
+                };
+
+                if !seen.insert(id) {
+                    continue;
+                }
+
+                let Some(data) = remote.entry(id) else {
+                    continue;
+                };
+
+                let Some(landing) = landing(destination, &path, &base) else {
+                    return Err(Refusal::Unnamed(id));
+                };
+
+                wanted.push(Wanted {
+                    id,
+                    data,
+                    path: landing,
+                });
             }
         }
     }
 
-    Ok(entries)
+    Ok(wanted)
 }
 
-/// What one reference names in the Vault's Layout: a `Uuid` read as one, a glob over the paths
-/// there, and anything else one path there.
+/// What one reference names: the directory a glob selects from, and the paths it names.
+///
+/// It is what the entries are walked from, so a path that names only a folder — no entry stands
+/// there — names what is under it rather than nothing, and a glob that matches a folder brings the
+/// folder's tree in with it.
 ///
 /// # Errors
 ///
 /// Returns [`Refusal::Argument`] when a reference reads as a pattern but not as a usable one, and
 /// [`Refusal::Unknown`] when it names nothing — a glob that matches nothing included, since a run
 /// that quietly did part of what was asked is worse than one that stops.
-fn named(layout: &Layout, reference: &str) -> Result<Vec<(Uuid, MutableData)>, Refusal> {
+fn seeds(
+    remote: &Layout,
+    paths: &[LayoutPath],
+    reference: &str,
+) -> Result<(String, Vec<LayoutPath>), Refusal> {
     if let Ok(id) = Uuid::from_str(reference) {
-        return layout
-            .entry(id)
-            .map(|data| vec![(id, data)])
-            .ok_or_else(|| Refusal::Unknown(reference.to_owned()));
+        return remote.path_of(id).map_or_else(
+            || Err(Refusal::Unknown(reference.to_owned())),
+            |path| Ok((String::new(), vec![path])),
+        );
     }
 
     if is_pattern(reference) {
-        // The Layout lists its paths in no particular order, so they are ordered here: what a glob
-        // matched is reported the same way however the Layout happens to hold it.
-        let mut paths: Vec<LayoutPath> = layout.paths().into_iter().map(|(path, _)| path).collect();
-        paths.sort_unstable();
+        let matched = matching(reference, paths)?;
 
-        let found: Vec<(Uuid, MutableData)> = matching(reference, &paths)?
-            .into_iter()
-            .filter_map(|path| {
-                let id = layout.id_of(&path)?;
-
-                layout.entry(id).map(|data| (id, data))
-            })
-            .collect();
-
-        if found.is_empty() {
+        if matched.is_empty() {
             return Err(Refusal::Unknown(reference.to_owned()));
         }
 
-        return Ok(found);
+        return Ok((pattern_base(reference), matched));
     }
 
     let Ok(path) = LayoutPath::new(reference) else {
         return Err(Refusal::Unknown(reference.to_owned()));
     };
-    let Some(id) = layout.id_of(&path) else {
-        return Err(Refusal::Unknown(reference.to_owned()));
-    };
 
-    layout
-        .entry(id)
-        .map(|data| vec![(id, data)])
-        .ok_or_else(|| Refusal::Unknown(reference.to_owned()))
+    if remote.id_of(&path).is_none()
+        && !paths
+            .iter()
+            .any(|candidate| under(candidate.as_str(), path.as_str()))
+    {
+        return Err(Refusal::Unknown(reference.to_owned()));
+    }
+
+    Ok((String::new(), vec![path]))
+}
+
+/// The directory a glob selects from, which what it matches is rebased on.
+///
+/// It is what stands before the first pattern character, cut back to the directory that holds it:
+/// `Assets/*` and `Assets/**` both select from `Assets`, and a pattern with no separator at all
+/// selects from the root.
+fn pattern_base(reference: &str) -> String {
+    let cut = reference
+        .find(['*', '?', '[', '{'])
+        .unwrap_or(reference.len());
+    let head = &reference[..cut];
+
+    head.rfind('/')
+        .map_or_else(String::new, |at| head[..at].to_owned())
+}
+
+/// Whether `path` names something below `of`, and not `of` itself.
+fn under(path: &str, of: &str) -> bool {
+    path.len() > of.len() && path.starts_with(of) && path.as_bytes()[of.len()] == b'/'
 }
 
 /// Whether a reference is to be read as a glob over the Vault's Layout paths.
@@ -917,32 +986,56 @@ fn destination(root: &Path, to: Option<&str>) -> Result<Destination, Refusal> {
         .map_err(|_| Refusal::Argument)
 }
 
-/// The path one reference lands at: the name the Vault gives it, joined into the destination when
+/// The path one reference lands at: the path the Vault gives it, joined into the destination when
 /// that is a directory, or the destination itself when that is the whole name.
 ///
-/// `None` is a reference the Vault gives no path while a name is needed, which the destination
-/// being a directory — or absent — is.
-fn landing(destination: &Destination, named: Option<&LayoutPath>) -> Option<LayoutPath> {
+/// A path keeps all of itself under a directory, and a glob match keeps what it has below the
+/// directory the glob selects from: that is what makes checking a folder in bring the folder — the
+/// tree it is, remade where it is put — while `Assets/*` brings what is in `Assets` rather than
+/// `Assets` again.
+///
+/// What a path names under the Vault's unplaced mark — `@/new/a.fbx` — lands without that mark.
+/// The `@` is the Vault's way of saying the entry has no path yet, not a directory anything here
+/// has: a Layout here that named `@/new/a.fbx` would make an `@` directory that names a decision
+/// the Vault has not made, and every reader of it would take it for a folder of the work.
+fn landing(destination: &Destination, named: &LayoutPath, base: &str) -> Option<LayoutPath> {
     match destination {
-        Destination::Named => named.cloned(),
+        Destination::Named => {
+            placeable(named.as_str()).and_then(|placed| LayoutPath::new(placed).ok())
+        }
         Destination::Exact(path) => Some(path.clone()),
         Destination::Under(directory) => {
-            let name = named?;
-
-            // A directory takes something by its leaf name, the way `mv` names what it puts in one:
-            // the directories above it are the Vault's own arrangement, kept there rather than
-            // remade here.
-            let leaf = name.as_str().rsplit('/').next()?;
-            let joined = if directory.is_empty() {
-                leaf.to_owned()
+            let rest = if base.is_empty() {
+                named.as_str()
             } else {
-                format!("{directory}/{leaf}")
+                named
+                    .as_str()
+                    .strip_prefix(base)
+                    .and_then(|rest| rest.strip_prefix('/'))
+                    .unwrap_or(named.as_str())
+            };
+            let rest = placeable(rest)?;
+            let joined = if directory.is_empty() {
+                rest.to_owned()
+            } else {
+                format!("{directory}/{rest}")
             };
 
             // Both halves are names a `LayoutPath` already accepted, so joining them cannot name
             // something one would not.
             LayoutPath::new(&joined).ok()
         }
+    }
+}
+
+/// A path as it is to be written here, with the Vault's unplaced mark taken off the front.
+///
+/// `None` is a path that is nothing but the mark: there is no name in it to place.
+fn placeable(path: &str) -> Option<&str> {
+    match path.strip_prefix(UNPLACED) {
+        Some("") => None,
+        Some(rest) => Some(rest),
+        None => Some(path),
     }
 }
 
@@ -1396,41 +1489,88 @@ mod tests {
     #[test]
     fn a_missing_destination_lands_at_the_name_the_vault_gives() {
         assert_eq!(
-            landing(&Destination::Named, Some(&path("a/b.psd"))),
+            landing(&Destination::Named, &path("a/b.psd"), ""),
             Some(path("a/b.psd"))
         );
-        assert_eq!(landing(&Destination::Named, None), None);
     }
 
     #[test]
     fn a_whole_name_destination_is_the_path_itself() {
         assert_eq!(
-            landing(
-                &Destination::Exact(path("here.psd")),
-                Some(&path("a/b.psd"))
-            ),
-            Some(path("here.psd"))
-        );
-        assert_eq!(
-            landing(&Destination::Exact(path("here.psd")), None),
+            landing(&Destination::Exact(path("here.psd")), &path("a/b.psd"), ""),
             Some(path("here.psd"))
         );
     }
 
     #[test]
-    fn a_directory_destination_is_joined_with_the_name_the_vault_gives() {
+    fn a_directory_destination_keeps_the_path_and_rebases_what_a_glob_selected() {
+        let named = path("a/b.psd");
+
+        // A path keeps all of itself under the destination, so the folder it is in is remade there.
         assert_eq!(
-            landing(
-                &Destination::Under("dir".to_owned()),
-                Some(&path("a/b.psd"))
-            ),
+            landing(&Destination::Under("dir".to_owned()), &named, ""),
+            Some(path("dir/a/b.psd"))
+        );
+
+        // A glob match keeps only what it has below the directory the glob selected from.
+        assert_eq!(
+            landing(&Destination::Under("dir".to_owned()), &named, "a"),
             Some(path("dir/b.psd"))
         );
+
+        // The root as a destination adds no segment.
         assert_eq!(
-            landing(&Destination::Under(String::new()), Some(&path("a/b.psd"))),
-            Some(path("b.psd"))
+            landing(&Destination::Under(String::new()), &named, ""),
+            Some(path("a/b.psd"))
         );
-        assert_eq!(landing(&Destination::Under("dir".to_owned()), None), None);
+    }
+
+    #[test]
+    fn an_unplaced_path_lands_by_the_name_below_the_mark() {
+        assert_eq!(placeable("@/new/a.fbx"), Some("new/a.fbx"));
+        assert_eq!(placeable("@/removed/a.fbx"), Some("removed/a.fbx"));
+        assert_eq!(placeable("a/b.fbx"), Some("a/b.fbx"));
+        assert_eq!(placeable("@/"), None);
+
+        // Both ways of landing drop the mark: the name the Vault gives, and the same name under a directory.
+        assert_eq!(
+            landing(&Destination::Named, &path("@/new/a.fbx"), ""),
+            Some(path("new/a.fbx"))
+        );
+        assert_eq!(
+            landing(
+                &Destination::Under("art".to_owned()),
+                &path("@/new/a.fbx"),
+                ""
+            ),
+            Some(path("art/new/a.fbx"))
+        );
+
+        // A glob over the unplaced area selects from it, so its matches have no mark left to drop.
+        assert_eq!(
+            landing(
+                &Destination::Under(String::new()),
+                &path("@/new/a.fbx"),
+                "@/new"
+            ),
+            Some(path("a.fbx"))
+        );
+    }
+
+    #[test]
+    fn a_glob_selects_from_the_directory_before_it() {
+        assert_eq!(pattern_base("Installers/*"), "Installers");
+        assert_eq!(pattern_base("Installers/**"), "Installers");
+        assert_eq!(pattern_base("Installers/sub/*.psd"), "Installers/sub");
+        assert_eq!(pattern_base("*.psd"), "");
+        assert_eq!(pattern_base("a?b"), "");
+    }
+
+    #[test]
+    fn something_below_a_path_is_not_the_path_itself() {
+        assert!(under("a/b.psd", "a"));
+        assert!(!under("a", "a"));
+        assert!(!under("ab/b.psd", "a"));
     }
 
     #[test]

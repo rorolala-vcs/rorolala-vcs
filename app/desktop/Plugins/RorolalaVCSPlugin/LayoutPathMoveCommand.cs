@@ -33,34 +33,46 @@ internal static class LayoutPathMoveCommand
     }
 
     /// <summary>The arguments a move is run with, after the program's name.</summary>
-    /// <param name="layout">The Layout to move in, as the command line names it.</param>
+    /// <param name="layout">
+    /// The Layout to move in, as the command line names it, or nothing for the one being worked in.
+    /// </param>
     /// <param name="from">The path it is at.</param>
     /// <param name="to">The path it is to be at.</param>
     /// <returns>The arguments.</returns>
-    public static IReadOnlyList<string> Arguments(string layout, string from, string to)
+    public static IReadOnlyList<string> Arguments(string? layout, string from, string to)
     {
-        ArgumentNullException.ThrowIfNull(layout);
         ArgumentNullException.ThrowIfNull(from);
         ArgumentNullException.ThrowIfNull(to);
 
-        return
+        List<string> arguments =
         [
             "--theme-choice=" + Sync.Theme,
             "--json",
             "layout",
             "path",
             "move",
-            "--layout",
-            layout,
-            from,
-            to,
         ];
+
+        // The Layout being worked in is what a run moves in when it names none: a checkin that moves a local copy over
+        // is about the work as it stands, and naming a Layout would move one that is not the one on screen.
+        if (layout is { Length: > 0 })
+        {
+            arguments.Add("--layout");
+            arguments.Add(layout);
+        }
+
+        arguments.Add(from);
+        arguments.Add(to);
+
+        return arguments;
     }
 
     /// <summary>Runs the move, saying what it is doing while it goes.</summary>
     /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the run is made.</param>
-    /// <param name="layout">The Layout to move in, as the command line names it.</param>
+    /// <param name="layout">
+    /// The Layout to move in, as the command line names it, or nothing for the one being worked in.
+    /// </param>
     /// <param name="from">The path it is at.</param>
     /// <param name="to">The path it is to be at.</param>
     /// <param name="records">What the run's records are read into, which the panel draws.</param>
@@ -69,7 +81,7 @@ internal static class LayoutPathMoveCommand
     public static (bool Done, string Said) Run(
         string program,
         string directory,
-        string layout,
+        string? layout,
         string from,
         string to,
         ProgressRecords records,

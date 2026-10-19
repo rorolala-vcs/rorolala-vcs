@@ -587,14 +587,44 @@ rorolala_vcs:
       en: Bring in
       zh-CN: 签入
     checkin_failed:
-      en: The entry could not be brought in from `%{vault}`
-      zh-CN: 无法从 `%{vault}` 签入条目
-    already_here_title:
-      en: Nothing to bring in
-      zh-CN: 没有可签入的条目
-    already_here:
-      en: "%{count} entries of this drop are already in the Layout being worked in, so they were left out"
-      zh-CN: 本次拖入的 %{count} 个条目已在当前布局中，已跳过
+      en: The checkin from `%{vault}` did not finish
+      zh-CN: 来自 `%{vault}` 的签入未能完成
+    # What a checkin asks when not everything it was given can come in as it stands: what is in the way, and what may
+    # be done about it. The counts are the plan's — one line per kind of thing in the way, so a drag of nine rows says
+    # how many are already here under another name and how many cannot land at all.
+    checkin_question:
+      en: Some of this checkin does not fit
+      zh-CN: 本次签入有一部分放不下
+    checkin_elsewhere:
+      en: "%{count} entries are already in this Layout under another path"
+      zh-CN: "已有 %{count} 个条目以其他路径存在于当前布局中"
+    checkin_taken:
+      en: "%{count} entries cannot land where the Vault names them, because something else is already there"
+      zh-CN: "有 %{count} 个条目无法落在保险库指定的位置，因为那里已有其他内容"
+    checkin_here:
+      en: "%{count} entries are already here, where the Vault names them"
+      zh-CN: "有 %{count} 个条目已经就在保险库指定的位置上"
+    checkin_move:
+      en: Move local files (%{count})
+      zh-CN: 移动本地文件（%{count}）
+    checkin_partial:
+      en: Bring in the rest (leave %{count} out)
+      zh-CN: 签入其余条目（放弃 %{count} 个）
+    checkin_abandon:
+      en: Abandon this checkin
+      zh-CN: 放弃本次签入
+    checkin_moved_title:
+      en: Local files moved
+      zh-CN: 本地文件已移动
+    checkin_moved:
+      en: "%{count} local files were moved to the paths the Vault names"
+      zh-CN: "%{count} 个本地文件已移动到保险库指定的路径"
+    checkin_abandoned_title:
+      en: Part of the checkin was left out
+      zh-CN: 部分签入已放弃
+    checkin_abandoned:
+      en: "%{count} entries were left out of this checkin"
+      zh-CN: "本次签入放弃了 %{count} 个条目"
     column_uuid:
       en: Uuid
       zh-CN: UUID
@@ -662,6 +692,9 @@ rorolala_vcs:
     refused_not_a_folder:
       en: A list is not a folder — open it and drop into one of the things it lists
       zh-CN: 列表不是文件夹：请打开它，再放到它列出的某一项上
+    refused_a_folder:
+      en: "A folder is not moved: drop it on a directory to bring in what stands under it"
+      zh-CN: "文件夹不会被移动：把它放到目录上即可签入其中的条目"
     refused_another_layout:
       en: An entry is moved within one Layout, and this one is of another
       zh-CN: 条目只能在同一布局内移动，而它属于另一个布局

@@ -82,55 +82,48 @@ internal static class UpstreamSpots
     }
 }
 
-/// <summary>What a drop of entries comes to: what is to be brought in, and how much of it is already here.</summary>
-/// <param name="References">What a checkin is to name, in the order it was carried.</param>
-/// <param name="Held">How many of the entries carried this Layout already holds.</param>
-internal sealed record UpstreamPlan(IReadOnlyList<string> References, int Held);
-
-/// <summary>The references a drop of entries comes to: every entry under what was carried, in the order it was carried.</summary>
+/// <summary>What a drop of entries comes to: every entry under what was carried, in the order it was carried.</summary>
 /// <remarks>
-/// A folder is not an entry, so what a drop of one brings in is what stands under it — the folder's own entry included,
+/// A folder is not an entry, so what a drop of one brings is what stands under it — the folder's own entry included,
 /// since a path may be both. A path the copy no longer names is dropped rather than guessed at: the copy moved under the
 /// drag, and what is not there is not something a checkin can name.
 /// </remarks>
 internal static class UpstreamBringing
 {
-    /// <summary>The references a checkin is given for a drag of these entries.</summary>
+    /// <summary>Every entry a drag of these carries brings, deduplicated and in the order it was carried.</summary>
+    /// <remarks>
+    /// The walk a folder makes, and the one a checkin is planned from: a folder is not an entry, so what it brings is what
+    /// stands under it — its own entry included, since a path may be both. A uuid one carry already brought is not brought
+    /// again, because the command line would be naming it twice.
+    /// </remarks>
     /// <param name="tree">The tree the Vault's copy was read to.</param>
     /// <param name="carrying">What the drag carried, in the order it carried it.</param>
-    /// <returns>The references, deduplicated and in order, and how many were already held.</returns>
-    public static UpstreamPlan Plan(UpstreamEntriesTree tree, IReadOnlyList<UpstreamCarry> carrying)
+    /// <returns>The entries.</returns>
+    public static IReadOnlyList<LayoutEntry> Entries(
+        UpstreamEntriesTree tree,
+        IReadOnlyList<UpstreamCarry> carrying
+    )
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(carrying);
 
-        var references = new List<string>();
+        var found = new List<LayoutEntry>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var held = 0;
 
         foreach (var carry in carrying)
         {
             foreach (var entry in Under(tree, carry.Path))
             {
-                // A folder and an entry under it dragged together are one reference: the command line would name the
-                // entry twice, and a run that says the same thing twice is a run refused as a duplicate.
-                if (!seen.Add(entry.Uuid))
+                // A folder and an entry under it dragged together are one entry: the command line would name it twice,
+                // and a run that says the same thing twice is a run refused as a duplicate.
+                if (seen.Add(entry.Uuid))
                 {
-                    continue;
+                    found.Add(entry);
                 }
-
-                if (tree.IsHeld(entry))
-                {
-                    held++;
-
-                    continue;
-                }
-
-                references.Add(CheckinCommand.Reference(entry));
             }
         }
 
-        return new UpstreamPlan(references, held);
+        return found;
     }
 
     /// <summary>Every entry at a path and under it, in the order a listing reads them.</summary>
@@ -183,10 +176,12 @@ internal static class UpstreamBringing
 /// the pointer moves.
 /// </para>
 /// <para>
-/// The actions are the command line's, as everywhere else in this plugin: bringing one entry in is a checkin of that
-/// one path, and moving one is a <c>layout path move</c> against the Layout the level is of, made when the entry is
-/// dropped on a folder's row. One entry at a time, because that is what the command line takes — and what a menu opened
-/// on one row is about.
+/// The actions are the command line's, as everywhere else in this plugin: bringing entries in is a checkin of their
+/// paths, and moving one is a <c>layout path move</c> against the Layout the level is of, made when the entry is
+/// dropped on a folder's row. A checkin is planned before it is run — see [`CheckinFlow`] — because the command line
+/// refuses a run whole for the first reference it will not take: a folder dragged in, a choice of rows cut out and
+/// pasted into a directory, and a row's own menu item all come to the same plan, and the same question where the plan
+/// does not fit. Moving one entry is still one run, because that is what a folder's row does.
 /// </para>
 /// </remarks>
 internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogicalRefusal
@@ -286,6 +281,9 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
     /// <summary>The base the kept answers were read at.</summary>
     private string _readAt = string.Empty;
 
+    /// <summary>What a checkin of a drag comes to, and what the user is asked about one that does not fit.</summary>
+    private readonly CheckinFlow _checkin;
+
     /// <summary>Makes the provider.</summary>
     /// <param name="host">The host, for the reports and for what a failure is shown through.</param>
     /// <param name="log">Where a base that is not a Workspace is judged.</param>
@@ -302,6 +300,7 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
         _log = log;
         _hub = hub;
         _fetch = fetch;
+        _checkin = new CheckinFlow(host, log, hub, Tree);
 
         // What a place answers is a snapshot of the copies, so it is let go of when they may have moved: the files having
         // changed is every command of this plugin's own answer that they have, and the base moving is a different work.
@@ -513,9 +512,18 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
 
         foreach (var carry in carrying)
         {
-            if (tree.Find(carry.Path)?.Entry is null)
+            if (tree.Find(carry.Path) is not { } node)
             {
                 return RolaI18N.Get("rorolala_vcs.place.refused_gone");
+            }
+
+            // A folder a row stands for without naming an entry is a prefix of the copy rather than a thing in it: it is
+            // brought in by dropping it on a directory, and there is no entry this side could move.
+            if (node.Entry is null)
+            {
+                return node.HasChildren
+                    ? RolaI18N.Get("rorolala_vcs.place.refused_a_folder")
+                    : RolaI18N.Get("rorolala_vcs.place.refused_gone");
             }
 
             if (Landing(carry.Path, prefix) is not { } to)
@@ -639,10 +647,15 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
             && carrying.All(carry => string.Equals(carry.Source.Key, source.Key, StringComparison.Ordinal))
             && string.Equals(vault, Tracked(), StringComparison.Ordinal)
             && Holds(directory)
-            && Plan(carrying, source) is { References.Count: > 0 } or { Held: > 0 };
+            && Tree(source) is { } tree
+            && UpstreamBringing.Entries(tree, carrying).Count > 0;
     }
 
-    /// <summary>Takes the drag: what it carried is brought in under the directory it was dropped on.</summary>
+    /// <summary>Takes the drag: what it carried is planned into a checkin, which is what the user is asked about.</summary>
+    /// <remarks>
+    /// What is planned is every entry the drag comes to — a folder's rows included — and the planning is what leaves the
+    /// ones that cannot come in for a question rather than for a run that refuses the lot.
+    /// </remarks>
     /// <param name="directory">The directory it was dropped on.</param>
     /// <param name="drag">What was dragged.</param>
     /// <returns>Whether it was taken.</returns>
@@ -659,32 +672,19 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
         var source = carrying[0].Source;
 
         if (
-            source.Vault is not { Length: > 0 } vault
+            source.Vault is not { Length: > 0 }
             || !carrying.All(carry => string.Equals(carry.Source.Key, source.Key, StringComparison.Ordinal))
-            || Plan(carrying, source) is not { } plan
+            || Tree(source) is not { } tree
+            || UpstreamBringing.Entries(tree, carrying).Count == 0
             || !Holds(directory)
         )
         {
             return false;
         }
 
-        // What this Layout already holds is left out of the run rather than handed to it: the command line refuses the
-        // whole run for one entry it knows, which would be a drag of three files refused because one of them was already
-        // here. What was left out is said, since a drop that brought in two of three and said nothing is a drop that lied.
-        if (plan.References.Count > 0)
-        {
-            Bring(vault, plan.References, Path.GetFullPath(directory));
-        }
+        _checkin.Start(source, carrying, Path.GetFullPath(directory));
 
-        if (plan.Held > 0)
-        {
-            Report(
-                "rorolala_vcs.place.already_here_title",
-                RolaI18N.Get("rorolala_vcs.place.already_here", plan.Held)
-            );
-        }
-
-        return plan.References.Count > 0 || plan.Held > 0;
+        return true;
     }
 
     /// <summary>
@@ -761,18 +761,6 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
         layouts?.FirstOrDefault(layout => layout.Current)?.Tracking is { Length: > 0 } tracked
             ? tracked
             : vaults?.FirstOrDefault(vault => vault.Default)?.Name;
-
-    /// <summary>What a drag of entries comes to: what is to be brought in, and what is already here.</summary>
-    /// <param name="carrying">What the drag carried.</param>
-    /// <param name="source">The Layout whose copy they are of.</param>
-    /// <returns>The plan, or nothing when nothing of the copy is left to name.</returns>
-    private UpstreamPlan? Plan(IReadOnlyList<UpstreamCarry> carrying, UpstreamSource source)
-    {
-        ArgumentNullException.ThrowIfNull(carrying);
-        ArgumentNullException.ThrowIfNull(source);
-
-        return Tree(source) is { } tree ? UpstreamBringing.Plan(tree, carrying) : null;
-    }
 
     /// <summary>The entry a row stands for, when it stands for one.</summary>
     /// <param name="entry">The row.</param>
@@ -993,10 +981,10 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
 
         return new LogicalEntry(
             spot.Name,
-            Draggable: spot.Entry is not null,
+            Draggable: true,
             Opens: spot.Folder ? Of(source.Domain, source.Name, spot.Path) : null,
             Menu: Menu(source, spot),
-            Data: spot.Entry is not null ? new UpstreamCarry(source, spot.Path, spot.Entry) : null,
+            Data: new UpstreamCarry(source, spot.Path, spot.Entry),
             Picture: spot.Folder
                 ? size => EntryIcons.For(spot.Path, EntryKind.Directory, size)
                 : size => EntryIcons.For(spot.Path, EntryKind.File, size)
@@ -1004,25 +992,69 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
     }
 
     /// <summary>What a row offers, which is what may be done with the entry it is.</summary>
+    /// <remarks>
+    /// A folder is a row with something to do even when no entry stands at its path: what is under it is checked in at
+    /// once, which is the same plan a drag of the folder makes. A folder of another Vault's copy is offered nothing,
+    /// since a checkin brings what the Layout being worked in tracks.
+    /// </remarks>
     /// <param name="source">The Layout it is of.</param>
     /// <param name="spot">The row.</param>
     /// <returns>The items, or nothing when there is nothing to do.</returns>
     private IReadOnlyList<ContextMenuItem>? Menu(UpstreamSource source, UpstreamSpot spot)
     {
+        var tracked = source.Vault is { Length: > 0 } vault
+            && string.Equals(vault, Tracked(), StringComparison.Ordinal);
+
         if (spot.Entry is not { } entry)
         {
-            return null;
-        }
+            // A folder with nothing under it is nothing to check in, and nothing else about it is worth a menu.
+            if (!tracked || !spot.Folder)
+            {
+                return null;
+            }
 
-        if (Tree(source)?.IsHeld(entry) == true)
-        {
-            // One entry this side already holds is not one to bring in: what it is, is a path this work names, and that
-            // is the one thing worth saying about it.
             return
             [
                 new ContextMenuItem(
-                    "rorolala_vcs.place.held",
+                    "rorolala_vcs.place.checkin",
                     10,
+                    _ => _checkin.Start(
+                        source,
+                        [new UpstreamCarry(source, spot.Path)],
+                        destination: null
+                    ),
+                    Icons.Download
+                ),
+            ];
+        }
+
+        var held = Tree(source)?.IsHeld(entry) == true;
+
+        return
+        [
+            // A checkin brings what the Layout being worked in *tracks*, so an entry of another Vault's copy — or of a
+            // Layout of the Workspace's own — is not something a checkin can name: what there is to do with it is read it,
+            // and move it where it belongs.
+            //
+            // An entry this side already holds is offered the same item: the checkin is planned against what is here, and
+            // one held under another name is exactly what the plan's move answer is for.
+            .. (tracked && source.Vault is { Length: > 0 }
+                ? new ContextMenuItem[]
+                {
+                    new(
+                        "rorolala_vcs.place.checkin",
+                        10,
+                        _ => _checkin.Start(source, entry, spot.Path),
+                        Icons.Download
+                    ),
+                }
+                : []),
+            // What a held entry is owed is where this work names it, since that is the one thing about it a checkin
+            // cannot say; what it is not held at is worth copying out instead.
+            held
+                ? new ContextMenuItem(
+                    "rorolala_vcs.place.held",
+                    20,
                     _ => Report(
                         "rorolala_vcs.place.held_title",
                         RolaI18N.Get(
@@ -1031,30 +1063,16 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
                         )
                     ),
                     Icons.Lock
+                )
+                : new ContextMenuItem(
+                    source.Vault.Length > 0 ? "rorolala_vcs.place.copy_path" : "rorolala_vcs.place.copy_path_layout",
+                    20,
+                    _ => Report(
+                        source.Vault.Length > 0 ? "rorolala_vcs.place.path_title" : "rorolala_vcs.place.path_title_layout",
+                        entry.Path
+                    ),
+                    Icons.ContentCopy
                 ),
-            ];
-        }
-
-        return
-        [
-            // A checkin brings what the Layout being worked in *tracks*, so an entry of another Vault's copy — or of a
-            // Layout of the Workspace's own — is not something a checkin can name: what there is to do with it is read it,
-            // and move it where it belongs.
-            .. (source.Vault is { Length: > 0 } vault && string.Equals(vault, Tracked(), StringComparison.Ordinal)
-                ? new ContextMenuItem[]
-                {
-                    new("rorolala_vcs.place.checkin", 10, _ => CheckIn(vault, entry), Icons.Download),
-                }
-                : []),
-            new ContextMenuItem(
-                source.Vault.Length > 0 ? "rorolala_vcs.place.copy_path" : "rorolala_vcs.place.copy_path_layout",
-                20,
-                _ => Report(
-                    source.Vault.Length > 0 ? "rorolala_vcs.place.path_title" : "rorolala_vcs.place.path_title_layout",
-                    entry.Path
-                ),
-                Icons.ContentCopy
-            ),
         ];
     }
 
@@ -1475,76 +1493,6 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
         _layoutsTried = false;
         _layoutsSaid = string.Empty;
         _rootAsked = false;
-    }
-
-    /// <summary>Brings one entry of the tracked Vault in, which is a checkin of the one path.</summary>
-    /// <param name="vault">The Vault the entry is of.</param>
-    /// <param name="entry">The entry.</param>
-    private void CheckIn(string vault, LayoutEntry entry)
-    {
-        ArgumentNullException.ThrowIfNull(entry);
-
-        Bring(vault, [CheckinCommand.Reference(entry)], to: null);
-    }
-
-    /// <summary>
-    /// Runs a checkin of these references, landing them at the paths the Layout names them by or under a directory.
-    /// </summary>
-    /// <remarks>
-    /// One run for everything a drag carried, because the command line is atomic: a reference it refuses is the whole run
-    /// refused, and a batch that half landed would be a work with no record of which half. The run materialises the copy
-    /// again before it resolves anything, so the place is read again whatever became of it.
-    /// </remarks>
-    /// <param name="vault">The Vault the entries are of, which is what a failure is said about.</param>
-    /// <param name="references">What is to be brought in.</param>
-    /// <param name="to">The directory to land them under, or nothing to land them at their upstream paths.</param>
-    private void Bring(string vault, IReadOnlyList<string> references, string? to)
-    {
-        ArgumentNullException.ThrowIfNull(references);
-
-        if (
-            references.Count == 0
-            || Program() is not { } program
-            || BaseDirectory.Current is not { Length: > 0 } directory
-        )
-        {
-            // A drop that did nothing and said nothing is the one thing a reader cannot tell from one that has not landed
-            // yet, so it is said.
-            FailureNotice.Show(
-                _host.Dialogs,
-                _host.Icons,
-                RolaI18N.Get("rorolala_vcs.place.no_program"),
-                RolaI18N.Get("rorolala_vcs.place.no_program_why")
-            );
-
-            return;
-        }
-
-        var run = _hub.Begin("rorolala_vcs.progress.checkin");
-
-        _ = Task.Run(() =>
-        {
-            var answer = CheckinCommand.Run(program, directory, references, run.Records, _hub.Touch, to);
-
-            Dispatcher.UIThread.Post(() =>
-            {
-                _hub.End(run);
-
-                if (!answer.Done || answer.Failed.Count > 0)
-                {
-                    FailureNotice.Show(
-                        _host.Dialogs,
-                        _host.Icons,
-                        RolaI18N.Get("rorolala_vcs.place.checkin_failed", vault),
-                        answer.Done ? string.Join('\n', answer.Failed) : answer.Said
-                    );
-                }
-
-                // The run fetches the Vault's Layout before it resolves anything, so the copy this place was read from
-                // may be newer whatever became of the work.
-                _host.Files.Touch();
-            });
-        });
     }
 
     /// <summary>Moves paths within one Layout, one run each.</summary>

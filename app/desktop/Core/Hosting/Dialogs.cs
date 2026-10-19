@@ -64,6 +64,21 @@ internal sealed class Dialogs : IDialogs
     }
 
     /// <inheritdoc />
+    public void Choose(Choice choice)
+    {
+        ArgumentNullException.ThrowIfNull(choice);
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Put(choice);
+
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => Put(choice));
+    }
+
+    /// <inheritdoc />
     public void Report(Report report)
     {
         ArgumentNullException.ThrowIfNull(report);
@@ -175,6 +190,93 @@ internal sealed class Dialogs : IDialogs
         if (confirmed)
         {
             dialog.Confirmed();
+        }
+    }
+
+    /// <summary>Puts one question with several answers to the user.</summary>
+    /// <remarks>
+    /// One button per answer, in the order they were given, and closing the window is the last of them: a question
+    /// whose answers are all things to do has nothing to do by default, and the last answer is the one the asker
+    /// placed there for that. Nothing is run for a window closed by anything but a button, which is the rule
+    /// <see cref="Put(Dialog)"/> follows as well.
+    /// </remarks>
+    /// <param name="choice">The question and its answers.</param>
+    private async void Put(Choice choice)
+    {
+        if (_shell.Window is not { IsVisible: true } owner || choice.Choices.Count == 0)
+        {
+            return;
+        }
+
+        var message = new TextBlock
+        {
+            Text = choice.Message,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 8),
+        };
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(16, 8, 16, 16),
+        };
+
+        var panel = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        panel.Children.Add(buttons);
+        panel.Children.Add(message);
+
+        var window = new Window
+        {
+            Title = choice.Title,
+            Icon = _icon,
+            Width = 640,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel,
+        };
+
+        window[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
+
+        var last = choice.Choices.Count - 1;
+
+        // What was answered is kept in a source rather than a local, because a local is only ever written from a click
+        // handler: nothing on this side of the dialog ever assigns it, and a reader of the code — the analyzer included —
+        // would be right to wonder whether anything ever does.
+        var picked = new TaskCompletionSource<Action?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        for (var at = 0; at <= last; at++)
+        {
+            var answer = choice.Choices[at];
+            var run = answer.Chosen;
+
+            var button = new Button
+            {
+                Content = answer.Label,
+                MinWidth = 96,
+                MaxWidth = 240,
+                IsDefault = at == 0,
+                IsCancel = at == last,
+            };
+
+            button.Click += (_, _) =>
+            {
+                picked.TrySetResult(run);
+                window.Close();
+            };
+
+            buttons.Children.Add(button);
+        }
+
+        await window.ShowDialog(owner);
+
+        // Off the screen first, for the reason the two-answer question above gives.
+        if (picked.Task.IsCompletedSuccessfully)
+        {
+            picked.Task.Result?.Invoke();
         }
     }
 }

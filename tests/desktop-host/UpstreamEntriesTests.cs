@@ -223,32 +223,25 @@ public sealed class UpstreamEntriesTests
 
         // The folder's own entry first, then what stands under it in the order a listing reads it.
         Assert.Equal(
-            ["Assets", "Assets/bg.psd", "Assets/hero.psd"],
-            UpstreamBringing.Plan(tree, [new UpstreamCarry(Origin, "Assets")]).References
+            ["a", "c", "b"],
+            UpstreamBringing.Entries(tree, [new UpstreamCarry(Origin, "Assets")])
+                .Select(entry => entry.Uuid)
         );
 
         // A choice of a folder and one of its entries is the folder's answer, and the entry is named once.
         Assert.Equal(
-            ["Assets", "Assets/bg.psd", "Assets/hero.psd"],
-            UpstreamBringing.Plan(
-                tree,
-                [new UpstreamCarry(Origin, "Assets"), new UpstreamCarry(Origin, "Assets/hero.psd")]
-            ).References
+            ["a", "c", "b"],
+            UpstreamBringing
+                .Entries(
+                    tree,
+                    [new UpstreamCarry(Origin, "Assets"), new UpstreamCarry(Origin, "Assets/hero.psd")]
+                )
+                .Select(entry => entry.Uuid)
         );
 
-        // One entry is one reference, and a path the copy no longer names is not a reference at all.
-        Assert.Equal(
-            ["Assets/hero.psd"],
-            UpstreamBringing.Plan(tree, [new UpstreamCarry(Origin, "Assets/hero.psd")]).References
-        );
-        Assert.Empty(UpstreamBringing.Plan(tree, [new UpstreamCarry(Origin, "Gone/hero.psd")]).References);
-
-        // What this Layout already holds is what a run is not given, and is counted so that the drop can say so.
-        var held = UpstreamEntriesTree.Build([Entry("Assets", "a"), Entry("Assets/hero.psd", "b")], [Entry("Assets/hero.psd", "b")]);
-        var plan = UpstreamBringing.Plan(held, [new UpstreamCarry(Origin, "Assets")]);
-
-        Assert.Equal(["Assets"], plan.References);
-        Assert.Equal(1, plan.Held);
+        // One entry is one entry, and a path the copy no longer names is not one at all.
+        Assert.Single(UpstreamBringing.Entries(tree, [new UpstreamCarry(Origin, "Assets/hero.psd")]));
+        Assert.Empty(UpstreamBringing.Entries(tree, [new UpstreamCarry(Origin, "Gone/hero.psd")]));
     }
 
     /// <summary>A checkin landed under a directory names it last, because that is how the operands are read.</summary>

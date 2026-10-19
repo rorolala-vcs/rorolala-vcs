@@ -293,6 +293,30 @@ public interface IFileChanges
 /// <param name="Confirmed">Run when the user goes ahead; a dialog the user dismisses runs nothing.</param>
 public sealed record Dialog(string Title, string Message, Action Confirmed);
 
+/// <summary>One answer a question offers, and what choosing it runs.</summary>
+/// <remarks>
+/// The label is the words themselves rather than a key, because a question may be about a count — "Bring in
+/// the other 3" — and a key with a number in it is the asker's to fill. What is run is the asker's too: the
+/// host draws a button and knows nothing of what it does.
+/// </remarks>
+/// <param name="Label">What the button says, in the words of whoever asked.</param>
+/// <param name="Chosen">Run once the button is pressed and the window is gone.</param>
+public sealed record DialogChoice(string Label, Action Chosen);
+
+/// <summary>
+/// A question with more answers than yes and no.
+/// </summary>
+/// <remarks>
+/// A checkin that half fits the work is the case this exists for: leaving it out, moving what is in the way, and
+/// giving up are three different things to do about one question, and a yes-or-no dialog would have to ask twice.
+/// The choices are shown in the order given, the first is the default and the last is what the window's close
+/// button comes to, so the last one is the answer that does nothing.
+/// </remarks>
+/// <param name="Title">What the question is called.</param>
+/// <param name="Message">What it asks.</param>
+/// <param name="Choices">The answers, in the order they are shown.</param>
+public sealed record Choice(string Title, string Message, IReadOnlyList<DialogChoice> Choices);
+
 /// <summary>
 /// What has happened, said rather than asked.
 /// </summary>
@@ -348,6 +372,17 @@ public interface IDialogs
     /// </remarks>
     /// <param name="dialog">The question to put.</param>
     void Show(Dialog dialog);
+
+    /// <summary>
+    /// Shows a question with several answers, and runs the one that is chosen.
+    /// </summary>
+    /// <remarks>
+    /// A window the user closes without pressing anything runs nothing, which is the same rule
+    /// <see cref="Show"/> follows: what a question hands over is what the answers do, and one of them is never a
+    /// thing to do by default.
+    /// </remarks>
+    /// <param name="choice">The question and its answers.</param>
+    void Choose(Choice choice);
 
     /// <summary>
     /// Shows something that has happened, which the user reads and closes.
