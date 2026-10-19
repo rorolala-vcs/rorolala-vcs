@@ -722,7 +722,7 @@ fn upstream_version(
             .map_err(mingling::Routable::to_chain)?;
     }
 
-    let copy = Layout::open(&dir).map_err(|error| failed(error.to_string()))?;
+    let copy = Layout::open_existing(&dir).map_err(|error| failed(error.to_string()))?;
 
     let Some(data) = copy.entry(id) else {
         return Err(ErrorRetrackUpstream {

@@ -40,6 +40,19 @@ pub enum LayoutError {
     Storage(rorolala_storage::Error),
 }
 
+impl LayoutError {
+    /// Whether this is a file that was not there.
+    ///
+    /// Every operating-system answer is [`LayoutError::Io`], and one of them is what a reader of a
+    /// layout that was never made meets: a copy that was not fetched, or a directory that exists
+    /// without the files a layout is made of. A caller that says "there is no copy" rather than "the
+    /// copy could not be read" asks this.
+    #[must_use]
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, Self::Io(source) if source.kind() == io::ErrorKind::NotFound)
+    }
+}
+
 impl fmt::Display for LayoutError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

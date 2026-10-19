@@ -37,9 +37,10 @@ fn main() {
     let vault = sandbox.join("vault");
     let held = sandbox.join("held");
     let claimed = sandbox.join("claimed");
+    let cached = sandbox.join("cached");
 
     for dir in [
-        &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed,
+        &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed, &cached,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -70,6 +71,7 @@ fn main() {
     language(&rola, &ws, &mut checked);
     held_by_another(&rola, &held, &mut checked);
     ownership(&rola, &claimed, &mut checked);
+    empty_cache(&rola, &cached, &mut checked);
 
     checked.report();
 }
@@ -1292,6 +1294,45 @@ fn copy_into(from: &Path, to: &Path) {
             fs::copy(entry.path(), under).expect("a copied file");
         }
     }
+}
+
+/// A directory in the cache is not a fetched copy.
+///
+/// A fetch that failed part of the way through used to leave an empty directory where the copy had
+/// been, and every reader opened it as a Layout holding nothing: `layout entries --layout
+/// truth@vault` printed an empty list and exited 0, which reads as "the Vault's Layout is empty"
+/// rather than "nothing was fetched". What is checked is that a directory with none of the Layout's
+/// own files in it is refused as nothing fetched — and that reading it made nothing in it.
+fn empty_cache(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made where the cache is read", &ran, 0);
+
+    // The shape a fetch that was cut short leaves: the copy's own directory, and nothing in it.
+    let cache = dir.join(".rola/cache/readonly-layouts/vault/truth");
+    fs::create_dir_all(&cache).expect("an empty cache directory");
+
+    let ran = rola.run(dir, &["layout", "entries", "--layout", "truth@vault"]);
+    checked.exits("a directory with no Layout in it is not a copy", &ran, 192);
+    checked.stderr_has(
+        "the run says the copy was not fetched",
+        &ran,
+        "has not been fetched",
+    );
+    checked.wants(
+        "reading it made nothing in it",
+        fs::read_dir(&cache)
+            .expect("the cache directory")
+            .next()
+            .is_none(),
+        &said(&ran),
+    );
+
+    // A copy a fetch got part of the way through is no more a copy than an empty one: what is there of the
+    // Layout is not all of it, and a Layout opened from it would hold some of what the Vault holds and none of
+    // the rest — which is worse than saying nothing was fetched.
+    fs::write(cache.join("log-0"), "half\n").expect("part of a copy");
+    let ran = rola.run(dir, &["layout", "entries", "--layout", "truth@vault"]);
+    checked.exits("a half-written copy is not a copy either", &ran, 192);
 }
 
 /// A command that runs `rola`, working in `dir` and keeping the user's files in the sandbox.

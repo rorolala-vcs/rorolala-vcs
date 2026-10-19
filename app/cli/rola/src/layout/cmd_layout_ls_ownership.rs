@@ -4,7 +4,6 @@
 //! answers about all of them at once: every entry the copy names, with whoever holds it. Nothing is
 //! reached for, so a run with no copy is told to fetch.
 
-use librorolala::layout::Layout;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
@@ -24,7 +23,7 @@ use serde::Serialize;
 use crate::Next;
 use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::exit_codes::EC_HELP;
-use crate::layout::{ErrorLayoutFailed, ErrorLayoutNotCached, readonly_layout_dir};
+use crate::layout::{cached_vault_layout, readonly_layout_dir};
 
 #[help(buffer)]
 pub fn help_layout_ls_ownership(_: EntryLayoutLsOwnership, ec: &mut ResExitCode) {
@@ -107,20 +106,9 @@ pub fn handle_layout_ls_ownership(
         .name_or_default(state.vault.unwrap_or_default())?;
     let dir = readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME);
 
-    if !dir.is_dir() {
-        return ErrorLayoutNotCached {
-            layout: VAULT_LAYOUT_NAME.to_owned(),
-            vault: name,
-        }
-        .into();
-    }
-
-    // Opening a copy makes one if it is not there, so what is not a directory is asked about
-    // first: a copy that was never fetched is not a copy with nothing in it.
-    let layout = match Layout::open(&dir) {
-        Ok(layout) => layout,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
+    // A copy that was never fetched is not a copy with nothing in it: a directory the Layout's own files are not in is
+    // said as nothing fetched rather than as a Layout holding no entries.
+    let layout = cached_vault_layout(&dir, &name)?;
 
     // What a Layout answers with is in no order a reader can rely on, so the entries are held in
     // the order a listing is read in: by the `Uuid` each is known by.

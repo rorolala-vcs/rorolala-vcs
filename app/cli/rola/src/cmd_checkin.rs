@@ -68,8 +68,7 @@ use crate::fetch::{self, Sources};
 use crate::hash::resolve as resolve_hash;
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, ErrorLayoutNotCached, failed,
-    readonly_layout_dir,
+    ErrorLayoutMissing, ErrorLayoutNoCurrent, cached_vault_layout, failed, readonly_layout_dir,
 };
 use crate::progress::Reporting;
 use crate::sync;
@@ -268,17 +267,7 @@ pub fn handle_checkin(
     }
 
     let dir = readonly_layout_dir(held, &vault_name, VAULT_LAYOUT_NAME);
-    if !dir.is_dir() {
-        return ErrorLayoutNotCached {
-            layout: VAULT_LAYOUT_NAME.to_owned(),
-            vault: vault_name,
-        }
-        .into();
-    }
-    let remote_layout = match Layout::open(&dir) {
-        Ok(layout) => layout,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
+    let remote_layout = cached_vault_layout(&dir, &vault_name)?;
 
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();

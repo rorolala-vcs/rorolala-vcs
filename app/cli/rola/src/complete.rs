@@ -323,7 +323,11 @@ pub fn cached_layout_uuids(
     let Ok(vault) = remote.name_or_default(named) else {
         return Vec::new();
     };
-    let Ok(layout) = Layout::open(readonly_layout_dir(workspace, &vault, VAULT_LAYOUT_NAME)) else {
+    // A completion must not make the cache it reads: a directory none of the Layout's own files are in is not a copy,
+    // and offering the entries of one would be offering nothing where the truth is that nothing was fetched.
+    let Ok(layout) =
+        Layout::open_existing(readonly_layout_dir(workspace, &vault, VAULT_LAYOUT_NAME))
+    else {
         return Vec::new();
     };
 

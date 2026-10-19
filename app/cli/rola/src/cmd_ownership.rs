@@ -65,7 +65,7 @@ use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_OWNERSHIP, EC_HELP
 use crate::failure::failure;
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNotCached, readonly_layout_dir,
+    ErrorLayoutFailed, ErrorLayoutMissing, cached_vault_layout, readonly_layout_dir,
     set_cached_owner,
 };
 use crate::progress::Reporting;
@@ -462,17 +462,7 @@ fn change(
     step.advance_by(1);
 
     let dir = readonly_layout_dir(held, &vault_name, VAULT_LAYOUT_NAME);
-    if !dir.is_dir() {
-        return ErrorLayoutNotCached {
-            layout: VAULT_LAYOUT_NAME.to_owned(),
-            vault: vault_name,
-        }
-        .into();
-    }
-    let copy = match Layout::open(&dir) {
-        Ok(layout) => layout,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
+    let copy = cached_vault_layout(&dir, &vault_name)?;
 
     let selected = match expanded(held, &cwd, names) {
         Ok(selected) => selected,

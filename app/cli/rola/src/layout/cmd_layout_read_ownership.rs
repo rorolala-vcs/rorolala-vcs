@@ -4,7 +4,6 @@
 //! [`fetch`](crate::layout::cmd_layout_fetch) wrote, so a run with no copy — or one whose copy does
 //! not name the entry — is told to fetch rather than left to reach a Vault that may be elsewhere.
 
-use librorolala::layout::Layout;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
@@ -28,8 +27,8 @@ use crate::complete::{
 };
 use crate::exit_codes::EC_HELP;
 use crate::layout::{
-    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutNotCached, ErrorOwnershipUnknown,
-    readonly_layout_dir, vault_and_uuid,
+    ErrorLayoutArgument, ErrorOwnershipUnknown, cached_vault_layout, readonly_layout_dir,
+    vault_and_uuid,
 };
 
 #[help(buffer)]
@@ -130,20 +129,9 @@ pub fn handle_layout_read_ownership(
         .name_or_default(state.vault.unwrap_or_default())?;
     let dir = readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME);
 
-    if !dir.is_dir() {
-        return ErrorLayoutNotCached {
-            layout: VAULT_LAYOUT_NAME.to_owned(),
-            vault: name,
-        }
-        .into();
-    }
-
-    // Opening a copy makes one if it is not there, so what is not a directory is asked about
-    // first: a copy that was never fetched is not a copy with nothing in it.
-    let layout = match Layout::open(&dir) {
-        Ok(layout) => layout,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
+    // A copy that was never fetched is not a copy with nothing in it: a directory the Layout's own files are not in is
+    // said as nothing fetched rather than as a Layout naming no such entry.
+    let layout = cached_vault_layout(&dir, &name)?;
 
     let uuid = state.id.to_string();
 

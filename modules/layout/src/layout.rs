@@ -103,17 +103,55 @@ impl Layout {
     /// Every shard's snapshot is read and its log replayed into memory, so what is answered
     /// afterwards is the layout as the two describe it at the moment it was opened.
     ///
+    /// `open` makes what it does not find, so a reader may not ask it about a copy it did not make:
+    /// see [`Layout::open_existing`].
+    ///
     /// # Errors
     ///
     /// Returns [`LayoutError::Io`] if a file could not be made or read, and [`LayoutError::Malformed`]
     /// if one holds bytes this build cannot read.
     pub fn open(dir: impl AsRef<Path>) -> Result<Self, LayoutError> {
-        let dir = dir.as_ref().to_path_buf();
-        std::fs::create_dir_all(&dir)?;
+        Self::open_in(dir.as_ref(), true)
+    }
+
+    /// Opens the layout kept in `dir`, which has to be there already.
+    ///
+    /// It is the open a *reader* makes of a layout it did not create — the read-only copy a fetch
+    /// leaves, say — and it makes nothing: a directory with none of the layout's own files in it is
+    /// [`LayoutError::Io`] with [`std::io::ErrorKind::NotFound`], not a layout holding nothing. That
+    /// distinction is the whole of it: an open that made the sixteen logs would let an empty
+    /// directory pass for a fetched copy, and a reading command would answer "the layout holds
+    /// nothing" where the truth is "nothing was fetched".
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::Io`] if a file is not there or could not be read, and
+    /// [`LayoutError::Malformed`] if one holds bytes this build cannot read.
+    pub fn open_existing(dir: impl AsRef<Path>) -> Result<Self, LayoutError> {
+        Self::open_in(dir.as_ref(), false)
+    }
+
+    /// Opens the layout kept in `dir`, making what is missing only where `create` says it may.
+    ///
+    /// # Errors
+    ///
+    /// Returns what [`Layout::open`] does: the files are made here when `create` is true, and asked
+    /// for when it is not.
+    fn open_in(dir: &Path, create: bool) -> Result<Self, LayoutError> {
+        let dir = dir.to_path_buf();
+
+        if create {
+            std::fs::create_dir_all(&dir)?;
+        }
 
         let mut shards = Vec::with_capacity(SHARD_COUNT);
         for shard in 0..SHARD_COUNT {
-            let log = ShardLog::open(&dir.join(format!("{LOG_PREFIX}{shard}{LOG_SUFFIX}")))?;
+            let path = dir.join(format!("{LOG_PREFIX}{shard}{LOG_SUFFIX}"));
+            let log = if create {
+                ShardLog::open(&path)?
+            } else {
+                ShardLog::open_existing(&path)?
+            };
             let slots = crate::snapshot::read(&snapshot_path(&dir, shard))?.unwrap_or_default();
             shards.push(RwLock::new(Shard { log, slots }));
         }
@@ -925,6 +963,48 @@ mod tests {
             layout.remove_entry(Uuid::from_u128(9)),
             Err(LayoutError::NotFound)
         ));
+    }
+
+    #[test]
+    fn an_empty_directory_is_not_a_layout_when_it_is_opened_for_reading() {
+        let dir = scratch("empty");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // An open that made the logs would let this pass for a fetched copy, and a reading command would answer "the
+        // layout holds nothing" where the truth is that nothing was fetched.
+        let error = Layout::open_existing(&dir).err().unwrap();
+
+        assert!(error.is_not_found(), "`{error}` is not `not found`");
+    }
+
+    #[test]
+    fn opening_for_reading_makes_nothing() {
+        let dir = scratch("not-made");
+
+        let error = Layout::open_existing(&dir).err().unwrap();
+
+        assert!(error.is_not_found(), "`{error}` is not `not found`");
+        assert!(
+            !dir.exists(),
+            "the open made the directory it was asked to read"
+        );
+    }
+
+    #[test]
+    fn a_layout_that_is_there_opens_for_reading_as_it_is() {
+        let dir = scratch("read-only");
+        let id = Uuid::from_u128(8);
+
+        {
+            let layout = Layout::open(&dir).unwrap();
+            layout.create_entry(id, data(8)).unwrap();
+            layout.create_path(&path("a.txt"), id).unwrap();
+        }
+
+        let layout = Layout::open_existing(&dir).unwrap();
+
+        assert_eq!(layout.id_of(&path("a.txt")), Some(id));
+        assert_eq!(layout.entry(id), Some(data(8)));
     }
 
     #[test]

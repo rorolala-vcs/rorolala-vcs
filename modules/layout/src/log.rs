@@ -79,6 +79,36 @@ impl ShardLog {
         })
     }
 
+    /// Opens the log at `path`, which has to be there already.
+    ///
+    /// A reader of a layout it did not make — a fetched copy, say — must not bring a log into being:
+    /// an empty directory would then open as a layout holding nothing, and "nothing was fetched"
+    /// would read as "the layout is empty". What is not there is therefore
+    /// [`io::ErrorKind::NotFound`] rather than a new file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::ErrorKind::NotFound`] when the log is not there, and whatever else the open
+    /// fails with.
+    pub fn open_existing(path: &Path) -> io::Result<Self> {
+        // Opened for appending as `open` does and without `create`, because a reader still holds the
+        // handle a compaction takes its lock through, and the two opens are one shape.
+        let write = OpenOptions::new().read(true).append(true).open(path)?;
+        let read = File::open(path)?;
+
+        let epoch_path = path.with_extension(EPOCH_EXTENSION);
+        let generation = read_generation(&epoch_path)?;
+
+        Ok(Self {
+            path: path.to_path_buf(),
+            write,
+            read,
+            epoch_path,
+            consumed: 0,
+            generation,
+        })
+    }
+
     /// Appends `bytes`, and waits until they are on disk.
     ///
     /// The lock is held exclusively for as long as this runs, as a compaction's is, so the two

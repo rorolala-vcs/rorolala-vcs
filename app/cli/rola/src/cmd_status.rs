@@ -591,7 +591,12 @@ fn tracked_layout(held: &Workspace) -> Option<(String, Layout)> {
     let track = layouts.track(&name).ok().flatten()?;
     let dir = readonly_layout_dir(held, &track, VAULT_LAYOUT_NAME);
 
-    Layout::open(&dir).ok().map(|layout| (track, layout))
+    // Opened as something that has to be there: a cache directory with none of the Layout in it — one a fetch was cut
+    // short of, or one an older build made — is not a copy, and opening it as a writable Layout would make one and read
+    // it as a Layout holding nothing.
+    Layout::open_existing(&dir)
+        .ok()
+        .map(|layout| (track, layout))
 }
 
 /// The 7 hex characters a hash is drawn by.

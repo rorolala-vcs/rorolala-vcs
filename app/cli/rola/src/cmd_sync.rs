@@ -442,8 +442,13 @@ fn plan_with(
     if !dir.is_dir() {
         return Err(PlanRefusal::NotCached);
     }
-    let remote_layout =
-        Layout::open(&dir).map_err(|error| PlanRefusal::Failed(error.to_string()))?;
+    let remote_layout = match Layout::open_existing(&dir) {
+        Ok(layout) => layout,
+        // A directory with none of the Layout in it is what a fetch that did not finish leaves, and it is not a copy
+        // to plan against: the plan is refused as a run that has not fetched is.
+        Err(error) if error.is_not_found() => return Err(PlanRefusal::NotCached),
+        Err(error) => return Err(PlanRefusal::Failed(error.to_string())),
+    };
 
     let mut plan = carry
         .runtime
