@@ -266,9 +266,10 @@ public sealed class SyncStripTests
             look.Palette.ThemeDictionaries[ThemeVariant.Dark]
         );
 
+        var hub = new ProgressHub();
         var strip = new SyncStrip(
             host,
-            new SyncWatcher(host, host.Log, new ProgressHub()),
+            new SyncWatcher(host, host.Log, hub, new VaultFetch(host, hub)),
             () => null,
             refresh: () => { }
         );
