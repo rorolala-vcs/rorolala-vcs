@@ -19,7 +19,9 @@ namespace RorolalaVCSPlugin;
 /// The drawing is the desktop's own geometry, not the command line's character grid: versions on one
 /// vertical axis, the variants that produced them on another to their left, and the variants merged
 /// in further left still. A file with no history is said in words rather than drawn as an empty
-/// graph, and a directory click is not an answer here at all (see <see cref="ChosenEntry"/>).
+/// graph, and a directory click is not an answer here at all (see <see cref="ChosenEntry"/>). A choice
+/// of several files is not a chain either, so what is said then is that the graph is hidden while the
+/// row under it acts on the choice.
 /// </remarks>
 internal sealed class VersionGraphDock : IDockView
 {
@@ -61,9 +63,9 @@ internal sealed class VersionGraphDock : IDockView
 
         // The row under the graph is always there: the graph is about one file, and a reader who has
         // just changed it has nowhere else to say what the change was. What the row's button may do is
-        // the graph's answer, which is why the two share one dock rather than living apart.
+        // the work's answer, which is why the two share one dock rather than living apart.
         var root = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
-        var bar = new VersionGraphTrackBar(host, graph, hub);
+        var bar = new VersionGraphTrackBar(host, graph, statuses, hub);
 
         root.Children.Add(graph);
         Grid.SetRow(bar, 1);
@@ -203,9 +205,6 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The file the current drawing is of, so a new file resets the pan.</summary>
     private string? _target;
 
-    /// <summary>Whether the drawing on screen is of a file whose working copy is an unrecorded edit.</summary>
-    private bool _editable;
-
     /// <summary>How large the drawing is drawn.</summary>
     private double _zoom = 1;
 
@@ -313,41 +312,16 @@ internal sealed partial class VersionGraphView : Control
     }
 
     /// <summary>
-    /// Raised when what the graph allows to be tracked changes: the file, whether it is an edit, or
-    /// whether the chains have parted.
+    /// Raised when the graph's answer about what may be tracked changes: the file, whether it is an
+    /// edit, whether the chains have parted, or that a choice of several files has hidden the graph.
     /// </summary>
     /// <remarks>
-    /// The row under the graph draws a message and one button, and what the button may do is this
-    /// view's answer rather than the row's: only this view knows which file is on screen and what the
-    /// chain read says about it.
+    /// The row under the graph draws a message and one button, and what the button may do is read from
+    /// the work rather than from the drawing; this is the view saying that its own reading of the work
+    /// has changed, so that the row asks the work again rather than waiting for a click it would not
+    /// be told about.
     /// </remarks>
     internal event EventHandler? TrackableChanged;
-
-    /// <summary>
-    /// The file whose unrecorded edit is on screen, and the directory it is in, or nothing when there
-    /// is no edit to record.
-    /// </summary>
-    /// <remarks>
-    /// An edit is the `???` variant the drawing puts above the highest version: the working file
-    /// differs from what the Layout records for it, so a run of `rola track` over it makes the version
-    /// the graph does not have yet.
-    /// </remarks>
-    internal (string Directory, string File)? Trackable =>
-        _editable
-        && _target is { Length: > 0 } file
-        && Path.GetDirectoryName(file) is { Length: > 0 } directory
-            ? (directory, file)
-            : null;
-
-    /// <summary>
-    /// Whether the work and the tracked Vault have parted, so that a track here makes a version the
-    /// Vault's chain does not carry.
-    /// </summary>
-    /// <remarks>
-    /// A tracked Vault that is merely ahead continues the same chain and is not a parting: only each
-    /// side having moved on from the common ancestor is.
-    /// </remarks>
-    internal bool Diverged => _drawing?.Diverged == true;
 
     /// <inheritdoc />
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -357,6 +331,7 @@ internal sealed partial class VersionGraphView : Control
         // Listening while the view is on screen rather than for as long as it exists: the catalogue
         // outlives every dock, and a dock that was closed has no reason to be told what was clicked.
         ChosenEntry.Changed += Refresh;
+        ChosenFiles.Changed += Refresh;
         _files.Changed += Refresh;
         _refocus.Regained += Refresh;
         ResourcesChanged += ResourcesChangedHandler;
@@ -368,6 +343,7 @@ internal sealed partial class VersionGraphView : Control
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         ChosenEntry.Changed -= Refresh;
+        ChosenFiles.Changed -= Refresh;
         _files.Changed -= Refresh;
         _refocus.Regained -= Refresh;
         ResourcesChanged -= ResourcesChangedHandler;
@@ -421,7 +397,7 @@ internal sealed partial class VersionGraphView : Control
         }
 
         if (
-            ChosenEntry.Current is { } entry
+            Subject() is { } entry
             && Path.GetDirectoryName(entry.Path) is { Length: > 0 } at
             && WorkspaceNotice.Holds(at, _log)
         )
@@ -465,6 +441,21 @@ internal sealed partial class VersionGraphView : Control
         Read();
     }
 
+    /// <summary>The one file the graph is of, or nothing when there is none or when several are chosen.</summary>
+    /// <remarks>
+    /// The choice is what the user made most recently, and the last click is what the graph followed before
+    /// a choice could hold several files: a choice of one is that file, a choice of none leaves the last
+    /// clicked file standing, and a choice of several is no one chain at all.
+    /// </remarks>
+    /// <returns>The file whose chain the graph is of, or nothing.</returns>
+    private static Entry? Subject() =>
+        ChosenFiles.Current.Count switch
+        {
+            0 => ChosenEntry.Current,
+            1 => ChosenFiles.Current[0],
+            _ => null,
+        };
+
     /// <summary>
     /// Reads the file clicked most recently, and draws what it has.
     /// </summary>
@@ -484,9 +475,25 @@ internal sealed partial class VersionGraphView : Control
             return;
         }
 
-        var entry = ChosenEntry.Current;
+        var chosen = ChosenFiles.Current;
+        var entry = chosen.Count switch
+        {
+            0 => ChosenEntry.Current,
+            1 => chosen[0],
+            _ => null,
+        };
         var directory = entry is null ? null : Path.GetDirectoryName(entry.Path);
         var generation = ++_generation;
+
+        // A choice of several files is not one chain: the drawing is hidden rather than made of whichever
+        // file was clicked, and the row under it is what the choice is acted on through.
+        if (chosen.Count > 1)
+        {
+            _target = null;
+            ShowMessage(RolaI18N.Get("rorolala_vcs.version_graph.many_files"));
+
+            return;
+        }
 
         if (entry is null || directory is null)
         {
@@ -557,7 +564,6 @@ internal sealed partial class VersionGraphView : Control
 
                     _target = entry.Path;
                     _drawing = drawing;
-                    _editable = drawing.Variants.Any(variant => variant.State is not null);
                     _emptyText = null;
                     _hover = null;
                     _metrics = null;
@@ -626,7 +632,6 @@ internal sealed partial class VersionGraphView : Control
     private void ShowMessage(string? said)
     {
         _drawing = null;
-        _editable = false;
         _emptyText = said;
         _hover = null;
         _metrics = null;

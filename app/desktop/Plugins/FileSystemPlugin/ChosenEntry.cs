@@ -50,3 +50,75 @@ public static class ChosenEntry
         Changed?.Invoke();
     }
 }
+
+/// <summary>
+/// The files chosen in a directory listing, which is the set a view of the work acts on.
+/// </summary>
+/// <remarks>
+/// <see cref="ChosenEntry"/> is the one file clicked most recently and is what a view of one
+/// file's history follows; a choice may be several files, and what is done with the choice — the
+/// track a Version Graph offers, say — is about all of them at once. The two are catalogues apart
+/// because they answer different questions: the last click stays the file the graph is of even
+/// when the choice beside it is empty, and the choice is nothing when the user clicks the space
+/// around the entries without changing what was clicked.
+/// <para>
+/// Only files are published. A directory is not a version chain, and a step up is a place rather
+/// than work: a choice of either leaves the files of it out, which is what the callers that track or
+/// read a chain want anyway.
+/// </para>
+/// </remarks>
+public static class ChosenFiles
+{
+    /// <summary>The files in the choice, in the order the listing shows them.</summary>
+    public static IReadOnlyList<Entry> Current { get; private set; } = [];
+
+    /// <summary>Raised when <see cref="Current"/> says something else.</summary>
+    public static event Action? Changed;
+
+    /// <summary>
+    /// Says what the choice holds now, so that a view of the work follows it.
+    /// </summary>
+    /// <remarks>
+    /// A catalogue like <see cref="ChosenEntry"/> rather than a member of one view, because there
+    /// are several listings and what the program acts on is the choice the user made last. What is
+    /// said twice the same is not said again: a listing rebuilt with the choice it already had is a
+    /// redraw and not a new choice.
+    /// </remarks>
+    /// <param name="chosen">The entries the listing has chosen.</param>
+    public static void Publish(IReadOnlyList<Entry> chosen)
+    {
+        ArgumentNullException.ThrowIfNull(chosen);
+
+        var files = chosen.Where(entry => entry.Kind == EntryKind.File).ToArray();
+
+        if (Same(Current, files))
+        {
+            return;
+        }
+
+        Current = files;
+        Changed?.Invoke();
+    }
+
+    /// <summary>Whether two choices name the same files in the same order.</summary>
+    /// <param name="left">One choice.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>Whether they are the same answer.</returns>
+    private static bool Same(IReadOnlyList<Entry> left, IReadOnlyList<Entry> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var at = 0; at < left.Count; at++)
+        {
+            if (!string.Equals(left[at].Path, right[at].Path, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}

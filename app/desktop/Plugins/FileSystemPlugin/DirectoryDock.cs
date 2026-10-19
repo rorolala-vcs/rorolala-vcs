@@ -814,6 +814,19 @@ internal sealed class DirectoryControl : UserControl
         _content.Content = drawn;
         drawn.Choose(chosen);
 
+        // A listing rebuilt on another directory starts with nothing chosen, and no selection event
+        // says so because nothing changed in the view that was just made: said here, but only when the
+        // keyboard was in the view being replaced or the dock itself walked elsewhere, so that a dock
+        // refreshing behind another one does not take the choice away from the listing being worked in.
+        if (
+            seating
+            || chosen.Count > 0
+            || (_drawn is not null && _drawnAt != Location.Current)
+        )
+        {
+            ChosenFiles.Publish(drawn.Chosen());
+        }
+
         // Said here rather than left to the view: whether the listing was drawn again is the other half of
         // "did a change reach this dock", and a report of one that did not cannot tell the two halves apart.
         _host.Log.Info($"drew the listing of `{Location.Current}`: {drawn.Shown} entries");

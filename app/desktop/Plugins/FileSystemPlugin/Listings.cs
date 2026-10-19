@@ -445,6 +445,12 @@ internal abstract class EntryView : UserControl
             ItemTemplate = new FuncDataTemplate<Entry>((entry, _) => Item(entry), true),
         };
 
+        // What the choice holds leaves this listing as it changes, since what the rest of the program
+        // does with a choice — the Version Graph's track — is about the files chosen rather than about
+        // the one clicked. Every way a choice moves goes through the toolkit's selection, so this one
+        // answer covers a click, a frame, the keyboard, and a listing rebuilt with the choice it had.
+        List.Selection.SelectionChanged += (_, _) => ChosenFiles.Publish(Chosen());
+
         // The menu on the space around the entries. An entry carries one of its own, and the toolkit
         // takes the nearest, so this one is the empty space by construction.
         List.ContextMenu = actions.Empty(this);

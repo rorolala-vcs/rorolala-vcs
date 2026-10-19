@@ -39,6 +39,12 @@ rorolala_vcs:
       en: This file has no version history
       zh-CN: 该文件没有版本历史
 
+    # What stands in place of the graph when the choice holds several files: one chain is one file's,
+    # and a choice of many has no one chain to draw. The row under it still acts on the choice.
+    many_files:
+      en: The version graph is hidden when multiple files are selected
+      zh-CN: 多个文件选择时将隐藏版本图
+
     # What a right-click on a node offers: the index's name for it, copied whole. Versions and
     # variants are words of their own, so the two are two items rather than one.
     copy_version_hash:
@@ -81,8 +87,14 @@ rorolala_vcs:
       en: Record the unrecorded change as a new version
       zh-CN: 将未记录的修改记录为新版本
     track_diverged:
-      en: this chain has parted from the Vault's, so hold Shift to track
-      zh-CN: 该链已与保险库分叉，请按住 Shift 追踪
+      en: some chosen changes have parted from the Vault's chain and will be confirmed first
+      zh-CN: 选中的部分修改已与保险库的链分叉，追踪前会再次确认
+    track_diverged_title:
+      en: Track changes that parted from the Vault?
+      zh-CN: 要追踪已与保险库分叉的修改吗？
+    track_diverged_message:
+      en: "Tracking these files makes versions the Vault's chain does not carry: %{files}. Confirm?"
+      zh-CN: "追踪以下文件会创建保险库链中不包含的版本：%{files}。请确认。"
     track_failed:
       en: The file could not be tracked
       zh-CN: 未能追踪该文件
