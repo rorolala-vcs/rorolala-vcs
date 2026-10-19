@@ -1,0 +1,68 @@
+# An example icon set, kept for reference and deliberately not packaged: `export` leaves this
+# directory out of `build/bin/desktop/icon-sets`, so it is never offered in the preference panel.
+#
+# A set is a directory holding this file and the pictures it names. The pictures are generated into
+# `icons/.cache/<directory>/` beside the program on first use, once for every size in `[generation]`.
+# The paths below are placeholders; replace the pictures with your own before copying the set out.
+
+[metadata]
+name = "Example Set"
+authors = [ "Your Name <you@example.com>" ]
+description = """
+A worked example of every part of an icon set: metadata, generation, fallback pictures and rules.
+"""
+license-file = "./LICENSE-MIT"
+
+[generation]
+# The source pictures are vectors; these are the pixel sizes each is drawn at.
+mode = "svg"
+sizes = [ 16, 24, 32, 48, 64, 128, 256 ]
+
+# The pictures used when no rule matches. A file whose kind has no entry is drawn as the binary
+# picture; a directory with no directory picture keeps the system's own folder icon.
+[fallback]
+audio-format = "./icons/fallback-audio.svg"
+binary-format = "./icons/fallback-binary.svg"
+directory-format = "./icons/fallback-directory.svg"
+media-format = "./icons/fallback-media.svg"
+text-format = "./icons/fallback-text.svg"
+
+# Rules are tried in the order written, before the fallback table. The first rule whose regex matches
+# the entry's name and whose `type` includes the entry's kind wins.
+#
+# `regex` is one pattern or an array of patterns. The entry's name is matched — the last part of the
+# path, not the whole path — and matching ignores case unless the pattern says `(?-i)`.
+#
+# `type` is one kind or an array of kinds: "file", "directory", or both. Omit it to apply to both.
+#
+# `icon` is relative to this file. Every icon a rule names is generated exactly like a fallback
+# picture, so it needs no other declaration.
+
+# A file rule: Maya scenes and caches.
+[[rules]]
+regex = [ ".ma$", ".mb$" ]
+type = [ "file" ]
+icon = "./icons/icon-maya.svg"
+
+# One pattern and one kind may be written without an array.
+[[rules]]
+regex = ".psd$"
+type = "file"
+icon = "./icons/icon-photoshop.svg"
+
+# A directory rule: version-control and dependency directories.
+[[rules]]
+regex = [ '^\.git$', '^node_modules$', '^\.cache$' ]
+type = [ "directory" ]
+icon = "./icons/icon-folder-special.svg"
+
+# A rule for both kinds: the name is the same kind of thing whether it is a file or a directory.
+[[rules]]
+regex = "^src$"
+type = [ "file", "directory" ]
+icon = "./icons/icon-source.svg"
+
+# Omit `type` to apply to both kinds.
+[[rules]]
+regex = "^LICENSE$"
+icon = "./icons/icon-license.svg"

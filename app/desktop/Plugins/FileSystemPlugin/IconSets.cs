@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Avalonia.Media.Imaging;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -20,6 +21,54 @@ namespace FileSystemPlugin;
 internal sealed record IconSource(IconCategory Category, string RelativePath);
 
 /// <summary>
+/// One rule an icon set states: names that match it, the kinds of entry it applies to, and the picture it
+/// gives them.
+/// </summary>
+/// <remarks>
+/// A rule is tried before the fallback table, and the rules are tried in the order the set writes them, so
+/// the first one whose pattern matches the entry's name and whose kind includes the entry's kind wins. The
+/// pattern is matched against the name rather than the whole path, because what a name says — its suffix —
+/// is what a rule is about.
+/// </remarks>
+/// <param name="Patterns">What the entry's name may match.</param>
+/// <param name="Files">Whether it applies to files.</param>
+/// <param name="Directories">Whether it applies to directories.</param>
+/// <param name="RelativePath">The picture it gives a matching entry, relative to the set's own directory.</param>
+internal sealed record IconRule(
+    IReadOnlyList<Regex> Patterns,
+    bool Files,
+    bool Directories,
+    string RelativePath
+)
+{
+    /// <summary>Whether this rule gives an entry its picture.</summary>
+    /// <param name="entry">The entry to test.</param>
+    /// <returns>Whether the kind is included and the name matches.</returns>
+    public bool Matches(Entry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (entry.Kind == EntryKind.Directory ? !Directories : !Files)
+        {
+            return false;
+        }
+
+        var name = Path.GetFileName(entry.Path);
+
+        try
+        {
+            return Patterns.Any(pattern => pattern.IsMatch(name));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // A pattern that takes longer than the timeout is a rule that does not answer rather than a
+            // listing that stops: the next rule, and then the fallback, still draw the entry.
+            return false;
+        }
+    }
+}
+
+/// <summary>
 /// One icon set as it is packaged: what it says about itself, and what it draws.
 /// </summary>
 /// <param name="Id">The directory it was found in, which is the value the setting keeps.</param>
@@ -27,7 +76,8 @@ internal sealed record IconSource(IconCategory Category, string RelativePath);
 /// <param name="Authors">Who made it.</param>
 /// <param name="Description">What it is, in its own words.</param>
 /// <param name="Folder">Where the set sits on disk.</param>
-/// <param name="Sources">The pictures it draws, one per kind of thing.</param>
+/// <param name="Sources">The pictures its fallback table draws, one per kind of thing.</param>
+/// <param name="Rules">The rules it states, in the order they are tried.</param>
 /// <param name="Sizes">The pixel sizes its pictures are cached at.</param>
 internal sealed record IconSet(
     string Id,
@@ -36,6 +86,7 @@ internal sealed record IconSet(
     string Description,
     string Folder,
     IReadOnlyList<IconSource> Sources,
+    IReadOnlyList<IconRule> Rules,
     IReadOnlyList<int> Sizes
 );
 
@@ -47,6 +98,13 @@ internal sealed record IconSet(
 /// pictures it names. The set's pictures are vectors, and a listing asks for one size at a time, so the vectors
 /// are drawn into PNGs once and the PNGs are what a row reads: drawing a vector per row would be drawing the
 /// same vector for every row of every listing.
+/// <para>
+/// A set may also state <c>[[rules]]</c>: a list of patterns, the kinds of entry they apply to, and one
+/// picture. The rules are tried in the order the set writes them and the first match is the picture the
+/// entry is drawn with; an entry no rule matches is drawn from its fallback kind. Every picture a rule
+/// names is drawn into the cache beside the fallback pictures, so a set that names one picture for several
+/// rules still draws it once.
+/// </para>
 /// <para>
 /// The cache is under <c>icons/.cache/&lt;set&gt;/</c> beside the program, because it is the program's own
 /// working state rather than the user's — a set that was packaged with the program is drawn from files beside
@@ -321,6 +379,17 @@ internal static class IconSets
             }
         }
 
+        // The rules are the set's own answer for a name, and they are tried before the fallback table:
+        // what the set names directly is more specific than the kind a fallback table sorts the name into.
+        // A rule whose picture was not drawn is passed over for the next rule, and then for the fallback.
+        foreach (var rule in set.Rules)
+        {
+            if (rule.Matches(entry) && Cached(set, rule.RelativePath, size) is { } ruled)
+            {
+                return ruled;
+            }
+        }
+
         var source = set.Sources.FirstOrDefault(candidate => candidate.Category == category);
 
         // A file of a kind the set has no picture for is drawn as the set's generic file, which is what a
@@ -331,19 +400,26 @@ internal static class IconSets
             source = set.Sources.FirstOrDefault(candidate => candidate.Category == IconCategory.Binary);
         }
 
-        if (source is null)
-        {
-            return null;
-        }
+        return source is null ? null : Cached(set, source.RelativePath, size);
+    }
 
+    /// <summary>The cached pictures of one source, at the drawn size nearest the one wanted.</summary>
+    /// <remarks>
+    /// The set states the sizes it was drawn at, and a listing may ask for any other — a grid's zoom is
+    /// continuous. The nearest drawn size is read and the control scales it, which keeps a zoom from asking
+    /// the set to be drawn at every size the pointer passes through.
+    /// </remarks>
+    /// <param name="set">The set the source belongs to.</param>
+    /// <param name="relativePath">The source's path within the set.</param>
+    /// <param name="size">How many pixels wide and tall the icon is wanted.</param>
+    /// <returns>The picture, or nothing when its cache is not there.</returns>
+    private static Bitmap? Cached(IconSet set, string relativePath, int size)
+    {
         var folder = CacheDirectory(set.Id);
 
-        // The set states the sizes it was drawn at, and a listing may ask for any other — a grid's zoom is
-        // continuous. The nearest drawn size is read and the control scales it, which keeps a zoom from
-        // asking the set to be drawn at every size the pointer passes through.
         foreach (var candidate in Nearest(set.Sizes, size))
         {
-            if (Loaded(Path.Combine(folder, NameOf(source.RelativePath, candidate))) is { } picture)
+            if (Loaded(Path.Combine(folder, NameOf(relativePath, candidate))) is { } picture)
             {
                 return picture;
             }
@@ -388,30 +464,46 @@ internal static class IconSets
 
         var folder = Path.Combine(cacheRoot, set.Id);
         var sources = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var asked = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var source in set.Sources)
         {
-            var full = Within(set.Folder, source.RelativePath);
+            Adding(source.RelativePath);
+        }
 
-            if (full is null)
-            {
-                warn($"the icon set `{set.Id}` names a source outside itself: {source.RelativePath}");
-                continue;
-            }
-
-            if (!File.Exists(full))
-            {
-                warn($"the icon set `{set.Id}` is missing its source: {source.RelativePath}");
-                continue;
-            }
-
-            sources[source.RelativePath] = full;
+        foreach (var rule in set.Rules)
+        {
+            Adding(rule.RelativePath);
         }
 
         if (sources.Count == 0)
         {
             warn($"the icon set `{set.Id}` draws nothing and is not offered");
             return false;
+        }
+
+        void Adding(string relativePath)
+        {
+            if (!asked.Add(relativePath))
+            {
+                return;
+            }
+
+            var full = Within(set.Folder, relativePath);
+
+            if (full is null)
+            {
+                warn($"the icon set `{set.Id}` names a source outside itself: {relativePath}");
+                return;
+            }
+
+            if (!File.Exists(full))
+            {
+                warn($"the icon set `{set.Id}` is missing its source: {relativePath}");
+                return;
+            }
+
+            sources[relativePath] = full;
         }
 
         var current = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -881,9 +973,11 @@ internal static class IconSets
             sources.Add(new IconSource(category, relative));
         }
 
-        if (sources.Count == 0)
+        var rules = ReadRules(model, id, folder, warn);
+
+        if (sources.Count == 0 && rules.Count == 0)
         {
-            warn($"the icon set `{id}` names no fallback picture");
+            warn($"the icon set `{id}` names no picture");
             return null;
         }
 
@@ -891,7 +985,199 @@ internal static class IconSets
         var authors = Strings(metadata, "authors");
         var description = Text(metadata, "description")?.Trim() ?? string.Empty;
 
-        return new IconSet(id, name, authors, description, folder, sources, sizes);
+        return new IconSet(id, name, authors, description, folder, sources, rules, sizes);
+    }
+
+    /// <summary>
+    /// Reads the set's rules, in the order it states them.
+    /// </summary>
+    /// <remarks>
+    /// A rule that cannot be read is one rule fewer rather than a set that will not load: an icon set is an
+    /// optional package, and a pattern written wrong should cost the rule it is written on. The order is
+    /// kept as written, because it is the priority the set gives its own rules.
+    /// </remarks>
+    /// <param name="model">The set's file, as a table.</param>
+    /// <param name="id">The set, for a warning about a rule that was not read.</param>
+    /// <param name="folder">Where the set sits.</param>
+    /// <param name="warn">Where a rule that will not read is reported.</param>
+    /// <returns>The rules that did read.</returns>
+    private static IReadOnlyList<IconRule> ReadRules(
+        TomlTable model,
+        string id,
+        string folder,
+        Action<string> warn
+    )
+    {
+        if (!model.TryGetValue("rules", out var value))
+        {
+            return [];
+        }
+
+        var tables = new List<TomlTable>();
+
+        switch (value)
+        {
+            case TomlTableArray array:
+                tables.AddRange(array);
+                break;
+
+            case TomlArray array:
+                foreach (var entry in array)
+                {
+                    if (entry is TomlTable table)
+                    {
+                        tables.Add(table);
+                    }
+                }
+
+                break;
+
+            case TomlTable table:
+                tables.Add(table);
+                break;
+
+            default:
+                warn($"the icon set `{id}` states rules that are not a table");
+                return [];
+        }
+
+        var rules = new List<IconRule>();
+
+        foreach (var table in tables)
+        {
+            if (ReadRule(table, id, folder, warn) is { } rule)
+            {
+                rules.Add(rule);
+            }
+        }
+
+        return rules;
+    }
+
+    /// <summary>Reads one rule, or nothing when what it states cannot be used.</summary>
+    /// <param name="table">The rule's table.</param>
+    /// <param name="id">The set, for a warning about a rule that was not read.</param>
+    /// <param name="folder">Where the set sits.</param>
+    /// <param name="warn">Where a rule that will not read is reported.</param>
+    /// <returns>The rule, or nothing.</returns>
+    private static IconRule? ReadRule(TomlTable table, string id, string folder, Action<string> warn)
+    {
+        var relative = Text(table, "icon")?.Trim();
+
+        if (string.IsNullOrEmpty(relative))
+        {
+            warn($"the icon set `{id}` has a rule with no icon");
+            return null;
+        }
+
+        if (Within(folder, relative) is null)
+        {
+            warn($"the icon set `{id}` names a rule icon outside itself: {relative}");
+            return null;
+        }
+
+        var patterns = ReadPatterns(table, id, warn);
+
+        if (patterns.Count == 0)
+        {
+            warn($"the icon set `{id}` has a rule with no readable regex");
+            return null;
+        }
+
+        var (files, directories, valid) = ReadTypes(table, id, warn);
+
+        if (!valid)
+        {
+            warn($"the icon set `{id}` has a rule that applies to no kind of entry");
+            return null;
+        }
+
+        return new IconRule(patterns, files, directories, relative);
+    }
+
+    /// <summary>The patterns a rule states, compiled and in the order written.</summary>
+    /// <remarks>
+    /// A pattern is matched without regard to case, because an extension is not case on the systems this
+    /// runs on — <c>.MA</c> is a Maya file as much as <c>.ma</c> is. A pattern that needs case can say so
+    /// with <c>(?-i)</c>. It is given a timeout because it is matched once per row while a listing is drawn:
+    /// a pattern with catastrophic backtracking would otherwise hang the window rather than cost its own
+    /// rule. What times out is a rule that does not answer, and the fallback still draws the entry.
+    /// </remarks>
+    /// <param name="table">The rule's table.</param>
+    /// <param name="id">The set, for a warning about a pattern that was not read.</param>
+    /// <param name="warn">Where a pattern that will not read is reported.</param>
+    /// <returns>The patterns that did compile.</returns>
+    private static IReadOnlyList<Regex> ReadPatterns(TomlTable table, string id, Action<string> warn)
+    {
+        var patterns = new List<Regex>();
+
+        foreach (var pattern in Strings(table, "regex"))
+        {
+            try
+            {
+                patterns.Add(
+                    new Regex(
+                        pattern,
+                        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase,
+                        TimeSpan.FromMilliseconds(250)
+                    )
+                );
+            }
+            catch (ArgumentException error)
+            {
+                warn($"the icon set `{id}` states a regex that will not compile: {pattern}: {error.Message}");
+            }
+        }
+
+        return patterns;
+    }
+
+    /// <summary>
+    /// The kinds of entry a rule applies to.
+    /// </summary>
+    /// <remarks>
+    /// A rule that states no <c>type</c> applies to both kinds, which is what a rule about a name rather
+    /// than about a kind of entry means. A rule that states a type this does not know applies to neither,
+    /// so it is not silently widened to everything; the caller says so and leaves the rule out.
+    /// </remarks>
+    /// <param name="table">The rule's table.</param>
+    /// <param name="id">The set, for a warning about a kind that was not read.</param>
+    /// <param name="warn">Where a kind that was not read is reported.</param>
+    /// <returns>Whether it applies to files, whether to directories, and whether it applies to anything.</returns>
+    private static (bool Files, bool Directories, bool Valid) ReadTypes(
+        TomlTable table,
+        string id,
+        Action<string> warn
+    )
+    {
+        if (!table.TryGetValue("type", out _))
+        {
+            return (true, true, true);
+        }
+
+        var files = false;
+        var directories = false;
+        var valid = false;
+
+        foreach (var kind in Strings(table, "type"))
+        {
+            if (string.Equals(kind, "file", StringComparison.OrdinalIgnoreCase))
+            {
+                files = true;
+                valid = true;
+            }
+            else if (string.Equals(kind, "directory", StringComparison.OrdinalIgnoreCase))
+            {
+                directories = true;
+                valid = true;
+            }
+            else
+            {
+                warn($"the icon set `{id}` states a rule kind that is not file or directory: {kind}");
+            }
+        }
+
+        return (files, directories, valid);
     }
 
     /// <summary>The sizes a set states, or the sizes one is assumed to be drawn at.</summary>
@@ -939,27 +1225,45 @@ internal static class IconSets
     private static string? Text(TomlTable? table, string key) =>
         table is not null && table.TryGetValue(key, out var value) ? value as string : null;
 
-    /// <summary>The strings of one array under a key, or nothing.</summary>
+    /// <summary>The strings under a key, whether it states one or an array of them.</summary>
     /// <param name="table">The table to read from.</param>
     /// <param name="key">The key it sits under.</param>
     /// <returns>The strings, in the order they are written.</returns>
     private static IReadOnlyList<string> Strings(TomlTable? table, string key)
     {
-        if (table is null || !table.TryGetValue(key, out var value) || value is not TomlArray array)
+        if (table is null || !table.TryGetValue(key, out var value))
         {
             return [];
         }
 
         var strings = new List<string>();
 
-        foreach (var entry in array)
+        switch (value)
         {
-            if (entry is string text && text.Trim() is { Length: > 0 } trimmed)
+            case string one:
+                Add(one);
+                break;
+
+            case TomlArray array:
+                foreach (var entry in array)
+                {
+                    if (entry is string text)
+                    {
+                        Add(text);
+                    }
+                }
+
+                break;
+        }
+
+        return strings;
+
+        void Add(string text)
+        {
+            if (text.Trim() is { Length: > 0 } trimmed)
             {
                 strings.Add(trimmed);
             }
         }
-
-        return strings;
     }
 }

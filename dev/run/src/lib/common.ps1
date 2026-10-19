@@ -230,10 +230,14 @@ function Publish-Desktop {
     # The icon sets, laid beside the program rather than built into it: the File System plugin reads
     # them from `icon-sets/` beside the program, which is also where it writes the cache it draws them
     # into. A tree with no sets is a program that offers only the system's own icons, which is why this
-    # is a copy and not a requirement.
+    # is a copy and not a requirement. `example` is documentation rather than a set, so it stays behind.
     if (Test-Path $DesktopIconSets) {
         New-Item -ItemType Directory -Force -Path "$Into/icon-sets" | Out-Null
-        Copy-Item -Recurse -Force "$DesktopIconSets/*" "$Into/icon-sets/"
+        Get-ChildItem -Path $DesktopIconSets -Force | Where-Object {
+            $_.Name -ine 'example'
+        } | ForEach-Object {
+            Copy-Item -Recurse -Force $_.FullName "$Into/icon-sets/"
+        }
     }
 }
 

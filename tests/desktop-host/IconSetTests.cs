@@ -13,7 +13,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class IconSetTests
 {
-    /// <summary>A set states its name, authors, description, sizes and fallback pictures.</summary>
+    /// <summary>A set states its name, authors, description, sizes, fallback pictures and rules.</summary>
     [Fact]
     public void ASetIsReadAsItDescribesItself()
     {
@@ -28,6 +28,27 @@ public sealed class IconSetTests
             new[] { IconCategory.Directory, IconCategory.Text },
             set.Sources.Select(source => source.Category)
         );
+        Assert.Equal(3, set.Rules.Count);
+    }
+
+    /// <summary>Rules are tried in the order the set writes them, and only for the kinds they name.</summary>
+    /// <remarks>
+    /// The first rule is the one for <c>.ma</c> alone, and the second is for <c>.ma</c> and <c>.mb</c>: a
+    /// <c>.ma</c> file must be drawn by the first, which is what "the earlier one wins" means. The last rule
+    /// is a directory rule, and a file named like its pattern must not take it.
+    /// </remarks>
+    [Fact]
+    public void RulesAreTriedInOrderAndByKind()
+    {
+        var set = OneSet();
+
+        Assert.Equal("./icon_maya.svg", First(set, "scene.ma", EntryKind.File)?.RelativePath);
+        Assert.Equal("./icon_maya.svg", First(set, "SCENE.MA", EntryKind.File)?.RelativePath);
+        Assert.Equal("./icon_other.svg", First(set, "scene.mb", EntryKind.File)?.RelativePath);
+        Assert.Equal("./icon_cache.svg", First(set, "cache", EntryKind.Directory)?.RelativePath);
+        Assert.Null(First(set, "notes.txt", EntryKind.File));
+        Assert.Null(First(set, "scene.ma", EntryKind.Directory));
+        Assert.Null(First(set, "cache", EntryKind.File));
     }
 
     /// <summary>The fallback rules tell the kinds of entry apart by name.</summary>
@@ -44,6 +65,46 @@ public sealed class IconSetTests
         Assert.Equal(IconCategory.Media, IconRules.Of(new Entry("clip.mp4", EntryKind.File)));
         Assert.Equal(IconCategory.Binary, IconRules.Of(new Entry("archive.zip", EntryKind.File)));
         Assert.Equal(IconCategory.Binary, IconRules.Of(new Entry("no-extension", EntryKind.File)));
+    }
+
+    /// <summary>A rule's picture is what the listing draws, and the fallback still answers a name no rule wants.</summary>
+    /// <remarks>
+    /// The set in this test has no binary fallback, so a <c>.ma</c> file that drew nothing would be a null
+    /// picture rather than a picture of another kind: what is checked is that the rule is the thing that
+    /// answered it, not merely that something did.
+    /// </remarks>
+    [Fact]
+    public void ARulePictureIsWhatTheListingDraws()
+    {
+        var set = OneSet();
+        var cache = Path.Combine(IconSets.CacheRoot, set.Id);
+        var ready = new ManualResetEventSlim();
+
+        if (Directory.Exists(cache))
+        {
+            Directory.Delete(cache, recursive: true);
+        }
+
+        try
+        {
+            IconSets.Adopt([set], _ => { }, ready.Set);
+            IconSets.Choose(set.Id);
+
+            Assert.True(ready.Wait(TimeSpan.FromSeconds(10)), "the set was not drawn");
+
+            using var ruled = IconSets.Picture(new Entry("scene.ma", EntryKind.File), 16);
+            using var fallback = IconSets.Picture(new Entry("notes.txt", EntryKind.File), 16);
+
+            Assert.NotNull(ruled);
+            Assert.NotNull(fallback);
+        }
+        finally
+        {
+            if (Directory.Exists(cache))
+            {
+                Directory.Delete(cache, recursive: true);
+            }
+        }
     }
 
     /// <summary>The cache is drawn once, and drawn again when a source it was drawn from changes.</summary>
@@ -68,7 +129,19 @@ public sealed class IconSetTests
 
         Assert.True(File.Exists(picture));
         Assert.Contains("sha1", File.ReadAllText(manifest), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(4, Directory.GetFiles(Path.Combine(cache, set.Id), "*.png").Length);
+        Assert.Equal(10, Directory.GetFiles(Path.Combine(cache, set.Id), "*.png").Length);
+
+        // What a rule names is drawn too, even though it is not one of the fallback pictures.
+        Assert.True(
+            File.Exists(
+                Path.Combine(cache, set.Id, IconSets.NameOf("./icon_maya.svg", 16))
+            )
+        );
+        Assert.True(
+            File.Exists(
+                Path.Combine(cache, set.Id, IconSets.NameOf("./icon_cache.svg", 32))
+            )
+        );
 
         var drawn = File.ReadAllBytes(picture);
 
@@ -110,14 +183,40 @@ public sealed class IconSetTests
             [fallback]
             directory-format = "./fallback-directory.svg"
             text-format = "./fallback-text.svg"
+
+            [[rules]]
+            regex = [ ".ma$" ]
+            type = [ "file" ]
+            icon = "./icon_maya.svg"
+
+            [[rules]]
+            regex = ".ma$|.mb$"
+            type = "file"
+            icon = "./icon_other.svg"
+
+            [[rules]]
+            regex = [ "^cache$" ]
+            type = [ "directory" ]
+            icon = "./icon_cache.svg"
             """
         );
 
         File.WriteAllText(Path.Combine(folder, "fallback-directory.svg"), Square(colour));
         File.WriteAllText(Path.Combine(folder, "fallback-text.svg"), Square("#336699"));
+        File.WriteAllText(Path.Combine(folder, "icon_maya.svg"), Square("#CC3300"));
+        File.WriteAllText(Path.Combine(folder, "icon_other.svg"), Square("#33CC33"));
+        File.WriteAllText(Path.Combine(folder, "icon_cache.svg"), Square("#3333CC"));
 
         return Assert.Single(IconSets.Discover(root, _ => { }));
     }
+
+    /// <summary>The first rule that matches an entry, as the set would try them.</summary>
+    /// <param name="set">The set whose rules are tried.</param>
+    /// <param name="path">The entry's path.</param>
+    /// <param name="kind">Whether the entry is a file or a directory.</param>
+    /// <returns>The first matching rule, or nothing.</returns>
+    private static IconRule? First(IconSet set, string path, EntryKind kind) =>
+        set.Rules.FirstOrDefault(rule => rule.Matches(new Entry(path, kind)));
 
     /// <summary>An SVG that fills its square with one colour.</summary>
     /// <param name="colour">The colour to fill with.</param>
