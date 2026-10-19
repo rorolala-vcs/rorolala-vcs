@@ -87,16 +87,18 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// </summary>
     /// <param name="host">The host, for the icon library and the log.</param>
     /// <param name="statuses">The readings of the work, shared with the docks.</param>
-    public static void Declare(IPluginHost host, StatusReadings statuses)
+    /// <param name="readings">
+    /// What the Vault's copy says about the entries being listed, shared with the menus: what an entry's menu offers is
+    /// judged by whether there is a copy to act on, and that is the answer a listing's column reads.
+    /// </param>
+    public static void Declare(IPluginHost host, StatusReadings statuses, OwnershipReadings readings)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(statuses);
+        ArgumentNullException.ThrowIfNull(readings);
 
         Icons.Declare(host.Icons);
 
-        // One set of readings for both of this plugin's contributions: who holds an entry and where
-        // upstream names it are read from the same two Layouts, and asking twice would open them twice.
-        var readings = new OwnershipReadings(host.Log);
         var locks = new RorolalaLocks(readings);
 
         // The same answer is a tile's badge as well as the list's column, so it is contributed as both: a

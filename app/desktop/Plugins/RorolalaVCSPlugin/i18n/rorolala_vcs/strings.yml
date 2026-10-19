@@ -513,10 +513,184 @@ rorolala_vcs:
       en: The Vault's Layout could not be fetched
       zh-CN: 未能取回保险库布局
 
+  # What the work's own menu offers: the upstream as a place, which is not a dock of this plugin's but an address the
+  # browser opens. The root is the Layout of the Vault the work tracks — what this work is the upstream of — and the
+  # two lists are a step away, so a work that tracks nothing still has somewhere to go.
+  menu:
+    workspace:
+      en: Workspace
+      zh-CN: 工作区
+    root:
+      en: Upstream root
+      zh-CN: 上游根目录
+    layouts:
+      en: Layouts
+      zh-CN: 布局
+    vaults:
+      en: Vaults
+      zh-CN: 保险库
+    upstream:
+      en: Upstream entries
+      zh-CN: 上游条目
+
+  # What the upstream place says. It is read a level at a time — the Vaults the Workspace knows, the Layouts it works
+  # in, and one Layout's entries — so the title says where in the address the reader is, and a level that cannot be
+  # read says which of the ways it could not be. The commands are the command line's, and what it said is shown as it
+  # said it: the words of a failure are the one thing this side does not know better.
+  place:
+    title:
+      en: Upstream entries
+      zh-CN: 上游条目
+    vaults_title:
+      en: "Upstream entries: Vaults"
+      zh-CN: "上游条目：保险库"
+    layouts_title:
+      en: "Upstream entries: Layouts"
+      zh-CN: "上游条目：布局"
+    vault_title:
+      en: "Upstream entries: %{vault}"
+      zh-CN: "上游条目：%{vault}"
+    layout_title:
+      en: "Upstream entries: the Layout %{layout}"
+      zh-CN: "上游条目：布局 %{layout}"
+    inside:
+      en: "Upstream entries: %{vault} / %{prefix}"
+      zh-CN: "上游条目：%{vault} / %{prefix}"
+    inside_layout:
+      en: "Upstream entries: the Layout %{layout} / %{prefix}"
+      zh-CN: "上游条目：布局 %{layout} / %{prefix}"
+    vaults_failed:
+      en: The Vaults this Workspace knows could not be read
+      zh-CN: 无法读取此工作区已知的保险库
+    layouts_failed:
+      en: The Layouts of this Workspace could not be read
+      zh-CN: 无法读取此工作区的布局
+    not_workspace:
+      en: This directory is not inside a Rorolala Workspace
+      zh-CN: 此目录不在 Rorolala 工作区内
+    not_fetched:
+      en: The Layout of `%{vault}` has not been fetched here yet
+      zh-CN: 尚未在此取回 `%{vault}` 的布局
+    failed:
+      en: The copy could not be read
+      zh-CN: 无法读取副本
+    failed_title:
+      en: What the command line said
+      zh-CN: 命令行的输出
+    read_again:
+      en: Read again
+      zh-CN: 重新读取
+    fetch:
+      en: Fetch the Vault's Layout
+      zh-CN: 取回保险库的布局
+    checkin:
+      en: Bring in
+      zh-CN: 签入
+    checkin_failed:
+      en: The entry could not be brought in from `%{vault}`
+      zh-CN: 无法从 `%{vault}` 签入条目
+    already_here_title:
+      en: Nothing to bring in
+      zh-CN: 没有可签入的条目
+    already_here:
+      en: "%{count} entries of this drop are already in the Layout being worked in, so they were left out"
+      zh-CN: 本次拖入的 %{count} 个条目已在当前布局中，已跳过
+    column_uuid:
+      en: Uuid
+      zh-CN: UUID
+    column_owner:
+      en: Owner
+      zh-CN: 持有人
+    copy_path:
+      en: Copy the upstream path
+      zh-CN: 复制上游路径
+    copy_path_layout:
+      en: Copy the path
+      zh-CN: 复制路径
+    path_title:
+      en: The path upstream names it by
+      zh-CN: 上游为它记录的路径
+    path_title_layout:
+      en: The path this Layout names it by
+      zh-CN: 此布局为它记录的路径
+    held:
+      en: Already here
+      zh-CN: 已在此
+    held_title:
+      en: This entry is already in the Layout being worked in
+      zh-CN: 该条目已在当前布局中
+    held_at:
+      en: "It is named here at: %{path}"
+      zh-CN: "它在此处记录为：%{path}"
+    no_program:
+      en: Nothing was done
+      zh-CN: 未执行任何操作
+    no_program_why:
+      en: "`rola` could not be run here, so the work was not touched"
+      zh-CN: "`rola` 无法在此运行，因此没有改动工作"
+    # What a move that did not happen says: which entry, and — where the copy names one — who holds it, because an entry
+    # held by another account is the usual reason the Vault refuses one. The reason itself is the command's own words
+    # where it wrote any, and this one where it did not.
+    move_refused_held:
+      en: "`%{path}` could not be moved — %{holder} holds it"
+      zh-CN: "`%{path}` 无法移动——它由 %{holder} 持有"
+    move_refused:
+      en: "`%{path}` could not be moved"
+      zh-CN: "`%{path}` 无法移动"
+    move_refused_why:
+      en: "`%{to}` was not written: the Layout still names the entry where it was. An entry another account holds can be moved only by that account, or by an administrator of the Vault."
+      zh-CN: "没有写入 `%{to}`：布局仍把条目记在原处。由他人持有的条目，只有持有人或保险库管理员才能移动。"
+
+    # What the root of the place opens at, and what it says when there is no Vault to open: the work's own upstream is
+    # the Vault the Layout being worked in tracks, and the Workspace's default Vault where it tracks none.
+    no_root_title:
+      en: No upstream layout to open
+      zh-CN: 没有可打开的上游布局
+    no_root:
+      en: This Workspace has no default Vault, so there is no upstream Layout to show
+      zh-CN: 此工作区没有默认保险库，无法查看上游布局
+    unknown:
+      en: Nothing here answers for `%{segment}`
+      zh-CN: 没有插件应答 `%{segment}`
+
+    # What a drop that moved nothing says, in this place's own words: the reasons are the Layout's — already there, a
+    # path taken, a copy still being read — and none of them is something the browser could work out. The row that was
+    # dropped on is the one whose answer it is, and the words are shown the moment the drag is let go.
+    refused_not_a_drag:
+      en: This is not something the upstream place can take
+      zh-CN: 这不是上游地点能够接收的内容
+    refused_not_a_folder:
+      en: A list is not a folder — open it and drop into one of the things it lists
+      zh-CN: 列表不是文件夹：请打开它，再放到它列出的某一项上
+    refused_another_layout:
+      en: An entry is moved within one Layout, and this one is of another
+      zh-CN: 条目只能在同一布局内移动，而它属于另一个布局
+    refused_reading:
+      en: The copy this place reads is being read, or was never fetched, so nothing can be moved in it yet
+      zh-CN: 此地读取的副本正在读取中，或尚未取回，暂时不能在其中移动条目
+    refused_gone:
+      en: The Layout no longer names this entry at that path
+      zh-CN: 布局已不再在该路径上命名这条目
+    refused_same:
+      en: "`%{path}` is already under that folder"
+      zh-CN: "`%{path}` 已经在该文件夹下"
+    refused_taken:
+      en: "Something is already named `%{path}`"
+      zh-CN: "`%{path}` 已经有别的内容"
+    refused_generic:
+      en: The entry cannot be moved there
+      zh-CN: 无法把该条目移到此处
+
   # What the Overview's progress panel says of the commands this plugin runs: a card per command, named for
   # what the command does, and a bar per task the command reports. A task that names itself is read by that
   # name, and one that does not is read by the direction its work moves — or as simply working.
   progress:
+    checkin:
+      en: Bringing entries in
+      zh-CN: 正在签入条目
+    path_move:
+      en: Moving the entry upstream
+      zh-CN: 正在移动上游条目
     sync:
       en: Syncing
       zh-CN: 同步数据

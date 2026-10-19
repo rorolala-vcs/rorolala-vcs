@@ -34,6 +34,15 @@ internal static class Sync
     internal const string Program = "ROLA_EXE";
 
     /// <summary>
+    /// The status a run has when it could not be started at all, which no exit status of a program can be.
+    /// </summary>
+    /// <remarks>
+    /// Nothing was asked, which is a different thing from a command that answered no: a report of a copy that cannot
+    /// be read is about what the command said, and one of a program that is not there is about this side.
+    /// </remarks>
+    internal const int FailedToRun = -1;
+
+    /// <summary>
     /// The flag that has the command answer in JSON and write its progress as one record per line.
     /// </summary>
     /// <remarks>
@@ -289,6 +298,29 @@ internal static class Sync
         string directory
     )
     {
+        var (code, said, output) = Coded(program, arguments, directory);
+
+        return (code == 0, said, output);
+    }
+
+    /// <summary>
+    /// Runs a command and waits, answering the status it ended with as well as what it said.
+    /// </summary>
+    /// <remarks>
+    /// A status is answered beside the words because one of the ways a run fails is a state rather than a fault: the
+    /// copy of a Layout that was never fetched is what a place offers a fetch for, and telling that from a copy that
+    /// cannot be read means reading the status rather than the message, which is in the reader's own language.
+    /// </remarks>
+    /// <param name="program">The program to run.</param>
+    /// <param name="arguments">What to run it with.</param>
+    /// <param name="directory">Where to run it.</param>
+    /// <returns>The status, what to say when it is not zero, and what it wrote.</returns>
+    internal static (int Code, string Said, string Output) Coded(
+        string program,
+        IReadOnlyList<string> arguments,
+        string directory
+    )
+    {
         var start = new ProcessStartInfo
         {
             FileName = program,
@@ -321,18 +353,22 @@ internal static class Sync
 
             if (process.ExitCode == 0)
             {
-                return (true, string.Empty, written);
+                return (0, string.Empty, written);
             }
 
             return (
-                false,
-                said.Length > 0 ? said : written.Length > 0 ? written : $"the command ended with {process.ExitCode}",
+                process.ExitCode,
+                said.Length > 0
+                    ? said
+                    : written.Length > 0
+                        ? written
+                        : $"the command ended with {process.ExitCode}",
                 written
             );
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            return (false, error.Message, string.Empty);
+            return (FailedToRun, error.Message, string.Empty);
         }
     }
 }

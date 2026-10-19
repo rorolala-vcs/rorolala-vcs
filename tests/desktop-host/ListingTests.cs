@@ -47,7 +47,7 @@ public sealed class ListingTests
         var hides = new global::FileSystemPlugin.HideRegistry(config);
         global::FileSystemPlugin.HideRegistry.Declare(host);
 
-        var shared = new global::FileSystemPlugin.Shared(directory, hides, config);
+        var shared = new global::FileSystemPlugin.Shared(directory, hides, config, new FileChanges());
         var browser = new global::FileSystemPlugin.Browser(host.Log, shared, directory, host.LogicalViews);
 
         // The plugin's own one-liner, repeated here because this is the location alone rather than the

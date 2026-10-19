@@ -360,3 +360,31 @@ internal sealed class LogicalViewRegistry
         .. _claims.OrderBy(claim => claim.Position).Select(claim => claim.Scheme),
     ];
 }
+
+/// <summary>What plugins take a non-file drag dropped on a directory for.</summary>
+/// <remarks>
+/// A list rather than one answer, because a directory is not the taker: any plugin may say which directories it
+/// takes what for, and the first that says it takes this one is the one that does.
+/// </remarks>
+internal sealed class DropTargetRegistry
+{
+    /// <summary>Every target, in the order it was offered.</summary>
+    private readonly List<(PluginId Owner, int Position, IDropTarget Target)> _targets = [];
+
+    /// <summary>Offers a target.</summary>
+    /// <param name="owner">The plugin offering it.</param>
+    /// <param name="position">The plugin's place in the load order.</param>
+    /// <param name="target">What answers for the directories it takes.</param>
+    public void Add(PluginId owner, int position, IDropTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        _targets.Add((owner, position, target));
+    }
+
+    /// <summary>Every target offered, in the order they are asked.</summary>
+    public IReadOnlyList<IDropTarget> Items =>
+    [
+        .. _targets.OrderBy(target => target.Position).Select(target => target.Target),
+    ];
+}

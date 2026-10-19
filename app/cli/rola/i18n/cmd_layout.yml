@@ -718,15 +718,21 @@ cmd_layout_path:
 
         **Usage**: rola layout path move <FROM> <TO>
         **Flags**:
-            --vault, -v      Edit the Vault's Layout, rather than the Workspace's
-            --offline        Do not reach the Vault when moving, using only what was fetched locally
+            --layout <NAME[@VAULT]>   Move the path in that Layout, the Vault's own when written `truth@VAULT`
+            --offline                 Do not reach the Vault when moving, using only what was fetched locally
+
+        Locating a file is moving it out of `@/new/`, and deprecating one is moving it under `@/removed/`
+        Only the entry's holder, or an administrator of the Vault, may move it
     zh-CN: |
         把条目从旧路径移到新路径
 
         **用法**：rola layout path move <源路径> <目标路径>
         **标识**：
-            --vault, -v      编辑保险库的布局，而非工作区的布局
-            --offline        移动时不连接保险库，仅使用本地已取回的内容
+            --layout <布局名[@保险库]>   在该布局中移动路径，写成 `truth@保险库` 时移动保险库自身的布局
+            --offline                    移动时不连接保险库，仅使用本地已取回的内容
+
+        定位文件就是把它移出 `@/new/`，废弃文件就是把它移到 `@/removed/` 之下
+        只有条目的持有人，或保险库的管理员，可以移动它
 
   move_description:
     en: Move the entry at one path to another

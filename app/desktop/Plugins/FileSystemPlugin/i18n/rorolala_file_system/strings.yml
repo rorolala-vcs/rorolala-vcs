@@ -217,6 +217,15 @@ rorolala_file_system:
     en: No plugin answers %{scheme}
     zh-CN: 没有插件回答 %{scheme}
 
+  # What is said when a place would not take what was dropped or pasted on it. The reason is the place's own and is
+  # shown where it has one; this is the title of that notification, and the answer for a place that says nothing.
+  refused_title:
+    en: Nothing was moved
+    zh-CN: 没有移动任何条目
+  refused:
+    en: This place does not take that
+    zh-CN: 此处不接受该条目
+
   # What the conflict window says when a name is already taken. The window is shown over the host's main
   # window, so the words are the plugin's while the window is the host's.
   conflict:

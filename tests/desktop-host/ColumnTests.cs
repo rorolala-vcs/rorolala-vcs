@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaVCSPlugin;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
@@ -115,7 +116,7 @@ public sealed class ColumnTests
 
         var services = Host.Services();
         var host = services.For(new PluginId(FileSystem.Identity), 1);
-        var shared = new Shared("/work", new HideRegistry(host.Config), host.Config);
+        var shared = new Shared("/work", new HideRegistry(host.Config), host.Config, new FileChanges());
 
         var readAgain = 0;
         shared.Touched += () => readAgain++;
@@ -418,11 +419,11 @@ public sealed class ColumnTests
         var entry = new Entry("hero.psd", EntryKind.File);
 
         // A mark for the entry is a mark, and no mark at all is nothing drawn.
-        Assert.IsType<Border>(Files.Contributed(dots, entry));
-        Assert.Empty(Assert.IsType<Panel>(Files.Contributed(marks, entry)).Children);
+        Assert.IsType<Border>(ColumnCells.Contributed(dots, entry));
+        Assert.Empty(Assert.IsType<Panel>(ColumnCells.Contributed(marks, entry)).Children);
 
         // A column of values says the same thing the way it says everything it does not know.
-        Assert.Equal("-", Assert.IsType<TextBlock>(Files.Contributed(values, entry)).Text);
+        Assert.Equal("-", Assert.IsType<TextBlock>(ColumnCells.Contributed(values, entry)).Text);
     }
 
     /// <summary>A state is worn on a tile as a picture in the colour the dot beside a name is.</summary>

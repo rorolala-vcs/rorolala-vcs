@@ -50,9 +50,14 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // because who holds an entry is Rorolala's question and the answer comes through the C ABI.
         // The same set of status readings is handed on to the docks: the Version Graph reads a file's
         // edit from it, and a reading shared is a reading not made twice.
-        var statuses = new StatusReadings(host.Log);
+        var statuses = new StatusReadings(host.Log, host.Files);
 
-        RorolalaLocks.Declare(host, statuses);
+        // What the Vault's copy says about the entries of a directory, read once for everything that asks: the Ownership
+        // column, the badges, and what an entry's menu offers. One set rather than each asking for itself, and every
+        // answer read off the window's thread (see OwnershipReadings).
+        var ownership = new OwnershipReadings(host.Log, host.Files);
+
+        RorolalaLocks.Declare(host, statuses, ownership);
 
         // What every command this plugin runs reports itself to: a card per command down the Overview, drawn by
         // whoever reached for the command — the strip, an entry's menu — and read by the Overview's panel.
@@ -72,7 +77,12 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         // What an entry's menu offers about who holds it: the two ownership commands, plain and forced, each of
         // which reports itself to the hub while it goes.
-        OwnershipActions.Declare(host, hub);
+        OwnershipActions.Declare(host, hub, ownership);
+
+        // And the work's upstream, which is not a dock of its own: it is a place the browser opens by address, read by
+        // the very same listing a directory is. Declaring it is registering the prefix it answers for, the way into it
+        // from the work's own menus, and what a drag of its entries means when it is let go on a directory.
+        UpstreamPlace.Declare(host, hub, fetch);
     }
 
     /// <summary>

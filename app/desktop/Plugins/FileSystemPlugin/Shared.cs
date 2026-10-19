@@ -39,16 +39,28 @@ internal sealed class Shared
     /// <summary>The plugin's own settings, where the choice about showing what is hidden is kept.</summary>
     private readonly IPluginConfig _config;
 
+    /// <summary>Where the plugin says that what it did changed the files.</summary>
+    private readonly IFileChanges _files;
+
+    /// <summary>Whether a touch is being handed to the host, so that the host's answer does not come back as one.</summary>
+    private bool _telling;
+
     /// <summary>Makes the shared answers, with the tree rooted at a directory.</summary>
     /// <param name="baseDir">The directory to root the tree at.</param>
     /// <param name="hides">The hide providers, and the choice of which are in force.</param>
     /// <param name="config">The plugin's settings, where the show choice is read and kept.</param>
-    public Shared(string baseDir, HideRegistry hides, IPluginConfig config)
+    /// <param name="files">Where the plugin says that the files may have changed.</param>
+    public Shared(string baseDir, HideRegistry hides, IPluginConfig config, IFileChanges files)
     {
         _base = baseDir;
         _hides = hides;
         _config = config;
+        _files = files;
         _shown = config.ReadKeyAs(ShowSetting, false);
+
+        // A read that some other plugin worked out is drawn again rather than read again: the two are the halves of one
+        // channel, and taking the other one would empty every reader's answers for a reading that changed nothing.
+        files.Redrawn += Drawn;
 
         // Said here as well as where the base moves, because a dependent plugin reads it before
         // anything moves: the directory a run starts on is as worth publishing as one it is rooted
@@ -79,6 +91,17 @@ internal sealed class Shared
     public event Action? Touched;
 
     /// <summary>
+    /// Raised when an answer a plugin worked out is at hand, so that every location draws again without reading.
+    /// </summary>
+    /// <remarks>
+    /// The other half of <see cref="Touched"/>: a reading that landed changed nothing on disk, so what is drawn from it
+    /// is drawn again and nobody's answers are given back. Saying a touch instead would have every reader of the work
+    /// read again for a reading it is already holding, which is one program run and one walk of the tree per drawing —
+    /// see <see cref="FilesChanged"/>.
+    /// </remarks>
+    public event Action? Redrawn;
+
+    /// <summary>
     /// Says that the files may have changed, which every location reads its directory again for.
     /// </summary>
     /// <remarks>
@@ -86,10 +109,16 @@ internal sealed class Shared
     /// finished an event and reading a directory again rebuilds the views showing it — one of which may be the
     /// view answering that event. Once a turn, because several things that finish together are one change to go
     /// and look for.
+    /// <para>
+    /// The host is told as well, once: what this plugin changed by a command of its own is a change the next plugin's
+    /// readers have to know about, and nothing else says so. What comes back from the host is a touch of its own, and
+    /// is dropped rather than posted again (<see cref="_telling"/>) — the ring that would otherwise be one touch per
+    /// turn for as long as the window is open.
+    /// </para>
     /// </remarks>
     public void Touch()
     {
-        if (_asked)
+        if (_telling || _asked)
         {
             return;
         }
@@ -100,6 +129,7 @@ internal sealed class Shared
         {
             _asked = false;
             FilesChanged();
+            Tell();
         });
     }
 
@@ -136,6 +166,28 @@ internal sealed class Shared
     /// changing what the directory holds: every location stages its listing again and none is read again.
     /// </remarks>
     public void Hidden() => Changed?.Invoke();
+
+    /// <summary>Hands a touch to the host, once, and drops the touch the host says back.</summary>
+    /// <remarks>
+    /// Guarded rather than compared: the host's own answer arrives while this is still telling it, so the flag is what
+    /// says the touch was this plugin's own rather than one from another plugin.
+    /// </remarks>
+    private void Tell()
+    {
+        _telling = true;
+
+        try
+        {
+            _files.Touch();
+        }
+        finally
+        {
+            _telling = false;
+        }
+    }
+
+    /// <summary>Says that an answer this plugin read is at hand, so every location draws again without reading.</summary>
+    private void Drawn() => Redrawn?.Invoke();
 
     /// <summary>
     /// The directory the tree is rooted at, which a directory's own menu sets.

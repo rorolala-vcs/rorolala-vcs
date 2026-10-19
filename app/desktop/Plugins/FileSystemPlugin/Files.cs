@@ -21,12 +21,6 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal sealed class Files : Listing<Entry>
 {
-    /// <summary>What a cell says when its provider has nothing to say about the entry.</summary>
-    private const string Placeholder = "-";
-
-    /// <summary>How large a dot is: a mark read at a glance rather than a thing to point at.</summary>
-    private const double DotSize = 8;
-
     /// <summary>How wide a column of values is before anybody drags it.</summary>
     private const double PermissionsColumn = 110;
 
@@ -44,6 +38,9 @@ internal sealed class Files : Listing<Entry>
 
     /// <summary>What a copy or a cut has put within reach of a paste.</summary>
     private readonly Clip _clip;
+
+    /// <summary>What a place's own copy or cut has put within reach of a paste, or nothing when none was made.</summary>
+    private readonly LogicalClip? _logical;
 
     /// <summary>The location, which is what the files and the columns are read through.</summary>
     private readonly Browser _browser;
@@ -74,11 +71,22 @@ internal sealed class Files : Listing<Entry>
     /// <param name="browser">The location, which is where the entries are read from.</param>
     /// <param name="actions">What opening and editing entries is done with.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public Files(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
+    /// <param name="logical">
+    /// What a place's own copy or cut has put within reach of a paste, which a directory offers its drop targets
+    /// before it falls back on the file clipboard.
+    /// </param>
+    public Files(
+        IPluginHost host,
+        Browser browser,
+        BrowserActions actions,
+        Clip clip,
+        LogicalClip? logical = null
+    )
         : base(host, browser.Shown)
     {
         _actions = actions;
         _clip = clip;
+        _logical = logical;
         _browser = browser;
         _locks = EntryLockProviders.For(browser.Current);
         _marks = EntryMarkProviders.For(browser.Current);
@@ -203,7 +211,9 @@ internal sealed class Files : Listing<Entry>
     /// pass would be the one that decided it. Cut wins, because being on its way out is what the user just did.
     /// <para>
     /// What is hidden is asked of the providers rather than carried on the entry, so a row drawn while a provider
-    /// was switched off is faded again the moment it is switched on.
+    /// was switched off is faded again the moment it is switched on. A provider that cannot answer without reading
+    /// something — a repository's rules are a program run — is not asked here: nothing is faded until what it says
+    /// is in, which is drawn again for that very reason (see <see cref="Browser"/>).
     /// </para>
     /// </remarks>
     /// <param name="row">The row to fade.</param>
@@ -211,7 +221,7 @@ internal sealed class Files : Listing<Entry>
     public override void Fade(Control row, Entry item) =>
         row.Opacity = _clip.IsCut(item.Path)
             ? _clip.Faded
-            : _browser.Hides(item)
+            : HideRegistry.Ready(_browser.Current) && _browser.Hides(item)
                 ? EntryView.HiddenOpacity
                 : 1.0;
 
@@ -221,8 +231,27 @@ internal sealed class Files : Listing<Entry>
     /// <inheritdoc />
     public override void Cut(Control from, IReadOnlyList<Entry> chosen) => _actions.Cut(from, chosen);
 
-    /// <inheritdoc />
-    public override void Paste(Control from) => _actions.Paste(from, _browser.Current);
+    /// <summary>Pastes into this directory what a place put on offer, or what the file clipboard holds.</summary>
+    /// <remarks>
+    /// A place's entries are not files, so what it offered is offered to whoever takes one in this directory: the
+    /// same answer a drop on it gives, without a pointer. The offer is read and only then ended, so a directory
+    /// that takes nothing of it leaves a cut on the place's clipboard rather than losing it.
+    /// </remarks>
+    /// <param name="from">A control in the tree the clipboard is reached through.</param>
+    public override void Paste(Control from)
+    {
+        if (_logical is { } logical && logical.Peek() is { Count: > 0 } items)
+        {
+            if (_drops.Offered(_browser.Current, new LogicalDrag(items)))
+            {
+                logical.Took();
+
+                return;
+            }
+        }
+
+        _actions.Paste(from, _browser.Current);
+    }
 
     /// <inheritdoc />
     public override void Delete(IReadOnlyList<Entry> chosen, bool ask) => _actions.Remove(chosen, ask);
@@ -292,12 +321,39 @@ internal sealed class Files : Listing<Entry>
     /// A directory entry is a place to let go into, and so is the way up — which is not a directory of its own but
     /// the one holding the listing, so what it lands in is asked of the browser. A file and the computer are not,
     /// and neither is a drag carrying no file. The space around the entries is the directory being looked at.
+    /// <para>
+    /// A drag that is not files is a place's own object, and what a directory does with one is not this listing's to
+    /// decide: it is offered to what was registered, and a directory nothing takes is a directory the drop is not
+    /// offered on. Only a directory row or the space around them is a place to let go into — an entry of the listing
+    /// is not, which is the same rule the file drags follow.
+    /// </para>
+    /// <para>
+    /// The files are read first, because a drag of this program's own files carries the payload as well: it is what
+    /// the views read to say where a drop would land, and taking it for a place's drag would be a file being offered
+    /// to nothing and so a drag nothing can take.
+    /// </para>
     /// </remarks>
     /// <param name="item">The entry the pointer is over, or nothing where it is over the space.</param>
     /// <param name="e">The drag.</param>
     /// <returns>Where it would land.</returns>
     public override Land? Landing(Entry? item, DragEventArgs e)
     {
+        if (
+            !e.DataTransfer.Contains(DataFormat.File)
+            && e.DataTransfer.TryGetValue(Drag.Payload) is { } logical
+        )
+        {
+            var into = item is null
+                ? _browser.Current
+                : item.Kind == EntryKind.Directory
+                    ? item.Path
+                    : null;
+
+            return into is { Length: > 0 } && _drops.Takes(into, logical)
+                ? new Land(into, item?.Path)
+                : null;
+        }
+
         if (!e.DataTransfer.Contains(DataFormat.File))
         {
             return null;
@@ -318,8 +374,22 @@ internal sealed class Files : Listing<Entry>
             : null;
     }
 
-    /// <inheritdoc />
-    public override DragDropEffects Over(Land land, DragEventArgs e) => Drops.Over(e);
+    /// <summary>
+    /// What letting go here would do.
+    /// </summary>
+    /// <remarks>
+    /// A place's drag is a copy whichever key is held: what it brings is not the files the source holds, and nothing
+    /// is moved out of anywhere by taking it — so the answer is the one that leaves the source where it is.
+    /// </remarks>
+    /// <param name="land">Where it would land.</param>
+    /// <param name="e">The drag.</param>
+    /// <returns>What the platform is told.</returns>
+    public override DragDropEffects Over(Land land, DragEventArgs e) =>
+        e.DataTransfer.Contains(DataFormat.File)
+            ? Drops.Over(e)
+            : e.DataTransfer.Contains(Drag.Payload)
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
 
     /// <inheritdoc />
     public override void DropAt(Land land, DragEventArgs e) => _drops.Dropped(land, e);
@@ -346,13 +416,13 @@ internal sealed class Files : Listing<Entry>
         [
             .. contributed
                 .Where(provider => provider.Placement == ColumnPlacement.Leftmost)
-                .Select(Contributed),
+                .Select(ColumnCells.From),
             .. contributed
                 .Where(provider => provider.Placement == ColumnPlacement.BesideName)
-                .Select(Contributed),
+                .Select(ColumnCells.From),
             .. contributed
                 .Where(provider => provider.Placement == ColumnPlacement.BeforeValues)
-                .Select(Contributed),
+                .Select(ColumnCells.From),
         ];
 
         if (!OperatingSystem.IsWindows())
@@ -365,7 +435,7 @@ internal sealed class Files : Listing<Entry>
         columns.AddRange(
             contributed
                 .Where(provider => provider.Placement == ColumnPlacement.AfterValues)
-                .Select(Contributed)
+                .Select(ColumnCells.From)
         );
 
         if (_locks is { } locks)
@@ -409,155 +479,10 @@ internal sealed class Files : Listing<Entry>
         new(
             provider.ColumnKey,
             OwnershipColumn,
-            _ => Placeholder,
+            _ => ColumnCells.Placeholder,
             TextAlignment.Right,
-            Draw: entry => Locked(provider, entry)
+            Draw: entry => ColumnCells.Locked(provider, entry)
         );
-
-    /// <summary>What one entry's lock is written as, in the words and ink the provider asked for.</summary>
-    /// <param name="provider">The provider that speaks for the directory being listed.</param>
-    /// <param name="entry">The entry to write about.</param>
-    /// <returns>The cell.</returns>
-    private static TextBlock Locked(IEntryLockProvider provider, Entry entry)
-    {
-        var mark = provider.Mark(entry);
-        var cell = Cell(mark.Said() ?? Placeholder, TextAlignment.Right);
-        cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.TextInk));
-
-        return cell;
-    }
-
-    /// <summary>
-    /// The column one column provider contributes.
-    /// </summary>
-    /// <remarks>
-    /// The value in it is the provider's to write and is not read from the entry's metadata, which is why the
-    /// column draws its own cell: what it says goes through <see cref="EntryColumnMark.Said"/>, which is a key
-    /// translated or a literal as the contribution asked, and neither is in <see cref="Facts"/>.
-    /// </remarks>
-    /// <param name="provider">The provider that speaks for the directory being listed.</param>
-    /// <returns>The column to add where the contribution asked.</returns>
-    private static Column<Entry> Contributed(IEntryColumnProvider provider) =>
-        new(
-            provider.ColumnKey,
-            provider.Width,
-            _ => Placeholder,
-            Draw: entry => Contributed(provider, entry),
-            Placement: provider.Placement
-        );
-
-    /// <summary>What one entry's cell in a contributed column is drawn as.</summary>
-    /// <param name="provider">The provider that speaks for the directory being listed.</param>
-    /// <param name="entry">The entry to write about.</param>
-    /// <returns>The cell, which draws nothing at all where a column of marks has no mark for the entry.</returns>
-    internal static Control Contributed(IEntryColumnProvider provider, Entry entry)
-    {
-        var mark = provider.Value(entry);
-
-        if (mark.Dot)
-        {
-            return Dot(mark);
-        }
-
-        // A column of marks says nothing by having no mark: the dash the listing says what it does not know with
-        // would be a mark of its own, and a cell with no mark has nothing else to say.
-        return provider.Marks ? new Panel() : Written(mark);
-    }
-
-    /// <summary>What one entry's cell in a contributed column that is words is written as.</summary>
-    /// <remarks>
-    /// The ink is the contribution's to name and this plugin's to resolve: a column drawn in a colour the
-    /// contribution picked for itself would be a colour the look does not hold, which is a column that vanishes
-    /// somewhere the theme is another — unless the contribution has a palette of its own, which is what a colour
-    /// of its own says, and then it is drawn in that. The Ownership column writes its words the same way.
-    /// </remarks>
-    /// <param name="mark">What the contribution answered.</param>
-    /// <returns>The cell.</returns>
-    private static TextBlock Written(EntryColumnMark mark)
-    {
-        var cell = Cell(mark.Said() ?? Placeholder);
-
-        if (mark.Colour is { } colour)
-        {
-            cell.Foreground = new SolidColorBrush(colour);
-        }
-        else
-        {
-            cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
-        }
-
-        return cell;
-    }
-
-    /// <summary>
-    /// What one entry's cell in a contributed column that is a mark is drawn as: a round dot in the ink.
-    /// </summary>
-    /// <remarks>
-    /// A dot rather than a word, because what it stands for is one of a handful of states and the colour is read
-    /// at a glance: a column of the same few words repeated is a column of text where a mark would do, and the
-    /// words are still there — said when the pointer rests on the mark, which is where a reader who wants them is
-    /// already looking.
-    /// </remarks>
-    /// <param name="mark">What the contribution answered.</param>
-    /// <returns>The cell.</returns>
-    private static Control Dot(EntryColumnMark mark)
-    {
-        var dot = new Border
-        {
-            Width = DotSize,
-            Height = DotSize,
-            CornerRadius = new CornerRadius(DotSize / 2),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        // The colour is the contribution's where it named one, and the role it named otherwise: a mark drawn in
-        // the role and then painted over would be drawn twice, and the role's own brush would win.
-        if (mark.Colour is { } colour)
-        {
-            dot.Background = new SolidColorBrush(colour);
-        }
-        else
-        {
-            dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
-        }
-
-        if (mark.Edge is { } edge)
-        {
-            // The line is the contribution's own rather than the design's, since whatever named the colour named
-            // what reads around it: a hairline of the listing's would be a mark drawn differently from the one the
-            // contribution asked for.
-            dot.BorderThickness = new Thickness(1);
-            dot.BorderBrush = new SolidColorBrush(edge);
-        }
-
-        if (mark.Hint is { Length: > 0 } hint)
-        {
-            ToolTip.SetTip(dot, hint);
-
-            // At once rather than after the wait a tooltip usually takes: the mark is a colour, and a reader who
-            // has to stop and wait for what a colour means is a reader who has to stop. Nothing is said by the wait
-            // that is not said by the mark.
-            ToolTip.SetShowDelay(dot, 0);
-        }
-
-        return dot;
-    }
-
-    /// <summary>One cell of one row, written in the column's alignment.</summary>
-    /// <param name="text">What the cell says.</param>
-    /// <param name="align">Where the text sits in the column.</param>
-    /// <returns>The cell.</returns>
-    private static TextBlock Cell(string text, TextAlignment align = TextAlignment.Left) =>
-        new()
-        {
-            Text = text,
-            TextAlignment = align,
-            TextWrapping = TextWrapping.NoWrap,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
-            Classes = { "caption", "faint" },
-        };
 
     /// <summary>What the columns say about one entry, read once and kept for the rest of this listing.</summary>
     /// <param name="entry">The entry to ask about.</param>

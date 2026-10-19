@@ -59,20 +59,26 @@ internal static class OwnershipActions
     /// </remarks>
     /// <param name="host">The host, whose context menus they are registered with.</param>
     /// <param name="hub">What every run this plugin makes is gathered in, which a run of these joins.</param>
-    public static void Declare(IPluginHost host, ProgressHub hub)
+    /// <param name="readings">
+    /// What the Vault's copy says about the entries being listed, which is what says whether there is anything to act
+    /// on: the question is asked once per item every time a menu is offered, so it is answered from what a listing has
+    /// already read rather than by opening the Layouts again.
+    /// </param>
+    public static void Declare(IPluginHost host, ProgressHub hub, OwnershipReadings readings)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
+        ArgumentNullException.ThrowIfNull(readings);
 
-        Add(host, hub, ContextMenuTarget.File, "hold_file", Icons.Lock, "hold", false, 10);
-        Add(host, hub, ContextMenuTarget.File, "give_file", Icons.LockOpen, "giveup", false, 20);
-        Add(host, hub, ContextMenuTarget.File, "hold_file_forced", Icons.Lock, "hold", true, 30);
-        Add(host, hub, ContextMenuTarget.File, "give_file_forced", Icons.LockOpen, "giveup", true, 40);
+        Add(host, hub, readings, ContextMenuTarget.File, "hold_file", Icons.Lock, "hold", false, 10);
+        Add(host, hub, readings, ContextMenuTarget.File, "give_file", Icons.LockOpen, "giveup", false, 20);
+        Add(host, hub, readings, ContextMenuTarget.File, "hold_file_forced", Icons.Lock, "hold", true, 30);
+        Add(host, hub, readings, ContextMenuTarget.File, "give_file_forced", Icons.LockOpen, "giveup", true, 40);
 
-        Add(host, hub, ContextMenuTarget.Directory, "hold_directory", Icons.Lock, "hold", false, 10);
-        Add(host, hub, ContextMenuTarget.Directory, "give_directory", Icons.LockOpen, "giveup", false, 20);
-        Add(host, hub, ContextMenuTarget.Directory, "hold_directory_forced", Icons.Lock, "hold", true, 30);
-        Add(host, hub, ContextMenuTarget.Directory, "give_directory_forced", Icons.LockOpen, "giveup", true, 40);
+        Add(host, hub, readings, ContextMenuTarget.Directory, "hold_directory", Icons.Lock, "hold", false, 10);
+        Add(host, hub, readings, ContextMenuTarget.Directory, "give_directory", Icons.LockOpen, "giveup", false, 20);
+        Add(host, hub, readings, ContextMenuTarget.Directory, "hold_directory_forced", Icons.Lock, "hold", true, 30);
+        Add(host, hub, readings, ContextMenuTarget.Directory, "give_directory_forced", Icons.LockOpen, "giveup", true, 40);
     }
 
     /// <summary>Whether this plugin has anything to say about what a menu was opened on.</summary>
@@ -82,44 +88,33 @@ internal static class OwnershipActions
     /// raised — a menu that will not open because ownership could not be read is a worse answer than a menu
     /// without these four lines in it, which is the same judgement the column makes.
     /// <para>
-    /// What is read is given back at once, because the only question here is whether there is anything to
-    /// say: an ownership not released holds two opened Layouts for the life of the run, and this is asked
-    /// once per contributed item every time a menu is offered. What a listing draws its column from is the
-    /// provider's own reading, which is kept per directory and let go of when the files may have changed
-    /// (see <see cref="RorolalaLocks"/>).
+    /// The answer is read from what a listing has already read (see <see cref="OwnershipReadings"/>), not by opening the
+    /// two Layouts here: this is asked once per contributed item every time a menu is offered, and opening a Layout per
+    /// item would be a menu that took a walk of the tree to open. A directory nothing has been read for yet answers
+    /// nothing, and the listing that asks is what has it read.
     /// </para>
     /// </remarks>
     /// <param name="was">What the menu was opened on.</param>
+    /// <param name="readings">What the Vault's copy says about the entries being listed.</param>
     /// <returns>Whether the entry is one this plugin can act on.</returns>
-    public static bool Knows(ContextTarget was)
+    public static bool Knows(ContextTarget was, OwnershipReadings readings)
     {
         ArgumentNullException.ThrowIfNull(was);
+        ArgumentNullException.ThrowIfNull(readings);
 
         if (was.Entry is not { } entry)
         {
             return false;
         }
 
-        try
-        {
-            if (Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory)
-            {
-                return false;
-            }
-
-            using var ownership = RolaOwnership.Locate(directory);
-
-            return ownership is not null;
-        }
-        catch (Exception error) when (error is not OutOfMemoryException)
-        {
-            return false;
-        }
+        return Path.GetDirectoryName(entry.Path) is { Length: > 0 } directory
+            && readings.Knows(directory);
     }
 
     /// <summary>Registers one of the eight.</summary>
     /// <param name="host">The host.</param>
     /// <param name="hub">What the run's card is begun in.</param>
+    /// <param name="readings">What the Vault's copy says about the entries being listed.</param>
     /// <param name="target">Which kind of entry it is offered for.</param>
     /// <param name="label">The name of the label key, under the menu's own branch.</param>
     /// <param name="icon">The picture it wears.</param>
@@ -129,6 +124,7 @@ internal static class OwnershipActions
     private static void Add(
         IPluginHost host,
         ProgressHub hub,
+        OwnershipReadings readings,
         ContextMenuTarget target,
         string label,
         string icon,
@@ -144,7 +140,7 @@ internal static class OwnershipActions
                 was => Run(verb, was, force, host, hub),
                 icon,
                 force,
-                Knows
+                was => Knows(was, readings)
             )
         );
 

@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using MenuItem = Avalonia.Controls.MenuItem;
@@ -15,6 +16,11 @@ namespace FileSystemPlugin;
 /// already knows the card, the row height, the icons and the zoom, so all a place has to say is what its entries
 /// are called, what picture they wear, where opening one goes, and what its menu offers. That is the whole of the
 /// logical-view point — a plugin's place read exactly as a directory is, without a second set of views to drift.
+/// <para>
+/// What a place adds over a directory is the provider's rather than this listing's: the columns beside the name, the
+/// way into a folder row, the drag an entry may be taken out as, and what a paste of one means. All of it is asked
+/// of the address being read, so an entry of a place is never mistaken for a file.
+/// </para>
 /// </remarks>
 internal sealed class Places : Listing<LogicalEntry>
 {
@@ -24,16 +30,39 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <summary>The place being listed, which is the one answer read for one address.</summary>
     private readonly LogicalPlace _place;
 
+    /// <summary>What a copy or a cut of a place's entry was put to, or nothing when none was made.</summary>
+    private readonly LogicalClip? _logical;
+
+    /// <summary>The columns the provider states, mapped onto the table's own placements.</summary>
+    private readonly IReadOnlyList<Column<LogicalEntry>> _columns;
+
     /// <summary>Makes the listing of a place.</summary>
     /// <param name="host">The host, for the library an entry's picture is read from.</param>
     /// <param name="browser">The location, which is how a double-click goes somewhere.</param>
     /// <param name="place">The place to list.</param>
-    public Places(IPluginHost host, Browser browser, LogicalPlace place)
+    /// <param name="logical">What a copy or a cut of an entry is put to, or nothing when this dock keeps none.</param>
+    public Places(IPluginHost host, Browser browser, LogicalPlace place, LogicalClip? logical = null)
         : base(host, place.Entries)
     {
+        ArgumentNullException.ThrowIfNull(browser);
+        ArgumentNullException.ThrowIfNull(place);
+
         _browser = browser;
         _place = place;
+        _logical = logical;
+        _columns =
+        [
+            .. (place.Provider?.Columns(place.Address) ?? []).Select(column => Column(column)),
+        ];
     }
+
+    /// <summary>What the provider says about each entry, laid out beside the name or after the values.</summary>
+    /// <remarks>
+    /// A column read with the name is a second name of the entry — where a layout names it, which uuid it is known by
+    /// — and one read after the values is a fact about it: who holds it. That is the provider's answer rather than
+    /// this table's, so the cell is drawn from the entry each time a row is built.
+    /// </remarks>
+    public override IReadOnlyList<Column<LogicalEntry>> Columns => _columns;
 
     /// <summary>
     /// What tells one entry of a place from another.
@@ -90,6 +119,10 @@ internal sealed class Places : Listing<LogicalEntry>
         bool force
     )
     {
+        // Emptied first, because a menu is filled every time it is opened rather than made for one entry: a menu that
+        // appended to itself would grow an item per right-click, and the same entry would be offered twice.
+        menu.Items.Clear();
+
         if (chosen.Count == 0 || chosen[0].Menu is not { Count: > 0 } items)
         {
             return;
@@ -139,21 +172,123 @@ internal sealed class Places : Listing<LogicalEntry>
             IsHitTestVisible = false,
         };
 
+    /// <summary>How faded a row is: one a cut has offered to a paste reads as on its way out.</summary>
+    /// <param name="row">The row to fade.</param>
+    /// <param name="item">What it stands for.</param>
+    public override void Fade(Control row, LogicalEntry item) =>
+        row.Opacity = _logical?.IsCut(Kept(item)) == true ? Clip.FadedAmount : 1.0;
+
+    /// <inheritdoc />
+    public override void Copy(Control from, IReadOnlyList<LogicalEntry> chosen) => Put(chosen, cut: false);
+
+    /// <inheritdoc />
+    public override void Cut(Control from, IReadOnlyList<LogicalEntry> chosen) => Put(chosen, cut: true);
+
+    /// <summary>
+    /// Pastes what a place put on offer into this place, when the place takes it.
+    /// </summary>
+    /// <remarks>
+    /// The offer is read and only then ended, so a place that refuses it leaves a cut where it was: what a paste means
+    /// is the answerer's, and this side may not end an offer on its own judgement.
+    /// </remarks>
+    /// <param name="from">A control in the tree the clipboard would be reached through, which a place does not use.</param>
+    public override void Paste(Control from)
+    {
+        if (_logical?.Peek() is not { Count: > 0 } items)
+        {
+            return;
+        }
+
+        var drag = new LogicalDrag(items.Count == 1 ? items[0] : items.ToArray());
+
+        if (_place.Provider is null)
+        {
+            Refused(null, _place.Address, drag);
+
+            return;
+        }
+
+        if (!_place.Provider.Accepts(_place.Address, drag))
+        {
+            Refused(_place.Provider, _place.Address, drag);
+
+            return;
+        }
+
+        _place.Provider.Drop(_place.Address, drag);
+        _logical.Took();
+    }
+
+    /// <summary>
+    /// Says that the place would not take what was let go on it, in the place's own words where it has any.
+    /// </summary>
+    /// <remarks>
+    /// Shown in the notification stack rather than as a dialog, because nothing about it is the user's to decide: the
+    /// place refused, and what is owed is the reason. The content is made by the host on the window's thread, which is
+    /// why what is handed over is how to build it.
+    /// </remarks>
+    /// <param name="provider">What answered the place, or nothing when nobody did.</param>
+    /// <param name="address">The place the drop was on, or nothing when what was dropped on is not an address.</param>
+    /// <param name="drag">What was dragged.</param>
+    private void Refused(ILogicalViewProvider? provider, LogicalAddress? address, LogicalDrag drag)
+    {
+        ArgumentNullException.ThrowIfNull(drag);
+
+        var said =
+            (provider is ILogicalRefusal refusal && address is not null
+                ? refusal.Refusal(address, drag)
+                : null) ?? RolaI18N.Get("rorolala_file_system.refused");
+
+        Host.Dialogs.Notify(
+            new Notification(
+                NotificationLevel.Warning,
+                RolaI18N.Get("rorolala_file_system.refused_title"),
+                () =>
+                    new TextBlock
+                    {
+                        Text = said,
+                        TextWrapping = TextWrapping.Wrap,
+                        MaxWidth = 420,
+                    }
+            )
+        );
+    }
+
     /// <summary>
     /// Whether a drag is something this place can take.
     /// </summary>
     /// <remarks>
-    /// Asked while the pointer is still moving, which is what decides whether a drop is offered at all. The place
-    /// takes it and not a row of it: a provider's answer is about the place, and which entry the pointer happens
-    /// to be over says nothing about what a file dropped there would mean.
+    /// Asked while the pointer is still moving, which is what decides whether a drop is offered at all. A row that
+    /// opens a place is a folder to drop into, and is offered to whatever answers that place's address; anywhere
+    /// else is the place being read, and is offered to its own answer.
+    /// <para>
+    /// A drag of this program's own is offered even where the place would refuse it, so that the refusal can be said
+    /// when it is let go (<see cref="DropAt"/>): a place that answered only with a forbidden pointer is a drop the user
+    /// cannot tell from one the drag never reached. A drag of files is not offered, because what the platform's own
+    /// refusal means is already the whole answer, and there is nothing this side knows to add.
+    /// </para>
+    /// <para>
+    /// What answers a row's address is found by its prefix and never by reading the place: a pointer moving over rows
+    /// must not start a read of each of them.
+    /// </para>
     /// </remarks>
-    /// <param name="item">The entry the pointer is over, which a place's answer does not depend on.</param>
+    /// <param name="item">The entry the pointer is over, or nothing where it is over the space.</param>
     /// <param name="e">The drag.</param>
     /// <returns>Where it would land, or nothing.</returns>
-    public override Land? Landing(LogicalEntry? item, DragEventArgs e) =>
-        Dragged(e) is { } drag && Logical.Accepts(_place, drag.Data)
-            ? new Land(string.Empty, null)
-            : null;
+    public override Land? Landing(LogicalEntry? item, DragEventArgs e)
+    {
+        if (Dragged(e) is null || e.DataTransfer.Contains(DataFormat.File))
+        {
+            return null;
+        }
+
+        if (item is not null && Target(item.Opens) is { } into)
+        {
+            return new Land(into.Address.ToString(), item);
+        }
+
+        return new Land(_place.Address.ToString(), null);
+    }
 
     /// <summary>
     /// What letting go here would do.
@@ -169,7 +304,13 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <returns>What the platform is told.</returns>
     public override DragDropEffects Over(Land land, DragEventArgs e) => DragDropEffects.Copy;
 
-    /// <summary>Lets a drag go: what it brought is handed to what answers the place.</summary>
+    /// <summary>
+    /// Lets a drag go: what it brought is handed to what answers the place it was dropped on.
+    /// </summary>
+    /// <remarks>
+    /// A place that will not take it says why, in its own words where it has any: the drop was offered so that this
+    /// moment could be reached, and letting it go with nothing to read is the answer this is here to avoid.
+    /// </remarks>
     /// <param name="land">Where it was let go.</param>
     /// <param name="e">The drop.</param>
     public override void DropAt(Land land, DragEventArgs e)
@@ -177,31 +318,76 @@ internal sealed class Places : Listing<LogicalEntry>
         e.Handled = true;
         Marking?.Invoke(null);
 
-        if (Dragged(e) is not { } drag || !Logical.Accepts(_place, drag.Data))
+        if (Dragged(e) is not { } drag || !LogicalAddress.TryRead(land.Into, out var address))
         {
+            return;
+        }
+
+        if (address is null || Answers(address) is not { } provider)
+        {
+            Refused(null, address, drag);
+
+            return;
+        }
+
+        if (!provider.Accepts(address, drag))
+        {
+            Refused(provider, address, drag);
+
             return;
         }
 
         // Recorded as a drop this program answered, so that a source of its own does not take the originals away
         // on the strength of a drop the place has already dealt with.
         Drag.Answered = true;
-        Logical.Drop(_place, drag.Data);
+        provider.Drop(address, drag);
     }
 
     /// <summary>
-    /// A picture an entry wears, read from the library the provider contributed it to.
+    /// Whether an entry may be picked up and dragged away.
     /// </summary>
     /// <remarks>
-    /// A key the library does not hold draws an empty cell rather than failing: what a key names is the
-    /// contributor's business, and an entry with no picture is an entry, not a listing that will not be drawn.
+    /// The entry's own answer, because whether a row is a thing to hand over is what a provider knows: a folder is a
+    /// place to go into, and an entry is a thing the work may take.
+    /// </remarks>
+    /// <param name="item">The entry to consider.</param>
+    /// <returns>Whether a drag may begin on it.</returns>
+    public override bool CanDrag(LogicalEntry item) => item.Draggable;
+
+    /// <inheritdoc />
+    public override void DragOut(
+        PointerPressedEventArgs from,
+        IReadOnlyList<LogicalEntry> carrying,
+        LogicalEntry lead
+    )
+    {
+        // What the pointer took hold of is not part of what a drop is answered with: a place takes what was chosen,
+        // and which of the chosen rows the pointer began on says nothing about what to do with the rest.
+        _ = lead;
+
+        Drag.Away(from, carrying.Select(Kept).ToArray());
+    }
+
+    /// <summary>What one entry's picture is, at the size the view asked for.</summary>
+    /// <remarks>
+    /// A maker the provider supplied is asked first, because a picture chosen from the entry's name — which is what an
+    /// extension is — cannot be looked up by a key. A key is then a picture the library holds, and neither is the folder
+    /// the icon set in force draws: a row drawn as nothing is a row a reader has to read rather than see.
     /// </remarks>
     /// <param name="item">The entry to draw.</param>
     /// <param name="size">How many pixels wide and tall.</param>
     /// <returns>What to draw where the picture goes.</returns>
-    private Control Picture(LogicalEntry item, int size) =>
-        item.IconKey is { Length: > 0 } key && Host.Icons.Find(key) is { } picture
+    private Control Picture(LogicalEntry item, int size)
+    {
+        if (item.Picture is { } make)
+        {
+            return make(size);
+        }
+
+        return item.IconKey is { Length: > 0 } key && Host.Icons.Find(key) is { } picture
             ? Icons.Glyph(picture, Icons.PlainInk, size)
-            : new Border { Width = size, Height = size };
+            : EntryIcons.Folder(size);
+    }
 
     /// <summary>One contributed menu item, as the menu draws it.</summary>
     /// <param name="item">What the provider registered.</param>
@@ -225,4 +411,59 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <param name="e">The drag.</param>
     /// <returns>The object the source handed over, or nothing.</returns>
     private static LogicalDrag? Dragged(DragEventArgs e) => e.DataTransfer.TryGetValue(Drag.Payload);
+
+    /// <summary>What one entry carries, which is what a drag and a clipboard keep of it.</summary>
+    /// <remarks>
+    /// The provider's own object where it kept one, and the name where it did not: a row that leads nowhere is still a
+    /// row, and what is carried has to be something the answerer can read.
+    /// </remarks>
+    /// <param name="item">The entry.</param>
+    /// <returns>What to carry or keep.</returns>
+    private static object Kept(LogicalEntry item) => item.Data ?? item.Name;
+
+    /// <summary>What a place's entry was copied or cut as, and whether it is on its way out.</summary>
+    /// <param name="chosen">What is chosen.</param>
+    /// <param name="cut">Whether they are to be moved rather than copied.</param>
+    private void Put(IReadOnlyList<LogicalEntry> chosen, bool cut) =>
+        _logical?.Put([.. chosen.Select(Kept)], cut);
+
+    /// <summary>
+    /// What answers an address, found by its prefix rather than by reading the place.
+    /// </summary>
+    /// <param name="opens">Where a row leads, or nothing when it leads nowhere.</param>
+    /// <returns>The provider and the address, or nothing when no plugin answers it.</returns>
+    private (ILogicalViewProvider Provider, LogicalAddress Address)? Target(LogicalAddress? opens)
+    {
+        if (opens is null || Answers(opens) is not { } provider)
+        {
+            return null;
+        }
+
+        return (provider, opens);
+    }
+
+    /// <summary>
+    /// What answers one address, which is this place's own answer where the prefix is this place's.
+    /// </summary>
+    /// <param name="address">The address to answer.</param>
+    /// <returns>The provider, or nothing when no plugin claimed the prefix.</returns>
+    private ILogicalViewProvider? Answers(LogicalAddress address) =>
+        _place.Provider is not null
+        && string.Equals(address.Scheme, _place.Address.Scheme, StringComparison.Ordinal)
+            ? _place.Provider
+            : Host.LogicalViews.Find(address.Scheme);
+
+    /// <summary>One column the provider stated, in the shape the table draws.</summary>
+    /// <param name="column">What the provider answered.</param>
+    /// <returns>The column to add.</returns>
+    private static Column<LogicalEntry> Column(LogicalColumn column) =>
+        new(
+            column.HeaderKey,
+            column.Width,
+            column.Value,
+            column.Align,
+            Placement: column.BesideName
+                ? ColumnPlacement.BesideName
+                : ColumnPlacement.AfterValues
+        );
 }

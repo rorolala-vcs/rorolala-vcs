@@ -1,5 +1,6 @@
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.Hosting;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -122,7 +123,7 @@ public sealed class LockTests
 
         var services = Host.Services();
         var host = services.For(new PluginId(FileSystem.Identity), 1);
-        var shared = new Shared("/work", new HideRegistry(host.Config), host.Config);
+        var shared = new Shared("/work", new HideRegistry(host.Config), host.Config, new FileChanges());
 
         var readAgain = 0;
         shared.Touched += () => readAgain++;

@@ -1,5 +1,6 @@
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.Hosting;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -31,7 +32,7 @@ public sealed class BaseDirectoryTests
 
         // Making the shared answers is the run rooting its tree: everything a location reads sits on
         // them, and the base they are made with is the one the run starts on.
-        var shared = new Shared(first, new HideRegistry(host.Config), host.Config);
+        var shared = new Shared(first, new HideRegistry(host.Config), host.Config, new FileChanges());
 
         Assert.Equal(first, BaseDirectory.Current);
 

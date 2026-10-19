@@ -76,6 +76,9 @@ internal static class Host
             Icons = icons,
             // Nothing claims a prefix here: a view that answers none of them is what a test starts from.
             LogicalViews = new LogicalViewRegistry(),
+            // Nothing takes a drag of a place's entries here either: a directory takes files, and a test of
+            // the drag protocol adds its own target.
+            Drops = new DropTargetRegistry(),
             // Nothing activates a window in a headless test, so nothing is ever raised on it.
             Refocus = refocus,
             // A dialog needs a window to be shown on, and a headless test has none: nothing is ever shown.

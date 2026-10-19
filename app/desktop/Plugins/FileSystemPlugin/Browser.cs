@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
@@ -83,6 +84,26 @@ internal sealed class Browser : IDisposable
     /// <summary>What a listing shows of it, which is those entries with the way up before them.</summary>
     private IReadOnlyList<Entry> _shown;
 
+    /// <summary>
+    /// The directories whose hide rules are being read, so that one read is asked for once.
+    /// </summary>
+    /// <remarks>
+    /// A rule about a repository is a program run, which is why it is read off the window's thread. Every listing of
+    /// the directory asks while it is going, and one run per asking would be a run per frame.
+    /// </remarks>
+    private readonly HashSet<string> _asking = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The directories whose hide rules have been asked for, so a provider that cannot answer is not asked per drawing.
+    /// </summary>
+    /// <remarks>
+    /// A provider that throws, or one whose program is not installed, leaves <see cref="HideRegistry.Ready"/> saying no
+    /// for as long as it is asked — and asking again on every staging would be a drawing that starts a read which
+    /// cannot finish. What was asked is therefore asked again only when the files are said to have changed, which is
+    /// when a rule or a repository may have appeared.
+    /// </remarks>
+    private readonly HashSet<string> _asked = new(StringComparer.Ordinal);
+
     /// <summary>Makes a location onto a directory, or onto a place.</summary>
     /// <param name="log">Where a read of the directory is said.</param>
     /// <param name="shared">The answers every location shares.</param>
@@ -113,9 +134,11 @@ internal sealed class Browser : IDisposable
         // A listing follows the shared answers wherever it is, so this location has to be told when they
         // change — and that is why a location given to a dock out of step is let go of rather than dropped.
         // The two things told apart: an answer changing is a listing to make again out of what was read, where
-        // the files changing is the directory to read again.
+        // the files changing is the directory to read again. A read that landed is neither: it is this very listing
+        // drawn again, out of answers the readers already hold.
         _shared.Changed += Restage;
         _shared.Touched += Refresh;
+        _shared.Redrawn += Redraw;
     }
 
     /// <summary>
@@ -484,12 +507,47 @@ internal sealed class Browser : IDisposable
         _entries = Read(_current);
         _shown = Stage(_current, _entries);
 
+        // The files may have changed, which is when a rule or a repository may have appeared: what could not be read
+        // before is asked for again.
+        _asked.Clear();
+
         // Said here rather than left to the views: what a view was told and what it drew are two different
         // answers to "did that change reach it", and a report of one that did not cannot tell them apart.
         _log.Info($"read `{_current}` again: {_shown.Count} entries");
 
         Changed?.Invoke();
         Reread?.Invoke();
+    }
+
+    /// <summary>
+    /// Draws what is here again, out of the answers that are already held.
+    /// </summary>
+    /// <remarks>
+    /// A reading that a plugin worked out is drawn when it lands, and drawing it is all that is owed: nothing on disk
+    /// changed, so nothing is read again — not the directory, and not what a hide rule makes of it.
+    /// <para>
+    /// A place is the exception, and it is the reason this is not one line: what a location holds of a place is the
+    /// answer read when the address was entered, so a reading that landed is not in it yet. The address is asked again
+    /// — which answers from what the provider has just read and starts nothing — and the listing that follows is the
+    /// one the landing was waiting for. Without it a place whose first read is still going would stay empty for as
+    /// long as it was open.
+    /// </para>
+    /// <para>
+    /// For a directory the listing is staged as a new list rather than repainted: a column's value is read as its row
+    /// is built, so a repaint would leave the value that was there before the reading landed.
+    /// </para>
+    /// </remarks>
+    public void Redraw()
+    {
+        if (_logical is not null)
+        {
+            Refresh();
+
+            return;
+        }
+
+        _shown = Stage(_current, _entries);
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -538,6 +596,7 @@ internal sealed class Browser : IDisposable
     {
         _shared.Changed -= Restage;
         _shared.Touched -= Refresh;
+        _shared.Redrawn -= Redraw;
     }
 
     /// <summary>Moves without touching the history, for back, forward and up.</summary>
@@ -599,7 +658,20 @@ internal sealed class Browser : IDisposable
     /// <param name="entries">What it holds.</param>
     private IReadOnlyList<Entry> Stage(string directory, IReadOnlyList<Entry> entries)
     {
-        var shown = _shared.ShowHidden ? entries : entries.Where(entry => !Hides(entry)).ToArray();
+        // A rule that would run a program is not run here: the window's thread is where a listing is staged, and a
+        // program behind it is the window that stops. Until every rule can answer, everything is shown — a listing
+        // missing a column for a moment is better than one that stops the window — and the rules are read on a thread
+        // of their own, which draws the listing again when they are in.
+        var rules = !_shared.ShowHidden && HideRegistry.Ready(directory);
+
+        if (!_shared.ShowHidden && !rules)
+        {
+            Ask(directory);
+        }
+
+        var shown = rules
+            ? entries.Where(entry => !Hides(entry)).ToArray()
+            : [.. entries];
 
         // Copied rather than handed on as it came, so that a staging with nothing switched is still a list
         // another one is not: what a dock holds to tell a staged listing from one it has not staged again is
@@ -609,6 +681,47 @@ internal sealed class Browser : IDisposable
         return ParentOf(directory) is null || Same(directory, _shared.BaseDir)
             ? staged
             : [new Entry(UpName, EntryKind.Directory), .. staged];
+    }
+
+    /// <summary>
+    /// Has the hide rules of a directory read off the window's thread, and the listing drawn again when they are in.
+    /// </summary>
+    /// <remarks>
+    /// Asked once per directory while the read is going, and the answer is what <see cref="HideRegistry.Ready"/> then
+    /// reports: the listing that follows filters by it without asking again, so a turn is not a program run.
+    /// </remarks>
+    /// <param name="directory">The directory whose rules are read.</param>
+    private void Ask(string directory)
+    {
+        if (!_asking.Add(directory) || !_asked.Add(directory))
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            HideRegistry.Prepare(directory);
+
+            // Asked after the reading rather than assumed: a provider whose program is not there answers no, and the
+            // listing shows everything rather than being staged again for a reading that will never come.
+            var read = HideRegistry.Ready(directory);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _asking.Remove(directory);
+
+                if (read)
+                {
+                    // A staging and not a read: nothing on disk changed, and what a rule makes of it is all that was
+                    // missing.
+                    _shared.Hidden();
+
+                    return;
+                }
+
+                _log.Warn($"what hides the entries of `{directory}` could not be read, so they are all shown");
+            });
+        });
     }
 
     /// <summary>

@@ -66,11 +66,51 @@ internal sealed class Drops
     public void Off() => _mark(null);
 
     /// <summary>
+    /// Whether a directory takes what a drag that is not files carries.
+    /// </summary>
+    /// <remarks>
+    /// A place's entry is not a file, so what a directory does with one is the plugin's answer rather than this
+    /// one's: the drag is offered to what was registered, in the order it was, and a directory nothing takes is a
+    /// directory the drop is not offered on.
+    /// </remarks>
+    /// <param name="directory">The directory it would be dropped on.</param>
+    /// <param name="drag">What the drag carries.</param>
+    /// <returns>Whether some plugin takes it there.</returns>
+    public bool Takes(string directory, LogicalDrag drag)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(drag);
+
+        return _host.Drops.Items.Any(target => target.Accepts(directory, drag));
+    }
+
+    /// <summary>
+    /// Has whichever plugin takes what a drag carries in this directory take it.
+    /// </summary>
+    /// <param name="into">The directory it was dropped on.</param>
+    /// <param name="drag">What the drag carries.</param>
+    /// <returns>Whether it was taken, which is what keeps the source from acting on it as well.</returns>
+    public bool Offered(string into, LogicalDrag drag)
+    {
+        ArgumentNullException.ThrowIfNull(into);
+        ArgumentNullException.ThrowIfNull(drag);
+
+        return _host.Drops.Items.FirstOrDefault(target => target.Accepts(into, drag)) is { } target
+            && target.Drop(into, drag);
+    }
+
+    /// <summary>
     /// Lets a drag go: what it brought goes into the directory it was over.
     /// </summary>
     /// <remarks>
     /// A drag this program started is answered here too, so a drag between two of its docks never leaves it, and
     /// the source is told by <see cref="Drag.Answered"/> not to remove the originals again.
+    /// <para>
+    /// What is not files is a place's own object, and a directory that takes one is a plugin's: it is offered before
+    /// the file operations, since what it carries names nothing on disk for them to move. The files are read first,
+    /// because a drag of this program's own files carries the payload as well and is a file operation whatever the
+    /// views made of it.
+    /// </para>
     /// </remarks>
     /// <param name="land">Where it was let go, or nothing where it was let go nowhere.</param>
     /// <param name="e">The drop.</param>
@@ -80,6 +120,18 @@ internal sealed class Drops
 
         if (land is not { } where)
         {
+            return;
+        }
+
+        if (
+            !e.DataTransfer.Contains(DataFormat.File)
+            && e.DataTransfer.TryGetValue(Drag.Payload) is { } logical
+            && Offered(where.Into, logical)
+        )
+        {
+            Drag.Answered = true;
+            e.Handled = true;
+
             return;
         }
 
@@ -273,5 +325,51 @@ internal static class Drag
         }
 
         Ghost.Carrying = null;
+    }
+
+    /// <summary>
+    /// Hands what a place made over as a drag.
+    /// </summary>
+    /// <remarks>
+    /// The source's own object is what travels, under the format this program's own views read: an entry of a place
+    /// is not a file, so there is nothing the platform could hand to another program and nothing a file manager could
+    /// make of it. A choice travels as a choice — one object per entry the listing showed chosen — because what a
+    /// place takes is what was chosen, and which one of them the pointer took hold of is not the answerer's question.
+    /// </remarks>
+    /// <param name="from">The press the drag begins at, which is what the platform is handed.</param>
+    /// <param name="data">What the source made, which the target answers for.</param>
+    public static async void Away(PointerPressedEventArgs from, object data)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(data);
+
+        if (TopLevel.GetTopLevel(from.Source as Visual) is null)
+        {
+            return;
+        }
+
+        using var transfer = new DataTransfer();
+        transfer.Add(DataTransferItem.Create(Payload, new LogicalDrag(data)));
+
+        Drag.Answered = false;
+
+        try
+        {
+            // Both, because what a drop on a place's entry means is the target's answer: a directory takes one as a
+            // copy — there is nothing to move away from the place — and a place takes one as a move of a path in its
+            // Vault. A source that offered one of the two would have the other answered as impossible, and the
+            // platform draws that as a drag that cannot land anywhere at all.
+            _ = await DragDrop.DoDragDropAsync(
+                from,
+                transfer,
+                DragDropEffects.Move | DragDropEffects.Copy
+            );
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            // A drag the platform stopped is nothing to report: the pointer came up, the window went away, or the
+            // target refused it — and none of those is a failure of this side's work.
+            _ = error;
+        }
     }
 }

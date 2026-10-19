@@ -414,6 +414,12 @@ internal sealed class OverviewView : UserControl
     /// <summary>Whether a reading is already waiting to be made, so a burst of asks is one reading.</summary>
     private bool _drawAsked;
 
+    /// <summary>Whether a reading of the work is being made on its own thread, so one is going at a time.</summary>
+    private bool _readingGoing;
+
+    /// <summary>Whether a reading was asked for while one was being made, so the one after it is drawn.</summary>
+    private bool _readAgain;
+
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
 
@@ -1432,6 +1438,12 @@ internal sealed class OverviewView : UserControl
     }
 
     /// <summary>Reads the work again and draws it.</summary>
+    /// <remarks>
+    /// The reading itself is made on a thread of its own: it is a walk of the whole tree with a version chain walked for
+    /// every path that records one, and it is asked for on a timer — a reading made here would stop the window for as long
+    /// as the walk took, every five seconds, for as long as the dock was open. What is asked for here is the read; what
+    /// comes back draws it (<see cref="Landed"/>).
+    /// </remarks>
     private void Drawn()
     {
         _drawAsked = false;
@@ -1445,7 +1457,57 @@ internal sealed class OverviewView : UserControl
             return;
         }
 
-        var reading = Of(BaseDirectory.Current, _log);
+        // One reading at a time: what asks during one is answered by the reading after it, which is the one about the
+        // work as it is by then.
+        if (_readingGoing)
+        {
+            _readAgain = true;
+
+            return;
+        }
+
+        _readingGoing = true;
+
+        var directory = BaseDirectory.Current;
+
+        _ = Task.Run(() =>
+        {
+            // Read here rather than inside what is posted: a reading built in the lambda that runs on the window's
+            // thread would be the walk this is here to keep off it.
+            var reading = Of(directory, _log);
+
+            Dispatcher.UIThread.Post(() => Landed(reading));
+        });
+    }
+
+    /// <summary>Draws what a reading that landed came to, or asks for the one after it.</summary>
+    /// <remarks>
+    /// A reading is asked for again rather than drawn when something was asked for while it was being made: what it
+    /// says may be older than the change that asked, and drawing it would be describing the work as it no longer is.
+    /// A reading that arrives in the middle of a sync is given back for the reason <see cref="Drawn"/> gives.
+    /// </remarks>
+    /// <param name="reading">What was read.</param>
+    private void Landed(OverviewReading reading)
+    {
+        _readingGoing = false;
+
+        if (_readAgain)
+        {
+            _readAgain = false;
+
+            reading.Status?.Dispose();
+            Draw();
+
+            return;
+        }
+
+        if (_sync.Running)
+        {
+            reading.Status?.Dispose();
+
+            return;
+        }
+
         var facts = reading.Facts;
         var rows = facts is null ? [] : Rows(facts);
         var said = Line(reading, rows.Count);

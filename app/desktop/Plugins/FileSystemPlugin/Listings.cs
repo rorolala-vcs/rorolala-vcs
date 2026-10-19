@@ -670,6 +670,13 @@ internal abstract class EntryView<TItem> : EntryView
             SelectionMode = SelectionMode.Multiple,
             Background = Brushes.Transparent,
             ItemTemplate = new FuncDataTemplate<TItem>((item, _) => Item(item), true),
+
+            // Focusable on the list and not only on its rows. The toolkit focuses a row when one is pressed, and a press
+            // in the space around them has no row to focus — so without this the keyboard is left nowhere, and the dock
+            // answers its keys at the top of itself and passes them down, which means a keyboard that is nowhere is a
+            // dock whose Ctrl+C, Ctrl+V, F2 and F5 are never heard. A listing whose rows are all focused and whose space
+            // is not is a listing where the clipboard works until the user clicks past the last row.
+            Focusable = true,
         };
 
         // What the choice holds leaves this listing as it changes, since what the rest of the program

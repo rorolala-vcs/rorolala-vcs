@@ -112,6 +112,9 @@ internal sealed class HostServices
     /// <summary>The places plugins answer for, which is what an address's prefix is answered from.</summary>
     public required LogicalViewRegistry LogicalViews { get; init; }
 
+    /// <summary>What plugins take a place's entry dropped on a directory for.</summary>
+    public required DropTargetRegistry Drops { get; init; }
+
     /// <summary>When one of the host's windows is come back to.</summary>
     public required Refocus Refocus { get; init; }
 
@@ -142,6 +145,7 @@ internal sealed class PluginHost
         IContextMenuRegistry,
         IDockMenuRegistry,
         ILogicalViewRegistry,
+        IDropTargetRegistry,
         INavigationRegistry,
         IDockRegistry,
         IOpenHookRegistry,
@@ -212,6 +216,9 @@ internal sealed class PluginHost
     public ILogicalViewRegistry LogicalViews => this;
 
     /// <inheritdoc />
+    public IDropTargetRegistry Drops => this;
+
+    /// <inheritdoc />
     public IRefocus Refocus => _services.Refocus;
 
     /// <inheritdoc />
@@ -251,6 +258,13 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     IReadOnlyList<string> ILogicalViewRegistry.Schemes => _services.LogicalViews.Schemes;
+
+    /// <inheritdoc />
+    void IDropTargetRegistry.Add(IDropTarget target) =>
+        _services.Drops.Add(_id, _position, target);
+
+    /// <inheritdoc />
+    IReadOnlyList<IDropTarget> IDropTargetRegistry.Items => _services.Drops.Items;
 
     /// <inheritdoc />
     void INavigationRegistry.Add(NavigationButton button) =>

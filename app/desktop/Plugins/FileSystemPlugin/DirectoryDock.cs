@@ -26,8 +26,9 @@ internal sealed class DirectoryDock : IDockView, IDockOpened
     /// <param name="shared">The answers every location shares.</param>
     /// <param name="browser">The one location, which this dock is a view of until it is taken out of step.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public DirectoryDock(IPluginHost host, Shared shared, Browser browser, Clip clip) =>
-        _view = new DirectoryControl(host, shared, browser, clip);
+    /// <param name="logical">What a place's own copy or cut has put within reach of a paste.</param>
+    public DirectoryDock(IPluginHost host, Shared shared, Browser browser, Clip clip, LogicalClip logical) =>
+        _view = new DirectoryControl(host, shared, browser, clip, logical);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -104,6 +105,15 @@ internal sealed class DirectoryControl : UserControl
     private const string SyncKey = "sync";
 
     /// <summary>
+    /// The dock key the place this dock was looking at is kept under.
+    /// </summary>
+    /// <remarks>
+    /// Empty for a dock that follows the whole, which is the state a dock that was taken back into step leaves behind:
+    /// where such a dock is is where the whole is, and a directory value here would be a place of its own.
+    /// </remarks>
+    private const string LocationKey = "location";
+
+    /// <summary>
     /// The dock key the arrangement was kept under before a zoom decided it.
     /// </summary>
     /// <remarks>
@@ -129,6 +139,9 @@ internal sealed class DirectoryControl : UserControl
 
     /// <summary>What a copy or a cut has put within reach of a paste.</summary>
     private readonly Clip _clip;
+
+    /// <summary>What a place's own copy or cut has put within reach of a paste.</summary>
+    private readonly LogicalClip _logicalClip;
 
     /// <summary>What the views do, so that every view of the location behaves alike.</summary>
     private BrowserActions _actions;
@@ -279,10 +292,18 @@ internal sealed class DirectoryControl : UserControl
     /// <param name="shared">The answers every location shares.</param>
     /// <param name="whole">The one location, which this dock is a view of until it is taken out of step.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public DirectoryControl(IPluginHost host, Shared shared, Browser whole, Clip clip)
+    /// <param name="logical">What a place's own copy or cut has put within reach of a paste.</param>
+    public DirectoryControl(
+        IPluginHost host,
+        Shared shared,
+        Browser whole,
+        Clip clip,
+        LogicalClip logical
+    )
     {
         _host = host;
         _clip = clip;
+        _logicalClip = logical;
         _shared = shared;
         _whole = whole;
         _actions = new BrowserActions(host, whole, clip);
@@ -292,10 +313,17 @@ internal sealed class DirectoryControl : UserControl
         // the tree and put back, which is a departure and a return for a dock that never closed.
         AttachedToVisualTree += (_, _) =>
         {
+            // What a place cut is drawn faded, and the rows are repainted for it: the offer is one for every dock, so a
+            // cut made in one is faded in the next one drawn rather than only in the one it was made in.
+            logical.Changed += RepaintPlace;
             Watch(Location);
             Draw();
         };
-        DetachedFromVisualTree += (_, _) => Watch(null);
+        DetachedFromVisualTree += (_, _) =>
+        {
+            logical.Changed -= RepaintPlace;
+            Watch(null);
+        };
 
         // Tunnelled, so that the zoom is reached before whatever the pointer is over reads the wheel as a
         // scroll: a zoom that stopped working as soon as the entries were worth scrolling would be a zoom
@@ -361,13 +389,17 @@ internal sealed class DirectoryControl : UserControl
     /// which is why what follows is the one way out of step rather than a second one.
     /// </para>
     /// </remarks>
-    /// <param name="at">The directory to look at.</param>
+    /// <param name="at">The directory or the address of the place to look at.</param>
     public void OpenAt(string at)
     {
-        // A directory that cannot be read is refused before a location is made over it: what a location is
-        // over is a directory, and one that cannot be read is not one. The dock then goes on following the
-        // whole, which is the one place that is always there.
-        if (!System.IO.Directory.Exists(Browser.Expand(at)))
+        // A directory that cannot be read is refused before a location is made over it: what a location is over a
+        // directory, and one that cannot be read is not one. The dock then goes on following the whole, which is the
+        // one place that is always there. An address is not a directory and is not asked of the filesystem: whether it
+        // leads anywhere is the plugin's answer, and an address nobody answers is a place to be at rather than a step
+        // that failed.
+        var address = LogicalAddress.TryRead(at, out _);
+
+        if (!address && !System.IO.Directory.Exists(Browser.Expand(at)))
         {
             _host.Log.Warn($"`{at}` cannot be looked at, so the dock stayed where the whole is looking");
 
@@ -375,7 +407,12 @@ internal sealed class DirectoryControl : UserControl
         }
 
         _own?.Dispose();
-        _own = new Browser(_host.Log, _shared, Browser.Expand(at), _host.LogicalViews);
+        _own = new Browser(
+            _host.Log,
+            _shared,
+            address ? at : Browser.Expand(at),
+            _host.LogicalViews
+        );
 
         // What is done to an entry is done in the directory this dock is looking at, so the actions are made over
         // the location again here: left as they were, a menu would act on the whole's directory — opening a folder
@@ -409,6 +446,17 @@ internal sealed class DirectoryControl : UserControl
         if (Kept(state) is { } zoom)
         {
             Zoom = zoom;
+        }
+
+        // Where the dock was comes first, because it decides which location is being looked at: a dock that was left at
+        // a place comes back at it, and one that was left in step is drawn at wherever the whole is.
+        var at = state.Read(LocationKey);
+
+        if (at is { Length: > 0 })
+        {
+            OpenAt(at);
+
+            return;
         }
 
         // And for the same reason again: a dock left out of step comes back out of step, at a directory of its
@@ -777,8 +825,25 @@ internal sealed class DirectoryControl : UserControl
                 new Clipboard(view.Copy, view.Cut, view.Paste, view.NewFolder),
                 _host.Log
             );
+
+            return;
+        }
+
+        // A place answers the clipboard keys too, and with its own offer: what is copied there is a place's entry and
+        // not a file, so the two clipboards are two offers rather than one. Nothing else is a key of a place's: there is
+        // no name to edit and nothing to delete on disk, and a key that quietly did nothing is better than one that did.
+        if (_logical is { } place)
+        {
+            _ = Keys.Clipboard(
+                e,
+                new Clipboard(place.Copy, place.Cut, place.Paste, place.NewFolder),
+                _host.Log
+            );
         }
     }
+
+    /// <summary>Draws a place's rows again after what is on offer to a paste changed.</summary>
+    private void RepaintPlace() => _logical?.Repaint();
 
     /// <summary>
     /// Takes a turn of the wheel with control held as a step of zoom.
@@ -818,15 +883,8 @@ internal sealed class DirectoryControl : UserControl
         // than its own last word on it.
         RefreshHidden();
 
-        if (Location.Place is { } place)
+        if (Location.Place is not null)
         {
-            if (ReferenceEquals(_drawnPlace, place))
-            {
-                _logical?.Repaint();
-
-                return;
-            }
-
             Draw();
 
             return;
@@ -866,7 +924,7 @@ internal sealed class DirectoryControl : UserControl
         // would be a dock whose zoom means something only some of the time.
         if (Location.Place is { } place)
         {
-            var source = new Places(_host, Location, place);
+            var source = new Places(_host, Location, place, _logicalClip);
 
             EntryView<LogicalEntry> listing = Zoom > GridAbove
                 ? new GridBrowser<LogicalEntry>(_host, source, Icons.SizeAt(Zoom))
@@ -887,6 +945,8 @@ internal sealed class DirectoryControl : UserControl
             _drawn = null;
             _drawnAt = null;
 
+            KeepLocation();
+
             return;
         }
 
@@ -899,8 +959,15 @@ internal sealed class DirectoryControl : UserControl
         var chosen = _drawnAt == Location.Current ? _view?.Chosen() ?? [] : [];
 
         EntryView<Entry> drawn = Zoom > GridAbove
-            ? new GridBrowser<Entry>(_host, new Files(_host, Location, _actions, _clip), Icons.SizeAt(Zoom))
-            : new ListBrowser<Entry>(_host, new Files(_host, Location, _actions, _clip));
+            ? new GridBrowser<Entry>(
+                _host,
+                new Files(_host, Location, _actions, _clip, _logicalClip),
+                Icons.SizeAt(Zoom)
+            )
+            : new ListBrowser<Entry>(
+                _host,
+                new Files(_host, Location, _actions, _clip, _logicalClip)
+            );
         _view = drawn;
 
         _content.Content = drawn;
@@ -930,7 +997,20 @@ internal sealed class DirectoryControl : UserControl
 
         _drawn = Location.Shown;
         _drawnAt = Location.Current;
+
+        KeepLocation();
     }
+
+    /// <summary>
+    /// Writes where this dock is, so that a dock left at a place comes back to it.
+    /// </summary>
+    /// <remarks>
+    /// The words the location is written in rather than a directory: an address is not a path, and a dock left at one
+    /// would otherwise come back at whatever directory the whole happens to be looking at. Empty while the dock follows
+    /// the whole — where it is, then, is where the whole is — so that a dock that was taken back into step does not go
+    /// on restoring the place it left.
+    /// </remarks>
+    private void KeepLocation() => _state?.Write(LocationKey, _own is null ? string.Empty : Location.Current);
 
     /// <summary>
     /// The zoom this dock was left at, written down either as a zoom or, from before there were zooms, as

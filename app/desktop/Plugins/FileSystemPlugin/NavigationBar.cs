@@ -612,7 +612,14 @@ internal sealed class NavigationBar : UserControl
             found = System.IO.Directory
                 .EnumerateFileSystemEntries(directory)
                 .Where(entry => Path.GetFileName(entry).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                .Where(entry => _browser.ShowHidden || !_browser.Hides(new Entry(entry, Browser.KindOf(entry))))
+                // A rule that would run a program is not asked here: this is a keystroke, and a program behind one is an
+                // address bar that stops on every letter. What the rules have not answered yet is offered rather than
+                // left out, which is the same way a listing shows it until they are read.
+                .Where(entry =>
+                    _browser.ShowHidden
+                    || !HideRegistry.Ready(directory)
+                    || !_browser.Hides(new Entry(entry, Browser.KindOf(entry)))
+                )
                 .OrderBy(entry => Path.GetFileName(entry), StringComparer.OrdinalIgnoreCase)
                 .Take(Completions)
                 .Select(entry => (Path: entry, Directory: System.IO.Directory.Exists(entry)))

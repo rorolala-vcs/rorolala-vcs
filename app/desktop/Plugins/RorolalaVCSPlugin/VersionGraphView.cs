@@ -416,6 +416,11 @@ internal sealed partial class VersionGraphView : Control
         ChosenEntry.Changed += Refresh;
         ChosenFiles.Changed += Refresh;
         _files.Changed += Refresh;
+
+        // And when a reading this graph draws from lands: the status readings are read off the window's thread, so the
+        // first drawing of a file can find them not yet there, and this is what draws it again — without letting go of
+        // anything, which is what a change would do.
+        _files.Redrawn += Refresh;
         _refocus.Regained += Refresh;
         ResourcesChanged += ResourcesChangedHandler;
         ActualThemeVariantChanged += ThemeVariantChangedHandler;
@@ -428,6 +433,7 @@ internal sealed partial class VersionGraphView : Control
         ChosenEntry.Changed -= Refresh;
         ChosenFiles.Changed -= Refresh;
         _files.Changed -= Refresh;
+        _files.Redrawn -= Refresh;
         _refocus.Regained -= Refresh;
         ResourcesChanged -= ResourcesChangedHandler;
         ActualThemeVariantChanged -= ThemeVariantChangedHandler;

@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
@@ -16,28 +17,57 @@ namespace RorolalaVCSPlugin;
 /// The answers are read once per directory rather than once per row, and forgotten when the files may have
 /// changed — which is when another run is most likely to have fetched a newer copy.
 /// </para>
+/// <para>
+/// Opening the two Layouts is not done on the window's thread: a Layout is a snapshot of the whole tree, and a
+/// listing asks about a directory while it draws. The read is started on a thread of its own and nothing is answered
+/// until it lands; a listing drawn in that moment reads an ownership column that is not there yet, and is drawn again
+/// when it is (see <see cref="IFileChanges.Redrawn"/>).
+/// </para>
 /// </remarks>
 internal sealed class OwnershipReadings
 {
     /// <summary>What was read for each directory, so a listing costs one read rather than one per row.</summary>
+    /// <remarks>
+    /// Guarded because a read lands from the thread it was made on, and the answers are asked for on the window's.
+    /// </remarks>
     private readonly Dictionary<string, RolaOwnership?> _known = new(StringComparer.Ordinal);
+
+    /// <summary>The directories a read is going for, so that one directory is read once at a time.</summary>
+    private readonly HashSet<string> _asking = new(StringComparer.Ordinal);
+
+    /// <summary>What guards <see cref="_known"/>, <see cref="_asking"/>, <see cref="_version"/> and <see cref="_warned"/>.</summary>
+    private readonly object _gate = new();
+
+    /// <summary>Which reading of the work the kept answers are of, which is what a read that landed is judged by.</summary>
+    private int _version;
 
     /// <summary>Where what could not be read is said, once.</summary>
     private readonly ILog _log;
+
+    /// <summary>How the views are told that a reading is at hand.</summary>
+    private readonly IFileChanges _files;
 
     /// <summary>Whether what could not be read has already been said.</summary>
     private bool _warned;
 
     /// <summary>Makes the readings.</summary>
     /// <param name="log">Where what could not be read is said.</param>
-    public OwnershipReadings(ILog log) => _log = log;
+    /// <param name="files">How the views are told that a reading is at hand.</param>
+    public OwnershipReadings(ILog log, IFileChanges files)
+    {
+        ArgumentNullException.ThrowIfNull(log);
+        ArgumentNullException.ThrowIfNull(files);
+
+        _log = log;
+        _files = files;
+    }
 
     /// <summary>
     /// Whether the Vault copy says anything about the entries of a directory.
     /// </summary>
     /// <remarks>
     /// Asked once for a listing rather than once per row, since it is what decides whether a column is
-    /// there at all.
+    /// there at all. A directory nothing has been read of yet answers nothing, and is read for the asking.
     /// </remarks>
     /// <param name="directory">The directory being listed.</param>
     /// <returns>Whether there is anything to read answers from.</returns>
@@ -63,15 +93,26 @@ internal sealed class OwnershipReadings
     /// another run writes after it was opened is not in it. A move or a removal renames a path in the
     /// Layout the Workspace works in, so the answers kept here are about a tree that no longer exists, and
     /// the handles are given back rather than only forgotten.
+    /// <para>
+    /// Only a change is one: a reading that landed is drawn without this being said of it, so nothing read for it is
+    /// given back (see <see cref="IFileChanges.Redrawn"/>).
+    /// </para>
     /// </remarks>
     public void Forget()
     {
-        foreach (var ownership in _known.Values)
+        RolaOwnership?[] ownerships;
+
+        lock (_gate)
+        {
+            _version++;
+            ownerships = [.. _known.Values];
+            _known.Clear();
+        }
+
+        foreach (var ownership in ownerships)
         {
             ownership?.Dispose();
         }
-
-        _known.Clear();
     }
 
     /// <summary>
@@ -110,30 +151,86 @@ internal sealed class OwnershipReadings
         }
     }
 
-    /// <summary>The answers for a directory, read once and kept.</summary>
+    /// <summary>The answers for a directory, read once and kept, asking for them in the background when they are not here.</summary>
     /// <param name="directory">The directory being listed.</param>
     /// <returns>The answers, or nothing when the directory is not inside a Workspace that tracks one.</returns>
     private RolaOwnership? Of(string directory)
     {
-        if (_known.TryGetValue(directory, out var known))
+        int version;
+
+        lock (_gate)
         {
-            return known;
+            if (_known.TryGetValue(directory, out var known))
+            {
+                return known;
+            }
+
+            if (!_asking.Add(directory))
+            {
+                return null;
+            }
+
+            version = _version;
         }
 
-        RolaOwnership? ownership = null;
+        _ = Task.Run(() => Land(directory, version, Locate(directory)));
 
+        return null;
+    }
+
+    /// <summary>Opens the two Layouts a directory's answers are read from, saying so if they could not be opened.</summary>
+    /// <param name="directory">The directory the answers are for.</param>
+    /// <returns>The answers, or nothing when there are none to read.</returns>
+    private RolaOwnership? Locate(string directory)
+    {
         try
         {
-            ownership = RolaOwnership.Locate(directory);
+            return RolaOwnership.Locate(directory);
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             Warn($"the ownership of `{directory}`", error);
+
+            return null;
         }
+    }
 
-        _known[directory] = ownership;
+    /// <summary>Keeps what a read that landed came to, and has the views drawn again for it.</summary>
+    /// <param name="directory">The directory it was read for.</param>
+    /// <param name="version">Which reading of the work it was asked for in.</param>
+    /// <param name="ownership">What it came to.</param>
+    private void Land(string directory, int version, RolaOwnership? ownership)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            bool current;
 
-        return ownership;
+            lock (_gate)
+            {
+                _asking.Remove(directory);
+                current = version == _version;
+
+                if (current)
+                {
+                    if (_known.TryGetValue(directory, out var older))
+                    {
+                        older?.Dispose();
+                    }
+
+                    _known[directory] = ownership;
+                }
+            }
+
+            if (!current)
+            {
+                ownership?.Dispose();
+            }
+
+            // Drawn either way: what landed is drawn when it stands, and when it does not, the drawing is what asks
+            // for it again — the answer being one from before the change the drawing is following. It is a drawing and
+            // not a change, so nothing anyone else read is given back for it.
+            _files.Redraw();
+        });
     }
 
     /// <summary>
@@ -147,12 +244,16 @@ internal sealed class OwnershipReadings
     /// <param name="error">Why it could not be read.</param>
     private void Warn(string what, Exception error)
     {
-        if (_warned)
+        lock (_gate)
         {
-            return;
+            if (_warned)
+            {
+                return;
+            }
+
+            _warned = true;
         }
 
-        _warned = true;
         _log.Warn($"{what} could not be read: {error.Message}");
     }
 }

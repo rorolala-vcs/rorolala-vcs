@@ -54,6 +54,9 @@ public interface IPluginHost
     /// <summary>Where the plugin offers the places it answers for, by the prefix of their addresses.</summary>
     ILogicalViewRegistry LogicalViews { get; }
 
+    /// <summary>Where the plugin offers what it takes a place's entry dropped on a directory for.</summary>
+    IDropTargetRegistry Drops { get; }
+
     /// <summary>When one of the host's windows is come back to.</summary>
     IRefocus Refocus { get; }
 

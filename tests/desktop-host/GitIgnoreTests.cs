@@ -144,7 +144,7 @@ public sealed class GitIgnoreTests
         // catalogue adds nothing, so a test that ran before is no reason for this one to fail.
         HideRegistry.Register(new GitIgnored());
 
-        var shared = new Shared(repository, new HideRegistry(host.Config), host.Config);
+        var shared = new Shared(repository, new HideRegistry(host.Config), host.Config, new FileChanges());
         var entry = new Entry(kept, EntryKind.File);
 
         Assert.False(shared.Hides(entry));

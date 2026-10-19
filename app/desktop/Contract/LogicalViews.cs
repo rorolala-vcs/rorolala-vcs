@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using Avalonia.Controls;
+using Avalonia.Media;
 
 namespace RorolalaDesktop.Contract;
 
@@ -101,14 +103,29 @@ public sealed record LogicalAddress(string Scheme, string Payload)
 /// <param name="Draggable">Whether the entry may be picked up and dropped somewhere else.</param>
 /// <param name="Opens">Where opening it goes, or nothing when it is not a place.</param>
 /// <param name="Menu">What the menu opened on it offers, or nothing for nothing at all.</param>
-/// <param name="Data">What the provider keeps about it, handed back when the entry is used.</param>
+/// <param name="Data">
+/// What the provider keeps about it, handed back when the entry is used, which is what lets two entries of a
+/// place share a name.
+/// </param>
+/// <param name="Picture">
+/// What to draw where the picture goes, for a picture the icon library holds no key for — an entry whose look is
+/// chosen from its name, which is what a file's extension is. Answered beside <paramref name="IconKey"/> rather
+/// than instead of it: a key is a picture the library already holds, and a maker is one the answer draws for the
+/// size it is asked for.
+/// </param>
+/// <remarks>
+/// What an entry looks like when neither is given is the view's answer, and it is the folder the icon set in force
+/// draws: a place's rows are places and things, and a thing drawn as nothing is a row a reader has to read rather
+/// than see.
+/// </remarks>
 public sealed record LogicalEntry(
     string Name,
     string? IconKey = null,
     bool Draggable = true,
     LogicalAddress? Opens = null,
     IReadOnlyList<ContextMenuItem>? Menu = null,
-    object? Data = null
+    object? Data = null,
+    Func<int, Control>? Picture = null
 );
 
 /// <summary>
@@ -165,6 +182,102 @@ public interface ILogicalViewProvider
     /// <param name="address">The place being dropped on.</param>
     /// <param name="drag">What is being dragged.</param>
     void Drop(LogicalAddress address, LogicalDrag drag);
+
+    /// <summary>
+    /// What a place says about each of its entries, beyond the name and the picture.
+    /// </summary>
+    /// <remarks>
+    /// A place's rows are drawn by the browser's own table, so what a row is worth saying about it is the
+    /// answerer's: an entry of a Vault has a uuid and a holder, and one of a directory has a size and a time — the
+    /// table does not know which, and a place that states nothing is a place read by its names alone.
+    /// </remarks>
+    /// <param name="address">The place being read.</param>
+    /// <returns>The columns, in the order they are shown, or nothing for a place read by its names.</returns>
+    IReadOnlyList<LogicalColumn> Columns(LogicalAddress address);
+}
+
+/// <summary>One column a place shows beside the name and the picture.</summary>
+/// <remarks>
+/// The heading is a key rather than the words, so that it is said in the reader's own language and stays in step
+/// with the catalogue like every other line a plugin draws. What the column says about an entry is the
+/// provider's answer, which is why the cell is drawn from the entry rather than from a value the table keeps.
+/// </remarks>
+/// <param name="HeaderKey">An i18n key for the column's heading.</param>
+/// <param name="Width">How wide the column starts.</param>
+/// <param name="Value">What the column says about one entry, which is the empty string for an entry it says nothing about.</param>
+/// <param name="Align">Where the text sits in the column.</param>
+/// <param name="BesideName">
+/// Whether the column is read with the name, before the room the table has to spare, rather than with the values
+/// at the far side of it: a second name of the entry belongs with the name, where a fact about it does not.
+/// </param>
+public sealed record LogicalColumn(
+    string HeaderKey,
+    double Width,
+    Func<LogicalEntry, string> Value,
+    TextAlignment Align = TextAlignment.Left,
+    bool BesideName = false
+);
+
+/// <summary>
+/// A directory that takes a drag which is not files: a place's entries dropped into the work.
+/// </summary>
+/// <remarks>
+/// The other direction of <see cref="ILogicalViewProvider"/>: a place is dropped <em>on</em>, while a directory
+/// takes what was dropped <em>from</em> one. What a directory does with it is not the file browser's to decide — a
+/// place's entry is not a file, and what it means to put one in a directory is the plugin's answer — so a plugin
+/// says which directories it takes one in and does the work itself.
+/// <para>
+/// Asked while the pointer is still moving, so that a directory which would refuse it does not offer the drop at
+/// all.
+/// </para>
+/// </remarks>
+public interface IDropTarget
+{
+    /// <summary>Whether a directory can take what a drag carries.</summary>
+    /// <param name="directory">The directory it is being dropped on.</param>
+    /// <param name="drag">What is being dragged.</param>
+    /// <returns>Whether it can be taken.</returns>
+    bool Accepts(string directory, LogicalDrag drag);
+
+    /// <summary>Takes a drag that <see cref="Accepts"/> answered for.</summary>
+    /// <param name="directory">The directory it was dropped on.</param>
+    /// <param name="drag">What was dragged.</param>
+    /// <returns>
+    /// Whether it was taken, which is what the source is told so that it does not act on what it carried as well.
+    /// </returns>
+    bool Drop(string directory, LogicalDrag drag);
+}
+
+/// <summary>Where a plugin offers what it takes a non-file drag dropped on a directory for.</summary>
+public interface IDropTargetRegistry
+{
+    /// <summary>Offers a target.</summary>
+    /// <param name="target">What answers for the directories it takes.</param>
+    void Add(IDropTarget target);
+
+    /// <summary>Every target offered, in the order they are asked.</summary>
+    IReadOnlyList<IDropTarget> Items { get; }
+}
+
+/// <summary>
+/// What a place can say about a drag it will not take.
+/// </summary>
+/// <remarks>
+/// A place that refused a drop silently is a place the user cannot tell from one the drag never reached, and "no" with
+/// no word is the least useful answer a place can give: the reasons are the place's own — the entry is already there,
+/// a path there is taken, the copy is still being read — and none of them is something the browser could work out.
+/// <para>
+/// Optional, because a provider may have nothing to add: one that does not answer is shown with the one thing the
+/// browser knows, which is that the place did not take the drag.
+/// </para>
+/// </remarks>
+public interface ILogicalRefusal
+{
+    /// <summary>Why a place would refuse a drag, in the words of the place.</summary>
+    /// <param name="address">The place being dropped on.</param>
+    /// <param name="drag">What is being dragged.</param>
+    /// <returns>The words, or nothing when the place has nothing to add to a plain refusal.</returns>
+    string? Refusal(LogicalAddress address, LogicalDrag drag);
 }
 
 /// <summary>

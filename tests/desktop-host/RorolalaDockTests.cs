@@ -59,6 +59,27 @@ public sealed class RorolalaDockTests
         );
     }
 
+    /// <summary>The plugin offers the work's upstream as a place the browser opens.</summary>
+    /// <remarks>
+    /// A place rather than a dock: what is read at <c>rola@</c> is drawn by the browser's own listing, so what this
+    /// checks is that the prefix is answered at all and that a directory's menu offers the way there.
+    /// </remarks>
+    [Fact]
+    public void ThePluginOffersTheUpstreamAsAPlace()
+    {
+        var services = Host.Services();
+        var plugin = new Vcs();
+
+        plugin.Initialize(services.For(plugin.Manifest.Id, 1));
+
+        Assert.NotNull(services.LogicalViews.Find(UpstreamPlace.Scheme));
+
+        Assert.Contains(
+            services.ContextMenus.Items(ContextMenuTarget.Directory),
+            item => item.LabelKey == "rorolala_vcs.menu.upstream"
+        );
+    }
+
     /// <summary>A base directory no Workspace holds is said so rather than left blank.</summary>
     /// <remarks>
     /// A scratch directory is under no Workspace, and a directory that was never said — nothing, or the

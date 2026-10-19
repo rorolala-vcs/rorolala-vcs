@@ -39,5 +39,11 @@ internal sealed class FileChanges : IFileChanges
     public event Action? Changed;
 
     /// <inheritdoc />
+    public event Action? Redrawn;
+
+    /// <inheritdoc />
     public void Touch() => Changed?.Invoke();
+
+    /// <inheritdoc />
+    public void Redraw() => Redrawn?.Invoke();
 }

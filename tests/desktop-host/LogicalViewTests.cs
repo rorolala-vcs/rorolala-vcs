@@ -1,5 +1,7 @@
+using Avalonia.Controls;
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.Hosting;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -118,6 +120,54 @@ public sealed class LogicalViewTests
         Assert.Equal(["one"], place.Entries.Select(entry => entry.Name));
     }
 
+    /// <summary>A place's menu is filled again for each opening rather than grown by it.</summary>
+    /// <remarks>
+    /// The menu is one per row and filled when it opens, so what an entry offers is put in each time rather than once: a
+    /// menu that appended would show the same item twice on the second right-click, three times on the third, and the
+    /// entry it is about would be offered as many times as the user had looked at it.
+    /// </remarks>
+    [Fact]
+    public void APlacefulMenuIsFilledAgainRatherThanGrown()
+    {
+        var directory = Scratch.New("place-menu");
+        var services = Host.Services();
+        var host = services.For(new PluginId("it.places"), 0);
+        var shared = new Shared(
+            directory,
+            new HideRegistry(host.Config),
+            host.Config,
+            host.Files
+        );
+        var browser = new Browser(host.Log, shared, directory, host.LogicalViews);
+        var entry = new LogicalEntry(
+            "hero.psd",
+            Menu:
+            [
+                new ContextMenuItem("it.menu.bring_in", 10, _ => { }, "rorolala_vcs.download"),
+            ]
+        );
+        var provider = new Stub { Title_ = "the place", Entries_ = [entry] };
+        var place = new LogicalPlace(
+            new LogicalAddress("logic", "somewhere"),
+            provider,
+            "the place",
+            [entry],
+            null
+        );
+        var listing = new Places(host, browser, place);
+        var menu = new ContextMenu();
+        var from = new Border();
+
+        listing.Fill(menu, from, [entry], force: false);
+        var once = menu.Items.Count;
+
+        Assert.Equal(1, once);
+
+        listing.Fill(menu, from, [entry], force: false);
+
+        Assert.Equal(once, menu.Items.Count);
+    }
+
     /// <summary>An address nobody answers is a place with nobody to ask, and not a failure to read.</summary>
     [Fact]
     public void AnAddressNobodyAnswersIsAPlaceWithNobodyToAsk()
@@ -194,7 +244,7 @@ public sealed class LogicalViewTests
         File.WriteAllText(Path.Combine(directory, "file.txt"), "x");
 
         var host = Host.Services().For(new PluginId(FileSystem.Identity), 1);
-        var shared = new Shared(directory, new HideRegistry(host.Config), host.Config);
+        var shared = new Shared(directory, new HideRegistry(host.Config), host.Config, new FileChanges());
         var browser = new Browser(host.Log, shared, directory, host.LogicalViews);
         var provider = new Stub { Title_ = "the place" };
 
@@ -241,7 +291,7 @@ public sealed class LogicalViewTests
     {
         var directory = Scratch.New("logical-nobody");
         var host = Host.Services().For(new PluginId(FileSystem.Identity), 1);
-        var shared = new Shared(directory, new HideRegistry(host.Config), host.Config);
+        var shared = new Shared(directory, new HideRegistry(host.Config), host.Config, new FileChanges());
         var browser = new Browser(host.Log, shared, directory, host.LogicalViews);
 
         Assert.True(browser.Go("nobody@somewhere"));
@@ -268,7 +318,7 @@ public sealed class LogicalViewTests
         Directory.CreateDirectory(odd);
 
         var host = Host.Services().For(new PluginId(FileSystem.Identity), 1);
-        var shared = new Shared(directory, new HideRegistry(host.Config), host.Config);
+        var shared = new Shared(directory, new HideRegistry(host.Config), host.Config, new FileChanges());
         var browser = new Browser(host.Log, shared, directory, host.LogicalViews);
 
         Assert.True(browser.Go(odd));
@@ -290,7 +340,7 @@ public sealed class LogicalViewTests
     {
         var directory = Scratch.New("logical-up");
         var host = Host.Services().For(new PluginId(FileSystem.Identity), 1);
-        var shared = new Shared(directory, new HideRegistry(host.Config), host.Config);
+        var shared = new Shared(directory, new HideRegistry(host.Config), host.Config, new FileChanges());
         var browser = new Browser(host.Log, shared, directory, host.LogicalViews);
         var provider = new Stub { Parent_ = new LogicalAddress("logic", "a") };
 
@@ -336,6 +386,9 @@ public sealed class LogicalViewTests
         /// <summary>What was dropped on it, in the order it was dropped.</summary>
         public List<string> Dropped { get; } = [];
 
+        /// <summary>What the place says about its entries, for a check that reads the answers.</summary>
+        public IReadOnlyList<LogicalColumn> Columns_ { get; init; } = [];
+
         /// <inheritdoc />
         public string Title(LogicalAddress address) => Title_;
 
@@ -344,6 +397,9 @@ public sealed class LogicalViewTests
 
         /// <inheritdoc />
         public LogicalAddress? Parent(LogicalAddress address) => Parent_;
+
+        /// <inheritdoc />
+        public IReadOnlyList<LogicalColumn> Columns(LogicalAddress address) => Columns_;
 
         /// <inheritdoc />
         public bool Accepts(LogicalAddress address, LogicalDrag drag) =>

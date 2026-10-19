@@ -147,9 +147,13 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // case it is given a location of its own and only the answers stay everybody's. The
         // clipboard is shared the same way: a copy made in one directory dock is a copy the other can paste.
         var at = Start();
-        var shared = new Shared(at, hides, host.Config);
+        var shared = new Shared(at, hides, host.Config, host.Files);
         var browser = new Browser(host.Log, shared, at, host.LogicalViews);
         var clip = new Clip(host.Log);
+
+        // A place's entries are not files, so what a copy or a cut of them is has a clipboard of its own: one offer for
+        // every view, like the files', so that a cut made in one dock can be pasted in the next.
+        var logical = new LogicalClip();
 
         // Drawn in the background, so the first listing is not held up by a set being drawn. Until it is done
         // the system's own icons are what is shown, and what the host's files are touched with once it is done
@@ -227,7 +231,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.directories",
                 DockOpenMode.New,
                 DockPlacement.Center,
-                _ => new DirectoryDock(host, shared, browser, clip)
+                _ => new DirectoryDock(host, shared, browser, clip, logical)
             )
         );
 

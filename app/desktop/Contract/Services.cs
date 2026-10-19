@@ -261,8 +261,23 @@ public interface IFileChanges
     /// <summary>Raised when something a plugin did may have changed the files.</summary>
     event Action? Changed;
 
+    /// <summary>
+    /// Raised when an answer a plugin has been working out is at hand, so what shows it is drawn again.
+    /// </summary>
+    /// <remarks>
+    /// The other half of <see cref="Changed"/>, and not the same thing: a reading that landed changed nothing on
+    /// disk, so what is drawn from it is drawn again and nothing anyone read is given back. Saying
+    /// <see cref="Touch"/> instead would have every plugin drop its answers and read them again — which, for a
+    /// reader whose answer is what just landed, is asking for the answer it is already holding: one reading per
+    /// drawing, for as long as the window is open.
+    /// </remarks>
+    event Action? Redrawn;
+
     /// <summary>Says that what this plugin has just done may have changed the files.</summary>
     void Touch();
+
+    /// <summary>Says that an answer this plugin has been reading is at hand, so what shows it is drawn again.</summary>
+    void Redraw();
 }
 
 /// <summary>

@@ -54,17 +54,27 @@ internal sealed class Clip
     /// How faded an entry is drawn while it is cut, so that it reads as on its way out.
     /// </summary>
     /// <remarks>
-    /// A property rather than a constant of the class, because a control's own <c>Clip</c> — the geometry one
-    /// draws with — is what the name <c>Clip</c> means there, so a view cannot reach a constant of this one by
-    /// name. Kept here rather than by a view because a listing and a tree both draw entries, and two answers to
-    /// how faded a cut one is would be two answers to one question.
+    /// A constant rather than a number written where it is used, because a listing and a tree both draw entries, and
+    /// two answers to how faded a cut one is would be two answers to one question. Read as a constant rather than
+    /// through an instance because a view of a place has a clipboard of its own (see <see cref="LogicalClip"/>) and
+    /// no file clipboard to ask.
+    /// </remarks>
+    public const double FadedAmount = 0.45;
+
+    /// <summary>
+    /// The same answer through an instance, for the views that hold a file clipboard.
+    /// </summary>
+    /// <remarks>
+    /// A control's own <c>Clip</c> — the geometry one draws with — is what the name <c>Clip</c> means there, so a
+    /// view cannot reach the constant by the type's name: it reads it through the clipboard instance it holds,
+    /// which is why this stays a member of one.
     /// </remarks>
     [SuppressMessage(
         "Performance",
         "CA1822:Mark members as static",
-        Justification = "a control's own `Clip` is the geometry property of that name, so a view cannot spell `Clip.Faded`; the view reads it through the clipboard instance it holds, which is why it stays on one"
+        Justification = "a control's own `Clip` is the geometry property of that name, so a view cannot spell `Clip.FadedAmount`; the view reads it through the clipboard instance it holds, which is why it stays on one"
     )]
-    public double Faded => 0.45;
+    public double Faded => FadedAmount;
 
     /// <summary>Puts entries on the clipboard to be copied, and takes back any earlier cut.</summary>
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
@@ -101,8 +111,10 @@ internal sealed class Clip
     {
         try
         {
-            var clipboard = TopLevel.GetTopLevel(from)?.Clipboard;
-            var paths = clipboard is null ? [] : await Paths(clipboard);
+            // Read in a try of its own, because a clipboard another program is holding open is not a paste that failed:
+            // what this plugin offered is still known, and the two are one offer (see `_held`). A read that throws is
+            // therefore answered as giving nothing, rather than as ending the paste before the fallback is reached.
+            var paths = await OfferedBySystem(from);
 
             // The system clipboard first, so that a copy taken in another program is pasted; this plugin's
             // own record only where it gave nothing, so that a copy and a paste made here still pair up.
@@ -156,6 +168,33 @@ internal sealed class Clip
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             failed(error.Message);
+        }
+    }
+
+    /// <summary>
+    /// The paths the system clipboard holds, or nothing when it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="Paths"/> so that a read that throws is one answer among others rather than the end of
+    /// the paste: the platform's clipboard is another program's to hold open, and one that refuses for a moment is not a
+    /// copy this program cannot paste. What could not be read is said in the log, because a paste that falls back on the
+    /// plugin's own offer and a paste with nothing to paste are otherwise the same from the outside.
+    /// </remarks>
+    /// <param name="from">A control in the tree the clipboard is reached through.</param>
+    /// <returns>The paths, or nothing when the clipboard gave none.</returns>
+    private async Task<IReadOnlyList<string>> OfferedBySystem(Control from)
+    {
+        try
+        {
+            return TopLevel.GetTopLevel(from)?.Clipboard is { } clipboard
+                ? await Paths(clipboard)
+                : [];
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _log.Info($"paste: the clipboard could not be read, so what this program offered is pasted instead: {error.Message}");
+
+            return [];
         }
     }
 
@@ -284,3 +323,82 @@ internal sealed class Clip
     /// <param name="path">The path to ask about.</param>
     private static string Holding(string path) => Path.GetDirectoryName(FileOps.Bare(path)) ?? string.Empty;
 }
+
+/// <summary>
+/// What a place's entries were copied or cut to, within this program.
+/// </summary>
+/// <remarks>
+/// A place's entries are not files, so what a copy of them is cannot be the system clipboard: there is nothing a file
+/// manager could do with one, and no path to hand a program. What it is instead is what the same views read a drag
+/// under, kept until a paste takes it — a cut fades the rows it holds for the same reason a cut file does, so that it
+/// reads as on its way out.
+/// <para>
+/// One of these belongs to the plugin rather than to a dock, for the same reason the file clipboard does: a cut made in
+/// one dock is one another dock can paste.
+/// </para>
+/// </remarks>
+internal sealed class LogicalClip
+{
+    /// <summary>What was copied or cut, as the sources made them.</summary>
+    private readonly List<object> _kept = [];
+
+    /// <summary>Whether what is kept is a cut, which a paste takes away.</summary>
+    private bool _cut;
+
+    /// <summary>Raised when what is on offer changes, which is when the rows of a place are drawn again.</summary>
+    public event Action? Changed;
+
+    /// <summary>
+    /// Whether something kept here is on its way out, which is what a row is faded for.
+    /// </summary>
+    /// <param name="data">What a row carries.</param>
+    /// <returns>Whether it was cut.</returns>
+    public bool IsCut(object data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        return _cut && _kept.Contains(data);
+    }
+
+    /// <summary>Puts what a place holds on offer, to be copied or moved by a paste.</summary>
+    /// <param name="items">What each chosen entry carries.</param>
+    /// <param name="cut">Whether they are to be moved rather than copied.</param>
+    public void Put(IReadOnlyList<object> items, bool cut)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        _kept.Clear();
+        _kept.AddRange(items);
+        _cut = cut;
+
+        Changed?.Invoke();
+    }
+
+    /// <summary>What is on offer, if anything is, without ending the offer.</summary>
+    /// <remarks>
+    /// Read before anything is done with it, because whether a paste means something is the place's answer: a paste
+    /// into somewhere that refuses it is a paste that did nothing, and a cut that was taken away by it would be lost
+    /// with no word — the rows would come back unfaded and the entries would be nowhere.
+    /// </remarks>
+    /// <returns>What was kept, or nothing when nothing is.</returns>
+    public IReadOnlyList<object>? Peek() => _kept.Count == 0 ? null : [.. _kept];
+
+    /// <summary>Ends a cut once a paste has made something of it, and leaves a copy as it is.</summary>
+    /// <remarks>
+    /// A copy stays on offer because a copy is what may be pasted again; a cut is gone because the paste that took it
+    /// is the move of what it named, and one faded row that has already moved would say it is still on its way out.
+    /// </remarks>
+    public void Took()
+    {
+        if (!_cut)
+        {
+            return;
+        }
+
+        _kept.Clear();
+        _cut = false;
+
+        Changed?.Invoke();
+    }
+}
+
