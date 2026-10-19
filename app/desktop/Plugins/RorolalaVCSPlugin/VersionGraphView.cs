@@ -719,10 +719,16 @@ internal sealed partial class VersionGraphView : Control
     /// What the working file's unrecorded change is, or nothing when its content stands as recorded.
     /// </summary>
     /// <remarks>
-    /// Only a change of content is an edit: a file the Layout does not name, one that moved, and one
-    /// waiting to be merged are each about something other than being worked on, and each has a mark
-    /// of its own elsewhere. A change that must not be recorded is still an edit, and is answered
-    /// with its own reason so that the graph says what the listing does about the same file.
+    /// Only a change of content is an edit: a file the Layout does not name and one that moved are each
+    /// about something other than being worked on, and each has a mark of its own elsewhere. A change
+    /// that must not be recorded is still an edit, and is answered with its own reason so that the graph
+    /// says what the listing does about the same file.
+    /// <para>
+    /// A merge waiting on the file does not hide a change made under it: the state answers the merge
+    /// before the change, so the change is read from the reading's own list. What is drawn then is the
+    /// edit, marked as work under way — the merge and the change are two things about one file and the
+    /// graph shows both.
+    /// </para>
     /// </remarks>
     /// <param name="directory">The directory holding the file, which is what a work is read for.</param>
     /// <param name="path">The file, as the program names it.</param>
@@ -736,7 +742,19 @@ internal sealed partial class VersionGraphView : Control
 
         try
         {
-            return status.StateOf(path) switch
+            var state = status.StateOf(path);
+
+            if (
+                state is PathState.Merging
+                && status.Modified.Any(named =>
+                    StatusReadings.Names(status.Root, named, path)
+                )
+            )
+            {
+                return (RorolalaStates.Words(PathState.Modified), false);
+            }
+
+            return state switch
             {
                 PathState.Modified => (
                     RorolalaStates.Words(PathState.Modified),

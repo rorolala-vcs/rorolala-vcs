@@ -281,6 +281,45 @@ internal sealed partial class VersionGraphView
             }
         }
 
+        void PendingEdge(
+            VersionGraphDrawing.VariantNode edit,
+            VersionGraphDrawing.VariantNode pending
+        )
+        {
+            var pen = new Pen(
+                new SolidColorBrush(RorolalaColours.UnderWay),
+                Math.Max(1, 1.5 * _zoom)
+            )
+            {
+                DashStyle = new DashStyle([5, 4], 0),
+                LineCap = PenLineCap.Round,
+            };
+            var start = new Point(
+                _panX + edit.X * _zoom,
+                _panY
+                    + (edit.Y + VersionGraphDrawing.CapsuleHeight / 2) * _zoom
+            );
+            var end = new Point(
+                _panX + pending.X * _zoom,
+                _panY
+                    + (pending.Y - VersionGraphDrawing.CapsuleHeight / 2) * _zoom
+            );
+            var dy = end.Y - start.Y;
+            var geometry = new StreamGeometry();
+
+            using (var path = geometry.Open())
+            {
+                path.BeginFigure(start, false);
+                path.CubicBezierTo(
+                    new Point(start.X, start.Y + dy * 0.45),
+                    new Point(end.X, end.Y - dy * 0.45),
+                    end
+                );
+            }
+
+            context.DrawGeometry(null, pen, geometry);
+        }
+
         foreach (var variant in _drawing!.Variants)
         {
             if (variant.State is not null)
@@ -288,6 +327,21 @@ internal sealed partial class VersionGraphView
                 // The edit is based on the highest version and would make the one the index does not
                 // have: only the second half of a spine edge exists, from the capsule down to it.
                 BaseEdge(variant);
+
+                // A merge waiting under a change is the other half of what the ? node is about: the
+                // dashed edge says the work is on its way into the pending variant as well as being
+                // based on the version above.
+                if (variant.Merging)
+                {
+                    var pending = _drawing.Variants.FirstOrDefault(
+                        one => one.Unjoined && one.Merging
+                    );
+
+                    if (pending is not null)
+                    {
+                        PendingEdge(variant, pending);
+                    }
+                }
 
                 continue;
             }

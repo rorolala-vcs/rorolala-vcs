@@ -339,11 +339,18 @@ internal sealed class VersionGraphTrackBar : Border
             {
                 var state = status.StateOf(entry.Path);
 
-                // A change either account may record, a file the Layout does not name yet, and a change
-                // against a base upstream moved past — that last one is the track with a question.
+                // A change either account may record, a file the Layout does not name yet, and a file
+                // waiting for a variant to be joined into it — recording the last one is what ends the
+                // merge. The merge itself is not a change: only a file the tree changed while it waits
+                // has something to record, and the command line would record nothing for one that did
+                // not. A change against a base upstream moved past is recordable too, and that is the
+                // one the question is put for.
                 var recordable = state switch
                 {
                     PathState.Modified or PathState.Untagged => true,
+                    PathState.Merging => status.Modified.Any(named =>
+                        StatusReadings.Names(status.Root, named, entry.Path)
+                    ),
                     PathState.Wrong => !status.Unowned.Any(named =>
                         StatusReadings.Names(status.Root, named, entry.Path)
                     ),

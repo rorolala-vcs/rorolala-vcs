@@ -404,7 +404,8 @@ internal sealed class VersionGraphDrawing
                     string.Empty,
                     string.Empty,
                     edit.Words,
-                    edit.Wrong
+                    edit.Wrong,
+                    Merging: merging is { Length: > 0 }
                 )
             );
         }
