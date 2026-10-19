@@ -546,24 +546,45 @@ internal sealed class PreferenceView : UserControl
             notes.Add(_i18n.Get("setting.restart"));
         }
 
-        if (notes.Count == 0)
+        var lines = new List<Control>();
+
+        if (Detail(setting, value) is { Length: > 0 } detail)
         {
-            return row;
+            lines.Add(
+                new TextBlock
+                {
+                    Text = detail,
+                    Classes = { "caption", "faint" },
+                    TextWrapping = TextWrapping.Wrap,
+                }
+            );
         }
 
-        return new StackPanel
+        if (notes.Count > 0)
         {
-            Spacing = 4,
-            Children =
-            {
-                row,
+            lines.Add(
                 new TextBlock
                 {
                     Text = string.Join(" · ", notes),
                     Classes = { "caption", "faint" },
-                },
-            },
-        };
+                }
+            );
+        }
+
+        if (lines.Count == 0)
+        {
+            return row;
+        }
+
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(row);
+
+        foreach (var line in lines)
+        {
+            panel.Children.Add(line);
+        }
+
+        return panel;
     }
 
     /// <summary>What a setting is chosen with, by its kind.</summary>
@@ -585,7 +606,7 @@ internal sealed class PreferenceView : UserControl
                 var options = (setting.Options ?? []).ToArray();
                 var choice = new ComboBox
                 {
-                    ItemsSource = options.Select(option => _i18n.Get(option.LabelKey)).ToArray(),
+                    ItemsSource = options.Select(OptionLabel).ToArray(),
                     SelectedIndex = Array.FindIndex(options, option => string.Equals(option.Value, value, StringComparison.Ordinal)),
                     MinWidth = 240,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -595,6 +616,10 @@ internal sealed class PreferenceView : UserControl
                     if (choice.SelectedIndex >= 0)
                     {
                         _settings.Keep(owner, setting, options[choice.SelectedIndex].Value);
+
+                        // Drawn again so that what the chosen option says about itself is shown, the same
+                        // way a preset is: the description belongs to the option, and it changes with it.
+                        Show();
                     }
                 };
 
@@ -662,7 +687,7 @@ internal sealed class PreferenceView : UserControl
                 var presets = (setting.Options ?? []).ToArray();
                 var preset = new ComboBox
                 {
-                    ItemsSource = presets.Select(option => _i18n.Get(option.LabelKey)).ToArray(),
+                    ItemsSource = presets.Select(OptionLabel).ToArray(),
                     SelectedIndex = Array.FindIndex(presets, option => string.Equals(option.Value, value, StringComparison.Ordinal)),
                     MinWidth = 240,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -779,11 +804,34 @@ internal sealed class PreferenceView : UserControl
     {
         var shown = (setting.Options ?? [])
             .Where(option => chosen.Contains(option.Value))
-            .Select(option => _i18n.Get(option.LabelKey))
+            .Select(OptionLabel)
             .ToArray();
 
         return shown.Length == 0 ? _i18n.Get("setting.none") : string.Join(" · ", shown);
     }
+
+    /// <summary>
+    /// What an option is called: the words it carries, or the key they are read from.
+    /// </summary>
+    /// <remarks>
+    /// An option whose values are read from data beside the program — an icon set, say — carries its own
+    /// words, because no translation file was written when the program was built. An option whose values are
+    /// the program's own carries a key, so that the two languages it speaks are two files rather than two
+    /// copies of a word in a source file.
+    /// </remarks>
+    /// <param name="option">The option.</param>
+    /// <returns>What to show in the list.</returns>
+    private string OptionLabel(SettingOption option) =>
+        option.Label is { Length: > 0 } label ? label : _i18n.Get(option.LabelKey);
+
+    /// <summary>What the chosen option says about itself, or nothing when it says nothing.</summary>
+    /// <param name="setting">The setting.</param>
+    /// <param name="value">What it is worth now.</param>
+    /// <returns>The description, or nothing.</returns>
+    private static string? Detail(PluginSetting setting, string value) =>
+        (setting.Options ?? [])
+            .FirstOrDefault(option => string.Equals(option.Value, value, StringComparison.Ordinal))
+            ?.Detail;
 
     /// <summary>What a declaration's default reads as, naming the options of a multi-choice setting.</summary>
     /// <param name="setting">The setting.</param>

@@ -15,17 +15,24 @@ namespace FileSystemPlugin;
 /// The icons this plugin draws: what entries are shown with, and the marks its own toolbar wears.
 /// </summary>
 /// <remarks>
-/// What an entry is drawn as comes from the system: what a folder looks like is the desktop's business, and a
-/// browser that draws its own folder is a browser that looks wrong on every desktop but the one it was drawn
-/// for. The icon library is this, and what is left of it is a picture per kind of file,
-/// which no system is asked about yet — a file is drawn as a file and not as a kind of one.
+/// What an entry is drawn as comes from the icon set the user chose, or from the system when the chosen set
+/// is the system's own — which is the default, and what a browser drew before sets existed. What a folder
+/// looks like is the desktop's business, and a browser that draws its own folder is a browser that looks
+/// wrong on every desktop but the one it was drawn for; a set is the user saying they want another look, so
+/// it is the set's picture rather than the desktop's.
 /// <para>
-/// The toolbar's own pictures are the other way round, and are the program's: a switch that shows what the
-/// rules hide, and whether a dock follows the whole, are this program's own ideas, which no system has a
-/// picture for. They are drawn from the pinned Material Design set by <c>./run.sh icons</c> — the manifest is
-/// <c>app/desktop/icons.toml</c> — and embedded in this assembly, so that what the host loads is the one file
-/// it found the plugin in. The keys they are handed over under are generated from that manifest into the
-/// other half of this class, so that no one writes them twice.
+/// A set's pictures are masks over the listing's ink rather than pictures in the colours they were drawn
+/// with, because the sets this program carries are line art: a line drawn in black would disappear on the
+/// dark look. The system's own icons are the other way round — they are pictures, and a folder that lost its
+/// colour would stop looking like the desktop's folder.
+/// </para>
+/// <para>
+/// The toolbar's own pictures are the program's: a switch that shows what the rules hide, and whether a dock
+/// follows the whole, are this program's own ideas, which no system has a picture for. They are drawn from the
+/// pinned Material Design set by <c>./run.sh icons</c> — the manifest is <c>app/desktop/icons.toml</c> — and
+/// embedded in this assembly, so that what the host loads is the one file it found the plugin in. The keys they
+/// are handed over under are generated from that manifest into the other half of this class, so that no one
+/// writes them twice.
 /// </para>
 /// <para>
 /// A system with no icon to give, or one this does not ask, falls back to a mark drawn here, which says
@@ -94,6 +101,15 @@ internal static partial class Icons
     /// <returns>What to draw beside the entry's name.</returns>
     public static Control For(Entry entry, int size)
     {
+        // A chosen icon set is drawn as a mask over the listing's own ink rather than as a picture in the
+        // colours it was drawn with: the sets this program carries are line art, and a line drawn in black
+        // is a line that disappears on the dark look. The system's own icons are the other way round — they
+        // are pictures, and a folder that lost its colour would stop looking like the desktop's folder.
+        if (IconSets.Picture(entry, size) is { } chosen)
+        {
+            return Glyph(chosen, PaletteKeys.Front, size);
+        }
+
         var directory = entry.Kind == EntryKind.Directory;
         var icon = directory ? SysIcons.Directory(size) : SysIcons.File(size);
 

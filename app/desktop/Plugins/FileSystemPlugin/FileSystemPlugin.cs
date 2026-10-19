@@ -107,6 +107,40 @@ public sealed class FileSystemPlugin : IRolaPlugin
         var hides = new HideRegistry(host.Config);
         HideRegistry.Declare(host);
 
+        // The icon sets are packaged beside the program rather than embedded in it, so they are found before
+        // the setting that offers them is declared and before anything draws a row. A stored value that names
+        // no set is put back to the system's own icons: a set removed by an update must not leave a listing
+        // with no icon at all, and the panel should show the choice that is actually in force.
+        var sets = IconSets.Discover(IconSets.Root, host.Log.Warn);
+        IconSets.Adopt(sets, host.Log.Warn, host.Files.Touch);
+
+        var iconSet = host.Config.ReadKeyAs<string>(IconSets.Setting, IconSets.System) ?? IconSets.System;
+        var known = string.Equals(iconSet, IconSets.System, StringComparison.Ordinal)
+            || sets.Any(set => string.Equals(set.Id, iconSet, StringComparison.Ordinal));
+
+        if (!known)
+        {
+            host.Log.Warn($"the icon set `{iconSet}` is not there; the system's own icons are used");
+            iconSet = IconSets.System;
+        }
+
+        host.Config.Add(
+            new PluginSetting(
+                IconSets.Setting,
+                SettingKind.Choice,
+                "rorolala_file_system.setting.icon_set_label",
+                iconSet,
+                5,
+                false,
+                IconSets.Options()
+            )
+        );
+
+        if (!known)
+        {
+            host.Config.Keep(IconSets.Setting, iconSet);
+        }
+
         // One location for the whole plugin, and one set of answers every location shares. Every dock is a
         // view onto the location — the browser docks differ in layout and in nothing else, and the navigation
         // dock has one address and one history to show — unless a dock has been taken out of step, in which
@@ -116,6 +150,11 @@ public sealed class FileSystemPlugin : IRolaPlugin
         var shared = new Shared(at, hides, host.Config);
         var browser = new Browser(host.Log, shared, at);
         var clip = new Clip(host.Log);
+
+        // Drawn in the background, so the first listing is not held up by a set being drawn. Until it is done
+        // the system's own icons are what is shown, and what the host's files are touched with once it is done
+        // is what makes the rows ask for the new ones.
+        IconSets.Choose(iconSet);
 
         // A menu of its own, because what is under it is about the File System as one thing rather than about
         // a location: the switch that shows what the hide rules hide is the plugin's own answer, and it is the
@@ -127,9 +166,18 @@ public sealed class FileSystemPlugin : IRolaPlugin
         );
 
         // Either setting changes what is shown rather than what is there: every location stages its listing
-        // again out of what was read, and no directory is read a second time.
+        // again out of what was read, and no directory is read a second time. Choosing another icon set is the
+        // same kind of change — the entries are the same entries, drawn differently — so it is staged again
+        // rather than read again.
         host.Config.Changed += setting =>
         {
+            if (string.Equals(setting, IconSets.Setting, StringComparison.Ordinal))
+            {
+                IconSets.Choose(host.Config.ReadKeyAs<string>(IconSets.Setting, IconSets.System));
+                shared.Hidden();
+                return;
+            }
+
             if (
                 string.Equals(setting, HideRegistry.Setting, StringComparison.Ordinal)
                 || string.Equals(setting, Shared.ShowSetting, StringComparison.Ordinal)

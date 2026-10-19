@@ -1,0 +1,18 @@
+[metadata]
+name = "FileSystemIcon (Pure)"
+authors = [ "SmallFox <2806143047@qq.com>" ]
+description = """
+An icon set for the RorolalaDesktop file system plugin
+"""
+license-file = "./LICENSE-MIT"
+
+[generation]
+mode = "svg"
+sizes = [ 16, 32, 64, 128, 256, 512 ]
+
+[fallback]
+audio-format = "./fallback-audio.svg"
+binary-format = "./fallback-binary.svg"
+directory-format = "./fallback-directory.svg"
+media-format = "./fallback-media.svg"
+text-format = "./fallback-text.svg"

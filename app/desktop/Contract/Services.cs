@@ -159,7 +159,7 @@ public enum SettingKind
 /// <see cref="SettingKind.Preset"/> offers.
 /// </summary>
 /// <param name="Value">The value, as it is kept.</param>
-/// <param name="LabelKey">An i18n key naming it.</param>
+/// <param name="LabelKey">An i18n key naming it, or empty when <paramref name="Label"/> names it.</param>
 /// <param name="Writes">
 /// What choosing this option writes elsewhere, as setting identity to value, and nothing for a plain
 /// choice. A preset's option names the settings it stands for; choosing it writes each of them, and it
@@ -167,10 +167,22 @@ public enum SettingKind
 /// names nothing is the fallback — what is shown when the settings agree with no other option — and
 /// choosing it writes nothing, so that it is the way to adjust each setting by hand.
 /// </param>
+/// <param name="Label">
+/// The option's words, written out rather than named by an i18n key. It is for an option whose values
+/// are not known when the program is built — a picture set read from beside the program, say — and a
+/// <see cref="LabelKey"/> that named a key no file states would show the key itself.
+/// </param>
+/// <param name="Detail">
+/// A longer description shown beneath the setting while this option is chosen, or nothing. It is
+/// written out for the same reason <paramref name="Label"/> is: it comes from the data the option
+/// stands for rather than from the program's own translation files.
+/// </param>
 public sealed record SettingOption(
     string Value,
     string LabelKey,
-    IReadOnlyDictionary<string, string>? Writes = null
+    IReadOnlyDictionary<string, string>? Writes = null,
+    string? Label = null,
+    string? Detail = null
 );
 
 /// <summary>

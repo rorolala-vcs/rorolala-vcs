@@ -115,6 +115,11 @@ SCRIPTS_DIR="$BUILD_DIR/scripts"
 DESKTOP_PROJECT=app/desktop/Core/RorolalaDesktop.csproj
 DESKTOP_DIR="$BUILD_DIR/bin/desktop"
 
+# The icon sets the Desktop may draw its file listing with. They are data rather than an assembly, so
+# they are not built: an export copies the tree as it stands, and the program finds it beside itself.
+# A set is a directory with its own `icon-theme.toml`, so adding one is adding a directory here.
+DESKTOP_ICON_SETS=res/desktop-icon-set
+
 # The platform the Desktop program is laid out for, as .NET spells one.
 #
 # A publish that names no platform carries the native libraries of every platform NuGet holds them for
@@ -205,6 +210,15 @@ publish_desktop() {
 	# for that in the program's own directory before anywhere else. Only the shared library is taken —
 	# the import library is for a C link, and the header for a C compile, and the Desktop does neither.
 	cp "$RELEASE_DIR/$CARGO_SHARED" "$1/"
+
+	# The icon sets, laid beside the program rather than built into it: the File System plugin reads
+	# them from `icon-sets/` beside the program, which is also where it writes the cache it draws them
+	# into. A tree with no sets is a program that offers only the system's own icons, which is why this
+	# is a copy and not a requirement.
+	if [ -d "$DESKTOP_ICON_SETS" ]; then
+		mkdir -p "$1/icon-sets"
+		cp -r "$DESKTOP_ICON_SETS/." "$1/icon-sets/"
+	fi
 }
 
 # Lays each plugin that ships with the Desktop program where the program looks for it: its assembly,
@@ -227,13 +241,18 @@ publish_plugins() {
 			cp -r "$output/i18n" "$DESKTOP_DIR/plugins/"
 		fi
 
-		# A private dependency a plugin carries, laid beside it where its own load context probes: the
-		# host does not carry the RolaSharp bindings, so the one plugin that asks the C ABI — and only
-		# it — brings them. An assembly with no plugin in it is left alone by discovery, which is how
-		# a dependency laid beside a plugin is meant to be read.
-		if [ -f "$output/RolaSharp.dll" ]; then
-			cp "$output/RolaSharp.dll" "$DESKTOP_DIR/plugins/"
-		fi
+		# A private dependency a plugin carries, laid beside it where its own load context probes. What
+		# the host already carries is read from the host's own directory rather than from a list:
+		# Avalonia, SkiaSharp and the contract are the host's copies, and a second of any of them would
+		# be a second type of the same name. What is left is the plugin's own — a renderer, a parser —
+		# and it travels with the plugin that asked for it.
+		for file in "$output"/*.dll; do
+			[ -f "$file" ] || continue
+			base=$(basename "$file")
+			[ "$base" = "$name.dll" ] && continue
+			[ -f "$DESKTOP_DIR/$base" ] && continue
+			cp "$file" "$DESKTOP_DIR/plugins/"
+		done
 	done
 }
 

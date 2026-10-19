@@ -184,6 +184,24 @@ rorolala_file_system:
     remove_files:
       en: Remove file command
       zh-CN: 删除文件命令
+    # What the listing draws entries with. The system's own icons are the default and read no file; a set
+    # packaged beside the program is named by the directory it sits in, and its own name, authors and
+    # description are put on the option rather than written here, because the set travels with the program.
+    icon_set_label:
+      en: Icon set
+      zh-CN: 图标集
+    icon_set_system:
+      en: System
+      zh-CN: 根据系统
+    icon_set_system_detail:
+      en: The icons the system gives files and folders.
+      zh-CN: 使用系统为文件和文件夹提供的图标。
+    icon_set_by:
+      en: "By %{authors} — %{description}"
+      zh-CN: "作者：%{authors} — %{description}"
+    icon_set_author:
+      en: "By %{authors}"
+      zh-CN: "作者：%{authors}"
   refresh:
     en: Refresh
     zh-CN: 刷新

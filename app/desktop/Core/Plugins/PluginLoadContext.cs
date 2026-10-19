@@ -132,6 +132,8 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
             || name == "RorolalaDesktopI18n"
             || name == "RorolalaDesktopSysIcons"
             || name.StartsWith("Avalonia", StringComparison.Ordinal)
+            || name.StartsWith("SkiaSharp", StringComparison.Ordinal)
+            || name.StartsWith("HarfBuzzSharp", StringComparison.Ordinal)
             || name.StartsWith("System", StringComparison.Ordinal)
             || name.StartsWith("Microsoft.", StringComparison.Ordinal)
             || name is "netstandard" or "mscorlib";

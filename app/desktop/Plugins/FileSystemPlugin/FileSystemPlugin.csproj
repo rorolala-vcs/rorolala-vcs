@@ -9,6 +9,10 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsPackable>false</IsPackable>
+    <!-- A plugin is laid beside the program as files, not published as a program of its own: what its
+         packages put in the output is what `publish_plugins` lays down beside it, and a library project
+         does not copy its package dependencies there by default. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,14 +25,22 @@
   <ItemGroup>
     <!-- Plugins build the UI out of Avalonia controls directly, which is the deliberate trade that
          keeps the contract small. The load context delegates Avalonia to the host's copy, so what
-         is built here is inserted into the host's tree as the same kind of control. -->
+         is built here is inserted into the host's tree as the same kind of control.
+
+         The icon sets are vectors, and nothing in Avalonia draws one: `Svg.Skia` is the renderer, and
+         it sits on the same SkiaSharp the host already carries. `Tomlyn` reads the set's own
+         `icon-theme.toml`, which is the one file in which a set says what it is and what it draws.
+         Both travel beside this plugin under `plugins/` because the host carries neither. -->
     <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Svg.Skia" Version="5.1.1" />
+    <PackageReference Include="Tomlyn" Version="2.8.0" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- The contract is the only thing the host and a plugin agree on; the translations are read by
          the same reader the host uses, so what this plugin says is said the way the host says it; and
-         the icons are the system's own, which is what a desktop expects a folder to be drawn with. -->
+         the icons are the system's own, which is what a desktop expects a folder to be drawn with
+         until the user chooses a packaged set to replace it. -->
     <ProjectReference Include="../../Contract/RorolalaDesktop.Contract.csproj" />
     <ProjectReference Include="../../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
     <ProjectReference Include="../../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj" />

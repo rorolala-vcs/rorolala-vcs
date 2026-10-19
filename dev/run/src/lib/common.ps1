@@ -113,6 +113,11 @@ $ScriptsDir = "$BuildDir/scripts"
 $DesktopProject = 'app/desktop/Core/RorolalaDesktop.csproj'
 $DesktopDir = "$BuildDir/bin/desktop"
 
+# The icon sets the Desktop may draw its file listing with. They are data rather than an assembly, so
+# they are not built: an export copies the tree as it stands, and the program finds it beside itself.
+# A set is a directory with its own `icon-theme.toml`, so adding one is adding a directory here.
+$DesktopIconSets = 'res/desktop-icon-set'
+
 # The platform the Desktop program is laid out for, as .NET spells one.
 #
 # A publish that names no platform carries the native libraries of every platform NuGet holds them for
@@ -221,6 +226,15 @@ function Publish-Desktop {
     # plugin asks the C ABI through `RolaSharp`, which `DllImport`s `rorolala`, and the runtime looks
     # for that in the program's own directory before anywhere else.
     Copy-Item -Force "$ReleaseDir/$CargoShared" "$Into/"
+
+    # The icon sets, laid beside the program rather than built into it: the File System plugin reads
+    # them from `icon-sets/` beside the program, which is also where it writes the cache it draws them
+    # into. A tree with no sets is a program that offers only the system's own icons, which is why this
+    # is a copy and not a requirement.
+    if (Test-Path $DesktopIconSets) {
+        New-Item -ItemType Directory -Force -Path "$Into/icon-sets" | Out-Null
+        Copy-Item -Recurse -Force "$DesktopIconSets/*" "$Into/icon-sets/"
+    }
 }
 
 # Builds each plugin that ships with the Desktop program and lays it where the program looks for it:
@@ -243,8 +257,15 @@ function Publish-Plugins {
             Copy-Item -Recurse -Force "$output/i18n" "$DesktopDir/plugins/"
         }
 
-        if (Test-Path "$output/RolaSharp.dll") {
-            Copy-Item -Force "$output/RolaSharp.dll" "$DesktopDir/plugins/"
+        # Every dependency the host does not already carry, laid beside the plugin where its own load
+        # context probes. What the host carries is read from the host's own directory rather than from a
+        # list: Avalonia, SkiaSharp and the contract are the host's copies, and a second of any of them
+        # would be a second type of the same name. What is left is the plugin's own — a renderer, a
+        # parser — and it travels with the plugin that asked for it.
+        Get-ChildItem -Path "$output/*.dll" | Where-Object {
+            $_.Name -ne "$name.dll" -and -not (Test-Path "$DesktopDir/$($_.Name)")
+        } | ForEach-Object {
+            Copy-Item -Force $_.FullName "$DesktopDir/plugins/"
         }
     }
 }
