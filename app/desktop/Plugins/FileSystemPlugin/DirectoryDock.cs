@@ -830,10 +830,15 @@ internal sealed class DirectoryControl : UserControl
         }
 
         // A place answers the clipboard keys too, and with its own offer: what is copied there is a place's entry and
-        // not a file, so the two clipboards are two offers rather than one. Nothing else is a key of a place's: there is
-        // no name to edit and nothing to delete on disk, and a key that quietly did nothing is better than one that did.
+        // not a file, so the two clipboards are two offers rather than one. What may be named or removed there is the
+        // place's to say — a folder of its own is the case it exists for — and a row it does not answer for is left alone.
         if (_logical is { } place)
         {
+            if (Keys.Forget(e, place.Delete, _host.Log) || Keys.Rename(e, place.Rename, _host.Log))
+            {
+                return;
+            }
+
             _ = Keys.Clipboard(
                 e,
                 new Clipboard(place.Copy, place.Cut, place.Paste, place.NewFolder),

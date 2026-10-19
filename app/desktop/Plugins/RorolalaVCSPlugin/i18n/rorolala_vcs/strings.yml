@@ -625,6 +625,24 @@ rorolala_vcs:
     checkin_abandoned:
       en: "%{count} entries were left out of this checkin"
       zh-CN: "本次签入放弃了 %{count} 个条目"
+    new_folder:
+      en: New folder
+      zh-CN: 新建文件夹
+    # The name a folder this side made is given before it is named, and what it is with a number after it when that one
+    # is taken. A folder with nothing in it is a plan about the work rather than a folder of it, which is why making one
+    # says so as a warning: a plan that outlived the window would be a folder the Vault never had.
+    new_folder_name:
+      en: New folder
+      zh-CN: 新建文件夹
+    draft_folder_title:
+      en: An empty folder, which is not kept
+      zh-CN: 空文件夹，不会被保留
+    draft_folder:
+      en: "It has nothing in it: unless something is put in it, it is gone when this Dock or the program is opened again"
+      zh-CN: "它里面没有内容：如果不往里放东西，下次打开这个 Dock 或程序时它就会消失"
+    draft_remove:
+      en: Remove this empty folder
+      zh-CN: 删除这个空文件夹
     column_uuid:
       en: Uuid
       zh-CN: UUID

@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using MenuItem = Avalonia.Controls.MenuItem;
@@ -36,6 +37,9 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <summary>The columns the provider states, mapped onto the table's own placements.</summary>
     private readonly IReadOnlyList<Column<LogicalEntry>> _columns;
 
+    /// <summary>A folder the place just made, waiting for its row to be named.</summary>
+    private string? _made;
+
     /// <summary>Makes the listing of a place.</summary>
     /// <param name="host">The host, for the library an entry's picture is read from.</param>
     /// <param name="browser">The location, which is how a double-click goes somewhere.</param>
@@ -54,7 +58,17 @@ internal sealed class Places : Listing<LogicalEntry>
         [
             .. (place.Provider?.Columns(place.Address) ?? []).Select(column => Column(column)),
         ];
+
     }
+
+    /// <summary>The row of a place's entries a name is, which is a folder the place just made.</summary>
+    /// <param name="entries">What the place lists.</param>
+    /// <param name="name">What it is called.</param>
+    /// <returns>The row, or nothing when it is not there.</returns>
+    private static LogicalEntry? Named(IReadOnlyList<LogicalEntry> entries, string name) =>
+        entries.FirstOrDefault(entry =>
+            entry.Opens is not null && string.Equals(entry.Name, name, StringComparison.Ordinal)
+        );
 
     /// <summary>What the provider says about each entry, laid out beside the name or after the values.</summary>
     /// <remarks>
@@ -63,6 +77,82 @@ internal sealed class Places : Listing<LogicalEntry>
     /// this table's, so the cell is drawn from the entry each time a row is built.
     /// </remarks>
     public override IReadOnlyList<Column<LogicalEntry>> Columns => _columns;
+
+    /// <summary>
+    /// What a place lets be done to the folders it holds that are not in what it reads.
+    /// </summary>
+    /// <remarks>
+    /// A place is read, so a folder this side made is the place's own answer rather than a directory here: what may be
+    /// made, named and removed is what it says, and a provider that says nothing is a listing that can only be read.
+    /// </remarks>
+    /// <returns>What the place answered, or nothing when it holds no folders of its own.</returns>
+    private ILogicalFolderEditor? Editor() => _place.Provider as ILogicalFolderEditor;
+
+    /// <inheritdoc />
+    public override void NewFolder()
+    {
+        if (Editor() is not { } editor || !editor.NewFolder(_place.Address))
+        {
+            return;
+        }
+
+        // What was made is asked for at once, because the place answers once: the row it is, out of what the place now
+        // lists, is what the box is put on — and the view asks for it as the folder is made, one turn before a row can
+        // hold a cell.
+        _made = editor.Pending(_place.Address);
+    }
+
+    /// <inheritdoc />
+    public override LogicalEntry? Pending()
+    {
+        var made = _made;
+        _made = null;
+
+        // The name is the place's own — `@/new/Photos` names a folder `Photos` — and the row is one of the place's
+        // entries, which is the same record instance the listing draws, so it is found rather than made again.
+        return made is null
+            ? null
+            : Named(
+                _place.Entries,
+                made[(made.LastIndexOf('/') + 1)..]
+            );
+    }
+
+    /// <inheritdoc />
+    public override bool Renamable(LogicalEntry item) =>
+        item.Data is { } data && Editor() is { } editor && editor.Renamable(data);
+
+    /// <inheritdoc />
+    public override void Rename(LogicalEntry item, string name)
+    {
+        if (item.Data is { } data)
+        {
+            _ = Editor()?.Rename(_place.Address, data, name);
+        }
+    }
+
+    /// <inheritdoc />
+    public override bool Removable(LogicalEntry item) =>
+        item.Data is { } data && Editor() is { } editor && editor.Removable(data);
+
+    /// <inheritdoc />
+    public override void Delete(IReadOnlyList<LogicalEntry> chosen, bool ask)
+    {
+        ArgumentNullException.ThrowIfNull(chosen);
+
+        if (Editor() is not { } editor)
+        {
+            return;
+        }
+
+        foreach (var item in chosen)
+        {
+            if (item.Data is { } data)
+            {
+                _ = editor.Remove(_place.Address, data);
+            }
+        }
+    }
 
     /// <summary>
     /// What tells one entry of a place from another.

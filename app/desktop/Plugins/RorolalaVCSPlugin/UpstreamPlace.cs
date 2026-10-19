@@ -184,7 +184,8 @@ internal static class UpstreamBringing
 /// does not fit. Moving one entry is still one run, because that is what a folder's row does.
 /// </para>
 /// </remarks>
-internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogicalRefusal
+internal sealed class UpstreamPlace
+    : ILogicalViewProvider, IDropTarget, ILogicalRefusal, ILogicalFolderEditor
 {
     /// <summary>The prefix the place's addresses begin with.</summary>
     public const string Scheme = "rola";
@@ -396,6 +397,153 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
         };
     }
 
+    /// <summary>
+    /// The empty folders this place holds, which are the work's drafts rather than anything read.
+    /// </summary>
+    /// <remarks>
+    /// A path is all a folder is: one that has children has them because their paths begin with its own, which is what
+    /// makes a folder made inside another, and a folder moved to another place, carry what it holds. Nothing here is
+    /// written down: the place reads a copy of the Vault's Layout, so a folder this side made is a suggestion about what
+    /// to put in it, and a suggestion that outlived the window would be a claim the Vault never made.
+    /// </remarks>
+    private readonly HashSet<string> _drafts = new(StringComparer.Ordinal);
+
+    /// <summary>The empty folders this place holds, which is what the checks read.</summary>
+    /// <remarks>
+    /// A name is the place's own — the one it gave a folder, and the one a rename gave it — so a check that read it
+    /// from a translation would be checking the words rather than the folders.
+    /// </remarks>
+    internal IReadOnlyCollection<string> DraftPaths => _drafts;
+
+    /// <summary>The folder this place just made, which is the one its listing puts a name box on.</summary>
+    private string? _made;
+
+    /// <summary>Whether a folder was made, and the path of the one to name.</summary>
+    /// <param name="address">The place it was made in.</param>
+    /// <returns>The path, or nothing when nothing was just made.</returns>
+    public string? Pending(LogicalAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        var made = _made;
+        _made = null;
+
+        return made;
+    }
+
+    /// <inheritdoc />
+    public bool NewFolder(LogicalAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        if (Target(address) is not { } target)
+        {
+            return false;
+        }
+
+        var (source, prefix) = target;
+
+        // Only a Vault's upstream holds folders of this side's: the Layouts under `layouts` are read from the work
+        // itself, and a folder there would be a path this side made up about the work.
+        if (
+            !string.Equals(source.Domain, Vaults, StringComparison.Ordinal)
+            || source.Vault is not { Length: > 0 }
+        )
+        {
+            return false;
+        }
+
+        _made = Join(prefix, Free(source, prefix));
+        _drafts.Add(_made);
+
+        // Said as a warning because it is what it is: a folder with nothing in it is a plan, and a plan is gone when the
+        // window is. A message would read as done work.
+        Notify(
+            NotificationLevel.Warning,
+            RolaI18N.Get("rorolala_vcs.place.draft_folder_title"),
+            RolaI18N.Get("rorolala_vcs.place.draft_folder")
+        );
+
+        _host.Files.Redraw();
+
+        return true;
+    }
+
+    /// <inheritdoc />
+    public bool Renamable(object data) =>
+        data is UpstreamCarry { Entry: null } carry && _drafts.Contains(carry.Path);
+
+    /// <inheritdoc />
+    public bool Rename(LogicalAddress address, object data, string name)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (data is not UpstreamCarry { Entry: null } carry || !_drafts.Contains(carry.Path))
+        {
+            return false;
+        }
+
+        var wanted = name.Trim();
+
+        // A name is one path component, and one that names the folder's own place or the way over it is no name.
+        if (
+            wanted.Length == 0
+            || wanted.Contains('/', StringComparison.Ordinal)
+            || wanted is "." or ".."
+        )
+        {
+            return false;
+        }
+
+        var to = Join(Above(carry.Path), wanted);
+
+        if (string.Equals(to, carry.Path, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (Occupied(carry.Source, to))
+        {
+            return false;
+        }
+
+        Rebase(carry.Path, to);
+        _host.Files.Redraw();
+
+        return true;
+    }
+
+    /// <inheritdoc />
+    public bool Removable(object data) => Renamable(data);
+
+    /// <inheritdoc />
+    public bool Remove(LogicalAddress address, object data)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        if (data is not UpstreamCarry { Entry: null } carry || !_drafts.Contains(carry.Path))
+        {
+            return false;
+        }
+
+        // What is under it goes with it: a folder taken away with its children left standing would be children of
+        // nothing, and a listing of them would be a folder that is not there.
+        if (
+            _drafts.RemoveWhere(path =>
+                string.Equals(path, carry.Path, StringComparison.Ordinal)
+                || path.StartsWith(carry.Path + "/", StringComparison.Ordinal)
+            ) == 0
+        )
+        {
+            return false;
+        }
+
+        _host.Files.Redraw();
+
+        return true;
+    }
+
     /// <inheritdoc />
     public IReadOnlyList<LogicalEntry> Entries(LogicalAddress address)
     {
@@ -463,12 +611,16 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
         var tree = Tree(source);
 
         // Several at once, because a drop of a choice is what a listing's drag is for: each entry is moved by a run of its
-        // own, and the ones the Layout refuses are said beside the ones that landed.
+        // own, and the ones the Layout refuses are said beside the ones that landed. A folder moves as the tree it is, and
+        // one dropped inside itself — or back where it was — is not a move at all.
         return tree is not null
             && carrying.All(carry =>
                 string.Equals(carry.Source.Key, source.Key, StringComparison.Ordinal)
-                && Editable(tree, carry.Path, prefix)
-            );
+                && !Inside(prefix, carry.Path)
+                && !string.Equals(prefix, carry.Path, StringComparison.Ordinal)
+            )
+            && Moving(tree, carrying, prefix) is { Count: > 0 } moves
+            && moves.All(move => tree.Find(move.To) is null);
     }
 
     /// <summary>
@@ -510,6 +662,22 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
             return RolaI18N.Get("rorolala_vcs.place.refused_reading");
         }
 
+        // A folder this side made is its own reason to be refused or taken, and none of the copy's reasons apply: it is
+        // not in the copy at all.
+        if (carrying is [{ Entry: null } draft] && _drafts.Contains(draft.Path))
+        {
+            var to = Join(prefix, Name(draft.Path));
+
+            if (string.Equals(Above(draft.Path), prefix, StringComparison.Ordinal))
+            {
+                return RolaI18N.Get("rorolala_vcs.place.refused_same", draft.Path);
+            }
+
+            return Occupied(source, to)
+                ? RolaI18N.Get("rorolala_vcs.place.refused_taken", to)
+                : RolaI18N.Get("rorolala_vcs.place.refused_generic");
+        }
+
         foreach (var carry in carrying)
         {
             if (tree.Find(carry.Path) is not { } node)
@@ -517,16 +685,26 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
                 return RolaI18N.Get("rorolala_vcs.place.refused_gone");
             }
 
-            // A folder a row stands for without naming an entry is a prefix of the copy rather than a thing in it: it is
-            // brought in by dropping it on a directory, and there is no entry this side could move.
-            if (node.Entry is null)
+            // A path with nothing at it and nothing under it is not something to move.
+            if (node.Entry is null && !node.HasChildren)
             {
-                return node.HasChildren
-                    ? RolaI18N.Get("rorolala_vcs.place.refused_a_folder")
-                    : RolaI18N.Get("rorolala_vcs.place.refused_gone");
+                return RolaI18N.Get("rorolala_vcs.place.refused_gone");
             }
 
-            if (Landing(carry.Path, prefix) is not { } to)
+            // A folder dropped on itself, or back where it was, is not a move: it would name its own parent.
+            if (
+                string.Equals(prefix, carry.Path, StringComparison.Ordinal)
+                || Inside(prefix, carry.Path)
+            )
+            {
+                return RolaI18N.Get("rorolala_vcs.place.refused_same", carry.Path);
+            }
+
+            var above = Above(carry.Path);
+            var root = above.Length == 0 ? string.Empty : above + "/";
+            var to = Join(prefix, carry.Path[root.Length..]);
+
+            if (string.Equals(to, carry.Path, StringComparison.Ordinal))
             {
                 return RolaI18N.Get("rorolala_vcs.place.refused_same", carry.Path);
             }
@@ -561,27 +739,121 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
             return;
         }
 
-        List<(string From, string To, string? Holder)> moves = [];
-
-        foreach (var carry in carrying)
+        // A folder this side made is moved by rewriting its path, and what is under it comes with it: nothing is run,
+        // because there is nothing of the work to run it against.
+        if (carrying is [{ Entry: null } draft] && _drafts.Contains(draft.Path))
         {
+            var to = Join(prefix, Name(draft.Path));
+
             if (
-                !string.Equals(carry.Source.Key, source.Key, StringComparison.Ordinal)
-                || Landing(carry.Path, prefix) is not { } to
-                || !Editable(tree, carry.Path, prefix)
+                !string.Equals(Above(draft.Path), prefix, StringComparison.Ordinal)
+                && !Occupied(source, to)
             )
             {
-                continue;
+                Rebase(draft.Path, to);
+                _host.Files.Redraw();
             }
 
-            moves.Add((carry.Path, to, tree.Find(carry.Path)?.Entry?.Owner));
+            return;
         }
+
+        // A folder is moved as the tree it is: what stands at its path and under it keeps the paths it has below the
+        // folder, which is what a folder cut and pasted in the file browser comes to. One run per entry, because that is
+        // what the command line takes, and what landed is checked against the copy afterwards.
+        var moves = Moving(tree, carrying, prefix)
+            .Where(move =>
+                string.Equals(
+                    carrying[0].Source.Key,
+                    source.Key,
+                    StringComparison.Ordinal
+                )
+                && tree.Find(move.To) is null
+            )
+            .ToList();
 
         if (moves.Count > 0)
         {
             Move(source, moves);
         }
     }
+
+    /// <summary>What moving these carries to a prefix comes to, one entry at a time.</summary>
+    /// <remarks>
+    /// A folder is not an entry, so a move of one is a move of everything at its path and under it, each keeping the
+    /// path it has below the folder: a folder and an entry of the same path are both moved, which is what makes a
+    /// folder that names an entry movable at all. A landing that is where the entry already is is not a move.
+    /// </remarks>
+    /// <param name="tree">The copy the drag is of.</param>
+    /// <param name="carrying">What the drag carried.</param>
+    /// <param name="prefix">The prefix they are dropped on.</param>
+    /// <returns>The moves, each entry once and in the order the carries were made.</returns>
+    internal static List<(string From, string To, string? Holder)> Moving(
+        UpstreamEntriesTree tree,
+        IReadOnlyList<UpstreamCarry> carrying,
+        string prefix
+    )
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(carrying);
+
+        List<(string From, string To, string? Holder)> moves = [];
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var carry in carrying)
+        {
+            if (tree.Find(carry.Path) is not { } node)
+            {
+                continue;
+            }
+
+            // The path a moved entry has is the one it has below the folder, under the prefix it was dropped on.
+            var above = Above(carry.Path);
+            var root = above.Length == 0 ? string.Empty : above + "/";
+
+            foreach (var path in node.HasChildren ? Every(tree, carry.Path) : [carry.Path])
+            {
+                var to = Join(prefix, path[root.Length..]);
+
+                if (!seen.Add(path) || string.Equals(to, path, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                moves.Add((path, to, tree.Find(path)?.Entry?.Owner));
+            }
+        }
+
+        return moves;
+    }
+
+    /// <summary>Every entry at a path and under it, in the order a listing reads them.</summary>
+    /// <param name="tree">The copy.</param>
+    /// <param name="path">The folder.</param>
+    /// <returns>The paths, which is the folder's own only when an entry stands there.</returns>
+    private static IEnumerable<string> Every(UpstreamEntriesTree tree, string path)
+    {
+        if (tree.Find(path)?.Entry is not null)
+        {
+            yield return path;
+        }
+
+        foreach (var child in tree.At(path))
+        {
+            foreach (var deeper in Every(tree, child.Path))
+            {
+                yield return deeper;
+            }
+        }
+    }
+
+    /// <summary>Whether a path is inside another, which is what a folder dropped in itself would be.</summary>
+    /// <param name="path">The path.</param>
+    /// <param name="of">The folder it may be inside.</param>
+    /// <returns>Whether it is.</returns>
+    private static bool Inside(string path, string of) =>
+        path.Length > of.Length
+        && path.StartsWith(of, StringComparison.Ordinal)
+        && path[of.Length] == '/';
 
     /// <summary>
     /// What a place says about each of its entries: the uuid the Vault knows it by, and the account that holds it.
@@ -947,12 +1219,175 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
 
         // The way up from the top of a Layout is the list it is one of, which is not a prefix of the copy: what is over the
         // copy is what it is one of, so the row is made here rather than read out of the tree.
+        List<LogicalEntry> rows = [];
+
+        if (prefix.Length == 0)
+        {
+            rows.Add(Up(Of(source.Domain)));
+        }
+
+        rows.AddRange(UpstreamSpots.Of(tree, prefix).Select(spot => Spot(source, spot)));
+        rows.AddRange(Drafts(source, prefix, tree));
+
+        // Folders before things, each by name, which is the order a level of the copy reads in: a folder this side made is
+        // a folder like any other, and one drawn after the files would be one a reader has to find.
         return
         [
-            .. (prefix.Length == 0 ? new[] { Up(Of(source.Domain)) } : []),
-            .. UpstreamSpots.Of(tree, prefix).Select(spot => Spot(source, spot)),
+            .. rows.OrderBy(row => row.Opens is null ? 1 : 0)
+                .ThenBy(row => row.Name, StringComparer.Ordinal),
         ];
     }
+
+    /// <summary>The empty folders this place holds at one level, which nothing read from the Vault has.</summary>
+    /// <remarks>
+    /// A folder this side made is let go of as soon as the copy names it: a checkin or a move into its path is the work
+    /// arriving, and what was a suggestion is then a folder of the Vault's own. It comes back if the work leaves again,
+    /// because nothing was ever written down about it.
+    /// </remarks>
+    /// <param name="source">The Layout the level is of.</param>
+    /// <param name="prefix">The prefix the level is at.</param>
+    /// <param name="tree">The copy, which says whether the path is the work's own.</param>
+    /// <returns>The rows, one per folder, in name order.</returns>
+    private IEnumerable<LogicalEntry> Drafts(
+        UpstreamSource source,
+        string prefix,
+        UpstreamEntriesTree tree
+    )
+    {
+        if (!string.Equals(source.Domain, Vaults, StringComparison.Ordinal))
+        {
+            yield break;
+        }
+
+        foreach (var path in _drafts.OrderBy(path => path, StringComparer.Ordinal))
+        {
+            if (
+                !string.Equals(Above(path), prefix, StringComparison.Ordinal)
+                || Covered(tree, path)
+            )
+            {
+                continue;
+            }
+
+            yield return new LogicalEntry(
+                Name(path),
+                Draggable: true,
+                Opens: Of(source.Domain, source.Name, path),
+                Menu: DraftMenu(source, path),
+                Data: new UpstreamCarry(source, path),
+                Picture: size => EntryIcons.For(path, EntryKind.Directory, size)
+            );
+        }
+    }
+
+    /// <summary>Whether the work already names a path, which is what a folder this side made gives way to.</summary>
+    /// <param name="tree">The copy.</param>
+    /// <param name="path">The path.</param>
+    /// <returns>Whether something is there.</returns>
+    private static bool Covered(UpstreamEntriesTree tree, string path) =>
+        tree.Find(path) is { Entry: not null } or { HasChildren: true };
+
+    /// <summary>What a folder this side made offers, which is what may be done to it.</summary>
+    /// <param name="source">The Layout it is of.</param>
+    /// <param name="path">The folder's path.</param>
+    /// <returns>The items.</returns>
+    private IReadOnlyList<ContextMenuItem> DraftMenu(UpstreamSource source, string path) =>
+    [
+        new ContextMenuItem(
+            "rorolala_vcs.place.draft_remove",
+            10,
+            _ => Remove(Of(source.Domain, source.Name, path), new UpstreamCarry(source, path)),
+            Icons.Error
+        ),
+    ];
+
+    /// <summary>Makes a folder, naming it so that no name is taken and none is empty.</summary>
+    /// <param name="source">The Layout it is made in.</param>
+    /// <param name="prefix">The prefix it is made under.</param>
+    /// <returns>The name it is given.</returns>
+    private string Free(UpstreamSource source, string prefix)
+    {
+        var stem = RolaI18N.Get("rorolala_vcs.place.new_folder_name");
+        var name = stem;
+
+        for (var at = 2; Occupied(source, Join(prefix, name)); at++)
+        {
+            name = stem + " " + at;
+        }
+
+        return name;
+    }
+
+    /// <summary>Whether a path is already something here, either the work's or this side's.</summary>
+    /// <param name="source">The Layout the path is in.</param>
+    /// <param name="path">The path.</param>
+    /// <returns>Whether it is taken.</returns>
+    private bool Occupied(UpstreamSource source, string path) =>
+        _drafts.Contains(path) || Tree(source)?.Find(path) is not null;
+
+    /// <summary>Moves a folder this side made, and everything under it, to another path.</summary>
+    /// <remarks>
+    /// What a folder holds is the paths that begin with its own, so moving the folder is rewriting those prefixes: a child
+    /// left at the old prefix would be a child of nothing.
+    /// </remarks>
+    /// <param name="from">The path it is at.</param>
+    /// <param name="to">The path it is to be at.</param>
+    private void Rebase(string from, string to)
+    {
+        var moving = _drafts
+            .Where(path =>
+                string.Equals(path, from, StringComparison.Ordinal)
+                || path.StartsWith(from + "/", StringComparison.Ordinal)
+            )
+            .ToArray();
+
+        foreach (var path in moving)
+        {
+            _ = _drafts.Remove(path);
+        }
+
+        foreach (var path in moving)
+        {
+            _ = _drafts.Add(to + path[from.Length..]);
+        }
+    }
+
+    /// <summary>The name a path's last component is, which is what a folder row is called.</summary>
+    /// <param name="path">The path.</param>
+    /// <returns>The name.</returns>
+    private static string Name(string path) => path[(path.LastIndexOf('/') + 1)..];
+
+    /// <summary>The path a path is under, which is empty at the top of a Layout.</summary>
+    /// <param name="path">The path.</param>
+    /// <returns>The path above it.</returns>
+    private static string Above(string path) =>
+        path.LastIndexOf('/') is var at && at >= 0 ? path[..at] : string.Empty;
+
+    /// <summary>A path under a prefix, which is the path itself when the prefix is the top of a Layout.</summary>
+    /// <param name="prefix">The prefix.</param>
+    /// <param name="name">The name under it.</param>
+    /// <returns>The path.</returns>
+    private static string Join(string prefix, string name) =>
+        prefix.Length == 0 ? name : prefix + "/" + name;
+
+    /// <summary>Puts a notification in the host's stack, which is what a folder with nothing in it is said with.</summary>
+    /// <param name="level">How serious it is.</param>
+    /// <param name="title">What it is called.</param>
+    /// <param name="said">What it says.</param>
+    private void Notify(NotificationLevel level, string title, string said) =>
+        _host.Dialogs.Notify(
+            new Notification(
+                level,
+                title,
+                () =>
+                    new Avalonia.Controls.TextBlock
+                    {
+                        Text = said,
+                        TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                        MaxWidth = 420,
+                    }
+            )
+        );
 
     /// <summary>The row that leads out of a level, to the place over it.</summary>
     /// <param name="over">The place it leads to.</param>
@@ -1008,23 +1443,41 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
         if (spot.Entry is not { } entry)
         {
             // A folder with nothing under it is nothing to check in, and nothing else about it is worth a menu.
-            if (!tracked || !spot.Folder)
+            if (!spot.Folder)
             {
                 return null;
             }
 
             return
             [
-                new ContextMenuItem(
-                    "rorolala_vcs.place.checkin",
-                    10,
-                    _ => _checkin.Start(
-                        source,
-                        [new UpstreamCarry(source, spot.Path)],
-                        destination: null
-                    ),
-                    Icons.Download
-                ),
+                // What a folder of a Vault's copy can always have is a folder of this side's in it, which is the one
+                // thing that can be arranged before the work is.
+                .. (source.Vault is { Length: > 0 }
+                    ? new ContextMenuItem[]
+                    {
+                        new(
+                            "rorolala_vcs.place.new_folder",
+                            5,
+                            _ => NewFolder(Of(source.Domain, source.Name, spot.Path)),
+                            Icons.Add
+                        ),
+                    }
+                    : []),
+                .. (tracked
+                    ? new ContextMenuItem[]
+                    {
+                        new(
+                            "rorolala_vcs.place.checkin",
+                            10,
+                            _ => _checkin.Start(
+                                source,
+                                [new UpstreamCarry(source, spot.Path)],
+                                destination: null
+                            ),
+                            Icons.Download
+                        ),
+                    }
+                    : []),
             ];
         }
 
@@ -1032,6 +1485,18 @@ internal sealed class UpstreamPlace : ILogicalViewProvider, IDropTarget, ILogica
 
         return
         [
+            // A folder of this side's can be made in a row that names a folder, whether or not an entry stands there.
+            .. (spot.Folder && source.Vault is { Length: > 0 }
+                ? new ContextMenuItem[]
+                {
+                    new(
+                        "rorolala_vcs.place.new_folder",
+                        5,
+                        _ => NewFolder(Of(source.Domain, source.Name, spot.Path)),
+                        Icons.Add
+                    ),
+                }
+                : []),
             // A checkin brings what the Layout being worked in *tracks*, so an entry of another Vault's copy — or of a
             // Layout of the Workspace's own — is not something a checkin can name: what there is to do with it is read it,
             // and move it where it belongs.

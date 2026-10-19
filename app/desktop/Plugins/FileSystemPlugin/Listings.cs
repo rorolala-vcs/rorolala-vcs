@@ -447,6 +447,21 @@ internal abstract class Listing<TItem>
     /// <returns>The item to name, or nothing.</returns>
     public virtual TItem? Pending() => null;
 
+    /// <summary>Whether a row's name may be edited in place.</summary>
+    /// <remarks>
+    /// A listing of what a place reads has names that are not its own to give, so a name is only editable where the
+    /// place says it would take one: an edit box opened on a name nothing can take is a box that puts itself away
+    /// again, and the reader is left wondering what they did.
+    /// </remarks>
+    /// <param name="item">The row.</param>
+    /// <returns>Whether the name may be edited.</returns>
+    public virtual bool Renamable(TItem item) => true;
+
+    /// <summary>Whether a row may be removed.</summary>
+    /// <param name="item">The row.</param>
+    /// <returns>Whether it may be removed.</returns>
+    public virtual bool Removable(TItem item) => true;
+
     /// <summary>Reads the listing again, which is what an edit that changed the files leaves behind.</summary>
     public virtual void Touch() { }
 
@@ -957,10 +972,20 @@ internal abstract class EntryView<TItem> : EntryView
 
     /// <summary>Removes what is chosen, asking first unless told not to.</summary>
     /// <param name="ask">Whether to put the question to the user first.</param>
-    public void Delete(bool ask) => Source.Delete(Offered(), ask);
+    public void Delete(bool ask) => Source.Delete([.. Offered().Where(Source.Removable)], ask);
 
     /// <summary>Makes a directory in the listing, which is then named where it is drawn.</summary>
-    public void NewFolder() => Source.NewFolder();
+    public void NewFolder()
+    {
+        Source.NewFolder();
+
+        // A folder made by a key is a folder with no name yet: its row is this view's, and the box goes in a turn later,
+        // which is what the same wait at the top of this file is for.
+        if (Source.Pending() is { } naming)
+        {
+            Dispatcher.UIThread.Post(() => Rename(naming), DispatcherPriority.Background);
+        }
+    }
 
     /// <summary>The box a name is being edited in, and the entry it is about, while one is.</summary>
     /// <remarks>
@@ -1005,6 +1030,12 @@ internal abstract class EntryView<TItem> : EntryView
         if (_editor is not null)
         {
             return true;
+        }
+
+        // A name the place would not take is a box that would put itself away again, so one is not put up.
+        if (!Source.Renamable(item))
+        {
+            return false;
         }
 
         var label = _rows

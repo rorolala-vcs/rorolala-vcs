@@ -281,6 +281,66 @@ public interface ILogicalRefusal
 }
 
 /// <summary>
+/// What a place can do to the folders it holds that are not in what it reads.
+/// </summary>
+/// <remarks>
+/// A place read from somewhere else — a Vault's copy, a history — has no directories of its own to make: what it lists
+/// is what it read. A place that lets its reader arrange the work before there is any is the case this exists for: an
+/// empty folder is a place's own, so making one, naming it, and letting it go are the place's to answer rather than the
+/// browser's.
+/// <para>
+/// Optional, because most places have nothing of their own to arrange: one that does not answer has no new-folder key,
+/// no name to edit, and nothing to remove, which is what a read-only listing should be.
+/// </para>
+/// <para>
+/// The data handed back is the row's <see cref="LogicalEntry.Data"/>, which is what the place answered with: a row the
+/// place does not recognise as its own is answered as <see langword="false"/> rather than guessed at.
+/// </para>
+/// </remarks>
+public interface ILogicalFolderEditor
+{
+    /// <summary>Makes an empty folder under an address, which the place then lists.</summary>
+    /// <param name="address">The place the folder is made in.</param>
+    /// <returns>Whether one was made, which is nothing when the place does not make them.</returns>
+    bool NewFolder(LogicalAddress address);
+
+    /// <summary>
+    /// The path of a folder <see cref="NewFolder"/> just made, which is the one to put a name box on.
+    /// </summary>
+    /// <remarks>
+    /// A folder made by a key is a folder nobody named: the view puts the name in a box where it is drawn, and what it
+    /// needs for that is which row. Answered once — a listing asks as it is built, and one that asked twice would open a
+    /// box on every redraw — so a view that never asks leaves nothing behind.
+    /// </remarks>
+    /// <param name="address">The place the folder was made in.</param>
+    /// <returns>The path, or nothing when nothing was just made.</returns>
+    string? Pending(LogicalAddress address);
+
+    /// <summary>Whether a row may have its name edited in place.</summary>
+    /// <param name="data">What the row carries.</param>
+    /// <returns>Whether the place would take a name for it.</returns>
+    bool Renamable(object data);
+
+    /// <summary>Takes a name for a row the place answered it would take one for.</summary>
+    /// <param name="address">The place the row is in.</param>
+    /// <param name="data">What the row carries.</param>
+    /// <param name="name">What the name was edited to.</param>
+    /// <returns>Whether the name was taken, which is nothing when it was not a name the place could give.</returns>
+    bool Rename(LogicalAddress address, object data, string name);
+
+    /// <summary>Whether a row may be removed.</summary>
+    /// <param name="data">What the row carries.</param>
+    /// <returns>Whether the place would remove it.</returns>
+    bool Removable(object data);
+
+    /// <summary>Removes a row the place answered it would remove.</summary>
+    /// <param name="address">The place the row is in.</param>
+    /// <param name="data">What the row carries.</param>
+    /// <returns>Whether something was removed.</returns>
+    bool Remove(LogicalAddress address, object data);
+}
+
+/// <summary>
 /// Where a plugin offers the places it answers for, by the prefix their addresses begin with.
 /// </summary>
 /// <remarks>
