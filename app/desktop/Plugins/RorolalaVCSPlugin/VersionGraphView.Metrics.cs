@@ -216,11 +216,13 @@ internal sealed partial class VersionGraphView
         {
             // The state a capsule carries is what it is coloured by, so an edit is read before its
             // label is: an unrecorded change is green, and one that must not be recorded is red.
-            var colour = variant.State is null
-                ? ink.AccentInk
-                : variant.Wrong
-                    ? ink.Del
-                    : ink.Add;
+            var colour = variant.Merging
+                ? RorolalaColours.UnderWay
+                : variant.State is null
+                    ? ink.AccentInk
+                    : variant.Wrong
+                        ? ink.Del
+                        : ink.Add;
             var label = Text(variant.Label, MonoMedium, 11 * zoom, colour);
 
             variants[variant.Index] = new VariantMetrics(

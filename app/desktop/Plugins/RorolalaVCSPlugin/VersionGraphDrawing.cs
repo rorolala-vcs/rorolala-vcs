@@ -155,6 +155,10 @@ internal sealed class VersionGraphDrawing
     /// The variants the chain draws nowhere — the ones the work may still be on its way through —
     /// or nothing when the graph is not showing them.
     /// </param>
+    /// <param name="merging">
+    /// The variant waiting to be joined into the file, as its hash, or nothing when no merge is in
+    /// progress. It is the one a checkin left behind, and it is drawn in the colour of work under way.
+    /// </param>
     /// <returns>The drawing.</returns>
     /// <remarks>
     /// An edit is drawn as a variant of its own, based on the highest version: it is the variant that
@@ -171,7 +175,8 @@ internal sealed class VersionGraphDrawing
     public static VersionGraphDrawing From(
         RolaVersionGraph graph,
         (string Words, bool Wrong)? editing,
-        IReadOnlyList<UnjoinedVariant>? unjoined = null
+        IReadOnlyList<UnjoinedVariant>? unjoined = null,
+        string? merging = null
     )
     {
         ArgumentNullException.ThrowIfNull(graph);
@@ -347,7 +352,8 @@ internal sealed class VersionGraphDrawing
                 variant.Creator,
                 variant.Message,
                 null,
-                false
+                false,
+                Merging: IsMerging(variant.Hash, merging)
             );
 
             variantNodes.Add(node);
@@ -377,7 +383,8 @@ internal sealed class VersionGraphDrawing
                     extra.Message,
                     null,
                     false,
-                    Unjoined: true
+                    Unjoined: true,
+                    Merging: IsMerging(extra.Hash, merging)
                 )
             );
         }
@@ -422,6 +429,14 @@ internal sealed class VersionGraphDrawing
             top
         );
     }
+
+    /// <summary>Whether a variant's hash is the one waiting to be joined into the file.</summary>
+    /// <param name="hash">The variant's hash, as the index names it.</param>
+    /// <param name="merging">The pending variant's hash, or nothing when no merge is in progress.</param>
+    /// <returns>Whether the two name the same variant.</returns>
+    private static bool IsMerging(string hash, string? merging) =>
+        merging is { Length: > 0 }
+        && string.Equals(hash, merging, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>One version, where it stands, and what it says.</summary>
     /// <param name="Level">The version's number, zero for the oldest.</param>
@@ -484,6 +499,10 @@ internal sealed class VersionGraphDrawing
     /// Whether the variant is one the chain draws nowhere: it is based on a version of the chain, so it
     /// has the edge down to that version, but no version points at it and nothing joins it in.
     /// </param>
+    /// <param name="Merging">
+    /// Whether it is the variant waiting to be joined into the file, which is the one a checkin left
+    /// behind and a track will record.
+    /// </param>
     internal sealed record VariantNode(
         int Index,
         string Label,
@@ -497,6 +516,7 @@ internal sealed class VersionGraphDrawing
         string Message,
         string? State,
         bool Wrong,
-        bool Unjoined = false
+        bool Unjoined = false,
+        bool Merging = false
     );
 }

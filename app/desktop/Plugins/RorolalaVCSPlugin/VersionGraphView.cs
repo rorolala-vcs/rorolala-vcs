@@ -625,11 +625,13 @@ internal sealed partial class VersionGraphView : Control
         {
             RolaVersionGraph? graph = null;
             (string Words, bool Wrong)? editing = null;
+            string? merging = null;
 
             try
             {
                 graph = RolaVersionGraph.Locate(directory, entry.Path);
                 editing = EditingOf(directory, entry.Path);
+                merging = MergingOf(directory, entry.Path);
             }
             catch (Exception error) when (error is not OutOfMemoryException)
             {
@@ -682,7 +684,7 @@ internal sealed partial class VersionGraphView : Control
 
                     using (graph)
                     {
-                        drawing = VersionGraphDrawing.From(graph, editing, unjoined);
+                        drawing = VersionGraphDrawing.From(graph, editing, unjoined, merging);
                     }
 
                     var moved = !string.Equals(entry.Path, _target, StringComparison.Ordinal);
@@ -750,6 +752,40 @@ internal sealed partial class VersionGraphView : Control
 
             return null;
         }
+    }
+
+    /// <summary>The variant waiting to be joined into the file at `path`, when one is.</summary>
+    /// <remarks>
+    /// It is read from the same status reading the edit is, so the menu and the drawing agree about
+    /// whether a merge is in progress: the command refuses a join while one is, and a second join item
+    /// would be an item that only fails.
+    /// </remarks>
+    /// <param name="directory">The directory holding the file, which is what a work is read for.</param>
+    /// <param name="path">The file, as the program names it.</param>
+    /// <returns>The pending variant's hash, or nothing when the file is not in a merge.</returns>
+    private string? MergingOf(string directory, string path)
+    {
+        if (_statuses.Reading(directory) is not { } status)
+        {
+            return null;
+        }
+
+        try
+        {
+            foreach (var merge in status.Merging)
+            {
+                if (StatusReadings.Names(status.Root, merge.Target, path))
+                {
+                    return merge.Variant;
+                }
+            }
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _log.Warn($"whether `{path}` is being merged could not be read: {error.Message}");
+        }
+
+        return null;
     }
 
     /// <summary>Says one thing in place of the graph, or nothing while a read is going.</summary>
@@ -1022,6 +1058,32 @@ internal sealed partial class VersionGraphView : Control
         copy.Click += (_, _) => CopyHash(hash);
         menu.Items.Add(copy);
 
+        // An unjoined variant is one no version points at, and joining it into the file is what makes
+        // it a merge waiting to be recorded. A file already in a merge has nowhere for a second one to
+        // go, so the item is offered only while it is not.
+        if (
+            node.Variant is { Unjoined: true } unjoined
+            && _target is { Length: > 0 } joining
+            && Path.GetDirectoryName(joining) is { Length: > 0 } mergingAt
+            && MergingOf(mergingAt, joining) is null
+        )
+        {
+            menu.Items.Add(new Avalonia.Controls.Separator());
+
+            var join = new Avalonia.Controls.MenuItem
+            {
+                Header = RolaI18N.Get("rorolala_vcs.version_graph.join_variant"),
+            };
+
+            if (_icons.Find(Icons.Merge) is { } joinPicture)
+            {
+                join.Icon = Icons.Inked(joinPicture);
+            }
+
+            join.Click += (_, _) => BeginJoin(unjoined.Hash);
+            menu.Items.Add(join);
+        }
+
         // A retrack is about a version the track records, and the file the graph is of is where it is
         // written: a node the index has no hash for is a placeholder, and one with no file on screen
         // has nothing to move. A version only the Vault has may be gone to as well: the command brings
@@ -1166,6 +1228,56 @@ internal sealed partial class VersionGraphView : Control
 
             return true;
         }
+    }
+
+    /// <summary>Turns an unjoined variant into a merge waiting on the file.</summary>
+    /// <remarks>
+    /// The run is the command line's <c>checkin</c> in its variant mode, and it is made off the
+    /// window's thread: the variant and its content may be asked of a Vault when they are not here.
+    /// What it wrote is a waiting merge rather than a version, so every view of the work is told the
+    /// files may have changed, and the graph reads again: the variant it names is the one drawn in the
+    /// colour of work under way.
+    /// </remarks>
+    /// <param name="variant">The variant to join into the file on screen.</param>
+    private void BeginJoin(string variant)
+    {
+        if (
+            _target is not { Length: > 0 } path
+            || Path.GetDirectoryName(path) is not { Length: > 0 } directory
+        )
+        {
+            return;
+        }
+
+        var run = _hub.Begin("rorolala_vcs.progress.join");
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = JoinCommand.Run(directory, path, variant);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hub.End(run);
+                _files.Touch();
+
+                if (!done)
+                {
+                    _dialogs.Present(
+                        RolaI18N.Get("rorolala_vcs.version_graph.join_failed"),
+                        () =>
+                            ReportView.Of(
+                                ReportLines.Parse(said),
+                                key => _icons.Find(key),
+                                ReportView.Ink
+                            )
+                    );
+
+                    return;
+                }
+
+                Refresh();
+            });
+        });
     }
 
     /// <summary>Runs the retrack, and reads the work again once it is over.</summary>

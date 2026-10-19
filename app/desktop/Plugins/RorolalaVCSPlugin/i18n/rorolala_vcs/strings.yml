@@ -105,6 +105,15 @@ rorolala_vcs:
       en: The file could not be tracked
       zh-CN: 未能追踪该文件
 
+    # What a right-click on an unjoined variant offers: making it the merge waiting on the file. It is
+    # offered only while the file is not already in a merge, since a second one has nowhere to go.
+    join_variant:
+      en: Join Variant
+      zh-CN: 合并该变体
+    join_failed:
+      en: The variant could not be joined
+      zh-CN: 未能合并该变体
+
     # What the Vault's version says on hover when the version itself is not in this index: a fetch
     # brings the Vault's Layout and never its versions, so there is a hash to name but no chain or
     # words to draw.
@@ -483,6 +492,9 @@ rorolala_vcs:
     track:
       en: Tracking
       zh-CN: 追踪新版本
+    join:
+      en: Joining
+      zh-CN: 合并变体
     row_up:
       en: Uploading
       zh-CN: 上传中

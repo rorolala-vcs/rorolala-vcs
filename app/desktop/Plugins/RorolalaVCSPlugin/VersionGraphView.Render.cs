@@ -598,11 +598,13 @@ internal sealed partial class VersionGraphView
             var height = VersionGraphDrawing.CapsuleHeight * _zoom;
             var cx = _panX + variant.X * _zoom;
             var cy = _panY + variant.Y * _zoom;
-            var stroke = variant.State is null
-                ? ink.Accent
-                : variant.Wrong
-                    ? ink.Del
-                    : ink.Add;
+            var stroke = variant.Merging
+                ? RorolalaColours.UnderWay
+                : variant.State is null
+                    ? ink.Accent
+                    : variant.Wrong
+                        ? ink.Del
+                        : ink.Add;
             var pen = new Pen(new SolidColorBrush(stroke), Math.Max(1, 1.5 * _zoom));
 
             if (
