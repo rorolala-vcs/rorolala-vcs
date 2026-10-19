@@ -239,15 +239,19 @@ impl<'a> Sources<'a> {
     /// be in the Vault's own store, so content that cannot be sent there is a failure of the run
     /// rather than something another Vault could stand in for.
     ///
+    /// What is answered with is how many units crossed: one per key kept whole, and a manifest and
+    /// its chunks for one kept cut, which is what the Vault was actually handed. It is what the
+    /// caller says moved, so it counts what was sent rather than what was asked for.
+    ///
     /// # Errors
     ///
     /// Returns the exchange's own failure as a message.
-    pub fn send(&self, store: Option<&RorolalaStorage>, keys: &[Key]) -> Result<(), String> {
+    pub fn send(&self, store: Option<&RorolalaStorage>, keys: &[Key]) -> Result<usize, String> {
         let Some(primary) = self.candidates.first() else {
-            return Ok(());
+            return Ok(0);
         };
         if keys.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
 
         // What is named is exploded into units here, before the keys are split: a content kept as
@@ -274,7 +278,7 @@ impl<'a> Sources<'a> {
         results
             .into_iter()
             .find_map(Result::err)
-            .map_or(Ok(()), |error| Err(error.to_string()))
+            .map_or(Ok(lines.len()), |error| Err(error.to_string()))
     }
 
     /// How many lanes a Vault grants, asking it once and remembering the answer.

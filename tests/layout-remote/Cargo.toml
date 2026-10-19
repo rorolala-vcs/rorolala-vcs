@@ -7,5 +7,6 @@ publish = false
 [dependencies]
 librorolala = { path = "../.." }
 rorolala-utils-sandbox = { path = "../../utils/sandbox" }
+serde_json = "1.0.151"
 tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "rt-multi-thread"] }
 uuid = { version = "1.26.1", features = ["v4"] }

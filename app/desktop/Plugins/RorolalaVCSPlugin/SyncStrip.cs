@@ -53,8 +53,8 @@ internal sealed class SyncStrip : StackPanel
     /// <summary>How much room a button keeps around its mark.</summary>
     private const double Room = 6;
 
-    /// <summary>The three buttons, with the mark each is drawn as and what it is called.</summary>
-    private readonly List<(Button Button, Border Mark, string Label)> _ways = [];
+    /// <summary>The three buttons, with the mark each is drawn as, what it is called, and which way it carries.</summary>
+    private readonly List<(Button Button, Border Mark, string Label, SyncWay Way)> _ways = [];
 
     /// <summary>The boxes of what is carried, so that a change made elsewhere is drawn here too.</summary>
     private readonly List<(CheckBox Box, string Setting)> _boxes = [];
@@ -132,7 +132,7 @@ internal sealed class SyncStrip : StackPanel
         var mark = Glyph(key);
         var button = Button(mark, label, () => Pressed(way));
 
-        _ways.Add((button, mark, label));
+        _ways.Add((button, mark, label, way));
         inside.Children.Add(button);
     }
 
@@ -215,12 +215,12 @@ internal sealed class SyncStrip : StackPanel
     {
         var said = _shifted ? RolaI18N.Get("rorolala_vcs.sync.forced") : null;
 
-        foreach (var (button, mark, label) in _ways)
+        foreach (var (button, mark, label, way) in _ways)
         {
-            button.IsEnabled = _sync.Pressable;
+            button.IsEnabled = _sync.Pressable && WayPressable(way);
             mark[!Border.BackgroundProperty] = new DynamicResourceExtension(_shifted ? Held : Ink);
 
-            ToolTip.SetTip(button, Sentence(label, said));
+            ToolTip.SetTip(button, Sentence(label, said, way));
         }
 
         _group[!Border.BorderBrushProperty] = new DynamicResourceExtension(_shifted ? Held : Rule);
@@ -234,19 +234,39 @@ internal sealed class SyncStrip : StackPanel
     }
 
     /// <summary>
+    /// Whether one of the three may be pressed with what a run is told to carry.
+    /// </summary>
+    /// <remarks>
+    /// A run that leaves the Layout behind reads no Layout, so it has no plan for a direction to narrow: the
+    /// command line refuses `--up-only` and `--down-only` beside `--no-layout`, and a button here would offer a
+    /// run that ends in an error. Both ways is what such a run does, so that is the one left pressable.
+    /// </remarks>
+    /// <param name="way">Which way the button carries.</param>
+    /// <returns>Whether it is a run the command line will take.</returns>
+    private static bool WayPressable(SyncWay way) =>
+        way == SyncWay.Both || SyncSettings.Carries(SyncSettings.Layout);
+
+    /// <summary>
     /// What a button says when the pointer rests on it: what it does, and why it is drawn as it is.
     /// </summary>
     /// <remarks>
     /// Three things may be worth saying beyond the button's own name, and they are said in the order a reader
-    /// wants them: that a held key changes the run, that there is nothing to carry, and why there is nothing —
-    /// which is the one thing a reader looking at three grey buttons wants to know.
+    /// wants them: what a run told to leave the Layout behind cannot do, that a held key changes the run, and
+    /// why there is nothing to carry — which is the one thing a reader looking at three grey buttons wants to
+    /// know.
     /// </remarks>
     /// <param name="label">The key of what the button is called.</param>
     /// <param name="held">What the key being held means, or nothing while it is not.</param>
+    /// <param name="way">Which way the button carries.</param>
     /// <returns>What to say.</returns>
-    private string Sentence(string label, string? held)
+    private string Sentence(string label, string? held, SyncWay way)
     {
         var said = RolaI18N.Get(label);
+
+        if (!WayPressable(way))
+        {
+            return $"{said} — {RolaI18N.Get("rorolala_vcs.sync.direction_needs_layout")}";
+        }
 
         if (held is { Length: > 0 })
         {

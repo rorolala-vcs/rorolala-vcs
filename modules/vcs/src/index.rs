@@ -6,6 +6,7 @@
 //! storage traits so that the transfer two ends speak is the same one, and reuses storage's
 //! framing, keys and pack directories rather than growing a second of each.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::io;
@@ -13,7 +14,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use rorolala_storage::{Codec, FRAME_VERSION, Frame, Layout, LockError, Lockable, LockingGuard};
+use rorolala_storage::{
+    Blake3Hash, Codec, FRAME_VERSION, Frame, Layout, LockError, Lockable, LockingGuard,
+};
 use rorolala_utils_constants::{
     LOCK_FILE, VAULT_CONFIG_PATH, VAULT_INDEX_DIR, WORKSPACE_DATA_DIR, WORKSPACE_INDEX_DIR,
 };
@@ -440,6 +443,66 @@ impl VCSIndex {
         }
 
         Ok(objects)
+    }
+
+    /// The storage hash every Variant in the index names, in the order the keys are held in.
+    ///
+    /// This is a scan rather than a listing: what is wanted is which content the index points at,
+    /// so an object of another kind is skipped as soon as the bytes say which kind it is, without
+    /// being decoded. A Variant is decoded, since the hash is one of its fields — but the object is
+    /// not checked against the key it is held under, unlike [`read`](Self::read): what is taken from
+    /// it is which content it names, not the object itself.
+    ///
+    /// An index object is written whole and raw, so the kind is the first byte of the payload and
+    /// the same scan costs one read per object. A frame written by some other codec is decoded
+    /// first, since only the plain payload leads with the kind.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VCSIndexReadingError`] if the keys cannot be listed, an entry is not framed the way
+    /// this build writes an index object, or a Variant does not decode.
+    pub async fn variant_storage_hashes(&self) -> Result<Vec<Blake3Hash>, VCSIndexReadingError> {
+        let keys = self.list_object_keys().await?;
+
+        let mut hashes = Vec::new();
+        for key in keys {
+            // A key a pack names but whose pack is gone is held and not producible, which is the
+            // same answer as an object that was never written: nothing is read out of it.
+            let Some(bytes) = self.entry_bytes(&key).await? else {
+                continue;
+            };
+            let (frame, header) = Frame::decode(&bytes).map_err(VCSIndexError::from)?;
+            if frame.layout != Layout::Single {
+                return Err(VCSIndexError::Malformed.into());
+            }
+
+            let payload = bytes.get(header..).ok_or(VCSIndexError::Malformed)?;
+            let plain = if frame.codec == Codec::Raw {
+                Cow::Borrowed(payload)
+            } else {
+                let plain_len =
+                    usize::try_from(frame.plain_len).map_err(|_| VCSIndexError::Malformed)?;
+                let plain = frame
+                    .codec
+                    .decode(payload, plain_len)
+                    .map_err(VCSIndexError::from)?;
+
+                Cow::Owned(plain)
+            };
+
+            if plain.first() != Some(&VCSIndexKind::Variant.id()) {
+                continue;
+            }
+
+            // The bytes lead with the kind, and it was just read as the Variant's, so what decodes
+            // is a Variant: one that is not is a kind byte this scan no longer understands, and
+            // nothing is named for it rather than the whole scan failing.
+            if let VCSIndexObject::Variant(variant) = VCSIndexObject::decode(&plain)? {
+                hashes.push(*variant.storage_hash());
+            }
+        }
+
+        Ok(hashes)
     }
 
     /// Every key the index holds an object under, loose or in a pack
@@ -1567,6 +1630,34 @@ mod tests {
         assert_eq!(run(index.version_num(&merged)).unwrap().unwrap(), 1);
         assert_eq!(run(index.variant_num(&second_variant)).unwrap().unwrap(), 0);
         assert_eq!(run(index.variant_num(&merge)).unwrap().unwrap(), 0);
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    /// The scan answers with the content every Variant names and nothing of the other kinds.
+    #[test]
+    fn a_scan_names_the_content_of_every_variant() {
+        let index = index("scan-variants");
+        let one = variant();
+        let other =
+            Variant::new_bare_variant([9_u8; 32], [2_u8; 32], None, [0_u8; 32], [0_u8; 32], 0);
+        let version = Version::new_bare_version([2_u8; 32], 0);
+        let message = Message::try_from(b"a message".to_vec()).unwrap();
+
+        // The kinds are written in an order that puts the Variants between objects of the others,
+        // so a scan that stopped at the first key it could not decode as a Variant would be found.
+        run(index.write(version)).unwrap().unwrap();
+        run(index.write(one.clone())).unwrap().unwrap();
+        run(index.write(message)).unwrap().unwrap();
+        run(index.write(other.clone())).unwrap().unwrap();
+
+        let mut named = run(index.variant_storage_hashes()).unwrap().unwrap();
+        named.sort_unstable();
+
+        let mut wanted = vec![*one.storage_hash(), *other.storage_hash()];
+        wanted.sort_unstable();
+
+        assert_eq!(named, wanted);
 
         let _ = fs::remove_dir_all(index.get_root());
     }

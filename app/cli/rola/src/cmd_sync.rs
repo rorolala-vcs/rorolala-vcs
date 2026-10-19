@@ -10,7 +10,9 @@
 //! comes down is a version the Vault is ahead on: what it stored is written into the tree, and the
 //! version into the Layout. Content is moved around the Layout either way — the index and the
 //! store, unless `--no-index` or `--no-storage` says otherwise — and `--no-layout` leaves the
-//! Layout out of it, moving only data and index.
+//! Layout out of it entirely: no plan is made, the index is exchanged both ways, and the stored
+//! content is uploaded. A direction is a narrowing of the plan, so `--up-only` and `--down-only`
+//! are refused beside it.
 //!
 //! A file changed here that the Vault is ahead on is refused before anything is written, so a pull
 //! never overwrites what the run does not know about; merging is not here yet.
@@ -28,7 +30,7 @@ use librorolala::daemon::{
 };
 use librorolala::layout::{Batch, Layout, LayoutPath, MutableData};
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
-use librorolala::vcs::{VCSIndex, VCSIndexObject};
+use librorolala::vcs::VCSIndex;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
@@ -44,7 +46,7 @@ use rorolala_cli_setups::{
     ResRorolalaStorage, ResVCSIndex, ResWorkspace,
 };
 use rorolala_errors::Failure;
-use rorolala_utils_cli_theme::{err_line, help_line, trd};
+use rorolala_utils_cli_theme::{err_line, help_line, trd, warn_line};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::{Direction as MoveDirection, Progress};
@@ -87,7 +89,7 @@ const ARG_NO_INDEX: PickerArg<'static, Flag> = arg![no_index: Flag];
 /// Leave the store alone; only the Layout and the index move.
 const ARG_NO_STORAGE: PickerArg<'static, Flag> = arg![no_storage: Flag];
 
-/// Leave the Vault's Layout alone; only data and index move.
+/// Leave the Vault's Layout alone; only the index and the store move.
 const ARG_NO_LAYOUT: PickerArg<'static, Flag> = arg![no_layout: Flag];
 
 #[help(buffer)]
@@ -137,14 +139,18 @@ pub fn complete_sync(ctx: ShellContext) -> Suggest {
 /// `--up-only` and `--down-only` keep the plan to one direction; neither, or `--both`, is both.
 /// `--force` is what lets a version whose chain below the Vault's has moved apart go up anyway.
 /// `--dry-run` prints the plan and changes nothing. What the plan names then has its content
-/// moved: the index and the store, unless `--no-index` or `--no-storage` leaves one behind, and
-/// `--no-layout` leaves the Layout itself behind, so only data and index move.
+/// moved: the index and the store, unless `--no-index` or `--no-storage` leaves one behind.
+///
+/// `--no-layout` leaves the Layout itself behind, and a run that reads no Layout has no plan for a
+/// direction to narrow: it exchanges the index both ways and uploads the stored content, and naming
+/// `--up-only` or `--down-only` beside it is refused.
 ///
 /// # Errors
 ///
 /// Renders [`ErrorSyncNoTrack`] when the Layout tracks no Vault, [`ErrorSyncBlocked`] when a file
-/// changed here is behind the Vault, [`ErrorSyncFailed`] when the exchange could not be made, and
-/// the exchange's own failures otherwise.
+/// changed here is behind the Vault, [`ErrorSyncFailed`] when the exchange could not be made,
+/// [`ErrorSyncNoLayoutDirection`] when a direction is named with `--no-layout`, and the exchange's
+/// own failures otherwise.
 #[command(node = "sync", entry = EntrySync)]
 pub fn sync(
     args: EntrySync,
@@ -171,19 +177,24 @@ pub fn sync(
     let up = matches!(up_only, Flag::Active);
     let down = matches!(down_only, Flag::Active);
     let both = matches!(both, Flag::Active);
+    let no_layout = matches!(no_layout, Flag::Active);
 
     // At most one direction may be named; naming none is both.
     if [up, down, both].into_iter().filter(|named| *named).count() > 1 {
         return ErrorSyncArgument.into();
     }
 
-    let direction = if up {
-        Direction::Up
-    } else if down {
-        Direction::Down
-    } else {
-        Direction::Both
+    let direction = match (up, down) {
+        (true, _) => Direction::Up,
+        (_, true) => Direction::Down,
+        _ => Direction::Both,
     };
+
+    // A run that reads no Layout has no plan for a direction to narrow: what it does is fixed —
+    // the index both ways and the store up — so a direction is refused rather than dropped.
+    if no_layout && (up || down) {
+        return ErrorSyncNoLayoutDirection.into();
+    }
 
     StateSync {
         direction,
@@ -193,7 +204,7 @@ pub fn sync(
         skip: Skip {
             index: matches!(no_index, Flag::Active),
             storage: matches!(no_storage, Flag::Active),
-            layout: matches!(no_layout, Flag::Active),
+            layout: no_layout,
         },
     }
     .into()
@@ -221,7 +232,7 @@ pub struct Skip {
     index: bool,
     /// Whether the store is left alone.
     storage: bool,
-    /// Whether the Vault's Layout is left alone, leaving only data and index.
+    /// Whether the Vault's Layout is left alone, leaving the index and the store to move.
     layout: bool,
 }
 
@@ -291,11 +302,9 @@ pub fn handle_sync(
 
     // What the Vault holds now is what the plan is made from, so its copy is brought up to date
     // first — the same fetch `rola layout fetch` makes. A run that is not about the Layout at all,
-    // which `--no-layout` says, makes no plan and reads no copy.
-    //
-    // One watching covers the whole run: the two steps that make the plan and every step that
-    // carries it out are one thing to a reader, and a bar that waited on each part on its own would
-    // never have been let out at all.
+    // which `--no-layout` says, makes no plan and reads no copy. One watching covers the whole run:
+    // the steps that make the plan and carry it out are one thing to a reader, and a bar waiting on
+    // each part would never have been let out at all.
     let reporting = Reporting::start(*progress);
 
     let plan = if state.skip.layout {
@@ -356,17 +365,29 @@ pub fn handle_sync(
     reporting.finish();
 
     match outcome {
-        Ok((applied, received, failed)) => ResultSyncDone {
-            layout: name,
-            vault: vault_name,
-            applied,
-            received,
-            up_to_date: plan.as_ref().map_or(0, |plan| plan.up_to_date),
-            failed,
-        }
-        .into(),
+        Ok(carried) => done(plan.as_ref(), name, vault_name, carried),
         Err(error) => error.into(),
     }
+}
+
+/// What a run that was carried out answers with.
+///
+/// What a run with no plan did is not in the three plan counts — there was no plan — so the counts
+/// of what crossed are carried through beside them, and which pair is printed follows from whether
+/// there was a Layout to read.
+fn done(plan: Option<&sync::Plan>, layout: String, vault: String, carried: Carried) -> Next {
+    ResultSyncDone {
+        layout,
+        vault,
+        applied: carried.applied,
+        received: carried.received,
+        up_to_date: plan.map_or(0, |plan| plan.up_to_date),
+        failed: carried.failed,
+        layout_read: plan.is_some(),
+        index_objects: carried.index_objects,
+        storage_objects: carried.storage_objects,
+    }
+    .into()
 }
 
 /// What a run that only wants to know asks for: the plan, and nothing done.
@@ -382,6 +403,9 @@ fn planned(plan: Option<&sync::Plan>, state: StateSync, layout: String, vault: S
         forced,
         entries,
         up_to_date,
+        layout_read: plan.is_some(),
+        index: !state.skip.index,
+        storage: !state.skip.storage,
     }
     .into()
 }
@@ -481,71 +505,70 @@ fn carry_with(
     carry: &Carry<'_>,
     vault_name: &str,
     account_name: &str,
-) -> Result<(usize, usize, Vec<String>), ErrorSyncFailed> {
+) -> Result<Carried, ErrorSyncFailed> {
     // A plan is what names the content to move, and `--no-layout` is the run that has none. Reading
     // no Layout must not leave the content behind, though: `--no-storage` is the only thing that
     // suppresses moving content. So with no plan what moves is everything the index holds — the
     // stored object every variant points at, the new ones included — and it is read here, before the
     // index is synced, so what crosses is this side's own work rather than everything the Vault
     // holds as well.
-    let indexed = (plan.is_none() && !state.skip.storage).then(|| indexed(carry));
+    //
+    // The list is read even when `--no-storage` leaves the store behind, because it is also the list
+    // a run with no plan reports having asked for.
+    let indexed = plan.is_none().then(|| indexed(carry));
 
-    if !state.skip.index
-        && let Err(error) = carry.runtime.block_on(action_sync_index_all_async(
-            carry.workspace,
-            carry.account,
-            carry.target.to_string(),
-            String::new(),
-            progress.clone(),
-        ))
-    {
-        return Err(ErrorSyncFailed {
-            cause: error.to_string(),
-        });
-    }
+    let entries = plan_entries(plan);
 
-    // The content is asked for one object at a time, by what the plan names: an object a run needs
-    // is fetched, and one it does not is never reached for. `--no-storage` is the run that wants the
-    // Layout and the index moved and the store left alone.
-    let entries: Vec<&Entry> = plan.map_or_else(Vec::new, |plan| {
-        plan.entries
-            .iter()
-            .filter(|entry| !matches!(entry.kind, Kind::UpToDate | Kind::RemoteOnly))
-            .collect()
-    });
+    let sources = sources_of(state, carry, vault_name, progress)?;
 
-    let sources = if state.skip.storage {
-        None
-    } else {
-        let primary = fetch::primary(carry.remote, Some(vault_name));
-        // Offline is not passed through: `rola sync` is refused before it gets here, since the
-        // exchange with the Vault is the whole of what it does.
-        let sources =
-            fetch::Sources::new(carry.workspace, carry.account, carry.remote, primary, false)
-                .map_err(|cause| ErrorSyncFailed { cause })?
-                .reporting(progress.clone())
-                .with_concurrency(state.concurrency);
+    // What moves the content, which is the plan's entries or — with no plan — everything the index
+    // names. Both the orders below ask for it, so what it does is stated once.
+    let carry_content = || -> Result<usize, ErrorSyncFailed> {
+        let Some(sources) = &sources else {
+            return Ok(0);
+        };
 
-        Some(sources)
+        if let Some(keys) = &indexed {
+            return sources
+                .send(carry.store, keys)
+                .map_err(|cause| ErrorSyncFailed { cause });
+        }
+
+        let (receive, send) = content_of(&entries, state, carry);
+
+        if let Some(store) = carry.store {
+            sources.bring(store, &receive);
+        }
+
+        sources
+            .send(carry.store, &send)
+            .map_err(|cause| ErrorSyncFailed { cause })
     };
 
-    if let Some(sources) = &sources {
-        if let Some(keys) = &indexed {
-            sources
-                .send(carry.store, keys)
-                .map_err(|cause| ErrorSyncFailed { cause })?;
-        } else {
-            let (receive, send) = content_of(&entries, state, carry);
-
-            if let Some(store) = carry.store {
-                sources.bring(store, &receive);
-            }
-
-            sources
-                .send(carry.store, &send)
-                .map_err(|cause| ErrorSyncFailed { cause })?;
-        }
+    // Which of the two exchanges goes first is decided by what names what. With no plan the Vault's
+    // index is about to name variants this run sends, so the content goes first: a failed upload
+    // then leaves content nobody names — harmless, since a key is its content — rather than a name
+    // pointing at nothing until a later run repairs it. With a plan it is the other way round: a
+    // version to bring down is resolved through index objects only the Vault holds, so the index has
+    // to cross before its content can be found.
+    let storage_objects;
+    if plan.is_none() {
+        storage_objects = carry_content()?;
+        sync_index(carry, state, progress)?;
+    } else {
+        sync_index(carry, state, progress)?;
+        storage_objects = carry_content()?;
     }
+
+    // What a run with no plan asked the Vault for is what the index named: the content every variant
+    // points at. The index objects themselves cross in an exchange of their own, which answers with
+    // no count — the action is already exported to C with a `()` output — so what is reported is the
+    // list this run made, not what the Vault answered with.
+    let index_objects = if state.skip.index {
+        0
+    } else {
+        indexed.as_ref().map_or(0, Vec::len)
+    };
 
     let up_total = count(&entries, false);
     let down_total = count(&entries, true);
@@ -622,7 +645,104 @@ fn carry_with(
         sources.report();
     }
 
-    Ok((applied, received, failed))
+    // A run that read no Layout left this side's copy of what the Vault holds exactly as it found
+    // it, which is what the reading commands go on answering from until something fetches. Saying so
+    // is what keeps a reader from taking a version graph for the Vault's current state.
+    if plan.is_none() {
+        eprintln!("{}", warn_line!(t!("sync.warn_layout_not_fetched").trim()));
+    }
+
+    Ok(Carried {
+        applied,
+        received,
+        failed,
+        index_objects,
+        storage_objects,
+    })
+}
+
+/// The entries a plan says are to move.
+///
+/// The content is asked for one object at a time, by what the plan names: an object a run needs is
+/// fetched, and one it does not is never reached for. An entry both sides already hold at the same
+/// version, and one only the Vault holds, names nothing this run moves.
+fn plan_entries(plan: Option<&sync::Plan>) -> Vec<&Entry> {
+    plan.map_or_else(Vec::new, |plan| {
+        plan.entries
+            .iter()
+            .filter(|entry| !matches!(entry.kind, Kind::UpToDate | Kind::RemoteOnly))
+            .collect()
+    })
+}
+
+/// The Vaults a run may send content to, or `None` when `--no-storage` leaves the store alone.
+///
+/// # Errors
+///
+/// Returns [`ErrorSyncFailed`] when the runtime the exchanges are waited on could not be made.
+fn sources_of<'a>(
+    state: StateSync,
+    carry: &Carry<'a>,
+    vault_name: &str,
+    progress: &Progress,
+) -> Result<Option<fetch::Sources<'a>>, ErrorSyncFailed> {
+    if state.skip.storage {
+        return Ok(None);
+    }
+
+    let primary = fetch::primary(carry.remote, Some(vault_name));
+    // Offline is not passed through: `rola sync` is refused before it gets here, since the exchange
+    // with the Vault is the whole of what it does.
+    let sources = fetch::Sources::new(carry.workspace, carry.account, carry.remote, primary, false)
+        .map_err(|cause| ErrorSyncFailed { cause })?
+        .reporting(progress.clone())
+        .with_concurrency(state.concurrency);
+
+    Ok(Some(sources))
+}
+
+/// What carrying a plan out came to.
+pub struct Carried {
+    /// How many entries were written to the Vault.
+    applied: usize,
+    /// How many versions were brought down from the Vault.
+    received: usize,
+    /// What was not done, one line each.
+    failed: Vec<String>,
+    /// How many stored objects the index named, which is what a run with no plan asked for.
+    index_objects: usize,
+    /// How many units of stored content the run sent.
+    storage_objects: usize,
+}
+
+/// Makes the two indexes hold the same objects, unless the run leaves the index alone.
+///
+/// # Errors
+///
+/// Returns [`ErrorSyncFailed`] when the exchange could not be made.
+fn sync_index(
+    carry: &Carry<'_>,
+    state: StateSync,
+    progress: &Progress,
+) -> Result<(), ErrorSyncFailed> {
+    if state.skip.index {
+        return Ok(());
+    }
+
+    carry
+        .runtime
+        .block_on(action_sync_index_all_async(
+            carry.workspace,
+            carry.account,
+            carry.target.to_string(),
+            // The exchange has one answer whichever side asks: a full sync is everything either side
+            // holds, and an input names nothing — see `ActionSyncIndexAll`.
+            String::new(),
+            progress.clone(),
+        ))
+        .map_err(|error| ErrorSyncFailed {
+            cause: error.to_string(),
+        })
 }
 
 /// Every stored object the index names, for a run with no plan to name content by.
@@ -630,19 +750,16 @@ fn carry_with(
 /// A variant is meaningful only once what it stored is beside it, and a run that read no Layout has
 /// no list of versions to work from: what the index holds is the list. Every variant's content is
 /// named, so the new variants a run just made have theirs carried the same way the old ones do.
+///
+/// The scan is the index's own rather than a listing of every object read whole: only the Variants
+/// are decoded, since only they name content, and the other kinds are skipped by the kind their
+/// bytes lead with.
 fn indexed(carry: &Carry<'_>) -> Vec<Key> {
-    let Ok(objects) = carry.runtime.block_on(carry.index.read_objects()) else {
+    let Ok(hashes) = carry.runtime.block_on(carry.index.variant_storage_hashes()) else {
         return Vec::new();
     };
 
-    let mut keys: Vec<Key> = objects
-        .into_iter()
-        .filter_map(|(_, object)| match object {
-            VCSIndexObject::Variant(variant) => Some(Key::new(*variant.storage_hash())),
-            _ => None,
-        })
-        .collect();
-
+    let mut keys: Vec<Key> = hashes.into_iter().map(Key::new).collect();
     keys.sort_unstable();
     keys.dedup();
 
@@ -1156,7 +1273,43 @@ pub fn render_error_sync_argument(error: ErrorSyncArgument, ec: &mut ResExitCode
     ec.exit_code = EC_ERR_SYNC_ARGUMENT;
 }
 
+/// Error: a direction was named beside `--no-layout`, which has none to narrow.
+///
+/// It is refused rather than ignored: a run that reads no Layout exchanges the index both ways and
+/// uploads the stored content whichever direction was asked for, so a `--down-only` that was quietly
+/// dropped would do the opposite of what it said.
+#[derive(Grouped)]
+pub struct ErrorSyncNoLayoutDirection;
+
+impl Failure for ErrorSyncNoLayoutDirection {
+    fn name(&self) -> &'static str {
+        "error_sync_no_layout_direction"
+    }
+
+    fn reason(&self) -> String {
+        t!("sync.err_no_layout_direction").trim().to_string()
+    }
+}
+
+failure!(ErrorSyncNoLayoutDirection);
+
+#[renderer(buffer)]
+pub fn render_error_sync_no_layout_direction(
+    error: ErrorSyncNoLayoutDirection,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("sync.err_no_layout_direction_help").trim())
+    );
+    ec.exit_code = EC_ERR_SYNC_ARGUMENT;
+}
+
 /// Result: a plan was made.
+// What a plan says of each part is a flag, and `--json` writes the four by name: grouping them
+// would change what a program reads for no gain a reader of the plan would see.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultSyncPlan {
     /// The Layout the plan is about.
@@ -1169,6 +1322,20 @@ pub struct ResultSyncPlan {
     entries: Vec<Entry>,
     /// How many entries both sides already hold at the same version.
     up_to_date: usize,
+    /// Whether the Vault's Layout was read at all.
+    ///
+    /// A run that leaves the Layout behind has no plan, and is not the same answer as a plan with
+    /// nothing in it: the entries and the count above say what a plan came to, and this says whether
+    /// there is one. `--json` carries it so a program can tell the two apart; a reader that only has
+    /// the counts cannot.
+    #[serde(default)]
+    layout_read: bool,
+    /// Whether the index is to move, which is what `--no-index` leaves behind.
+    #[serde(default)]
+    index: bool,
+    /// Whether the store is to move, which is what `--no-storage` leaves behind.
+    #[serde(default)]
+    storage: bool,
 }
 
 #[renderer(buffer)]
@@ -1194,15 +1361,24 @@ pub fn render_result_sync_plan(result: ResultSyncPlan) {
         );
     }
 
-    r_println!(
-        "{}",
-        t!(
-            "sync.result_summary",
-            planned = result.entries.len(),
-            up_to_date = result.up_to_date
-        )
-        .trim()
-    );
+    // A plan of nothing is not what a run that read no Layout would do — it moves the index and the
+    // store whichever count is printed — so that run is told what it is about to move instead.
+    if result.layout_read {
+        r_println!(
+            "{}",
+            t!(
+                "sync.result_summary",
+                planned = result.entries.len(),
+                up_to_date = result.up_to_date
+            )
+            .trim()
+        );
+    } else {
+        r_println!(
+            "{}",
+            plan_without_layout(result.index, result.storage).trim()
+        );
+    }
 
     if result
         .entries
@@ -1212,6 +1388,22 @@ pub fn render_result_sync_plan(result: ResultSyncPlan) {
         r_eprintln!("{}", err_line!(t!("sync.warn_blocked").trim()));
         r_eprintln!("{}", help_line!(t!("sync.warn_blocked_help").trim()));
     }
+}
+
+/// What a run that read no Layout would move, in words.
+///
+/// What such a run moves is fixed by `--no-layout` rather than by what a plan would name, and the two
+/// parts it leaves alone can take either of the two away: the sentence says what is left, so that a
+/// run told to leave everything behind is not described as though it would move something.
+fn plan_without_layout(index: bool, storage: bool) -> String {
+    match (index, storage) {
+        (true, true) => t!("sync.plan_no_layout"),
+        (true, false) => t!("sync.plan_no_layout_index"),
+        (false, true) => t!("sync.plan_no_layout_storage"),
+        (false, false) => t!("sync.plan_no_layout_nothing"),
+    }
+    .trim()
+    .to_owned()
 }
 
 /// Result: a run was carried out.
@@ -1229,6 +1421,19 @@ pub struct ResultSyncDone {
     up_to_date: usize,
     /// What was not done, one line each.
     failed: Vec<String>,
+    /// Whether the Vault's Layout was read at all.
+    ///
+    /// A run that leaves the Layout behind has no plan, so the three counts above are all zero
+    /// however much moved: what it did is in the two below, and which of the two is printed is what
+    /// this says.
+    #[serde(default)]
+    layout_read: bool,
+    /// How many stored objects the index named, which is what a run with no plan asked for.
+    #[serde(default)]
+    index_objects: usize,
+    /// How many units of stored content the run sent.
+    #[serde(default)]
+    storage_objects: usize,
 }
 
 #[renderer(buffer)]
@@ -1237,17 +1442,30 @@ pub fn render_result_sync_done(result: ResultSyncDone, ec: &mut ResExitCode) {
         r_eprintln!("{}", err_line!(cause));
     }
 
-    r_println!(
-        "{}",
-        t!(
-            "sync.done_summary",
-            applied = result.applied,
-            received = result.received,
-            up_to_date = result.up_to_date,
-            failed = result.failed.len()
-        )
-        .trim()
-    );
+    if result.layout_read {
+        r_println!(
+            "{}",
+            t!(
+                "sync.done_summary",
+                applied = result.applied,
+                received = result.received,
+                up_to_date = result.up_to_date,
+                failed = result.failed.len()
+            )
+            .trim()
+        );
+    } else {
+        r_println!(
+            "{}",
+            t!(
+                "sync.done_no_layout",
+                index = result.index_objects,
+                storage = result.storage_objects,
+                failed = result.failed.len()
+            )
+            .trim()
+        );
+    }
 
     if !result.failed.is_empty() {
         ec.exit_code = EC_ERR_SYNC;

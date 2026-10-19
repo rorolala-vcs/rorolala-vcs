@@ -3,11 +3,11 @@ _version: 2
 sync:
   complete:
     up_only:
-      en: Only what the local Layout holds goes up
-      zh-CN: 只上传本地布局的内容
+      en: Only what the local Layout holds goes up, which needs the Layout
+      zh-CN: 只上传本地布局的内容，需要读取布局
     down_only:
-      en: Only what the Vault holds comes down
-      zh-CN: 只下拉保险库的内容
+      en: Only what the Vault holds comes down, which needs the Layout
+      zh-CN: 只下拉保险库的内容，需要读取布局
     both:
       en: Sync in both directions
       zh-CN: 双向同步
@@ -21,22 +21,22 @@ sync:
       en: Leave the store alone; only the Layout and the index move
       zh-CN: 不动仓库，只移动布局和索引
     no_layout:
-      en: Leave the Vault's Layout alone; only data and index move
-      zh-CN: 不动保险库的布局，只移动数据和索引
+      en: Leave the Vault's Layout alone; exchange the index and upload the store
+      zh-CN: 不动保险库的布局，只双向交换索引并上传存储
   help:
     en: |
         Bring the local Layout and the Vault it tracks into agreement
 
         **Usage**: rola sync
         **Flags**:
-            --up-only           Only what the local Layout holds goes up
-            --down-only         Only what the Vault holds comes down
+            --up-only           Only what the local Layout holds goes up; cannot be used with --no-layout
+            --down-only         Only what the Vault holds comes down; cannot be used with --no-layout
             --both              Sync in both directions, the default when no direction is given
 
             --dry-run           Show the plan and change nothing
             --no-index          Leave the index alone; only the Layout and the store move
             --no-storage        Leave the store alone; only the Layout and the index move
-            --no-layout         Leave the Vault's Layout alone; only data and index move
+            --no-layout         Do not read or write the Vault's Layout; exchange the index both ways and upload storage
             --force             Go on uploading when the version chain has moved apart
             --concurrency <N>   Carry the content over N connections at once (default 4)
 
@@ -44,19 +44,20 @@ sync:
         The Vault is named by the Layout's `TRACK`, and the Workspace binds it first
         The run first fetches what the Vault holds now, then moves by the plan: a `Uuid` only the local side holds goes up, and the side that is behind is updated
         A file changed here that the Vault is ahead on is refused, so it is never overwritten
+        --no-layout makes no plan and fetches nothing: the index is exchanged both ways and the stored content is uploaded, and a direction is refused beside it
     zh-CN: |
         让本地布局与它所追踪的保险库保持一致
 
         **用法**：rola sync
         **标识**：
-            --up-only           只上传本地布局持有的内容
-            --down-only         只下拉保险库持有的内容
+            --up-only           只上传本地布局持有的内容；不能与 --no-layout 同用
+            --down-only         只下拉保险库持有的内容；不能与 --no-layout 同用
             --both              双向同步，未指定方向时即此
 
             --dry-run           只显示计划，不做任何改动
             --no-index          不动索引，只移动布局和仓库
             --no-storage        不动仓库，只移动布局和索引
-            --no-layout         不动保险库的布局，只移动数据和索引
+            --no-layout         不读写保险库布局；索引双向交换，存储只上传
             --force             版本链已分叉时仍然上传
             --concurrency <N>   用 N 条连接同时传输内容（默认 4）
 
@@ -64,6 +65,7 @@ sync:
         保险库由布局的 `TRACK` 指定，须先由工作区绑定
         运行先取回保险库的当前内容，再按计划移动：本地独有的 `Uuid` 上传，落后的一端被更新
         本地已改动而保险库更前的文件会被拒绝，避免被覆盖
+        --no-layout 不读取布局也不取回：索引双向交换、存储内容上传，且不能同时指定方向
 
   description:
     en: Bring the local Layout and the Vault it tracks into agreement
@@ -111,6 +113,18 @@ sync:
     zh-CN: |
         请只给出 `--up-only`、`--down-only`、`--both` 中的一个
 
+  err_no_layout_direction:
+    en: "`--no-layout` cannot be used with `--up-only` or `--down-only`"
+    zh-CN: "`--no-layout` 不能与 `--up-only` 或 `--down-only` 同时使用"
+
+  err_no_layout_direction_help:
+    en: |
+        A run that reads no Layout has no plan for a direction to narrow: it exchanges the index both ways and uploads the stored content
+        Leave out the direction, or carry the Layout by dropping `--no-layout`
+    zh-CN: |
+        不读布局的运行没有可缩小的方向计划：它双向交换索引，并上传存储内容
+        请去掉方向标识，或去掉 `--no-layout` 以同步布局
+
   write_written:
     en: written
     zh-CN: 已写入
@@ -147,9 +161,33 @@ sync:
     en: "%{planned} to move, %{up_to_date} already at the Vault's version"
     zh-CN: "待移动 %{planned} 项，已有 %{up_to_date} 项与保险库同为当前版本"
 
+  plan_no_layout:
+    en: "The Vault's Layout was not read: the index is exchanged both ways and the store is uploaded"
+    zh-CN: "未读取保险库布局：索引双向交换，存储只上传"
+
+  plan_no_layout_index:
+    en: "The Vault's Layout was not read and the store is left alone: the index is exchanged both ways"
+    zh-CN: "未读取保险库布局，也不动存储：只双向交换索引"
+
+  plan_no_layout_storage:
+    en: "The Vault's Layout was not read and the index is left alone: the store is uploaded"
+    zh-CN: "未读取保险库布局，也不动索引：只上传存储"
+
+  plan_no_layout_nothing:
+    en: "The Vault's Layout, the index and the store are all left behind: this run would move nothing"
+    zh-CN: "保险库布局、索引和存储都不动：这次运行什么也不会搬"
+
   done_summary:
     en: "%{applied} written, %{received} brought down, %{up_to_date} already there, %{failed} not done"
     zh-CN: "已写入 %{applied} 项，已下拉 %{received} 项，本已同步 %{up_to_date} 项，未完成 %{failed} 项"
+
+  done_no_layout:
+    en: "index %{index} / storage %{storage} moved, %{failed} not done"
+    zh-CN: "索引搬运 %{index} 项 / 存储搬运 %{storage} 项，未完成 %{failed} 项"
+
+  warn_layout_not_fetched:
+    en: "The Vault's Layout was not fetched: readings still use the copy from the last fetch"
+    zh-CN: "未取回保险库的布局：读取仍使用上次取回的副本"
 
   warn_blocked:
     en: A file changed here is behind the Vault, so nothing would be brought down

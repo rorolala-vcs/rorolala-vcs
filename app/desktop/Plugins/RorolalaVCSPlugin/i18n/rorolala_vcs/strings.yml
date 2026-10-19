@@ -398,6 +398,9 @@ rorolala_vcs:
     plan_unreadable:
       en: What a sync would carry could not be read.
       zh-CN: 无法读出一次同步要搬什么。
+    direction_needs_layout:
+      en: Needs the Layout; a sync that leaves it out carries both ways
+      zh-CN: 需要同步布局；不读布局的同步只能双向
 
     # What is said before a sync that leaves something out, one line per way of leaving it out and per
     # direction: what is left behind still gets written, and which part it was decides what becomes

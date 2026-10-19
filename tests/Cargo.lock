@@ -1051,6 +1051,7 @@ version = "0.1.0"
 dependencies = [
  "librorolala",
  "rorolala-utils-sandbox",
+ "serde_json",
  "tokio",
  "uuid",
 ]

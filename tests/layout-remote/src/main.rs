@@ -1982,12 +1982,110 @@ async fn main() {
     ));
     let before = keys(&before.stdout);
 
-    run(&mut client(
+    // What the Vault's Layout holds, and the files it is kept in, is read before the run so that
+    // what the run does to them can be seen afterwards. A run told to leave the Layout alone must
+    // write nothing at all — not even an empty append, since the only copy of what the Vault holds
+    // is the Vault's own, and another writer may be part of the way through one.
+    let layout_before = vault_layout_state(&root);
+
+    let said = run(&mut client(&workspace, &data, &["sync", "--no-layout"]));
+
+    // What a run with no plan moved is not the plan's count — there is no plan — so the run says
+    // what crossed: the index objects it asked the Vault for and the stored units it sent. A summary
+    // of zeroes would be a run that reported doing nothing while it did the whole of its work.
+    let drew = clean(&said.stdout);
+    checked.wants(
+        "`--no-layout` says what the index and the store moved",
+        said.success() && drew.contains("index ") && !drew.contains("index 0 / storage 0"),
+        &format!("it ended with {:?} and said {:?}", said.code, drew.trim()),
+    );
+
+    // What this side holds of the Vault's Layout is what a fetch last brought, and a run that read
+    // no Layout leaves it exactly there: the reading commands answer from it afterwards, so a run
+    // that did not refresh it says so rather than letting a version graph pass for the Vault's.
+    checked.wants(
+        "`--no-layout` says the Vault's Layout was not fetched",
+        said.stderr.contains("was not fetched"),
+        &format!("it said {:?}", said.stderr.trim()),
+    );
+
+    let layout_after = vault_layout_state(&root);
+
+    checked.wants(
+        "`--no-layout` leaves the Vault's Layout as it was",
+        layout_before == layout_after,
+        &format!("before: {layout_before:?}, after: {layout_after:?}"),
+    );
+
+    // A `Uuid` only this Layout holds is what a run that carries the Layout names under `@/new/`;
+    // one that read no Layout names nothing, so that path is where a write would show.
+    checked.wants(
+        "`--no-layout` makes no `@/new/` path in the Vault's Layout",
+        layout_after.0.iter().all(|(_, _, path)| {
+            path.as_deref()
+                .is_none_or(|path| !path.starts_with("@/new/"))
+        }),
+        &format!("it holds {:?}", layout_after.0),
+    );
+
+    // A direction is not a part of a run that reads no Layout, so naming one is refused rather than
+    // dropped: `--down-only --no-layout` would upload, which is the opposite of what it says. The
+    // exit status is `EC_ERR_SYNC_ARGUMENT`, the one arguments that cannot be used end with.
+    for direction in ["--up-only", "--down-only"] {
+        let said = run(&mut client(
+            &workspace,
+            &data,
+            &["sync", "--no-layout", direction],
+        ));
+
+        checked.wants(
+            &format!("`{direction}` with `--no-layout` is refused"),
+            said.code == Some(231) && said.stderr.contains("--no-layout"),
+            &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+        );
+    }
+
+    // A dry run of the same thing is not "nothing to do": it prints no count of a plan it did not
+    // make, and says what the run would move instead — the index and the store, which is what
+    // `--no-layout` does. A `--json` caller is told the same in a field, since a plan with no entries
+    // and no plan at all are the same counts and different answers.
+    let said = run(&mut client(
         &workspace,
         &data,
-        &["sync", "--no-layout", "--up-only"],
-    ))
-    .expect_success();
+        &["sync", "--no-layout", "--dry-run"],
+    ));
+    let drawn = clean(&said.stdout);
+    checked.wants(
+        "`sync --no-layout --dry-run` says what would move rather than counting nothing",
+        said.success()
+            && !drawn.contains("0 to move")
+            && drawn.contains("index is exchanged both ways"),
+        &format!("it ended with {:?} and said {:?}", said.code, drawn.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["sync", "--no-layout", "--dry-run", "--json"],
+    ));
+    let answered = json_of(&said.stdout);
+    checked.wants(
+        "`--json` says the Vault's Layout was not read",
+        answered.as_ref().is_some_and(|value| {
+            value
+                .get("layout_read")
+                .and_then(serde_json::Value::as_bool)
+                == Some(false)
+                && value.get("entries").is_some_and(|entries| {
+                    entries.as_array().is_some_and(|entries| entries.is_empty())
+                })
+        }),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
 
     let after = run(&mut client(
         &workspace,
@@ -2008,6 +2106,11 @@ async fn main() {
 
     serving.stop();
     checked.report();
+}
+
+/// The JSON object a command answered with, when it answered with one.
+fn json_of(said: &str) -> Option<serde_json::Value> {
+    serde_json::from_str(said.trim()).ok()
 }
 
 /// The keys a store listing names, one a line.
@@ -2084,6 +2187,53 @@ fn vault_path_of(root: &Path, id: Uuid) -> Option<String> {
         .path_of(id)
         .map(|path| path.as_str().to_owned())
 }
+
+/// What the Vault's own Layout holds, read afresh.
+fn vault_layout_state(root: &Path) -> LayoutState {
+    layout_state(&root.join(LAYOUT_DIR))
+}
+
+/// What a Layout holds, and the files it is kept in, as one value a run can be compared against.
+///
+/// The paths are taken through [`Layout::path_of`], since which path a `Uuid` is at is what a reader
+/// of the Layout sees; the entries are put in `Uuid` order so that two readings of the same Layout
+/// compare equal whatever order the shards handed them back in.
+///
+/// The files are named with their sizes. A Layout is written by appending to a log, so a size that
+/// did not move is a log nothing was appended to — which is the part a comparison of what the Layout
+/// *holds* would miss: an append that changed nothing still wrote.
+fn layout_state(dir: &Path) -> LayoutState {
+    let layout = Layout::open(dir).expect("a Layout");
+
+    let mut entries: Vec<(Uuid, MutableData, Option<String>)> = layout
+        .entries()
+        .into_iter()
+        .map(|(id, data)| {
+            let path = layout.path_of(id).map(|path| path.as_str().to_owned());
+
+            (id, data, path)
+        })
+        .collect();
+    entries.sort_by_key(|(id, _, _)| *id);
+
+    let mut files: Vec<(String, u64)> = fs::read_dir(dir)
+        .expect("the Layout's directory")
+        .map(|entry| entry.expect("a file of the Layout"))
+        .filter(|entry| entry.path().is_file())
+        .map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let size = entry.metadata().expect("the file's size").len();
+
+            (name, size)
+        })
+        .collect();
+    files.sort();
+
+    (entries, files)
+}
+
+/// What a Layout holds, and the files it is kept in.
+type LayoutState = (Vec<(Uuid, MutableData, Option<String>)>, Vec<(String, u64)>);
 
 /// The version the Layout being worked in names for `id`, read afresh.
 ///
