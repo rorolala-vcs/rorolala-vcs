@@ -114,6 +114,46 @@ rorolala_vcs:
       en: The variant could not be joined
       zh-CN: 未能合并该变体
 
+    # What a right-click on the ??? node offers: dropping the change the working file holds and
+    # putting it back to the version the Layout names. Nothing else holds that content, so it is
+    # always asked first.
+    delete_changes:
+      en: Delete Changes
+      zh-CN: 删除变更
+    delete_changes_confirm_title:
+      en: Delete the unrecorded changes?
+      zh-CN: 要删除未记录的修改吗？
+    delete_changes_confirm_message:
+      en: "`%{file}` will be put back to the version the Layout records. Confirm?"
+      zh-CN: "`%{file}` 将还原到布局记录的版本。请确认。"
+    delete_changes_failed:
+      en: The changes could not be deleted
+      zh-CN: 未能删除变更
+
+    # What a right-click on a variant drawn as work under way offers: ending the merge that variant is
+    # waiting for. Both end it the same way — the variant file goes and the record with it — and differ
+    # in what the main file is left holding: the plain one puts it back to the version the Layout names,
+    # the other leaves the work as it is. The variant file is the merge's, not the file's, so the
+    # question names the main file the reader right-clicked beside.
+    cancel_merge:
+      en: Cancel Merge
+      zh-CN: 取消合并
+    cancel_merge_keep:
+      en: Cancel Merge (Keep Content)
+      zh-CN: 取消合并（保留内容）
+    cancel_merge_confirm_title:
+      en: Cancel the merge?
+      zh-CN: 要取消合并吗？
+    cancel_merge_confirm_message:
+      en: "The variant waiting for `%{file}` will be taken away, and `%{file}` will be put back to the version the Layout records. Confirm?"
+      zh-CN: "将移除等待 `%{file}` 的变体，并把 `%{file}` 还原到布局记录的版本。请确认。"
+    cancel_merge_keep_confirm_message:
+      en: "The variant waiting for `%{file}` will be taken away, and the unrecorded work in `%{file}` will be kept. Confirm?"
+      zh-CN: "将移除等待 `%{file}` 的变体，`%{file}` 中未记录的内容将保留。请确认。"
+    cancel_merge_failed:
+      en: The merge could not be cancelled
+      zh-CN: 未能取消合并
+
     # What the Vault's version says on hover when the version itself is not in this index: a fetch
     # brings the Vault's Layout and never its versions, so there is a hash to name but no chain or
     # words to draw.
@@ -495,6 +535,12 @@ rorolala_vcs:
     join:
       en: Joining
       zh-CN: 合并变体
+    restore:
+      en: Restoring
+      zh-CN: 还原内容
+    unmerge:
+      en: Cancelling the merge
+      zh-CN: 取消合并
     row_up:
       en: Uploading
       zh-CN: 上传中

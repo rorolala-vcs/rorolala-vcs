@@ -781,7 +781,19 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="directory">The directory holding the file, which is what a work is read for.</param>
     /// <param name="path">The file, as the program names it.</param>
     /// <returns>The pending variant's hash, or nothing when the file is not in a merge.</returns>
-    private string? MergingOf(string directory, string path)
+    private string? MergingOf(string directory, string path) =>
+        MergeOf(directory, path)?.Merge.Variant;
+
+    /// <summary>The merge waiting on the file at `path`, and the Workspace it was read in.</summary>
+    /// <remarks>
+    /// The Workspace's root is handed over with the record because the record names the variant file
+    /// relative to it, and the two are read together: a root kept in a field would be the root of
+    /// whichever file was read last.
+    /// </remarks>
+    /// <param name="directory">The directory holding the file, which is what a work is read for.</param>
+    /// <param name="path">The file, as the program names it.</param>
+    /// <returns>The merge and the Workspace's root, or nothing when the file is not in a merge.</returns>
+    private (Merge Merge, string Root)? MergeOf(string directory, string path)
     {
         if (_statuses.Reading(directory) is not { } status)
         {
@@ -794,7 +806,7 @@ internal sealed partial class VersionGraphView : Control
             {
                 if (StatusReadings.Names(status.Root, merge.Target, path))
                 {
-                    return merge.Variant;
+                    return (merge, status.Root);
                 }
             }
         }
@@ -804,6 +816,31 @@ internal sealed partial class VersionGraphView : Control
         }
 
         return null;
+    }
+
+    /// <summary>The path a place in a merge record names, when it lies inside the work.</summary>
+    /// <remarks>
+    /// The file is removed to end a merge, so a place that does not resolve under the Workspace is
+    /// answered with nothing rather than with a path: the record is the command line's to hold, and a
+    /// place that climbs out of the work is not a file this may delete.
+    /// </remarks>
+    /// <param name="root">Where the Workspace is rooted.</param>
+    /// <param name="place">The place, relative to the Workspace's root.</param>
+    /// <returns>The absolute path, or nothing when the place is not inside the Workspace.</returns>
+    private static string? VariantPath(string root, string place)
+    {
+        var work = Path.GetFullPath(root);
+        var disk = Path.GetFullPath(Path.Combine(work, place));
+        var relative = Path.GetRelativePath(work, disk);
+
+        return relative == ".."
+            || relative.StartsWith(
+                ".." + Path.DirectorySeparatorChar,
+                StringComparison.Ordinal
+            )
+            || Path.IsPathRooted(relative)
+            ? null
+            : disk;
     }
 
     /// <summary>Says one thing in place of the graph, or nothing while a read is going.</summary>
@@ -1046,6 +1083,12 @@ internal sealed partial class VersionGraphView : Control
     /// The hash is always there to copy. A version adds the two retracks: the one that writes the version's
     /// content back over the file as well as moving the record, and the one that moves the record and leaves
     /// the file alone. A variant has neither, because a variant is not a position a record may be put at.
+    /// <para>
+    /// The edit and the merge are the two things about the working file that may be taken back. The
+    /// <c>???</c> node offers dropping the change it stands for; a variant drawn as work under way —
+    /// the <c>???</c> itself or the variant waiting to be joined — offers ending the merge, either by
+    /// putting the file back as well or by leaving its content in place.
+    /// </para>
     /// </remarks>
     /// <param name="node">The node that was right-clicked.</param>
     private void ShowNodeMenu(Hover node)
@@ -1100,6 +1143,38 @@ internal sealed partial class VersionGraphView : Control
 
             join.Click += (_, _) => BeginJoin(unjoined.Hash);
             menu.Items.Add(join);
+        }
+
+        // A change that was never recorded may be dropped, which is what puts the file back to the
+        // version the Layout names. The content is nowhere else, so the item only asks; nothing is
+        // written until the question is answered.
+        if (
+            node.Variant is { State: not null }
+            && _target is { Length: > 0 } edited
+            && Path.GetDirectoryName(edited) is { Length: > 0 } editedAt
+        )
+        {
+            menu.Items.Add(new Avalonia.Controls.Separator());
+            menu.Items.Add(DeleteChangesItem(edited, editedAt));
+        }
+
+        // A merge waiting on the file is ended by taking its variant file away and then its record,
+        // which is the two runs `align --delete` is built from. The plain item also puts the main file
+        // back to what the Layout records; the other leaves the work as it stands, and both ask first.
+        // The file is taken where the tree holds it, which a move made by hand may have taken away
+        // from the record's place.
+        if (
+            node.Variant is { Merging: true }
+            && _target is { Length: > 0 } merged
+            && Path.GetDirectoryName(merged) is { Length: > 0 } mergedAt
+            && MergeOf(mergedAt, merged) is { } pending
+            && VariantPath(pending.Root, VariantFiles.Place(pending.Merge)) is { } actual
+            && VariantPath(pending.Root, pending.Merge.Path) is { } recorded
+        )
+        {
+            menu.Items.Add(new Avalonia.Controls.Separator());
+            menu.Items.Add(CancelMergeItem(merged, mergedAt, actual, recorded, keep: false));
+            menu.Items.Add(CancelMergeItem(merged, mergedAt, actual, recorded, keep: true));
         }
 
         // A retrack is about a version the track records, and the file the graph is of is where it is
@@ -1175,6 +1250,102 @@ internal sealed partial class VersionGraphView : Control
         return item;
     }
 
+    /// <summary>The item that drops the file's unrecorded change.</summary>
+    /// <param name="path">The file, as the program names it.</param>
+    /// <param name="directory">The directory the runs of the item are made in.</param>
+    /// <returns>The item, ready to be added to a menu.</returns>
+    private Avalonia.Controls.MenuItem DeleteChangesItem(string path, string directory)
+    {
+        var item = new Avalonia.Controls.MenuItem
+        {
+            Header = RolaI18N.Get("rorolala_vcs.version_graph.delete_changes"),
+        };
+
+        if (_icons.Find(Icons.Refresh) is { } picture)
+        {
+            item.Icon = Icons.Inked(picture);
+        }
+
+        item.Click += (_, _) => AskDeleteChanges(path, directory);
+
+        return item;
+    }
+
+    /// <summary>One of the two items that end a merge, which differ in what the file is left holding.</summary>
+    /// <param name="path">The file the merge is waiting on, as the program names it.</param>
+    /// <param name="directory">The directory the runs of the item are made in.</param>
+    /// <param name="variant">Where the tree holds the variant file.</param>
+    /// <param name="recorded">Where the record says the variant file lies.</param>
+    /// <param name="keep">Whether the file's content is kept rather than put back.</param>
+    /// <returns>The item, ready to be added to a menu.</returns>
+    private Avalonia.Controls.MenuItem CancelMergeItem(
+        string path,
+        string directory,
+        string variant,
+        string recorded,
+        bool keep
+    )
+    {
+        var item = new Avalonia.Controls.MenuItem
+        {
+            Header = RolaI18N.Get(
+                keep
+                    ? "rorolala_vcs.version_graph.cancel_merge_keep"
+                    : "rorolala_vcs.version_graph.cancel_merge"
+            ),
+        };
+
+        if (_icons.Find(keep ? Icons.EditNote : Icons.CallSplit) is { } picture)
+        {
+            item.Icon = Icons.Inked(picture);
+        }
+
+        item.Click += (_, _) => AskCancelMerge(path, directory, variant, recorded, keep);
+
+        return item;
+    }
+
+    /// <summary>Puts the dropping of an edit to the user, since nothing else holds its content.</summary>
+    /// <param name="path">The file, as the program names it.</param>
+    /// <param name="directory">The directory the run is made in.</param>
+    private void AskDeleteChanges(string path, string directory) =>
+        _dialogs.Show(
+            new Dialog(
+                RolaI18N.Get("rorolala_vcs.version_graph.delete_changes_confirm_title"),
+                RolaI18N.Get(
+                    "rorolala_vcs.version_graph.delete_changes_confirm_message",
+                    Path.GetFileName(path)
+                ),
+                () => BeginDeleteChanges(path, directory)
+            )
+        );
+
+    /// <summary>Puts the ending of a merge to the user, with what it leaves the file holding.</summary>
+    /// <param name="path">The file the merge is waiting on, as the program names it.</param>
+    /// <param name="directory">The directory the runs are made in.</param>
+    /// <param name="variant">Where the tree holds the variant file.</param>
+    /// <param name="recorded">Where the record says the variant file lies.</param>
+    /// <param name="keep">Whether the file's content is kept rather than put back.</param>
+    private void AskCancelMerge(
+        string path,
+        string directory,
+        string variant,
+        string recorded,
+        bool keep
+    ) =>
+        _dialogs.Show(
+            new Dialog(
+                RolaI18N.Get("rorolala_vcs.version_graph.cancel_merge_confirm_title"),
+                RolaI18N.Get(
+                    keep
+                        ? "rorolala_vcs.version_graph.cancel_merge_keep_confirm_message"
+                        : "rorolala_vcs.version_graph.cancel_merge_confirm_message",
+                    Path.GetFileName(path)
+                ),
+                () => BeginCancelMerge(path, directory, variant, recorded, keep)
+            )
+        );
+
     /// <summary>Puts the retrack to the user, asking first only when there is work on disk to lose.</summary>
     /// <remarks>
     /// The record alone moves without a question: nothing the user has is touched. Writing the version's
@@ -1246,6 +1417,107 @@ internal sealed partial class VersionGraphView : Control
 
             return true;
         }
+    }
+
+    /// <summary>Runs the restore that drops the file's unrecorded change, and reads again once it is over.</summary>
+    /// <remarks>
+    /// The run is the command line's and is made off the window's thread: the content of the version the
+    /// file is put back to may not be in the local store, and the command reaches for a Vault when it is
+    /// not. What it wrote is what every reading is made from, so the files are said to have changed and
+    /// the graph reads again.
+    /// </remarks>
+    /// <param name="path">The file, as the program names it.</param>
+    /// <param name="directory">The directory the run is made in.</param>
+    private void BeginDeleteChanges(string path, string directory)
+    {
+        var run = _hub.Begin("rorolala_vcs.progress.restore");
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = AlignCommand.Restore(directory, path);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hub.End(run);
+                _files.Touch();
+
+                if (!done)
+                {
+                    _dialogs.Present(
+                        RolaI18N.Get("rorolala_vcs.version_graph.delete_changes_failed"),
+                        () =>
+                            ReportView.Of(
+                                ReportLines.Parse(said),
+                                key => _icons.Find(key),
+                                ReportView.Ink
+                            )
+                    );
+
+                    return;
+                }
+
+                Refresh();
+            });
+        });
+    }
+
+    /// <summary>Ends the merge waiting on the file, putting the file back or leaving what it holds.</summary>
+    /// <remarks>
+    /// The variant file goes first, because a run that ends a merge finds it by being gone: what `align
+    /// --delete` removes is the record, and the file is only how the variant was shown. The plain item
+    /// puts the file back to the version the Layout names as well, which is what makes the two items
+    /// differ; both are run off the window's thread, since a restore may reach for a Vault.
+    /// </remarks>
+    /// <param name="path">The file the merge is waiting on, as the program names it.</param>
+    /// <param name="directory">The directory the runs are made in.</param>
+    /// <param name="variant">Where the tree holds the variant file.</param>
+    /// <param name="recorded">Where the record says the variant file lies.</param>
+    /// <param name="keep">Whether the file's content is kept rather than put back.</param>
+    private void BeginCancelMerge(
+        string path,
+        string directory,
+        string variant,
+        string recorded,
+        bool keep
+    )
+    {
+        // A file with nothing unrecorded has nothing to put back: a restore of it would be a run that
+        // is only refused, and the merge is ended just the same by the run before it.
+        var restore = !keep && EditingOf(directory, path) is not null;
+        var run = _hub.Begin("rorolala_vcs.progress.unmerge");
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = AlignCommand.Unmerge(directory, variant, recorded);
+
+            if (done && restore)
+            {
+                (done, said) = AlignCommand.Restore(directory, path);
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hub.End(run);
+                _files.Touch();
+
+                if (!done)
+                {
+                    _dialogs.Present(
+                        RolaI18N.Get("rorolala_vcs.version_graph.cancel_merge_failed"),
+                        () =>
+                            ReportView.Of(
+                                ReportLines.Parse(said),
+                                key => _icons.Find(key),
+                                ReportView.Ink
+                            )
+                    );
+
+                    return;
+                }
+
+                Refresh();
+            });
+        });
     }
 
     /// <summary>Turns an unjoined variant into a merge waiting on the file.</summary>
