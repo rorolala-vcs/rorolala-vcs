@@ -24,7 +24,7 @@ use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{Broken, Relation, Status, compare};
 use librorolala::storage::{Blake3Hash, Key};
 use librorolala::tree_analyze::tree_diff;
-use librorolala::vcs::VCSIndex;
+use librorolala::vcs::{LookbackError, VCSIndex, read_chain};
 use librorolala::workspace::{Merging, Pending, Workspace};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
@@ -61,6 +61,9 @@ use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, runtime};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
+
+/// Show every unjoined variant of the target instead of drawing its chain.
+const ARG_SHOW_UNJOINED_VARIANTS: PickerArg<'static, Flag> = arg![show_unjoined_variants: Flag];
 
 /// Draw the lines above the chain without the chain itself.
 const ARG_NO_GRAPH: PickerArg<'static, Flag> = arg![no_graph: Flag];
@@ -138,18 +141,31 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
         .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH)
         .pick(&ARG_NO_GRAPH)
         .pick(&ARG_NO_HINT)
+        .pick(&ARG_SHOW_UNJOINED_VARIANTS)
         .pick(&arg![Option<String>])
         .to_result();
-    let (compact, no_message, no_creator, max_message_length, no_graph, no_hint, target) =
-        match picked {
-            Ok(picked) => picked,
-            Err(next) => return next,
-        };
+    let (
+        compact,
+        no_message,
+        no_creator,
+        max_message_length,
+        no_graph,
+        no_hint,
+        show_unjoined_variants,
+        target,
+    ) = match picked {
+        Ok(picked) => picked,
+        Err(next) => return next,
+    };
 
     lookback.asked(compact, no_message, no_creator, max_message_length);
     lookback.asked_status(no_graph, no_hint);
 
-    StateStatus { target }.into()
+    StateStatus {
+        target,
+        show_unjoined_variants: matches!(show_unjoined_variants, Flag::Active),
+    }
+    .into()
 }
 
 /// The state a reading of the tree starts in.
@@ -157,6 +173,8 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
 pub struct StateStatus {
     /// What to look back from, when the run named something rather than asking how the work stands.
     target: Option<String>,
+    /// Whether the target's unjoined variants are to be listed rather than its chain drawn.
+    show_unjoined_variants: bool,
 }
 
 #[chain(routeify)]
@@ -200,6 +218,10 @@ pub fn handle_status(
                     .map(|path| path.as_str().to_owned()),
             }
             .into();
+        }
+
+        if state.show_unjoined_variants {
+            return unjoined_of(&target, &layout, held, index, cwd.as_deref());
         }
 
         return lookback_of(&target, &layout, held, index, me, cwd.as_deref(), &merging);
@@ -374,6 +396,97 @@ fn lookback_of(
     }
 
     result.into()
+}
+
+/// Lists the unjoined variants of the chain the target names.
+///
+/// The target names what a lookback would draw, and the chain is read the same way; what is listed is
+/// the other half of it — the variants no link points at, which a drawing cannot reach. Each line
+/// carries the version it is based on, so a variant is placed in the chain without drawing it.
+///
+/// # Errors
+///
+/// Renders [`ErrorVcsIndexNoIndex`] when there is no index, [`ErrorStatusTarget`] when the target
+/// names nothing a chain hangs from, and [`ErrorVcsIndexRead`] when the index cannot be read.
+#[routeify]
+fn unjoined_of(
+    target: &str,
+    layout: &Layout,
+    held: &Workspace,
+    index: &mut LazyRes<ResVCSIndex>,
+    cwd: Option<&Path>,
+) -> Next {
+    let Some(index) = index.get_ref().as_ref() else {
+        return ErrorVcsIndexNoIndex.into();
+    };
+    let runtime = match runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => return error.into(),
+    };
+
+    let remote = tracked_layout(held);
+    let found = match found(
+        target,
+        layout,
+        remote.as_ref().map(|(_, layout)| layout),
+        held,
+        Some(index),
+        cwd,
+    ) {
+        Ok(found) => found,
+        Err(cause) => {
+            return ErrorStatusTarget {
+                target: target.to_owned(),
+                cause,
+            }
+            .into();
+        }
+    };
+
+    let chain = match read_chain(index, &runtime, found.key, None) {
+        Ok(chain) => chain,
+        Err(LookbackError::NotAChain) => {
+            return ErrorStatusTarget {
+                target: target.to_owned(),
+                cause: t!("vcs_index_lookback.err_not_a_chain").trim().to_owned(),
+            }
+            .into();
+        }
+        Err(LookbackError::Broken) => {
+            return ErrorStatusTarget {
+                target: target.to_owned(),
+                cause: t!("vcs_index_lookback.err_broken").trim().to_owned(),
+            }
+            .into();
+        }
+        Err(LookbackError::Read(error)) => {
+            return ErrorVcsIndexRead::new(error.reason()).into();
+        }
+    };
+
+    match chain.unjoined_variants(index, &runtime) {
+        Ok(variants) => ResultStatusUnjoined {
+            variants: variants
+                .into_iter()
+                .map(|variant| UnjoinedVariant {
+                    version_hash: variant.version,
+                    version_number: variant.number,
+                    variant_hash: variant.variant.hash,
+                    creator: variant.variant.creator,
+                    message: variant.variant.message,
+                })
+                .collect(),
+        }
+        .into(),
+        Err(error) => match error {
+            LookbackError::Read(error) => ErrorVcsIndexRead::new(error.reason()).into(),
+            _ => ErrorStatusTarget {
+                target: target.to_owned(),
+                cause: t!("vcs_index_lookback.err_broken").trim().to_owned(),
+            }
+            .into(),
+        },
+    }
 }
 
 /// How the file the target named stands, for the lines drawn above its chain.
@@ -782,6 +895,54 @@ pub fn render_result_status_merge(result: ResultStatusMerge, lookback: &ResLookb
         r_println!(
             "{}",
             help_line!(t!("status.merge_variant_into", target = target).trim())
+        );
+    }
+}
+
+/// Result: the unjoined variants of one chain, the highest base version first.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultStatusUnjoined {
+    /// The variants, one line each.
+    variants: Vec<UnjoinedVariant>,
+}
+
+/// One unjoined variant, with the version it is based on.
+#[derive(Serialize)]
+pub struct UnjoinedVariant {
+    /// The hash of the version the variant is based on.
+    #[serde(rename = "version_hash")]
+    version_hash: String,
+    /// The number of the version the variant is based on.
+    #[serde(rename = "version_number")]
+    version_number: u64,
+    /// The variant's own hash.
+    #[serde(rename = "variant_hash")]
+    variant_hash: String,
+    /// Who made the variant.
+    creator: String,
+    /// What the variant says.
+    message: String,
+}
+
+#[renderer(buffer)]
+pub fn render_result_status_unjoined(result: ResultStatusUnjoined) {
+    for variant in &result.variants {
+        let said = match (variant.creator.is_empty(), variant.message.is_empty()) {
+            (false, false) => format!("{}: {}", variant.creator, variant.message),
+            (false, true) => variant.creator.clone(),
+            (true, false) => variant.message.clone(),
+            (true, true) => String::new(),
+        };
+
+        r_println!(
+            "V{} {}{}",
+            variant.version_number,
+            variant.variant_hash,
+            if said.is_empty() {
+                String::new()
+            } else {
+                format!(" {said}")
+            }
         );
     }
 }

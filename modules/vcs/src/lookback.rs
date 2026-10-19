@@ -6,7 +6,7 @@
 //! `rola vcs-index lookback` and the Desktop's Version Graph read the chain this way, so the walk is
 //! kept here rather than in each of them.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use rorolala_storage::Key;
 use serde::Serialize;
@@ -83,6 +83,90 @@ pub struct Lookback {
     /// The drawing is by variant, but a caller that shows where a version itself stands — the
     /// Desktop's Version Graph does — needs the hash the index names that version by.
     pub version_hashes: HashMap<u64, String>,
+}
+
+/// One unjoined variant with the version it is based on, as a flat listing names it.
+#[derive(Debug, Clone)]
+pub struct BasedVariant {
+    /// The number of the version the variant is based on.
+    pub number: u64,
+    /// The hash of the version the variant is based on, as hex.
+    pub version: String,
+    /// The variant itself.
+    pub variant: VariantView,
+}
+
+impl Lookback {
+    /// Every unjoined variant based on a version of this chain, the highest base version first.
+    ///
+    /// The index is scanned rather than walked: a variant the chain draws nowhere is reached from no
+    /// link in the chain. What the chain draws is its spine and the variants merged in beside it, so a
+    /// variant is unjoined when it is neither — and it belongs to this file when the version it is
+    /// based on is one the chain holds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LookbackError::Read`] when the index's objects cannot be read.
+    pub fn unjoined_variants(
+        &self,
+        index: &VCSIndex,
+        runtime: &tokio::runtime::Runtime,
+    ) -> Result<Vec<BasedVariant>, LookbackError> {
+        // The versions by the hex a variant names them with, since a variant carries the digest rather
+        // than the number the chain worked out.
+        let versions: HashMap<&str, (u64, &str)> = self
+            .version_hashes
+            .iter()
+            .map(|(number, hash)| (hash.as_str(), (*number, hash.as_str())))
+            .collect();
+
+        // What the chain draws: every spine variant, every variant merged in beside one, and the
+        // variant that made the oldest version, which hangs from the root rather than a level.
+        let drawn: HashSet<&str> = self
+            .levels
+            .iter()
+            .flat_map(|level| std::iter::once(&level.variant).chain(level.merged.iter()))
+            .chain(self.first.iter())
+            .map(|variant| variant.hash.as_str())
+            .collect();
+
+        let objects = runtime
+            .block_on(index.read_objects())
+            .map_err(LookbackError::Read)?;
+        let mut found = Vec::new();
+
+        for (key, object) in objects {
+            let VCSIndexObject::Variant(variant) = object else {
+                continue;
+            };
+
+            let hash = key.hex();
+
+            if drawn.contains(hash.as_str()) {
+                continue;
+            }
+
+            let base = Key::new(*variant.base_version()).hex();
+            let Some((number, version)) = versions.get(base.as_str()) else {
+                continue;
+            };
+
+            found.push(BasedVariant {
+                number: *number,
+                version: (*version).to_owned(),
+                variant: view(index, runtime, &variant),
+            });
+        }
+
+        found.sort_by(|left, right| {
+            right
+                .number
+                .cmp(&left.number)
+                .then_with(|| left.variant.hash.cmp(&right.variant.hash))
+        });
+
+        Ok(found)
+    }
 }
 
 /// Why a chain could not be read.
