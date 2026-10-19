@@ -45,6 +45,12 @@ rorolala_vcs:
       en: The version graph is hidden when multiple files are selected
       zh-CN: 多个文件选择时将隐藏版本图
 
+    # What the switch in the graph's corner is hovered for: it shows the variants the chain draws
+    # nowhere, asked of the command line since the graph's own reading reaches only what a link reaches.
+    show_unjoined:
+      en: Show unjoined variants
+      zh-CN: 显示未闭合的变体
+
     # What a right-click on a node offers: the index's name for it, copied whole. Versions and
     # variants are words of their own, so the two are two items rather than one.
     copy_version_hash:

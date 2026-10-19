@@ -244,30 +244,60 @@ internal sealed partial class VersionGraphView
             );
         }
 
+        void BaseEdge(VersionGraphDrawing.VariantNode variant)
+        {
+            if (!_drawing!.VersionByLevel.TryGetValue(variant.Level, out var below))
+            {
+                return;
+            }
+
+            // The arc is the one the chain draws from a variant down to the version it is based on,
+            // carried over to this variant's own column: the same quarter turn at every column, so
+            // every base edge is read as the same curve.
+            var endX =
+                _panX
+                + (variant.X + VersionGraphDrawing.AxisGap) * _zoom;
+
+            DrawArc(
+                context,
+                pen,
+                new Point(endX, _panY + variant.Y * _zoom),
+                VersionGraphDrawing.AxisGap * _zoom,
+                (below.Y - variant.Y) * _zoom,
+                Math.PI,
+                Math.PI / 2,
+                SweepDirection.CounterClockwise
+            );
+
+            // What the arc does not reach — the run from its end to the version's own column — is a
+            // straight line, so a variant further out is the same arc with a longer run attached.
+            var versionX = _panX + below.X * _zoom;
+
+            if (versionX > endX)
+            {
+                var row = _panY + below.Y * _zoom;
+
+                context.DrawLine(pen, new Point(endX, row), new Point(versionX, row));
+            }
+        }
+
         foreach (var variant in _drawing!.Variants)
         {
             if (variant.State is not null)
             {
                 // The edit is based on the highest version and would make the one the index does not
                 // have: only the second half of a spine edge exists, from the capsule down to it.
-                if (_drawing.VersionByLevel.TryGetValue(variant.Level, out var below))
-                {
-                    DrawArc(
-                        context,
-                        pen,
-                        new Point(
-                            _panX + below.X * _zoom,
-                            _panY + variant.Y * _zoom
-                        ),
-                        (below.X - variant.X) * _zoom,
-                        (below.Y - variant.Y) * _zoom,
-                        Math.PI,
-                        Math.PI / 2,
-                        SweepDirection.CounterClockwise
-                    );
-                }
+                BaseEdge(variant);
 
                 continue;
+            }
+
+            // An unjoined variant has no version above it, so the only edge it has is the one down to
+            // the version it is based on: being based on something is the whole of what says where it
+            // belongs, and a version pointing at it is what it does not have.
+            if (variant.Unjoined)
+            {
+                BaseEdge(variant);
             }
 
             if (

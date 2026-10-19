@@ -151,16 +151,27 @@ internal sealed class VersionGraphDrawing
     /// How the working file stands beside what was recorded, when it has changes that were never
     /// recorded; nothing when it stands as recorded.
     /// </param>
+    /// <param name="unjoined">
+    /// The variants the chain draws nowhere — the ones the work may still be on its way through —
+    /// or nothing when the graph is not showing them.
+    /// </param>
     /// <returns>The drawing.</returns>
     /// <remarks>
     /// An edit is drawn as a variant of its own, based on the highest version: it is the variant that
     /// would make the version the index does not have yet, so it stands where every variant stands —
     /// in the row above the version it is based on. The versions move down a row to make it room, since
     /// there is no version above it for that row to sit under.
+    /// <para>
+    /// An unjoined variant is drawn where a merged one is, in the column to the left of the spine and
+    /// on the row of the version it is based on, but with no edge: nothing joins it into the chain, and
+    /// the absence of an edge is what says so. A variant based on the highest version needs the same row
+    /// above it that an edit does, so the versions move down for it as well.
+    /// </para>
     /// </remarks>
     public static VersionGraphDrawing From(
         RolaVersionGraph graph,
-        (string Words, bool Wrong)? editing
+        (string Words, bool Wrong)? editing,
+        IReadOnlyList<UnjoinedVariant>? unjoined = null
     )
     {
         ArgumentNullException.ThrowIfNull(graph);
@@ -227,14 +238,23 @@ internal sealed class VersionGraphDrawing
 
         var upstreamTop = upstream.Count == 0 ? localTop : upstream.Max(one => one.Level);
         var top = Math.Max(localTop, upstreamTop);
-        var shift = editing is null ? 0 : VersionToVariant;
-        var localTopY = TopY + shift + (double)(top - localTop) * VersionStep;
-        var merged = graph
+        var extras = unjoined is null
+            ? Array.Empty<UnjoinedVariant>()
+            : unjoined.Where(one => one.VersionNumber <= localTop).ToArray();
+        var mergedCounts = graph
             .Variants.Where(variant => !variant.Spine)
             .GroupBy(variant => variant.Level)
-            .Select(group => group.Count())
-            .DefaultIfEmpty(0)
-            .Max();
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        foreach (var group in extras.GroupBy(one => one.VersionNumber))
+        {
+            mergedCounts[group.Key] = mergedCounts.GetValueOrDefault(group.Key) + group.Count();
+        }
+
+        var merged = mergedCounts.Values.DefaultIfEmpty(0).Max();
+        var hasTopExtra = extras.Any(one => one.VersionNumber == localTop);
+        var shift = editing is null && !hasTopExtra ? 0 : VersionToVariant;
+        var localTopY = TopY + shift + (double)(top - localTop) * VersionStep;
 
         // Both sides have moved on from the common ancestor only then is there a branch to draw: a
         // Vault that is merely ahead continues the work's own chain in one column. A version only the
@@ -288,9 +308,18 @@ internal sealed class VersionGraphDrawing
             );
         }
 
-        var variantNodes = new List<VariantNode>(graph.Variants.Count);
+        var variantNodes = new List<VariantNode>(graph.Variants.Count + extras.Length);
         var spineByLevel = new Dictionary<ulong, VariantNode>();
         var mergedOrder = new Dictionary<ulong, int>();
+
+        // Where a variant of a level stands: under the version it produced, or in the row above the
+        // highest version when what it is based on is that version itself.
+        double VariantY(ulong level) =>
+            versionByLevel.TryGetValue(level + 1, out var above)
+                ? above.Y + VersionToVariant
+                : top > localTop || editing is not null || hasTopExtra
+                    ? localTopY - VersionToVariant
+                    : TopY;
 
         for (var index = 0; index < graph.Variants.Count; index++)
         {
@@ -306,11 +335,6 @@ internal sealed class VersionGraphDrawing
             var x = variant.Spine
                 ? variantX
                 : variantX - MergedGap * (order + 1);
-            var y = versionByLevel.TryGetValue(variant.Level + 1, out var above)
-                ? above.Y + VersionToVariant
-                : top > localTop || editing is not null
-                    ? localTopY - VersionToVariant
-                    : TopY;
             var node = new VariantNode(
                 index,
                 variant.Label,
@@ -319,7 +343,7 @@ internal sealed class VersionGraphDrawing
                 variant.Spine,
                 variant.Join,
                 x,
-                y,
+                VariantY(variant.Level),
                 variant.Creator,
                 variant.Message,
                 null,
@@ -332,6 +356,30 @@ internal sealed class VersionGraphDrawing
             {
                 spineByLevel[variant.Level] = node;
             }
+        }
+
+        foreach (var extra in extras)
+        {
+            mergedOrder.TryGetValue(extra.VersionNumber, out var order);
+            mergedOrder[extra.VersionNumber] = order + 1;
+
+            variantNodes.Add(
+                new VariantNode(
+                    variantNodes.Count,
+                    extra.Hash[..Math.Min(7, extra.Hash.Length)],
+                    extra.Hash,
+                    extra.VersionNumber,
+                    false,
+                    null,
+                    variantX - MergedGap * (order + 1),
+                    VariantY(extra.VersionNumber),
+                    extra.Creator,
+                    extra.Message,
+                    null,
+                    false,
+                    Unjoined: true
+                )
+            );
         }
 
         if (editing is { } edit)
@@ -432,6 +480,10 @@ internal sealed class VersionGraphDrawing
     /// </param>
     /// <param name="Wrong">Whether that edit must not be recorded — it is not this account's, or the
     /// version it is based on is not the one upstream is at.</param>
+    /// <param name="Unjoined">
+    /// Whether the variant is one the chain draws nowhere: it is based on a version of the chain, so it
+    /// has the edge down to that version, but no version points at it and nothing joins it in.
+    /// </param>
     internal sealed record VariantNode(
         int Index,
         string Label,
@@ -444,6 +496,7 @@ internal sealed class VersionGraphDrawing
         string Creator,
         string Message,
         string? State,
-        bool Wrong
+        bool Wrong,
+        bool Unjoined = false
     );
 }

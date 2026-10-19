@@ -1,9 +1,13 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using FileSystemPlugin;
 using RolaSharp;
@@ -64,15 +68,91 @@ internal sealed class VersionGraphDock : IDockView
         // The row under the graph is always there: the graph is about one file, and a reader who has
         // just changed it has nowhere else to say what the change was. What the row's button may do is
         // the work's answer, which is why the two share one dock rather than living apart.
-        var root = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+        var stage = new Grid { Children = { graph } };
         var bar = new VersionGraphTrackBar(host, graph, statuses, hub);
+        var toggle = UnjoinedToggle(host, graph);
 
-        root.Children.Add(graph);
+        stage.Children.Add(toggle);
+
+        var root = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+
+        root.Children.Add(stage);
         Grid.SetRow(bar, 1);
         root.Children.Add(bar);
 
         _graph = graph;
         _view = root;
+    }
+
+    /// <summary>
+    /// The switch in the graph's corner: whether the variants the chain draws nowhere are shown.
+    /// </summary>
+    /// <remarks>
+    /// It is drawn over the graph rather than in the dock's strip because it is about the drawing: a
+    /// reader looking at the chain is looking there for what is beside it. What it shows is asked of
+    /// the command line, since the graph's own reading reaches only what a link reaches.
+    /// </remarks>
+    /// <param name="host">The host, whose pictures the switch is drawn with.</param>
+    /// <param name="graph">The graph it turns the unjoined variants on and off for.</param>
+    /// <returns>The switch.</returns>
+    private static ToggleButton UnjoinedToggle(IPluginHost host, VersionGraphView graph)
+    {
+        var toggle = new ToggleButton
+        {
+            Classes = { "tool" },
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 12, 12, 0),
+            Padding = new Thickness(6),
+        };
+
+        Border? mark = null;
+
+        if (host.Icons.Find(Icons.CallSplit) is { } picture)
+        {
+            mark = new Border
+            {
+                Width = 14,
+                Height = 14,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
+            };
+
+            RenderOptions.SetBitmapInterpolationMode(mark, BitmapInterpolationMode.HighQuality);
+            mark[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
+            toggle.Content = mark;
+        }
+
+        ToolTip.SetTip(
+            toggle,
+            RolaI18N.Get("rorolala_vcs.version_graph.show_unjoined")
+        );
+
+        toggle.IsCheckedChanged += (_, _) =>
+        {
+            var on = toggle.IsChecked == true;
+
+            if (on)
+            {
+                toggle.Classes.Add("on");
+            }
+            else
+            {
+                toggle.Classes.Remove("on");
+            }
+
+            if (mark is not null)
+            {
+                mark[!Border.BackgroundProperty] = new DynamicResourceExtension(
+                    on ? PaletteKeys.PrimaryText : PaletteKeys.Front
+                );
+            }
+
+            graph.ShowUnjoined(on);
+        };
+
+        return toggle;
     }
 
     /// <inheritdoc />
@@ -204,6 +284,9 @@ internal sealed partial class VersionGraphView : Control
 
     /// <summary>The file the current drawing is of, so a new file resets the pan.</summary>
     private string? _target;
+
+    /// <summary>Whether the variants the chain draws nowhere are shown beside it.</summary>
+    private bool _showUnjoined;
 
     /// <summary>How large the drawing is drawn.</summary>
     private double _zoom = 1;
@@ -434,6 +517,26 @@ internal sealed partial class VersionGraphView : Control
         _settle.Start();
     }
 
+    /// <summary>
+    /// Says whether the variants the chain draws nowhere are to be shown beside it.
+    /// </summary>
+    /// <remarks>
+    /// They are not part of the chain and are not read from the index here: the command line is asked
+    /// for them, since a variant nothing points at is reached from no link in the chain. Turning the
+    /// switch over is a reading again, which is what puts them in the drawing or takes them out.
+    /// </remarks>
+    /// <param name="show">Whether to show them.</param>
+    internal void ShowUnjoined(bool show)
+    {
+        if (show == _showUnjoined)
+        {
+            return;
+        }
+
+        _showUnjoined = show;
+        Refresh();
+    }
+
     /// <summary>Reads what <see cref="Refresh"/> said to wait for.</summary>
     private void Settled(object? sender, EventArgs e)
     {
@@ -514,6 +617,10 @@ internal sealed partial class VersionGraphView : Control
         _reading = true;
         _readingFor = generation;
 
+        // What the switch says is read here, on the window's thread, so a reading that was already
+        // going does not change its mind halfway through the answer it was asked for.
+        var showing = _showUnjoined;
+
         _ = Task.Run(() =>
         {
             RolaVersionGraph? graph = null;
@@ -529,6 +636,24 @@ internal sealed partial class VersionGraphView : Control
                 _log.Warn(
                     $"the version history of `{entry.Path}` could not be read: {error.Message}"
                 );
+            }
+
+            IReadOnlyList<UnjoinedVariant> unjoined = [];
+
+            if (showing && graph is not null)
+            {
+                var (done, said, found) = UnjoinedCommand.Run(directory, entry.Path);
+
+                if (done)
+                {
+                    unjoined = found;
+                }
+                else
+                {
+                    _log.Warn(
+                        $"the unjoined variants of `{entry.Path}` could not be read: {said}"
+                    );
+                }
             }
 
             Dispatcher.UIThread.Post(() =>
@@ -557,7 +682,7 @@ internal sealed partial class VersionGraphView : Control
 
                     using (graph)
                     {
-                        drawing = VersionGraphDrawing.From(graph, editing);
+                        drawing = VersionGraphDrawing.From(graph, editing, unjoined);
                     }
 
                     var moved = !string.Equals(entry.Path, _target, StringComparison.Ordinal);
