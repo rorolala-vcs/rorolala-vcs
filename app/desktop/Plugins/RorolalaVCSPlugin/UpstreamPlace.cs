@@ -282,6 +282,20 @@ internal sealed class UpstreamPlace
     /// <summary>The base the kept answers were read at.</summary>
     private string _readAt = string.Empty;
 
+    /// <summary>The account the work acts as, which is who a row has to be held by to be this side's to name.</summary>
+    /// <remarks>
+    /// An account is a private key and which one is in use is Rorolala's own answer, given by `rola account` — a run. A
+    /// provider's answer is asked for on the window's thread, so the answer is read in the background and kept, the way the
+    /// lists of Vaults and Layouts are.
+    /// </remarks>
+    private string _account = string.Empty;
+
+    /// <summary>Whether a read of the account is going, so that one read is asked for once.</summary>
+    private bool _accountAsking;
+
+    /// <summary>Whether the account has been asked for, so a run that failed is not asked again on every draw.</summary>
+    private bool _accountTried;
+
     /// <summary>What a checkin of a drag comes to, and what the user is asked about one that does not fit.</summary>
     private readonly CheckinFlow _checkin;
 
@@ -469,17 +483,46 @@ internal sealed class UpstreamPlace
         return true;
     }
 
-    /// <inheritdoc />
-    public bool Renamable(object data) =>
-        data is UpstreamCarry { Entry: null } carry && _drafts.Contains(carry.Path);
+    /// <summary>Whether a carry is a folder this side made, which is one no entry of the work stands at.</summary>
+    /// <param name="carry">What a drag carried, or what a row stands for.</param>
+    /// <returns>Whether it is one.</returns>
+    private bool Draft(UpstreamCarry carry) =>
+        carry.Entry is null && _drafts.Contains(carry.Path);
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A folder this side made is its own to name. A row of the work's own upstream is the account's that holds it — all of
+    /// it, since a folder is only what stands under it — and a Layout of the Workspace's own is not offered: what this names
+    /// is the Vault's upstream, and the paths of the work's own Layout are the work itself.
+    /// </remarks>
+    public bool Renamable(object data)
+    {
+        if (data is not UpstreamCarry carry)
+        {
+            return false;
+        }
+
+        if (Draft(carry))
+        {
+            return true;
+        }
+
+        return string.Equals(carry.Source.Domain, Vaults, StringComparison.Ordinal)
+            && Tree(carry.Source) is { } tree
+            && Held(tree, carry, Account());
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A rename of something the work names is a move within its own folder, one run per entry against the Layout the level
+    /// is of, which is what the Vault takes: the copy is written by those runs, and the rows follow them.
+    /// </remarks>
     public bool Rename(LogicalAddress address, object data, string name)
     {
         ArgumentNullException.ThrowIfNull(address);
         ArgumentNullException.ThrowIfNull(name);
 
-        if (data is not UpstreamCarry { Entry: null } carry || !_drafts.Contains(carry.Path))
+        if (data is not UpstreamCarry carry || !Renamable(carry))
         {
             return false;
         }
@@ -505,24 +548,59 @@ internal sealed class UpstreamPlace
 
         if (Occupied(carry.Source, to))
         {
+            // Said rather than dropped: the box the name was typed in is gone once the name is taken, so a refusal that said
+            // nothing would be a name that went nowhere and a reader with no way to tell it from a rename that happened.
+            Notify(
+                NotificationLevel.Warning,
+                RolaI18N.Get("rorolala_vcs.place.rename_refused_title"),
+                RolaI18N.Get("rorolala_vcs.place.refused_taken", to)
+            );
+
             return false;
         }
 
+        // A folder this side made is moved by rewriting its path, and what is under it comes with it: nothing is run,
+        // because there is nothing of the work to run it against.
+        if (Draft(carry))
+        {
+            Rebase(carry.Path, to);
+            _host.Files.Redraw();
+
+            return true;
+        }
+
+        if (Tree(carry.Source) is not { } tree)
+        {
+            return false;
+        }
+
+        // A folder this side made inside it is a path under this one, and it goes with it: the suggestion is about where the
+        // work's things are, and one left at the old prefix would be a folder under a path the work no longer has.
         Rebase(carry.Path, to);
-        _host.Files.Redraw();
+
+        var moves = Renaming(tree, carry, to);
+
+        if (moves.Count > 0)
+        {
+            Move(carry.Source, moves);
+        }
 
         return true;
     }
 
     /// <inheritdoc />
-    public bool Removable(object data) => Renamable(data);
+    /// <remarks>
+    /// Only a folder this side made is the place's to take away: what the work names is the Vault's, and a row of it is
+    /// removed by the command line, not by a suggestion about the work.
+    /// </remarks>
+    public bool Removable(object data) => data is UpstreamCarry carry && Draft(carry);
 
     /// <inheritdoc />
     public bool Remove(LogicalAddress address, object data)
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        if (data is not UpstreamCarry { Entry: null } carry || !_drafts.Contains(carry.Path))
+        if (data is not UpstreamCarry carry || !Draft(carry))
         {
             return false;
         }
@@ -844,6 +922,71 @@ internal sealed class UpstreamPlace
                 yield return deeper;
             }
         }
+    }
+
+    /// <summary>Whether every entry at a path and under it is held by one account, which is what makes it that account's.</summary>
+    /// <remarks>
+    /// A path is only the entries that stand at it and under it, so a folder is this side's exactly when all of them are: one
+    /// held by another account is a folder that account would have to move as well, and the Vault refuses the whole of it.
+    /// An entry nobody holds has no owner to match, and what nobody holds is not this side's to name.
+    /// </remarks>
+    /// <param name="tree">The copy.</param>
+    /// <param name="carry">The row being judged.</param>
+    /// <param name="account">The account the work acts as, empty when it is not known.</param>
+    /// <returns>Whether it is held by that account.</returns>
+    internal static bool Held(UpstreamEntriesTree tree, UpstreamCarry carry, string account)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(carry);
+        ArgumentNullException.ThrowIfNull(account);
+
+        if (account.Length == 0)
+        {
+            return false;
+        }
+
+        var owners = Every(tree, carry.Path)
+            .Select(path => tree.Find(path)?.Entry?.Owner ?? string.Empty)
+            .ToList();
+
+        return owners.Count > 0
+            && owners.TrueForAll(owner => string.Equals(owner, account, StringComparison.Ordinal));
+    }
+
+    /// <summary>What renaming a path comes to, one entry at a time.</summary>
+    /// <remarks>
+    /// A rename is a move within the path's own folder: the entries under a folder keep what they have below it, because an
+    /// entry is named by its whole path and one left at the old prefix would be a child of nothing.
+    /// </remarks>
+    /// <param name="tree">The copy.</param>
+    /// <param name="carry">What is being renamed.</param>
+    /// <param name="to">The path it is to have.</param>
+    /// <returns>The moves, each entry once, in the order a listing reads them.</returns>
+    internal static List<(string From, string To, string? Holder)> Renaming(
+        UpstreamEntriesTree tree,
+        UpstreamCarry carry,
+        string to
+    )
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(carry);
+
+        var root = carry.Path + "/";
+        List<(string From, string To, string? Holder)> moves = [];
+
+        foreach (var path in Every(tree, carry.Path))
+        {
+            var landed = path.Length == carry.Path.Length ? to : Join(to, path[root.Length..]);
+
+            if (string.Equals(landed, path, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            moves.Add((path, landed, tree.Find(path)?.Entry?.Owner));
+        }
+
+        return moves;
     }
 
     /// <summary>Whether a path is inside another, which is what a folder dropped in itself would be.</summary>
@@ -1204,6 +1347,10 @@ internal sealed class UpstreamPlace
     private IReadOnlyList<LogicalEntry> Level(UpstreamSource source, string prefix)
     {
         var reading = Reading(source);
+
+        // What may be named here is what the account in use holds, and which one that is is a run: it is asked for on the way
+        // to the rows, so that it is here by the time a name is asked to be edited rather than when the press happens.
+        _ = Account();
 
         // Nothing yet rather than a row: a place being read is a place with nothing to say about itself, and the wait is
         // what the window draws for it by being drawn again.
@@ -1752,6 +1899,65 @@ internal sealed class UpstreamPlace
     }
 
     /// <summary>
+    /// The account the work acts as, asking for it in the background when it is not here yet.
+    /// </summary>
+    /// <remarks>
+    /// Which account is in use is the command line's answer, so reading it is a run, and a provider is asked on the window's
+    /// thread: an answer that took a run to make would take the window with it. The read is asked for once and kept until the
+    /// files are said to have changed; until it lands, nothing is known to be held by anyone, which refuses a rename rather
+    /// than waiting for it — and the press after it is answered.
+    /// </remarks>
+    /// <returns>The name, or an empty string while it is being read or when nothing says.</returns>
+    private string Account()
+    {
+        var directory = BaseDirectory.Current ?? string.Empty;
+
+        if (directory.Length == 0 || _accountTried || _accountAsking)
+        {
+            return _account;
+        }
+
+        _accountAsking = true;
+
+        var version = _version;
+
+        _ = Task.Run(() =>
+        {
+            var (done, accounts, _) = AccountActions.List(directory);
+            var current = done
+                ? accounts.FirstOrDefault(account => account.Current)?.Name ?? string.Empty
+                : string.Empty;
+
+            Dispatcher.UIThread.Post(() => LandedAccount(version, current));
+        });
+
+        return _account;
+    }
+
+    /// <summary>Keeps the account a read that landed came to.</summary>
+    /// <remarks>
+    /// Nothing is drawn again for it, because nothing drawn reads it: a name box is put up by a press, and the press reads
+    /// the place directly. An answer of a reading that is no longer the one being read is dropped, and the mark that it was
+    /// asked for goes with it, so that the next draw asks again.
+    /// </remarks>
+    /// <param name="version">Which reading of the work it was asked for in.</param>
+    /// <param name="current">The account the work acts as, or an empty string when nothing says.</param>
+    private void LandedAccount(int version, string current)
+    {
+        _accountAsking = false;
+
+        if (version != _version)
+        {
+            _accountTried = false;
+
+            return;
+        }
+
+        _accountTried = true;
+        _account = current;
+    }
+
+    /// <summary>
     /// The Vaults the Workspace knows, asking for them in the background when they are not here yet.
     /// </summary>
     /// <remarks>
@@ -1958,6 +2164,9 @@ internal sealed class UpstreamPlace
         _layoutsTried = false;
         _layoutsSaid = string.Empty;
         _rootAsked = false;
+        _account = string.Empty;
+        _accountAsking = false;
+        _accountTried = false;
     }
 
     /// <summary>Moves paths within one Layout, one run each.</summary>

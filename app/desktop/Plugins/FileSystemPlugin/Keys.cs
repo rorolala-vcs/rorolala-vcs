@@ -214,6 +214,16 @@ internal static class Keys
             return false;
         }
 
+        // A field is left alone, as it is with the clipboard's keys: a name being typed is the box's, and a read of
+        // the files asked for mid-rename would build the rows again under the box and take the name with them.
+        // Said, for the reason the clipboard's keys are.
+        if (e.Source is TextBox)
+        {
+            log.Info("F5: left to the field it was pressed in");
+
+            return false;
+        }
+
         // Said out loud like the clipboard's keys, and for the same reason: a key that was pressed while the
         // keyboard was outside the dock is one nothing here ever saw.
         log.Info("F5: reading every directory again");

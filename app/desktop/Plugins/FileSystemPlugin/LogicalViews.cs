@@ -169,6 +169,19 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <inheritdoc />
     public override string Name(LogicalEntry item) => item.Name;
 
+    /// <summary>How much of a name a rename chooses, which leaves a file's extension out.</summary>
+    /// <remarks>
+    /// Chosen the way the file browser chooses it, because the accident it avoids is the same one: typing over
+    /// the whole of <c>hero.psd</c> takes the extension with it, and a place's rows are named exactly as a
+    /// directory's are. A row a place opens is a folder, and one it does not is a file — a place names no other
+    /// kind of thing.
+    /// </remarks>
+    /// <param name="item">The entry being renamed.</param>
+    /// <param name="name">The name it has.</param>
+    /// <returns>Where the chosen part of the name ends.</returns>
+    public override int Select(LogicalEntry item, string name) =>
+        Names.Chosen(item.Opens is null ? EntryKind.File : EntryKind.Directory, name);
+
     /// <inheritdoc />
     public override Control Icon(LogicalEntry item, int size) => Picture(item, size);
 

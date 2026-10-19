@@ -356,6 +356,11 @@ internal sealed class AccountsPanel : UserControl
                 }
 
                 Refresh();
+
+                // The account in use is what "mine" means everywhere else: the Ownership column, whether an entry is
+                // already here, and which rows the upstream place may name. Choosing another one makes every reading that
+                // asked stale, so they are let go of rather than drawn again out of what they hold.
+                _host.Files.Touch();
             });
         });
     }

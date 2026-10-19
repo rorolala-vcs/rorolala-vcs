@@ -728,6 +728,11 @@ rorolala_vcs:
     refused_taken:
       en: "Something is already named `%{path}`"
       zh-CN: "`%{path}` 已经有别的内容"
+    # A name that could not be given: the box it was typed in is gone by the time the refusal is known, so the reason is
+    # what is shown instead of the field waiting for another try.
+    rename_refused_title:
+      en: The name was not taken
+      zh-CN: 未能改名
     refused_generic:
       en: The entry cannot be moved there
       zh-CN: 无法把该条目移到此处
