@@ -281,12 +281,126 @@ internal sealed partial class VersionGraphView
             }
         }
 
+        void Elbow(
+            IPen line,
+            double sourceX,
+            double sourceY,
+            double targetX,
+            double targetY,
+            double half
+        )
+        {
+            var fromX = _panX + sourceX * _zoom;
+            var fromY = _panY + sourceY * _zoom;
+            var toX = _panX + targetX * _zoom;
+            var toY = _panY + targetY * _zoom;
+            var dx = toX - fromX;
+            var dy = toY - fromY;
+            var directionX = Math.Sign(dx);
+            var directionY = Math.Sign(dy);
+
+            if (directionX == 0 || directionY == 0)
+            {
+                var edge = directionY == 0
+                    ? new Point(fromX, fromY)
+                    : new Point(fromX, fromY + directionY * half * _zoom);
+
+                context.DrawLine(line, edge, new Point(toX, toY));
+
+                return;
+            }
+
+            // The same quarter the chain draws from a variant to the version it is based on: the
+            // horizontal span and the drop are the chain's own, so every arc is the same curve. What
+            // the arc does not cover — a longer run down or across — is a straight line, before it or
+            // after it.
+            var rx = Math.Min(VersionGraphDrawing.AxisGap * _zoom, Math.Abs(dx));
+            var ry = Math.Min(
+                VersionGraphDrawing.VersionToVariant * _zoom,
+                Math.Abs(dy)
+            );
+            var extra = Math.Abs(dy) - ry;
+            var start = new Point(fromX, fromY + directionY * extra);
+            var end = new Point(fromX + directionX * rx, toY);
+
+            if (extra > 0.5)
+            {
+                context.DrawLine(
+                    line,
+                    new Point(fromX, fromY + directionY * half * _zoom),
+                    start
+                );
+            }
+
+            var geometry = new StreamGeometry();
+
+            // A quintic that leaves the vertical and enters the horizontal with no curvature at either
+            // end: the straight and the curve meet with the same tangent and the same curvature, which
+            // is what keeps the join from reading as a kink. Its control points are on the two tangents,
+            // so it stays within the same quarter the chain's arc covers.
+            //
+            // The control points sit on the two tangents at 20% and 56%, the distances that make the
+            // quintic track the chain's quarter ellipse of AxisGap by VersionToVariant — within half a
+            // unit along the curve and a third of a unit in length — while meeting the straight runs
+            // with no step in curvature, which is the kink an ellipse leaves at both ends.
+            var first = new Point(start.X, start.Y + directionY * ry * 0.2);
+            var second = new Point(start.X, start.Y + directionY * ry * 0.56);
+            var third = new Point(end.X - directionX * rx * 0.56, end.Y);
+            var fourth = new Point(end.X - directionX * rx * 0.2, end.Y);
+            var steps = Math.Clamp(
+                (int)Math.Ceiling(Math.Max(rx, ry) / 2),
+                16,
+                256
+            );
+
+            using (var path = geometry.Open())
+            {
+                path.BeginFigure(start, false);
+
+                for (var at = 1; at <= steps; at++)
+                {
+                    var t = at / (double)steps;
+                    var u = 1 - t;
+                    var b0 = u * u * u * u * u;
+                    var b1 = 5 * u * u * u * u * t;
+                    var b2 = 10 * u * u * u * t * t;
+                    var b3 = 10 * u * u * t * t * t;
+                    var b4 = 5 * u * t * t * t * t;
+                    var b5 = t * t * t * t * t;
+
+                    path.LineTo(
+                        new Point(
+                            (b0 * start.X)
+                                + (b1 * first.X)
+                                + (b2 * second.X)
+                                + (b3 * third.X)
+                                + (b4 * fourth.X)
+                                + (b5 * end.X),
+                            (b0 * start.Y)
+                                + (b1 * first.Y)
+                                + (b2 * second.Y)
+                                + (b3 * third.Y)
+                                + (b4 * fourth.Y)
+                                + (b5 * end.Y)
+                        )
+                    );
+                }
+            }
+
+            context.DrawGeometry(null, line, geometry);
+
+            if (Math.Abs(toX - end.X) > 0.5)
+            {
+                context.DrawLine(line, end, new Point(toX, toY));
+            }
+        }
+
         void PendingEdge(
             VersionGraphDrawing.VariantNode edit,
             VersionGraphDrawing.VariantNode pending
         )
         {
-            var pen = new Pen(
+            var line = new Pen(
                 new SolidColorBrush(RorolalaColours.UnderWay),
                 Math.Max(1, 1.5 * _zoom)
             )
@@ -294,30 +408,19 @@ internal sealed partial class VersionGraphView
                 DashStyle = new DashStyle([5, 4], 0),
                 LineCap = PenLineCap.Round,
             };
-            var start = new Point(
-                _panX + edit.X * _zoom,
-                _panY
-                    + (edit.Y + VersionGraphDrawing.CapsuleHeight / 2) * _zoom
-            );
-            var end = new Point(
-                _panX + pending.X * _zoom,
-                _panY
-                    + (pending.Y - VersionGraphDrawing.CapsuleHeight / 2) * _zoom
-            );
-            var dy = end.Y - start.Y;
-            var geometry = new StreamGeometry();
 
-            using (var path = geometry.Open())
-            {
-                path.BeginFigure(start, false);
-                path.CubicBezierTo(
-                    new Point(start.X, start.Y + dy * 0.45),
-                    new Point(end.X, end.Y - dy * 0.45),
-                    end
-                );
-            }
-
-            context.DrawGeometry(null, pen, geometry);
+            // The run the join line will make once the merge is recorded: it starts at the variant being
+            // joined and ends at the one the work becomes, where the ? stands now. Drawing it in the same
+            // direction and by the same curve is what lets the dash turn into the line without a change
+            // of shape.
+            Elbow(
+                line,
+                pending.X,
+                pending.Y,
+                edit.X,
+                edit.Y,
+                VersionGraphDrawing.CapsuleHeight / 2
+            );
         }
 
         foreach (var variant in _drawing!.Variants)
@@ -346,12 +449,24 @@ internal sealed partial class VersionGraphView
                 continue;
             }
 
-            // An unjoined variant has no version above it, so the only edge it has is the one down to
-            // the version it is based on: being based on something is the whole of what says where it
-            // belongs, and a version pointing at it is what it does not have.
-            if (variant.Unjoined)
+            // Every variant that is not on the spine is based on a version of the chain and is not
+            // reached by the two arcs a spine variant has: its base edge is the one that says where it
+            // stands. A merged variant and an unjoined one are the same here — the join edge is the
+            // other relation, not this one.
+            if (
+                variant.State is null
+                && !variant.Spine
+                && _drawing.VersionByLevel.TryGetValue(variant.Level, out var below)
+            )
             {
-                BaseEdge(variant);
+                Elbow(
+                    pen,
+                    variant.X,
+                    variant.Y,
+                    below.X,
+                    below.Y,
+                    VersionGraphDrawing.CapsuleHeight / 2
+                );
             }
 
             if (
@@ -363,68 +478,18 @@ internal sealed partial class VersionGraphView
                 continue;
             }
 
+            // The joined variant is the one the run leaves from: it is the lower one, and the line goes
+            // up (or down) from its own column, turns, and runs into the merge variant's column.
             var target = _drawing.Variants[join];
 
-            if (
-                target.Y
-                <= variant.Y + VersionGraphDrawing.CapsuleHeight
-            )
-            {
-                continue;
-            }
-
-            var from = new Point(
-                _panX + variant.X * _zoom,
-                _panY + variant.Y * _zoom
+            Elbow(
+                pen,
+                target.X,
+                target.Y,
+                variant.X,
+                variant.Y,
+                VersionGraphDrawing.CapsuleHeight / 2
             );
-            var to = new Point(
-                _panX + target.X * _zoom,
-                _panY + target.Y * _zoom
-            );
-            var dx = target.X - variant.X;
-            var dy = target.Y - variant.Y;
-
-            if (Math.Abs(dx) < 0.5)
-            {
-                // The degenerate arc: a variant joining one directly below it.
-                context.DrawLine(pen, from, to);
-
-                continue;
-            }
-
-            var center = new Point(
-                _panX + target.X * _zoom,
-                _panY + variant.Y * _zoom
-            );
-            var rx = Math.Abs(dx) * _zoom;
-            var ry = dy * _zoom;
-
-            if (dx > 0)
-            {
-                DrawArc(
-                    context,
-                    pen,
-                    center,
-                    rx,
-                    ry,
-                    Math.PI,
-                    Math.PI / 2,
-                    SweepDirection.CounterClockwise
-                );
-            }
-            else
-            {
-                DrawArc(
-                    context,
-                    pen,
-                    center,
-                    rx,
-                    ry,
-                    0,
-                    Math.PI / 2,
-                    SweepDirection.Clockwise
-                );
-            }
         }
     }
 
