@@ -67,6 +67,26 @@ rorolala_vcs:
       en: The file could not be retracked
       zh-CN: 未能重新追踪该文件
 
+    # What the row under the graph offers: a message for the version an unrecorded edit would make,
+    # and the button that records it. The field is always there; the button is pressable only while
+    # the file on screen has an edit and something was written for it. A graph whose work and Vault
+    # have parted asks for Shift as well, and says so on the button.
+    track:
+      en: TRACK
+      zh-CN: 追踪
+    track_hint:
+      en: Message for the new version
+      zh-CN: 新版本的说明
+    track_tip:
+      en: Record the unrecorded change as a new version
+      zh-CN: 将未记录的修改记录为新版本
+    track_diverged:
+      en: this chain has parted from the Vault's, so hold Shift to track
+      zh-CN: 该链已与保险库分叉，请按住 Shift 追踪
+    track_failed:
+      en: The file could not be tracked
+      zh-CN: 未能追踪该文件
+
     # What the Vault's version says on hover when the version itself is not in this index: a fetch
     # brings the Vault's Layout and never its versions, so there is a hash to name but no chain or
     # words to draw.
@@ -439,6 +459,9 @@ rorolala_vcs:
     retrack:
       en: Retracking
       zh-CN: 重新追踪
+    track:
+      en: Tracking
+      zh-CN: 追踪新版本
     row_up:
       en: Uploading
       zh-CN: 上传中
