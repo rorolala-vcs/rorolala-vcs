@@ -6,12 +6,13 @@ $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/../lib/common.ps1"
 
-# Any running `rola` or `rola-daemon` is stopped before anything is built: a process would hold the
-# binaries the build is about to write, and a file that is still in use cannot be overwritten.
-Get-Process -Name 'rola', 'rola-daemon' -ErrorAction SilentlyContinue | ForEach-Object {
+# Any running `rola`, `rola-daemon` or `rola-daemon-gui` is stopped before anything is built: a
+# process would hold the binaries the build is about to write, and a file that is still in use
+# cannot be overwritten. The window holds its own executable the same way, so it is stopped too.
+Get-Process -Name 'rola', 'rola-daemon', 'rola-daemon-gui' -ErrorAction SilentlyContinue | ForEach-Object {
     Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
 }
-Get-Process -Name 'rola', 'rola-daemon' -ErrorAction SilentlyContinue | ForEach-Object { $_.WaitForExit(5000) }
+Get-Process -Name 'rola', 'rola-daemon', 'rola-daemon-gui' -ErrorAction SilentlyContinue | ForEach-Object { $_.WaitForExit(5000) }
 
 # The plugin's own pictures first, and deliberately: they are drawn from the pinned icon set rather
 # than carried, so what is laid out below is what the pin holds rather than whatever was last in the
@@ -64,6 +65,11 @@ Publish-Rsharp
 # tree's own at its top rather than files written for a layout, because a second copy is a copy that
 # goes stale — what an export carries is what the project says about itself, said once.
 Copy-Item -Force 'README.md', 'LICENSE' "$BuildDir/"
+
+# And the window over the daemon's own answers. It is built last of the programs because
+# `$BuildDir` is removed and laid out above — a window built before that would be wiped — and
+# before the integrity level below, so the copy that is handed over is the one that carries it.
+Invoke-Script daemon-win-build
 
 # The export tree is handed to whoever runs it, so it is given the integrity level that lets it run
 # rather than being left at whatever the tree was checked out with.
