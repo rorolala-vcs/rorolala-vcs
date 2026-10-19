@@ -21,10 +21,11 @@ namespace FileSystemPlugin;
 /// wrong on every desktop but the one it was drawn for; a set is the user saying they want another look, so
 /// it is the set's picture rather than the desktop's.
 /// <para>
-/// A set's pictures are masks over the listing's ink rather than pictures in the colours they were drawn
-/// with, because the sets this program carries are line art: a line drawn in black would disappear on the
-/// dark look. The system's own icons are the other way round — they are pictures, and a folder that lost its
-/// colour would stop looking like the desktop's folder.
+/// A set's pictures are drawn in the colours they were drawn with, not as masks over the listing's ink: the
+/// colours are the set's, and a set drawn in black stays black on the dark look even where that is hard to
+/// see. A picture recoloured by the program is a picture the set did not draw. The system's own icons are
+/// the same way — they are pictures, and a folder that lost its colour would stop looking like the desktop's
+/// folder.
 /// </para>
 /// <para>
 /// The toolbar's own pictures are the program's: a switch that shows what the rules hide, and whether a dock
@@ -101,29 +102,30 @@ internal static partial class Icons
     /// <returns>What to draw beside the entry's name.</returns>
     public static Control For(Entry entry, int size)
     {
-        // A chosen icon set is drawn as a mask over the listing's own ink rather than as a picture in the
-        // colours it was drawn with: the sets this program carries are line art, and a line drawn in black
-        // is a line that disappears on the dark look. The system's own icons are the other way round — they
-        // are pictures, and a folder that lost its colour would stop looking like the desktop's folder.
-        if (IconSets.Picture(entry, size) is { } chosen)
-        {
-            return Glyph(chosen, PaletteKeys.Front, size);
-        }
-
         var directory = entry.Kind == EntryKind.Directory;
-        var icon = directory ? SysIcons.Directory(size) : SysIcons.File(entry.Path, size);
 
-        return icon is null
-            ? Marked(directory, size)
-            : new Image
-            {
-                Source = icon,
-                Width = size,
-                Height = size,
-                Stretch = Stretch.Uniform,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+        // An icon set's picture is drawn as it was drawn. Its colours are not this plugin's to change —
+        // a black set stays black on the dark look — and the same is true of the system's own pictures.
+        var picture =
+            IconSets.Picture(entry, size)
+            ?? (directory ? SysIcons.Directory(size) : SysIcons.File(entry.Path, size));
+
+        return picture is null ? Marked(directory, size) : Shown(picture, size);
     }
+
+    /// <summary>One picture, drawn at the size a row gives it.</summary>
+    /// <param name="picture">The picture to draw.</param>
+    /// <param name="size">How many pixels wide and tall.</param>
+    /// <returns>What to draw beside the entry's name.</returns>
+    private static Control Shown(Bitmap picture, int size) =>
+        new Image
+        {
+            Source = picture,
+            Width = size,
+            Height = size,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
 
     /// <summary>
     /// How large a grid's icons are at a zoom, in pixels.
