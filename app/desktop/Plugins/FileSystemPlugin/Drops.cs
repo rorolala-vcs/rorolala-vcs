@@ -9,80 +9,58 @@ namespace FileSystemPlugin;
 
 /// <summary>Where a drag lands in a view: the directory it goes into, and the row that stands for it.</summary>
 /// <param name="Into">The directory the dragged entries go into.</param>
-/// <param name="Row">The path of the row to light, or nothing where no row stands for the place.</param>
-internal readonly record struct Land(string Into, string Row);
+/// <param name="Row">
+/// What says which row to light — the entry's own key — or nothing where no row stands for the place.
+/// </param>
+/// <remarks>
+/// The row is a key rather than a path because what a row stands for is not always a file: a listing of a plugin's
+/// place has rows whose key is the provider's own, and the marking is the view's either way.
+/// </remarks>
+internal readonly record struct Land(string Into, object? Row);
 
 /// <summary>
-/// The drop protocol over one view: whether a drag may land, what is lit while it is over, and what letting go
-/// does.
+/// The drop protocol over one view: whether a drag may land, and what letting go does.
 /// </summary>
 /// <remarks>
-/// One answer for every view rather than one per view, because the protocol is one thing: a drag is asked
-/// whether it may land, the row it would land on is lit, and letting go hands the work to the file operations. What
-/// differs between a listing and a tree is only where their rows are and which of them may be landed on, and each
-/// view answers that for itself.
+/// One answer for every view that takes files rather than one per view, because the protocol is one thing: a drag
+/// is asked whether it may land, the row it would land on is lit by the view, and letting go hands the work to the
+/// file operations. What differs between a listing and a tree is only where their rows are and which of them may
+/// be landed on, and each view answers that for itself (<see cref="Listing{TItem}.Landing"/>).
 /// </remarks>
 internal sealed class Drops
 {
-    /// <summary>
-    /// Whether a drop of this program's own answered the drag in flight.
-    /// </summary>
-    /// <remarks>
-    /// It is what tells a moved-out drag from a moved-in one: a drop answered here has already moved the files,
-    /// so the source must not take the originals away as well. Held for the whole program rather than by a view,
-    /// because the drop is answered by the view it landed on and the removal is the source's — which is a view of
-    /// its own, and may be another dock's.
-    /// </remarks>
-    public static bool Answered { get; set; }
-
     /// <summary>The host, for what cannot be done.</summary>
     private readonly IPluginHost _host;
 
     /// <summary>The location a read is said through, since every location reads its directory again.</summary>
     private readonly Browser _browser;
 
-    /// <summary>Where a drag at a position would land in this view, or nothing where it may not land here.</summary>
-    private readonly Func<DragEventArgs, Land?> _landing;
-
-    /// <summary>Lights the row a drag would land on, or takes the light off.</summary>
-    private readonly Action<string?> _mark;
+    /// <summary>Takes the light off the row a drag would have landed on.</summary>
+    private readonly Action<object?> _mark;
 
     /// <summary>Sets the protocol up over one view.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="browser">The location a read is to be said through.</param>
-    /// <param name="landing">Where a drag at a position would land, or nothing where it may not land here.</param>
-    /// <param name="mark">Lights the row a drag would land on, or takes the light off.</param>
-    public Drops(
-        IPluginHost host,
-        Browser browser,
-        Func<DragEventArgs, Land?> landing,
-        Action<string?> mark
-    )
+    /// <param name="mark">Takes the light off the row a drag would have landed on.</param>
+    public Drops(IPluginHost host, Browser browser, Action<object?> mark)
     {
         _host = host;
         _browser = browser;
-        _landing = landing;
         _mark = mark;
     }
 
     /// <summary>
-    /// Takes a drag over the view: lights what it would land on, and answers whether it may land.
+    /// What letting go where a drag would land would do.
     /// </summary>
+    /// <remarks>
+    /// Asked rather than decided by the caller, because it is the same answer for every view that takes files: a
+    /// drag with <c>Ctrl</c> held copies and one without moves, which is what the platform is told and what the
+    /// source reads back.
+    /// </remarks>
     /// <param name="e">The drag.</param>
     /// <returns>What letting go here would do.</returns>
-    public DragDropEffects Over(DragEventArgs e)
-    {
-        if (_landing(e) is not { } land)
-        {
-            _mark(null);
-
-            return DragDropEffects.None;
-        }
-
-        _mark(land.Row);
-
-        return e.KeyModifiers.HasFlag(KeyModifiers.Control) ? DragDropEffects.Copy : DragDropEffects.Move;
-    }
+    public static DragDropEffects Over(DragEventArgs e) =>
+        e.KeyModifiers.HasFlag(KeyModifiers.Control) ? DragDropEffects.Copy : DragDropEffects.Move;
 
     /// <summary>Takes a drag off the view: nothing is lit any more.</summary>
     public void Off() => _mark(null);
@@ -92,23 +70,24 @@ internal sealed class Drops
     /// </summary>
     /// <remarks>
     /// A drag this program started is answered here too, so a drag between two of its docks never leaves it, and
-    /// the source is told by <see cref="Answered"/> not to remove the originals again.
+    /// the source is told by <see cref="Drag.Answered"/> not to remove the originals again.
     /// </remarks>
+    /// <param name="land">Where it was let go, or nothing where it was let go nowhere.</param>
     /// <param name="e">The drop.</param>
-    public async void Dropped(DragEventArgs e)
+    public async void Dropped(Land? land, DragEventArgs e)
     {
         _mark(null);
 
-        if (_landing(e) is not { } land)
+        if (land is not { } where)
         {
             return;
         }
 
-        var into = land.Into;
+        var into = where.Into;
 
         // Told before the work is waited for: what the platform is owed an answer to cannot wait for a question
         // the file operations may have to put to a person.
-        Answered = true;
+        Drag.Answered = true;
         e.Handled = true;
 
         var copy = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.DragEffects == DragDropEffects.Copy;
@@ -199,6 +178,29 @@ internal static class Drag
     public const double Slip = 4;
 
     /// <summary>
+    /// The format the object a source made travels under, within this program.
+    /// </summary>
+    /// <remarks>
+    /// In-process on purpose: what a logical place takes is an object of the source's own making, which no
+    /// platform can serialize and no other program has a word for. A drag that leaves this program still carries
+    /// its files and their paths, and this is the extra thing this program's own views read to decide whether a
+    /// place can take it — which is why the platform is asked to keep it out of its own negotiation.
+    /// </remarks>
+    public static readonly DataFormat<LogicalDrag> Payload =
+        DataFormat.CreateInProcessFormat<LogicalDrag>("rorolala.logical-drag");
+
+    /// <summary>
+    /// Whether a drop of this program's own answered the drag in flight.
+    /// </summary>
+    /// <remarks>
+    /// It is what tells a moved-out drag from a moved-in one: a drop answered by one of this program's views has
+    /// already dealt with what was carried, so the source must not take the originals away as well. Held for the
+    /// whole program rather than by a view, because the drop is answered by the view it landed on and the removal
+    /// is the source's — which is a view of its own, and may be another dock's (Section 7.7).
+    /// </remarks>
+    public static bool Answered { get; set; }
+
+    /// <summary>
     /// Hands entries over as a drag, and finishes what that leaves unfinished.
     /// </summary>
     /// <remarks>
@@ -206,8 +208,8 @@ internal static class Drag
     /// as files and a text field as text. What the platform does with the drag is its own business: this hands
     /// over the data and waits to be told what became of it. A move another program made is a
     /// move this program has to finish, the other program having only copied the files it was handed; a move one
-    /// of this program's own docks answered has already moved them, which is what <see cref="Drops.Answered"/>
-    /// records — taking them away again would delete what was just carried.
+    /// of this program's own docks answered has already moved them, which is what <see cref="Answered"/> records —
+    /// taking them away again would delete what was just carried.
     /// </remarks>
     /// <param name="through">A location to say a read through, since every location reads its directory again.</param>
     /// <param name="from">The press the drag begins at, which is what the platform is handed.</param>
@@ -241,16 +243,22 @@ internal static class Drag
             }
         }
 
-        transfer.Add(DataTransferItem.CreateText(string.Join(Environment.NewLine, carrying.Select(entry => entry.Path))));
+        // The paths are what this program's own object says, and what a logical place is offered: the contract rubs
+        // the type out at the boundary and the source hands over what it made, and what a file drag says is where
+        // the files are — the same words the text carries, since a place that takes one takes a file's name.
+        var said = string.Join(Environment.NewLine, carrying.Select(entry => entry.Path));
 
-        Drops.Answered = false;
+        transfer.Add(DataTransferItem.CreateText(said));
+        transfer.Add(DataTransferItem.Create(Payload, new LogicalDrag(said)));
+
+        Drag.Answered = false;
         Ghost.Carrying = lead;
 
         try
         {
             var effect = await DragDrop.DoDragDropAsync(from, transfer, DragDropEffects.Move | DragDropEffects.Copy);
 
-            if (effect == DragDropEffects.Move && !Drops.Answered)
+            if (effect == DragDropEffects.Move && !Drag.Answered)
             {
                 await FileOps.Remove([.. carrying], failed);
 

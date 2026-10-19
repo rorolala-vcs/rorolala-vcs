@@ -100,6 +100,31 @@ internal static class Names
     }
 }
 
+/// <summary>One column of values a table shows after the icon and the name.</summary>
+/// <remarks>
+/// Generic in the entry because the table is: a directory's columns say how large a file is and who holds it, and
+/// a plugin's place has no such columns — but the table that draws them, and the grabs that resize them, are one
+/// table either way.
+/// </remarks>
+/// <typeparam name="TItem">What one entry of the table is.</typeparam>
+/// <param name="Header">The translation key the column is headed by.</param>
+/// <param name="Width">How wide the column starts.</param>
+/// <param name="Value">What the column says about one entry.</param>
+/// <param name="Align">Where the text sits in the column.</param>
+/// <param name="Draw">
+/// How the column draws one entry, where a value of its own is not enough — a contributed column draws its own
+/// ink. Answered instead of <see cref="Value"/> when it is there.
+/// </param>
+/// <param name="Placement">Where the column sits among the listing's own.</param>
+internal sealed record Column<TItem>(
+    string Header,
+    double Width,
+    Func<TItem, string> Value,
+    TextAlignment Align = TextAlignment.Left,
+    Func<TItem, Control>? Draw = null,
+    ColumnPlacement Placement = ColumnPlacement.AfterValues
+);
+
 /// <summary>
 /// What a gesture on a listing leaves chosen: the choice it was made from, the entries it was made on, and the
 /// modifiers it was made with.
@@ -277,25 +302,192 @@ internal static class Choice
 }
 
 /// <summary>
-/// What both ways of reading a directory have in common: the choice, the keyboard, and the menus.
+/// What a listing is made of: the items, and everything a view has to know about one of them.
 /// </summary>
 /// <remarks>
-/// One directory is read two ways — as a table of rows and as tiles — and the two are one browser seen
-/// twice rather than two browsers. Everything a user does to an entry, short of how it is laid out, is
-/// therefore written once here: what a click means, what the arrows and the typed letters mean, and what
-/// the menu on a choice offers. A view supplies the arrangement and a face for one entry, and inherits
-/// the rest.
-/// <para>
-/// The choice is the toolkit's own list selection, because the look already fills a chosen row with the accent
-/// — but not the toolkit's own rules for what a press means. Here a click chooses the one entry it landed
-/// on, <c>Shift</c> with it moves the nearer end of the run already chosen to the entry it landed on, and
-/// <c>Ctrl</c> with it toggles that one entry; a frame over a run of entries reads its modifiers as rules over
-/// the whole run instead, which is a different rule set for a different gesture (see <see cref="Choice"/>). The
-/// press is therefore read on the way down (<see cref="Pressed"/>) and the toolkit is never left to decide a
-/// choice of its own: its <c>Shift</c> takes a range from a fixed anchor and replaces the choice with it, where
-/// this one moves an end of the choice and has no frame at all. What else is added here is what the toolkit does
-/// not have: the frame, the arrows within a wrapped grid, the typed letters, and a menu that knows about a set.
-/// </para>
+/// A view is one arrangement of a listing — rows, or tiles — and a listing is one family of things arranged. The
+/// two vary apart, which is why they are two: a directory and a plugin's place are both read as rows and as tiles,
+/// and neither arrangement has anything to say about what an entry <em>is</em>. So a view is made of an
+/// arrangement and a listing (<see cref="EntryView{TItem}"/> takes one), and what a place adds over a directory —
+/// a provider's picture, a provider's menu — is said here once rather than in a second pair of views.
+/// </remarks>
+/// <typeparam name="TItem">What one entry of a listing is.</typeparam>
+internal abstract class Listing<TItem>
+    where TItem : class
+{
+    /// <summary>Makes a listing of what a view is to draw.</summary>
+    /// <param name="host">The host, for what cannot be done.</param>
+    /// <param name="items">What is in it, in the order it is shown.</param>
+    protected Listing(IPluginHost host, IReadOnlyList<TItem> items)
+    {
+        Host = host;
+        Items = items;
+    }
+
+    /// <summary>The host, for what cannot be done.</summary>
+    public IPluginHost Host { get; }
+
+    /// <summary>What is in the listing, in the order it is shown.</summary>
+    public IReadOnlyList<TItem> Items { get; }
+
+    /// <summary>
+    /// Lights the row a drag would land on, which the view the listing is drawn in supplies.
+    /// </summary>
+    /// <remarks>
+    /// Set by the view rather than handed in, because a row is the view's to draw: what a listing decides is which
+    /// item a drag is over, and what saying so looks like belongs to the arrangement.
+    /// </remarks>
+    public Action<object?>? Marking { get; set; }
+
+    /// <summary>What tells one item from another, which is what a choice is carried across a read by.</summary>
+    /// <param name="item">The item.</param>
+    /// <returns>What says which one it is.</returns>
+    public abstract object Key(TItem item);
+
+    /// <summary>What one item is called.</summary>
+    /// <param name="item">The item.</param>
+    /// <returns>The name to show.</returns>
+    public abstract string Name(TItem item);
+
+    /// <summary>The picture one item wears.</summary>
+    /// <param name="item">The item.</param>
+    /// <param name="size">How many pixels wide and tall.</param>
+    /// <returns>What to draw beside the name.</returns>
+    public abstract Control Icon(TItem item, int size);
+
+    /// <summary>The picture one item wears in a tile, which may carry more than a row's does.</summary>
+    /// <param name="item">The item.</param>
+    /// <param name="size">How many pixels wide and tall.</param>
+    /// <returns>What to draw in the tile.</returns>
+    public virtual Control Marked(TItem item, int size) => Icon(item, size);
+
+    /// <summary>Opens one item, which is what a double-click and <c>Enter</c> do.</summary>
+    /// <param name="item">The item to open.</param>
+    public abstract void Open(TItem item);
+
+    /// <summary>Fills the menu opened on an item.</summary>
+    /// <param name="menu">The menu to fill.</param>
+    /// <param name="from">The control the menu is opened from.</param>
+    /// <param name="chosen">What is chosen, the item the menu was opened on first.</param>
+    /// <param name="force">Whether the forced actions are shown to begin with.</param>
+    public abstract void Fill(ContextMenu menu, Control from, IReadOnlyList<TItem> chosen, bool force);
+
+    /// <summary>How the items beyond the name are read, in the order they are shown.</summary>
+    public virtual IReadOnlyList<Column<TItem>> Columns => [];
+
+    /// <summary>Says that the choice moved, for a listing that has somewhere to publish it.</summary>
+    /// <param name="chosen">What is chosen now.</param>
+    public virtual void Chosen(IReadOnlyList<TItem> chosen) { }
+
+    /// <summary>Says that a press landed on an item, for a listing that has somewhere to publish it.</summary>
+    /// <param name="item">The item the press landed on.</param>
+    public virtual void Clicked(TItem item) { }
+
+    /// <summary>Whether an item leads somewhere, which is what a name reads heavier for.</summary>
+    /// <param name="item">The item.</param>
+    /// <returns>Whether it opens.</returns>
+    public virtual bool Openable(TItem item) => false;
+
+    /// <summary>Fades a row, which is what a listing knows and its arrangement does not.</summary>
+    /// <param name="row">The row to fade.</param>
+    /// <param name="item">What it stands for.</param>
+    public virtual void Fade(Control row, TItem item) { }
+
+    /// <summary>Whether a run of typed letters may land on an item.</summary>
+    /// <param name="item">The item.</param>
+    /// <returns>Whether it is a name rather than a place.</returns>
+    public virtual bool Seekable(TItem item) => true;
+
+    /// <summary>Whether the listing holds nothing to read.</summary>
+    public virtual bool Barren => Items.Count == 0;
+
+    /// <summary>What a listing with nothing in it says, or nothing for one that says nothing.</summary>
+    /// <returns>The word, or nothing.</returns>
+    public virtual Control? Notice() => null;
+
+    /// <summary>The menu on the space around the items, or nothing.</summary>
+    /// <param name="from">The control the menu is opened from.</param>
+    /// <returns>The menu, or nothing.</returns>
+    public virtual ContextMenu? Space(Control from) => null;
+
+    /// <summary>Copies what is chosen, where the listing has a clipboard to put it on.</summary>
+    /// <param name="from">A control in the tree the clipboard is reached through.</param>
+    /// <param name="chosen">What is chosen.</param>
+    public virtual void Copy(Control from, IReadOnlyList<TItem> chosen) { }
+
+    /// <summary>Cuts what is chosen, which a paste then moves.</summary>
+    /// <param name="from">A control in the tree the clipboard is reached through.</param>
+    /// <param name="chosen">What is chosen.</param>
+    public virtual void Cut(Control from, IReadOnlyList<TItem> chosen) { }
+
+    /// <summary>Pastes what is on the clipboard into the listing.</summary>
+    /// <param name="from">A control in the tree the clipboard is reached through.</param>
+    public virtual void Paste(Control from) { }
+
+    /// <summary>Removes what is chosen.</summary>
+    /// <param name="chosen">What is chosen.</param>
+    /// <param name="ask">Whether to put the question to the user first.</param>
+    public virtual void Delete(IReadOnlyList<TItem> chosen, bool ask) { }
+
+    /// <summary>Makes a directory in the listing, which is then named where it is drawn.</summary>
+    public virtual void NewFolder() { }
+
+    /// <summary>Takes what a name was edited to.</summary>
+    /// <param name="item">What is being renamed.</param>
+    /// <param name="name">What the box says.</param>
+    public virtual void Rename(TItem item, string name) { }
+
+    /// <summary>How much of a name a rename chooses to begin with.</summary>
+    /// <param name="item">What is being renamed.</param>
+    /// <param name="name">The name it has.</param>
+    /// <returns>Where the chosen part of the name ends.</returns>
+    public virtual int Select(TItem item, string name) => name.Length;
+
+    /// <summary>What is waiting to be named, if the listing made something while a view was being made.</summary>
+    /// <returns>The item to name, or nothing.</returns>
+    public virtual TItem? Pending() => null;
+
+    /// <summary>Reads the listing again, which is what an edit that changed the files leaves behind.</summary>
+    public virtual void Touch() { }
+
+    /// <summary>Whether an item may be picked up and dragged away.</summary>
+    /// <param name="item">The item.</param>
+    /// <returns>Whether a drag may begin on it.</returns>
+    public virtual bool CanDrag(TItem item) => false;
+
+    /// <summary>Hands items over as a drag.</summary>
+    /// <param name="from">The press the drag begins at.</param>
+    /// <param name="carrying">What to carry, in the order the view shows it.</param>
+    /// <param name="lead">The item the drag took hold of.</param>
+    public virtual void DragOut(PointerPressedEventArgs from, IReadOnlyList<TItem> carrying, TItem lead) { }
+
+    /// <summary>Whether a drag may land here, or nothing where it may not land at all.</summary>
+    /// <param name="item">The item the pointer is over, or nothing where it is over the space around them.</param>
+    /// <param name="e">The drag.</param>
+    /// <returns>Where it would land.</returns>
+    public virtual Land? Landing(TItem? item, DragEventArgs e) => null;
+
+    /// <summary>What letting go here would do.</summary>
+    /// <param name="land">Where it would land.</param>
+    /// <param name="e">The drag.</param>
+    /// <returns>What the platform is told.</returns>
+    public virtual DragDropEffects Over(Land land, DragEventArgs e) => DragDropEffects.None;
+
+    /// <summary>Lets a drag go where it was let go.</summary>
+    /// <param name="land">Where it was let go.</param>
+    /// <param name="e">The drop.</param>
+    public virtual void DropAt(Land land, DragEventArgs e) { }
+
+    /// <summary>Takes a drag off the listing: nothing is lit any more.</summary>
+    public virtual void DragLeft() => Marking?.Invoke(null);
+}
+
+/// <summary>
+/// What every listing view is, whichever arrangement draws it and whatever it lists.
+/// </summary>
+/// <remarks>
+/// The root exists for what a dock holds without caring: a dock swaps one view for another, and what it does to
+/// either of them — put the keyboard in it, draw it again — does not depend on what is in it.
 /// </remarks>
 internal abstract class EntryView : UserControl
 {
@@ -308,6 +500,48 @@ internal abstract class EntryView : UserControl
     /// </remarks>
     internal const double HiddenOpacity = 0.55;
 
+    /// <summary>How many entries this view is showing, which is what a dock reports it drew.</summary>
+    public abstract int Shown { get; }
+
+    /// <summary>Draws every row again with what the listing is worth now.</summary>
+    public abstract void Repaint();
+
+    /// <summary>
+    /// Puts the keyboard in the listing, so that the dock's own keys reach it again.
+    /// </summary>
+    /// <remarks>
+    /// The listing is where a dock answers its keys from: they are taken at the top of the dock and passed to the
+    /// view being read, so a keyboard that is nowhere in the dock is a dock whose keys do nothing. That is what
+    /// happens when the address — which hides itself when an edit ends — was where the keyboard was
+    /// (Section 7.7).
+    /// </remarks>
+    public abstract void Listen();
+}
+
+/// <summary>
+/// What both ways of reading a listing have in common: the choice, the keyboard, the menus, and the drags.
+/// </summary>
+/// <remarks>
+/// One listing is read two ways — as a table of rows and as tiles — and the two are one listing seen twice rather
+/// than two listings. Everything a user does to an entry, short of how it is laid out, is therefore written once
+/// here: what a click means, what the arrows and the typed letters mean, and what the menu on a choice offers. An
+/// arrangement supplies the layout and a face for one entry, and inherits the rest.
+/// <para>
+/// What an entry <em>is</em> is not here either: whether it is a file, what opening it does, whether it may be
+/// dragged — all of that is the <see cref="Listing{TItem}"/> the view was made over. That is what lets a plugin's
+/// place be read by these very views rather than by a second set that would drift from them.
+/// </para>
+/// <para>
+/// The choice is the toolkit's own list selection, because it is exactly the one asked for — a click
+/// chooses, <c>Ctrl</c> adds or removes, <c>Shift</c> takes a range — and because the look already fills
+/// a chosen row with the accent (§10). What is added here is only what the toolkit does not have: the
+/// arrows within a wrapped grid, the typed letters, and a menu that knows about a set.
+/// </para>
+/// </remarks>
+/// <typeparam name="TItem">What one entry of the listing is.</typeparam>
+internal abstract class EntryView<TItem> : EntryView
+    where TItem : class
+{
     /// <summary>How long a run of typed letters stays one run.</summary>
     private static readonly TimeSpan Typing = TimeSpan.FromSeconds(1);
 
@@ -315,7 +549,7 @@ internal abstract class EntryView : UserControl
     private const double RowGuess = 28.0;
 
     /// <summary>Every row on screen, so that a faded cut and a moved column reach all of them.</summary>
-    private readonly List<(Entry Entry, Control Row)> _rows = [];
+    private readonly List<(TItem Item, Control Row)> _rows = [];
 
     /// <summary>Where the pointer or the keyboard last landed, which is what a range and an open begin at.</summary>
     private int _lead = -1;
@@ -372,21 +606,18 @@ internal abstract class EntryView : UserControl
     /// <summary>The card that follows a drag, drawn over this view while the pointer is in it.</summary>
     private readonly Ghost _ghost;
 
-    /// <summary>How a drag is taken here: where it would land, and what is lit while it is over.</summary>
-    private readonly Drops _drops;
-
     /// <summary>Where a press landed and on which entry, while it may still become a drag.</summary>
     private Point _slip;
     private int _slippedAt = -1;
 
     /// <summary>
-    /// The choice as it stood when the pointer went down, as the entries it held.
+    /// The choice as it stood when the pointer went down, before the toolkit collapsed it to one.
     /// </summary>
     /// <remarks>
-    /// As entries and not as places, because this is what a drag carries: what is handed over is what was
-    /// chosen when the hand went down, and not whatever a rebuilt listing would number those places as.
+    /// As the items themselves and not as places, because this is what a drag carries: what is handed over is what
+    /// was chosen when the hand went down, and not whatever a rebuilt listing would number those places as.
     /// </remarks>
-    private IReadOnlyList<Entry> _atPress = [];
+    private IReadOnlyList<TItem> _atPress = [];
 
     /// <summary>
     /// The same choice as places in the listing, which is what a click and a frame are both read against.
@@ -424,36 +655,32 @@ internal abstract class EntryView : UserControl
 
     /// <summary>Sets up the shared behaviour over one list.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
-    /// <param name="browser">The location the entries belong to.</param>
-    /// <param name="actions">What the entries do when opened or given a menu.</param>
-    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    protected EntryView(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
+    /// <param name="source">What is listed, which is what every entry of it is answered by.</param>
+    protected EntryView(IPluginHost host, Listing<TItem> source)
     {
         Host = host;
-        Browser = browser;
-        Actions = actions;
-        Clipboard = clip;
+        Source = source;
+        Source.Marking = Mark;
 
         _ghost = new Ghost(_over);
-        _drops = new Drops(host, browser, Landing, Mark);
 
         List = new ListBox
         {
-            ItemsSource = browser.Shown,
+            ItemsSource = source.Items,
             SelectionMode = SelectionMode.Multiple,
             Background = Brushes.Transparent,
-            ItemTemplate = new FuncDataTemplate<Entry>((entry, _) => Item(entry), true),
+            ItemTemplate = new FuncDataTemplate<TItem>((item, _) => Item(item), true),
         };
 
         // What the choice holds leaves this listing as it changes, since what the rest of the program
         // does with a choice — the Version Graph's track — is about the files chosen rather than about
         // the one clicked. Every way a choice moves goes through the toolkit's selection, so this one
         // answer covers a click, a frame, the keyboard, and a listing rebuilt with the choice it had.
-        List.Selection.SelectionChanged += (_, _) => ChosenFiles.Publish(Chosen());
+        List.Selection.SelectionChanged += (_, _) => source.Chosen(Chosen());
 
         // The menu on the space around the entries. An entry carries one of its own, and the toolkit
         // takes the nearest, so this one is the empty space by construction.
-        List.ContextMenu = actions.Empty(this);
+        List.ContextMenu = source.Space(this);
 
         // The keyboard is the list's, taken on the way down before the list reads it itself: the arrows are
         // replaced by ones that know about a wrapped grid, and Enter and the typed letters are not the
@@ -501,63 +728,37 @@ internal abstract class EntryView : UserControl
         List.AddHandler(DragDrop.DragLeaveEvent, DraggedOff);
         List.AddHandler(DragDrop.DropEvent, Dropped);
 
-        // Repainting only while on screen, like the browser itself: a dock that was closed is not a view
-        // of anything to keep in step.
-        AttachedToVisualTree += (_, _) =>
+        // A name waiting to be typed, if one was made while this view was being made — which is what a new
+        // folder is: its row is this view's, and this view is not laid out yet, so the box goes in a moment
+        // later rather than at a row that does not exist. The listing is what knows whether the name is for what
+        // it reads, since a view is handed a listing and not a directory (see `Listing.Pending`), and a view that
+        // is already up hears about one through the actions' own `Naming` (see `TreeBrowser`).
+        if (Source.Pending() is { } naming)
         {
-            Clipboard.Changed += Repaint;
-            actions.Naming += Named;
-        };
-        DetachedFromVisualTree += (_, _) =>
-        {
-            Clipboard.Changed -= Repaint;
-            actions.Naming -= Named;
-        };
-    }
-
-    /// <summary>Puts a box in the row of an entry that has just been made, if this view draws it.</summary>
-    /// <remarks>
-    /// Heard rather than read from the actions because the view showing the directory the folder went into is
-    /// not always this one — a dock beside this one may be looking at it — and a hand-off read where it is
-    /// kept would be taken by whichever view was made first. A directory this view is not showing is not this
-    /// view's to name: a box put in the row of the wrong listing is a name typed where the user is not looking.
-    /// </remarks>
-    /// <param name="entry">The entry whose name is to be typed.</param>
-    private void Named(Entry entry)
-    {
-        if (!string.Equals(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(entry.Path)), Browser.Current, StringComparison.Ordinal))
-        {
-            return;
+            Dispatcher.UIThread.Post(() => Rename(naming), DispatcherPriority.Background);
         }
-
-        // A moment later rather than now, because the row is drawn by the reading that is about to happen: the
-        // view is not laid out yet, and a box asked for at a row that does not exist is a box that never is.
-        Dispatcher.UIThread.Post(() => Rename(entry), DispatcherPriority.Background);
     }
 
     /// <summary>The host, for what cannot be done.</summary>
     protected IPluginHost Host { get; }
 
-    /// <summary>The location the entries belong to.</summary>
-    protected Browser Browser { get; }
+    /// <summary>What is listed, and what every entry of it is answered by.</summary>
+    protected Listing<TItem> Source { get; }
+
+    /// <summary>What is in the listing, in the order it is shown.</summary>
+    protected IReadOnlyList<TItem> Items => Source.Items;
 
     /// <summary>How many entries this view is showing, which is what a dock reports it drew.</summary>
-    public int Shown => Browser.Shown.Count;
-
-    /// <summary>What the entries do when opened or given a menu.</summary>
-    protected BrowserActions Actions { get; }
-
-    /// <summary>What a copy or a cut has put within reach of a paste.</summary>
-    protected Clip Clipboard { get; }
+    public override int Shown => Items.Count;
 
     /// <summary>The list every entry is a row or a tile of.</summary>
     protected ListBox List { get; }
 
     /// <summary>Every row on screen, so that a column move can reach the ones drawn as a table.</summary>
-    protected IReadOnlyList<(Entry Entry, Control Row)> Rows => _rows;
+    protected IReadOnlyList<(TItem Item, Control Row)> Rows => _rows;
 
     /// <summary>The entry the pointer or the keyboard last landed on, or nothing before either has.</summary>
-    protected Entry? Lead => _lead >= 0 && _lead < Browser.Shown.Count ? Browser.Shown[_lead] : null;
+    protected TItem? Lead => _lead >= 0 && _lead < Items.Count ? Items[_lead] : null;
 
     /// <summary>
     /// Whether a press begins a resize of something the view draws, which the view then drives.
@@ -615,9 +816,9 @@ internal abstract class EntryView : UserControl
 
         // The word is drawn over the empty space rather than in place of the list, so that the menu and the
         // frame the space still answers keep answering.
-        if (Barren())
+        if (Source.Barren && Source.Notice() is { } notice)
         {
-            grid.Children.Add(Notice());
+            grid.Children.Add(notice);
         }
 
         grid.Children.Add(_over);
@@ -626,57 +827,15 @@ internal abstract class EntryView : UserControl
     }
 
     /// <summary>
-    /// Whether the listing holds nothing but the way up.
+    /// One entry as a row or a tile, which is the one thing an arrangement supplies.
     /// </summary>
     /// <remarks>
-    /// The way up stands before every listing that is not the base's own and is not an entry of the
-    /// directory, so a directory with nothing in it still shows one row; the word for an empty listing is
-    /// due where there is nothing but that row.
-    /// </remarks>
-    private bool Barren() => !Browser.Shown.Any(entry => !Browser.IsUp(entry.Path));
-
-    /// <summary>
-    /// What a listing with nothing in it says.
-    /// </summary>
-    /// <remarks>
-    /// It takes no pointer of its own: the space it sits over is still the list's, and a word that ate the
-    /// right-click there would take the empty-space menu and the start of a frame with it.
-    /// </remarks>
-    private static Control Notice() =>
-        new StackPanel
-        {
-            Spacing = 8,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = "\U0001F5C2",
-                    FontSize = 34,
-                    Classes = { "faint" },
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                },
-                new TextBlock
-                {
-                    Text = RolaI18N.Get("rorolala_file_system.empty"),
-                    Classes = { "muted" },
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                },
-            },
-        };
-
-    /// <summary>
-    /// One entry as a row or a tile, which is the one thing a view supplies.
-    /// </summary>
-    /// <remarks>
-    /// Called by the toolkit when it realises an item, and by no view directly, so a view may build it out
+    /// Called by the toolkit when it realises an item, and by no view directly, so an arrangement may build it out
     /// of anything the selection and the theme do not reach.
     /// </remarks>
-    /// <param name="entry">The entry to draw.</param>
+    /// <param name="item">The entry to draw.</param>
     /// <returns>What stands for the entry.</returns>
-    protected abstract Control Item(Entry entry);
+    protected abstract Control Item(TItem item);
 
     /// <summary>
     /// How many entries stand side by side, which is what an up or down arrow steps by.
@@ -696,13 +855,13 @@ internal abstract class EntryView : UserControl
     /// and the toolkit reuses them: what the menu is about is the choice as it stands at the moment of
     /// opening, which is later.
     /// </remarks>
-    /// <param name="entry">What the row stands for.</param>
+    /// <param name="item">What the row stands for.</param>
     /// <param name="row">The row to finish.</param>
     /// <returns>The row.</returns>
-    protected Control Prepared(Entry entry, Control row)
+    protected Control Prepared(TItem item, Control row)
     {
         var menu = new ContextMenu();
-        menu.Opening += (_, _) => Actions.Fill(menu, this, Chosen(entry), force: Held);
+        menu.Opening += (_, _) => Source.Fill(menu, this, Chosen(item), force: Held);
         row.ContextMenu = menu;
 
         // What the pointer held is read when it is pressed, because the menu that opens next is laid out before
@@ -714,9 +873,9 @@ internal abstract class EntryView : UserControl
         menu.AddHandler(KeyDownEvent, (_, key) => Revealed(menu, key), RoutingStrategies.Tunnel);
         menu.AddHandler(KeyUpEvent, (_, key) => Revealed(menu, key), RoutingStrategies.Tunnel);
 
-        Apply(row, entry);
+        Source.Fade(row, item);
 
-        _rows.Add((entry, row));
+        _rows.Add((item, row));
         row.DetachedFromVisualTree += (_, _) =>
         {
             for (var at = _rows.Count - 1; at >= 0; at--)
@@ -759,33 +918,42 @@ internal abstract class EntryView : UserControl
     /// about the rest of the choice: it is the one whose kind decides which menu this is, and the one whose
     /// words a contributed action is named by.
     /// </remarks>
-    /// <param name="entry">The entry the menu was opened on.</param>
-    protected IReadOnlyList<Entry> Chosen(Entry entry)
+    /// <param name="item">The entry the menu was opened on.</param>
+    protected IReadOnlyList<TItem> Chosen(TItem item)
     {
         var chosen = Chosen();
 
-        if (!chosen.Any(item => string.Equals(item.Path, entry.Path, StringComparison.Ordinal)))
+        if (!chosen.Any(other => Same(other, item)))
         {
-            return [entry];
+            return [item];
         }
 
-        return chosen[0].Path == entry.Path
+        return Same(chosen[0], item)
             ? chosen
-            : [entry, .. chosen.Where(item => item.Path != entry.Path)];
+            : [item, .. chosen.Where(other => !Same(other, item))];
     }
 
+    /// <summary>Whether two items are the same one, which is what their listing says tells them apart.</summary>
+    /// <param name="left">One item.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>Whether they are the same.</returns>
+    private bool Same(TItem left, TItem right) => Equals(Source.Key(left), Source.Key(right));
+
     /// <summary>Copies what is chosen to the clipboard.</summary>
-    public void Copy() => Actions.Copy(this, Offered());
+    public void Copy() => Source.Copy(this, Offered());
 
     /// <summary>Cuts what is chosen to the clipboard, which a paste then moves.</summary>
-    public void Cut() => Actions.Cut(this, Offered());
+    public void Cut() => Source.Cut(this, Offered());
 
-    /// <summary>Pastes what is on the clipboard into the directory being looked at.</summary>
-    public void Paste() => Actions.Paste(this, Browser.Current);
+    /// <summary>Pastes what is on the clipboard into the listing.</summary>
+    public void Paste() => Source.Paste(this);
 
     /// <summary>Removes what is chosen, asking first unless told not to.</summary>
     /// <param name="ask">Whether to put the question to the user first.</param>
-    public void Delete(bool ask) => Actions.Remove(Offered(), ask);
+    public void Delete(bool ask) => Source.Delete(Offered(), ask);
+
+    /// <summary>Makes a directory in the listing, which is then named where it is drawn.</summary>
+    public void NewFolder() => Source.NewFolder();
 
     /// <summary>The box a name is being edited in, and the entry it is about, while one is.</summary>
     /// <remarks>
@@ -793,7 +961,7 @@ internal abstract class EntryView : UserControl
     /// name in a listing, and the listing is where it can be seen against the names around it.
     /// </remarks>
     private TextBox? _editor;
-    private Entry? _editing;
+    private TItem? _editing;
 
     /// <summary>Renames what is chosen, or the entry the pointer last landed on.</summary>
     public void Rename()
@@ -804,28 +972,28 @@ internal abstract class EntryView : UserControl
         }
     }
 
-    /// <summary>Puts the name of `entry` into a box where the listing draws it.</summary>
-    /// <param name="entry">What is being renamed.</param>
-    public void Rename(Entry entry)
+    /// <summary>Puts the name of `item` into a box where the listing draws it.</summary>
+    /// <param name="item">What is being renamed.</param>
+    public void Rename(TItem item)
     {
         // What is edited is a row, and a row that is not on screen has no container to hold a cell: bringing
-        // it into view is what makes a name reachable in a directory too long to show at once.
-        List.ScrollIntoView(entry);
+        // it into view is what makes a name reachable in a listing too long to show at once.
+        List.ScrollIntoView(item);
 
-        if (Beginning(entry))
+        if (Beginning(item))
         {
             return;
         }
 
         // The container is made by the layout the scroll asks for, so it is a moment behind: one more turn
         // of the loop is what puts the box in a row rather than nowhere.
-        Dispatcher.UIThread.Post(() => Beginning(entry), DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() => Beginning(item), DispatcherPriority.Background);
     }
 
-    /// <summary>Puts the name of `entry` into a box, where its row and the cell in it are already drawn.</summary>
-    /// <param name="entry">What is being renamed.</param>
+    /// <summary>Puts the name of `item` into a box, where its row and the cell in it are already drawn.</summary>
+    /// <param name="item">What is being renamed.</param>
     /// <returns>Whether the box was made.</returns>
-    private bool Beginning(Entry entry)
+    private bool Beginning(TItem item)
     {
         if (_editor is not null)
         {
@@ -833,7 +1001,7 @@ internal abstract class EntryView : UserControl
         }
 
         var label = _rows
-            .Where(row => string.Equals(row.Entry.Path, entry.Path, StringComparison.Ordinal))
+            .Where(row => Same(row.Item, item))
             .Select(row => row.Row)
             .SelectMany(row => row.GetVisualDescendants())
             .OfType<TextBlock>()
@@ -845,7 +1013,7 @@ internal abstract class EntryView : UserControl
         }
 
         var at = parent.Children.IndexOf(label);
-        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(entry.Path)) ?? string.Empty;
+        var name = Source.Name(item);
         var box = new TextBox
         {
             Text = name,
@@ -861,7 +1029,7 @@ internal abstract class EntryView : UserControl
         parent.Children[at] = box;
 
         _editor = box;
-        _editing = entry;
+        _editing = item;
 
         // Taken on the way down, so that Enter and Escape are read before the box's own reading of them: a
         // field that took Enter for itself would be a name nobody could finish.
@@ -871,15 +1039,12 @@ internal abstract class EntryView : UserControl
         box.Focus();
 
         // The name is chosen rather than taken whole, so that what is typed over is the name and not the
-        // extension: see `Names.Chosen` for what is left out and why.
+        // extension where the listing leaves the extension out (see `Listing.Select`).
         box.SelectionStart = 0;
-        box.SelectionEnd = Names.Chosen(entry.Kind, name);
+        box.SelectionEnd = Source.Select(item, name);
 
         return true;
     }
-
-    /// <summary>Makes a directory in the directory being looked at, which is then named where it is drawn.</summary>
-    public void NewFolder() => Actions.NewFolder(Browser.Current);
 
     /// <summary>Reads a key while a name is being edited: Enter takes it, Escape leaves the name alone.</summary>
     /// <param name="e">The key.</param>
@@ -904,9 +1069,9 @@ internal abstract class EntryView : UserControl
     private void Committed()
     {
         var box = _editor;
-        var entry = _editing;
+        var item = _editing;
 
-        if (box is null || entry is null)
+        if (box is null || item is null)
         {
             return;
         }
@@ -914,15 +1079,15 @@ internal abstract class EntryView : UserControl
         _editor = null;
         _editing = null;
 
-        Actions.Rename(entry, box.Text ?? string.Empty);
+        Source.Rename(item, box.Text ?? string.Empty);
 
         // The box belongs to a row, and the reading is what puts the name back: a rename that had nothing to
         // do would otherwise leave the field standing. The keyboard goes back to the listing with it.
-        Browser.Touch();
+        Source.Touch();
         Listen();
     }
 
-    /// <summary>Leaves the name as it was, and reads the directory again so the box goes away.</summary>
+    /// <summary>Leaves the name as it was, and reads the listing again so the box goes away.</summary>
     private void Cancelled()
     {
         if (_editor is null)
@@ -933,7 +1098,7 @@ internal abstract class EntryView : UserControl
         _editor = null;
         _editing = null;
 
-        Browser.Touch();
+        Source.Touch();
         Listen();
     }
 
@@ -945,7 +1110,7 @@ internal abstract class EntryView : UserControl
     /// view being read, so a keyboard that is nowhere in the dock is a dock whose keys do nothing. That is what
     /// happens when the address — which hides itself when an edit ends — was where the keyboard was.
     /// </remarks>
-    public void Listen() => List.Focus();
+    public override void Listen() => List.Focus();
 
     /// <summary>
     /// What a shortcut acts on.
@@ -955,35 +1120,23 @@ internal abstract class EntryView : UserControl
     /// keyboard anywhere in the dock, so it cannot assume a choice was made, and acting on the entry the
     /// pointer last touched is what a user who has clicked one and not another means by "this".
     /// </remarks>
-    private IReadOnlyList<Entry> Offered()
+    private IReadOnlyList<TItem> Offered()
     {
         var chosen = Chosen();
 
         return chosen.Count > 0 || Lead is not { } lead ? chosen : [lead];
     }
 
-    /// <summary>
-    /// What this view is showing.
-    /// </summary>
-    /// <remarks>
-    /// The listing the view was built with rather than the browser's latest: a read of the directory replaces what
-    /// the browser shows before anything is told of it, so a view asked what was chosen just before it is built
-    /// again has to answer for the rows it is still showing, or the choice would be read against files that moved
-    /// under it.
-    /// </remarks>
-    private IReadOnlyList<Entry> ShownEntries => List.ItemsSource as IReadOnlyList<Entry> ?? Browser.Shown;
-
     /// <summary>The chosen entries, in the order the listing shows.</summary>
-    public IReadOnlyList<Entry> Chosen()
+    public IReadOnlyList<TItem> Chosen()
     {
-        var shown = ShownEntries;
-        var chosen = new List<Entry>();
+        var chosen = new List<TItem>();
 
         foreach (var at in List.Selection.SelectedIndexes)
         {
-            if (at >= 0 && at < shown.Count)
+            if (at >= 0 && at < Items.Count)
             {
-                chosen.Add(shown[at]);
+                chosen.Add(Items[at]);
             }
         }
 
@@ -994,30 +1147,29 @@ internal abstract class EntryView : UserControl
     /// Puts the choice back on what it was on before the listing was built again.
     /// </summary>
     /// <remarks>
-    /// A listing is built again whenever its directory is read again — a window come back to, a key asking for a
+    /// A listing is built again whenever it is read again — a window come back to, a key asking for a
     /// refresh, a change of zoom — and the choice is what the user was working with. Losing it to a read that
-    /// found the same files is losing work rather than changing the subject, and the tree keeps its own choice
+    /// found the same things is losing work rather than changing the subject, and the tree keeps its own choice
     /// across the same rebuild for the same reason. An entry that is gone is simply not chosen again: a listing
-    /// whose files have changed is not the place to report which of them went.
+    /// whose entries have changed is not the place to report which of them went.
     /// </remarks>
     /// <param name="chosen">What was chosen, in the order it was.</param>
-    public void Choose(IReadOnlyList<Entry> chosen)
+    public void Choose(IReadOnlyList<TItem> chosen)
     {
         if (chosen.Count == 0)
         {
             return;
         }
 
-        var shown = ShownEntries;
         var last = -1;
 
         using (List.Selection.BatchUpdate())
         {
             List.Selection.Clear();
 
-            foreach (var entry in chosen)
+            foreach (var item in chosen)
             {
-                var at = Index(shown, entry);
+                var at = Index(item);
 
                 if (at < 0)
                 {
@@ -1035,15 +1187,14 @@ internal abstract class EntryView : UserControl
         }
     }
 
-    /// <summary>Where an entry stands in a listing, or nothing when it is not there.</summary>
-    /// <param name="shown">The listing.</param>
-    /// <param name="entry">The entry to find.</param>
+    /// <summary>Where an entry stands in the listing, or nothing when it is not there.</summary>
+    /// <param name="item">The entry to find.</param>
     /// <returns>The place it stands in, or nothing.</returns>
-    private static int Index(IReadOnlyList<Entry> shown, Entry entry)
+    private int Index(TItem item)
     {
-        for (var at = 0; at < shown.Count; at++)
+        for (var at = 0; at < Items.Count; at++)
         {
-            if (shown[at] == entry)
+            if (Same(Items[at], item))
             {
                 return at;
             }
@@ -1053,38 +1204,6 @@ internal abstract class EntryView : UserControl
     }
 
     /// <summary>
-    /// How faded a row is: one a hidden provider hides reads as secondary, and one that is cut as on its way
-    /// out.
-    /// </summary>
-    /// <remarks>
-    /// Both are said here rather than in two passes over the rows, because a row has one opacity and the second
-    /// pass would be the one that decided it. Cut wins, because being on its way out is what the user just did.
-    /// <para>
-    /// What is hidden is asked of the providers rather than carried on the entry, so a row drawn while a
-    /// provider was switched off is faded again the moment it is switched on.
-    /// </para>
-    /// </remarks>
-    /// <param name="row">The row to fade.</param>
-    /// <param name="entry">What it stands for.</param>
-    protected virtual void Apply(Control row, Entry entry) =>
-        row.Opacity = Clipboard.IsCut(entry.Path)
-            ? Clipboard.Faded
-            : Hides(entry)
-                ? HiddenOpacity
-                : 1.0;
-
-    /// <summary>
-    /// Whether a hidden provider hides an entry, which is what the location a row belongs to answers.
-    /// </summary>
-    /// <remarks>
-    /// The location is what a view holds, and a row staged for one location has to be faded by the same
-    /// answer that left it out of that location's listing.
-    /// </remarks>
-    /// <param name="entry">The entry to consider.</param>
-    /// <returns>Whether it is hidden.</returns>
-    protected bool Hides(Entry entry) => Browser.Hides(entry);
-
-    /// <summary>
     /// Draws every row again with what the listing is worth now: how faded, and whether it is cut.
     /// </summary>
     /// <remarks>
@@ -1092,11 +1211,11 @@ internal abstract class EntryView : UserControl
     /// changes how the entries are drawn and not which ones there are, so the rows are already in the tree and
     /// need their opacity said again rather than the view being built a second time.
     /// </remarks>
-    public void Repaint()
+    public override void Repaint()
     {
-        foreach (var (entry, row) in _rows)
+        foreach (var (item, row) in _rows)
         {
-            Apply(row, entry);
+            Source.Fade(row, item);
         }
     }
 
@@ -1129,7 +1248,7 @@ internal abstract class EntryView : UserControl
             case Key.Enter:
                 if (Lead is { } lead)
                 {
-                    Actions.Open(lead);
+                    Source.Open(lead);
                 }
 
                 e.Handled = true;
@@ -1158,7 +1277,7 @@ internal abstract class EntryView : UserControl
                 e.Handled = true;
                 break;
             case Key.End:
-                To(Browser.Shown.Count - 1, shift);
+                To(Items.Count - 1, shift);
                 e.Handled = true;
                 break;
             case Key.PageUp:
@@ -1235,23 +1354,21 @@ internal abstract class EntryView : UserControl
 
     /// <summary>The first entry from a place on that begins with what was typed, or nothing.</summary>
     /// <remarks>
-    /// The way up is left out: it is not a name but a place, and it is reached by its own means rather than by
-    /// being spelled — a run that matches it would be a run that answers with something the reader did not
-    /// name.
+    /// What a listing says is not a name — the way up — is left out: it is not a name but a place, and it is
+    /// reached by its own means rather than by being spelled, so a run that matched it would answer with
+    /// something the reader did not name.
     /// </remarks>
     /// <param name="typed">What was typed.</param>
     /// <param name="from">Where to start looking.</param>
     private int Seek(string typed, int from)
     {
-        var shown = Browser.Shown;
-
-        for (var step = 0; step < shown.Count; step++)
+        for (var step = 0; step < Items.Count; step++)
         {
-            var at = (((from + step) % shown.Count) + shown.Count) % shown.Count;
-            var entry = shown[at];
+            var at = (((from + step) % Items.Count) + Items.Count) % Items.Count;
+            var item = Items[at];
 
-            if (!Browser.IsUp(entry.Path) &&
-                Names.Show(entry).StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+            if (Source.Seekable(item) &&
+                Source.Name(item).StartsWith(typed, StringComparison.OrdinalIgnoreCase))
             {
                 return at;
             }
@@ -1267,7 +1384,7 @@ internal abstract class EntryView : UserControl
     {
         if (_lead < 0)
         {
-            To(by < 0 ? Browser.Shown.Count - 1 : 0, false);
+            To(by < 0 ? Items.Count - 1 : 0, false);
 
             return;
         }
@@ -1288,7 +1405,7 @@ internal abstract class EntryView : UserControl
     /// <param name="shift">Whether to take the range rather than the one entry.</param>
     private void To(int target, bool shift)
     {
-        var count = Browser.Shown.Count;
+        var count = Items.Count;
 
         if (count == 0)
         {
@@ -1399,9 +1516,9 @@ internal abstract class EntryView : UserControl
         // The file a press landed on is the one the rest of the program may be asked about: a view
         // of its version chain follows this, and a directory says nothing here because no chain
         // hangs from one.
-        if (at >= 0 && at < Browser.Shown.Count)
+        if (at >= 0 && at < Items.Count)
         {
-            ChosenEntry.Publish(Browser.Shown[at]);
+            Source.Clicked(Items[at]);
         }
 
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
@@ -1541,7 +1658,7 @@ internal abstract class EntryView : UserControl
 
         var covered = new List<int>();
 
-        for (var at = 0; at < Browser.Shown.Count; at++)
+        for (var at = 0; at < Items.Count; at++)
         {
             if (List.ContainerFromIndex(at) is not { } row ||
                 row.TranslatePoint(new Point(0, 0), this) is not { } origin)
@@ -1693,10 +1810,12 @@ internal abstract class EntryView : UserControl
     /// Starts a drag of the choice as it stood when the pointer went down.
     /// </summary>
     /// <remarks>
-    /// What is carried is the whole choice, or — where there was no choice to carry — the one entry the press
+    /// What is carried is the whole choice, or — where the press did not land on a chosen entry — the one entry it
     /// landed on. Anywhere else the press begins a frame rather than a drag, which is what keeps a frame drawn
     /// beside a choice from carrying the entries it was drawn to add to (see <see cref="Pressed"/>). Everything
-    /// after that is the same for every view that can be dragged from (<see cref="Drag.Away"/>).
+    /// after that is the listing's, because what a drag of a place's entries means is not what a drag of files
+    /// means: a file is handed over as a file, and a place's entry is handed over as the data its provider kept
+    /// (see <see cref="Listing{TItem}.DragOut"/>).
     /// </remarks>
     private void Started()
     {
@@ -1708,26 +1827,29 @@ internal abstract class EntryView : UserControl
         _from = null;
         _atPress = [];
 
-        if (from is null || pressed < 0 || pressed >= Browser.Shown.Count)
+        if (from is null || pressed < 0 || pressed >= Items.Count)
         {
             return;
         }
 
-        var dragged = Browser.Shown[pressed];
-        IReadOnlyList<Entry> carrying = chosen.Count > 0 ? chosen : [dragged];
+        var dragged = Items[pressed];
+        IReadOnlyList<TItem> carrying = chosen.Any(item => Same(item, dragged))
+            ? chosen
+            : [dragged];
 
-        // Places rather than things: nothing about the way up or the computer is a file to hand over.
-        carrying = [.. carrying.Where(entry => !Browser.IsUp(entry.Path) && !Browser.IsComputer(entry.Path))];
+        // What the listing will not hand over — a place that is not a thing, an entry that said it is not
+        // draggable — is left out here rather than refused when the drag is begun.
+        carrying = [.. carrying.Where(Source.CanDrag)];
 
         if (carrying.Count == 0)
         {
             return;
         }
 
-        Drag.Away(Browser, from, carrying, dragged, Host.Log.Error);
+        Source.DragOut(from, carrying, dragged);
     }
 
-    /// <summary>Says whether a drag may land here, and lights the directory it would land in.</summary>
+    /// <summary>Says whether a drag may land here, and lights the entry it would land on.</summary>
     /// <param name="sender">The list.</param>
     /// <param name="e">The drag.</param>
     private void DraggedOver(object? sender, DragEventArgs e)
@@ -1736,7 +1858,10 @@ internal abstract class EntryView : UserControl
         // what would be done there.
         _ghost.Following(e.GetPosition(this));
 
-        e.DragEffects = _drops.Over(e);
+        var land = Source.Landing(At(e.GetPosition(this)), e);
+
+        Source.Marking?.Invoke(land?.Row);
+        e.DragEffects = land is { } where ? Source.Over(where, e) : DragDropEffects.None;
         e.Handled = e.DragEffects != DragDropEffects.None;
     }
 
@@ -1745,7 +1870,7 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The drag.</param>
     private void DraggedOff(object? sender, DragEventArgs e)
     {
-        _drops.Off();
+        Source.DragLeft();
         _ghost.Unghost();
     }
 
@@ -1755,62 +1880,27 @@ internal abstract class EntryView : UserControl
     private void Dropped(object? sender, DragEventArgs e)
     {
         _ghost.Unghost();
-        _drops.Dropped(e);
+
+        if (Source.Landing(At(e.GetPosition(this)), e) is { } land)
+        {
+            Source.DropAt(land, e);
+        }
     }
 
-    /// <summary>
-    /// <summary>Where a drag would land, or nothing where it may not land here at all.</summary>
-    /// </summary>
-    /// <remarks>
-    /// A directory entry is a place to let go into, and so is the way up — which is not a directory of its own
-    /// but the one holding the listing, so what it lands in is asked of the browser. A file and the computer
-    /// are not, and neither is a drag carrying no file. The space around the entries is the directory being
-    /// looked at.
-    /// </remarks>
-    /// <param name="e">The drag.</param>
-    private Land? Landing(DragEventArgs e)
-    {
-        if (!e.DataTransfer.Contains(DataFormat.File))
-        {
-            return null;
-        }
-
-        var at = e.GetPosition(this);
-
-        for (var visual = this.GetVisualAt(at) as Visual; visual is not null; visual = visual.GetVisualParent())
-        {
-            if (visual is ListBoxItem item && List.IndexFromContainer(item) is var index && index >= 0)
-            {
-                var entry = Browser.Shown[index];
-
-                if (Browser.IsUp(entry.Path))
-                {
-                    return Browser.Parent is { Length: > 0 } up ? new Land(up, entry.Path) : null;
-                }
-
-                return entry.Kind == EntryKind.Directory && !Browser.IsComputer(entry.Path)
-                    ? new Land(entry.Path, entry.Path)
-                    : null;
-            }
-        }
-
-        return Browser.IsComputer(Browser.Current) ? null : new Land(Browser.Current, string.Empty);
-    }
-
-    /// <summary>Paints the row for the directory a drag is over, or takes the paint off.</summary>
-    /// <param name="directory">The directory being pointed at, or nothing.</param>
-    private void Mark(string? directory)
+    /// <summary>Paints the row for the entry a drag is over, or takes the paint off.</summary>
+    /// <param name="key">What says which entry, or nothing.</param>
+    private void Mark(object? key)
     {
         Unmark();
 
-        if (directory is null)
+        if (key is null)
         {
             return;
         }
 
-        foreach (var (entry, row) in _rows)
+        foreach (var (item, row) in _rows)
         {
-            if (!string.Equals(entry.Path, directory, StringComparison.Ordinal))
+            if (!Equals(Source.Key(item), key))
             {
                 continue;
             }
@@ -1853,10 +1943,34 @@ internal abstract class EntryView : UserControl
     /// <param name="e">The tap.</param>
     private void Opened(object? sender, TappedEventArgs e)
     {
-        if (IndexAt(e.Source) is var at && at >= 0 && at < Browser.Shown.Count)
+        if (IndexAt(e.Source) is var at && at >= 0 && at < Items.Count)
         {
-            Actions.Open(Browser.Shown[at]);
+            Source.Open(Items[at]);
         }
+    }
+
+    /// <summary>The entry at a point in the view, or nothing where the point is on the space around them.</summary>
+    /// <remarks>
+    /// Walked up to the item rather than asked of the selection, because a drag in the room beside the entries
+    /// has no entry and must land nowhere in particular, and because the selection may hold entries the pointer
+    /// did not touch.
+    /// </remarks>
+    /// <param name="at">Where the pointer is, in the view's own coordinates.</param>
+    /// <returns>The entry there, or nothing.</returns>
+    private TItem? At(Point at)
+    {
+        for (var visual = this.GetVisualAt(at) as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is ListBoxItem item &&
+                List.IndexFromContainer(item) is var index &&
+                index >= 0 &&
+                index < Items.Count)
+            {
+                return Items[index];
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1882,15 +1996,11 @@ internal abstract class EntryView : UserControl
     }
 }
 
-/// <summary>The entries as a table, one to a line.</summary>
-internal sealed class ListBrowser : EntryView
+/// <summary>The entries of a listing as a table, one to a line.</summary>
+/// <typeparam name="TItem">What one entry is.</typeparam>
+internal sealed class ListBrowser<TItem> : EntryView<TItem>
+    where TItem : class
 {
-    /// <summary>How wide the column of icons is, which is the design's own measure.</summary>
-    private const double IconColumn = 22;
-
-    /// <summary>How large a dot is: a mark read at a glance rather than a thing to point at.</summary>
-    private const double DotSize = 8;
-
     /// <summary>
     /// How wide the grab between two columns is, and the marks it wears.
     /// </summary>
@@ -1924,21 +2034,6 @@ internal sealed class ListBrowser : EntryView
     /// <summary>How narrow a column may be dragged.</summary>
     private const double MinColumn = 56;
 
-    /// <summary>How wide a column of values is before anybody drags it.</summary>
-    private const double PermissionsColumn = 110;
-
-    /// <inheritdoc cref="PermissionsColumn" />
-    private const double ModifiedColumn = 150;
-
-    /// <inheritdoc cref="PermissionsColumn" />
-    private const double SizeColumn = 88;
-
-    /// <inheritdoc cref="PermissionsColumn" />
-    private const double OwnershipColumn = 96;
-
-    /// <summary>What a cell says when its provider has nothing to say about the entry.</summary>
-    private const string Placeholder = "-";
-
     /// <summary>
     /// How wide the column of names starts.
     /// </summary>
@@ -1951,13 +2046,10 @@ internal sealed class ListBrowser : EntryView
     private const double NameColumnWidth = 200;
 
     /// <summary>The contributed columns read with the name, which stand in front of the room the table is read in.</summary>
-    private readonly Column[] _beside;
+    private readonly Column<TItem>[] _beside;
 
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
-    private readonly Column[] _values;
-
-    /// <summary>The lock provider that speaks for this directory, or nothing when none does.</summary>
-    private readonly IEntryLockProvider? _locks;
+    private readonly IReadOnlyList<Column<TItem>> _values;
 
     /// <summary>How wide every column is, the grabs between them included.</summary>
     private readonly GridLength[] _widths;
@@ -1991,59 +2083,27 @@ internal sealed class ListBrowser : EntryView
     private (int Left, int Right, double At, double LeftWas, double RightWas)? _grabbed;
 
     /// <summary>The contributed columns that stand before everything, the picture included.</summary>
-    private readonly Column[] _leads;
+    private readonly Column<TItem>[] _leads;
 
-    /// <summary>Makes the table over what the browser holds.</summary>
+    /// <summary>Makes the table over what the listing holds.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
-    /// <param name="browser">What is being shown.</param>
-    /// <param name="actions">What an entry does when it is opened or given a menu.</param>
-    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public ListBrowser(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
-        : base(host, browser, actions, clip)
+    /// <param name="source">What is listed.</param>
+    public ListBrowser(IPluginHost host, Listing<TItem> source)
+        : base(host, source)
     {
-        // A contributed column is placed where its own contribution asks to be, and is only there when a
-        // provider speaks for this directory: a column of placeholders would be a column of the listing
-        // saying what it does not know. The Ownership column comes last of all, since a lock is the one
-        // answer that is a state of the entry rather than a value of it.
-        var contributed = EntryColumns.For(Browser.Current);
-        var values = new List<Column>();
+        // A column is placed where its own contribution asks to be. The split is the view's, since the
+        // arrangement knows where the room the table is read in falls and the listing that contributed the
+        // column does not.
+        var columns = source.Columns;
 
-        _leads =
+        _leads = [.. columns.Where(column => column.Placement == ColumnPlacement.Leftmost)];
+        _beside = [.. columns.Where(column => column.Placement == ColumnPlacement.BesideName)];
+        _values =
         [
-            .. contributed
-                .Where(provider => provider.Placement == ColumnPlacement.Leftmost)
-                .Select(Contributed),
+            .. columns.Where(column =>
+                column.Placement is not ColumnPlacement.Leftmost and not ColumnPlacement.BesideName
+            ),
         ];
-
-        // What is read with the name is kept with it, before the room the table is read in: a second name of
-        // the entry is read where the entry is named rather than at the far side of the dock.
-        _beside =
-        [
-            .. contributed
-                .Where(provider => provider.Placement == ColumnPlacement.BesideName)
-                .Select(Contributed),
-        ];
-
-        values.AddRange(
-            contributed
-                .Where(provider => provider.Placement == ColumnPlacement.BeforeValues)
-                .Select(Contributed)
-        );
-        values.AddRange(Values());
-        values.AddRange(
-            contributed
-                .Where(provider => provider.Placement == ColumnPlacement.AfterValues)
-                .Select(Contributed)
-        );
-
-        _locks = EntryLockProviders.For(Browser.Current);
-
-        if (_locks is { } locks)
-        {
-            values.Add(Lock(locks));
-        }
-
-        _values = [.. values];
 
         var (widths, star, grabs) = Lay();
         _widths = widths;
@@ -2089,204 +2149,8 @@ internal sealed class ListBrowser : EntryView
         Present(panel);
     }
 
-    /// <summary>One column of values, after the icon and the name.</summary>
-    /// <param name="Header">The translation key the column is headed by.</param>
-    /// <param name="Width">How wide the column starts.</param>
-    /// <param name="Value">What the column says about one entry.</param>
-    /// <param name="Align">Where the text sits in the column.</param>
-    /// <param name="Draw">
-    /// How the column draws one entry, where a value of its own is not enough — a contributed column
-    /// draws its own ink. Answered instead of <see cref="Value"/> when it is there.
-    /// </param>
-    private sealed record Column(
-        string Header,
-        double Width,
-        Func<Facts, string> Value,
-        TextAlignment Align = TextAlignment.Left,
-        Func<Entry, Control>? Draw = null
-    );
-
-    /// <summary>One entry as a row: its icon, its name, and what each column of values says.</summary>
-    /// <param name="entry">The entry to draw.</param>
-    protected override Control Item(Entry entry) => Prepared(entry, Row(entry));
-
-    /// <summary>
-    /// The columns after the name, in the order they are shown.
-    /// </summary>
-    /// <remarks>
-    /// Permissions are not a column on Windows, where the system does not carry what those nine letters
-    /// say. A column blank in every row would be this table saying "not here" in a column of its own, and
-    /// a table is better off with one column fewer.
-    /// </remarks>
-    private static Column[] Values() =>
-        OperatingSystem.IsWindows()
-            ? [Modified(), Size()]
-            : [
-                new("rorolala_file_system.column_permissions", PermissionsColumn, facts => facts.Permissions),
-                Modified(),
-                Size(),
-            ];
-
-    /// <summary>The column that says when an entry was last written.</summary>
-    private static Column Modified() =>
-        new("rorolala_file_system.column_modified", ModifiedColumn, facts => facts.Modified);
-
-    /// <summary>The column that says how large an entry is, which is a number and so stands on the right.</summary>
-    private static Column Size() =>
-        new("rorolala_file_system.column_size", SizeColumn, facts => facts.Size, TextAlignment.Right);
-
-    /// <summary>
-    /// The Ownership column one lock provider contributes.
-    /// </summary>
-    /// <remarks>
-    /// The value in it is the provider's to write and is not read from the entry's metadata, which is
-    /// why the column draws its own cell: what a lock looks like — its words, and the ink they are
-    /// written in — is what the provider answered, and none of it is in <see cref="Facts"/>.
-    /// <para>
-    /// What it says stands on the right, which is where a column of short answers is read from: the holder's
-    /// name is the last thing on the row, and the edge it is read against is the one the listing ends in.
-    /// </para>
-    /// </remarks>
-    /// <param name="provider">The provider that speaks for the directory being listed.</param>
-    /// <returns>The column to add after the table's own.</returns>
-    private static Column Lock(IEntryLockProvider provider) =>
-        new(
-            provider.ColumnKey,
-            OwnershipColumn,
-            _ => Placeholder,
-            TextAlignment.Right,
-            Draw: entry => Locked(provider, entry)
-        );
-
-    /// <summary>What one entry's lock is written as, in the words and ink the provider asked for.</summary>
-    /// <param name="provider">The provider that speaks for the directory being listed.</param>
-    /// <param name="entry">The entry to write about.</param>
-    /// <returns>The cell.</returns>
-    private static TextBlock Locked(IEntryLockProvider provider, Entry entry)
-    {
-        var mark = provider.Mark(entry);
-        var cell = Cell(mark.Said() ?? Placeholder, TextAlignment.Right);
-        cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.TextInk));
-
-        return cell;
-    }
-
-    /// <summary>
-    /// The column one column provider contributes.
-    /// </summary>
-    /// <remarks>
-    /// The value in it is the provider's to write and is not read from the entry's metadata, which is why
-    /// the column draws its own cell: what it says goes through <see cref="EntryColumnMark.Said"/>, which
-    /// is a key translated or a literal as the contribution asked, and neither is in <see cref="Facts"/>.
-    /// </remarks>
-    /// <param name="provider">The provider that speaks for the directory being listed.</param>
-    /// <returns>The column to add where the contribution asked.</returns>
-    private static Column Contributed(IEntryColumnProvider provider) =>
-        new(
-            provider.ColumnKey,
-            provider.Width,
-            _ => Placeholder,
-            Draw: entry => Contributed(provider, entry)
-        );
-
-    /// <summary>What one entry's cell in a contributed column is drawn as.</summary>
-    /// <param name="provider">The provider that speaks for the directory being listed.</param>
-    /// <param name="entry">The entry to write about.</param>
-    /// <returns>The cell, which draws nothing at all where a column of marks has no mark for the entry.</returns>
-    internal static Control Contributed(IEntryColumnProvider provider, Entry entry)
-    {
-        var mark = provider.Value(entry);
-
-        if (mark.Dot)
-        {
-            return Dot(mark);
-        }
-
-        // A column of marks says nothing by having no mark: the dash the listing says what it does not know
-        // with would be a mark of its own, and a cell with no mark has nothing else to say.
-        return provider.Marks ? new Panel() : Written(mark);
-    }
-
-    /// <summary>What one entry's cell in a contributed column that is words is written as.</summary>
-    /// <remarks>
-    /// The ink is the contribution's to name and this plugin's to resolve: a column drawn in a colour the
-    /// contribution picked for itself would be a colour the look does not hold, which is a column that
-    /// vanishes somewhere the theme is another — unless the contribution has a palette of its own, which is
-    /// what a colour of its own says, and then it is drawn in that. The Ownership column writes its words the
-    /// same way.
-    /// </remarks>
-    /// <param name="mark">What the contribution answered.</param>
-    /// <returns>The cell.</returns>
-    private static TextBlock Written(EntryColumnMark mark)
-    {
-        var cell = Cell(mark.Said() ?? Placeholder);
-
-        if (mark.Colour is { } colour)
-        {
-            cell.Foreground = new SolidColorBrush(colour);
-        }
-        else
-        {
-            cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
-        }
-
-        return cell;
-    }
-
-    /// <summary>
-    /// What one entry's cell in a contributed column that is a mark is drawn as: a round dot in the ink.
-    /// </summary>
-    /// <remarks>
-    /// A dot rather than a word, because what it stands for is one of a handful of states and the colour is
-    /// read at a glance: a column of the same few words repeated is a column of text where a mark would do,
-    /// and the words are still there — said when the pointer rests on the mark, which is where a reader who
-    /// wants them is already looking.
-    /// </remarks>
-    /// <param name="mark">What the contribution answered.</param>
-    /// <returns>The cell.</returns>
-    private static Control Dot(EntryColumnMark mark)
-    {
-        var dot = new Border
-        {
-            Width = DotSize,
-            Height = DotSize,
-            CornerRadius = new CornerRadius(DotSize / 2),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        // The colour is the contribution's where it named one, and the role it named otherwise: a mark drawn in
-        // the role and then painted over would be drawn twice, and the role's own brush would win.
-        if (mark.Colour is { } colour)
-        {
-            dot.Background = new SolidColorBrush(colour);
-        }
-        else
-        {
-            dot[!Border.BackgroundProperty] = new DynamicResourceExtension(Icons.Ink(mark.Ink));
-        }
-
-        if (mark.Edge is { } edge)
-        {
-            // The line is the contribution's own rather than the design's, since whatever named the colour named
-            // what reads around it: a hairline of the listing's would be a mark drawn differently from the one
-            // the contribution asked for.
-            dot.BorderThickness = new Thickness(1);
-            dot.BorderBrush = new SolidColorBrush(edge);
-        }
-
-        if (mark.Hint is { Length: > 0 } hint)
-        {
-            ToolTip.SetTip(dot, hint);
-
-            // At once rather than after the wait a tooltip usually takes: the mark is a colour, and a reader
-            // who has to stop and wait for what a colour means is a reader who has to stop. Nothing is said by
-            // the wait that is not said by the mark.
-            ToolTip.SetShowDelay(dot, 0);
-        }
-
-        return dot;
-    }
+    /// <inheritdoc />
+    protected override Control Item(TItem item) => Prepared(item, Row(item));
 
     /// <summary>
     /// How wide every column starts, in the order they are laid out, together with the column that takes what
@@ -2305,7 +2169,7 @@ internal sealed class ListBrowser : EntryView
 
         // A contributed column is taken hold of by its own edge, which is the grab in front of it: the grab moves
         // that column and the one before it, and the pair is settled here rather than read off the widths.
-        void Add(IReadOnlyList<Column> columns)
+        void Add(IReadOnlyList<Column<TItem>> columns)
         {
             foreach (var column in columns)
             {
@@ -2321,7 +2185,7 @@ internal sealed class ListBrowser : EntryView
             widths.Add(new GridLength(column.Width));
         }
 
-        widths.Add(new GridLength(IconColumn));
+        widths.Add(new GridLength(Icons.IconColumn));
         widths.Add(new GridLength(NameColumnWidth));
 
         Add(_beside);
@@ -2410,12 +2274,11 @@ internal sealed class ListBrowser : EntryView
     }
 
     /// <summary>One entry as a row: its marks, its picture, its name, and what each value says.</summary>
-    /// <param name="entry">The entry to draw.</param>
-    private Control Row(Entry entry)
+    /// <param name="item">The entry to draw.</param>
+    private Control Row(TItem item)
     {
-        var facts = Stats.Of(entry);
-        var name = Names.Show(entry);
-        var icon = Icons.For(entry);
+        var name = Source.Name(item);
+        var icon = Source.Icon(item, Icons.Row);
         icon.HorizontalAlignment = HorizontalAlignment.Left;
 
         var cells = new List<Control?>();
@@ -2425,18 +2288,18 @@ internal sealed class ListBrowser : EntryView
         {
             cells.Add(null);
             cells.Add(
-                column.Draw is { } draw ? draw(entry) : Cell(column.Value(facts), column.Align)
+                column.Draw is { } draw ? draw(item) : Cell(column.Value(item), column.Align)
             );
         }
 
         cells.Add(icon);
-        cells.Add(Named(entry, name.Length > 0 ? name : entry.Path));
+        cells.Add(Named(item, name.Length > 0 ? name : Source.Key(item)?.ToString() ?? string.Empty));
 
         foreach (var column in _beside)
         {
             cells.Add(null);
             cells.Add(
-                column.Draw is { } draw ? draw(entry) : Cell(column.Value(facts), column.Align)
+                column.Draw is { } draw ? draw(item) : Cell(column.Value(item), column.Align)
             );
         }
 
@@ -2447,7 +2310,7 @@ internal sealed class ListBrowser : EntryView
         {
             cells.Add(null);
             cells.Add(
-                column.Draw is { } draw ? draw(entry) : Cell(column.Value(facts), column.Align)
+                column.Draw is { } draw ? draw(item) : Cell(column.Value(item), column.Align)
             );
         }
 
@@ -2455,9 +2318,8 @@ internal sealed class ListBrowser : EntryView
         Place(grid, cells);
 
         // Every row but the last wears the line that tells it from the next, so that the table ends in the
-        // listing's own edge rather than in a line drawn against nothing.
-        var last = Browser.Shown.Count > 0 &&
-            string.Equals(entry.Path, Browser.Shown[Browser.Shown.Count - 1].Path, StringComparison.Ordinal);
+        // card's own edge rather than in a line drawn against nothing.
+        var last = Items.Count > 0 && Equals(Source.Key(item), Source.Key(Items[^1]));
 
         var row = new Border
         {
@@ -2710,14 +2572,14 @@ internal sealed class ListBrowser : EntryView
             Classes = { "label" },
         };
 
-    /// <summary>One entry's name: a directory reads heavier, since choosing it opens where a file does not.</summary>
+    /// <summary>One entry's name: one that leads somewhere reads heavier.</summary>
     /// <remarks>
-    /// The way up is left light: it is not a directory of the listing but a step out of it, and the design
-    /// draws it as the one row that is a place rather than a thing.
+    /// The way up is left light: it is not a thing of the listing but a step out of it, and the design draws it
+    /// as the one row that is a place rather than a thing.
     /// </remarks>
-    /// <param name="entry">The entry the name belongs to.</param>
+    /// <param name="item">The entry the name belongs to.</param>
     /// <param name="text">The name as it is written.</param>
-    private static TextBlock Named(Entry entry, string text) =>
+    private TextBlock Named(TItem item, string text) =>
         new()
         {
             Text = text,
@@ -2727,9 +2589,7 @@ internal sealed class ListBrowser : EntryView
             // Marked with the class rather than kept in a field, because the row is made once and reused by
             // the toolkit's virtualisation: what a rename edits is the name cell of the row as it stands.
             Classes = { "entry-name" },
-            FontWeight = entry.Kind == EntryKind.Directory && !Browser.IsUp(entry.Path)
-                ? FontWeight.SemiBold
-                : FontWeight.Normal,
+            FontWeight = Source.Openable(item) ? FontWeight.SemiBold : FontWeight.Normal,
         };
 
     /// <summary>One cell's value: one line, cut off rather than wrapped, in the faint metadata ink.</summary>
@@ -2747,8 +2607,10 @@ internal sealed class ListBrowser : EntryView
         };
 }
 
-/// <summary>The entries as tiles, wrapping across the width.</summary>
-internal sealed class GridBrowser : EntryView
+/// <summary>The entries of a listing as tiles, wrapping across the width.</summary>
+/// <typeparam name="TItem">What one entry is.</typeparam>
+internal sealed class GridBrowser<TItem> : EntryView<TItem>
+    where TItem : class
 {
     /// <summary>How much room is left around a tile's icon and name.</summary>
     private const int Around = 12;
@@ -2768,20 +2630,14 @@ internal sealed class GridBrowser : EntryView
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
-    /// <summary>What a tile's icon wears at its top right corner, in the order the badges are numbered.</summary>
-    private readonly IReadOnlyList<IEntryMarkProvider> _badges;
-
-    /// <summary>Makes the grid layout over what the browser holds.</summary>
+    /// <summary>Makes the grid layout over what the listing holds.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
-    /// <param name="browser">What is being shown.</param>
-    /// <param name="actions">What an entry does when it is opened or given a menu.</param>
-    /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
+    /// <param name="source">What is listed.</param>
     /// <param name="icon">How large an icon is at the zoom this dock is at.</param>
-    public GridBrowser(IPluginHost host, Browser browser, BrowserActions actions, Clip clip, int icon)
-        : base(host, browser, actions, clip)
+    public GridBrowser(IPluginHost host, Listing<TItem> source, int icon)
+        : base(host, source)
     {
         _icon = icon;
-        _badges = EntryMarkProviders.For(Browser.Current);
 
         // The tiles of a wrapped line fill the width it is given, so that the grid's outer inset is the room
         // around it and stays put however wide the dock is — the room a line has to spare is spent between
@@ -2848,8 +2704,8 @@ internal sealed class GridBrowser : EntryView
     /// taken off the end rather than wrapped, because a tile of two lines is a tile of another height, and a
     /// row of tiles that are not the same height is not a row.
     /// </remarks>
-    /// <param name="entry">The entry to draw.</param>
-    protected override Control Item(Entry entry) => Prepared(entry, Tile(entry));
+    /// <param name="item">The entry to draw.</param>
+    protected override Control Item(TItem item) => Prepared(item, Tile(item));
 
     /// <summary>
     /// How many tiles the layout put on a line.
@@ -2861,7 +2717,7 @@ internal sealed class GridBrowser : EntryView
     /// </remarks>
     protected override int Columns()
     {
-        var count = Browser.Shown.Count;
+        var count = Items.Count;
 
         if (count <= 1 || List.ContainerFromIndex(0) is not { } first)
         {
@@ -2886,8 +2742,8 @@ internal sealed class GridBrowser : EntryView
         return count;
     }
 
-    /// <summary>One entry as a tile: its icon above its name.</summary>
-    private Control Tile(Entry entry)
+    /// <inheritdoc />
+    private Control Tile(TItem item)
     {
         // The surface a chosen tile wears is the item's; what is here is the content and the room around it.
         return new Border
@@ -2896,7 +2752,7 @@ internal sealed class GridBrowser : EntryView
             Child = new StackPanel
             {
                 Spacing = 8,
-                Children = { Marked(entry), Caption(entry) },
+                Children = { Source.Marked(item, _icon), Caption(item) },
             },
         };
     }
@@ -2911,14 +2767,14 @@ internal sealed class GridBrowser : EntryView
     /// as wide as the icon and not one pixel wider, so that the two read as one column rather than as a
     /// picture with a caption under it that happens to start somewhere else.
     /// </remarks>
-    /// <param name="entry">The entry to draw.</param>
+    /// <param name="item">The entry to draw.</param>
     /// <returns>What to draw where the name goes.</returns>
-    private Control Caption(Entry entry)
+    private Control Caption(TItem item)
     {
         var name = new TextBlock
         {
             MaxWidth = Math.Max(1, _icon),
-            Text = Names.Show(entry),
+            Text = Source.Name(item),
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Classes = { "entry-name", "caption" },
@@ -2926,39 +2782,5 @@ internal sealed class GridBrowser : EntryView
         };
 
         return name;
-    }
-
-    /// <summary>An entry's icon, with what every contributor marked worn around its top right corner.</summary>
-    /// <remarks>
-    /// Every provider that speaks for the directory is asked, rather than one of them: two badges say two
-    /// different things — who holds the entry and how far its version has come — and neither is the other's to
-    /// replace. A picture is looked up rather than carried, and a key that names nothing draws nothing: a
-    /// provider that contributed a mark but no picture is a listing without a badge on it, not a listing that
-    /// fails to be drawn.
-    /// <para>
-    /// The order the providers were asked in is the order the badges are numbered, which is what makes a badge
-    /// stand in the same place of the arc from one listing to the next: what is read at the top of the arc is
-    /// the contribution that was registered first and is the same contribution every time.
-    /// </para>
-    /// </remarks>
-    /// <param name="entry">The entry to draw.</param>
-    /// <returns>What to draw where the icon goes.</returns>
-    private Control Marked(Entry entry)
-    {
-        var icon = Icons.For(entry, _icon);
-        var badges = new List<EntryBadge>();
-
-        foreach (var provider in _badges)
-        {
-            if (
-                provider.Mark(entry) is { IconKey: { Length: > 0 } key } mark
-                && Host.Icons.Find(key) is { } picture
-            )
-            {
-                badges.Add(new EntryBadge(picture, mark));
-            }
-        }
-
-        return Icons.Marked(icon, badges, _icon);
     }
 }

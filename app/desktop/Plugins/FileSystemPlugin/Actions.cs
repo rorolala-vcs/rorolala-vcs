@@ -175,6 +175,18 @@ internal sealed class BrowserActions
     public event Action<Entry>? Naming;
 
     /// <summary>
+    /// The directory a folder was just made in, and the entry it was made as, until a view has named it.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside <see cref="Naming"/> rather than instead of it, because the two reach different views: the event
+    /// reaches the ones that are up, and this reaches the one a dock makes a moment later when it reads the
+    /// directory again. What is kept is the directory as well as the entry, since a view of another directory
+    /// asking for it would be a name typed in a dock the user is not looking at. Taken rather than read, so that
+    /// one folder is named once (see <c>Files.Pending</c>).
+    /// </remarks>
+    public (string Directory, Entry Entry)? Awaiting { get; set; }
+
+    /// <summary>
     /// The entry a view has begun renaming, which its editor reads the kind of.
     /// </summary>
     /// <remarks>
@@ -229,7 +241,10 @@ internal sealed class BrowserActions
 
         // Said before the reading, because the reading is what makes the views that draw it: a hand-off made
         // after the reading would be a hand-off to a row that is already drawn without a box in it.
-        Naming?.Invoke(new Entry(made, EntryKind.Directory));
+        var named = new Entry(made, EntryKind.Directory);
+
+        Awaiting = (into, named);
+        Naming?.Invoke(named);
 
         _browser.Touch();
 
@@ -394,7 +409,7 @@ internal sealed class BrowserActions
 
             switch (from)
             {
-                case EntryView view:
+                case EntryView<Entry> view:
                     menu.Items.Add(Item("rorolala_file_system.rename", () => view.Rename(only)));
 
                     break;
@@ -413,7 +428,7 @@ internal sealed class BrowserActions
             var step = entries[0].Path;
             menu.Items.Add(Item("rorolala_file_system.new_folder", () => grower.NewFolder(step)));
         }
-        else if (from is EntryView maker)
+        else if (from is EntryView<Entry> maker)
         {
             menu.Items.Add(Item("rorolala_file_system.new_folder", maker.NewFolder));
         }

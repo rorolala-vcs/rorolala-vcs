@@ -418,11 +418,11 @@ public sealed class ColumnTests
         var entry = new Entry("hero.psd", EntryKind.File);
 
         // A mark for the entry is a mark, and no mark at all is nothing drawn.
-        Assert.IsType<Border>(ListBrowser.Contributed(dots, entry));
-        Assert.Empty(Assert.IsType<Panel>(ListBrowser.Contributed(marks, entry)).Children);
+        Assert.IsType<Border>(Files.Contributed(dots, entry));
+        Assert.Empty(Assert.IsType<Panel>(Files.Contributed(marks, entry)).Children);
 
         // A column of values says the same thing the way it says everything it does not know.
-        Assert.Equal("-", Assert.IsType<TextBlock>(ListBrowser.Contributed(values, entry)).Text);
+        Assert.Equal("-", Assert.IsType<TextBlock>(Files.Contributed(values, entry)).Text);
     }
 
     /// <summary>A state is worn on a tile as a picture in the colour the dot beside a name is.</summary>

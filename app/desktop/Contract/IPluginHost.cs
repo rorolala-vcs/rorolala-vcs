@@ -51,6 +51,9 @@ public interface IPluginHost
     /// <summary>Where the plugin adds the pictures the program draws, and reads them back.</summary>
     IIconLibrary Icons { get; }
 
+    /// <summary>Where the plugin offers the places it answers for, by the prefix of their addresses.</summary>
+    ILogicalViewRegistry LogicalViews { get; }
+
     /// <summary>When one of the host's windows is come back to.</summary>
     IRefocus Refocus { get; }
 

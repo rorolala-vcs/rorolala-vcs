@@ -316,3 +316,47 @@ internal sealed class IconLibrary : IIconLibrary
         return _pictures.GetValueOrDefault(key);
     }
 }
+
+/// <summary>The places plugins answer for, by the prefix their addresses begin with.</summary>
+internal sealed class LogicalViewRegistry
+{
+    /// <summary>Every claim, in the order it was made.</summary>
+    private readonly List<(PluginId Owner, int Position, string Scheme, ILogicalViewProvider Provider)> _claims = [];
+
+    /// <summary>Adds a claim.</summary>
+    /// <param name="owner">The plugin claiming it.</param>
+    /// <param name="position">The plugin's place in the load order.</param>
+    /// <param name="scheme">The prefix being claimed.</param>
+    /// <param name="provider">What answers for it.</param>
+    /// <exception cref="ArgumentException">The prefix is not one a plugin may claim.</exception>
+    public void Add(PluginId owner, int position, string scheme, ILogicalViewProvider provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+
+        if (!LogicalAddress.IsScheme(scheme))
+        {
+            throw new ArgumentException(
+                $"`{scheme}` is not a prefix an address may begin with, so `{owner.Value}` cannot answer for it",
+                nameof(scheme)
+            );
+        }
+
+        _claims.Add((owner, position, scheme, provider));
+    }
+
+    /// <summary>What answers a prefix.</summary>
+    /// <param name="scheme">The prefix.</param>
+    /// <returns>The provider, or nothing when no plugin answers it.</returns>
+    public ILogicalViewProvider? Find(string scheme) =>
+        _claims
+            .Where(claim => string.Equals(claim.Scheme, scheme, StringComparison.Ordinal))
+            .OrderBy(claim => claim.Position)
+            .Select(claim => claim.Provider)
+            .FirstOrDefault();
+
+    /// <summary>Every prefix that has an answer, in the order they were offered.</summary>
+    public IReadOnlyList<string> Schemes =>
+    [
+        .. _claims.OrderBy(claim => claim.Position).Select(claim => claim.Scheme),
+    ];
+}

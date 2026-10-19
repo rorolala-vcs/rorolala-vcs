@@ -42,8 +42,17 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal static partial class Icons
 {
-    /// <summary>How wide and tall an icon is where no size is asked for.</summary>
-    private const int Default = 16;
+    /// <summary>How wide and tall an icon is in a row, which is the size a listing's rows read at.</summary>
+    public const int Row = 16;
+
+    /// <summary>
+    /// How wide the column of icons is in a table, which is the design's own measure.
+    /// </summary>
+    /// <remarks>
+    /// A row's picture is drawn at <see cref="Row"/> inside it, so the column is wider than the picture: it is
+    /// the room the picture takes in the table rather than the picture itself.
+    /// </remarks>
+    public const double IconColumn = 22;
 
     /// <summary>The size a grid's icons are at the zoom it opens at.</summary>
     private const int Base = 64;
@@ -94,7 +103,7 @@ internal static partial class Icons
     /// </summary>
     /// <param name="entry">The entry to draw.</param>
     /// <returns>What to draw beside the entry's name.</returns>
-    public static Control For(Entry entry) => For(entry, Default);
+    public static Control For(Entry entry) => For(entry, Row);
 
     /// <summary>The icon for an entry, at a size in pixels.</summary>
     /// <param name="entry">The entry to draw.</param>

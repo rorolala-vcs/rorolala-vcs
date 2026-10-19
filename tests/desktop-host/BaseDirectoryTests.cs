@@ -35,7 +35,7 @@ public sealed class BaseDirectoryTests
 
         Assert.Equal(first, BaseDirectory.Current);
 
-        using var browser = new Browser(host.Log, shared, first);
+        using var browser = new Browser(host.Log, shared, first, host.LogicalViews);
 
         var said = 0;
         Action listener = () => said++;

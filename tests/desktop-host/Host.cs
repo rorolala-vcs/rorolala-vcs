@@ -74,6 +74,8 @@ internal static class Host
             // Nothing contributes a picture here, and nothing draws one: the library is what the
             // contract says a plugin may add to, and a headless test adds nothing.
             Icons = icons,
+            // Nothing claims a prefix here: a view that answers none of them is what a test starts from.
+            LogicalViews = new LogicalViewRegistry(),
             // Nothing activates a window in a headless test, so nothing is ever raised on it.
             Refocus = refocus,
             // A dialog needs a window to be shown on, and a headless test has none: nothing is ever shown.

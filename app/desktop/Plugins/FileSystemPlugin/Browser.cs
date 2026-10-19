@@ -17,6 +17,12 @@ namespace FileSystemPlugin;
 /// that did not draw a change it was told about and a view that was never told read the same from the
 /// outside.
 /// </para>
+/// <para>
+/// Where one is may also be a place a plugin answers rather than a directory, written as an address
+/// (<see cref="LogicalPlace"/>): a plugin's own kind of place, with its own entries and its own title, reached
+/// through the very same history and the very same address bar. Keeping the two in one location is what makes
+/// stepping between a directory and a place an ordinary move rather than a second kind of navigation.
+/// </para>
 /// </remarks>
 internal sealed class Browser : IDisposable
 {
@@ -48,6 +54,9 @@ internal sealed class Browser : IDisposable
     /// <summary>Where a read is said, so that a view that was told can be told from one that was not.</summary>
     private readonly ILog _log;
 
+    /// <summary>What answers the prefixes of the addresses this location may be given.</summary>
+    private readonly ILogicalViewRegistry _views;
+
     /// <summary>Where it has been, most recent last.</summary>
     private readonly List<string> _back = [];
 
@@ -57,23 +66,49 @@ internal sealed class Browser : IDisposable
     /// <summary>The directory being looked at.</summary>
     private string _current;
 
+    /// <summary>
+    /// The place being looked at, or nothing while this location is looking at a directory.
+    /// </summary>
+    /// <remarks>
+    /// One location or the other, never both: where a browser is is either a path the filesystem answers or an
+    /// address a plugin answers, and a listing is drawn from whichever it is. Keeping the two on one location
+    /// rather than giving logical views a browser of their own is what keeps one history and one way to move —
+    /// back, forward and the address switch between a directory and a place as freely as between two directories.
+    /// </remarks>
+    private LogicalPlace? _logical;
+
     /// <summary>What the directory held when it was last read.</summary>
     private IReadOnlyList<Entry> _entries;
 
     /// <summary>What a listing shows of it, which is those entries with the way up before them.</summary>
     private IReadOnlyList<Entry> _shown;
 
-    /// <summary>Makes a location onto a directory.</summary>
+    /// <summary>Makes a location onto a directory, or onto a place.</summary>
     /// <param name="log">Where a read of the directory is said.</param>
     /// <param name="shared">The answers every location shares.</param>
-    /// <param name="directory">The directory to look at.</param>
-    public Browser(ILog log, Shared shared, string directory)
+    /// <param name="directory">
+    /// The directory to look at, or the address of a place to open instead — which is what a dock taken out of
+    /// step is given when it was out of step at a logical address.
+    /// </param>
+    /// <param name="views">What answers the prefixes of the addresses this location may be given.</param>
+    public Browser(ILog log, Shared shared, string directory, ILogicalViewRegistry views)
     {
         _log = log;
         _shared = shared;
+        _views = views;
         _current = directory;
-        _entries = Read(directory);
-        _shown = Stage(directory, _entries);
+
+        if (LogicalAddress.TryRead(directory, out _))
+        {
+            _logical = Logical.Find(directory, views);
+            _entries = [];
+            _shown = [];
+        }
+        else
+        {
+            _entries = Read(directory);
+            _shown = Stage(directory, _entries);
+        }
 
         // A listing follows the shared answers wherever it is, so this location has to be told when they
         // change — and that is why a location given to a dock out of step is let go of rather than dropped.
@@ -166,8 +201,26 @@ internal sealed class Browser : IDisposable
     /// </remarks>
     public event Action? Reread;
 
-    /// <summary>The directory being looked at.</summary>
-    public string Current => _current;
+    /// <summary>
+    /// The directory being looked at, or the address of the place being looked at.
+    /// </summary>
+    /// <remarks>
+    /// Spelled the one way wherever it is asked for, so that the address the path bar shows and the way back
+    /// through the history are the same string in both modes.
+    /// </remarks>
+    public string Current => _logical?.Address.ToString() ?? _current;
+
+    /// <summary>
+    /// The place being looked at, or nothing while this location is looking at a directory.
+    /// </summary>
+    /// <remarks>
+    /// Named for the place rather than for the view, so that a property and the reader that answers it are not
+    /// read as one word.
+    /// </remarks>
+    public LogicalPlace? Place => _logical;
+
+    /// <summary>Whether this location is looking at a place a plugin answers rather than at a directory.</summary>
+    public bool IsLogical => _logical is not null;
 
     /// <summary>
     /// The directory the tree is rooted at, which a directory's own menu sets.
@@ -178,8 +231,15 @@ internal sealed class Browser : IDisposable
     /// </remarks>
     public string BaseDir => _shared.BaseDir;
 
-    /// <summary>The directory holding the one being looked at, or nothing when there is none.</summary>
-    public string? Parent => ParentOf(_current);
+    /// <summary>
+    /// What is over where this location is looking: the directory holding a directory, or the address over a place.
+    /// </summary>
+    /// <remarks>
+    /// A place has no directory over it — an address is not a path — so what is over one is the plugin's answer
+    /// rather than this one's (<see cref="ILogicalViewProvider.Parent"/>), and nothing when the plugin says there
+    /// is no step up. Either way it is one string, which is what makes the way up one button that goes somewhere.
+    /// </remarks>
+    public string? Parent => _logical is not null ? _logical.Parent?.ToString() : ParentOf(_current);
 
     /// <summary>Whether going back has anywhere to go.</summary>
     public bool CanGoBack => _back.Count > 0;
@@ -188,7 +248,7 @@ internal sealed class Browser : IDisposable
     public bool CanGoForward => _forward.Count > 0;
 
     /// <summary>Whether going up has anywhere to go.</summary>
-    public bool CanGoUp => ParentOf(_current) is not null;
+    public bool CanGoUp => Parent is not null;
 
     /// <summary>What the directory holds, directories first and then by name.</summary>
     public IReadOnlyList<Entry> Entries => _entries;
@@ -272,11 +332,34 @@ internal sealed class Browser : IDisposable
     /// about the path (see <see cref="Expand"/>), so that what the address offers and what it goes to
     /// agree wherever home is.
     /// </para>
+    /// <para>
+    /// What is of the shape of an address goes to the plugin that claimed its prefix instead, whether or not one
+    /// did: an address nobody answers is a place with nobody to ask, and saying so in the dock is what a browser
+    /// that refused it could not do.
+    /// </para>
     /// </remarks>
-    /// <param name="directory">The directory to look at.</param>
+    /// <param name="directory">The directory or the address to look at.</param>
     /// <returns>Whether it went there.</returns>
     public bool Go(string directory)
     {
+        // An address is asked of the registry before anything is asked of the filesystem: the two name different
+        // kinds of place, and a directory that happens to hold an at-sign is not of the shape an address is.
+        if (LogicalAddress.TryRead(directory, out _))
+        {
+            if (Same(directory, Current))
+            {
+                Refresh();
+
+                return true;
+            }
+
+            _back.Add(Current);
+            _forward.Clear();
+            Enter(directory);
+
+            return true;
+        }
+
         // A leading `~` names home, which is what the address reaches for; anything else is the path it is.
         var target = Expand(directory);
 
@@ -285,14 +368,14 @@ internal sealed class Browser : IDisposable
             return false;
         }
 
-        if (Same(target, _current))
+        if (Same(target, Current))
         {
             Refresh();
 
             return true;
         }
 
-        _back.Add(_current);
+        _back.Add(Current);
         _forward.Clear();
         Move(target);
 
@@ -306,11 +389,20 @@ internal sealed class Browser : IDisposable
     /// Setting the base moves the browser as well, because the two are one act to whoever asked: the
     /// tree is a view of the place being worked in, and a base the browser is not in would leave the
     /// tree showing somewhere else entirely.
+    /// <para>
+    /// A place is not a directory to root a tree at, so an address is refused here rather than moved to: what
+    /// the tree would be rooted at is a question a plugin answers, and this is not the plugin being asked.
+    /// </para>
     /// </remarks>
     /// <param name="directory">The directory to root the tree at.</param>
     /// <returns>Whether it went there and rooted it there.</returns>
     public bool SetBase(string directory)
     {
+        if (LogicalAddress.TryRead(directory, out _))
+        {
+            return false;
+        }
+
         if (!Go(directory))
         {
             return false;
@@ -335,7 +427,7 @@ internal sealed class Browser : IDisposable
 
         var to = _back[^1];
         _back.RemoveAt(_back.Count - 1);
-        _forward.Add(_current);
+        _forward.Add(Current);
         Move(to);
     }
 
@@ -349,14 +441,20 @@ internal sealed class Browser : IDisposable
 
         var to = _forward[^1];
         _forward.RemoveAt(_forward.Count - 1);
-        _back.Add(_current);
+        _back.Add(Current);
         Move(to);
     }
 
-    /// <summary>Looks at the directory holding this one, if there is one.</summary>
+    /// <summary>
+    /// Looks at the directory holding this one, if there is one.
+    /// </summary>
+    /// <remarks>
+    /// A place has nowhere to go up to, which is what <see cref="Parent"/> being nothing there means: what is
+    /// over a place is the plugin's answer and not a directory, so the way up is left to the toolbar's own.
+    /// </remarks>
     public void Up()
     {
-        if (ParentOf(_current) is { } parent)
+        if (Parent is { } parent)
         {
             Go(parent);
         }
@@ -365,6 +463,24 @@ internal sealed class Browser : IDisposable
     /// <summary>Reads the directory again, which is what shows a change made elsewhere.</summary>
     public void Refresh()
     {
+        if (_logical is not null)
+        {
+            // The place is asked again rather than the address kept, because a read that is asked for is what
+            // the plugin's answer is for: what it holds may have moved without where it is having moved.
+            var written = _logical.Address.ToString();
+
+            _logical = Logical.Find(written, _views);
+
+            // Said here rather than left to the views: what a view was told and what it drew are two different
+            // answers to "did that change reach it", and a report of one that did not cannot tell them apart.
+            _log.Info($"read `{written}` again: {_logical?.Entries.Count ?? 0} entries");
+
+            Changed?.Invoke();
+            Reread?.Invoke();
+
+            return;
+        }
+
         _entries = Read(_current);
         _shown = Stage(_current, _entries);
 
@@ -383,9 +499,18 @@ internal sealed class Browser : IDisposable
     /// The directory has not changed; what a listing makes of it has. Both shared answers are read while a
     /// listing is staged, so one of them changing is a listing to make again — and the tree, which is rooted
     /// at one of them, is told by the same raising rather than by a second one of its own.
+    /// <para>
+    /// A place is not staged from a directory, so there is nothing here for a shared answer to make again: what
+    /// a plugin's listing leaves out is the plugin's own answer, and neither the base nor a hiding has a word in it.
+    /// </para>
     /// </remarks>
     private void Restage()
     {
+        if (_logical is not null)
+        {
+            return;
+        }
+
         _shown = Stage(_current, _entries);
         Changed?.Invoke();
     }
@@ -416,15 +541,43 @@ internal sealed class Browser : IDisposable
     }
 
     /// <summary>Moves without touching the history, for back, forward and up.</summary>
-    /// <param name="directory">The directory to look at.</param>
+    /// <param name="directory">The directory or the address to look at.</param>
     private void Move(string directory)
     {
+        // A history holds what was written rather than what a place was read as, so a step back into an address
+        // is the address asked for again — which is the same read the address itself would have made.
+        if (LogicalAddress.TryRead(directory, out _))
+        {
+            Enter(directory);
+
+            return;
+        }
+
+        _logical = null;
+
         // Held in full rather than as it was given: what is typed may be relative or have a step in
         // it, and the address is what says where the browser actually is. The computer is not a path
         // and is held as it is.
         _current = IsComputer(directory) ? directory : Path.GetFullPath(directory);
         _entries = Read(_current);
         _shown = Stage(_current, _entries);
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Goes to a place a plugin answers for, reading everything about it in one go.
+    /// </summary>
+    /// <remarks>
+    /// The address is kept as it was written and the place is read afresh, so that the title, the entries and
+    /// whatever answers a drag are one answer about one address — and an address nobody answers is kept the same
+    /// way, since saying so is the dock's business rather than this one's.
+    /// </remarks>
+    /// <param name="written">The address, as it was written.</param>
+    private void Enter(string written)
+    {
+        _logical = Logical.Find(written, _views);
+        _entries = [];
+        _shown = [];
         Changed?.Invoke();
     }
 
@@ -495,19 +648,36 @@ internal sealed class Browser : IDisposable
             : null;
     }
 
-    /// <summary>Whether two paths name the same directory.</summary>
+    /// <summary>Whether two locations name the same place.</summary>
     /// <remarks>
     /// Compared in full, so that <c>..</c> and a trailing separator are the same place rather than
     /// a second step in the history. A place that is not a path is compared as itself.
+    /// <para>
+    /// An address is compared as the words it was written in and never as a path: <c>Path.GetFullPath</c> would
+    /// read one against the working directory and hand back something that is neither, and an address and a path
+    /// are two kinds of place that cannot be the same one.
+    /// </para>
     /// </remarks>
-    private static bool Same(string left, string right) =>
-        IsComputer(left) || IsComputer(right)
-            ? left == right
+    private static bool Same(string left, string right)
+    {
+        var leftAddress = LogicalAddress.TryRead(left, out _);
+        var rightAddress = LogicalAddress.TryRead(right, out _);
+
+        if (leftAddress || rightAddress)
+        {
+            return leftAddress
+                && rightAddress
+                && string.Equals(left, right, StringComparison.Ordinal);
+        }
+
+        return IsComputer(left) || IsComputer(right)
+            ? string.Equals(left, right, StringComparison.Ordinal)
             : string.Equals(
                 Path.GetFullPath(left),
                 Path.GetFullPath(right),
                 StringComparison.Ordinal
             );
+    }
 
     /// <summary>
     /// The drives a computer has, which is all the computer holds.

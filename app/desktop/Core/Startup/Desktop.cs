@@ -156,6 +156,7 @@ internal sealed class Desktop
             Dialogs = dialogs,
             IconBadges = new IconBadgeRegistry(),
             Icons = icons,
+            LogicalViews = new LogicalViewRegistry(),
             // The set of windows is made over the services rather than handed them, and how one is made is
             // written onto it here: what a window is drawn from is this object, which does not exist until
             // this line is done. The shell is named by the set itself, which is the one that hears a window

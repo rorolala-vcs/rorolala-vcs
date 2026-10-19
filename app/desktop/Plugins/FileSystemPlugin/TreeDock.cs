@@ -388,7 +388,7 @@ internal sealed class TreeBrowser : UserControl
         _actions = actions;
         _clip = clip;
         _root = root;
-        _drops = new Drops(host, browser, Landing, Mark);
+        _drops = new Drops(host, browser, Mark);
 
         var tree = new TreeView { ContextMenu = actions.Empty(this) };
         tree.Items.Add(Node(root));
@@ -453,7 +453,10 @@ internal sealed class TreeBrowser : UserControl
     {
         _ghost.Following(e.GetPosition(this));
 
-        e.DragEffects = _drops.Over(e);
+        var land = Landing(e);
+
+        Mark(land?.Row);
+        e.DragEffects = land is null ? DragDropEffects.None : Drops.Over(e);
         e.Handled = e.DragEffects != DragDropEffects.None;
     }
 
@@ -472,7 +475,7 @@ internal sealed class TreeBrowser : UserControl
     private void Dropped(object? sender, DragEventArgs e)
     {
         _ghost.Unghost();
-        _drops.Dropped(e);
+        _drops.Dropped(Landing(e), e);
     }
 
     /// <summary>
@@ -808,18 +811,18 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>Paints the row standing for a directory, or takes the paint off.</summary>
     /// <param name="directory">The directory being pointed at, or nothing.</param>
-    private void Mark(string? directory)
+    private void Mark(object? directory)
     {
         Unmark();
 
-        if (directory is null)
+        if (directory is not string path)
         {
             return;
         }
 
-        foreach (var (path, row) in _rows)
+        foreach (var (step, row) in _rows)
         {
-            if (!string.Equals(path, directory, StringComparison.Ordinal))
+            if (!string.Equals(step, path, StringComparison.Ordinal))
             {
                 continue;
             }

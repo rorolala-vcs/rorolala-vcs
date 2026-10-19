@@ -218,7 +218,18 @@ internal sealed class DirectoryControl : UserControl
     private readonly ContentControl _content = new();
 
     /// <summary>The view being read, which is what a copy or a paste in this dock is about.</summary>
-    private EntryView? _view;
+    private EntryView<Entry>? _view;
+
+    /// <summary>
+    /// The listing of a place, while this dock is looking at one.
+    /// </summary>
+    /// <remarks>
+    /// One or the other of this and <see cref="_view"/> is what is being read. Both are views of the very same
+    /// arrangements — a place is read by the rows and the tiles a directory is — over a different listing
+    /// (<see cref="Places"/> rather than <see cref="Files"/>), so which of them there is follows from what the
+    /// location says, and how it is drawn does not.
+    /// </remarks>
+    private EntryView<LogicalEntry>? _logical;
 
     /// <summary>
     /// The location this dock was given, or nothing while it follows the whole.
@@ -238,6 +249,9 @@ internal sealed class DirectoryControl : UserControl
 
     /// <summary>The entries as this dock last drew them, so that a reread can be told from a step.</summary>
     private IReadOnlyList<Entry>? _drawn;
+
+    /// <summary>The place this dock last drew, so that a reread of the same one can be told from a step.</summary>
+    private LogicalPlace? _drawnPlace;
 
     /// <summary>
     /// The directory the dock last drew, so that a choice is only carried across a rebuild of the same one.
@@ -361,7 +375,15 @@ internal sealed class DirectoryControl : UserControl
         }
 
         _own?.Dispose();
-        _own = new Browser(_host.Log, _shared, Browser.Expand(at));
+        _own = new Browser(_host.Log, _shared, Browser.Expand(at), _host.LogicalViews);
+
+        // What is done to an entry is done in the directory this dock is looking at, so the actions are made over
+        // the location again here: left as they were, a menu would act on the whole's directory — opening a folder
+        // from here would send the docks beside this one there and leave this one where it is, which is the one
+        // thing a dock out of step must not do. Asked of `Location` rather than of `_own`, since the two are one
+        // answer (see `Location`), and made here as it is in `InStep` because this is the same state reached by
+        // being opened onto a directory rather than by the switch.
+        _actions = new BrowserActions(_host, Location, _clip);
 
         _bar.Reading(_own);
         Watch(_own);
@@ -629,7 +651,7 @@ internal sealed class DirectoryControl : UserControl
 
         Watch(null);
         _own?.Dispose();
-        _own = inStep ? null : new Browser(_host.Log, _shared, was.Current);
+        _own = inStep ? null : new Browser(_host.Log, _shared, was.Current, _host.LogicalViews);
         _actions = new BrowserActions(_host, Location, _clip);
 
         _bar.Reading(Location);
@@ -710,7 +732,16 @@ internal sealed class DirectoryControl : UserControl
     /// of a control that is not arranged yet is a keyboard it forgets, the same reason the address defers its own
     /// selection.
     /// </remarks>
-    private void Seated() => Dispatcher.UIThread.Post(() => _view?.Listen());
+    private void Seated() =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_view is { } view)
+            {
+                view.Listen();
+            }
+
+            _logical?.Listen();
+        });
 
     /// <summary>
     /// Reads the keys a dock answers for the whole of itself.
@@ -773,6 +804,12 @@ internal sealed class DirectoryControl : UserControl
     /// and a change of base all look like from here. Two changes are not that — switching what is shown, and
     /// switching a rule that matches nothing in this directory — and they are the ones the rows are drawn
     /// again for: the entries are the same ones, and how they are drawn is not.
+    /// <para>
+    /// A place is told from a step by the answer itself, and by neither the list nor the address: the same address
+    /// read again is a new answer of the same shape, which is a listing to draw again, while a step to another
+    /// place is a different answer entirely — and a step between a place and a directory is the same question
+    /// asked of the two modes.
+    /// </para>
     /// </remarks>
     private void Update()
     {
@@ -780,6 +817,29 @@ internal sealed class DirectoryControl : UserControl
         // choice for every dock, so one opened after another was switched shows what that one shows rather
         // than its own last word on it.
         RefreshHidden();
+
+        if (Location.Place is { } place)
+        {
+            if (ReferenceEquals(_drawnPlace, place))
+            {
+                _logical?.Repaint();
+
+                return;
+            }
+
+            Draw();
+
+            return;
+        }
+
+        // A dock that has just come out of a place has no drawn listing to compare: what it was drawing is not
+        // a list of entries, and the directory it is now looking at has to be drawn whatever it holds.
+        if (_drawnPlace is not null)
+        {
+            Draw();
+
+            return;
+        }
 
         if (ReferenceEquals(_drawn, Location.Shown))
         {
@@ -799,16 +859,48 @@ internal sealed class DirectoryControl : UserControl
         // tree — so every key after walking into another directory would go unanswered, with nothing anywhere
         // saying why. A view replaced while the keyboard was somewhere else (the zoom, say) leaves it there.
         var on = Keys.On(this);
-        var seating = _view is { } was && Keys.Holds(on, was);
+        var seating = ((Control?)_view ?? _logical) is { } was && Keys.Holds(on, was);
+
+        // A place is read by the same two arrangements a directory is, over a listing of its own: whether an entry
+        // is a file is not what decides how it is laid out, and a dock that stopped honouring the zoom at a place
+        // would be a dock whose zoom means something only some of the time.
+        if (Location.Place is { } place)
+        {
+            var source = new Places(_host, Location, place);
+
+            EntryView<LogicalEntry> listing = Zoom > GridAbove
+                ? new GridBrowser<LogicalEntry>(_host, source, Icons.SizeAt(Zoom))
+                : new ListBrowser<LogicalEntry>(_host, source);
+
+            _logical = listing;
+            _view = null;
+            _content.Content = listing;
+
+            _host.Log.Info($"drew the place `{place.Address}`: {listing.Shown} entries");
+
+            if (seating)
+            {
+                Seated();
+            }
+
+            _drawnPlace = place;
+            _drawn = null;
+            _drawnAt = null;
+
+            return;
+        }
+
+        _logical = null;
+        _drawnPlace = null;
 
         // What was chosen goes with it, for the same reason the tree keeps what was open: a read that found the
         // files it found before is not a reason to stop working with them. Only within one
         // directory — stepping elsewhere is a different listing, and its choice starts empty.
         var chosen = _drawnAt == Location.Current ? _view?.Chosen() ?? [] : [];
 
-        EntryView drawn = Zoom > GridAbove
-            ? new GridBrowser(_host, Location, _actions, _clip, Icons.SizeAt(Zoom))
-            : new ListBrowser(_host, Location, _actions, _clip);
+        EntryView<Entry> drawn = Zoom > GridAbove
+            ? new GridBrowser<Entry>(_host, new Files(_host, Location, _actions, _clip), Icons.SizeAt(Zoom))
+            : new ListBrowser<Entry>(_host, new Files(_host, Location, _actions, _clip));
         _view = drawn;
 
         _content.Content = drawn;

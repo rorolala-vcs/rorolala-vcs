@@ -109,6 +109,9 @@ internal sealed class HostServices
     /// <summary>The pictures plugins contribute, which is what an <c>IconKey</c> is answered from.</summary>
     public required IconLibrary Icons { get; init; }
 
+    /// <summary>The places plugins answer for, which is what an address's prefix is answered from.</summary>
+    public required LogicalViewRegistry LogicalViews { get; init; }
+
     /// <summary>When one of the host's windows is come back to.</summary>
     public required Refocus Refocus { get; init; }
 
@@ -138,6 +141,7 @@ internal sealed class PluginHost
         IMenuRegistry,
         IContextMenuRegistry,
         IDockMenuRegistry,
+        ILogicalViewRegistry,
         INavigationRegistry,
         IDockRegistry,
         IOpenHookRegistry,
@@ -205,6 +209,9 @@ internal sealed class PluginHost
     public IIconLibrary Icons => _services.Icons;
 
     /// <inheritdoc />
+    public ILogicalViewRegistry LogicalViews => this;
+
+    /// <inheritdoc />
     public IRefocus Refocus => _services.Refocus;
 
     /// <inheritdoc />
@@ -234,6 +241,16 @@ internal sealed class PluginHost
     /// <inheritdoc />
     IReadOnlyList<ContextMenuItem> IContextMenuRegistry.Items(ContextMenuTarget target) =>
         _services.ContextMenus.Items(target);
+
+    /// <inheritdoc />
+    void ILogicalViewRegistry.Register(string scheme, ILogicalViewProvider provider) =>
+        _services.LogicalViews.Add(_id, _position, scheme, provider);
+
+    /// <inheritdoc />
+    ILogicalViewProvider? ILogicalViewRegistry.Find(string scheme) => _services.LogicalViews.Find(scheme);
+
+    /// <inheritdoc />
+    IReadOnlyList<string> ILogicalViewRegistry.Schemes => _services.LogicalViews.Schemes;
 
     /// <inheritdoc />
     void INavigationRegistry.Add(NavigationButton button) =>

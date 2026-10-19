@@ -410,10 +410,23 @@ internal sealed class NavigationBar : UserControl
     /// heavier so that where we are is where the eye lands — opens the address for editing instead: a click on
     /// the place you are already in can only mean that what you want is to write somewhere else.
     /// </para>
+    /// <para>
+    /// A logical place is one link and not a chain: an address is not a path, and what is over a place is the
+    /// plugin's answer rather than a directory this one could walk. The link is the place's title, and clicking
+    /// it opens the address for editing the same way the last crumb does.
+    /// </para>
     /// </remarks>
     private void ShowCrumbs()
     {
         _crumbs.Children.Clear();
+
+        if (_browser.Place is { } place)
+        {
+            _crumbs.Children.Add(Link(place));
+            Scrolled();
+
+            return;
+        }
 
         var chain = new List<string>();
 
@@ -459,14 +472,52 @@ internal sealed class NavigationBar : UserControl
             _crumbs.Children.Add(Crumb(name, chain[at], at == chain.Count - 1));
         }
 
-        // Scrolled to its end once it has been laid out, since how much of it there is to scroll is not known
-        // until then: the last crumb is the one being looked at and the one the address is opened from.
+        Scrolled();
+    }
+
+    /// <summary>
+    /// Scrolls the address to its end, once it has been laid out.
+    /// </summary>
+    /// <remarks>
+    /// Deferred, because how much of it there is to scroll is not known until the layout has run: the last crumb
+    /// is the one being looked at and the one the address is opened from, and the beginning is what is worth
+    /// losing when there is not room for both.
+    /// </remarks>
+    private void Scrolled() =>
         Dispatcher.UIThread.Post(() =>
             _breadth.Offset = new Vector(
                 Math.Max(0, _breadth.Extent.Width - _breadth.Viewport.Width),
                 0
             )
         );
+
+    /// <summary>
+    /// The one step of a logical address: what the place is called, or who nobody is answering it.
+    /// </summary>
+    /// <remarks>
+    /// A button like a crumb, and for the same reason: it is what is pressed to write somewhere else. An address
+    /// no plugin claimed is still an address, so it is named as such — the prefix, because that is what a plugin
+    /// would have claimed — and it opens the field just the same, since the point of saying nobody answers it is
+    /// that the user is to type another.
+    /// </remarks>
+    /// <param name="place">The place being looked at.</param>
+    /// <returns>The link.</returns>
+    private Button Link(LogicalPlace place)
+    {
+        var link = new Button
+        {
+            Content = place.Provider is null
+                ? RolaI18N.Get("rorolala_file_system.unknown_address", place.Address.Scheme)
+                : place.Title,
+            Classes = { "ghost" },
+            Padding = new Thickness(6, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = FontWeight.Bold,
+        };
+
+        link.Click += (_, _) => Edit();
+
+        return link;
     }
 
     /// <summary>
@@ -530,6 +581,16 @@ internal sealed class NavigationBar : UserControl
     {
         if (!_address.IsVisible)
         {
+            return;
+        }
+
+        // A logical address is not a path to complete: what a place holds is the plugin's answer, read from the
+        // address itself rather than from a directory the filesystem could enumerate. Nothing is offered, and what
+        // is typed is still gone to on Return.
+        if (_browser.Place is not null)
+        {
+            Close();
+
             return;
         }
 

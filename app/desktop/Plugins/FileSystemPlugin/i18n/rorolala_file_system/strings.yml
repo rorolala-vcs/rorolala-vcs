@@ -210,6 +210,13 @@ rorolala_file_system:
     en: "`%{path}` is not a directory"
     zh-CN: "`%{path}` 不是目录"
 
+  # What the path bar says while an address is open whose prefix no plugin claimed. It names the prefix and not
+  # the whole address, because the prefix is the thing a plugin claims — a payload nobody reads is not what is
+  # missing.
+  unknown_address:
+    en: No plugin answers %{scheme}
+    zh-CN: 没有插件回答 %{scheme}
+
   # What the conflict window says when a name is already taken. The window is shown over the host's main
   # window, so the words are the plugin's while the window is the host's.
   conflict:
