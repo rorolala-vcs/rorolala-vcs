@@ -258,6 +258,12 @@ pub const EC_ERR_DESKTOP_WINDOW_STYLE: i32 = 173;
 /// `exit_codes.desktop_called`
 pub const EC_DESKTOP_CALLED: i32 = 174;
 
+// The two things `rola desktop` can be told about a frame are a question and a choice, and a run that
+// wrote both asked for two runs. It is refused rather than answered, since which of the two was meant is
+// the caller's to say and a run that quietly dropped one would be answering a question nobody asked.
+/// `exit_codes.desktop_query_style`
+pub const EC_ERR_DESKTOP_QUERY_STYLE: i32 = 175;
+
 // Output — how a result is drawn when it is written
 
 /// `exit_codes.format`

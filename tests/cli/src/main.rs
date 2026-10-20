@@ -67,6 +67,7 @@ fn main() {
     merging(&rola, &ws, &files, &mut checked);
     vaults(&rola, &ws, &mut checked);
     explain(&rola, &ws, &mut checked);
+    desktop(&rola, &ws, &mut checked);
     output(&rola, &ws, &mut checked);
     language(&rola, &ws, &mut checked);
     held_by_another(&rola, &held, &mut checked);
@@ -1068,6 +1069,35 @@ fn explain(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["explain"]);
     checked.exits("`explain` without a command shows its help", &ran, 2);
+}
+
+/// What a run says about the frame a window would be drawn in, without opening one.
+///
+/// The query is an environment probe, so what it answers is what the machine it is run on is drawn in —
+/// which is one of three names, whichever machine this is. What is checked is that it answers one name and
+/// nothing else: a caller reading it is written against that.
+fn desktop(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["desktop", "--query-window-style"]);
+    checked.exits("a window style is queried", &ran, 0);
+    checked.wants(
+        "the query answers one of the three names",
+        matches!(ran.stdout.trim(), "windows" | "mac" | "tillingwm"),
+        &said(&ran),
+    );
+
+    // A question and a choice are two runs, and a run that wrote both is refused rather than answered
+    // with one of them.
+    let ran = rola.run(
+        dir,
+        &["desktop", "--query-window-style", "--window-style", "mac"],
+    );
+    checked.exits("a query and a choice together are refused", &ran, 175);
+
+    // A style that is none of the three is refused here rather than handed over: the window leaves a name
+    // it does not know to the machine, so a run that wrote one wrong would draw something it was not asked
+    // for.
+    let ran = rola.run(dir, &["desktop", "--window-style", "gnome"]);
+    checked.exits("a style that is none of the three is refused", &ran, 173);
 }
 
 /// How a result is drawn: as data, indented, or through a template.

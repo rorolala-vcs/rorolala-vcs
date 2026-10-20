@@ -115,6 +115,15 @@ SCRIPTS_DIR="$BUILD_DIR/scripts"
 DESKTOP_PROJECT=app/desktop/Core/RorolalaDesktop.csproj
 DESKTOP_DIR="$BUILD_DIR/bin/desktop"
 
+# The launcher: the product's front door, and the program a person is meant to meet. It is published
+# into the same `desktop` directory as the Desktop program — the two are one product to whoever opens
+# either, and the launcher reaches for the command line and the window it starts by what sits beside it.
+LAUNCHER_PROJECT=app/launcher/ROLALauncher.csproj
+
+# The banners the launcher may play, taken from the tree rather than built: they are data, and the
+# program looks for them in `launcher-banners/` beside itself, which is also where the picker starts.
+LAUNCHER_BANNERS=res/desktop-launcher-banner
+
 # The icon sets the Desktop may draw its file listing with. They are data rather than an assembly, so
 # they are not built: an export copies the tree as it stands, and the program finds it beside itself.
 # A set is a directory with its own `icon-theme.toml`, so adding one is adding a directory here.
@@ -219,6 +228,29 @@ publish_desktop() {
 		mkdir -p "$1/icon-sets"
 		find "$DESKTOP_ICON_SETS" -mindepth 1 -maxdepth 1 '!' -name '[Ee][Xx][Aa][Mm][Pp][Ll][Ee]' \
 			-exec cp -r {} "$1/icon-sets/" \;
+	fi
+}
+
+# Publishes the launcher into the Desktop program's directory, and lays the banners beside it.
+#
+# It is published after the Desktop program rather than before: the two share a directory, and what a
+# publish lays down is what that program is made of. The launcher comes second because it is the one
+# that reads the other — the command line and the window are found by where they sit beside it — so
+# what is there when it is published is the layout it was made for.
+publish_launcher() {
+	if [ -z "$DOTNET_RID" ]; then
+		echo "the host's RID could not be read; name the platform this layout is for in DOTNET_RID" >&2
+		exit 1
+	fi
+
+	restore "$LAUNCHER_PROJECT" -r "$DOTNET_RID"
+
+	# shellcheck disable=SC2086
+	$DOTNET publish "$LAUNCHER_PROJECT" -c Release --no-restore -r "$DOTNET_RID" --self-contained false -o "$1"
+
+	if [ -d "$LAUNCHER_BANNERS" ]; then
+		mkdir -p "$1/launcher-banners"
+		cp "$LAUNCHER_BANNERS"/*.aseprite "$1/launcher-banners/"
 	fi
 }
 

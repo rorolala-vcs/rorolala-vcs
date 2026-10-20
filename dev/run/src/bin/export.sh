@@ -48,6 +48,7 @@ done
 build_solution
 
 publish_desktop "$DESKTOP_DIR"
+publish_launcher "$DESKTOP_DIR"
 publish_plugins
 
 # The C# bindings beside the native library they bind, under `lib/` where a consumer of the C ABI

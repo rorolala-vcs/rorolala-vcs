@@ -18,4 +18,5 @@ again lib
 build_solution
 
 publish_desktop "$DESKTOP_DIR"
+publish_launcher "$DESKTOP_DIR"
 publish_plugins

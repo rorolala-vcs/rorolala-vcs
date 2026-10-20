@@ -55,6 +55,7 @@ foreach ($program in $Programs) {
 Build-Solution
 
 Publish-Desktop $DesktopDir
+Publish-Launcher $DesktopDir
 Publish-Plugins
 
 # The C# bindings beside the native library they bind, under `lib/` where a consumer of the C ABI looks

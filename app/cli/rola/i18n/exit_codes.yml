@@ -273,6 +273,10 @@ exit_codes:
     en: The Desktop program was already running and was asked to come forward
     zh-CN: 桌面程序已在运行，已被请求切到前台
 
+  desktop_query_style:
+    en: A run both asked how a frame is drawn and chose how one is drawn
+    zh-CN: 本次运行既询问了边框的样式，又选择了边框的样式
+
   fs_ops_argument:
     en: A file operation was named without the paths it works on
     zh-CN: 文件操作缺少它所作用的路径

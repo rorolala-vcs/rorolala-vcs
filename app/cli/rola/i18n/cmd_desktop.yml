@@ -8,9 +8,11 @@ desktop:
         **Usage**: rola desktop
         **Flags**:
             --window-style <STYLE>    Choose the window frame style, one of windows, mac or tillingwm
+            --query-window-style      Print how this machine draws a window frame, and open nothing
 
         Open the Desktop program that sits beside the `rola` that was run
         `--window-style` chooses the window frame style
+        `--query-window-style` probes this machine for the style it draws a window frame in
 
         This run waits for the window to close and ends with the window's own exit code
     zh-CN: |
@@ -19,9 +21,11 @@ desktop:
         **用法**：rola desktop
         **标识**：
             --window-style <样式>    选择窗口边框的样式，可选 windows、mac 或 tillingwm
+            --query-window-style     打印本机绘制窗口边框的样式，不打开任何窗口
 
         打开与所运行的 `rola` 并排的桌面程序
         `--window-style` 选择窗口边框的样式
+        `--query-window-style` 探测本机绘制窗口边框所用的样式
 
         本次运行一直等待窗口关闭并以窗口自己的退出码结束
 
@@ -33,6 +37,9 @@ desktop:
     window_style:
       en: Choose the window frame style
       zh-CN: 选择窗口边框的样式
+    query_window_style:
+      en: Ask how this machine draws a window frame
+      zh-CN: 询问本机绘制窗口边框的样式
 
   called:
     en: |
@@ -49,6 +56,18 @@ desktop:
         Please write one of `windows`, `mac` or `tillingwm`, or leave `--window-style` out
     zh-CN: |
         请写 `windows`、`mac` 或 `tillingwm` 之一，或者不写 `--window-style`
+
+  err_query_with_style:
+    en: |
+        `--query-window-style` asks how a frame is drawn, and `--window-style` chooses how one is drawn
+    zh-CN: |
+        `--query-window-style` 询问边框的样式，而 `--window-style` 选择边框的样式
+
+  err_query_with_style_help:
+    en: |
+        Please write one of the two, or neither
+    zh-CN: |
+        请写两者之一，或者都不写
 
   err_not_found:
     en: There is no Desktop program beside this one

@@ -1,0 +1,267 @@
+_version: 2
+
+# What the launcher says. The keys are the same shape as the host's, and a file here is read by the same
+# reader; the root is `launcher` so that a directory holding both programs' files can hold both without
+# either overwriting the other.
+
+launcher:
+  language:
+    en: Language
+    zh-CN: 语言
+
+  common:
+    ok:
+      en: OK
+      zh-CN: 好
+    cancel:
+      en: Cancel
+      zh-CN: 取消
+    close:
+      en: Close
+      zh-CN: 关闭
+    done:
+      en: Done
+      zh-CN: 完成
+
+  toolbar:
+    account:
+      en: Set up your account
+      zh-CN: 初始化账户
+    create:
+      en: Create a Workspace
+      zh-CN: 创建工作区
+    create_needs_account:
+      en: Set up your account first
+      zh-CN: 请先初始化账户
+    import:
+      en: Add a Workspace you already have
+      zh-CN: 导入工作区
+
+  welcome:
+    appearance:
+      en: "Choose the look you want"
+      zh-CN: "请选择想要的视觉风格"
+    account:
+      en: Set up account
+      zh-CN: 设置账户
+    no_account:
+      en: "First, let's set up your account."
+      zh-CN: 首先，让我们设置账户。
+    create:
+      en: Create a Workspace
+      zh-CN: 创建工作区
+    import:
+      en: Import a Workspace
+      zh-CN: 导入工作区
+    empty:
+      en: No Workspace exists yet — you can create one or import one
+      zh-CN: 尚不存在任何工作区，你可以导入或创建
+
+  settings:
+    title:
+      en: Settings
+      zh-CN: 设置
+    appearance:
+      en: Day or night
+      zh-CN: 日夜主题
+
+    light:
+      en: Light
+      zh-CN: 亮色
+    dark:
+      en: Dark
+      zh-CN: 暗色
+    system:
+      en: Follow the system
+      zh-CN: 跟随系统
+    frame:
+      en: Window frame
+      zh-CN: 窗口边框
+    style_windows:
+      en: Windows
+      zh-CN: Windows
+    style_mac:
+      en: macOS
+      zh-CN: macOS
+    style_tillingwm:
+      en: Tiling window manager
+      zh-CN: 平铺窗口管理器
+
+
+  banner:
+    pick:
+      en: Choose a banner
+      zh-CN: 选择横幅
+    type:
+      en: Aseprite picture
+      zh-CN: Aseprite 图片
+    empty:
+      en: Double-click here to choose a banner
+      zh-CN: 双击这里选择横幅
+    problem:
+      en: "This banner could not be read: %{reason}"
+      zh-CN: "无法读取这个横幅：%{reason}"
+
+  workspace:
+    title:
+      en: Workspace
+      zh-CN: 工作区
+    remove:
+      en: Remove from this list
+      zh-CN: 从列表中移除
+    missing:
+      en: Not there
+      zh-CN: 不存在
+    not_workspace:
+      en: Not a Workspace
+      zh-CN: 不是工作区
+    gone:
+      en: "%{path} is not a Workspace any more"
+      zh-CN: "%{path} 已经不是一个工作区了"
+    launch_failed:
+      en: "The Desktop program could not be started from %{program}"
+      zh-CN: "无法从 %{program} 启动桌面程序"
+
+  import:
+    title:
+      en: Add a Workspace
+      zh-CN: 导入工作区
+    not_a_workspace:
+      en: "%{path} is not a Workspace: it holds no .rola directory"
+      zh-CN: "%{path} 不是工作区：其中没有 .rola 目录"
+
+  account:
+    title:
+      en: Your account
+      zh-CN: 你的账户
+    title_new:
+      en: Set up your account
+      zh-CN: 设置账户
+    hello:
+      en: "Hello, %{name}"
+      zh-CN: "你好，%{name}"
+    greeting:
+      en: Your account is set. Export its public key and hand the file to whoever runs your Vault.
+      zh-CN: 账户已经设置好。导出它的公钥，把文件交给你所在保险库的管理员。
+    intro:
+      en: Enter your account name
+      zh-CN: 输入你的账户名称
+    name:
+      en: Account name
+      zh-CN: 账户名称
+    confirm_title:
+      en: Confirm the account name
+      zh-CN: 确认账户名称
+    warning:
+      en: |
+        It is hard to change a name once a Vault has been told it,
+        so please check it is written the way you want.
+      zh-CN: |
+        名字一旦被保险库知道就很难更改，请确认没有写错。
+    create:
+      en: Create account
+      zh-CN: 创建账户
+    creating:
+      en: Creating…
+      zh-CN: 正在创建…
+    empty:
+      en: Please write a name first.
+      zh-CN: 请先写一个名字。
+    forbidden:
+      en: "`%{name}` is a word `rola account` reads as its own, so it cannot be an account"
+      zh-CN: "`%{name}` 是 `rola account` 自己使用的词，不能作为账户名"
+    exists:
+      en: "There is already an account called `%{name}`"
+      zh-CN: "已经有一个叫 `%{name}` 的账户了"
+    failed:
+      en: "The account could not be made: %{reason}"
+      zh-CN: "无法创建账户：%{reason}"
+    export:
+      en: Export public key
+      zh-CN: 导出公钥
+    exporting:
+      en: Exporting…
+      zh-CN: 正在导出…
+    export_type:
+      en: Public key
+      zh-CN: 公钥
+    export_failed:
+      en: "The key could not be saved: %{reason}"
+      zh-CN: "无法保存公钥：%{reason}"
+    no_key:
+      en: "No public key was found for `%{name}`"
+      zh-CN: "没有找到 `%{name}` 的公钥"
+    exported:
+      en: The public key was exported
+      zh-CN: 公钥已导出
+    exported_help:
+      en: Please hand this file to whoever runs your Vault.
+      zh-CN: 请把这个文件交给你所在保险库的管理员。
+
+  create:
+    title:
+      en: Create a Workspace
+      zh-CN: 创建工作区
+    address:
+      en: "rola://host:port/namespace"
+      zh-CN: "rola://主机:端口/命名空间"
+    address_label:
+      en: "Vault address:"
+      zh-CN: 保险库地址：
+    address_empty:
+      en: Please write the Vault's address.
+      zh-CN: 请写出保险库的地址。
+    address_invalid:
+      en: "That is not an address."
+      zh-CN: "这不是一个地址。"
+    directory:
+      en: The folder to work in
+      zh-CN: 要工作的文件夹
+    directory_label:
+      en: "Folder:"
+      zh-CN: 目录：
+    directory_empty:
+      en: Please choose a folder.
+      zh-CN: 请选择一个文件夹。
+    directory_is_file:
+      en: That is a file, not a folder.
+      zh-CN: 这是一个文件，不是文件夹。
+    directory_not_empty:
+      en: "That folder must be empty, or not exist yet."
+      zh-CN: "这个文件夹需要是空的、或者还不存在。"
+    directory_unreadable:
+      en: "That folder could not be read: %{reason}"
+      zh-CN: "无法读取这个文件夹：%{reason}"
+    browse:
+      en: Choose…
+      zh-CN: 选择…
+    picker_failed:
+      en: "The folder picker could not be opened: %{reason}"
+      zh-CN: "无法打开文件夹选择器：%{reason}"
+    check:
+      en: Check connection
+      zh-CN: 检查连接
+    checking:
+      en: Checking…
+      zh-CN: 正在检查…
+    reached:
+      en: The Vault answered.
+      zh-CN: 保险库已回应。
+    need_account:
+      en: "An account is needed to reach a Vault: set one up first."
+      zh-CN: "连接保险库需要一个账户：请先初始化账户。"
+    failed:
+      en: "The Vault did not answer: %{reason}"
+      zh-CN: "保险库没有回应：%{reason}"
+    unchecked:
+      en: Press Check connection to reach the Vault before creating.
+      zh-CN: 创建之前请先点击“检查连接”。
+    create:
+      en: Create
+      zh-CN: 创建
+    creating:
+      en: Creating…
+      zh-CN: 正在创建…
+    failed_create:
+      en: "The Workspace could not be created: %{reason}"
+      zh-CN: "无法创建工作区：%{reason}"

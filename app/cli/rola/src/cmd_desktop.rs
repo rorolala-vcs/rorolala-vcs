@@ -24,11 +24,11 @@ use std::process::Command;
 use mingling::{
     Grouped, ShellContext, Suggest,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, renderer, routeify,
-        suggest,
+        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, PickerArg},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::{ResCurrentDir, ResExitCode},
 };
 use rorolala_cli_setups::ResLanguage;
@@ -42,7 +42,7 @@ use crate::Next;
 use crate::complete::{filling_flag, offer, strip_written, typing_flag};
 use crate::exit_codes::{
     EC_DESKTOP_CALLED, EC_ERR_DESKTOP_ENDED, EC_ERR_DESKTOP_LAUNCH_FAILED,
-    EC_ERR_DESKTOP_NOT_FOUND, EC_ERR_DESKTOP_WINDOW_STYLE, EC_HELP,
+    EC_ERR_DESKTOP_NOT_FOUND, EC_ERR_DESKTOP_QUERY_STYLE, EC_ERR_DESKTOP_WINDOW_STYLE, EC_HELP,
 };
 use crate::failure::failure;
 
@@ -117,7 +117,78 @@ impl WindowStyle {
             Self::TillingWm => "TillingWM",
         }
     }
+
+    /// The name this style is written as where a run reads it — the spelling a person types.
+    fn written(self) -> &'static str {
+        match self {
+            Self::Windows => "windows",
+            Self::Mac => "mac",
+            Self::TillingWm => "tillingwm",
+        }
+    }
+
+    /// The style the machine this program runs on is drawn in, as an environment probe.
+    ///
+    /// This is the answer a window with nothing said about its frame gets, and it is worked out from
+    /// the environment because a program with no window yet has no other way to ask: the Desktop
+    /// program reads the same variables for the same reason, and the two must come to one answer.
+    /// Windows and macOS answer for themselves; every other system is a Unix whose window manager may
+    /// or may not draw a frame of its own, and a tiling one does not.
+    fn here() -> Self {
+        if cfg!(target_os = "windows") {
+            Self::Windows
+        } else if cfg!(target_os = "macos") {
+            Self::Mac
+        } else if is_tiling(|name| std::env::var(name).ok()) {
+            Self::TillingWm
+        } else {
+            Self::Windows
+        }
+    }
 }
+
+/// Whether an environment is a tiling window manager's.
+///
+/// Recognized by what the four this program knows about leave behind rather than by asking the
+/// session, which is a conversation a program with no window yet has no way to have: three of them
+/// publish the socket they may be spoken to on as an environment variable of their own, and all four
+/// are named by the session when it names itself. It is a simple read on purpose — a window manager
+/// that is none of these is given the three marks, which is a frame drawn where one was already there
+/// rather than a window with nothing left to close it by.
+fn is_tiling(value: impl Fn(&str) -> Option<String>) -> bool {
+    if SOCKETS
+        .iter()
+        .any(|socket| value(socket).is_some_and(|held| !held.is_empty()))
+    {
+        return true;
+    }
+
+    SESSIONS.iter().any(|session| {
+        value(session).is_some_and(|named| {
+            MANAGERS
+                .iter()
+                .any(|manager| named.to_ascii_lowercase().contains(manager))
+        })
+    })
+}
+
+/// The variables the tiling window managers publish their own socket under.
+const SOCKETS: [&str; 4] = [
+    "SWAYSOCK",
+    "I3SOCK",
+    "HYPRLAND_INSTANCE_SIGNATURE",
+    "NIRI_SOCKET",
+];
+
+/// The variables a session names the desktop it runs in.
+const SESSIONS: [&str; 3] = [
+    "XDG_CURRENT_DESKTOP",
+    "XDG_SESSION_DESKTOP",
+    "DESKTOP_SESSION",
+];
+
+/// What those window managers are called, as a session spells them.
+const MANAGERS: [&str; 4] = ["sway", "i3", "hyprland", "niri"];
 
 /// The styles a run may ask for, as it writes them.
 const WINDOW_STYLES: [&str; 3] = ["windows", "mac", "tillingwm"];
@@ -128,6 +199,13 @@ const WINDOW_STYLES: [&str; 3] = ["windows", "mac", "tillingwm"];
 /// nothing about it gets: the window is opened where it is opened from, and how a frame is drawn there is
 /// the machine's answer rather than a caller's.
 const ARG_WINDOW_STYLE: PickerArg<'static, Option<String>> = arg![window_style: Option<String>];
+
+/// The flag that answers how this machine draws a frame, without opening a window.
+///
+/// It is the environment probe the Desktop program itself makes on a run that was told no style: what is
+/// asked is the machine, not the program, so the answer is written to standard output as the one name a
+/// person types — `windows`, `mac` or `tillingwm` — and nothing is opened.
+const ARG_QUERY_WINDOW_STYLE: PickerArg<'static, Flag> = arg![query_window_style: Flag];
 
 #[help(buffer)]
 pub fn help_desktop(_: EntryDesktop, ec: &mut ResExitCode) {
@@ -155,6 +233,7 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
             &ctx,
             suggest! {
                 ARG_WINDOW_STYLE: t!("desktop.complete.window_style"),
+                ARG_QUERY_WINDOW_STYLE: t!("desktop.complete.query_window_style"),
             },
         );
     }
@@ -182,17 +261,37 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
 /// right, `mac` for the three lights at the left, `tillingwm` for no buttons at all. Absent, the Desktop
 /// program draws the frame the machine it is opened on asks for.
 ///
+/// `--query-window-style` does not open anything: it answers how the machine this run is made on draws a
+/// frame, one name on standard output, which is the same answer a run that named no style would get. It is
+/// the environment probe the Desktop program makes for itself, offered to everything that has no window to
+/// ask — a launcher, a script, a test. The two flags say two different things and are refused together.
+///
 /// # Errors
 ///
-/// Renders [`ErrorDesktopWindowStyle`] when `--window-style` names none of the three, [`ErrorDesktopNotFound`]
-/// when there is no Desktop program beside this one, and [`ErrorDesktopFailed`] when there is one but it
-/// would not start.
+/// Renders [`ErrorDesktopWindowStyle`] when `--window-style` names none of the three,
+/// [`ErrorDesktopQueryWithStyle`] when both flags are written, [`ErrorDesktopNotFound`] when there is no
+/// Desktop program beside this one, and [`ErrorDesktopFailed`] when there is one but it would not start.
 #[command(node = "desktop", entry = EntryDesktop)]
 pub fn desktop(args: EntryDesktop) -> Next {
-    let written: Option<String> = match args.pick(&ARG_WINDOW_STYLE).to_result() {
-        Ok(written) => written,
+    let picked = args
+        .pick(&ARG_QUERY_WINDOW_STYLE)
+        .pick(&ARG_WINDOW_STYLE)
+        .to_result();
+    let (query, written) = match picked {
+        Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if matches!(query, Flag::Active) {
+        // Asking how a frame is drawn and choosing how one is drawn are two different runs, and a run
+        // that asked both would answer something it was never asked. It is said rather than one of the
+        // two being dropped: which of them was meant is the caller's to say.
+        if written.is_some() {
+            return ErrorDesktopQueryWithStyle.into();
+        }
+
+        return StateQueryWindowStyle.into();
+    }
 
     // A style the run does not know is refused here rather than handed over: the Desktop program leaves a
     // name it does not know to the machine, so a run that wrote one wrong would open a window drawn one way
@@ -281,6 +380,36 @@ fn opening_at(cwd: &Path) -> PathBuf {
     Workspace::locate(cwd).map_or_else(|| cwd.to_path_buf(), |held| held.get_root().to_path_buf())
 }
 
+/// The state a query of the machine's window style starts in.
+///
+/// It names nothing: what is asked is the machine this run is made on, and the answer is the whole of
+/// what the run has to say.
+#[derive(Grouped)]
+pub struct StateQueryWindowStyle;
+
+#[chain]
+pub fn handle_query_window_style(_state: StateQueryWindowStyle) -> Next {
+    ResultWindowStyle {
+        style: WindowStyle::here(),
+    }
+    .into()
+}
+
+/// Result: how the machine this run is made on draws a window frame.
+#[derive(Grouped)]
+pub struct ResultWindowStyle {
+    /// The style the machine itself asks for.
+    style: WindowStyle,
+}
+
+#[renderer(buffer)]
+pub fn render_result_window_style(result: ResultWindowStyle) {
+    // The one name a person types, and nothing around it: this is read by a program that has no window
+    // and wants to draw one the way the machine it is on is drawn, so the answer is the whole of what it
+    // is handed. It is written where results go rather than where progress does, since it is the result.
+    r_println!("{}", result.style.written());
+}
+
 /// The argument that hands over the language this run speaks.
 fn language_arg(language: &ResLanguage) -> String {
     format!("{LANGUAGE_ARG}{}", language.as_str())
@@ -365,6 +494,35 @@ pub fn render_error_desktop_window_style(error: ErrorDesktopWindowStyle, ec: &mu
     ec.exit_code = EC_ERR_DESKTOP_WINDOW_STYLE;
 }
 
+/// Error: a run both asked how a frame is drawn and chose how one is drawn.
+#[derive(Grouped)]
+pub struct ErrorDesktopQueryWithStyle;
+
+impl Failure for ErrorDesktopQueryWithStyle {
+    fn name(&self) -> &'static str {
+        "error_desktop_query_with_style"
+    }
+
+    fn reason(&self) -> String {
+        t!("desktop.err_query_with_style").trim().to_string()
+    }
+}
+
+failure!(ErrorDesktopQueryWithStyle);
+
+#[renderer(buffer)]
+pub fn render_error_desktop_query_with_style(
+    error: ErrorDesktopQueryWithStyle,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("desktop.err_query_with_style_help").trim())
+    );
+    ec.exit_code = EC_ERR_DESKTOP_QUERY_STYLE;
+}
+
 /// Error: there is no Desktop program beside this one.
 #[derive(Grouped)]
 pub struct ErrorDesktopNotFound;
@@ -425,7 +583,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use super::{WindowStyle, opening_at};
+    use super::{WindowStyle, is_tiling, opening_at};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -497,5 +655,88 @@ mod tests {
         assert_eq!(WindowStyle::Windows.argument(), "Windows");
         assert_eq!(WindowStyle::Mac.argument(), "Mac");
         assert_eq!(WindowStyle::TillingWm.argument(), "TillingWM");
+    }
+
+    #[test]
+    fn a_style_is_queried_by_the_name_a_run_writes() {
+        // What a query prints is what a run may write back: the two are one set of names, or a run
+        // could not pass the answer to the next one.
+        assert_eq!(WindowStyle::Windows.written(), "windows");
+        assert_eq!(WindowStyle::Mac.written(), "mac");
+        assert_eq!(WindowStyle::TillingWm.written(), "tillingwm");
+
+        for style in [
+            WindowStyle::Windows,
+            WindowStyle::Mac,
+            WindowStyle::TillingWm,
+        ] {
+            assert_eq!(WindowStyle::named(style.written()), Some(style));
+        }
+    }
+
+    #[test]
+    fn the_machine_is_probed_for_the_style_it_is_drawn_in() {
+        // What this answers is the machine a window would be drawn on, so the expectation is the
+        // platform this program was built for rather than a value written here.
+        let expected = if cfg!(target_os = "windows") {
+            WindowStyle::Windows
+        } else if cfg!(target_os = "macos") {
+            WindowStyle::Mac
+        } else {
+            WindowStyle::Windows
+        };
+
+        // A Unix that is visibly tiling inside this test's own environment is answered as one, which is
+        // what the probe is for; nothing here sets anything, so a tiling answer means the test runner
+        // itself is inside one.
+        let tiling = is_tiling(|name| std::env::var(name).ok());
+
+        if !cfg!(any(target_os = "windows", target_os = "macos")) && tiling {
+            assert_eq!(WindowStyle::here(), WindowStyle::TillingWm);
+        } else {
+            assert_eq!(WindowStyle::here(), expected);
+        }
+    }
+
+    #[test]
+    fn a_window_manager_is_recognized_by_its_socket() {
+        for variable in [
+            "SWAYSOCK",
+            "I3SOCK",
+            "HYPRLAND_INSTANCE_SIGNATURE",
+            "NIRI_SOCKET",
+        ] {
+            assert!(is_tiling(|name| {
+                (name == variable).then(|| "/run/one/socket".to_string())
+            }));
+        }
+
+        // An empty one is a variable that is set and says nothing: it names no socket, so it is not a
+        // window manager to be recognized by.
+        assert!(!is_tiling(|name| {
+            (name == "SWAYSOCK").then(String::new)
+        }));
+    }
+
+    #[test]
+    fn a_window_manager_is_recognized_by_its_session() {
+        for (variable, named) in [
+            ("XDG_CURRENT_DESKTOP", "sway"),
+            ("XDG_CURRENT_DESKTOP", "i3"),
+            ("XDG_SESSION_DESKTOP", "Hyprland"),
+            ("DESKTOP_SESSION", "niri"),
+        ] {
+            assert!(is_tiling(|name| {
+                (name == variable).then(|| named.to_string())
+            }));
+        }
+    }
+
+    #[test]
+    fn a_desktop_that_is_none_of_them_is_not_tiling() {
+        assert!(!is_tiling(|_| None));
+        assert!(!is_tiling(|name| {
+            (name == "XDG_CURRENT_DESKTOP").then(|| "ubuntu:GNOME".to_string())
+        }));
     }
 }

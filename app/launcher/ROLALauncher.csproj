@@ -1,0 +1,91 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- The name a person meets: the product's, not the namespace's. It is laid down beside the Desktop
+         program, which is where `rola desktop` reaches and where this program reaches for it. -->
+    <AssemblyName>ROLALauncher</AssemblyName>
+    <RootNamespace>RorolalaLauncher</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The program as a file: the icon a file list draws and a pinned program keeps. It is the same
+         picture the Desktop program carries, because the two are one product to whoever pins either. -->
+    <ApplicationIcon>../../res/icons/yizi.ico</ApplicationIcon>
+    <AvaloniaIncludeApplicationIconAsWindowIcon>false</AvaloniaIncludeApplicationIconAsWindowIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="12.1.3" />
+    <!-- The window draws its own frame, and on Wayland that is the client's job: the compositor is asked
+         for none, and the toolkit draws the bar and the edges it would otherwise have taken. -->
+    <PackageReference Include="Avalonia.Wayland" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../desktop/Contract/RorolalaDesktop.Contract.csproj" />
+    <ProjectReference Include="../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The theme file, the colours and the three window styles are the Desktop program's own
+         statements, and they are shared rather than restated: the same sources are compiled here, so
+         there is one reading of `theme.json` and one set of names in the product. A copy would be a
+         second statement of the same file that could drift from the first. -->
+    <Compile Include="../desktop/Core/Configuration/Configuration.cs" Link="Shared/Configuration.cs" />
+    <Compile Include="../desktop/Core/Configuration/ConfigPaths.cs" Link="Shared/ConfigPaths.cs" />
+    <Compile Include="../desktop/Core/Configuration/ConfigurationLoader.cs" Link="Shared/ConfigurationLoader.cs" />
+    <Compile Include="../desktop/Core/Configuration/Failure.cs" Link="Shared/Failure.cs" />
+    <Compile Include="../desktop/Core/Theming/WindowStyle.cs" Link="Shared/WindowStyle.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The launcher's own types are not part of what a plugin sees, so nothing outside reaches them but
+         the integration suite that drives them. -->
+    <InternalsVisibleTo Include="ROLALauncher.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The pictures this program is drawn with, embedded so that they travel in it: the three its own
+         toolbar wears, which are drawn into `icons/` from the pinned Material set by `./run.sh icons`, and
+         the two marks a window's frame carries, which are the Desktop program's own files — the frames the
+         two programs draw are one frame, so the marks on them are one set. The Desktop's are linked rather
+         than copied, so the tree keeps one place a picture lives. -->
+    <EmbeddedResource Include="icons/account_circle.png" LogicalName="RorolalaLauncher.icons.account_circle.png" />
+    <EmbeddedResource Include="icons/add_circle.png" LogicalName="RorolalaLauncher.icons.add_circle.png" />
+    <EmbeddedResource Include="icons/folder_open.png" LogicalName="RorolalaLauncher.icons.folder_open.png" />
+    <EmbeddedResource Include="icons/language.png" LogicalName="RorolalaLauncher.icons.language.png" />
+    <EmbeddedResource Include="../desktop/Core/icons/close.png" Link="icons/close.png" LogicalName="RorolalaLauncher.icons.close.png" />
+    <EmbeddedResource Include="../desktop/Core/icons/minimize.png" Link="icons/minimize.png" LogicalName="RorolalaLauncher.icons.minimize.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The artwork a day-or-night choice is made by: one wireframe of the window, recoloured by the look it
+         would put the program in. It is linked rather than copied so that the tree keeps one place it lives. -->
+    <EmbeddedResource Include="../../res/desktop-launcher-theme-preview.png" Link="theme-preview.png" LogicalName="RorolalaLauncher.theme-preview.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- What the launcher says is read from beside the program rather than built into it, following the
+         Desktop program: the two are laid down in one directory, and what each states travels with it. -->
+    <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The line the launcher says about itself, laid beside the program by a build and by a publish: it is
+         copy rather than a string, so it is a file the release carries, and it is linked rather than copied
+         so that the tree keeps one place it lives. -->
+    <None Include="../../res/desktop-launcher-slogan.txt" Link="slogan.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- What a published layout is handed over without: debug symbols. The Desktop program states the same
+       thing for the same reason, and this program is published into the same directory. -->
+  <Target Name="NoDebugSymbols" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishedSymbols Include="$(PublishDir)**/*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(PublishedSymbols)" />
+  </Target>
+
+</Project>

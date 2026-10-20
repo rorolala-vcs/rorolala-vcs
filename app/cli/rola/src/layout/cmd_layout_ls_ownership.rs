@@ -70,6 +70,8 @@ pub fn complete_layout_ls_ownership(
 ///
 /// [`ErrorShouldInWorkspace`]: crate::error::ErrorShouldInWorkspace
 /// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
+/// [`ErrorLayoutNotCached`]: crate::layout::ErrorLayoutNotCached
+/// [`ErrorLayoutFailed`]: crate::layout::ErrorLayoutFailed
 #[command(node = "layout.ls-ownership", entry = EntryLayoutLsOwnership)]
 pub fn layout_ls_ownership(args: EntryLayoutLsOwnership) -> StateLayoutLsOwnership {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the

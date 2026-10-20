@@ -113,6 +113,15 @@ $ScriptsDir = "$BuildDir/scripts"
 $DesktopProject = 'app/desktop/Core/RorolalaDesktop.csproj'
 $DesktopDir = "$BuildDir/bin/desktop"
 
+# The launcher: the product's front door, published into the Desktop program's own directory. The two
+# are one product to whoever opens either, and the launcher reaches for the command line and the window
+# it starts by what sits beside it.
+$LauncherProject = 'app/launcher/ROLALauncher.csproj'
+
+# The banners the launcher may play, taken from the tree rather than built: the program looks for them
+# in `launcher-banners/` beside itself, which is also where the picker starts.
+$LauncherBanners = 'res/desktop-launcher-banner'
+
 # The icon sets the Desktop may draw its file listing with. They are data rather than an assembly, so
 # they are not built: an export copies the tree as it stands, and the program finds it beside itself.
 # A set is a directory with its own `icon-theme.toml`, so adding one is adding a directory here.
@@ -238,6 +247,29 @@ function Publish-Desktop {
         } | ForEach-Object {
             Copy-Item -Recurse -Force $_.FullName "$Into/icon-sets/"
         }
+    }
+}
+
+# Publishes the launcher into the Desktop program's directory, and lays the banners beside it. It is
+# published after the Desktop program rather than before, because the two share a directory and the
+# launcher is the one that reads the other: what it reaches for is what is already laid down.
+function Publish-Launcher {
+    param([Parameter(Mandatory = $true, Position = 0)][string] $Into)
+
+    if (-not $DotnetRid) {
+        Write-Error "the host's RID could not be read; name the platform this layout is for in DOTNET_RID"
+        exit 1
+    }
+
+    & $DotnetProgram @DotnetFlags restore $LauncherProject -r $DotnetRid
+    Assert-Exit
+
+    & $DotnetProgram @DotnetFlags publish $LauncherProject -c Release --no-restore -r $DotnetRid --self-contained false -o $Into
+    Assert-Exit
+
+    if (Test-Path $LauncherBanners) {
+        New-Item -ItemType Directory -Force -Path "$Into/launcher-banners" | Out-Null
+        Copy-Item -Force "$LauncherBanners/*.aseprite" "$Into/launcher-banners/"
     }
 }
 

@@ -210,10 +210,11 @@ Source: "{#SourceDir}\scripts\*"; DestDir: "{app}\scripts"; Components: completi
 Source: "{#SourcePath}\desktop-here.vbs"; DestDir: "{app}\bin"; Components: menu; Flags: ignoreversion
 
 [Icons]
-; The Desktop program, opened the way the context menu opens it — through `rola desktop`, which is what finds
-; the Workspace and hands the window the command line it is to work with. A shortcut straight to the program
-; would open a window whose commands could not run.
-Name: "{group}\Rorolala Desktop"; Filename: "{app}\bin\rola.exe"; Parameters: "desktop"; WorkingDir: "{app}"; IconFilename: "{app}\bin\desktop\RorolalaDesktop.exe"; IconIndex: 0; Components: shortcuts
+; The launcher, which is where a reader starts: it lists the Workspaces on this machine and opens one through
+; `rola desktop`, which is what finds the Workspace and hands the window the command line it is to work with.
+; A shortcut straight to the Desktop program would open a window whose commands could not run, and one straight
+; to the command line is the item below it.
+Name: "{group}\Rorolala Desktop"; Filename: "{app}\bin\desktop\ROLALauncher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\bin\desktop\ROLALauncher.exe"; IconIndex: 0; Components: shortcuts
 Name: "{group}\Rorolala"; Filename: "{app}\bin\rola.exe"; WorkingDir: "{app}"; Comment: "The command line"; Components: shortcuts
 Name: "{group}\Uninstall Rorolala"; Filename: "{uninstallexe}"
 

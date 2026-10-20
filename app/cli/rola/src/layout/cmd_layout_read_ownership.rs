@@ -92,6 +92,8 @@ pub fn complete_layout_read_ownership(
 ///
 /// [`ErrorShouldInWorkspace`]: crate::error::ErrorShouldInWorkspace
 /// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
+/// [`ErrorLayoutNotCached`]: crate::layout::ErrorLayoutNotCached
+/// [`ErrorLayoutFailed`]: crate::layout::ErrorLayoutFailed
 #[command(node = "layout.read-ownership", entry = EntryLayoutReadOwnership)]
 pub fn layout_read_ownership(args: EntryLayoutReadOwnership) -> Next {
     let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();

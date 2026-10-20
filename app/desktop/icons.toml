@@ -1,4 +1,5 @@
-# The pictures the Desktop draws, which is the one file adding one means editing.
+# The pictures the product draws — the Desktop program's, its plugins', and the launcher's — which is the
+# one file adding one means editing.
 #
 # What is drawn is Google's Material Design icons, from the maintained mirror of the set. The set is not
 # vendored: it is a shallow clone under `THIRD-PARTY/`, which git ignores, and every picture is drawn from
@@ -135,3 +136,16 @@ key = "rorolala"
 # it puts the window back the size it was. Nothing here is `fullscreen` or `open_in_full`: this window
 # has no full-screen button, and a picture for one would be a picture nothing wears.
 icons = ["minimize", "crop_square", "filter_none", "close"]
+
+[[set]]
+plugin = "RorolalaLauncher"
+source = "app/launcher"
+key = "rola_launcher"
+
+# The launcher's own pictures, which are the buttons its window offers: the account it greets a person by,
+# the Workspace it makes, the one it imports — a folder being opened, which is what choosing a directory that
+# already holds a Workspace is — and the language its text is read in.
+#
+# The window's frame is the Desktop program's own, so the marks on it are that set's and are not stated
+# again here: what is drawn for this project is only what its own window offers.
+icons = ["account_circle", "add_circle", "folder_open", "language"]

@@ -18,4 +18,5 @@ Invoke-Script lib
 Build-Solution
 
 Publish-Desktop $DesktopDir
+Publish-Launcher $DesktopDir
 Publish-Plugins
