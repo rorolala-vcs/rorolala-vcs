@@ -24,7 +24,7 @@ use rorolala_cli_setups::{ResCurrentRemoteVault, ResVault, ResWorkspace};
 use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_READONLY_LAYOUTS_DIR};
 use rorolala_utils_location::Locate as _;
 
-use crate::layout::{chosen, readonly_layout_dir};
+use crate::layout::{chosen, readonly_layout_copy};
 
 /// Which positional argument the word being completed is, counting from zero.
 ///
@@ -221,7 +221,7 @@ pub fn layout_names(workspace: &ResWorkspace) -> Vec<String> {
                 continue;
             };
 
-            if readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME).is_dir() {
+            if readonly_layout_copy(held, &name, VAULT_LAYOUT_NAME).is_some() {
                 names.push(format!("{VAULT_LAYOUT_NAME}@{name}"));
             }
         }
@@ -325,9 +325,10 @@ pub fn cached_layout_uuids(
     };
     // A completion must not make the cache it reads: a directory none of the Layout's own files are in is not a copy,
     // and offering the entries of one would be offering nothing where the truth is that nothing was fetched.
-    let Ok(layout) =
-        Layout::open_existing(readonly_layout_dir(workspace, &vault, VAULT_LAYOUT_NAME))
-    else {
+    let Some(dir) = readonly_layout_copy(workspace, &vault, VAULT_LAYOUT_NAME) else {
+        return Vec::new();
+    };
+    let Ok(layout) = Layout::open_existing(dir) else {
         return Vec::new();
     };
 

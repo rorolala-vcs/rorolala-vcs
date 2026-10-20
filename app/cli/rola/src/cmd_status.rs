@@ -53,7 +53,9 @@ use crate::complete::{
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::hash::resolve as resolve_hash;
-use crate::layout::{ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_dir};
+use crate::layout::{
+    ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_copy,
+};
 use crate::vcs_index::cmd_vcs_index_lookback::{
     MergeHint, ResLookback, Standing, StandingRelation, from_object,
 };
@@ -135,14 +137,14 @@ pub fn complete_status(ctx: ShellContext) -> Suggest {
 #[command(node = "status", entry = EntryStatus)]
 pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
     let picked = args
-        .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_COMPACT)
-        .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_MESSAGE)
-        .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_CREATOR)
-        .pick(&crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH)
-        .pick(&ARG_NO_GRAPH)
-        .pick(&ARG_NO_HINT)
-        .pick(&ARG_SHOW_UNJOINED_VARIANTS)
-        .pick(&arg![Option<String>])
+        .pick(crate::vcs_index::cmd_vcs_index_lookback::ARG_COMPACT)
+        .pick(crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_MESSAGE)
+        .pick(crate::vcs_index::cmd_vcs_index_lookback::ARG_NO_CREATOR)
+        .pick(crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH)
+        .pick(ARG_NO_GRAPH)
+        .pick(ARG_NO_HINT)
+        .pick(ARG_SHOW_UNJOINED_VARIANTS)
+        .pick(arg![Option<String>])
         .to_result();
     let (
         compact,
@@ -589,7 +591,7 @@ fn tracked_layout(held: &Workspace) -> Option<(String, Layout)> {
     let layouts = held.layouts();
     let name = layouts.current().ok().flatten()?;
     let track = layouts.track(&name).ok().flatten()?;
-    let dir = readonly_layout_dir(held, &track, VAULT_LAYOUT_NAME);
+    let dir = readonly_layout_copy(held, &track, VAULT_LAYOUT_NAME)?;
 
     // Opened as something that has to be there: a cache directory with none of the Layout in it — one a fetch was cut
     // short of, or one an older build made — is not a copy, and opening it as a writable Layout would make one and read

@@ -9,7 +9,7 @@
 //! that taking and letting go of an entry is written on the Vault and in the copy beside it.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
@@ -80,10 +80,6 @@ async fn main() {
     ))
     .expect_success();
 
-    let copy = workspace
-        .join(".rola/cache/readonly-layouts")
-        .join(VAULT_NAME)
-        .join("truth");
     let entry = ENTRY.to_string();
     let gone = GONE.to_string();
     let mut checked = Checked::default();
@@ -156,7 +152,7 @@ async fn main() {
         ),
     );
 
-    let copied = Layout::open(&copy).expect("the fetched copy");
+    let copied = Layout::open(fetched_copy(&workspace, VAULT_NAME)).expect("the fetched copy");
     checked.wants(
         "the fetched copy is a Layout holding what the Vault held",
         copied.entry(ENTRY).is_some()
@@ -285,7 +281,7 @@ async fn main() {
     );
     checked.wants(
         "the copy names the account that took the entry",
-        Layout::open(&copy)
+        Layout::open(fetched_copy(&workspace, VAULT_NAME))
             .expect("the fetched copy")
             .entry(ENTRY)
             .and_then(|data| data.owner().map(str::to_owned))
@@ -357,7 +353,7 @@ async fn main() {
     );
     checked.wants(
         "the copy names nobody after a give-up",
-        Layout::open(&copy)
+        Layout::open(fetched_copy(&workspace, VAULT_NAME))
             .expect("the fetched copy")
             .entry(ENTRY)
             .and_then(|data| data.owner().map(str::to_owned))
@@ -422,7 +418,7 @@ async fn main() {
     );
     checked.wants(
         "the copy follows the path the Vault moved",
-        Layout::open(&copy)
+        Layout::open(fetched_copy(&workspace, VAULT_NAME))
             .expect("the fetched copy")
             .id_of(&LayoutPath::new("@/removed/a.psd").unwrap())
             == Some(ENTRY),
@@ -1372,8 +1368,8 @@ async fn main() {
 
     // `retrack` moves the entry's version pointer and writes the version's content back over the
     // file with it, so the two agree again. `--only-index` moves the pointer and leaves the file
-    // alone, which is what a run that wants the work on disk untouched asks for. `--until -1` and
-    // `--until=-1` are the same level written two ways.
+    // alone, which is what a run that wants the work on disk untouched asks for. A level written
+    // `-1` begins with a dash, so it goes with the flag: `--until=-1`.
     //
     // The file is first put back to what the Layout was last known to agree with, so that what the
     // checks below see is the pointer moving and not the file: a file whose bytes never changed is
@@ -1403,8 +1399,7 @@ async fn main() {
         &[
             "retrack",
             "models/hero.psd",
-            "--until",
-            "-1",
+            "--until=-1",
             "--only-index",
         ],
     ));
@@ -1444,7 +1439,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", "-1"],
+        &["retrack", "models/hero.psd", "--until=-1"],
     ));
     checked.wants(
         "a retrack of a file with unrecorded changes is refused, and both ways on are offered",
@@ -1454,15 +1449,15 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    // `--force` is the run that means to discard them, and `--until=-1` is the same level as
-    // `--until -1`.
+    // `--force` is the run that means to discard them. A level that begins with `-` is written with
+    // the value joined to the flag, `--until=-1`, since a word of its own would be read as an option.
     let said = run(&mut client(
         &workspace,
         &data,
         &["retrack", "models/hero.psd", "--until=-1", "--force"],
     ));
     checked.wants(
-        "`--force` switches the content over the changes, and `--until=-1` is the same level",
+        "`--force` switches the content over the changes",
         said.success()
             && local_version_of(&workspace, id) == first_version
             && fs::read(&model).unwrap() == b"first",
@@ -1673,7 +1668,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", "-1"],
+        &["retrack", "models/hero.psd", "--until=-1"],
     ));
     checked.wants(
         "a retrack of a file a variant is waiting for is refused, and `--force` is offered",
@@ -1687,8 +1682,7 @@ async fn main() {
         &[
             "retrack",
             "models/hero.psd",
-            "--until",
-            "-1",
+            "--until=-1",
             "--only-index",
         ],
     ));
@@ -1703,7 +1697,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", "-1", "--force"],
+        &["retrack", "models/hero.psd", "--until=-1", "--force"],
     ));
     checked.wants(
         "`--force` ends the merge, removes the variant file and switches the content",
@@ -2018,12 +2012,17 @@ async fn main() {
     );
 
     // A `Uuid` only this Layout holds is what a run that carries the Layout names under `@/new/`;
-    // one that read no Layout names nothing, so that path is where a write would show.
+    // one that read no Layout names nothing, so that path is where a write would show. What the
+    // checks before this one put there stays: the Vault holds the `@/new/` names they made, and
+    // what this run must not do is add one of its own.
     checked.wants(
-        "`--no-layout` makes no `@/new/` path in the Vault's Layout",
-        layout_after.0.iter().all(|(_, _, path)| {
-            path.as_deref()
-                .is_none_or(|path| !path.starts_with("@/new/"))
+        "`--no-layout` adds no `@/new/` path to the Vault's Layout",
+        layout_after.0.iter().all(|entry| {
+            layout_before.0.contains(entry)
+                || entry
+                    .2
+                    .as_deref()
+                    .is_none_or(|path| !path.starts_with("@/new/"))
         }),
         &format!("it holds {:?}", layout_after.0),
     );
@@ -2150,7 +2149,7 @@ fn client(workspace: &Path, data: &Path, args: &[&str]) -> Command {
 
     command
         .current_dir(workspace)
-        .env("XDG_DATA_HOME", data)
+        .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data)
         // What the run says is checked, so it is said in one language rather than whichever one
         // the machine happens to be set to.
         .env("ROLA_LANG", "en")
@@ -2252,6 +2251,33 @@ fn address(port: u16) -> String {
     format!("127.0.0.1:{port}/{NAMESPACE}")
 }
 
+/// The generation of `vault`'s fetched copy that a reader is to open.
+///
+/// What a fetch writes is a generation of the copy rather than the copy itself, and which generation
+/// that is is the Workspace's to answer — see `LayoutCopy`. Reading one here means asking the same
+/// question a command does instead of naming a directory of the cache's own.
+fn fetched_copy(workspace: &Path, vault: &str) -> PathBuf {
+    let held = locate_workspace(workspace).expect("the Workspace the run was made in");
+    let container = held.readonly_layouts_dir(vault, "truth");
+
+    held.readonly_layout_copy(vault, "truth")
+        .unwrap_or_else(|| {
+            let entries: Vec<String> = fs::read_dir(&container)
+                .map(|entries| {
+                    entries
+                        .flatten()
+                        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            panic!(
+                "no copy of `{vault}`'s Layout was fetched at {}: {entries:?}",
+                container.display()
+            )
+        })
+}
+
 /// Makes `dir` a Vault that can be served: a Vault of its own.
 fn serveable(dir: &Path) {
     Vault::create(dir).unwrap_or_else(|error| panic!("making {}: {error:?}", dir.display()));
@@ -2298,7 +2324,7 @@ fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
         command("rola-daemon")
             .arg("--port")
             .arg(port.to_string())
-            .env("XDG_DATA_HOME", data),
+            .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data),
         ("127.0.0.1", port),
         STARTUP,
     )

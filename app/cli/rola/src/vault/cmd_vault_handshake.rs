@@ -70,7 +70,7 @@ pub fn desc_vault_handshake() -> Description {
 pub fn vault_handshake(args: EntryVaultHandshake) -> StateVaultHandshake {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // lets the Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     StateVaultHandshake::from(named)
 }

@@ -65,7 +65,7 @@ use crate::fetch;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, ErrorLayoutNotCached,
-    add_cached_entry, cached_copy, failed, readonly_layout_dir, set_cached_version,
+    add_cached_entry, cached_copy, failed, readonly_layout_copy, set_cached_version,
 };
 use crate::progress::Reporting;
 use crate::sync::{self, Direction, Entry, Kind};
@@ -165,13 +165,13 @@ pub fn sync(
     }
 
     let (up_only, down_only, both, dry_run, no_index, no_storage, no_layout) = args
-        .pick(&ARG_UP_ONLY)
-        .pick(&ARG_DOWN_ONLY)
-        .pick(&ARG_BOTH)
-        .pick(&ARG_DRY_RUN)
-        .pick(&ARG_NO_INDEX)
-        .pick(&ARG_NO_STORAGE)
-        .pick(&ARG_NO_LAYOUT)
+        .pick(ARG_UP_ONLY)
+        .pick(ARG_DOWN_ONLY)
+        .pick(ARG_BOTH)
+        .pick(ARG_DRY_RUN)
+        .pick(ARG_NO_INDEX)
+        .pick(ARG_NO_STORAGE)
+        .pick(ARG_NO_LAYOUT)
         .unwrap();
 
     let up = matches!(up_only, Flag::Active);
@@ -438,10 +438,9 @@ fn plan_with(
     .map_err(|error| PlanRefusal::Failed(error.to_string()))?;
     bar.advance_by(1);
 
-    let dir = readonly_layout_dir(carry.workspace, vault_name, VAULT_LAYOUT_NAME);
-    if !dir.is_dir() {
+    let Some(dir) = readonly_layout_copy(carry.workspace, vault_name, VAULT_LAYOUT_NAME) else {
         return Err(PlanRefusal::NotCached);
-    }
+    };
     let remote_layout = match Layout::open_existing(&dir) {
         Ok(layout) => layout,
         // A directory with none of the Layout in it is what a fetch that did not finish leaves, and it is not a copy

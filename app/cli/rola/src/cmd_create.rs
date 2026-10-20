@@ -6,7 +6,7 @@ use librorolala::{
     workspace::{DATA_DIR, Workspace},
 };
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest, Wrap,
+    Grouped, LazyRes, Routable, ShellContext, Suggest, Wrap,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -55,7 +55,7 @@ pub fn complete_create(ctx: ShellContext) -> Suggest {
 #[command(entry = EntryCreate, routeify)]
 pub fn create(args: EntryCreate) -> Next {
     let path: PathBuf = args
-        .pick_or_route(&arg![PathBuf], || ErrorCreatePathNotProvided.into())
+        .pick_or_route(arg![PathBuf], || ErrorCreatePathNotProvided.to_chain())
         .to_result()?;
 
     StateCreatePath::from(path).into()

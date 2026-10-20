@@ -61,7 +61,10 @@ internal sealed record LayoutsAnswer(
 
 /// <summary>What a listing of the entries came to.</summary>
 /// <param name="Done">Whether the command ended well.</param>
-/// <param name="Code">The status it ended with, which is negative when it could not be run.</param>
+/// <param name="Code">
+/// The status it ended with: <see cref="LayoutEntriesCommand.NotCached"/> when the Vault's copy was never fetched, and
+/// negative when it did not answer with a result at all.
+/// </param>
 /// <param name="Said">What it said when it did not end well, or when its answer could not be read.</param>
 /// <param name="Entries">The entries it listed.</param>
 internal sealed record EntriesAnswer(
@@ -73,7 +76,7 @@ internal sealed record EntriesAnswer(
 
 /// <summary>The Vaults a Workspace knows, and what a listing of them came to.</summary>
 /// <param name="Done">Whether the command ended well.</param>
-/// <param name="Code">The status it ended with, which is negative when it could not be run.</param>
+/// <param name="Code">The status it ended with, which is negative when it did not answer with a result.</param>
 /// <param name="Said">What it said when it did not end well, or when its answer could not be read.</param>
 /// <param name="Vaults">The Vaults it listed, in the order it named them.</param>
 internal sealed record VaultsAnswer(bool Done, int Code, string Said, IReadOnlyList<VaultListing> Vaults);
@@ -106,6 +109,14 @@ internal static class LayoutEntriesCommand
     /// no header: the number is the contract across the boundary, so it is written where it is used.
     /// </remarks>
     public const int NotCached = 192;
+
+    /// <summary>The name the command line gives the failure of a copy that was never fetched.</summary>
+    /// <remarks>
+    /// A run asked for a structural answer names the failure rather than ending with the status a person's rendering
+    /// would have set, so which failure it was is read from the name. The number <see cref="NotCached"/> is what the
+    /// callers branch on, and it is stated by the same number the command line's own constant is written with.
+    /// </remarks>
+    private const string NotCachedName = "error_layout_not_cached";
 
     /// <summary>The arguments the Layouts are listed with, after the program's name.</summary>
     /// <returns>The arguments.</returns>
@@ -382,7 +393,12 @@ internal static class LayoutEntriesCommand
 
         if (code != 0)
         {
-            return new EntriesAnswer(false, code, said, []);
+            // A copy that was never fetched is a state rather than a fault, and it is what the place offers a fetch
+            // for. What says which failure it was is the name the command line wrote, since a run asked for a
+            // structural answer does not end with the status its rendering would have set.
+            return FailureReport.Read(output)?.Name == NotCachedName
+                ? new EntriesAnswer(false, NotCached, said, [])
+                : new EntriesAnswer(false, code, said, []);
         }
 
         try

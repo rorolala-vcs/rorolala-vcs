@@ -114,7 +114,7 @@ pub fn complete_layout_entries(
 #[command(node = "layout.entries", entry = EntryLayoutEntries)]
 pub fn layout_entries(args: EntryLayoutEntries, format: &mut ResFormat) -> Next {
     // Picking flags cannot fail: a flag that is absent is `None`, not an error.
-    let (layout, uuid) = args.pick(&ARG_LAYOUT).pick(&ARG_UUID).unwrap();
+    let (layout, uuid) = args.pick(ARG_LAYOUT).pick(ARG_UUID).unwrap();
 
     let id = match uuid {
         Some(text) => match Uuid::from_str(&text) {

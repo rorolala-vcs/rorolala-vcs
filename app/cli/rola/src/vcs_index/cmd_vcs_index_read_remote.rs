@@ -96,7 +96,7 @@ pub fn vcs_index_read_remote(
     }
 
     // Picking cannot fail: no positions are `None`-able but the list itself, which is empty.
-    let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
+    let words: Vec<String> = args.pick(arg![Vec<String>]).unwrap_or_default();
     let (vault, words) = with_vault(words);
 
     let Some(hash) = words.into_iter().next() else {

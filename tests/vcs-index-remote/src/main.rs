@@ -338,7 +338,7 @@ fn client(workspace: &Path, data: &Path, args: &[&str]) -> Command {
 
     command
         .current_dir(workspace)
-        .env("XDG_DATA_HOME", data)
+        .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data)
         .args(args);
 
     command
@@ -396,8 +396,8 @@ fn pair(dir: &Path, name: &str) {
 /// Serves the Vault rooted at `dir` under the namespace, and waits until it is listening.
 ///
 /// The daemon belongs to the machine, so it is told where it sits through the user's own data
-/// directory: the sandbox's `XDG_DATA_HOME` holds both the table and the account it proves
-/// itself with.
+/// directory: the sandbox's `ROLA_DATA_HOME` holds both the table and the account it proves
+/// itself with — the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
 fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
     register(data, dir);
 
@@ -405,7 +405,7 @@ fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
         command("rola-daemon")
             .arg("--port")
             .arg(port.to_string())
-            .env("XDG_DATA_HOME", data),
+            .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data),
         ("127.0.0.1", port),
         STARTUP,
     )

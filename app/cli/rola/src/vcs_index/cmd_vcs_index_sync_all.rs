@@ -92,7 +92,7 @@ pub fn desc_vcs_index_sync_all() -> Description {
 pub fn vcs_index_sync_all(args: EntryVcsIndexSyncAll) -> StateVcsIndexSyncAll {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     StateVcsIndexSyncAll::from(named)
 }

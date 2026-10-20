@@ -70,7 +70,7 @@ pub fn vcs_index_ls_remote_variants(
 ) -> StateVcsIndexLsRemoteVariants {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     format.default_template(DEFAULT_FORMAT_HASHES);
     StateVcsIndexLsRemoteVariants::from(named)

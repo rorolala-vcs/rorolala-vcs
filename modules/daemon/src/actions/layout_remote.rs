@@ -6,12 +6,15 @@
 //! what they answer is one [`Ownership`], so the two ends of an exchange read the same three
 //! outcomes without either being told a second time.
 
+use std::path::PathBuf;
 use std::str::FromStr as _;
 
-use rorolala_errors::BincodeError;
-use rorolala_layout::{Layout, LayoutPath, MutableData};
+use rorolala_errors::{BincodeError, IoError};
+use rorolala_layout::{Layout, LayoutError, LayoutPath, MutableData};
 use rorolala_protocol::{ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 use rorolala_storage::Key;
+use rorolala_utils_constants::VAULT_LAYOUT_DIR;
+use rorolala_utils_location::Locate as _;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -45,15 +48,29 @@ pub enum Ownership {
 /// Which Vault that is follows from where this runs: an action served by a Vault works on the
 /// Vault's Layout, and a Workspace side has none — so a context that is not a Vault is not one an
 /// ownership change can run on.
+///
+/// A Layout that could not be opened is [`ActionError::LocalFile`] when the operating system
+/// refused a file, naming the directory it is kept in: the path is what a reader acts on, and a
+/// failure that says "access is denied" and nothing else says nothing they can go and look at.
 pub(crate) fn local_layout(ctx: &ActionContext<'_>) -> Result<Layout, ActionError> {
     let vault = ctx
         .current_vault()
         .into_inner()
         .ok_or(ActionError::MissingValue)?;
 
-    vault
-        .layout()
-        .map_err(|error| ActionError::Store(error.to_string()))
+    let dir: PathBuf = vault
+        .get_root()
+        .join(VAULT_LAYOUT_DIR)
+        .components()
+        .collect();
+
+    vault.layout().map_err(|error| match error {
+        LayoutError::Io(source) => ActionError::LocalFile(IoError::new(
+            source.kind().into(),
+            format!("`{}`: {source}", dir.display()),
+        )),
+        other => ActionError::Store(format!("`{}`: {other}", dir.display())),
+    })
 }
 
 /// Runs one ownership change per `Uuid`, all over the one session.

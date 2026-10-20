@@ -7,7 +7,7 @@
 use librorolala::storage::Key;
 use librorolala::vcs::{UNKNOWN_VERSION, Variant};
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -95,30 +95,30 @@ pub fn complete_vcs_index_write_variant(
 #[command(node = "vcs-index.write-variant", entry = EntryVcsIndexWriteVariant)]
 pub fn vcs_index_write_variant(args: EntryVcsIndexWriteVariant) -> Next {
     let picked = args
-        .pick(&ARG_JOIN)
-        .pick_or_route(&arg![String], || {
+        .pick(ARG_JOIN)
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "BASE_VERSION".to_owned(),
             }
-            .into()
+            .to_chain()
         })
-        .pick_or_route(&arg![String], || {
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "STORAGE".to_owned(),
             }
-            .into()
+            .to_chain()
         })
-        .pick_or_route(&arg![String], || {
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "CREATOR_HASH".to_owned(),
             }
-            .into()
+            .to_chain()
         })
-        .pick_or_route(&arg![String], || {
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "MESSAGE_HASH".to_owned(),
             }
-            .into()
+            .to_chain()
         })
         .to_result();
     let (join, base_version, storage, creator, message) = match picked {

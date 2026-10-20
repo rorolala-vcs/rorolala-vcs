@@ -25,11 +25,7 @@ where
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
         // UNWRAP: picking ARG_OFFLINE and REMAINS can each fall back, so parsing never
         // fails and the `unwrap` is safe.
-        let (offline, args) = program
-            .take_args()
-            .pick(&ARG_OFFLINE)
-            .pick(&REMAINS)
-            .unwrap();
+        let (offline, args) = program.take_args().pick(ARG_OFFLINE).pick(REMAINS).unwrap();
         program.replace_args(args.into());
 
         program.with_resource(ResOffline {

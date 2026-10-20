@@ -13,6 +13,7 @@ use rorolala_utils_constants::WORKSPACE_READONLY_LAYOUTS_DIR;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
 
+mod cache;
 mod config;
 mod error;
 mod ffi;
@@ -20,6 +21,7 @@ mod init;
 mod merging;
 mod ownership;
 
+pub use cache::*;
 pub use config::*;
 pub use error::*;
 pub use ffi::*;
@@ -136,18 +138,26 @@ impl Workspace {
         self.current_dir.join(LAYOUTS_DIR).components().collect()
     }
 
-    /// Where the read-only copy of a Vault's Layout is kept.
+    /// Where a Vault's Layout copy is kept: the pointer, and a directory per generation.
     ///
     /// The cache is a directory per Vault and a directory per Layout under it, both named by what
-    /// the copy was fetched under, so a reader reaches the place a fetch wrote. It answers a path
-    /// whether or not anything was ever fetched — opening a Layout makes one where none is there,
-    /// so a caller asks whether the directory is one before it opens it.
+    /// the copy was fetched under. Inside that one is what [`LayoutCopy`] makes of it — see the
+    /// module it lives in for why a copy is kept in generations rather than replaced whole.
     #[must_use]
-    pub fn readonly_layout_dir(&self, vault: &str, layout: &str) -> PathBuf {
+    pub fn readonly_layouts_dir(&self, vault: &str, layout: &str) -> PathBuf {
         self.current_dir
             .join(WORKSPACE_READONLY_LAYOUTS_DIR)
             .join(vault)
             .join(layout)
+    }
+
+    /// The generation of a Vault's Layout copy a reader is to open, or nothing when none is here.
+    ///
+    /// What is answered is a copy, never a directory to be opened and made into one: a caller with
+    /// nothing here is told so rather than handed a path it would turn into a Layout holding nothing.
+    #[must_use]
+    pub fn readonly_layout_copy(&self, vault: &str, layout: &str) -> Option<PathBuf> {
+        LayoutCopy::of(self, vault, layout).current()
     }
 
     /// Where the Workspace's store is rooted, with the layout's spelling walked back out of it.

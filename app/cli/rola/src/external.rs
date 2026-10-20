@@ -174,6 +174,7 @@ fn help_flag() -> String {
     // asked for help has at least one spelling of.
     let name = HELP_FLAG
         .full
+        .as_slice()
         .first()
         .expect("the help flag is spelled at least once");
 

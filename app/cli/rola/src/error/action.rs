@@ -8,9 +8,9 @@ use rust_i18n::t;
 
 use crate::exit_codes::{
     EC_ERR_ACTION_ADDR, EC_ERR_ACTION_AUTH, EC_ERR_ACTION_CODEC, EC_ERR_ACTION_IO,
-    EC_ERR_ACTION_JSON, EC_ERR_ACTION_MISSING_OBJECT, EC_ERR_ACTION_MISSING_VALUE,
-    EC_ERR_ACTION_NO_CHANNEL, EC_ERR_ACTION_STORE, EC_ERR_ACTION_UNKNOWN,
-    EC_ERR_ACTION_VALUE_TOO_LARGE,
+    EC_ERR_ACTION_JSON, EC_ERR_ACTION_LOCAL_FILE, EC_ERR_ACTION_MISSING_OBJECT,
+    EC_ERR_ACTION_MISSING_VALUE, EC_ERR_ACTION_NO_CHANNEL, EC_ERR_ACTION_STORE,
+    EC_ERR_ACTION_UNKNOWN, EC_ERR_ACTION_VALUE_TOO_LARGE,
 };
 
 // The error is foreign to this crate, so it is imported: that is what lets `?` route it
@@ -66,6 +66,19 @@ pub fn render_error_action(err: ErrorAction, ec: &mut ResExitCode) {
             );
             r_eprintln!("{}", help_line!(t!("error.action.err_store_help").trim()));
             ec.exit_code = EC_ERR_ACTION_STORE;
+        }
+        // A file this side had to read or write, which is a place rather than a peer: the words and
+        // the way out are the store's own, since what a reader does about either is the same.
+        ActionError::LocalFile(source) => {
+            r_eprintln!(
+                "{}",
+                err_line!(t!("error.action.err_local_file", reason = source.to_string()).trim())
+            );
+            r_eprintln!(
+                "{}",
+                help_line!(t!("error.action.err_local_file_help").trim())
+            );
+            ec.exit_code = EC_ERR_ACTION_LOCAL_FILE;
         }
         ActionError::ValueTooLarge => {
             r_eprintln!(

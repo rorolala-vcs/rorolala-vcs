@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::workspace::{Merging, Workspace};
 use mingling::{
-    Grouped, ShellContext, Suggest,
+    Grouped, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -71,19 +71,19 @@ pub fn complete_fs_ops_mv(ctx: ShellContext) -> Suggest {
 #[command(node = "fs-ops.mv")]
 pub fn fs_ops_mv(args: EntryFsOpsMv) -> Next {
     let picked = args
-        .pick_or_route(&arg![PathBuf], || {
+        .pick_or_route(arg![PathBuf], || {
             ErrorFsOpsArguments {
                 verb: "mv",
                 needs_to: true,
             }
-            .into()
+            .to_chain()
         })
-        .pick_or_route(&arg![PathBuf], || {
+        .pick_or_route(arg![PathBuf], || {
             ErrorFsOpsArguments {
                 verb: "mv",
                 needs_to: true,
             }
-            .into()
+            .to_chain()
         })
         .to_result();
 

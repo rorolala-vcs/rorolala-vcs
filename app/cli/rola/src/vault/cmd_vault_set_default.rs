@@ -1,7 +1,7 @@
 //! The `rola vault set-default` command: choose the Vault a Workspace reaches for.
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest, Wrap,
+    Grouped, LazyRes, Routable, ShellContext, Suggest, Wrap,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -42,7 +42,7 @@ pub fn desc_vault_set_default() -> Description {
 #[command(node = "vault.set-default")]
 pub fn vault_set_default(args: EntryVaultSetDefault) -> Next {
     let name = match args
-        .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
+        .pick_or_route(arg![String], || ErrorVaultNameMissing.to_chain())
         .to_result()
     {
         Ok(name) => name,

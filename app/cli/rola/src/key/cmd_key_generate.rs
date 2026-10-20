@@ -6,7 +6,7 @@ use std::process::Command;
 
 use librorolala::auth::user_keys_dir;
 use mingling::{
-    Grouped, ShellContext, Suggest,
+    Grouped, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -91,8 +91,8 @@ pub fn complete_key_generate(ctx: ShellContext) -> Suggest {
 #[command(node = "key.generate")]
 pub fn key_generate(args: EntryKeyGenerate) -> Next {
     let picked = args
-        .pick(&ARG_INSTALL)
-        .pick_or_route(&arg![String], || ErrorKeyNameMissing.into())
+        .pick(ARG_INSTALL)
+        .pick_or_route(arg![String], || ErrorKeyNameMissing.to_chain())
         .to_result();
     let (install, named) = match picked {
         Ok(picked) => picked,

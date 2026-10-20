@@ -8,7 +8,7 @@
 use librorolala::layout::normalize_name;
 use librorolala::protocol::VaultAddress;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -102,10 +102,10 @@ pub fn complete_bind(ctx: ShellContext, history: &mut LazyRes<ResAddressHistory>
 #[command(node = "bind", entry = EntryBind)]
 pub fn bind(args: EntryBind) -> Next {
     let picked = args
-        .pick(&ARG_NO_SET_DEFAULT_VAULT)
-        .pick(&ARG_NO_SET_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorVaultAddressMissing.into())
-        .pick(&arg![Option<String>])
+        .pick(ARG_NO_SET_DEFAULT_VAULT)
+        .pick(ARG_NO_SET_LAYOUT)
+        .pick_or_route(arg![String], || ErrorVaultAddressMissing.to_chain())
+        .pick(arg![Option<String>])
         .to_result();
     let (no_set_default_vault, no_set_layout, address, name) = match picked {
         Ok(picked) => picked,

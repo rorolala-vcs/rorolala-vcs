@@ -41,6 +41,14 @@ pub enum ActionError {
     /// The session could not be established: a key could not be read, the peer could not
     /// be reached, or the identity it proved was not the one expected.
     Auth(rorolala_auth::Error),
+    /// A file the action had to read or write could not be.
+    ///
+    /// It is kept apart from [`Io`](Self::Io), which is the channel, because the two are acted on
+    /// differently: a channel that failed is a peer to reach, while a file that failed is a place to
+    /// give access to — and the side it failed on is not always the one a caller would guess, since
+    /// the Vault's own Layout is a file to the Vault. The path is carried in the message, because a
+    /// failure that says "access is denied" and nothing else says nothing a reader can go and look at.
+    LocalFile(IoError),
 }
 
 impl fmt::Display for ActionError {
@@ -68,6 +76,9 @@ impl fmt::Display for ActionError {
             Self::Auth(source) => {
                 write!(formatter, "the session could not be established: {source}")
             }
+            Self::LocalFile(source) => {
+                write!(formatter, "a file could not be read or written: {source}")
+            }
         }
     }
 }
@@ -75,7 +86,9 @@ impl fmt::Display for ActionError {
 impl std::error::Error for ActionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Io(source) => Some(source),
+            // The two carry the same kind of failure — an `io` error, whichever side of the exchange
+            // it failed on — so one arm says it for both.
+            Self::Io(source) | Self::LocalFile(source) => Some(source),
             Self::Codec(source) => Some(source),
             Self::Json(source) => Some(source),
             Self::Addr(source) => Some(source),
@@ -121,6 +134,7 @@ impl rorolala_errors::Failure for ActionError {
             Self::Json(_) => "action_error_json",
             Self::Addr(_) => "action_error_addr",
             Self::Auth(_) => "action_error_auth",
+            Self::LocalFile(_) => "action_error_local_file",
         }
     }
 
@@ -141,6 +155,8 @@ rorolala_errors::failure!(ActionError);
 mod tests {
     use std::error::Error as _;
     use std::io;
+
+    use rorolala_errors::Failure as _;
 
     use super::ActionError;
 
@@ -197,6 +213,24 @@ mod tests {
         assert!(matches!(error, ActionError::Io(_)));
         assert_eq!(error.to_string(), "the channel failed: denied");
         assert!(error.source().is_some());
+    }
+
+    #[test]
+    fn a_file_that_could_not_be_read_is_told_apart_from_a_channel_that_failed() {
+        // The two are the same kind of failure to `io`, and not the same thing to a caller: one is a
+        // peer to reach, the other a path to give access to. The path is part of what is said,
+        // because a reader told only "access is denied" has nowhere to look.
+        let error = ActionError::LocalFile(rorolala_errors::IoError::new(
+            rorolala_errors::IoErrorKind::PermissionDenied,
+            "`D:\\work\\.rola\\cache\\origin\\truth`: access is denied".to_owned(),
+        ));
+
+        assert_eq!(
+            error.to_string(),
+            "a file could not be read or written: `D:\\work\\.rola\\cache\\origin\\truth`: access is denied"
+        );
+        assert!(error.source().is_some());
+        assert_eq!(error.name(), "action_error_local_file");
     }
 
     #[test]

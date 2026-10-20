@@ -151,9 +151,9 @@ dependencies = [
 
 [[package]]
 name = "arg-picker"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c00be313879473d19d1018fe218c79e92282b4e328052a530aad29f683aab3a7"
+checksum = "9d344a60e606398e8411274e8cc534795aa4f11ea831fc8716ede4486f7262e1"
 dependencies = [
  "arg-picker-macros",
  "just_fmt 0.2.1",
@@ -161,9 +161,9 @@ dependencies = [
 
 [[package]]
 name = "arg-picker-macros"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1ac52a9b597e1f9fb7bb08de7d8cb2ef70a4943f3d4286c9beef5f8dcb8f3a"
+checksum = "b029f564f386649918bf6c8669eef49b9e19f147b7ac43f288d689fa2ce16dca"
 dependencies = [
  "just_fmt 0.2.1",
  "proc-macro2",
@@ -2500,7 +2500,7 @@ dependencies = [
 [[package]]
 name = "mingling"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=f5544992ba72000623f079c6eeefaefc7e2fa16f#f5544992ba72000623f079c6eeefaefc7e2fa16f"
+source = "git+https://github.com/mingling-rs/mingling?rev=09c2205267fe16686e1ac22d68da14a26005b8c9#09c2205267fe16686e1ac22d68da14a26005b8c9"
 dependencies = [
  "arg-picker",
  "mingling_core",
@@ -2511,7 +2511,7 @@ dependencies = [
 [[package]]
 name = "mingling_core"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=f5544992ba72000623f079c6eeefaefc7e2fa16f#f5544992ba72000623f079c6eeefaefc7e2fa16f"
+source = "git+https://github.com/mingling-rs/mingling?rev=09c2205267fe16686e1ac22d68da14a26005b8c9#09c2205267fe16686e1ac22d68da14a26005b8c9"
 dependencies = [
  "just_fmt 0.2.1",
  "might_be_async",
@@ -2522,7 +2522,7 @@ dependencies = [
 [[package]]
 name = "mingling_macros"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=f5544992ba72000623f079c6eeefaefc7e2fa16f#f5544992ba72000623f079c6eeefaefc7e2fa16f"
+source = "git+https://github.com/mingling-rs/mingling?rev=09c2205267fe16686e1ac22d68da14a26005b8c9#09c2205267fe16686e1ac22d68da14a26005b8c9"
 dependencies = [
  "just_fmt 0.2.1",
  "just_template",
@@ -2535,7 +2535,7 @@ dependencies = [
 [[package]]
 name = "mingling_pathf"
 version = "0.6.0"
-source = "git+https://github.com/mingling-rs/mingling?rev=f5544992ba72000623f079c6eeefaefc7e2fa16f#f5544992ba72000623f079c6eeefaefc7e2fa16f"
+source = "git+https://github.com/mingling-rs/mingling?rev=09c2205267fe16686e1ac22d68da14a26005b8c9#09c2205267fe16686e1ac22d68da14a26005b8c9"
 dependencies = [
  "cargo_metadata",
  "just_fmt 0.2.1",
@@ -3547,7 +3547,6 @@ version = "0.1.0"
 dependencies = [
  "colored",
  "console",
- "dirs",
  "embed-resource",
  "futures",
  "globset",
@@ -3627,13 +3626,13 @@ name = "rorolala-auth"
 version = "0.1.0"
 dependencies = [
  "chacha20poly1305",
- "dirs",
  "ed25519-dalek",
  "hkdf",
  "ml-kem",
  "rorolala-errors",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
+ "rorolala-utils-location",
  "serde",
  "sha2",
  "tokio",
@@ -3659,7 +3658,6 @@ dependencies = [
 name = "rorolala-daemon"
 version = "0.1.0"
 dependencies = [
- "dirs",
  "ed25519-dalek",
  "just_template",
  "rorolala-auth",
@@ -3903,7 +3901,9 @@ dependencies = [
 name = "rorolala-utils-location"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "just_fmt 0.2.1",
+ "rorolala-utils-constants",
  "tokio",
 ]
 

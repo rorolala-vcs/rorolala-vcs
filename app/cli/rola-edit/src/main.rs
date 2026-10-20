@@ -67,8 +67,8 @@ fn main() -> ExitCode {
     // Positional first and the flag after it, so the file is claimed by the one position there is
     // before any word is read as the language.
     let (file, language) = Picker::from_args()
-        .pick_or_default(&FILE_ARG)
-        .pick_or_default(&LANG_ARG)
+        .pick_or_default(FILE_ARG)
+        .pick_or_default(LANG_ARG)
         .unwrap();
 
     set_locale(&language.map_or_else(default_language, |value| locale_of(&value)));

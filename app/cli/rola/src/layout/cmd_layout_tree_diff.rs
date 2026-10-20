@@ -90,10 +90,7 @@ pub fn complete_layout_tree_diff(
 /// or the Layout could not be read.
 #[command(node = "layout.tree-diff", entry = EntryLayoutTreeDiff)]
 pub fn layout_tree_diff(args: EntryLayoutTreeDiff) -> Next {
-    let picked = args
-        .pick(&ARG_ALIKE)
-        .pick(&arg![Option<String>])
-        .to_result();
+    let picked = args.pick(ARG_ALIKE).pick(arg![Option<String>]).to_result();
     let (alike, name) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,

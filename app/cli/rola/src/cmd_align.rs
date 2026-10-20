@@ -206,16 +206,16 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 #[command(node = "align", entry = EntryAlign)]
 pub fn align(args: EntryAlign) -> Next {
     let picked = args
-        .pick(&ARG_DELETE)
-        .pick(&ARG_RENAME)
-        .pick(&ARG_BREAK)
-        .pick(&ARG_MOVE_TO)
-        .pick(&ARG_RESTORE_MOVE)
-        .pick(&ARG_RESTORE_MODIFY)
-        .pick(&ARG_RESTORE_DELETE)
-        .pick(&ARG_RESTORE)
-        .pick(&ARG_COMPLETELY)
-        .pick(&arg![Option<String>])
+        .pick(ARG_DELETE)
+        .pick(ARG_RENAME)
+        .pick(ARG_BREAK)
+        .pick(ARG_MOVE_TO)
+        .pick(ARG_RESTORE_MOVE)
+        .pick(ARG_RESTORE_MODIFY)
+        .pick(ARG_RESTORE_DELETE)
+        .pick(ARG_RESTORE)
+        .pick(ARG_COMPLETELY)
+        .pick(arg![Option<String>])
         .to_result();
     let (
         delete,

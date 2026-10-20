@@ -267,15 +267,13 @@ pub fn cached_layout(workspace: &ResWorkspace, layout: &str, vault: &str) -> Res
         return Err(ErrorLayoutArgument.into());
     }
 
-    let dir = readonly_layout_dir(workspace, vault, layout);
-
-    if !dir.is_dir() {
+    let Some(dir) = readonly_layout_copy(workspace, vault, layout) else {
         return Err(ErrorLayoutNotCached {
             layout: layout.to_owned(),
             vault: vault.to_owned(),
         }
         .into());
-    }
+    };
 
     // Opened as something that has to be there, because a directory is not a copy: one that holds none of the Layout's
     // own files — left by a fetch that was cut short, or made by an older build's reader — would otherwise open as a
@@ -291,7 +289,7 @@ pub fn cached_layout(workspace: &ResWorkspace, layout: &str, vault: &str) -> Res
     }
 }
 
-/// The fetched copy of `vault`'s own Layout at `dir`, or the refusal a run that has not fetched it is told.
+/// The fetched copy of `vault`'s own Layout, or the refusal a run that has not fetched it is told.
 ///
 /// It is the read every command that works from the Vault's copy makes, and the one thing they all
 /// have to get right: a directory is not a copy. A fetch that fails part of the way through may
@@ -300,10 +298,18 @@ pub fn cached_layout(workspace: &ResWorkspace, layout: &str, vault: &str) -> Res
 ///
 /// # Errors
 ///
-/// Returns [`ErrorLayoutNotCached`] when there is no copy at `dir`, and [`ErrorLayoutFailed`] when a
-/// copy that is there cannot be read.
-pub fn cached_vault_layout(dir: &std::path::Path, vault: &str) -> Result<Layout, Next> {
-    match Layout::open_existing(dir) {
+/// Returns [`ErrorLayoutNotCached`] when no copy was fetched, and [`ErrorLayoutFailed`] when a copy
+/// that is there cannot be read.
+pub fn cached_vault_copy(workspace: &Workspace, vault: &str) -> Result<Layout, Next> {
+    let Some(dir) = readonly_layout_copy(workspace, vault, VAULT_LAYOUT_NAME) else {
+        return Err(ErrorLayoutNotCached {
+            layout: VAULT_LAYOUT_NAME.to_owned(),
+            vault: vault.to_owned(),
+        }
+        .into());
+    };
+
+    match Layout::open_existing(&dir) {
         Ok(copy) => Ok(copy),
         Err(error) if error.is_not_found() => Err(ErrorLayoutNotCached {
             layout: VAULT_LAYOUT_NAME.to_owned(),
@@ -609,16 +615,22 @@ pub fn render_result_layout_content(result: ResultLayoutContent) {
     r_println!("{}", said.trim());
 }
 
-/// Where a Workspace keeps the read-only copy of a Vault's Layout.
+/// The generation of a Workspace's read-only copy of a Vault's Layout a reader is to open.
 ///
 /// The cache is a directory per Vault and a directory per Layout under it, both named by what the
-/// copy was fetched under, so a command that reads one reaches the same place a
-/// [`rola layout fetch`](crate::layout::cmd_layout_fetch) wrote. Where that is is the Workspace's
-/// own answer ([`Workspace::readonly_layout_dir`]); what a Vault's Layout is known by is
-/// [`VAULT_LAYOUT_NAME`].
+/// copy was fetched under, and what is read there is the generation a pointer names: a fetch writes
+/// a generation of its own rather than replacing the copy, so what a command opens is one whole copy
+/// whichever fetch published it last. Where that is is the Workspace's own answer
+/// ([`Workspace::readonly_layout_copy`]); what a Vault's Layout is known by is
+/// [`VAULT_LAYOUT_NAME`]. Nothing is answered when no copy was fetched, which is what a caller
+/// refuses a run with rather than opening a directory that would become one.
 #[must_use]
-pub fn readonly_layout_dir(workspace: &Workspace, vault: &str, layout: &str) -> std::path::PathBuf {
-    workspace.readonly_layout_dir(vault, layout)
+pub fn readonly_layout_copy(
+    workspace: &Workspace,
+    vault: &str,
+    layout: &str,
+) -> Option<std::path::PathBuf> {
+    workspace.readonly_layout_copy(vault, layout)
 }
 
 /// The Vault and the `Uuid` an ownership command was given, from the words it was given.
@@ -677,10 +689,9 @@ pub fn set_cached_owner(
     id: Uuid,
     owner: Option<String>,
 ) -> Result<(), LayoutError> {
-    let dir = readonly_layout_dir(workspace, vault, VAULT_LAYOUT_NAME);
-    if !dir.is_dir() {
+    let Some(dir) = readonly_layout_copy(workspace, vault, VAULT_LAYOUT_NAME) else {
         return Ok(());
-    }
+    };
 
     let layout = match Layout::open_existing(&dir) {
         Ok(layout) => layout,
@@ -717,10 +728,9 @@ pub fn set_cached_path(
     from: &LayoutPath,
     to: &LayoutPath,
 ) -> Result<(), LayoutError> {
-    let dir = readonly_layout_dir(workspace, vault, layout);
-    if !dir.is_dir() {
+    let Some(dir) = readonly_layout_copy(workspace, vault, layout) else {
         return Ok(());
-    }
+    };
 
     let copy = match Layout::open_existing(&dir) {
         Ok(copy) => copy,
@@ -746,10 +756,9 @@ pub fn set_cached_path(
 ///
 /// Returns [`LayoutError`] if a copy that is there cannot be read back.
 pub fn cached_copy(workspace: &Workspace, vault: &str) -> Result<Option<Layout>, LayoutError> {
-    let dir = readonly_layout_dir(workspace, vault, VAULT_LAYOUT_NAME);
-    if !dir.is_dir() {
+    let Some(dir) = readonly_layout_copy(workspace, vault, VAULT_LAYOUT_NAME) else {
         return Ok(None);
-    }
+    };
 
     // A directory the Layout's own files are not in is not a copy, and reading it must not make one.
     match Layout::open_existing(&dir) {
@@ -842,7 +851,11 @@ pub fn render_error_layout_not_cached(error: ErrorLayoutNotCached, ec: &mut ResE
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!(
         "{}",
-        help_line!(t!("cmd_layout.err_not_cached_help").trim())
+        help_line!(
+            t!("cmd_layout.err_not_cached_help", vault = error.vault)
+                .trim()
+                .to_string()
+        )
     );
     ec.exit_code = EC_ERR_LAYOUT_NOT_CACHED;
 }

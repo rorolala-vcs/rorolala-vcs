@@ -274,8 +274,8 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
 #[command(node = "desktop", entry = EntryDesktop)]
 pub fn desktop(args: EntryDesktop) -> Next {
     let picked = args
-        .pick(&ARG_QUERY_WINDOW_STYLE)
-        .pick(&ARG_WINDOW_STYLE)
+        .pick(ARG_QUERY_WINDOW_STYLE)
+        .pick(ARG_WINDOW_STYLE)
         .to_result();
     let (query, written) = match picked {
         Ok(picked) => picked,

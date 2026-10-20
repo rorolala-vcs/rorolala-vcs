@@ -8,24 +8,24 @@
 //! writes that under its cache named by the Vault. The whole directory is one blob: a Layout is a
 //! fixed set of small files beside snapshots, and carrying them one at a time would say the same
 //! thing in more exchanges.
+//!
+//! What a fetch writes is a **generation** of the copy, published by moving a pointer — see
+//! [`LayoutCopy`] for why. A copy is therefore never renamed over, and a run that is reading one
+//! cannot make a fetch fail.
 
 use std::fs;
 use std::io::Write as _;
-use std::path::{Component, Path};
+use std::path::Path;
+use std::time::SystemTime;
 
+use rorolala_errors::IoError;
 use rorolala_layout::Layout;
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
-use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_READONLY_LAYOUTS_DIR};
-use rorolala_utils_location::Locate as _;
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+use rorolala_workspace::LayoutCopy;
 
 use super::layout_remote::local_layout;
 use super::sync_storage::{Side, carry_blob};
-
-/// The mark a fetch gives the directory it writes the new copy into, before that copy takes the place of the old one.
-const FETCHING: &str = "fetching-";
-
-/// The mark the copy being replaced carries while the new one is moved into its place.
-const KEEPING: &str = "keeping-";
 
 /// An Action that brings the Vault's Layout to the Workspace's read-only cache.
 ///
@@ -54,8 +54,9 @@ impl Action for ActionFetchLayout {
     /// # Errors
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
-    /// Vault, [`ActionError::Store`] if the Vault's Layout could not be read or the cache written,
-    /// and whatever the exchange fails with.
+    /// Vault, [`ActionError::Store`] if the Vault sent something that is not a Layout, and
+    /// [`ActionError::LocalFile`] if the Layout could not be read where it is or the copy could not
+    /// be written here — besides whatever the exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
@@ -99,13 +100,20 @@ impl Action for ActionFetchLayout {
 ///
 /// # Errors
 ///
-/// Returns [`ActionError::Io`] if the directory or a file in it cannot be read.
+/// Returns [`ActionError::LocalFile`] naming the directory or the file when one cannot be read.
 fn read_layout(layout: &Layout) -> Result<Vec<(String, Vec<u8>)>, ActionError> {
+    let dir = layout.dir();
     let mut files = Vec::new();
 
-    for entry in fs::read_dir(layout.dir())? {
-        let entry = entry?;
-        if !entry.file_type()?.is_file() {
+    for entry in fs::read_dir(dir).map_err(|error| local(dir, &error))? {
+        let entry = entry.map_err(|error| local(dir, &error))?;
+        let path = entry.path();
+
+        if !entry
+            .file_type()
+            .map_err(|error| local(&path, &error))?
+            .is_file()
+        {
             continue;
         }
 
@@ -113,7 +121,7 @@ fn read_layout(layout: &Layout) -> Result<Vec<(String, Vec<u8>)>, ActionError> {
             continue;
         };
 
-        files.push((name, fs::read(entry.path())?));
+        files.push((name, fs::read(&path).map_err(|error| local(&path, &error))?));
     }
 
     files.sort();
@@ -121,21 +129,18 @@ fn read_layout(layout: &Layout) -> Result<Vec<(String, Vec<u8>)>, ActionError> {
     Ok(files)
 }
 
-/// Writes the fetched files under the Workspace's cache, replacing whatever was there.
+/// Writes the fetched files as a new generation of the Workspace's copy.
 ///
-/// The old copy is taken away rather than written over, so a file the Vault no longer keeps does
-/// not survive in the copy: what is read afterwards is the Vault's Layout and not that Layout with
-/// older files beside it.
-///
-/// What replaces it is written whole before the old copy is touched — see [`replace`] — because a
-/// fetch that fails part of the way through would otherwise leave an empty or half-written
-/// directory where a good copy was. A directory is not a copy: a reader that met one would answer
-/// "the Vault's Layout holds nothing" rather than "nothing was fetched".
+/// What replaces the copy is written whole before the pointer is moved, so a fetch that fails part
+/// of the way through leaves the copy that is here untouched: a reader is never handed a directory
+/// that is half of what the Vault holds. The old generation is not removed here — a reader may be
+/// part of the way through it — and is cleared by a later fetch.
 ///
 /// # Errors
 ///
 /// Returns [`ActionError::MissingValue`] if this side has no Workspace, [`ActionError::Store`] if the
-/// Vault sent something that is not a Layout, and [`ActionError::Io`] if the copy cannot be made.
+/// Vault sent something that is not a Layout this side can keep, and [`ActionError::LocalFile`] if
+/// the copy cannot be written.
 fn write_cache(
     ctx: &ActionContext<'_>,
     name: &str,
@@ -154,15 +159,49 @@ fn write_cache(
 
     check(files)?;
 
-    let root = workspace
-        .get_root()
-        .join(WORKSPACE_READONLY_LAYOUTS_DIR)
-        .join(name);
-    let dir = root.join(VAULT_LAYOUT_NAME);
+    let copy = LayoutCopy::of(workspace, name, VAULT_LAYOUT_NAME);
 
-    fs::create_dir_all(&root)?;
+    publish(&copy, files)
+}
 
-    replace(&root, &dir, files)
+/// Writes `files` as a generation of `copy`, points the copy at it, and clears what earlier runs left.
+///
+/// The clearing is done last, and only after the copy is pointed at the new generation: a fetch that
+/// fails part of the way through costs nothing at all — the copy that was here is still the copy, and
+/// still the one named. What is cleared is everything the pointer does not name and nothing young
+/// enough to be another run's work, which is what keeps a crash from accumulating a copy's worth of
+/// directories under the cache without removing what another run is writing.
+///
+/// # Errors
+///
+/// Returns [`ActionError::LocalFile`] naming the directory or the file when the generation cannot
+/// be written, and the publication's own failure when it cannot be pointed at.
+fn publish(copy: &LayoutCopy, files: &[(String, Vec<u8>)]) -> Result<(), ActionError> {
+    let started = SystemTime::now();
+    let staging = copy.stage();
+    fs::create_dir_all(&staging).map_err(|error| local(&staging, &error))?;
+
+    for (file, bytes) in files {
+        let path = staging.join(file);
+
+        if let Err(error) = write_whole(&path, bytes) {
+            // The copy that is here was never touched, and what was written of the new one is no use
+            // to anyone.
+            let _ = fs::remove_dir_all(&staging);
+
+            return Err(local(&path, &error));
+        }
+    }
+
+    copy.publish(&staging).map_err(|error| {
+        let _ = fs::remove_dir_all(&staging);
+
+        local(copy.container(), &error)
+    })?;
+
+    copy.drain(started);
+
+    Ok(())
 }
 
 /// Refuses what a Vault sends that is not a Layout this side can keep.
@@ -172,7 +211,7 @@ fn write_cache(
 ///
 /// A Layout is at least the sixteen logs `Layout::open` makes, because the Vault opens its own
 /// Layout before reading it: nothing at all is not a Layout, and keeping it would replace a good
-/// copy with an empty directory.
+/// copy with an empty one.
 ///
 /// # Errors
 ///
@@ -196,111 +235,6 @@ fn check(files: &[(String, Vec<u8>)]) -> Result<(), ActionError> {
     Ok(())
 }
 
-/// Writes every file into a directory of its own, then moves it into the copy's place.
-///
-/// The order is what keeps a failed fetch from costing the copy that is here:
-///
-/// 1. what an interrupted fetch left beside the copy is cleared, and a copy an interrupted swap
-///    moved aside is put back ([`recover`]);
-/// 2. every file is written into `<copy>.fetching-<unique>` and flushed;
-/// 3. only then is the copy moved aside, the staging directory moved in, and the old copy dropped.
-///
-/// The property that matters is that the copy is never removed before a complete new one exists: a
-/// write that fails, or a process that is killed, leaves either the old copy or a leftover staging
-/// directory — and the next fetch clears the latter.
-///
-/// # Errors
-///
-/// Returns [`ActionError::Io`] if a file cannot be written or a directory renamed.
-fn replace(root: &Path, dir: &Path, files: &[(String, Vec<u8>)]) -> Result<(), ActionError> {
-    recover(root, dir)?;
-
-    let staging = root.join(format!("{VAULT_LAYOUT_NAME}.{FETCHING}{}", unique()));
-    fs::create_dir_all(&staging)?;
-
-    for (file, bytes) in files {
-        if let Err(error) = write_whole(&staging.join(file), bytes) {
-            // The copy that is here was never touched, and what was written of the new one is no use to anyone.
-            let _ = fs::remove_dir_all(&staging);
-
-            return Err(error.into());
-        }
-    }
-
-    let backup = root.join(format!("{VAULT_LAYOUT_NAME}.{KEEPING}{}", unique()));
-    let kept = dir.is_dir();
-
-    if kept {
-        fs::rename(dir, &backup)?;
-    }
-
-    if let Err(error) = fs::rename(&staging, dir) {
-        // A swap that could not be finished costs nothing: the copy is put back where it was.
-        if kept {
-            let _ = fs::rename(&backup, dir);
-        }
-
-        let _ = fs::remove_dir_all(&staging);
-
-        return Err(error.into());
-    }
-
-    if kept {
-        // A copy that will not be dropped is not a failed fetch: the new one is in place, and what is left is cleared by
-        // the next fetch ([`recover`]).
-        let _ = fs::remove_dir_all(&backup);
-    }
-
-    Ok(())
-}
-
-/// Clears what an interrupted fetch left beside the copy, and puts back a copy it moved aside.
-///
-/// A staging directory is what a fetch that did not finish writing leaves; a backup is a copy that
-/// an interrupted swap moved out of the way, and one of those is put back only when the copy itself
-/// is not there — a copy still in place is the newer of the two.
-///
-/// Only one fetch of one copy is expected at a time: the desktop serialises its own, and two runs
-/// racing over one cache are two runs writing over each other whatever this does.
-///
-/// # Errors
-///
-/// Returns [`ActionError::Io`] if the directory cannot be listed or the copy put back.
-fn recover(root: &Path, dir: &Path) -> Result<(), ActionError> {
-    let mut aside: Option<std::path::PathBuf> = None;
-
-    for entry in fs::read_dir(root)? {
-        let entry = entry?;
-
-        let name = entry.file_name();
-        let Some(name) = name.to_str() else {
-            continue;
-        };
-        let Some(rest) = name
-            .strip_prefix(VAULT_LAYOUT_NAME)
-            .and_then(|rest| rest.strip_prefix('.'))
-        else {
-            continue;
-        };
-
-        if rest.starts_with(FETCHING) {
-            let _ = fs::remove_dir_all(entry.path());
-        } else if rest.starts_with(KEEPING) {
-            if dir.is_dir() || aside.is_some() {
-                let _ = fs::remove_dir_all(entry.path());
-            } else {
-                aside = Some(entry.path());
-            }
-        }
-    }
-
-    if let Some(aside) = aside {
-        fs::rename(aside, dir)?;
-    }
-
-    Ok(())
-}
-
 /// Writes `bytes` to `path`, and does not return until they are on disk.
 ///
 /// `fs::write` leaves the bytes with the operating system rather than on the disk, and what a copy
@@ -315,15 +249,16 @@ fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     file.sync_all()
 }
 
-/// A value no other fetch of this copy is using, for a directory of its own beside it.
-fn unique() -> String {
-    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-
-    format!(
-        "{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    )
+/// What a file that could not be read or written means to an action.
+///
+/// The path is part of what is said: a failure that answers "access is denied" and nothing else is
+/// one a reader cannot go and look at, and the two sides of a fetch fail on files of their own — the
+/// Vault's Layout at one end, the copy at the other.
+fn local(path: &Path, error: &std::io::Error) -> ActionError {
+    ActionError::LocalFile(IoError::new(
+        error.kind().into(),
+        format!("`{}`: {error}", path.display()),
+    ))
 }
 
 /// Whether `name` is one path component and nothing else.
@@ -334,7 +269,8 @@ fn unique() -> String {
 fn is_plain_name(name: &str) -> bool {
     let mut components = Path::new(name).components();
 
-    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+    matches!(components.next(), Some(std::path::Component::Normal(_)))
+        && components.next().is_none()
 }
 
 /// What an encodable payload that will not cross means to an action.
@@ -344,49 +280,39 @@ fn codec_failed(error: impl std::fmt::Display) -> ActionError {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+    use rorolala_utils_location::Locate as _;
+    use rorolala_workspace::{LayoutCopy, Workspace};
 
-    use super::{FETCHING, KEEPING, check, recover, replace};
+    use super::{check, publish};
 
-    /// A directory of its own under the workspace's own scratch space, emptied first so a rerun starts clean.
+    /// A Workspace of its own under the temp directory, emptied first so a rerun starts clean.
     ///
-    /// It is under the project rather than the system's temporary directory so that a run on a machine whose temporary
-    /// directory is sandboxed still writes where it says it does.
-    fn scratch(label: &str) -> PathBuf {
+    /// It is under the project rather than the system's temporary directory so that a run on a
+    /// machine whose temporary directory is sandboxed still writes where it says it does.
+    fn scratch(label: &str) -> (PathBuf, Workspace) {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
 
-        let dir = std::env::temp_dir().join(format!(
+        let root = std::env::temp_dir().join(format!(
             "rorolala-fetch-{}-{label}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join(".rola")).unwrap();
 
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+        let workspace = Workspace::locate(&root).unwrap();
+
+        (root, workspace)
     }
 
-    /// The copy's own directory under a scratch root, and that root.
-    fn copy_at(root: &Path) -> PathBuf {
-        root.join(VAULT_LAYOUT_NAME)
-    }
-
-    /// A file's bytes, or nothing when it is not there.
-    fn read(path: &Path) -> Option<Vec<u8>> {
-        std::fs::read(path).ok()
-    }
-
-    /// The names in a directory, in name order.
-    fn names(dir: &Path) -> Vec<String> {
-        let mut found: Vec<String> = std::fs::read_dir(dir)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-            .collect();
-        found.sort();
-        found
+    /// The copy a fetch writes into, for a Vault the Workspace keeps under `vault`.
+    fn copy(workspace: &Workspace, vault: &str) -> LayoutCopy {
+        LayoutCopy::of(workspace, vault, VAULT_LAYOUT_NAME)
     }
 
     /// A Layout's worth of files, as the Vault would send them.
@@ -397,65 +323,100 @@ mod tests {
             .collect()
     }
 
+    /// The names in a directory, in name order.
+    fn names(dir: &Path) -> Vec<String> {
+        let mut found: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        found.sort();
+        found
+    }
+
     #[test]
-    fn a_copy_is_replaced_whole() {
-        let root = scratch("whole");
-        let dir = copy_at(&root);
+    fn a_copy_is_published_whole() {
+        let (root, workspace) = scratch("whole");
+        let copy = copy(&workspace, "vault");
 
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("log-0"), b"old").unwrap();
-        std::fs::write(dir.join("an-old-file"), b"gone").unwrap();
+        publish(&copy, &sent(&[("log-0", "old"), ("an-old-file", "gone")])).unwrap();
+        let first = workspace
+            .readonly_layout_copy("vault", VAULT_LAYOUT_NAME)
+            .unwrap();
 
-        replace(&root, &dir, &sent(&[("log-0", "new"), ("log-1", "new")])).unwrap();
+        publish(&copy, &sent(&[("log-0", "new"), ("log-1", "new")])).unwrap();
+        let second = workspace
+            .readonly_layout_copy("vault", VAULT_LAYOUT_NAME)
+            .unwrap();
 
-        // What the Vault no longer keeps does not survive the copy, and neither does anything the fetch staged.
-        assert_eq!(names(&dir), ["log-0", "log-1"]);
-        assert_eq!(read(&dir.join("log-0")).unwrap(), b"new");
-        assert_eq!(
-            names(&root),
-            [VAULT_LAYOUT_NAME.to_owned()],
-            "the fetch left something beside the copy"
-        );
+        // What the Vault no longer keeps does not survive into the next generation...
+        assert_eq!(names(&second), ["log-0", "log-1"]);
+        assert_eq!(fs::read(second.join("log-0")).unwrap(), b"new");
+
+        // ...and the generation before it is still whole, so a reader that resolved it before the
+        // fetch still has what it opened.
+        assert_eq!(names(&first), ["an-old-file", "log-0"]);
+        assert_eq!(fs::read(first.join("log-0")).unwrap(), b"old");
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn a_write_that_fails_leaves_the_copy_that_is_here() {
-        let root = scratch("failed");
-        let dir = copy_at(&root);
+        let (root, workspace) = scratch("failed");
+        let copy = copy(&workspace, "vault");
 
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("log-0"), b"old").unwrap();
+        publish(&copy, &sent(&[("log-0", "old")])).unwrap();
+        let before = workspace
+            .readonly_layout_copy("vault", VAULT_LAYOUT_NAME)
+            .unwrap();
 
-        // A name a Layout may be keyed by is not a name a file may be made with: the write fails after the copy would
-        // have been removed by the old order, which is the bug this is written for.
-        let refused = replace(&root, &dir, &sent(&[("log-0", "new"), ("a\u{0}b", "new")]));
+        // A name a Layout may be keyed by is not a name a file may be made with: the write fails
+        // after the copy would have been replaced by the old order, which is the bug this is
+        // written for.
+        let refused = publish(&copy, &sent(&[("log-0", "new"), ("a\u{0}b", "new")]));
 
         assert!(refused.is_err());
+
+        let after = workspace
+            .readonly_layout_copy("vault", VAULT_LAYOUT_NAME)
+            .expect("the copy that was here is still the copy");
+
+        assert_eq!(after, before);
+        assert_eq!(fs::read(after.join("log-0")).unwrap(), b"old");
+
+        // What was written of the generation that failed is no use to anyone, and is not left where
+        // a reader could open it.
         assert_eq!(
-            names(&dir),
-            ["log-0"],
-            "the copy was written into or emptied"
+            names(copy.container())
+                .into_iter()
+                .filter(|name| name.ends_with(".staging"))
+                .count(),
+            0,
+            "a staging directory was left behind"
         );
-        assert_eq!(read(&dir.join("log-0")).unwrap(), b"old");
-        assert_eq!(
-            names(&root),
-            [VAULT_LAYOUT_NAME.to_owned()],
-            "the fetch left its staging directory behind"
-        );
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn nothing_sent_at_all_is_refused_and_the_copy_is_untouched() {
-        let root = scratch("empty");
-        let dir = copy_at(&root);
+        let (root, workspace) = scratch("empty");
+        let copy = copy(&workspace, "vault");
 
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("log-0"), b"old").unwrap();
+        publish(&copy, &sent(&[("log-0", "old")])).unwrap();
+        let before = workspace
+            .readonly_layout_copy("vault", VAULT_LAYOUT_NAME)
+            .unwrap();
 
         assert!(check(&[]).is_err());
 
-        // The copy is only touched by `replace`, which `write_cache` reaches after the check: what is here is kept.
-        assert_eq!(read(&dir.join("log-0")).unwrap(), b"old");
+        // `check` runs before anything is written, so what is here is what was here.
+        assert_eq!(
+            workspace.readonly_layout_copy("vault", VAULT_LAYOUT_NAME),
+            Some(before)
+        );
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -468,38 +429,5 @@ mod tests {
         }
 
         assert!(check(&sent(&[("log-0", "x")])).is_ok());
-    }
-
-    #[test]
-    fn a_copy_an_interrupted_swap_moved_aside_is_put_back() {
-        let root = scratch("recovered");
-        let dir = copy_at(&root);
-        let aside = root.join(format!("{VAULT_LAYOUT_NAME}.{KEEPING}1-0"));
-
-        std::fs::create_dir_all(&aside).unwrap();
-        std::fs::write(aside.join("log-0"), b"kept").unwrap();
-
-        recover(&root, &dir).unwrap();
-
-        assert_eq!(names(&dir), ["log-0"]);
-        assert_eq!(read(&dir.join("log-0")).unwrap(), b"kept");
-        assert_eq!(names(&root), [VAULT_LAYOUT_NAME.to_owned()]);
-    }
-
-    #[test]
-    fn what_a_cut_short_fetch_staged_is_cleared_and_the_copy_kept() {
-        let root = scratch("cleared");
-        let dir = copy_at(&root);
-        let staging = root.join(format!("{VAULT_LAYOUT_NAME}.{FETCHING}1-0"));
-
-        std::fs::create_dir_all(&staging).unwrap();
-        std::fs::write(staging.join("log-0"), b"half").unwrap();
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("log-0"), b"here").unwrap();
-
-        recover(&root, &dir).unwrap();
-
-        assert_eq!(names(&root), [VAULT_LAYOUT_NAME.to_owned()]);
-        assert_eq!(read(&dir.join("log-0")).unwrap(), b"here");
     }
 }

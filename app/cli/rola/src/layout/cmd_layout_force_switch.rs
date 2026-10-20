@@ -1,7 +1,7 @@
 //! The `rola layout force-switch` command: work in another Layout.
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -66,7 +66,7 @@ pub fn complete_layout_force_switch(
 #[command(node = "layout.force-switch", entry = EntryLayoutForceSwitch)]
 pub fn layout_force_switch(args: EntryLayoutForceSwitch) -> Next {
     let picked = args
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let name = match picked {
         Ok(name) => name,

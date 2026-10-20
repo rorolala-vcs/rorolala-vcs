@@ -583,6 +583,21 @@ mod tests {
     }
 
     #[test]
+    fn a_backslash_in_a_code_span_is_a_backslash() {
+        // What a span holds is taken literally, and a path is what a message puts in one: a
+        // Windows path holds backslashes, and reading `\_` as an escaped underscore would name a
+        // path that is not the one that failed.
+        assert_eq!(
+            drawn(r"`D:\work\__pycache__\layout`"),
+            r"`D:\work\__pycache__\layout`"
+        );
+        assert_eq!(drawn(r"`a\*b`"), r"`a\*b`");
+
+        // Outside one, a backslash still takes the meaning away from what follows.
+        assert_eq!(drawn(r"a \_ b"), "a _ b");
+    }
+
+    #[test]
     fn a_code_span_and_a_flag_are_drawn_in_bright_cyan() {
         // Bold for what is meant to be taken literally, italic for a flag, and the
         // same bright cyan for both.

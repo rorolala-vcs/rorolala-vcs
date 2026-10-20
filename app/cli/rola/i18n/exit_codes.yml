@@ -217,6 +217,10 @@ exit_codes:
     en: A store on one side failed while the exchange was being made
     zh-CN: 交换过程中一方的仓库失败
 
+  action_local_file:
+    en: A file the action needed could not be read or written
+    zh-CN: 动作需要的文件无法读写
+
   action_value_too_large:
     en: A value was too long to frame
     zh-CN: 值过长，无法装帧

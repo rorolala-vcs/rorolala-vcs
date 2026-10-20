@@ -63,7 +63,7 @@ pub fn desc_account() -> Description {
 pub fn account(args: EntryAccount) -> Next {
     // Picking an `Option` cannot fail: an account that is absent is `None` rather than an
     // error, so this unwrap never panics.
-    let chosen: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let chosen: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     let Some(name) = chosen else {
         return StateAccountList.into();

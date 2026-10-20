@@ -10,7 +10,7 @@ use std::str::FromStr as _;
 
 use librorolala::layout::MutableData;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{arg, buffer, chain, command, completion, help, metadata, r_eprintln, suggest},
     metadata::Description,
     picker::{EntryPicker, PickerArg},
@@ -188,11 +188,11 @@ fn entry_uuids(ctx: &ShellContext, workspace: &ResWorkspace, vault: &ResVault) -
 #[command(node = "layout.entry.create", entry = EntryLayoutEntryCreate)]
 pub fn layout_entry_create(args: EntryLayoutEntryCreate) -> Next {
     let picked = args
-        .pick(&ARG_OWNER)
-        .pick(&ARG_DESCRIPTION)
-        .pick(&ARG_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick(ARG_OWNER)
+        .pick(ARG_DESCRIPTION)
+        .pick(ARG_LAYOUT)
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (owner, description, layout, uuid, version) = match picked {
         Ok(picked) => picked,
@@ -235,11 +235,11 @@ pub fn desc_layout_entry_update() -> Description {
 #[command(node = "layout.entry.update", entry = EntryLayoutEntryUpdate)]
 pub fn layout_entry_update(args: EntryLayoutEntryUpdate) -> Next {
     let picked = args
-        .pick(&ARG_OWNER)
-        .pick(&ARG_DESCRIPTION)
-        .pick(&ARG_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick(ARG_OWNER)
+        .pick(ARG_DESCRIPTION)
+        .pick(ARG_LAYOUT)
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (owner, description, layout, uuid, version) = match picked {
         Ok(picked) => picked,
@@ -279,8 +279,8 @@ pub fn desc_layout_entry_remove() -> Description {
 #[command(node = "layout.entry.remove", entry = EntryLayoutEntryRemove)]
 pub fn layout_entry_remove(args: EntryLayoutEntryRemove) -> Next {
     let picked = args
-        .pick(&crate::layout::ARG_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick(crate::layout::ARG_LAYOUT)
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (layout, uuid) = match picked {
         Ok(picked) => picked,

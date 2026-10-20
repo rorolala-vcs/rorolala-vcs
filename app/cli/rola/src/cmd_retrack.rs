@@ -38,7 +38,7 @@ use librorolala::tree_analyze::{Cache, cache_path, entry_of, tree_diff};
 use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
 use librorolala::workspace::{Merging, Pending, Workspace};
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -74,7 +74,8 @@ use crate::fetch::{self, Sources};
 use crate::hash::{HashMiss, resolve as resolve_hash};
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutShouldInWorkspace, chosen, failed as layout_failed, readonly_layout_dir, remote_spec,
+    ErrorLayoutShouldInWorkspace, chosen, failed as layout_failed, readonly_layout_copy,
+    remote_spec,
 };
 
 /// How alike two text files have to be to count as the same file moved.
@@ -105,9 +106,10 @@ pub fn desc_retrack() -> Description {
 /// Completes what `rola retrack` can be given next.
 ///
 /// `FILE` is a local path the Layout records, so the filesystem answers it. `--until` names where
-/// the pointer goes: a level, a version the index holds, or a Vault whose own Layout records one —
-/// and a level such as `-1` is itself a word that starts with a dash, so it is answered before the
-/// flags are.
+/// the pointer goes: a level, a version the index holds, or a Vault whose own Layout records one.
+/// A level such as `-1` begins with a dash, so it is written with the flag — `--until=-1` — rather
+/// than as a word of its own, which would be read as an option; what is offered here are the words
+/// that do stand on their own, the versions and the Vaults.
 #[completion(EntryRetrack)]
 pub fn complete_retrack(
     ctx: ShellContext,
@@ -115,8 +117,7 @@ pub fn complete_retrack(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
     if filling_flag(&ctx, &ARG_UNTIL) {
-        let mut names = vec!["-1".to_owned()];
-        names.extend(index_hashes(index.get_ref().as_ref(), IndexObject::Version));
+        let mut names: Vec<String> = index_hashes(index.get_ref().as_ref(), IndexObject::Version);
         names.extend(vault_names(remote.get_ref()));
 
         return offer(&ctx, names);
@@ -149,8 +150,10 @@ pub fn complete_retrack(
 /// `--until` is where the pointer goes, and is one version back when it is not given: `-1` one
 /// version back, `~N` N versions back, `N` the version numbered N, a hash a version on the way
 /// back from where the entry is now, and a Vault's name the version that Vault's own Layout
-/// records for the file. A hash that is not on the way back is refused unless `--allow-jump` is
-/// given; `~N` and `N` past either end of the chain are always refused.
+/// records for the file. A level that begins with a dash is written with the flag, `--until=-1`,
+/// since a word of its own would be read as an option. A hash that is not on the way back is
+/// refused unless `--allow-jump` is given; `~N` and `N` past either end of the chain are always
+/// refused.
 ///
 /// A version this index does not hold is brought from the Vault the Layout tracks before the
 /// pointer moves, so a run may go to a version this side never fetched and leave a chain that can
@@ -179,10 +182,10 @@ pub fn complete_retrack(
 #[command(node = "retrack", entry = EntryRetrack)]
 pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
     let picked = args
-        .pick(&ARG_UNTIL)
-        .pick(&ARG_ONLY_INDEX)
-        .pick(&ARG_ALLOW_JUMP)
-        .pick_or_route(&arg![Vec<String>], || ErrorRetrackNoFile.into())
+        .pick(ARG_UNTIL)
+        .pick(ARG_ONLY_INDEX)
+        .pick(ARG_ALLOW_JUMP)
+        .pick_or_route(arg![Vec<String>], || ErrorRetrackNoFile.to_chain())
         .to_result();
     let (until, only_index, allow_jump, mut files) = match picked {
         Ok(picked) => picked,
@@ -705,12 +708,12 @@ fn upstream_version(
         .name_or_default(alias)
         .map_err(mingling::Routable::to_chain)?;
 
-    let dir = readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME);
+    let mut copy = readonly_layout_copy(held, &name, VAULT_LAYOUT_NAME);
 
     // A copy that is here is read as it is, however old: reaching for the Vault is what a run that
     // has not fetched is for, not something every run pays for — and an offline run does not reach
     // for it at all, so a copy that is not here fails at the open below.
-    if !dir.is_dir() && !offline {
+    if copy.is_none() && !offline {
         let target = remote
             .get_ref()
             .vault_or_default(name.clone())
@@ -720,7 +723,15 @@ fn upstream_version(
 
         action_fetch_layout(held, &account, target.to_string(), name.clone())
             .map_err(mingling::Routable::to_chain)?;
+
+        copy = readonly_layout_copy(held, &name, VAULT_LAYOUT_NAME);
     }
+
+    let Some(dir) = copy else {
+        return Err(failed(
+            "the Vault's Layout is not here, and this run may not fetch it".to_owned(),
+        ));
+    };
 
     let copy = Layout::open_existing(&dir).map_err(|error| failed(error.to_string()))?;
 

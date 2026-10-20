@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use librorolala::layout::LayoutFile;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -72,8 +72,8 @@ pub fn complete_layout_shot(ctx: ShellContext, workspace: &mut LazyRes<ResWorksp
 #[command(node = "layout.shot", entry = EntryLayoutShot)]
 pub fn layout_shot(args: EntryLayoutShot) -> Next {
     let picked = args
-        .pick_or_route(&arg![PathBuf], || ErrorLayoutArgument.into())
-        .pick(&arg![Option<String>])
+        .pick_or_route(arg![PathBuf], || ErrorLayoutArgument.to_chain())
+        .pick(arg![Option<String>])
         .to_result();
     let (output, name) = match picked {
         Ok(picked) => picked,

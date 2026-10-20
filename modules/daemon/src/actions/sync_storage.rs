@@ -124,7 +124,8 @@ impl Unit {
 /// [`ActionError::MissingValue`] if the context did not say which store this side has or the
 /// answers did not come back, [`ActionError::MissingObject`] if a required key is held by neither
 /// side, [`ActionError::Codec`] if a manifest from the peer does not read, and
-/// [`ActionError::Store`] or [`ActionError::Io`] if a store could not be read or written.
+/// [`ActionError::LocalFile`] if a store could not be read or written, and
+/// [`ActionError::Store`] for what a store failed with otherwise.
 pub async fn sync_storage(
     ctx: &mut ActionContext<'_>,
     workspace: OnlyWorkspace<RorolalaStorage>,
@@ -154,7 +155,8 @@ pub async fn sync_storage(
 /// [`ActionError::MissingValue`] if the context did not say which store this side has or the
 /// answers did not come back, [`ActionError::MissingObject`] if a required unit is held by neither
 /// side, [`ActionError::Codec`] if a manifest from the peer does not read, and
-/// [`ActionError::Store`] or [`ActionError::Io`] if a store could not be read or written.
+/// [`ActionError::LocalFile`] if a store could not be read or written, and
+/// [`ActionError::Store`] for what a store failed with otherwise.
 pub(crate) async fn sync_units(
     ctx: &mut ActionContext<'_>,
     workspace: OnlyWorkspace<RorolalaStorage>,
@@ -716,7 +718,10 @@ async fn pieces(local: &RorolalaStorage, key: &Key) -> Result<Pieces, ActionErro
 /// What a store failure means to an action.
 fn store_failed(error: StoreError) -> ActionError {
     match error {
-        StoreError::Io(source) => ActionError::Io(source.into()),
+        // A store that could not be read or written is a file, not a channel: what a caller does
+        // about it is give access to a place, and the two are told apart because they are acted on
+        // differently.
+        StoreError::Io(source) => ActionError::LocalFile(source.into()),
         // What this side held a moment ago is not there now, which is the same answer as the check
         // having found neither side holding it.
         StoreError::NotFound(_) => ActionError::MissingObject,

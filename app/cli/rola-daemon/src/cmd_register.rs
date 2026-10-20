@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 use mingling::{
-    Grouped, StructuralData, Suggest,
+    Grouped, Routable, StructuralData, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -56,8 +56,10 @@ pub fn complete_register() -> Suggest {
 #[command(node = "register")]
 pub fn register(args: EntryRegister) -> Next {
     let picked = args
-        .pick_or_route(&arg![String], || ErrorArgument::missing("NAMESPACE").into())
-        .pick(&arg![Option<String>])
+        .pick_or_route(arg![String], || {
+            ErrorArgument::missing("NAMESPACE").to_chain()
+        })
+        .pick(arg![Option<String>])
         .to_result();
 
     let (namespace, path) = match picked {

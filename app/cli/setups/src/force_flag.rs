@@ -25,7 +25,7 @@ where
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
         // UNWRAP: picking ARG_FORCE and REMAINS can each fall back, so parsing never
         // fails and the `unwrap` is safe.
-        let (force, args) = program.take_args().pick(&ARG_FORCE).pick(&REMAINS).unwrap();
+        let (force, args) = program.take_args().pick(ARG_FORCE).pick(REMAINS).unwrap();
         program.replace_args(args.into());
 
         program.with_resource(ResForce {

@@ -1,7 +1,7 @@
 //! The `rola layout cp` command: copy a Layout to a new name and work in the copy.
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -88,10 +88,10 @@ pub fn complete_layout_cp(
 #[command(node = "layout.cp", entry = EntryLayoutCp)]
 pub fn layout_cp(args: EntryLayoutCp) -> Next {
     let picked = args
-        .pick(&ARG_TRACK)
-        .pick(&ARG_NO_SET_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick(ARG_TRACK)
+        .pick(ARG_NO_SET_LAYOUT)
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (track, no_set_layout, from, to) = match picked {
         Ok(picked) => picked,

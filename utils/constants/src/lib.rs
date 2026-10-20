@@ -215,6 +215,16 @@ pub const USER_HISTORY_FILE: &str = "addr.hs";
 /// The file, under [`USER_DATA_DIR`], the exit code of the last run is kept in
 pub const USER_LASTEC_FILE: &str = "lastec";
 
+/// The variable naming the directory the user's own files are kept under
+///
+/// What it names is the directory [`USER_DATA_DIR`] sits in, which is the same thing a machine
+/// that follows the XDG layout means by `XDG_DATA_HOME`. It is for a run that must keep its files
+/// somewhere other than the user's — an integration suite, which would otherwise read and write
+/// the machine's — rather than for a person to set: a sandbox built on `XDG_DATA_HOME` alone is a
+/// sandbox on Unix, since Windows has no such variable to read.
+#[lazyffi(export = ROLA_DATA_HOME_ENV_VAR)]
+pub const DATA_HOME_ENV_VAR: &str = "ROLA_DATA_HOME";
+
 /// Keys named by the environment, under [`HOME_ENV_VAR`]
 #[lazyffi(export = ROLA_ENV_KEYS_DIR)]
 pub const ENV_KEYS_DIR: &str = "keys";

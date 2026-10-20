@@ -3,7 +3,8 @@
 //! A program rather than a set of tests cargo runs, because what it does is what a person does
 //! with a terminal: name a Vault, list what is served, check it, take it away, and complain
 //! when what was said is not what was expected. The machine's own table is never touched: every
-//! run is given a sandbox's `XDG_DATA_HOME`, which is where the daemon looks for it.
+//! run is given a sandbox's `ROLA_DATA_HOME`, which is where the daemon looks for it — and
+//! which is what makes that true on Windows, where `XDG_DATA_HOME` names nothing.
 
 use std::fs;
 use std::path::Path;
@@ -174,7 +175,7 @@ fn make_vault(dir: &Path) {
 /// A command running the daemon against the sandbox's own data directory.
 fn daemon(data: &Path, args: &[&str]) -> Command {
     let mut command = command("rola-daemon");
-    command.env("XDG_DATA_HOME", data).args(args);
+    command.env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data).args(args);
     command
 }
 

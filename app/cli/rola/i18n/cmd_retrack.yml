@@ -174,8 +174,10 @@ retrack:
   err_not_a_level_help:
     en: |
         `--until` accepts `-1`, `~N`, a version number `N`, a version's hash, or a Vault's name
+        A level that begins with `-` goes with the flag: `--until=-1`
     zh-CN: |
         `--until` 接受 `-1`、`~N`、版本号 `N`、版本的哈希，或保险库名
+        以 `-` 开头的层级要跟标志写在一起：`--until=-1`
 
   err_out_of_chain:
     en: "`%{until}` is outside the range of the version chain `%{path}` is at"

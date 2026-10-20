@@ -351,18 +351,26 @@ internal static class Sync
             var said = error.GetAwaiter().GetResult().Trim();
             var written = output.GetAwaiter().GetResult().Trim();
 
+            // A failure written as data rather than as a status and an error stream: asking for a structural renderer
+            // answers a failed run with the failure itself, and the renderer that would have set the status never ran.
+            var failure = FailureReport.Read(written);
+
             if (process.ExitCode == 0)
             {
-                return (0, string.Empty, written);
+                return failure is { } answered
+                    ? (FailureReport.Code, answered.Reason, written)
+                    : (0, string.Empty, written);
             }
 
             return (
                 process.ExitCode,
                 said.Length > 0
                     ? said
-                    : written.Length > 0
-                        ? written
-                        : $"the command ended with {process.ExitCode}",
+                    : failure?.Reason is { Length: > 0 } reason
+                        ? reason
+                        : written.Length > 0
+                            ? written
+                            : $"the command ended with {process.ExitCode}",
                 written
             );
         }

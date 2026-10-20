@@ -9,7 +9,7 @@ use librorolala::daemon::{PathMove, action_move_remote_path};
 use librorolala::layout::LayoutPath;
 use librorolala::workspace::Merging;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -109,9 +109,9 @@ pub fn complete_layout_path_create(
 #[command(node = "layout.path.create", entry = EntryLayoutPathCreate)]
 pub fn layout_path_create(args: EntryLayoutPathCreate) -> Next {
     let picked = args
-        .pick(&crate::layout::ARG_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick(crate::layout::ARG_LAYOUT)
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (layout, path, uuid) = match picked {
         Ok(picked) => picked,
@@ -220,8 +220,8 @@ pub fn complete_layout_path_remove(
 #[command(node = "layout.path.remove", entry = EntryLayoutPathRemove)]
 pub fn layout_path_remove(args: EntryLayoutPathRemove) -> Next {
     let picked = args
-        .pick(&crate::layout::ARG_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick(crate::layout::ARG_LAYOUT)
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (layout, path) = match picked {
         Ok(picked) => picked,
@@ -337,9 +337,9 @@ fn entry_layout(
 #[command(node = "layout.path.move", entry = EntryLayoutPathMove)]
 pub fn layout_path_move(args: EntryLayoutPathMove) -> Next {
     let picked = args
-        .pick(&crate::layout::ARG_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick(crate::layout::ARG_LAYOUT)
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (layout, from, to) = match picked {
         Ok(picked) => picked,

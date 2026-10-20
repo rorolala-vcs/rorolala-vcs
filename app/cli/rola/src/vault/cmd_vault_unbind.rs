@@ -1,7 +1,7 @@
 //! The `rola vault unbind` command: let a Workspace's name for a Vault go.
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest, Wrap,
+    Grouped, LazyRes, Routable, ShellContext, Suggest, Wrap,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -41,7 +41,7 @@ pub fn desc_vault_unbind() -> Description {
 #[command(node = "vault.unbind")]
 pub fn vault_unbind(args: EntryVaultUnbind) -> Next {
     let name = match args
-        .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
+        .pick_or_route(arg![String], || ErrorVaultNameMissing.to_chain())
         .to_result()
     {
         Ok(name) => name,

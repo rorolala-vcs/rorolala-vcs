@@ -106,7 +106,7 @@ pub fn desc_explain_exit_code() -> Description {
 pub fn explain_exit_code(args: EntryExplainExitCode) -> StateExplainExitCode {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // makes this about the run before.
-    let named: Option<i32> = args.pick(&arg![Option<i32>]).unwrap();
+    let named: Option<i32> = args.pick(arg![Option<i32>]).unwrap();
 
     StateExplainExitCode::from(named)
 }

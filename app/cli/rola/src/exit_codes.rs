@@ -233,6 +233,13 @@ pub const EC_ERR_ACTION_MISSING_OBJECT: i32 = 149;
 /// `exit_codes.action_store`
 pub const EC_ERR_ACTION_STORE: i32 = 150;
 
+// The action block is ten apart from 140, and the store's number is the first of the block after it:
+// 151 is the last number between them, so a file that could not be read or written takes it rather
+// than a block of its own.
+
+/// `exit_codes.action_local_file`
+pub const EC_ERR_ACTION_LOCAL_FILE: i32 = 151;
+
 // Explain
 
 /// `exit_codes.explain_unknown`

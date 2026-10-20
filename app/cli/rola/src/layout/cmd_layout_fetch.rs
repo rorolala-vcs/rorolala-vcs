@@ -27,7 +27,6 @@ use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
-use crate::layout::readonly_layout_dir;
 
 #[help(buffer)]
 pub fn help_layout_fetch(_: EntryLayoutFetch, ec: &mut ResExitCode) {
@@ -83,7 +82,7 @@ pub fn complete_layout_fetch(
 pub fn layout_fetch(args: EntryLayoutFetch) -> StateLayoutFetch {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     StateLayoutFetch::from(named)
 }
@@ -133,7 +132,10 @@ pub fn handle_layout_fetch(
     action_fetch_layout(held, &account, target.to_string(), name.clone())?;
 
     ResultLayoutFetched {
-        path: readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME)
+        // What is named is the place the copy is kept rather than the generation this run wrote:
+        // a generation is a name of the copy's own, and one a reader has no use for.
+        path: held
+            .readonly_layouts_dir(&name, VAULT_LAYOUT_NAME)
             .display()
             .to_string(),
         vault: name,

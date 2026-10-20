@@ -16,7 +16,6 @@ use mingling::{
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
-use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
 use serde::Serialize;
 use uuid::Uuid;
@@ -27,8 +26,7 @@ use crate::complete::{
 };
 use crate::exit_codes::EC_HELP;
 use crate::layout::{
-    ErrorLayoutArgument, ErrorOwnershipUnknown, cached_vault_layout, readonly_layout_dir,
-    vault_and_uuid,
+    ErrorLayoutArgument, ErrorOwnershipUnknown, cached_vault_copy, vault_and_uuid,
 };
 
 #[help(buffer)]
@@ -96,7 +94,7 @@ pub fn complete_layout_read_ownership(
 /// [`ErrorLayoutFailed`]: crate::layout::ErrorLayoutFailed
 #[command(node = "layout.read-ownership", entry = EntryLayoutReadOwnership)]
 pub fn layout_read_ownership(args: EntryLayoutReadOwnership) -> Next {
-    let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
+    let words: Vec<String> = args.pick(arg![Vec<String>]).unwrap_or_default();
 
     let Some((vault, id)) = vault_and_uuid(&words) else {
         return ErrorLayoutArgument.into();
@@ -129,11 +127,10 @@ pub fn handle_layout_read_ownership(
     let name = remote
         .get_ref()
         .name_or_default(state.vault.unwrap_or_default())?;
-    let dir = readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME);
 
     // A copy that was never fetched is not a copy with nothing in it: a directory the Layout's own files are not in is
     // said as nothing fetched rather than as a Layout naming no such entry.
-    let layout = cached_vault_layout(&dir, &name)?;
+    let layout = cached_vault_copy(held, &name)?;
 
     let uuid = state.id.to_string();
 

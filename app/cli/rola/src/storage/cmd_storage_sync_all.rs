@@ -89,7 +89,7 @@ pub fn desc_storage_sync_all() -> Description {
 pub fn storage_sync_all(args: EntryStorageSyncAll) -> StateStorageSyncAll {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     StateStorageSyncAll::from(named)
 }

@@ -92,7 +92,7 @@ pub fn complete_entries(ctx: ShellContext) -> Suggest {
 #[command(node = "entries", entry = EntryEntries)]
 pub fn entries(args: EntryEntries, format: &mut ResFormat) -> Next {
     // Picking flags cannot fail: a flag that is absent is `None`, not an error.
-    let remote = args.pick(&ARG_REMOTE).unwrap();
+    let remote = args.pick(ARG_REMOTE).unwrap();
 
     format.default_template(PATH_TEMPLATE);
 

@@ -63,7 +63,7 @@ pub fn complete_fetch(ctx: ShellContext, remote: &mut LazyRes<ResCurrentRemoteVa
 pub fn fetch(args: EntryFetch) -> StateLayoutFetch {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     StateLayoutFetch::from(named)
 }

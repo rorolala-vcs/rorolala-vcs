@@ -2,7 +2,7 @@
 
 use librorolala::inverse_index::InverseIndex;
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
         renderer, routeify, suggest,
@@ -51,11 +51,11 @@ pub fn desc_inv_idx_version_num() -> Description {
 #[command(node = "inv-idx.version-num", entry = EntryInvIdxVersionNum)]
 pub fn inv_idx_version_num(args: EntryInvIdxVersionNum, format: &mut ResFormat) -> Next {
     let hash = match args
-        .pick_or_route(&arg![String], || {
+        .pick_or_route(arg![String], || {
             ErrorInvIdxArgument {
                 argument: "HASH".to_owned(),
             }
-            .into()
+            .to_chain()
         })
         .to_result()
     {

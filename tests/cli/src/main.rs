@@ -6,8 +6,10 @@
 //! library under it is shaped, which is the business of the module suites.
 //!
 //! Everything happens inside one sandbox, and the places the program keeps for the user are
-//! pointed into it as well: `XDG_DATA_HOME`, `HOME` and `ROLA_HOME` are the sandbox's own, so a
-//! run here reads and writes nothing of the machine's. The language is pinned to English, since
+//! pointed into it as well: `ROLA_DATA_HOME`, `XDG_DATA_HOME`, `HOME` and `ROLA_HOME` are the
+//! sandbox's own, so a run here reads and writes nothing of the machine's. The first of those is
+//! what makes that true on Windows too: the machine's data directory is a known folder there, and
+//! `XDG_DATA_HOME` is a name no Windows program reads. The language is pinned to English, since
 //! what is read back is text; the check that is about the language says so itself.
 //!
 //! The commands are grouped the way a caller meets them: what the program is, making a place to
@@ -136,7 +138,11 @@ fn creation(
 ) {
     let ran = rola.run(empty, &["create", &text(ws)]);
     checked.exits("a Workspace is made", &ran, 0);
-    checked.stdout_has("the creation names where it was made", &ran, &text(ws));
+    checked.wants(
+        "the creation names where it was made",
+        names(&ran.stdout, ws),
+        &said(&ran),
+    );
     checked.wants(
         "the Workspace holds its data directory",
         ws.join(".rola/workspace.toml").is_file(),
@@ -171,7 +177,11 @@ fn creation(
 
     let ran = rola.run(empty, &["--vault", "create", &text(vault)]);
     checked.exits("a Vault is made", &ran, 0);
-    checked.stdout_has("the creation names where it was made", &ran, &text(vault));
+    checked.wants(
+        "the creation names where it was made",
+        names(&ran.stdout, vault),
+        &said(&ran),
+    );
     checked.wants(
         "the Vault holds its configuration",
         vault.join("vault.toml").is_file(),
@@ -190,7 +200,11 @@ fn creation(
     // `vaults/` and named rather than pathed.
     let ran = rola.run(vault, &["--vault", "create", "alpha"]);
     checked.exits("a Vault inside a Vault is made by name", &ran, 0);
-    checked.stdout_has("the made Vault is named under vaults", &ran, "vaults/alpha");
+    checked.wants(
+        "the made Vault is named under vaults",
+        names(&ran.stdout, Path::new("vaults/alpha")),
+        &said(&ran),
+    );
 
     let ran = rola.run(vault, &["--vault", "create", "alpha"]);
     checked.exits(
@@ -1348,6 +1362,11 @@ fn empty_cache(rola: &Rola, dir: &Path, checked: &mut Checked) {
         &ran,
         "has not been fetched",
     );
+    checked.stderr_has(
+        "the way out names the Vault to fetch",
+        &ran,
+        "rola layout fetch vault",
+    );
     checked.wants(
         "reading it made nothing in it",
         fs::read_dir(&cache)
@@ -1383,7 +1402,7 @@ impl Rola {
         command
             .current_dir(dir)
             .env("HOME", &self.home)
-            .env("XDG_DATA_HOME", &self.data)
+            .env("XDG_DATA_HOME", &self.data).env("ROLA_DATA_HOME", &self.data)
             .env("ROLA_HOME", &self.rola_home)
             // The language is pinned, so that what a check reads back does not depend on the
             // machine it runs on. A check about the language names its own.
@@ -1405,6 +1424,15 @@ impl Rola {
 /// The path as the argument a command is given.
 fn text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+/// Whether what a run said names `path`, however that platform spells a separator.
+///
+/// A place is written the way the program's path types write one — `/` — and an argument is
+/// written the way the machine writes one, so the two are the same place spelled twice. A check
+/// that compared the spellings rather than the place would fail on Windows for that alone.
+fn names(said: &str, path: &Path) -> bool {
+    said.replace('\\', "/").contains(&text(path).replace('\\', "/"))
 }
 
 /// What a run printed, read as JSON, when it printed JSON at all.

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use librorolala::storage::{Key, store_file};
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
+    Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -85,7 +85,7 @@ pub fn complete_storage_write_file(ctx: ShellContext) -> Suggest {
 #[command(node = "storage.write-file")]
 pub fn storage_write_file(args: EntryStorageWriteFile) -> Next {
     let picked = args
-        .pick_or_route(&arg![PathBuf], || ErrorFileMissing.into())
+        .pick_or_route(arg![PathBuf], || ErrorFileMissing.to_chain())
         .to_result();
     let file = match picked {
         Ok(file) => file,

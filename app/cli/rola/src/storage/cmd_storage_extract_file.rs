@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use librorolala::storage::{Error as StorageError, StorageBackend as _};
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -86,8 +86,8 @@ pub fn complete_storage_extract_file(
 #[command(node = "storage.extract-file")]
 pub fn storage_extract_file(args: EntryStorageExtractFile) -> Next {
     let picked = args
-        .pick_or_route(&arg![String], || ErrorHashMissing.into())
-        .pick(&arg![Option<PathBuf>])
+        .pick_or_route(arg![String], || ErrorHashMissing.to_chain())
+        .pick(arg![Option<PathBuf>])
         .to_result();
     let (hash, dir) = match picked {
         Ok(picked) => picked,

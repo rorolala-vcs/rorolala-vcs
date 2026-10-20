@@ -509,6 +509,10 @@ internal enum RolaActionErrorTag : int
     /// The session could not be established: a key could not be read, the peer could not
     /// </summary>
     RolaActionError_Auth = 10,
+    /// <summary>
+    /// A file the action had to read or write could not be.
+    /// </summary>
+    RolaActionError_LocalFile = 11,
 }
 
 [StructLayout(LayoutKind.Explicit)]
@@ -549,6 +553,11 @@ internal struct RolaActionErrorPayload
     /// </summary>
     [FieldOffset(0)]
     public RolaAuthError Auth;
+    /// <summary>
+    /// A file the action had to read or write could not be.
+    /// </summary>
+    [FieldOffset(0)]
+    public nint LocalFile;
 }
 
 /// <summary>
@@ -1308,6 +1317,12 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_DAEMON_REGISTRY_FILE();
+
+    /// <summary>
+    /// The variable naming the directory the user's own files are kept under
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_DATA_HOME_ENV_VAR();
 
     /// <summary>
     /// Keys named by the environment, under [`HOME_ENV_VAR`]

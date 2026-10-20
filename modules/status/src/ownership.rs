@@ -28,13 +28,13 @@ pub fn tracked_vault(workspace: &Workspace, layout: &Layout) -> Option<String> {
 ///
 /// It is what upstream says about an entry: who holds it, and which version it is at. A Layout that
 /// tracks no Vault, and a copy that was never fetched, both answer nothing — opening a copy makes one
-/// where none is there, so what is not a directory is not a copy with nothing in it.
+/// where none is there, so what was not fetched is not a copy with nothing in it.
 #[must_use]
 pub fn vault_copy(workspace: &Workspace, layout: &Layout) -> Option<Layout> {
     let vault = tracked_vault(workspace, layout)?;
-    let dir = workspace.readonly_layout_dir(&vault, VAULT_LAYOUT_NAME);
+    let dir = workspace.readonly_layout_copy(&vault, VAULT_LAYOUT_NAME)?;
 
-    dir.is_dir().then(|| Layout::open(&dir).ok()).flatten()
+    Layout::open(&dir).ok()
 }
 
 /// The paths among the tree's content changes that the fetched copy says are not `me`'s to make.
@@ -60,10 +60,9 @@ pub fn unowned(
         return Ok(Vec::new());
     };
 
-    let dir = workspace.readonly_layout_dir(vault, VAULT_LAYOUT_NAME);
-    if !dir.is_dir() {
+    let Some(dir) = workspace.readonly_layout_copy(vault, VAULT_LAYOUT_NAME) else {
         return Ok(Vec::new());
-    }
+    };
 
     let copy = Layout::open(&dir)?;
     let moved_from: BTreeMap<&str, &LayoutPath> = diff

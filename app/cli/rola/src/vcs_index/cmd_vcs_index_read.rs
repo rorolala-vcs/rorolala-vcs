@@ -8,7 +8,7 @@
 use librorolala::storage::Key;
 use librorolala::vcs::{VCSIndexObject, VCSWrite as _};
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
         renderer, routeify, suggest,
@@ -78,11 +78,11 @@ pub fn complete_vcs_index_read(ctx: ShellContext, index: &mut LazyRes<ResVCSInde
 #[command(node = "vcs-index.read", entry = EntryVcsIndexRead)]
 pub fn vcs_index_read(args: EntryVcsIndexRead, format: &mut ResFormat) -> Next {
     let hash = match args
-        .pick_or_route(&arg![String], || {
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "HASH".to_owned(),
             }
-            .into()
+            .to_chain()
         })
         .to_result()
     {

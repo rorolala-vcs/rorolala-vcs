@@ -5,7 +5,7 @@
 
 use librorolala::vcs::Creator;
 use mingling::{
-    Grouped, LazyRes, Suggest,
+    Grouped, LazyRes, Routable, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -49,11 +49,11 @@ pub fn desc_vcs_index_write_creator() -> Description {
 #[command(node = "vcs-index.write-creator", entry = EntryVcsIndexWriteCreator)]
 pub fn vcs_index_write_creator(args: EntryVcsIndexWriteCreator) -> Next {
     let name = match args
-        .pick_or_route(&arg![String], || {
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "CREATOR".to_owned(),
             }
-            .into()
+            .to_chain()
         })
         .to_result()
     {

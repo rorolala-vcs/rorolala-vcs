@@ -5,7 +5,7 @@
 
 use librorolala::vcs::Message;
 use mingling::{
-    Grouped, LazyRes, Suggest,
+    Grouped, LazyRes, Routable, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -47,11 +47,11 @@ pub fn desc_vcs_index_write_msg() -> Description {
 #[command(node = "vcs-index.write-msg", entry = EntryVcsIndexWriteMsg)]
 pub fn vcs_index_write_msg(args: EntryVcsIndexWriteMsg) -> Next {
     let message = match args
-        .pick_or_route(&arg![String], || {
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "MESSAGE".to_owned(),
             }
-            .into()
+            .to_chain()
         })
         .to_result()
     {

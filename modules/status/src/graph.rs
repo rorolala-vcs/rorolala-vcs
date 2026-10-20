@@ -586,7 +586,7 @@ fn vault_origin(workspace: &Workspace, id: Uuid) -> Option<(String, [u8; 32])> {
     let layouts = workspace.layouts();
     let current = layouts.current().ok().flatten()?;
     let track = layouts.track(&current).ok().flatten()?;
-    let dir = workspace.readonly_layout_dir(&track, VAULT_LAYOUT_NAME);
+    let dir = workspace.readonly_layout_copy(&track, VAULT_LAYOUT_NAME)?;
     let layout = Layout::open(dir).ok()?;
     let version = layout.entry(id)?.version();
 

@@ -132,7 +132,8 @@ pub(crate) fn local_index(ctx: &ActionContext<'_>) -> Result<VCSIndex, ActionErr
 /// Returns [`ActionError::NoChannel`] if there is nothing to exchange over,
 /// [`ActionError::MissingValue`] if the context did not say which index this side has or the answers
 /// did not come back, [`ActionError::MissingObject`] if a required key is held by neither side, and
-/// [`ActionError::Store`] or [`ActionError::Io`] if the index could not be read or written.
+/// [`ActionError::LocalFile`] if the index could not be read or written, and
+/// [`ActionError::Store`] for what an index failed with otherwise.
 async fn sync_index(
     ctx: &mut ActionContext<'_>,
     workspace: OnlyWorkspace<VCSIndex>,
@@ -278,7 +279,10 @@ async fn carry_index(
 /// What an index failure means to an action.
 fn index_failed(error: VCSIndexError) -> ActionError {
     match error {
-        VCSIndexError::Io(source) => ActionError::Io(source.into()),
+        // An index that could not be read or written is a file, not a channel: what a caller does
+        // about it is give access to a place, and the two are told apart because they are acted on
+        // differently.
+        VCSIndexError::Io(source) => ActionError::LocalFile(source.into()),
         // What this side held a moment ago is not there now, which is the same answer as the check
         // having found neither side holding it.
         VCSIndexError::NotFound(_) => ActionError::MissingObject,

@@ -8,7 +8,7 @@ use librorolala::layout::{LayoutFile, MutableData};
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::VCSIndex;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -105,11 +105,11 @@ pub fn complete_layout_import(ctx: ShellContext) -> Suggest {
 #[command(node = "layout.import", entry = EntryLayoutImport)]
 pub fn layout_import(args: EntryLayoutImport) -> Next {
     let picked = args
-        .pick(&ARG_NAME)
-        .pick(&ARG_TRACK)
-        .pick(&ARG_NO_CHECK)
-        .pick(&ARG_NO_SET_LAYOUT)
-        .pick_or_route(&arg![PathBuf], || ErrorLayoutArgument.into())
+        .pick(ARG_NAME)
+        .pick(ARG_TRACK)
+        .pick(ARG_NO_CHECK)
+        .pick(ARG_NO_SET_LAYOUT)
+        .pick_or_route(arg![PathBuf], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (name, track, no_check, no_set_layout, input) = match picked {
         Ok(picked) => picked,

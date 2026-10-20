@@ -39,7 +39,7 @@ use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_di
 use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
 use librorolala::workspace::{DATA_DIR, Merging, Pending};
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -189,11 +189,11 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 #[command(node = "track", entry = EntryTrack)]
 pub fn track(args: EntryTrack, force: &ResForce) -> Next {
     let picked = args
-        .pick(&ARG_MESSAGE)
-        .pick(&ARG_FILE_MESSAGE)
-        .pick(&ARG_NO_EDITOR)
-        .pick(&ARG_REPLACE)
-        .pick_or_route(&arg![Vec<String>], || ErrorTrackNoFiles.into())
+        .pick(ARG_MESSAGE)
+        .pick(ARG_FILE_MESSAGE)
+        .pick(ARG_NO_EDITOR)
+        .pick(ARG_REPLACE)
+        .pick_or_route(arg![Vec<String>], || ErrorTrackNoFiles.to_chain())
         .to_result();
     let (message, file_message, no_editor, replace, files) = match picked {
         Ok(picked) => picked,

@@ -48,7 +48,6 @@ use rorolala_cli_setups::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_location::normalize;
 use rust_i18n::t;
@@ -67,9 +66,7 @@ use crate::failure::failure;
 use crate::fetch::{self, Sources};
 use crate::hash::resolve as resolve_hash;
 use crate::keys::account_named;
-use crate::layout::{
-    ErrorLayoutMissing, ErrorLayoutNoCurrent, cached_vault_layout, failed, readonly_layout_dir,
-};
+use crate::layout::{ErrorLayoutMissing, ErrorLayoutNoCurrent, cached_vault_copy, failed};
 use crate::progress::Reporting;
 use crate::sync;
 use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
@@ -168,7 +165,7 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
 #[command(node = "checkin", entry = EntryCheckin)]
 pub fn checkin(args: EntryCheckin) -> Next {
     // Picking cannot fail: the positions are one list, and an absent one is the empty list.
-    let picked = args.pick(&arg![Vec<String>]).pick(&ARG_JOIN).to_result();
+    let picked = args.pick(arg![Vec<String>]).pick(ARG_JOIN).to_result();
     let (words, join): (Vec<String>, Option<String>) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
@@ -281,8 +278,7 @@ pub fn handle_checkin(
         action_fetch_layout(held, &account, target.to_string(), vault_name.clone())?;
     }
 
-    let dir = readonly_layout_dir(held, &vault_name, VAULT_LAYOUT_NAME);
-    let remote_layout = cached_vault_layout(&dir, &vault_name)?;
+    let remote_layout = cached_vault_copy(held, &vault_name)?;
 
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();

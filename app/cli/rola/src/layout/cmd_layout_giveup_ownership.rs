@@ -111,7 +111,7 @@ pub fn layout_giveup_ownership(args: EntryLayoutGiveupOwnership, offline: &ResOf
         return ErrorOffline.into();
     }
 
-    let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
+    let words: Vec<String> = args.pick(arg![Vec<String>]).unwrap_or_default();
 
     let Some((vault, ids)) = vault_and_uuids(&words) else {
         return ErrorLayoutArgument.into();
@@ -150,23 +150,25 @@ pub fn handle_layout_giveup_ownership(
     let account_name = current.get_ref().must_bind()?;
     let account = account_named(&account_name, Some(held), None)?;
 
+    // The `Uuid`s are let go of in one batch rather than one connection apiece: the action answers
+    // with one outcome per entry, in the order they were named, and the bar is unnamed because this
+    // door is not watched. What crosses back is the batch as text, since an action's output is what
+    // the C ABI hands back; what a run was told is read here, where the words it is said in are.
+    let ids: Vec<String> = state.ids.iter().map(ToString::to_string).collect();
+    let input = match crate::cmd_ownership::ownership_input(String::new(), ids) {
+        Ok(input) => input,
+        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+    };
+    let answer = action_giveup_ownership(held, &account, target.to_string(), input)?;
+    let outcomes: Vec<Ownership> = match serde_json::from_str(&answer) {
+        Ok(outcomes) => outcomes,
+        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+    };
+
     let mut entries = Vec::with_capacity(state.ids.len());
 
-    for id in state.ids {
+    for (id, outcome) in state.ids.into_iter().zip(outcomes) {
         let uuid = id.to_string();
-
-        // What crosses back is the outcome as text, since an action's output is what the C ABI hands
-        // back; what a run was told is read here, where the words it is said in are. What goes out is
-        // one `Uuid`, and the bar is unnamed because this door is not watched.
-        let input = match crate::cmd_ownership::ownership_input(String::new(), vec![uuid.clone()]) {
-            Ok(input) => input,
-            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-        };
-        let outcome = action_giveup_ownership(held, &account, target.to_string(), input)?;
-        let outcome: Ownership = match serde_json::from_str(&outcome) {
-            Ok(outcome) => outcome,
-            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-        };
 
         match outcome {
             Ownership::Owner(_) => {

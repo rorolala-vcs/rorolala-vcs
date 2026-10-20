@@ -117,8 +117,18 @@ internal static class CommandLine
 
             var written = output.GetAwaiter().GetResult().Trim();
 
+            // What the run answered with, when that is a failure written as data rather than a result: asking for a
+            // structural renderer answers a failed run with the failure, and the status that would have said so is one
+            // the renderer that sets it never reached.
+            var failure = FailureReport.Read(written);
+
             if (process.ExitCode == 0)
             {
+                if (failure is { } answered)
+                {
+                    return (FailureReport.Code, answered.Reason, written);
+                }
+
                 // What it said is kept even here: a run read through a structural renderer answers with its result, and
                 // a command that wrote about a refusal to its error stream has said something whether or not its status
                 // is zero. A caller that reads only what it needs is unaffected by the words it does not look at.
@@ -129,7 +139,10 @@ internal static class CommandLine
 
             if (told.Length == 0)
             {
-                told = written;
+                // A failure that was written as data is shown by what it says rather than by the line of JSON that
+                // holds it: the reason is the command's own account of what went wrong, and the JSON around it is the
+                // shape it was handed over in.
+                told = failure?.Reason ?? written;
             }
 
             return (

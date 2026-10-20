@@ -2,7 +2,7 @@
 
 use librorolala::protocol::VaultAddress;
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -54,9 +54,9 @@ pub fn desc_vault_bind() -> Description {
 #[command(node = "vault.bind")]
 pub fn vault_bind(args: EntryVaultBind) -> Next {
     let picked = args
-        .pick(&ARG_SET_DEFAULT)
-        .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
-        .pick_or_route(&arg![String], || ErrorVaultAddressMissing.into())
+        .pick(ARG_SET_DEFAULT)
+        .pick_or_route(arg![String], || ErrorVaultNameMissing.to_chain())
+        .pick_or_route(arg![String], || ErrorVaultAddressMissing.to_chain())
         .to_result();
     let (set_default, name, address) = match picked {
         Ok(picked) => picked,

@@ -1,7 +1,7 @@
 //! The `rola layout un-track` command: make a Layout track no Vault.
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -57,7 +57,7 @@ pub fn complete_layout_un_track(
 #[command(node = "layout.un-track", entry = EntryLayoutUnTrack)]
 pub fn layout_un_track(args: EntryLayoutUnTrack) -> Next {
     let picked = args
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let name = match picked {
         Ok(name) => name,

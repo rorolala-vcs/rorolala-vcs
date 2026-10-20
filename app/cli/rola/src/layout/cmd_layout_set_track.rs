@@ -1,7 +1,7 @@
 //! The `rola layout set-track` command: name the Vault upstream a Layout tracks.
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -65,8 +65,8 @@ pub fn complete_layout_set_track(
 #[command(node = "layout.set-track", entry = EntryLayoutSetTrack)]
 pub fn layout_set_track(args: EntryLayoutSetTrack) -> Next {
     let picked = args
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (name, track) = match picked {
         Ok(picked) => picked,

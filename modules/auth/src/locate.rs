@@ -6,6 +6,7 @@ use rorolala_utils_constants::{
     ENV_KEYS_DIR, GLOBAL_KEYS_DIR, HOME_ENV_VAR, PRIVATE_KEY_EXTENSION, PUBLIC_KEY_EXTENSION,
     USER_KEYS_DIR,
 };
+use rorolala_utils_location::data_home;
 
 use crate::{Account, Accounts, KeyLocateRule, Member, Members};
 
@@ -266,10 +267,11 @@ fn find_key<T>(
 ///
 /// This is the scope a generated pair is installed into, and the one a member is looked for
 /// in when the user scope is turned on: `~/.local/share/rola/keys` on a machine that follows
-/// the XDG layout. It is `None` when the machine does not say where that directory is.
+/// the XDG layout. It is `None` when the machine does not say where that directory is, and when
+/// neither does the run — see [`data_home`].
 #[must_use]
 pub fn user_keys_dir() -> Option<PathBuf> {
-    Some(dirs::data_local_dir()?.join(USER_KEYS_DIR))
+    Some(data_home()?.join(USER_KEYS_DIR))
 }
 
 /// The directory keys are kept in under the filesystem root: `/.rola/keys` on Unix.

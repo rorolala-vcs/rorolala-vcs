@@ -291,9 +291,13 @@ impl Merging {
     /// of the Workspace is not one a record can hold — though a place that becomes one later, because
     /// the target moved shallower, is held at the root rather than refused, which is what
     /// [`Merging::variant_path`] does.
+    ///
+    /// A place that is *rooted* is refused rather than one that is absolute: `/models/x.psd` is not
+    /// absolute on Windows — it names a path from the root of whatever drive the run is on — and
+    /// joining it onto the target's directory would hold a path no Layout names.
     #[must_use]
     pub fn place_holds(target: &LayoutPath, at: &Path) -> bool {
-        if at.is_absolute() {
+        if at.has_root() {
             return false;
         }
 

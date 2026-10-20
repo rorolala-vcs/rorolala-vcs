@@ -1,7 +1,7 @@
 //! The `rola layout new` command: make an empty Layout and work in it.
 
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -82,9 +82,9 @@ pub fn complete_layout_new(
 #[command(node = "layout.new", entry = EntryLayoutNew)]
 pub fn layout_new(args: EntryLayoutNew) -> Next {
     let picked = args
-        .pick(&ARG_TRACK)
-        .pick(&ARG_NO_SET_LAYOUT)
-        .pick_or_route(&arg![String], || ErrorLayoutArgument.into())
+        .pick(ARG_TRACK)
+        .pick(ARG_NO_SET_LAYOUT)
+        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .to_result();
     let (track, no_set_layout, name) = match picked {
         Ok(picked) => picked,

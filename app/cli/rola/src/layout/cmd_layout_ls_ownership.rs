@@ -16,14 +16,13 @@ use mingling::{
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
-use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
 use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::exit_codes::EC_HELP;
-use crate::layout::{cached_vault_layout, readonly_layout_dir};
+use crate::layout::cached_vault_copy;
 
 #[help(buffer)]
 pub fn help_layout_ls_ownership(_: EntryLayoutLsOwnership, ec: &mut ResExitCode) {
@@ -76,7 +75,7 @@ pub fn complete_layout_ls_ownership(
 pub fn layout_ls_ownership(args: EntryLayoutLsOwnership) -> StateLayoutLsOwnership {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is read.
-    let named: Option<String> = args.pick(&arg![Option<String>]).unwrap();
+    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     StateLayoutLsOwnership::from(named)
 }
@@ -106,11 +105,10 @@ pub fn handle_layout_ls_ownership(
     let name = remote
         .get_ref()
         .name_or_default(state.vault.unwrap_or_default())?;
-    let dir = readonly_layout_dir(held, &name, VAULT_LAYOUT_NAME);
 
     // A copy that was never fetched is not a copy with nothing in it: a directory the Layout's own files are not in is
     // said as nothing fetched rather than as a Layout holding no entries.
-    let layout = cached_vault_layout(&dir, &name)?;
+    let layout = cached_vault_copy(held, &name)?;
 
     // What a Layout answers with is in no order a reader can rely on, so the entries are held in
     // the order a listing is read in: by the `Uuid` each is known by.

@@ -21,7 +21,7 @@ use librorolala::vcs::{
     draw as draw_chain, read_chain, short_hash,
 };
 use mingling::{
-    Grouped, LazyRes, ProgramCollect, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, ProgramCollect, Routable, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -242,15 +242,15 @@ pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCS
 #[command(node = "vcs-index.lookback", entry = EntryVcsIndexLookback)]
 pub fn vcs_index_lookback(args: EntryVcsIndexLookback, lookback: &mut ResLookback) -> Next {
     let picked = args
-        .pick(&ARG_COMPACT)
-        .pick(&ARG_NO_MESSAGE)
-        .pick(&ARG_NO_CREATOR)
-        .pick(&ARG_MAX_MESSAGE_LENGTH)
-        .pick_or_route(&arg![String], || {
+        .pick(ARG_COMPACT)
+        .pick(ARG_NO_MESSAGE)
+        .pick(ARG_NO_CREATOR)
+        .pick(ARG_MAX_MESSAGE_LENGTH)
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "HASH".to_owned(),
             }
-            .into()
+            .to_chain()
         })
         .to_result();
     let (compact, no_message, no_creator, max_message_length, hash) = match picked {

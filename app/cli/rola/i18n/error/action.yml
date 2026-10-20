@@ -46,6 +46,16 @@ error:
       zh-CN: |
         请确认仓库可读可写，然后重试
 
+    err_local_file:
+      en: A file could not be read or written — %{reason}
+      zh-CN: 文件读写失败 —— %{reason}
+
+    err_local_file_help:
+      en: |
+        Please check that the path can be read and written, then try again
+      zh-CN: |
+        请确认该路径可读可写，然后重试
+
     err_value_too_large:
       en: The value to send is too long to fit in a frame
       zh-CN: 要发送的值太长，放不下一帧

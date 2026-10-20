@@ -19,7 +19,6 @@ rorolala-vault.workspace = true
 rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
 
-dirs.workspace = true
 
 tokio = { workspace = true, features = ["io-util"] }
 serde.workspace = true

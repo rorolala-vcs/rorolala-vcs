@@ -35,7 +35,7 @@ use librorolala::protocol::VaultAddress;
 use librorolala::tree_analyze::{TreeDiff, tree_diff, walk};
 use librorolala::workspace::Workspace;
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -49,7 +49,6 @@ use rorolala_cli_setups::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_location::normalize;
 use rorolala_utils_progress::Progress;
@@ -64,10 +63,7 @@ use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_OWNERSHIP, EC_HELP};
 use crate::failure::failure;
 use crate::keys::account_named;
-use crate::layout::{
-    ErrorLayoutFailed, ErrorLayoutMissing, cached_vault_layout, readonly_layout_dir,
-    set_cached_owner,
-};
+use crate::layout::{ErrorLayoutFailed, ErrorLayoutMissing, cached_vault_copy, set_cached_owner};
 use crate::progress::Reporting;
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
@@ -171,13 +167,13 @@ pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
     }
 
     let picked = args
-        .pick_or_route(&arg![Vec<String>], || {
+        .pick_or_route(arg![Vec<String>], || {
             ErrorOwnershipArgument {
                 command: "hold".to_owned(),
             }
-            .into()
+            .to_chain()
         })
-        .pick(&ARG_ALLOW_PARTIAL)
+        .pick(ARG_ALLOW_PARTIAL)
         .to_result();
     let (paths, allow_partial) = match picked {
         Ok(picked) => picked,
@@ -285,13 +281,13 @@ pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next
     }
 
     let picked = args
-        .pick_or_route(&arg![Vec<String>], || {
+        .pick_or_route(arg![Vec<String>], || {
             ErrorOwnershipArgument {
                 command: "giveup".to_owned(),
             }
-            .into()
+            .to_chain()
         })
-        .pick(&ARG_ALLOW_PARTIAL)
+        .pick(ARG_ALLOW_PARTIAL)
         .to_result();
     let (paths, allow_partial) = match picked {
         Ok(picked) => picked,
@@ -461,8 +457,7 @@ fn change(
     action_fetch_layout(held, &account, target.to_string(), vault_name.clone())?;
     step.advance_by(1);
 
-    let dir = readonly_layout_dir(held, &vault_name, VAULT_LAYOUT_NAME);
-    let copy = cached_vault_layout(&dir, &vault_name)?;
+    let copy = cached_vault_copy(held, &vault_name)?;
 
     let selected = match expanded(held, &cwd, names) {
         Ok(selected) => selected,

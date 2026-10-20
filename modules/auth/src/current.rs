@@ -2,18 +2,20 @@
 //!
 //! It belongs to no Vault and no Workspace: which account the work acts as is the user's own
 //! choice, and it is one line of text rather than a configuration. A machine that does not name a
-//! local data directory has nowhere to keep it, so the path is an `Option` and a run without a
-//! file acts as nobody.
+//! local data directory, and no run that names one, has nowhere to keep it, so the path is an
+//! `Option` and a run without a file acts as nobody.
 
 use std::fs;
 use std::path::PathBuf;
 
 use rorolala_utils_constants::{USER_ACCOUNT_FILE, USER_DATA_DIR};
+use rorolala_utils_location::data_home;
 
-/// The file the account the work acts as is kept in, if the machine names a data directory.
+/// The file the account the work acts as is kept in, if the machine or a run names a data
+/// directory.
 #[must_use]
 pub fn account_path() -> Option<PathBuf> {
-    dirs::data_local_dir().map(|dir| dir.join(USER_DATA_DIR).join(USER_ACCOUNT_FILE))
+    data_home().map(|dir| dir.join(USER_DATA_DIR).join(USER_ACCOUNT_FILE))
 }
 
 /// The account the work acts as, or nothing when none is named.

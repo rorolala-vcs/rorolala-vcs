@@ -32,8 +32,8 @@ where
         // fails and the `unwrap` is safe.
         let (no_pager, args) = program
             .take_args()
-            .pick(&ARG_NO_PAGER)
-            .pick(&REMAINS)
+            .pick(ARG_NO_PAGER)
+            .pick(REMAINS)
             .unwrap();
         program.replace_args(args.into());
 

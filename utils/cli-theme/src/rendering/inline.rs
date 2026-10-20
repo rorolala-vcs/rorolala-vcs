@@ -202,12 +202,23 @@ impl<'a> Parser<'a> {
             let Some(character) = rest.chars().next() else {
                 break;
             };
+            // What a code span holds is meant to be taken literally: a path or a name is written
+            // this way so that it arrives as itself, and reading `\_` as an escaped underscore — or
+            // `__pycache__` as an underlined word — would hand the reader something other than what
+            // the message was about. What a span still reads is what closes it, and a directive.
+            let literal = self.in_code();
             if rest.starts_with('\\') {
-                self.escape(rest);
+                if literal {
+                    self.advance();
+                } else {
+                    self.escape(rest);
+                }
             } else if rest.starts_with("[[") {
                 self.directive(rest);
             } else if let Some(wrapper) = self.wrapper(character, rest) {
                 self.mark(wrapper, character);
+            } else if literal {
+                self.advance();
             } else if let Some(delimiter) =
                 DELIMITERS.iter().find(|found| rest.starts_with(**found))
             {
@@ -217,6 +228,16 @@ impl<'a> Parser<'a> {
             }
         }
         self.flush();
+    }
+
+    /// Whether what is being read is inside a code span.
+    ///
+    /// The innermost thing open is what decides: a span opened inside another wrapper is still a
+    /// span, and what it holds is read as itself.
+    fn in_code(&self) -> bool {
+        self.open
+            .iter()
+            .any(|open| open.by == Opened::Wrapper(Wrapper::Code))
     }
 
     /// Reads one character as itself.

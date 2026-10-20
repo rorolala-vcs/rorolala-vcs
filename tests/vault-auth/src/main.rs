@@ -281,7 +281,7 @@ fn serve_vault(data: &Path, port: u16) -> Serving {
         command("rola-daemon")
             .arg("--port")
             .arg(port.to_string())
-            .env("XDG_DATA_HOME", data),
+            .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data),
         ("127.0.0.1", port),
         STARTUP,
     )

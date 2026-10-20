@@ -98,7 +98,7 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
 #[command(node = "pack", entry = EntryPack)]
 pub fn pack(args: EntryPack) -> StatePack {
     // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let (no_index, no_storage) = args.pick(&ARG_NO_INDEX).pick(&ARG_NO_STORAGE).unwrap();
+    let (no_index, no_storage) = args.pick(ARG_NO_INDEX).pick(ARG_NO_STORAGE).unwrap();
 
     StatePack {
         storage: matches!(no_storage, Flag::Inactive),

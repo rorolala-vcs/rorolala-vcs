@@ -97,7 +97,7 @@ rorolala-vcs = { path = "modules/vcs" }
 rorolala-workspace = { path = "modules/workspace" }
 
 # CLI Framework
-mingling = { git = "https://github.com/mingling-rs/mingling", rev = "f5544992ba72000623f079c6eeefaefc7e2fa16f", features = [
+mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267fe16686e1ac22d68da14a26005b8c9", features = [
     "picker",
     "comp",
     "pathf",
@@ -108,7 +108,7 @@ mingling = { git = "https://github.com/mingling-rs/mingling", rev = "f5544992ba7
 # Argument picking, on its own. The version has to be the one `mingling` resolves to, or the
 # `SinglePickable` implemented against it would not be the trait `mingling::picker` reaches
 # for and the two would be different traits with one name.
-arg-picker = "0.3.2"
+arg-picker = "0.4.0"
 
 # Globbing over the Vault's Layout paths, which is how `rola checkin` reads a reference that names
 # several entries at once. The full syntax is wanted rather than a bare `*`: a Vault's paths are a

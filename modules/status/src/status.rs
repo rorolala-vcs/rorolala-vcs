@@ -850,8 +850,9 @@ mod tests {
             .set_track(DEFAULT_LAYOUT_NAME, "vault")
             .unwrap();
 
-        // The copy says somebody else holds the entry, which is what makes changing it wrong.
-        let copy_dir = workspace.readonly_layout_dir("vault", VAULT_LAYOUT_NAME);
+        // The copy says somebody else holds the entry, which is what makes changing it wrong. It is kept the way a
+        // fetch for a Workspace of this age keeps one, which a reader still reads.
+        let copy_dir = workspace.readonly_layouts_dir("vault", VAULT_LAYOUT_NAME);
         fs::create_dir_all(&copy_dir).unwrap();
         let copy = Layout::open(&copy_dir).unwrap();
         copy.create_entry(

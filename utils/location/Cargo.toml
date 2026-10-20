@@ -4,5 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+dirs.workspace = true
 just_fmt.workspace = true
 tokio.workspace = true
+rorolala-utils-constants.workspace = true

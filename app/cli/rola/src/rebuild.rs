@@ -37,11 +37,7 @@ where
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
         // UNWRAP: each pick can fall back, so parsing never fails and the `unwrap` is safe — the
         // same reason `GlobalFlagSetup` gives for its own.
-        let (rebuild, args) = program
-            .take_args()
-            .pick(&ARG_REBUILD)
-            .pick(&REMAINS)
-            .unwrap();
+        let (rebuild, args) = program.take_args().pick(ARG_REBUILD).pick(REMAINS).unwrap();
         program.replace_args(args.into());
 
         program.with_resource(ResRebuildInverseIndex {

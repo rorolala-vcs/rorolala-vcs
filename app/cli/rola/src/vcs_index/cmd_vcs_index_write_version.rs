@@ -5,7 +5,7 @@
 
 use librorolala::vcs::{UNKNOWN_VERSION, Version};
 use mingling::{
-    Grouped, LazyRes, ShellContext, Suggest,
+    Grouped, LazyRes, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -69,11 +69,11 @@ pub fn complete_vcs_index_write_version(
 #[command(node = "vcs-index.write-version", entry = EntryVcsIndexWriteVersion)]
 pub fn vcs_index_write_version(args: EntryVcsIndexWriteVersion) -> Next {
     let picked = args
-        .pick_or_route(&arg![String], || {
+        .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "VARIANT".to_owned(),
             }
-            .into()
+            .to_chain()
         })
         .to_result();
     let variant = match picked {

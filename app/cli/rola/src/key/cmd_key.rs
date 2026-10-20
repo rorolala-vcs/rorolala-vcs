@@ -65,7 +65,7 @@ pub fn desc_key() -> Description {
 #[command(node = "key", entry = EntryKey)]
 pub fn key(args: EntryKey, format: &mut ResFormat) -> StateKeyList {
     // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let pem = args.pick(&ARG_PEM).unwrap();
+    let pem = args.pick(ARG_PEM).unwrap();
 
     format.default_template(DEFAULT_FORMAT);
     StateKeyList::from(matches!(pem, Flag::Active))

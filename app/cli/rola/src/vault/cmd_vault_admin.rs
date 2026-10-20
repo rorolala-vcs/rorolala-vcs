@@ -10,7 +10,7 @@
 
 use librorolala::vault::Config as VaultConfig;
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
+    Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -125,7 +125,7 @@ pub fn complete_vault_admin_add(
 #[command(node = "vault.admin.add", entry = EntryVaultAdminAdd)]
 pub fn vault_admin_add(args: EntryVaultAdminAdd) -> Next {
     let name = match args
-        .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
+        .pick_or_route(arg![String], || ErrorVaultNameMissing.to_chain())
         .to_result()
     {
         Ok(name) => name,
@@ -208,7 +208,7 @@ pub fn complete_vault_admin_rm(
 #[command(node = "vault.admin.rm", entry = EntryVaultAdminRm)]
 pub fn vault_admin_rm(args: EntryVaultAdminRm) -> Next {
     let name = match args
-        .pick_or_route(&arg![String], || ErrorVaultNameMissing.into())
+        .pick_or_route(arg![String], || ErrorVaultNameMissing.to_chain())
         .to_result()
     {
         Ok(name) => name,

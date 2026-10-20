@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use mingling::{
-    Grouped, ShellContext, Suggest,
+    Grouped, Routable, ShellContext, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -58,19 +58,19 @@ pub fn complete_fs_ops_cp(ctx: ShellContext) -> Suggest {
 #[command(node = "fs-ops.cp")]
 pub fn fs_ops_cp(args: EntryFsOpsCp) -> Next {
     let picked = args
-        .pick_or_route(&arg![PathBuf], || {
+        .pick_or_route(arg![PathBuf], || {
             ErrorFsOpsArguments {
                 verb: "cp",
                 needs_to: true,
             }
-            .into()
+            .to_chain()
         })
-        .pick_or_route(&arg![PathBuf], || {
+        .pick_or_route(arg![PathBuf], || {
             ErrorFsOpsArguments {
                 verb: "cp",
                 needs_to: true,
             }
-            .into()
+            .to_chain()
         })
         .to_result();
 

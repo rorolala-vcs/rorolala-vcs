@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use mingling::{
-    Grouped, ShellContext, StructuralData, Suggest,
+    Grouped, Routable, ShellContext, StructuralData, Suggest,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -64,7 +64,9 @@ pub fn complete_remove(ctx: ShellContext) -> Suggest {
 #[command(node = "remove")]
 pub fn remove(args: EntryRemove) -> Next {
     let picked = args
-        .pick_or_route(&arg![String], || ErrorArgument::missing("NAMESPACE").into())
+        .pick_or_route(arg![String], || {
+            ErrorArgument::missing("NAMESPACE").to_chain()
+        })
         .to_result();
 
     let namespace = match picked {

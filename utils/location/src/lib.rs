@@ -10,6 +10,9 @@ use std::future::Future;
 use std::io::Error;
 use std::path::{Path, PathBuf};
 
+mod data_home;
+pub use data_home::*;
+
 mod helper;
 pub use helper::*;
 

@@ -18,7 +18,6 @@ globset.workspace = true
 mingling.workspace = true
 minus.workspace = true
 rust-i18n.workspace = true
-dirs.workspace = true
 futures.workspace = true
 indicatif.workspace = true
 rorolala-errors.workspace = true

@@ -103,7 +103,7 @@ pub fn storage_sync_hashes(args: EntryStorageSyncHashes, offline: &ResOffline) -
     }
 
     // Picking cannot fail: no positions are `None`-able but the list itself, which is empty.
-    let words: Vec<String> = args.pick(&arg![Vec<String>]).unwrap_or_default();
+    let words: Vec<String> = args.pick(arg![Vec<String>]).unwrap_or_default();
     let (vault, hashes) = with_vault(words);
 
     StateStorageSyncHashes { vault, hashes }.into()

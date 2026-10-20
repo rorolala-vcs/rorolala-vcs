@@ -82,9 +82,10 @@ impl Ownership {
         let local = layouts.get(&current).ok().flatten()?;
 
         // Opening a copy makes one where none is there, so a copy that was never fetched is asked
-        // about first: what is not a directory is not a copy with nothing in it.
-        let dir = workspace.readonly_layout_dir(&vault, VAULT_LAYOUT_NAME);
-        let copy = dir.is_dir().then(|| Layout::open(dir).ok()).flatten();
+        // about first: what was not fetched is not a copy with nothing in it.
+        let copy = workspace
+            .readonly_layout_copy(&vault, VAULT_LAYOUT_NAME)
+            .and_then(|dir| Layout::open(dir).ok());
 
         Some(Self {
             root: normalize(workspace.get_root()),
@@ -232,7 +233,9 @@ mod tests {
             .create_entry(id, MutableData::new(None, [1; 32], String::new()))
             .unwrap();
 
-        let copy_dir = workspace.readonly_layout_dir("vault", VAULT_LAYOUT_NAME);
+        // The shape a copy was kept in before generations, which a reader still reads: one
+        // directory holding the Layout itself, and no pointer naming anything.
+        let copy_dir = workspace.readonly_layouts_dir("vault", VAULT_LAYOUT_NAME);
         fs::create_dir_all(&copy_dir).unwrap();
         let copy = Layout::open(&copy_dir).unwrap();
         copy.create_path(&LayoutPath::new(upstream).unwrap(), id)
@@ -346,7 +349,7 @@ mod tests {
     #[test]
     fn a_vault_whose_copy_was_never_fetched_names_nothing() {
         let (dir, workspace) = held("unfetched-upstream", Some("alice"));
-        fs::remove_dir_all(workspace.readonly_layout_dir("vault", VAULT_LAYOUT_NAME)).unwrap();
+        fs::remove_dir_all(workspace.readonly_layouts_dir("vault", VAULT_LAYOUT_NAME)).unwrap();
 
         let ownership = Ownership::open(&workspace, Some("alice".to_owned())).unwrap();
 
@@ -368,7 +371,7 @@ mod tests {
     #[test]
     fn a_vault_whose_copy_was_never_fetched_answers_nothing_is_known() {
         let (dir, workspace) = held("unfetched", Some("alice"));
-        fs::remove_dir_all(workspace.readonly_layout_dir("vault", VAULT_LAYOUT_NAME)).unwrap();
+        fs::remove_dir_all(workspace.readonly_layouts_dir("vault", VAULT_LAYOUT_NAME)).unwrap();
 
         let ownership = Ownership::open(&workspace, Some("alice".to_owned())).unwrap();
 
