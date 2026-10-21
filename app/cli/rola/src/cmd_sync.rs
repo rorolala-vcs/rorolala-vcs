@@ -33,6 +33,7 @@ use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::VCSIndex;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -164,7 +165,7 @@ pub fn sync(
         return ErrorOffline.into();
     }
 
-    let (up_only, down_only, both, dry_run, no_index, no_storage, no_layout) = args
+    let (up_only, down_only, both, dry_run, no_index, no_storage, no_layout, unmatched) = args
         .pick(ARG_UP_ONLY)
         .pick(ARG_DOWN_ONLY)
         .pick(ARG_BOTH)
@@ -172,7 +173,12 @@ pub fn sync(
         .pick(ARG_NO_INDEX)
         .pick(ARG_NO_STORAGE)
         .pick(ARG_NO_LAYOUT)
+        .pick(&UNMATCHED)
         .unwrap();
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "sync") {
+        return next;
+    }
 
     let up = matches!(up_only, Flag::Active);
     let down = matches!(down_only, Flag::Active);
