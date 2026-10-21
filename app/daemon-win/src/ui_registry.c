@@ -154,7 +154,8 @@ static INT_PTR CALLBACK EntryDialogProc(HWND dialog, UINT message,
       if (state) {
         WCHAR namespace_name[256];
         WCHAR path[PATH_CCH];
-        WCHAR *trimmed;
+        WCHAR *trimmed_namespace;
+        WCHAR *trimmed_path;
         WCHAR *config;
         BOOL is_vault;
 
@@ -162,8 +163,8 @@ static INT_PTR CALLBACK EntryDialogProc(HWND dialog, UINT message,
                         (int)ARRAY_COUNT(namespace_name));
         GetDlgItemTextW(dialog, IDC_ENTRY_PATH, path, (int)ARRAY_COUNT(path));
 
-        trimmed = str_trim(namespace_name);
-        if (!registry_is_namespace(trimmed)) {
+        trimmed_namespace = str_trim(namespace_name);
+        if (!registry_is_namespace(trimmed_namespace)) {
           show_error(
               dialog,
               L"A namespace is letters, digits, '-' and '_', and starts with "
@@ -172,14 +173,14 @@ static INT_PTR CALLBACK EntryDialogProc(HWND dialog, UINT message,
           return TRUE;
         }
 
-        trimmed = str_trim(path);
-        if (!trimmed[0]) {
+        trimmed_path = str_trim(path);
+        if (!trimmed_path[0]) {
           show_error(dialog, L"Please choose the Vault folder.");
           SetFocus(GetDlgItem(dialog, IDC_ENTRY_PATH));
           return TRUE;
         }
 
-        config = path_join(trimmed, L"vault.toml");
+        config = path_join(trimmed_path, L"vault.toml");
         is_vault = config && path_exists(config);
         free(config);
         if (!is_vault) {
@@ -190,9 +191,11 @@ static INT_PTR CALLBACK EntryDialogProc(HWND dialog, UINT message,
           return TRUE;
         }
 
+        // The two are kept apart: what the row is named and where it points are read from their own
+        // box, and a name read from the path's box would be a row the daemon refuses as invalid.
         str_copy(state->namespace_name, ARRAY_COUNT(state->namespace_name),
-                 trimmed);
-        str_copy(state->path, ARRAY_COUNT(state->path), trimmed);
+                 trimmed_namespace);
+        str_copy(state->path, ARRAY_COUNT(state->path), trimmed_path);
       }
       EndDialog(dialog, TRUE);
       return TRUE;
