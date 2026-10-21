@@ -1216,7 +1216,7 @@ internal sealed class TreeBrowser : UserControl
             // a step holding nothing loses it again when the answer is in. A step that is opened in the
             // meantime is left alone, because what its rows are is the reading's to say.
             Waiting(item);
-            item.Header = Header(new Entry(path, EntryKind.Directory), () => Collapse(item));
+            item.Header = Header(new Entry(path, EntryKind.Directory), item, () => Collapse(item));
 
             _ = Task.Run(() =>
             {
@@ -1304,6 +1304,7 @@ internal sealed class TreeBrowser : UserControl
         // in hand is drawn plain and faded the moment they are (see `Node`).
         var row = Header(
             new Entry(path, EntryKind.Directory),
+            item,
             holds ? () => Collapse(item) : null
         );
         Fade(row, path);
@@ -1365,15 +1366,17 @@ internal sealed class TreeBrowser : UserControl
     /// it are that listing's answers, so the two views of one directory agree about an entry rather than each
     /// drawing it.
     /// <para>
-    /// A click on a directory switches the location there and then, rather than waiting for a second one: a tree is
-    /// walked by choosing steps, and choosing one can only mean going to it. A file is chosen, and opened by a second
-    /// click, because going to a file is nothing a tree can do. A step is opened by its own chevron, so opening one
-    /// does not come through here.
+    /// A press on a directory switches the location there and then, rather than waiting for a second one: a tree
+    /// is walked by choosing steps, and choosing one can only mean going to it. The step is left open with it, so
+    /// the walking is one press per step. What closes a step is its chevron — which the theme draws beside the
+    /// header as a control of its own, so a press on the chevron is not a press on the row and never reaches this
+    /// handler — and the menu's close-everything. A file is chosen, and opened by a second press, because going to
+    /// a file is nothing a tree can do.
     /// </para>
     /// <para>
-    /// What is clicked is the band the row is drawn in and not the word written in it, which is why the
+    /// What is pressed is the band the row is drawn in and not the word written in it, which is why the
     /// band is given a background at all: a panel with none is not hit anywhere its children are not, so
-    /// a click on the space after a name would select the row and leave the location where it was.
+    /// a press on the space after a name would select the row and leave the location where it was.
     /// </para>
     /// <para>
     /// The base theme opens and closes a step on a double click of a row as well, which leaves the chevron
@@ -1384,8 +1387,9 @@ internal sealed class TreeBrowser : UserControl
     /// </para>
     /// </remarks>
     /// <param name="entry">The entry the row names.</param>
+    /// <param name="step">The step the row is the header of, which a press on the row opens.</param>
     /// <param name="collapse">What closes every step under the row, or nothing where it has no steps under it.</param>
-    private Border Header(Entry entry, Action? collapse)
+    private Border Header(Entry entry, TreeViewItem? step, Action? collapse)
     {
         var path = entry.Path;
         var name = _listing.Name(entry);
@@ -1463,11 +1467,29 @@ internal sealed class TreeBrowser : UserControl
 
             Choose(path);
 
-            // Choosing a directory is going to it, because the tree is nothing but where a user is walking. A
-            // file is chosen here and opened by a second click, as a row of the directory listing beside it is.
             if (entry.Kind is EntryKind.Directory)
             {
+                // A press on a directory is the whole of walking: the location goes there, and the step is left
+                // open onto what it holds, so the step after it is one the user can see and press. A press on a
+                // row never puts a step away — what closes one is its chevron, or the menu's close-everything —
+                // so a tree is never folded up by the press that went into it.
+                //
+                // Opened before the location moves rather than after it: going to the directory the location is
+                // already in reads it again, and a tree read again is built again out of the steps that were open
+                // when it was asked (see `TreeControl.Draw`). An opening made after that belongs to the tree that
+                // is already gone, and the step the user pressed comes back closed.
+                if (step is not null)
+                {
+                    step.IsExpanded = true;
+                }
+
                 _browser.Go(path);
+            }
+            else if (Path.GetDirectoryName(path) is { Length: > 0 } directory)
+            {
+                // A file is not a place to go: what a click on one takes the location to is the directory it is
+                // in, which is the half of walking a file has. Opening the file is the second click's.
+                _browser.Go(directory);
             }
         };
 
@@ -1557,8 +1579,15 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>A row for a file, which opens onto nothing.</summary>
     /// <param name="entry">The file the row names.</param>
     /// <returns>The row.</returns>
-    private TreeViewItem Leaf(Entry entry) =>
-        new() { Tag = entry.Path, Header = Header(entry, collapse: null) };
+    private TreeViewItem Leaf(Entry entry)
+    {
+        // The row is made before its header, since a header is told which step it is: a file has none, because
+        // nothing opens under a file.
+        var item = new TreeViewItem { Tag = entry.Path };
+        item.Header = Header(entry, step: null, collapse: null);
+
+        return item;
+    }
 
     /// <summary>Whether a path is a directory or a file, as the tree knows it when asked.</summary>
     /// <remarks>

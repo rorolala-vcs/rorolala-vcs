@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using Avalonia.Styling;
 // Aliased because the contract carries a MenuItem of its own, and this file styles Avalonia's.
 using RorolalaDesktop.CoreDocks;
@@ -267,6 +268,19 @@ internal sealed class RorolalaTheme
 
     /// <inheritdoc cref="TreeRowHeight" />
     private const double TreeRowRoom = 3.0;
+
+    /// <summary>How long the arrow of a step takes to say the step was opened or closed.</summary>
+    private static readonly TimeSpan TreeTurn = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>
+    /// The name the base theme gives the arrow of a step.
+    /// </summary>
+    /// <remarks>
+    /// A template part is found by the name its own theme gave it, so this is read off the theme rather than
+    /// chosen here: the value it is given has to reach the control the theme builds, and a name this program
+    /// made up would be a style that applies to nothing at all.
+    /// </remarks>
+    private const string Chevron = "PART_ExpandCollapseChevron";
 
     /// <summary>
     /// The height of the menu bar, which is a fifth shorter than the other bands.
@@ -1132,6 +1146,33 @@ internal sealed class RorolalaTheme
             On(
                 selector => selector.OfType<TreeViewItem>().Template().Name("PART_HeaderPresenter"),
                 new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 0, TreeRowRoom))
+            ),
+            // The arrow says what the step is, and it says it from the step's own state: the base theme's
+            // chevron is a toggle button bound to the step, so the state is already there to select on. The
+            // two states are two style values rather than one binding, because a value a style hands a
+            // control is applied when the control is dressed and is not asked again — a binding put there
+            // reads the state once and goes on saying what it read. The turn is a transition on the same
+            // property, which is what makes it animated without becoming a second state to keep in step.
+            // The part is named as the base theme names it, since that is what a template part is found by:
+            // a name of this program's own would be a style that applies to nothing at all.
+            On(
+                selector => selector.OfType<TreeViewItem>().Template().Name(Chevron),
+                new Setter(Visual.RenderTransformProperty, TransformOperations.Parse("rotate(0deg)")),
+                new Setter(
+                    Visual.TransitionsProperty,
+                    new Transitions
+                    {
+                        new TransformOperationsTransition
+                        {
+                            Property = Visual.RenderTransformProperty,
+                            Duration = TreeTurn,
+                        },
+                    }
+                )
+            ),
+            On(
+                selector => selector.OfType<TreeViewItem>().Template().Name(Chevron).Class(":checked"),
+                new Setter(Visual.RenderTransformProperty, TransformOperations.Parse("rotate(45deg)"))
             ),
             On(
                 selector => selector.OfType<MenuItem>(),
