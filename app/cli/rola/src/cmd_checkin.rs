@@ -79,8 +79,8 @@ const ARG_JOIN: PickerArg<'static, Option<String>> = arg![join: Option<String>];
 /// Whether each reference keeps only its own name under the destination.
 ///
 /// A directory destination is a prefix by default, so `Assets/hero.psd` lands at
-/// `<TO>/Assets/hero.psd` 鈥?the path the Vault gives it, kept whole. A run that brings entries the
-/// user chose elsewhere 鈥?a drop on a directory, a paste 鈥?means them to land where they were put
+/// `<TO>/Assets/hero.psd` — the path the Vault gives it, kept whole. A run that brings entries the
+/// user chose elsewhere — a drop on a directory, a paste — means them to land where they were put
 /// rather than where the Vault has them, so this makes the destination the parent and the
 /// reference the name: `<TO>/hero.psd`, and a folder keeps the tree it is under its own name.
 const ARG_BY_NAME: PickerArg<'static, Flag> = arg![by_name: Flag];

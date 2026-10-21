@@ -60,7 +60,7 @@ public sealed class AsepriteTests
     /// The picture's bottom layer fills the canvas and its frames after the first reach that layer through a
     /// linked cel, which states no size of its own. A reader that drew the link's size rather than the size of
     /// the cel it names leaves those frames as the layers above the link and nothing else, which is a layer
-    /// missing from every frame but the first 鈥?what this checks is that the canvas is covered throughout.
+    /// missing from every frame but the first &mdash; what this checks is that the canvas is covered throughout.
     /// </remarks>
     [Fact]
     public void AFrameDrawnThroughALinkedCelCoversTheCanvas()
