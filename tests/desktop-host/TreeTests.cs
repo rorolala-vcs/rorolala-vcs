@@ -23,6 +23,22 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class TreeTests
 {
+    /// <summary>
+    /// Begins each test with no configuration of its own, and with no provider registered.
+    /// </summary>
+    /// <remarks>
+    /// The providers that hide entries are the run's rather than a view's (see
+    /// <see cref="global::FileSystemPlugin.HideRegistry"/>), so a test that drove a listing before this one may
+    /// have left a rule in force that hides the whole of a scratch directory. A tree with nothing under it is a
+    /// tree with no chevron and nothing to open, which is a test of nothing at all — and it reads from the
+    /// outside exactly like a press that did not work.
+    /// </remarks>
+    public TreeTests()
+    {
+        DataHome.Clean();
+        global::FileSystemPlugin.HideRegistry.Clear();
+    }
+
     /// <summary>The chevron opens a step and closes it again without touching the steps under it.</summary>
     /// <remarks>
     /// The steps under a step are closed with it only in the sense that they are not drawn: whether they were
@@ -113,6 +129,11 @@ public sealed class TreeTests
 
         var services = Host.Services();
         var host = services.For(new PluginId(FileSystem.Identity), 1);
+
+        // The providers the plugin brings itself, which is the state a run starts in; what any other test
+        // registered was cleared before this one began.
+        global::FileSystemPlugin.HideRegistry.Declare(host);
+
         var shared = new global::FileSystemPlugin.Shared(
             directory,
             new global::FileSystemPlugin.HideRegistry(host.Config),
