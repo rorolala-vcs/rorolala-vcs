@@ -6,6 +6,7 @@ use librorolala::layout::{Layout, LayoutPath};
 use librorolala::workspace::{Merging, Workspace};
 use mingling::{
     Grouped, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -72,12 +73,16 @@ pub fn fs_ops_rm(args: EntryFsOpsRm) -> Next {
             }
             .to_chain()
         })
+        .pick(&UNMATCHED)
         .to_result();
-
-    let path = match picked {
+    let (path, unmatched) = match picked {
         Ok(path) => path,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "fs-ops rm") {
+        return next;
+    }
 
     StateFsOpsRm { path }.into()
 }

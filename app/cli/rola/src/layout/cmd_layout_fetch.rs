@@ -7,6 +7,7 @@
 use librorolala::daemon::action_fetch_layout;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -79,12 +80,17 @@ pub fn complete_layout_fetch(
 /// [`ErrorAccountUnknown`]: crate::keys::ErrorAccountUnknown
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "layout.fetch", entry = EntryLayoutFetch)]
-pub fn layout_fetch(args: EntryLayoutFetch) -> StateLayoutFetch {
+pub fn layout_fetch(args: EntryLayoutFetch) -> Next {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
+    let (named, unmatched): (Option<String>, _) =
+        args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 
-    StateLayoutFetch::from(named)
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout fetch") {
+        return next;
+    }
+
+    StateLayoutFetch::from(named).into()
 }
 
 /// The state of fetching a Vault's Layout.

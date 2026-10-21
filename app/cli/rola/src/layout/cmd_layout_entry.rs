@@ -11,6 +11,7 @@ use std::str::FromStr as _;
 use librorolala::layout::MutableData;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{arg, buffer, chain, command, completion, help, metadata, r_eprintln, suggest},
     metadata::Description,
     picker::{EntryPicker, PickerArg},
@@ -193,11 +194,16 @@ pub fn layout_entry_create(args: EntryLayoutEntryCreate) -> Next {
         .pick(ARG_LAYOUT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (owner, description, layout, uuid, version) = match picked {
+    let (owner, description, layout, uuid, version, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout entry create") {
+        return next;
+    }
 
     StateLayoutEntry {
         uuid,
@@ -240,11 +246,16 @@ pub fn layout_entry_update(args: EntryLayoutEntryUpdate) -> Next {
         .pick(ARG_LAYOUT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (owner, description, layout, uuid, version) = match picked {
+    let (owner, description, layout, uuid, version, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout entry update") {
+        return next;
+    }
 
     StateLayoutEntry {
         uuid,
@@ -281,11 +292,16 @@ pub fn layout_entry_remove(args: EntryLayoutEntryRemove) -> Next {
     let picked = args
         .pick(crate::layout::ARG_LAYOUT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (layout, uuid) = match picked {
+    let (layout, uuid, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout entry remove") {
+        return next;
+    }
 
     StateLayoutEntry {
         uuid,

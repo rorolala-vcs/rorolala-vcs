@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use librorolala::layout::LayoutFile;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -74,11 +75,16 @@ pub fn layout_shot(args: EntryLayoutShot) -> Next {
     let picked = args
         .pick_or_route(arg![PathBuf], || ErrorLayoutArgument.to_chain())
         .pick(arg![Option<String>])
+        .pick(&UNMATCHED)
         .to_result();
-    let (output, name) = match picked {
+    let (output, name, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout shot") {
+        return next;
+    }
 
     StateLayoutShot { output, name }.into()
 }

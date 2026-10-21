@@ -34,6 +34,7 @@ use librorolala::vcs::{VCSIndex, VCSIndexObject, Variant};
 use librorolala::workspace::{Merging, Pending};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -165,11 +166,19 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
 #[command(node = "checkin", entry = EntryCheckin)]
 pub fn checkin(args: EntryCheckin) -> Next {
     // Picking cannot fail: the positions are one list, and an absent one is the empty list.
-    let picked = args.pick(arg![Vec<String>]).pick(ARG_JOIN).to_result();
-    let (words, join): (Vec<String>, Option<String>) = match picked {
+    let picked = args
+        .pick(arg![Vec<String>])
+        .pick(ARG_JOIN)
+        .pick(&UNMATCHED)
+        .to_result();
+    let (words, join, unmatched): (Vec<String>, Option<String>, _) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "checkin") {
+        return next;
+    }
 
     let Some((refs, to)) = split(join.as_deref(), words) else {
         return ErrorCheckinArgument.into();

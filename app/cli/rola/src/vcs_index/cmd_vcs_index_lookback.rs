@@ -22,6 +22,7 @@ use librorolala::vcs::{
 };
 use mingling::{
     Grouped, LazyRes, ProgramCollect, Routable, ShellContext, StructuralData, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -252,11 +253,16 @@ pub fn vcs_index_lookback(args: EntryVcsIndexLookback, lookback: &mut ResLookbac
             }
             .to_chain()
         })
+        .pick(&UNMATCHED)
         .to_result();
-    let (compact, no_message, no_creator, max_message_length, hash) = match picked {
+    let (compact, no_message, no_creator, max_message_length, hash, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "vcs-index lookback") {
+        return next;
+    }
 
     lookback.asked(compact, no_message, no_creator, max_message_length);
 

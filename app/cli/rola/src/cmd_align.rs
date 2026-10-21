@@ -28,6 +28,7 @@ use librorolala::vcs::VCSIndex;
 use librorolala::workspace::{Merging, Pending};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -216,6 +217,7 @@ pub fn align(args: EntryAlign) -> Next {
         .pick(ARG_RESTORE)
         .pick(ARG_COMPLETELY)
         .pick(arg![Option<String>])
+        .pick(&UNMATCHED)
         .to_result();
     let (
         delete,
@@ -228,10 +230,15 @@ pub fn align(args: EntryAlign) -> Next {
         restore,
         completely,
         path,
+        unmatched,
     ) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "align") {
+        return next;
+    }
 
     let Some(path) = path else {
         return ErrorAlignArgument.into();

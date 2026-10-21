@@ -2,6 +2,7 @@
 
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -92,11 +93,16 @@ pub fn layout_cp(args: EntryLayoutCp) -> Next {
         .pick(ARG_NO_SET_LAYOUT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (track, no_set_layout, from, to) = match picked {
+    let (track, no_set_layout, from, to, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout cp") {
+        return next;
+    }
 
     StateLayoutCp {
         from,

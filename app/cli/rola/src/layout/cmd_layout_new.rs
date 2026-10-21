@@ -2,6 +2,7 @@
 
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -85,11 +86,16 @@ pub fn layout_new(args: EntryLayoutNew) -> Next {
         .pick(ARG_TRACK)
         .pick(ARG_NO_SET_LAYOUT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (track, no_set_layout, name) = match picked {
+    let (track, no_set_layout, name, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout new") {
+        return next;
+    }
 
     StateLayoutNew {
         name,

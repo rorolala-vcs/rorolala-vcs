@@ -17,6 +17,10 @@ exit_codes:
     en: The run was handed over to a program beside this one, and did not end with that program's code
     zh-CN: 本次运行已交给旁边的外部程序，但未能以它的退出码结束
 
+  unmatched:
+    en: A command was given arguments it does not know
+    zh-CN: 某条命令被给了它不认识的参数
+
   help:
     en: Help was asked for
     zh-CN: 请求了帮助

@@ -7,6 +7,7 @@ use std::process::Command;
 use librorolala::auth::user_keys_dir;
 use mingling::{
     Grouped, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -93,11 +94,16 @@ pub fn key_generate(args: EntryKeyGenerate) -> Next {
     let picked = args
         .pick(ARG_INSTALL)
         .pick_or_route(arg![String], || ErrorKeyNameMissing.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (install, named) = match picked {
+    let (install, named, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "key generate") {
+        return next;
+    }
 
     // A pair is named by the stem of what was given, which is also what separates a name from
     // what a key is written as: it is the same reading here as everywhere a key is named.

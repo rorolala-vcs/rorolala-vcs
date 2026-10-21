@@ -3,6 +3,7 @@
 use librorolala::protocol::VaultAddress;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -57,11 +58,16 @@ pub fn vault_bind(args: EntryVaultBind) -> Next {
         .pick(ARG_SET_DEFAULT)
         .pick_or_route(arg![String], || ErrorVaultNameMissing.to_chain())
         .pick_or_route(arg![String], || ErrorVaultAddressMissing.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (set_default, name, address) = match picked {
+    let (set_default, name, address, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "vault bind") {
+        return next;
+    }
 
     // Picking a `Flag` cannot fail, so this is `Active` only when it was written.
     StateVaultBind {

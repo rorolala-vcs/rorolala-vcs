@@ -9,6 +9,7 @@
 use librorolala::storage::Lockable as _;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -96,14 +97,23 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
 /// is, [`ErrorPackLocked`] when one is locked by another run, and [`ErrorPackFailed`] when the
 /// objects could not be read or a pack could not be written.
 #[command(node = "pack", entry = EntryPack)]
-pub fn pack(args: EntryPack) -> StatePack {
+pub fn pack(args: EntryPack) -> Next {
     // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let (no_index, no_storage) = args.pick(ARG_NO_INDEX).pick(ARG_NO_STORAGE).unwrap();
+    let (no_index, no_storage, unmatched) = args
+        .pick(ARG_NO_INDEX)
+        .pick(ARG_NO_STORAGE)
+        .pick(&UNMATCHED)
+        .unwrap();
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "pack") {
+        return next;
+    }
 
     StatePack {
         storage: matches!(no_storage, Flag::Inactive),
         index: matches!(no_index, Flag::Inactive),
     }
+    .into()
 }
 
 /// The state a packing run starts in.

@@ -38,6 +38,13 @@ pub const EC_UNKNOWN_COMMAND: i32 = 12;
 /// `exit_codes.external_failed`
 pub const EC_ERR_EXTERNAL_FAILED: i32 = 13;
 
+// A command was given words it has no use for. They are one code rather than one per area: what
+// the words are is drawn, and the command they were given to is named beside them, so the code
+// says the same thing whichever command it was.
+
+/// `exit_codes.unmatched`
+pub const EC_ERR_UNMATCHED: i32 = 14;
+
 // Creation
 
 /// `exit_codes.creation_workspace`

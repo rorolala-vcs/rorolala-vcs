@@ -2,6 +2,7 @@
 
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -58,11 +59,16 @@ pub fn complete_layout_un_track(
 pub fn layout_un_track(args: EntryLayoutUnTrack) -> Next {
     let picked = args
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let name = match picked {
+    let (name, unmatched) = match picked {
         Ok(name) => name,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout un-track") {
+        return next;
+    }
 
     StateLayoutUnTrack { name }.into()
 }

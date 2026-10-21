@@ -28,6 +28,7 @@ use librorolala::vcs::{LookbackError, VCSIndex, read_chain};
 use librorolala::workspace::{Merging, Pending, Workspace};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -145,6 +146,7 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
         .pick(ARG_NO_HINT)
         .pick(ARG_SHOW_UNJOINED_VARIANTS)
         .pick(arg![Option<String>])
+        .pick(&UNMATCHED)
         .to_result();
     let (
         compact,
@@ -155,10 +157,15 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
         no_hint,
         show_unjoined_variants,
         target,
+        unmatched,
     ) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "status") {
+        return next;
+    }
 
     lookback.asked(compact, no_message, no_creator, max_message_length);
     lookback.asked_status(no_graph, no_hint);

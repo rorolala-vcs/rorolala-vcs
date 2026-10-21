@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use librorolala::auth::{locate_accounts, locate_members};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, empty_result, help, metadata, r_eprintln, r_print,
         r_println, renderer, suggest,
@@ -63,12 +64,16 @@ pub fn desc_key() -> Description {
 /// Each key found is printed as a full path, one per line, on standard output, in the order
 /// it is looked up. Finding nothing is not a failure: it prints nothing and returns.
 #[command(node = "key", entry = EntryKey)]
-pub fn key(args: EntryKey, format: &mut ResFormat) -> StateKeyList {
+pub fn key(args: EntryKey, format: &mut ResFormat) -> Next {
     // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let pem = args.pick(ARG_PEM).unwrap();
+    let (pem, unmatched) = args.pick(ARG_PEM).pick(&UNMATCHED).unwrap();
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "key") {
+        return next;
+    }
 
     format.default_template(DEFAULT_FORMAT);
-    StateKeyList::from(matches!(pem, Flag::Active))
+    StateKeyList::from(matches!(pem, Flag::Active)).into()
 }
 
 /// The state a listing of keys starts in.

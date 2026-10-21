@@ -16,6 +16,7 @@
 
 use mingling::{
     Grouped, StructuralData, Wrap,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, help, metadata, r_eprintln, r_println, renderer, routeify,
     },
@@ -103,12 +104,17 @@ pub fn desc_explain_exit_code() -> Description {
 /// [`ErrorUnknownExitCode`] when the code named is not one the program states, and
 /// [`ErrorLastExitCodeUnknown`] when the recorded one is not.
 #[command(node = "explain.exit-code")]
-pub fn explain_exit_code(args: EntryExplainExitCode) -> StateExplainExitCode {
+pub fn explain_exit_code(args: EntryExplainExitCode) -> Next {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // makes this about the run before.
-    let named: Option<i32> = args.pick(arg![Option<i32>]).unwrap();
+    let (named, unmatched): (Option<i32>, _) =
+        args.pick(arg![Option<i32>]).pick(&UNMATCHED).unwrap();
 
-    StateExplainExitCode::from(named)
+    if let Some(next) = crate::unmatched::refused(&unmatched, "explain.exit-code") {
+        return next;
+    }
+
+    StateExplainExitCode::from(named).into()
 }
 
 /// The state an explanation of an exit code starts in.

@@ -8,6 +8,7 @@
 use librorolala::daemon::action_handshake;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -67,12 +68,17 @@ pub fn desc_vault_handshake() -> Description {
 /// [`ErrorRemoteVault`]: crate::error::ErrorRemoteVault
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "vault.handshake")]
-pub fn vault_handshake(args: EntryVaultHandshake) -> StateVaultHandshake {
+pub fn vault_handshake(args: EntryVaultHandshake) -> Next {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // lets the Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
+    let (named, unmatched): (Option<String>, _) =
+        args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 
-    StateVaultHandshake::from(named)
+    if let Some(next) = crate::unmatched::refused(&unmatched, "vault handshake") {
+        return next;
+    }
+
+    StateVaultHandshake::from(named).into()
 }
 
 /// The state of speaking the handshake to a Vault.

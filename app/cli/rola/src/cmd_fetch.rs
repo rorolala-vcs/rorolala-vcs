@@ -6,6 +6,7 @@
 
 use mingling::{
     LazyRes, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{arg, buffer, command, completion, help, metadata, r_eprintln, suggest},
     metadata::Description,
     picker::EntryPicker,
@@ -15,6 +16,7 @@ use rorolala_cli_setups::ResCurrentRemoteVault;
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
+use crate::Next;
 use crate::complete::{offer, positional, typing_flag, vault_names};
 use crate::exit_codes::EC_HELP;
 use crate::layout::cmd_layout_fetch::StateLayoutFetch;
@@ -60,10 +62,15 @@ pub fn complete_fetch(ctx: ShellContext, remote: &mut LazyRes<ResCurrentRemoteVa
 /// [`ErrorAccountUnknown`](crate::keys::ErrorAccountUnknown)), or the exchange itself failed
 /// ([`ActionError`](librorolala::protocol::ActionError)).
 #[command(node = "fetch", entry = EntryFetch)]
-pub fn fetch(args: EntryFetch) -> StateLayoutFetch {
+pub fn fetch(args: EntryFetch) -> Next {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
+    let (named, unmatched): (Option<String>, _) =
+        args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 
-    StateLayoutFetch::from(named)
+    if let Some(next) = crate::unmatched::refused(&unmatched, "fetch") {
+        return next;
+    }
+
+    StateLayoutFetch::from(named).into()
 }

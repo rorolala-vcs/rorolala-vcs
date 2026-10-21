@@ -1,0 +1,17 @@
+_version: 2
+
+# The words a run was given and has no use for: the head of the snippet, and what each word is
+# called. Both are drawn by rola's own reporter, in the colours a drawing is made of.
+unmatched:
+  title:
+    en: "the command was given arguments it does not know"
+    zh-CN: "输入的命令中包含未知参数"
+
+  label:
+    en: "unknown argument"
+    zh-CN: "未知参数"
+
+  # The way out, naming the command the words were given to.
+  help:
+    en: "Run `rola %{command} --help` to see what it takes"
+    zh-CN: "运行 `rola %{command} --help` 看看它能接受什么"

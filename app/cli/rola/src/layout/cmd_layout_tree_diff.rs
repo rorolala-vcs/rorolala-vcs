@@ -3,6 +3,7 @@
 use librorolala::tree_analyze::tree_diff;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_print, r_println,
         renderer, suggest,
@@ -90,11 +91,19 @@ pub fn complete_layout_tree_diff(
 /// or the Layout could not be read.
 #[command(node = "layout.tree-diff", entry = EntryLayoutTreeDiff)]
 pub fn layout_tree_diff(args: EntryLayoutTreeDiff) -> Next {
-    let picked = args.pick(ARG_ALIKE).pick(arg![Option<String>]).to_result();
-    let (alike, name) = match picked {
+    let picked = args
+        .pick(ARG_ALIKE)
+        .pick(arg![Option<String>])
+        .pick(&UNMATCHED)
+        .to_result();
+    let (alike, name, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout tree-diff") {
+        return next;
+    }
 
     StateLayoutTreeDiff {
         name,

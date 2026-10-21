@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use librorolala::storage::{Key, store_file};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest, Wrap,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -86,11 +87,16 @@ pub fn complete_storage_write_file(ctx: ShellContext) -> Suggest {
 pub fn storage_write_file(args: EntryStorageWriteFile) -> Next {
     let picked = args
         .pick_or_route(arg![PathBuf], || ErrorFileMissing.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let file = match picked {
+    let (file, unmatched) = match picked {
         Ok(file) => file,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "storage write-file") {
+        return next;
+    }
 
     StateStorageWriteFile::from(file).into()
 }

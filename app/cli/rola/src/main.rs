@@ -60,6 +60,7 @@ mod progress;
 mod rebuild;
 mod storage;
 mod sync;
+mod unmatched;
 mod user;
 mod vault;
 mod vcs_index;

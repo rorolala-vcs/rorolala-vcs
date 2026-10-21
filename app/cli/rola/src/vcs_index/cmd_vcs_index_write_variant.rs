@@ -8,6 +8,7 @@ use librorolala::storage::Key;
 use librorolala::vcs::{UNKNOWN_VERSION, Variant};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -120,11 +121,16 @@ pub fn vcs_index_write_variant(args: EntryVcsIndexWriteVariant) -> Next {
             }
             .to_chain()
         })
+        .pick(&UNMATCHED)
         .to_result();
-    let (join, base_version, storage, creator, message) = match picked {
+    let (join, base_version, storage, creator, message, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "vcs-index write-variant") {
+        return next;
+    }
 
     StateVcsIndexWriteVariant {
         base_version,

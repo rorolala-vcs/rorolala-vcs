@@ -6,6 +6,7 @@
 use librorolala::vcs::{UNKNOWN_VERSION, Version};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -75,11 +76,16 @@ pub fn vcs_index_write_version(args: EntryVcsIndexWriteVersion) -> Next {
             }
             .to_chain()
         })
+        .pick(&UNMATCHED)
         .to_result();
-    let variant = match picked {
+    let (variant, unmatched) = match picked {
         Ok(variant) => variant,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "vcs-index write-version") {
+        return next;
+    }
 
     StateVcsIndexWriteVersion { variant }.into()
 }

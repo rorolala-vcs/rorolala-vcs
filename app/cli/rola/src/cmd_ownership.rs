@@ -36,6 +36,7 @@ use librorolala::tree_analyze::{TreeDiff, tree_diff, walk};
 use librorolala::workspace::Workspace;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -174,11 +175,16 @@ pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
             .to_chain()
         })
         .pick(ARG_ALLOW_PARTIAL)
+        .pick(&UNMATCHED)
         .to_result();
-    let (paths, allow_partial) = match picked {
+    let (paths, allow_partial, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "hold") {
+        return next;
+    }
 
     // Picking several cannot fail for want of them — an absent list is an empty one — so a run
     // that named nothing is told so here rather than reading as a run with nothing to do.
@@ -288,11 +294,16 @@ pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next
             .to_chain()
         })
         .pick(ARG_ALLOW_PARTIAL)
+        .pick(&UNMATCHED)
         .to_result();
-    let (paths, allow_partial) = match picked {
+    let (paths, allow_partial, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "giveup") {
+        return next;
+    }
 
     // Picking several cannot fail for want of them — an absent list is an empty one — so a run
     // that named nothing is told so here rather than reading as a run with nothing to do.

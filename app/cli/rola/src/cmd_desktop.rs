@@ -23,6 +23,7 @@ use std::process::Command;
 
 use mingling::{
     Grouped, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -276,11 +277,16 @@ pub fn desktop(args: EntryDesktop) -> Next {
     let picked = args
         .pick(ARG_QUERY_WINDOW_STYLE)
         .pick(ARG_WINDOW_STYLE)
+        .pick(&UNMATCHED)
         .to_result();
-    let (query, written) = match picked {
+    let (query, written, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "desktop") {
+        return next;
+    }
 
     if matches!(query, Flag::Active) {
         // Asking how a frame is drawn and choosing how one is drawn are two different runs, and a run

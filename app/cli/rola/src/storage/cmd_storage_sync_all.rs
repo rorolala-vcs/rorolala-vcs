@@ -15,6 +15,7 @@ use librorolala::protocol::ActionError;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest, Wrap,
     confirm::YesConfirm,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -86,12 +87,17 @@ pub fn desc_storage_sync_all() -> Description {
 // where it is handed in for the same reason, and taking a copy of it here would be no more the
 // answer the run gave.
 #[command(node = "storage.sync-all")]
-pub fn storage_sync_all(args: EntryStorageSyncAll) -> StateStorageSyncAll {
+pub fn storage_sync_all(args: EntryStorageSyncAll) -> Next {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
+    let (named, unmatched): (Option<String>, _) =
+        args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 
-    StateStorageSyncAll::from(named)
+    if let Some(next) = crate::unmatched::refused(&unmatched, "storage sync-all") {
+        return next;
+    }
+
+    StateStorageSyncAll::from(named).into()
 }
 
 /// The state of making the two stores hold the same keys.

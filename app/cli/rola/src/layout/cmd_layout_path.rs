@@ -10,6 +10,7 @@ use librorolala::layout::LayoutPath;
 use librorolala::workspace::Merging;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -112,11 +113,16 @@ pub fn layout_path_create(args: EntryLayoutPathCreate) -> Next {
         .pick(crate::layout::ARG_LAYOUT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (layout, path, uuid) = match picked {
+    let (layout, path, uuid, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout path create") {
+        return next;
+    }
 
     StateLayoutPathCreate { path, uuid, layout }.into()
 }
@@ -222,11 +228,16 @@ pub fn layout_path_remove(args: EntryLayoutPathRemove) -> Next {
     let picked = args
         .pick(crate::layout::ARG_LAYOUT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (layout, path) = match picked {
+    let (layout, path, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout path remove") {
+        return next;
+    }
 
     StateLayoutPathRemove { path, layout }.into()
 }
@@ -340,11 +351,16 @@ pub fn layout_path_move(args: EntryLayoutPathMove) -> Next {
         .pick(crate::layout::ARG_LAYOUT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (layout, from, to) = match picked {
+    let (layout, from, to, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout path move") {
+        return next;
+    }
 
     StateLayoutPathMove { from, to, layout }.into()
 }

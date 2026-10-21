@@ -18,6 +18,7 @@ use librorolala::protocol::ActionError;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest, Wrap,
     confirm::YesConfirm,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -89,12 +90,17 @@ pub fn desc_vcs_index_sync_all() -> Description {
 // where it is handed in for the same reason, and taking a copy of it here would be no more the
 // answer the run gave.
 #[command(node = "vcs-index.sync-all")]
-pub fn vcs_index_sync_all(args: EntryVcsIndexSyncAll) -> StateVcsIndexSyncAll {
+pub fn vcs_index_sync_all(args: EntryVcsIndexSyncAll) -> Next {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is reached for.
-    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
+    let (named, unmatched): (Option<String>, _) =
+        args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 
-    StateVcsIndexSyncAll::from(named)
+    if let Some(next) = crate::unmatched::refused(&unmatched, "vcs-index sync-all") {
+        return next;
+    }
+
+    StateVcsIndexSyncAll::from(named).into()
 }
 
 /// The state of making the two indexes hold the same keys.

@@ -6,6 +6,7 @@
 
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -72,12 +73,17 @@ pub fn complete_layout_ls_ownership(
 /// [`ErrorLayoutNotCached`]: crate::layout::ErrorLayoutNotCached
 /// [`ErrorLayoutFailed`]: crate::layout::ErrorLayoutFailed
 #[command(node = "layout.ls-ownership", entry = EntryLayoutLsOwnership)]
-pub fn layout_ls_ownership(args: EntryLayoutLsOwnership) -> StateLayoutLsOwnership {
+pub fn layout_ls_ownership(args: EntryLayoutLsOwnership) -> Next {
     // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
     // Workspace's own choice be the one that is read.
-    let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
+    let (named, unmatched): (Option<String>, _) =
+        args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 
-    StateLayoutLsOwnership::from(named)
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout ls-ownership") {
+        return next;
+    }
+
+    StateLayoutLsOwnership::from(named).into()
 }
 
 /// The state of listing who holds each entry.

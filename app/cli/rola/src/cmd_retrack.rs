@@ -39,6 +39,7 @@ use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version
 use librorolala::workspace::{Merging, Pending, Workspace};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -186,11 +187,16 @@ pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
         .pick(ARG_ONLY_INDEX)
         .pick(ARG_ALLOW_JUMP)
         .pick_or_route(arg![Vec<String>], || ErrorRetrackNoFile.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (until, only_index, allow_jump, mut files) = match picked {
+    let (until, only_index, allow_jump, mut files, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "retrack") {
+        return next;
+    }
 
     // One file is the whole of what this moves, so naming more is not a run this reads as one of
     // its own: it is refused rather than acted on for the first and quietly ignoring the rest.

@@ -40,6 +40,7 @@ use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
 use librorolala::workspace::{DATA_DIR, Merging, Pending};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -194,11 +195,16 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
         .pick(ARG_NO_EDITOR)
         .pick(ARG_REPLACE)
         .pick_or_route(arg![Vec<String>], || ErrorTrackNoFiles.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (message, file_message, no_editor, replace, files) = match picked {
+    let (message, file_message, no_editor, replace, files, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "track") {
+        return next;
+    }
 
     if files.is_empty() {
         return ErrorTrackNoFiles.into();

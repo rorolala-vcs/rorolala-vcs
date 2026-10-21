@@ -2,6 +2,7 @@
 
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -67,11 +68,16 @@ pub fn layout_set_track(args: EntryLayoutSetTrack) -> Next {
     let picked = args
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
+        .pick(&UNMATCHED)
         .to_result();
-    let (name, track) = match picked {
+    let (name, track, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "layout set-track") {
+        return next;
+    }
 
     StateLayoutSetTrack { name, track }.into()
 }

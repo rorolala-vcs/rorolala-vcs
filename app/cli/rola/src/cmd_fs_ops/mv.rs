@@ -11,6 +11,7 @@ use librorolala::layout::{Layout, LayoutPath};
 use librorolala::workspace::{Merging, Workspace};
 use mingling::{
     Grouped, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -85,12 +86,16 @@ pub fn fs_ops_mv(args: EntryFsOpsMv) -> Next {
             }
             .to_chain()
         })
+        .pick(&UNMATCHED)
         .to_result();
-
-    let (from, to) = match picked {
+    let (from, to, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "fs-ops mv") {
+        return next;
+    }
 
     StateFsOpsMv { from, to }.into()
 }

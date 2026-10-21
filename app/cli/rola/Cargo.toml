@@ -12,6 +12,7 @@ rorolala-utils-location.workspace = true
 rorolala-utils-progress.workspace = true
 rorolala-vault.workspace = true
 rorolala-workspace.workspace = true
+annotate-snippets.workspace = true
 colored.workspace = true
 console.workspace = true
 globset.workspace = true

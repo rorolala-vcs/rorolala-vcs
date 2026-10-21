@@ -9,6 +9,7 @@ use librorolala::layout::normalize_name;
 use librorolala::protocol::VaultAddress;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
@@ -106,11 +107,16 @@ pub fn bind(args: EntryBind) -> Next {
         .pick(ARG_NO_SET_LAYOUT)
         .pick_or_route(arg![String], || ErrorVaultAddressMissing.to_chain())
         .pick(arg![Option<String>])
+        .pick(&UNMATCHED)
         .to_result();
-    let (no_set_default_vault, no_set_layout, address, name) = match picked {
+    let (no_set_default_vault, no_set_layout, address, name, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "bind") {
+        return next;
+    }
 
     StateBind {
         address,

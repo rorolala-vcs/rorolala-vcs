@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use mingling::{
     Grouped, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
     },
@@ -72,12 +73,16 @@ pub fn fs_ops_cp(args: EntryFsOpsCp) -> Next {
             }
             .to_chain()
         })
+        .pick(&UNMATCHED)
         .to_result();
-
-    let (from, to) = match picked {
+    let (from, to, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "fs-ops cp") {
+        return next;
+    }
 
     StateFsOpsCp { from, to }.into()
 }

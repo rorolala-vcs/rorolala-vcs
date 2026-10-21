@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use librorolala::storage::{Error as StorageError, StorageBackend as _};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
+    consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
@@ -88,11 +89,16 @@ pub fn storage_extract_file(args: EntryStorageExtractFile) -> Next {
     let picked = args
         .pick_or_route(arg![String], || ErrorHashMissing.to_chain())
         .pick(arg![Option<PathBuf>])
+        .pick(&UNMATCHED)
         .to_result();
-    let (hash, dir) = match picked {
+    let (hash, dir, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
+
+    if let Some(next) = crate::unmatched::refused(&unmatched, "storage extract-file") {
+        return next;
+    }
 
     StateStorageExtractFile { hash, dir }.into()
 }
