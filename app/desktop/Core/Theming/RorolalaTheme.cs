@@ -427,6 +427,18 @@ internal sealed class RorolalaTheme
     /// on the dark ground — where a mark that cannot be read is a bead with nothing to say.
     /// </remarks>
     private static readonly Color MacInk = Color.FromArgb(0x66, 0x00, 0x00, 0x00);
+
+    /// <summary>
+    /// The veil a drag lays over the places it is not over.
+    /// </summary>
+    /// <remarks>
+    /// Black at fifteen percent, which is what dims whatever it lies on rather than being a colour of the look's
+    /// own: a veil says "this is set aside", and a colour picked for the job would be one more letter in a
+    /// palette that is the user's. Black is also the one colour that reads as darker on both of the grounds a
+    /// user may have chosen — the light one's neutrals are almost white, so the hollow laid thin over them is
+    /// no dimming at all.
+    /// </remarks>
+    private static readonly Color Mask = Color.FromArgb(0x26, 0x00, 0x00, 0x00);
     private const string Shadow = "rorolala.shadow";
     private const string Ring = "rorolala.ring";
 
@@ -1693,14 +1705,21 @@ internal sealed class RorolalaTheme
             // Where a dragged dock could land. All of them are up while a drag is on, because they are
             // the question — which regions are there to land in — and the one being aimed at is drawn in
             // the accent, because it is the answer and must not read as a selection.
+            //
+            // The places that are not the answer are a veil rather than a cover: a solid fill took the docks
+            // under it away, where what a drag says about them is that they are out of reach for the moment.
+            // A veil at fifteen percent dims them enough to be read as set aside and leaves them legible,
+            // which is what a user needs to choose where the dock goes.
             On(
                 selector => selector.OfType<Border>().Class(DockArea.DropZoneClass),
                 new Setter(Border.BorderThicknessProperty, Edge),
                 Brushed(Border.BorderBrushProperty, Strong),
-                Brushed(Border.BackgroundProperty, Sunken),
-                new Setter(Border.CornerRadiusProperty, Radius),
+                NewBrush(Border.BackgroundProperty, Mask),
                 new Setter(Border.TransitionsProperty, Fading(Light))
             ),
+            // No box takes a corner, and the answer least of all: the five of them tile the area, so a corner
+            // rounded on each would leave a notch at every seam and at the area's own edges — and the answer
+            // would be drawn as a card where what it says is the rectangle the dock is about to be given.
             On(
                 selector =>
                     selector
