@@ -34,6 +34,9 @@
     <!-- The banner the program ships with, so that what is checked is the file a user meets rather than a
          file written for the test. -->
     <None Include="../../res/desktop-launcher-banner/red-flash.aseprite" Link="red-flash.aseprite" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The other picture the program ships, whose frames after the first reach their bottom layer through a
+         linked cel: it is what checks that a link is drawn as the cel it names. -->
+    <None Include="../../res/desktop-launcher-banner/rola-command.aseprite" Link="rola-command.aseprite" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -53,6 +53,27 @@ public sealed class AsepriteTests
         );
     }
 
+    /// <summary>
+    /// Every layer of the shipped banner is drawn in every frame, a linked cel included.
+    /// </summary>
+    /// <remarks>
+    /// The picture's bottom layer fills the canvas and its frames after the first reach that layer through a
+    /// linked cel, which states no size of its own. A reader that drew the link's size rather than the size of
+    /// the cel it names leaves those frames as the layers above the link and nothing else, which is a layer
+    /// missing from every frame but the first 鈥?what this checks is that the canvas is covered throughout.
+    /// </remarks>
+    [Fact]
+    public void AFrameDrawnThroughALinkedCelCoversTheCanvas()
+    {
+        var animation = Aseprite.Read(Path.Combine(AppContext.BaseDirectory, "rola-command.aseprite"));
+
+        foreach (var frame in animation.Frames)
+        {
+            // The corner belongs to the bottom layer alone, so what is there is what that layer drew.
+            Assert.Equal(255, frame.Pixels[3]);
+        }
+    }
+
     /// <summary>A file that is not one is refused rather than half-drawn.</summary>
     [Fact]
     public void AnotherFileIsRefused()

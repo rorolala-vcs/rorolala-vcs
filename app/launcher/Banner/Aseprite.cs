@@ -440,38 +440,38 @@ internal static class Aseprite
                 continue;
             }
 
-            var pixels = PixelsOf(frames, frame, cel, index);
+            var drawn = Resolve(frames, cel, index);
 
-            if (pixels is null)
+            if (drawn is null)
             {
                 continue;
             }
 
             var opacity = cel.Opacity * layers[index].Opacity / 255;
 
-            for (var y = 0; y < cel.Height; y++)
+            for (var y = 0; y < drawn.Height; y++)
             {
-                var to = cel.Y + y;
+                var to = drawn.Y + y;
 
                 if (to < 0 || to >= height)
                 {
                     continue;
                 }
 
-                for (var x = 0; x < cel.Width; x++)
+                for (var x = 0; x < drawn.Width; x++)
                 {
-                    var from = cel.X + x;
+                    var from = drawn.X + x;
 
                     if (from < 0 || from >= width)
                     {
                         continue;
                     }
 
-                    var source = ((y * cel.Width) + x) * 4;
+                    var source = ((y * drawn.Width) + x) * 4;
                     var target = ((to * width) + from) * 4;
-                    var alpha = pixels[source + 3] * opacity / 255;
+                    var alpha = drawn.Pixels[source + 3] * opacity / 255;
 
-                    Over(canvas, target, pixels, source, alpha);
+                    Over(canvas, target, drawn.Pixels, source, alpha);
                 }
             }
         }
@@ -479,10 +479,16 @@ internal static class Aseprite
         return canvas;
     }
 
-    /// <summary>The pixels a cel draws, following a link to the frame it names.</summary>
-    private static byte[]? PixelsOf(
+    /// <summary>
+    /// The cel a cel draws, following a link to the frame it names.
+    /// </summary>
+    /// <remarks>
+    /// What is answered is the cel the pixels and the placement come from, not the link: a linking cel states where it
+    /// draws and nothing about how big it is — its size is the size of the cel it points at — so a drawing that read
+    /// the link's own size would draw nothing at all, which is a layer silently missing from the picture.
+    /// </remarks>
+    private static Cel? Resolve(
         List<Frame> frames,
-        Frame frame,
         Cel cel,
         int layer
     )
@@ -505,7 +511,7 @@ internal static class Aseprite
             held = linked;
         }
 
-        return held.Pixels.Length == 0 ? null : held.Pixels;
+        return held.Pixels.Length == 0 ? null : held;
     }
 
     /// <summary>Puts one pixel over what is already there, the usual way.</summary>
