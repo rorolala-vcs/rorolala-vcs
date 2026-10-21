@@ -39,6 +39,15 @@ internal static class ConfigPaths
     public static string Layout => Path.Combine(Root, LayoutFile);
 
     /// <summary>
+    /// The directory a plugin keeps what it can make again in.
+    /// </summary>
+    /// <remarks>
+    /// It stands beside the configuration rather than among it, so that a person emptying the cache empties
+    /// one directory, and nothing written to it can be mistaken for a setting somebody chose.
+    /// </remarks>
+    public static string Cache => Path.Combine(Root, "cache");
+
+    /// <summary>
     /// The platform's data directory, with this program's own directory under it.
     /// </summary>
     private static string ResolveRoot()

@@ -24,6 +24,9 @@ public interface IPluginHost
     /// <summary>The plugin's own section of <c>preference.json</c>.</summary>
     IPluginConfig Config { get; }
 
+    /// <summary>Where the plugin keeps what it can make again rather than what a person decided.</summary>
+    ICache Cache { get; }
+
     /// <summary>Where the plugin adds top-level menus and their items.</summary>
     IMenuRegistry Menu { get; }
 

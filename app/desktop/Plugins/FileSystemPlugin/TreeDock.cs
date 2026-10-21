@@ -67,6 +67,9 @@ internal sealed class TreeControl : UserControl
     /// <summary>What a copy or a cut has put within reach of a paste, which a cut step is drawn faded from.</summary>
     private readonly Clip _clip;
 
+    /// <summary>The steps that were open the last time this program ran.</summary>
+    private readonly TreeMemory _memory;
+
     /// <summary>
     /// The tree, and nothing else, which is the whole of the dock.
     /// </summary>
@@ -98,6 +101,7 @@ internal sealed class TreeControl : UserControl
         _browser = browser;
         _actions = actions;
         _clip = clip;
+        _memory = new TreeMemory(host.Cache.Directory);
 
         AttachedToVisualTree += (_, _) =>
         {
@@ -185,6 +189,11 @@ internal sealed class TreeControl : UserControl
         }
     }
 
+    /// <summary>Keeps what a step says about being open, for the next run to open it again.</summary>
+    /// <param name="sender">The tree.</param>
+    /// <param name="e">The step, and whether it is open.</param>
+    private void Stepped(object? sender, StepEventArgs e) => _memory.Remember(e.Path, e.Open);
+
     /// <summary>
     /// Builds the tree over the base, keeping the steps that were open and what was chosen.
     /// </summary>
@@ -203,9 +212,12 @@ internal sealed class TreeControl : UserControl
         // itself — so a tree rebuilt while it had the keyboard would answer nothing afterwards.
         var seating = was is { } old && Keys.Holds(Keys.On(this), old);
 
-        IReadOnlyList<string> opened = was is null ? [] : was.Opened();
+        // A tree built for the first time is one nothing in this run says anything about, so it opens what
+        // was open when the program last ran: a user is put back where they were rather than at the base.
+        IReadOnlyList<string> opened = was is null ? _memory.Opened(_browser.BaseDir) : was.Opened();
 
         var tree = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions, _clip);
+        tree.StepChanged += Stepped;
         _content.Content = tree;
         tree.Reopen(opened, was?.Chosen());
 
@@ -256,6 +268,15 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>The tree itself, which the open steps are gathered from when it is built again.</summary>
     private readonly TreeView _tree;
+
+    /// <summary>
+    /// What says that a step was opened or closed, which is what the tree is remembered by.
+    /// </summary>
+    /// <remarks>
+    /// Said as it happens rather than gathered when the tree is built again: a run that ends with a step open
+    /// never builds the tree again, and that step is the one worth remembering.
+    /// </remarks>
+    public event EventHandler<StepEventArgs>? StepChanged;
 
     /// <summary>
     /// The directory the tree is rooted at.
@@ -1169,6 +1190,10 @@ internal sealed class TreeBrowser : UserControl
 
         item.Expanded += (_, _) =>
         {
+            // Said before the reading: whether a step is open is what the next run opens again, and that is
+            // true of a step that is opened and read later as much as of one read now.
+            StepChanged?.Invoke(this, new StepEventArgs(path, open: true));
+
             // Read the first time it is opened, and again only when something under the step has changed on
             // disk: a step holds what it read, and a reading of it is what the steps it holds are made from.
             if (read && !_stale.Remove(path))
@@ -1204,6 +1229,8 @@ internal sealed class TreeBrowser : UserControl
                 });
             });
         };
+
+        item.Collapsed += (_, _) => StepChanged?.Invoke(this, new StepEventArgs(path, open: false));
 
         return item;
     }
@@ -1452,4 +1479,15 @@ internal sealed class TreeBrowser : UserControl
             return [];
         }
     }
+}
+/// <summary>What a step says when it is opened or closed.</summary>
+/// <param name="path">The directory the step stands for.</param>
+/// <param name="open">Whether it is open now.</param>
+internal sealed class StepEventArgs(string path, bool open) : EventArgs
+{
+    /// <summary>The directory the step stands for.</summary>
+    public string Path { get; } = path;
+
+    /// <summary>Whether it is open now.</summary>
+    public bool Open { get; } = open;
 }

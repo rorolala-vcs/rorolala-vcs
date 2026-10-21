@@ -171,6 +171,7 @@ internal sealed class PluginHost
         _position = position;
         Log = services.Log.For(id.Value);
         Config = new PluginConfigView(services.Settings, id);
+        Cache = new PluginCache(id);
     }
 
     /// <inheritdoc />
@@ -184,6 +185,9 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public IPluginConfig Config { get; }
+
+    /// <inheritdoc />
+    public ICache Cache { get; }
 
     /// <inheritdoc />
     public IMenuRegistry Menu => this;
@@ -290,4 +294,36 @@ internal sealed class PluginHost
     /// <inheritdoc />
     void IIconBadgeRegistry.Add(IIconBadgeProvider provider) =>
         _services.IconBadges.Add(_id, _position, provider);
+}
+/// <summary>
+/// One plugin's cache directory, made when it is first asked for.
+/// </summary>
+/// <remarks>
+/// The directory is made lazily because a plugin that keeps nothing should leave nothing behind, and it
+/// is made on the thread that asks: a plugin asks while it is being initialized or while a view is drawn,
+/// and a directory made on either is a directory the next run finds.
+/// </remarks>
+internal sealed class PluginCache : ICache
+{
+    /// <summary>Where this plugin's files stand.</summary>
+    private readonly string _directory;
+
+    /// <summary>Makes the directory of one plugin.</summary>
+    /// <param name="id">The plugin's identity, which names its directory.</param>
+    public PluginCache(PluginId id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        _directory = Path.Combine(ConfigPaths.Cache, id.Value);
+    }
+
+    /// <inheritdoc />
+    public string Directory
+    {
+        get
+        {
+            _ = System.IO.Directory.CreateDirectory(_directory);
+
+            return _directory;
+        }
+    }
 }
