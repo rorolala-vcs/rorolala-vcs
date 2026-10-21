@@ -361,6 +361,15 @@ internal abstract class Listing<TItem>
     /// <returns>What to draw in the tile.</returns>
     public virtual Control Marked(TItem item, int size) => Icon(item, size);
 
+    /// <summary>What the contributions said about an item, in the order the badges are numbered.</summary>
+    /// <remarks>
+    /// A view that wears them somewhere other than the icon's corner asks for them here: the badges are the
+    /// listing's answer about what speaks for an entry, and where they are drawn is the view's.
+    /// </remarks>
+    /// <param name="item">The item.</param>
+    /// <returns>The badges, or nothing where nothing speaks for it.</returns>
+    public virtual IReadOnlyList<EntryBadge> Badges(TItem item) => [];
+
     /// <summary>Opens one item, which is what a double-click and <c>Enter</c> do.</summary>
     /// <param name="item">The item to open.</param>
     public abstract void Open(TItem item);

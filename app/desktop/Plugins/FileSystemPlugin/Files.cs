@@ -48,8 +48,7 @@ internal sealed class Files : Listing<Entry>
     /// <summary>The lock provider that speaks for this directory, or nothing when none does.</summary>
     private readonly IEntryLockProvider? _locks;
 
-    /// <summary>What a tile's icon wears at its top right corner, in the order the badges are numbered.</summary>
-    private readonly IReadOnlyList<IEntryMarkProvider> _marks;
+
 
     /// <summary>How a drag of files is taken here.</summary>
     private readonly Drops _drops;
@@ -89,7 +88,6 @@ internal sealed class Files : Listing<Entry>
         _logical = logical;
         _browser = browser;
         _locks = EntryLockProviders.For(browser.Current);
-        _marks = EntryMarkProviders.For(browser.Current);
 
         // The light on a row is the view's to put out, so the protocol is handed a way to say so rather than a
         // row it could never find: what is lit is a row this listing never draws.
@@ -124,12 +122,20 @@ internal sealed class Files : Listing<Entry>
     /// <param name="item">The entry to draw.</param>
     /// <param name="size">How many pixels wide and tall.</param>
     /// <returns>What to draw in the tile.</returns>
-    public override Control Marked(Entry item, int size)
+    public override Control Marked(Entry item, int size) =>
+        Icons.Marked(Icons.For(item, size), Badges(item), size);
+
+    /// <inheritdoc />
+    public override IReadOnlyList<EntryBadge> Badges(Entry item)
     {
-        var icon = Icons.For(item, size);
         var badges = new List<EntryBadge>();
 
-        foreach (var provider in _marks)
+        // Asked here rather than kept from the constructor, and asked of the entry's own directory rather than of
+        // the one being looked at: a tree outlives one reading and shows entries from many directories, and a badge
+        // says something about the entry it is worn by rather than about the view it is worn in.
+        var directory = Path.GetDirectoryName(item.Path) is { Length: > 0 } parent ? parent : _browser.Current;
+
+        foreach (var provider in EntryMarkProviders.For(directory))
         {
             if (
                 provider.Mark(item) is { IconKey: { Length: > 0 } key } mark
@@ -140,7 +146,7 @@ internal sealed class Files : Listing<Entry>
             }
         }
 
-        return Icons.Marked(icon, badges, size);
+        return badges;
     }
 
     /// <inheritdoc />

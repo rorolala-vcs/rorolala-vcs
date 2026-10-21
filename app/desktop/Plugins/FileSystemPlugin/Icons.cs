@@ -240,7 +240,7 @@ internal static partial class Icons
         // what it cannot tell is not worn rather than worn on top of another (see BadgeArc.Most).
         for (var at = 0; at < BadgeArc.Worn(badges.Count); at++)
         {
-            arc.Children.Add(Badge(badges[at], size));
+            arc.Children.Add(Worn(badges[at], size));
         }
 
         var grid = new Grid { Width = size, Height = size };
@@ -268,7 +268,7 @@ internal static partial class Icons
     /// <param name="badge">The picture and what the contribution said about the entry.</param>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
     /// <returns>What to stand on the arc.</returns>
-    private static Control Badge(EntryBadge badge, int size)
+    public static Control Worn(EntryBadge badge, int size)
     {
         var extent = BadgeArc.Extent(size);
         var role = Ink(badge.Mark.Ink);

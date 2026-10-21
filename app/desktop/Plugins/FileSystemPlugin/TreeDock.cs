@@ -30,8 +30,9 @@ internal sealed class TreeDock : IDockView
     /// <param name="host">The host, for logging what the tree cannot do.</param>
     /// <param name="browser">The one location and base, which the tree is rooted at.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public TreeDock(IPluginHost host, Browser browser, Clip clip) =>
-        _view = new TreeControl(host, browser, new BrowserActions(host, browser, clip), clip);
+    /// <param name="logical">What a place's own copy or cut has put within reach of a paste.</param>
+    public TreeDock(IPluginHost host, Browser browser, Clip clip, LogicalClip? logical = null) =>
+        _view = new TreeControl(host, browser, new BrowserActions(host, browser, clip), clip, logical);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -67,6 +68,9 @@ internal sealed class TreeControl : UserControl
     /// <summary>What a copy or a cut has put within reach of a paste, which a cut step is drawn faded from.</summary>
     private readonly Clip _clip;
 
+    /// <summary>A row's pictures, badges, menu and opening, which are a directory listing's answers.</summary>
+    private readonly Files _listing;
+
     /// <summary>The steps that were open the last time this program ran.</summary>
     private readonly TreeMemory _memory;
 
@@ -95,13 +99,21 @@ internal sealed class TreeControl : UserControl
     /// <param name="browser">The one location and base, which the tree is rooted at.</param>
     /// <param name="actions">What the rows do.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public TreeControl(IPluginHost host, Browser browser, BrowserActions actions, Clip clip)
+    /// <param name="logical">What a place's own copy or cut has put within reach of a paste.</param>
+    public TreeControl(
+        IPluginHost host,
+        Browser browser,
+        BrowserActions actions,
+        Clip clip,
+        LogicalClip? logical = null
+    )
     {
         _host = host;
         _browser = browser;
         _actions = actions;
         _clip = clip;
         _memory = new TreeMemory(host.Cache.Directory);
+        _listing = new Files(host, browser, actions, clip, logical);
 
         AttachedToVisualTree += (_, _) =>
         {
@@ -158,7 +170,14 @@ internal sealed class TreeControl : UserControl
         )
         {
             Draw();
+
+            return;
         }
+
+        // Nothing to read again, but what a provider answered may have landed since the rows were drawn: a badge
+        // is asked for when a row is made, so a strip refilled only by a rebuild would be a badge that appears and
+        // then vanishes until the next rebuild. What is asked again is the badges, not the directories.
+        (_content.Content as TreeBrowser)?.RepaintBadges();
     }
 
     /// <summary>
@@ -216,7 +235,7 @@ internal sealed class TreeControl : UserControl
         // was open when the program last ran: a user is put back where they were rather than at the base.
         IReadOnlyList<string> opened = was is null ? _memory.Opened(_browser.BaseDir) : was.Opened();
 
-        var tree = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions, _clip);
+        var tree = new TreeBrowser(_host, _browser, _browser.BaseDir, _actions, _clip, _listing);
         tree.StepChanged += Stepped;
         _content.Content = tree;
         tree.Reopen(opened, was?.Chosen());
@@ -266,6 +285,9 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>What a copy or a cut has put within reach of a paste, which a cut step is drawn faded from.</summary>
     private readonly Clip _clip;
 
+    /// <summary>A row's pictures, badges, menu and opening, which are a directory listing's answers.</summary>
+    private readonly Files _listing;
+
     /// <summary>The tree itself, which the open steps are gathered from when it is built again.</summary>
     private readonly TreeView _tree;
 
@@ -292,6 +314,9 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>The card that follows a drag, drawn over the tree while the pointer is in it.</summary>
     private readonly Ghost _ghost;
+
+    /// <summary>Every row's badge strip, so that what it holds can be asked for again.</summary>
+    private readonly List<(string Path, StackPanel Strip)> _worn = [];
 
     /// <summary>Every step on screen, so that the one a drag is over can be lit.</summary>
     /// <remarks>
@@ -402,12 +427,21 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="root">The directory the tree is rooted at.</param>
     /// <param name="actions">What a directory does when it is chosen or right-clicked.</param>
     /// <param name="clip">What a copy or a cut has put within reach of a paste.</param>
-    public TreeBrowser(IPluginHost host, Browser browser, string root, BrowserActions actions, Clip clip)
+    /// <param name="listing">The listing a row is drawn and treated by.</param>
+    public TreeBrowser(
+        IPluginHost host,
+        Browser browser,
+        string root,
+        BrowserActions actions,
+        Clip clip,
+        Files listing
+    )
     {
         _browser = browser;
         _host = host;
         _actions = actions;
         _clip = clip;
+        _listing = listing;
         _root = root;
         _drops = new Drops(host, browser, Mark);
 
@@ -575,7 +609,7 @@ internal sealed class TreeBrowser : UserControl
         _slipped = null;
         _dragged = true;
 
-        var entry = new Entry(path, EntryKind.Directory);
+        var entry = Being(path);
 
         Drag.Away(_browser, from, [entry], entry, _host.Log.Error);
     }
@@ -876,6 +910,11 @@ internal sealed class TreeBrowser : UserControl
     /// Going there is the caller's, because choosing and going are one gesture here: what is done here is
     /// remembering it, and having the row drawn as the chosen one so that what a copy or a cut is about is what the
     /// eye says it is.
+    /// <para>
+    /// What is chosen is also what the rest of the program is told is chosen: a directory listing publishes its own
+    /// choice and the entry that was clicked to a catalogue the version graph reads, and a tree is the same view of the
+    /// same files, so a file chosen here is a file the graph comes to as well.
+    /// </para>
     /// </remarks>
     /// <param name="path">The step to choose.</param>
     private void Choose(string path)
@@ -886,6 +925,11 @@ internal sealed class TreeBrowser : UserControl
         {
             item.IsSelected = true;
         }
+
+        var entry = Being(path);
+
+        _listing.Chosen([entry]);
+        _listing.Clicked(entry);
     }
 
     /// <summary>Copies the chosen step to the clipboard.</summary>
@@ -893,7 +937,7 @@ internal sealed class TreeBrowser : UserControl
     {
         if (Chosen() is { } path)
         {
-            _actions.Copy(this, [new Entry(path, EntryKind.Directory)]);
+            _actions.Copy(this, [Being(path)]);
         }
     }
 
@@ -902,7 +946,7 @@ internal sealed class TreeBrowser : UserControl
     {
         if (Chosen() is { } path)
         {
-            _actions.Cut(this, [new Entry(path, EntryKind.Directory)]);
+            _actions.Cut(this, [Being(path)]);
         }
     }
 
@@ -932,7 +976,7 @@ internal sealed class TreeBrowser : UserControl
     {
         if (Chosen() is { } path && !string.Equals(path, _root, StringComparison.Ordinal))
         {
-            _actions.Remove([new Entry(path, EntryKind.Directory)], ask);
+            _actions.Remove([Being(path)], ask);
         }
     }
 
@@ -1172,7 +1216,7 @@ internal sealed class TreeBrowser : UserControl
             // a step holding nothing loses it again when the answer is in. A step that is opened in the
             // meantime is left alone, because what its rows are is the reading's to say.
             Waiting(item);
-            item.Header = Header(path, () => Collapse(item));
+            item.Header = Header(new Entry(path, EntryKind.Directory), () => Collapse(item));
 
             _ = Task.Run(() =>
             {
@@ -1258,7 +1302,10 @@ internal sealed class TreeBrowser : UserControl
         // Faded here rather than where the row is made, because what a row is faded by is the rules, and the
         // rules are read by a provider that may have to reach for the filesystem: a row made before they are
         // in hand is drawn plain and faded the moment they are (see `Node`).
-        var row = Header(path, holds ? () => Collapse(item) : null);
+        var row = Header(
+            new Entry(path, EntryKind.Directory),
+            holds ? () => Collapse(item) : null
+        );
         Fade(row, path);
         item.Header = row;
     }
@@ -1282,7 +1329,8 @@ internal sealed class TreeBrowser : UserControl
 
         foreach (var child in Children(path))
         {
-            item.Items.Add(Node(child));
+            // A directory is a step, which opens onto its own entries; a file is where the walking stops.
+            item.Items.Add(child.Kind is EntryKind.Directory ? Node(child.Path) : Leaf(child));
         }
 
         // What a rebuild is to bring back is opened as the reading holding it lands: what is under a step is
@@ -1310,13 +1358,18 @@ internal sealed class TreeBrowser : UserControl
     private bool Current(string path, int token) => _readings.GetValueOrDefault(path) == token;
 
     /// <summary>
-    /// One directory's header: its icon and its name, and what choosing it does.
+    /// One row: its picture, the badges worn on it, its name, and what choosing it does.
     /// </summary>
     /// <remarks>
-    /// A click switches the location there and then, rather than waiting for a second one: the tree
-    /// is nothing but directories, so choosing one can only mean going to it, and the address says so
-    /// the moment it happens. A step is opened by its own chevron, so opening one does not come
-    /// through here.
+    /// A row is an entry like a directory listing's row: what it is drawn with, what its menu holds and what opens
+    /// it are that listing's answers, so the two views of one directory agree about an entry rather than each
+    /// drawing it.
+    /// <para>
+    /// A click on a directory switches the location there and then, rather than waiting for a second one: a tree is
+    /// walked by choosing steps, and choosing one can only mean going to it. A file is chosen, and opened by a second
+    /// click, because going to a file is nothing a tree can do. A step is opened by its own chevron, so opening one
+    /// does not come through here.
+    /// </para>
     /// <para>
     /// What is clicked is the band the row is drawn in and not the word written in it, which is why the
     /// band is given a background at all: a panel with none is not hit anywhere its children are not, so
@@ -1330,12 +1383,12 @@ internal sealed class TreeBrowser : UserControl
     /// by the time the presenter is reached.
     /// </para>
     /// </remarks>
-    /// <param name="path">The directory the row names.</param>
+    /// <param name="entry">The entry the row names.</param>
     /// <param name="collapse">What closes every step under the row, or nothing where it has no steps under it.</param>
-    private Border Header(string path, Action? collapse)
+    private Border Header(Entry entry, Action? collapse)
     {
-        var entry = new Entry(path, EntryKind.Directory);
-        var name = Names.Show(entry);
+        var path = entry.Path;
+        var name = _listing.Name(entry);
         var deletable = !string.Equals(path, _root, StringComparison.Ordinal);
 
         // Filled when it opens rather than when the row is made, which is how a listing's menu is made as
@@ -1345,6 +1398,7 @@ internal sealed class TreeBrowser : UserControl
         var menu = new ContextMenu();
         menu.Opening += (_, _) =>
         {
+            // Filled by the same actions a listing fills its menu with, with the base row left out of what may be removed.
             _actions.Fill(menu, this, [entry], deletable);
 
             // Offered by every row with steps under it, which is the same row that is given an expander, since
@@ -1359,17 +1413,28 @@ internal sealed class TreeBrowser : UserControl
 
         // The menu is opened by the control the row is in rather than by the row, since one of the
         // things it does — putting a path on the clipboard — is reached through a control on screen.
-        var row = new Border
-        {
-            Background = Brushes.Transparent,
-            ContextMenu = menu,
-            Child = new StackPanel
+        // A tree row is as wide as the tree, so what speaks for an entry is worn at the row's right rather than
+        // on the icon's corner: a tree is a list of names, and a badge drawn over a picture in it would be a mark
+        // on the picture rather than an answer about the entry.
+        var badges = Worn(entry);
+
+        DockPanel.SetDock(badges, Dock.Right);
+
+        _worn.RemoveAll(one => string.Equals(one.Path, path, StringComparison.Ordinal));
+        _worn.Add((path, badges));
+
+        var panel = new DockPanel { LastChildFill = true };
+
+        panel.Children.Add(badges);
+
+        panel.Children.Add(
+            new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 8,
                 Children =
                 {
-                    Icons.For(entry),
+                    _listing.Icon(entry, Icons.Row),
                     new TextBlock
                     {
                         Text = name.Length > 0 ? name : path,
@@ -1377,7 +1442,14 @@ internal sealed class TreeBrowser : UserControl
                         VerticalAlignment = VerticalAlignment.Center,
                     },
                 },
-            },
+            }
+        );
+
+        var row = new Border
+        {
+            Background = Brushes.Transparent,
+            ContextMenu = menu,
+            Child = panel,
         };
 
         row.Tapped += (_, _) =>
@@ -1390,7 +1462,13 @@ internal sealed class TreeBrowser : UserControl
             }
 
             Choose(path);
-            _browser.Go(path);
+
+            // Choosing a directory is going to it, because the tree is nothing but where a user is walking. A
+            // file is chosen here and opened by a second click, as a row of the directory listing beside it is.
+            if (entry.Kind is EntryKind.Directory)
+            {
+                _browser.Go(path);
+            }
         };
 
         // A double click opens a step in the base theme, and a tree here is walked by choosing one: the gesture
@@ -1398,7 +1476,22 @@ internal sealed class TreeBrowser : UserControl
         // the row's own presenter and a gesture taken by a handler on the row is already taken by the time the
         // presenter is reached. A double click in the box a name is being typed in is the box's, though, since
         // that is how a word of a name is chosen.
-        row.DoubleTapped += (_, e) => e.Handled = e.Source is not TextBox;
+        row.DoubleTapped += (_, e) =>
+        {
+            if (e.Source is TextBox)
+            {
+                return;
+            }
+
+            // A directory is walked into by choosing it, so a second click on one is not also a step; a file is
+            // opened the way the listing opens one, by the program the plugin answered for it with.
+            if (entry.Kind is EntryKind.File)
+            {
+                _listing.Open(entry);
+            }
+
+            e.Handled = true;
+        };
 
         // A step's header is made again when what it holds changes — the way to close it is offered once it has
         // something to close — and the row it had is then no longer the row it is drawn with: keeping both would
@@ -1408,6 +1501,74 @@ internal sealed class TreeBrowser : UserControl
 
         return row;
     }
+
+    /// <summary>What the contributions said about an entry, drawn as a strip at the row's right.</summary>
+    /// <remarks>
+    /// The same badges a tile wears on its icon's corner, in the same order, drawn where a row has room for them.
+    /// Nothing is made when nothing speaks for the entry, so a row without a badge is a row with nothing added.
+    /// </remarks>
+    /// <param name="entry">The entry the row is for.</param>
+    /// <returns>The strip, which is kept so that what it holds can be asked for again.</returns>
+    private StackPanel Worn(Entry entry)
+    {
+        var strip = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+
+        Wear(strip, entry);
+
+        return strip;
+    }
+
+    /// <summary>Puts what speaks for an entry into the strip at its row's right.</summary>
+    /// <param name="strip">The strip to fill.</param>
+    /// <param name="entry">The entry the row is for.</param>
+    private void Wear(StackPanel strip, Entry entry)
+    {
+        strip.Children.Clear();
+
+        foreach (var badge in _listing.Badges(entry))
+        {
+            strip.Children.Add(Icons.Worn(badge, Icons.Row));
+        }
+
+        // A row nothing speaks for wears nothing: a strip left in the layout would be room taken from a name for an
+        // answer that is not there.
+        strip.IsVisible = strip.Children.Count > 0;
+    }
+
+    /// <summary>Asks every row again what speaks for it, without reading anything again.</summary>
+    /// <remarks>
+    /// What the tree holds is asked of the catalogue the same way a listing asks when it is staged, so a reading that
+    /// lands is a badge that appears on the row it belongs to rather than on the next rebuild of the tree.
+    /// </remarks>
+    public void RepaintBadges()
+    {
+        foreach (var (path, strip) in _worn)
+        {
+            Wear(strip, Being(path));
+        }
+    }
+
+    /// <summary>A row for a file, which opens onto nothing.</summary>
+    /// <param name="entry">The file the row names.</param>
+    /// <returns>The row.</returns>
+    private TreeViewItem Leaf(Entry entry) =>
+        new() { Tag = entry.Path, Header = Header(entry, collapse: null) };
+
+    /// <summary>Whether a path is a directory or a file, as the tree knows it when asked.</summary>
+    /// <remarks>
+    /// Asked of the filesystem rather than carried on a row: a path is a directory until it is not, and a row that
+    /// remembered what it was when it was drawn would be a row acting on what is no longer there.
+    /// </remarks>
+    /// <param name="path">The path.</param>
+    /// <returns>The entry it is.</returns>
+    private static Entry Being(string path) =>
+        new(path, System.IO.Directory.Exists(path) ? EntryKind.Directory : EntryKind.File);
 
     /// <summary>
     /// Closes every step under a row, and the row itself.
@@ -1447,7 +1608,8 @@ internal sealed class TreeBrowser : UserControl
 
         try
         {
-            return System.IO.Directory.EnumerateDirectories(path).Any(Shown);
+            // A directory holding nothing but files still opens onto them, which is what a file tree is for.
+            return Children(path).Count > 0;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -1455,24 +1617,45 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
-    /// <summary>The directories directly under one that are shown, or the drives when it is the computer.</summary>
+    /// <summary>The entries directly under one that are shown, or the drives when it is the computer.</summary>
+    /// <remarks>
+    /// Directories come first and each kind is by name, which is the order a file tree is read in: what a user walks
+    /// down into stands above what they stop at. Nothing else decides it, so a row keeps its place from one reading
+    /// to the next.
+    /// </remarks>
     /// <param name="path">The directory to read.</param>
-    private IReadOnlyList<string> Children(string path) =>
+    private IReadOnlyList<Entry> Children(string path) =>
         Browser.IsComputer(path)
-            ? [.. Browser.Read(path).Select(entry => entry.Path).Where(Shown)]
-            : Subdirectories(path);
+            ? [.. Browser.Read(path).Where(entry => Shown(entry.Path)).OrderBy(entry => entry.Kind).ThenBy(entry => entry.Path, StringComparer.OrdinalIgnoreCase)]
+            : Entries(path);
 
-    /// <summary>The directories directly under one that are shown, by name, or nothing when it cannot be read.</summary>
+    /// <summary>
+    /// The directories directly under one that are shown, then the files, or nothing when it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// A file is a row as a directory is: the tree is a view of what is under a place rather than of the places
+    /// under it, and a folder whose only content is files still opens onto them. What is skipped is what a listing
+    /// would leave out, so the tree and the directory beside it show the same entries.
+    /// </remarks>
     /// <param name="path">The directory to read.</param>
-    private IReadOnlyList<string> Subdirectories(string path)
+    /// <returns>The entries, directories first.</returns>
+    private IReadOnlyList<Entry> Entries(string path)
     {
         try
         {
-            return System.IO.Directory
+            IEnumerable<Entry> directories = System.IO.Directory
                 .EnumerateDirectories(path)
                 .Where(Shown)
                 .OrderBy(directory => Path.GetFileName(directory), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+                .Select(directory => new Entry(directory, EntryKind.Directory));
+
+            IEnumerable<Entry> files = System.IO.Directory
+                .EnumerateFiles(path)
+                .Where(Shown)
+                .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
+                .Select(file => new Entry(file, EntryKind.File));
+
+            return [.. directories, .. files];
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {

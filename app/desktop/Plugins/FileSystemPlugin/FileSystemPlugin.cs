@@ -242,7 +242,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.tree",
                 DockOpenMode.Toggle,
                 DockPlacement.Left,
-                _ => new TreeDock(host, browser, clip)
+                _ => new TreeDock(host, browser, clip, logical)
             )
         );
     }
