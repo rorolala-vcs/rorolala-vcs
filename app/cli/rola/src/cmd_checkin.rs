@@ -40,7 +40,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, PickerArg},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
@@ -76,6 +76,15 @@ use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
 /// bringing a `Uuid` the Vault holds into this Layout.
 const ARG_JOIN: PickerArg<'static, Option<String>> = arg![join: Option<String>];
 
+/// Whether each reference keeps only its own name under the destination.
+///
+/// A directory destination is a prefix by default, so `Assets/hero.psd` lands at
+/// `<TO>/Assets/hero.psd` 鈥?the path the Vault gives it, kept whole. A run that brings entries the
+/// user chose elsewhere 鈥?a drop on a directory, a paste 鈥?means them to land where they were put
+/// rather than where the Vault has them, so this makes the destination the parent and the
+/// reference the name: `<TO>/hero.psd`, and a folder keeps the tree it is under its own name.
+const ARG_BY_NAME: PickerArg<'static, Flag> = arg![by_name: Flag];
+
 /// The mark the Vault puts in front of a path that is not placed: `@/new/a.fbx` is an entry the
 /// Vault holds no path for yet, and `@/removed/a.fbx` one that was taken out of the work.
 ///
@@ -108,6 +117,7 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
             &ctx,
             suggest! {
                 ARG_JOIN: t!("checkin.complete.join"),
+                ARG_BY_NAME: t!("checkin.complete.by_name"),
             },
         );
     }
@@ -169,9 +179,10 @@ pub fn checkin(args: EntryCheckin) -> Next {
     let picked = args
         .pick(arg![Vec<String>])
         .pick(ARG_JOIN)
+        .pick(ARG_BY_NAME)
         .pick(&UNMATCHED)
         .to_result();
-    let (words, join, unmatched): (Vec<String>, Option<String>, _) = match picked {
+    let (words, join, by_name, unmatched): (Vec<String>, Option<String>, Flag, _) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -184,7 +195,13 @@ pub fn checkin(args: EntryCheckin) -> Next {
         return ErrorCheckinArgument.into();
     };
 
-    StateCheckin { refs, to, join }.into()
+    StateCheckin {
+        refs,
+        to,
+        join,
+        by_name: matches!(by_name, Flag::Active),
+    }
+    .into()
 }
 
 /// The state a checkin starts in.
@@ -198,6 +215,8 @@ pub struct StateCheckin {
     to: Option<String>,
     /// The file a variant is to be joined into, when this run checks one in.
     join: Option<String>,
+    /// Whether each reference keeps only its own name under the destination.
+    by_name: bool,
 }
 
 #[chain(routeify)]
@@ -213,7 +232,12 @@ pub fn handle_checkin(
     force: &ResForce,
     concurrency: &ResConcurrency,
 ) -> Next {
-    let StateCheckin { refs, to, join } = state;
+    let StateCheckin {
+        refs,
+        to,
+        join,
+        by_name,
+    } = state;
 
     workspace.get_ref().check()?;
 
@@ -300,6 +324,7 @@ pub fn handle_checkin(
         held.get_root(),
         &refs,
         to.as_deref(),
+        by_name,
     ) {
         Ok(wanted) => wanted,
         Err(refusal) => return refused(refusal),
@@ -729,6 +754,7 @@ fn resolve(
     root: &Path,
     refs: &[String],
     to: Option<&str>,
+    by_name: bool,
 ) -> Result<Vec<Wanted>, Refusal> {
     let destination = destination(root, to)?;
 
@@ -739,7 +765,7 @@ fn resolve(
         return Err(Refusal::Argument);
     }
 
-    let matched = expand(remote, refs, &destination)?;
+    let matched = expand(remote, refs, &destination, by_name)?;
 
     // A destination that is not a directory names one landing, so it can take only one entry.
     if matches!(destination, Destination::Exact(_)) && matched.len() > 1 {
@@ -782,6 +808,7 @@ fn expand(
     remote: &Layout,
     refs: &[String],
     destination: &Destination,
+    by_name: bool,
 ) -> Result<Vec<Wanted>, Refusal> {
     let mut paths: Vec<LayoutPath> = remote.paths().into_iter().map(|(path, _)| path).collect();
     paths.sort_unstable();
@@ -790,7 +817,7 @@ fn expand(
     let mut seen = BTreeSet::new();
 
     for reference in refs {
-        let (base, seeds) = seeds(remote, &paths, reference)?;
+        let (base, seeds) = seeds(remote, &paths, reference, by_name)?;
 
         for seed in seeds {
             let mut candidates = vec![seed.clone()];
@@ -845,11 +872,19 @@ fn seeds(
     remote: &Layout,
     paths: &[LayoutPath],
     reference: &str,
+    by_name: bool,
 ) -> Result<(String, Vec<LayoutPath>), Refusal> {
     if let Ok(id) = Uuid::from_str(reference) {
         return remote.path_of(id).map_or_else(
             || Err(Refusal::Unknown(reference.to_owned())),
-            |path| Ok((String::new(), vec![path])),
+            |path| {
+                let base = if by_name {
+                    parent(path.as_str())
+                } else {
+                    String::new()
+                };
+                Ok((base, vec![path]))
+            },
         );
     }
 
@@ -875,9 +910,22 @@ fn seeds(
         return Err(Refusal::Unknown(reference.to_owned()));
     }
 
-    Ok((String::new(), vec![path]))
+    let base = if by_name {
+        parent(path.as_str())
+    } else {
+        String::new()
+    };
+    Ok((base, vec![path]))
 }
 
+/// The directory a path stands in, which is what a name is read against.
+///
+/// It is the whole path before its last separator, and nothing when it has none: an entry at the
+/// top of the Workspace stands in the root, which is the directory with no name of its own.
+fn parent(path: &str) -> String {
+    path.rsplit_once('/')
+        .map_or_else(String::new, |(directory, _)| directory.to_owned())
+}
 /// The directory a glob selects from, which what it matches is rebased on.
 ///
 /// It is what stands before the first pattern character, cut back to the directory that holds it:
@@ -1528,6 +1576,35 @@ mod tests {
             landing(&Destination::Under(String::new()), &named, ""),
             Some(path("a/b.psd"))
         );
+    }
+
+    #[test]
+    fn a_name_is_read_against_the_directory_it_stands_in() {
+        assert_eq!(parent("Assets/Tex/wood.png"), "Assets/Tex");
+        assert_eq!(parent("Assets/Tex"), "Assets");
+        // A name at the top of the Workspace stands in the root, which has no name of its own.
+        assert_eq!(parent("Tex"), "");
+    }
+
+    #[test]
+    fn a_by_name_destination_lands_a_reference_by_its_own_name() {
+        // What `--by-name` makes of a path reference: the base is the directory it stands in, so
+        // the entry keeps its own name and, under a folder, the tree the folder is.
+        let folder = "Assets/Tex";
+
+        assert_eq!(parent(folder), "Assets");
+
+        for (named, expected) in [
+            ("Assets/Tex/wood.png", "dir/Tex/wood.png"),
+            ("Assets/Tex", "dir/Tex"),
+        ] {
+            let base = parent(folder);
+
+            assert_eq!(
+                landing(&Destination::Under("dir".to_owned()), &path(named), &base),
+                Some(path(expected))
+            );
+        }
     }
 
     #[test]

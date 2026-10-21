@@ -34,11 +34,13 @@ internal enum CheckinBlocker
 /// <param name="Landing">The path it would be named at here, relative to the Workspace's root.</param>
 /// <param name="Local">The path this side names it at, when it holds it; empty for one it holds at no path.</param>
 /// <param name="Blocker">What is in the way.</param>
+/// <param name="Carried">The path the drag carried that brought this entry, which is what a drop brings in whole.</param>
 internal sealed record CheckinStep(
     LayoutEntry Entry,
     string Landing,
     string? Local,
-    CheckinBlocker Blocker
+    CheckinBlocker Blocker,
+    string Carried
 );
 
 /// <summary>
@@ -53,11 +55,13 @@ internal sealed record CheckinStep(
 /// <param name="Root">The Workspace's root, which Layout paths are relative to.</param>
 /// <param name="Destination">The directory they are to land under, or nothing for the paths the Vault names.</param>
 /// <param name="Steps">What the checkin comes to, in the order the entries were carried.</param>
+/// <param name="Carried">What the drag carried, in the order it carried it.</param>
 internal sealed record CheckinPlan(
     string Vault,
     string Root,
     string? Destination,
-    IReadOnlyList<CheckinStep> Steps
+    IReadOnlyList<CheckinStep> Steps,
+    IReadOnlyList<UpstreamCarry> Carried
 )
 {
     /// <summary>The entries that can be brought in as they stand.</summary>
@@ -82,9 +86,36 @@ internal sealed record CheckinPlan(
     public bool Blocks => Elsewhere.Count > 0 || Taken.Count > 0;
 
     /// <summary>The references a run of the clean entries is given.</summary>
+    /// <remarks>
+    /// A drag or a paste lands where it was put, so what it names is what it carried rather than every entry under it: a
+    /// folder is one reference, and the run keeps the tree it is — the command line rebases each on its own name. The
+    /// button names the entries themselves, since each is to land at the path the Vault gives it.
+    /// </remarks>
     /// <returns>What a checkin is to name, in the order the entries were carried.</returns>
-    public IReadOnlyList<string> References() =>
-        [.. Clean.Select(step => CheckinCommand.Reference(step.Entry))];
+    public IReadOnlyList<string> References()
+    {
+        if (Destination is not { Length: > 0 })
+        {
+            return [.. Clean.Select(step => CheckinCommand.Reference(step.Entry))];
+        }
+
+        // What is carried comes in whole or not at all: one entry that cannot land refuses the run that names what it
+        // stands under, so an item with any such entry is left out rather than half brought in.
+        List<string> references = [];
+
+        foreach (var carry in Carried)
+        {
+            if (Steps.All(step =>
+                !string.Equals(step.Carried, carry.Path, StringComparison.Ordinal)
+                || step.Blocker is CheckinBlocker.None
+            ))
+            {
+                references.Add(CheckinCommand.Reference(carry));
+            }
+        }
+
+        return references;
+    }
 }
 
 /// <summary>Working out what a checkin of a drag would come to, without running anything.</summary>
@@ -137,26 +168,40 @@ internal static class CheckinPlanning
 
         List<CheckinStep> steps = [];
 
-        foreach (var entry in UpstreamBringing.Entries(tree, carrying))
+        foreach (var carry in carrying)
         {
-            // A destination is a prefix rather than a rebasing: the path the Vault names is kept under it, so a folder
-            // brought in is the tree it is — the same rule `checkin` follows for a path operand.
-            //
-            // The Vault's unplaced mark is not part of that path here: `@/new/a.fbx` is an entry the Vault holds no path
-            // for yet, and a directory called `@` would be a decision this side made on the Vault's behalf.
-            var placeable = Unplaced(entry.Path);
-            var landing = under switch
+            // What a drag carried is the thing that was let go on the directory, so a drop lands it where it was put
+            // rather than where the Vault has it: each carried path keeps only its own name under the destination, and
+            // a folder keeps the tree it is. The button writes no destination, and then the Vault's path is the answer.
+            var carried = Unplaced(carry.Path);
+            var name = carried[(carried.LastIndexOf('/') + 1)..];
+
+            foreach (var entry in UpstreamBringing.Entries(tree, [carry]))
             {
-                null => placeable,
-                { Length: 0 } => placeable,
-                _ => under + "/" + placeable,
-            };
+                // The Vault's unplaced mark is not part of the path here: `@/new/a.fbx` is an entry the Vault holds no
+                // path for yet, and a directory called `@` would be a decision this side made on the Vault's behalf.
+                var placeable = Unplaced(entry.Path);
 
-            var here = held.TryGetValue(entry.Uuid, out var at) ? at : null;
+                var landing = under switch
+                {
+                    null => placeable,
+                    // What the entry keeps below the carried path: itself, and what stands under it.
+                    { Length: 0 } => Joined(string.Empty, name, placeable, carried),
+                    _ => Joined(under, name, placeable, carried),
+                };
 
-            steps.Add(
-                new CheckinStep(entry, landing, here, Blocker(root, landing, here, named))
-            );
+                var here = held.TryGetValue(entry.Uuid, out var at) ? at : null;
+
+                steps.Add(
+                    new CheckinStep(
+                        entry,
+                        landing,
+                        here,
+                        Blocker(root, landing, here, named),
+                        carry.Path
+                    )
+                );
+            }
         }
 
         // A path that is a file and a directory at once cannot be written: an entry landing at `A` while another lands
@@ -172,7 +217,29 @@ internal static class CheckinPlanning
             ),
         ];
 
-        return new CheckinPlan(vault, root, destination, steps);
+        return new CheckinPlan(vault, root, destination, steps, carrying);
+    }
+
+    /// <summary>Where an entry a drag carried lands under a destination.</summary>
+    /// <remarks>
+    /// The carried path is what the entry hangs from, so the entry itself keeps the carried name and what stands under
+    /// it keeps that tree: a folder brought in is the folder, remade where it was put, rather than its whole Vault path
+    /// under the destination.
+    /// </remarks>
+    /// <param name="under">The directory it lands under, which is empty for the Workspace's root.</param>
+    /// <param name="name">The name of what the drag carried.</param>
+    /// <param name="placeable">The entry's own path, with the unplaced mark taken off.</param>
+    /// <param name="carried">The carried path, with the unplaced mark taken off.</param>
+    /// <returns>The path it lands at.</returns>
+    private static string Joined(string under, string name, string placeable, string carried)
+    {
+        var rest = string.Equals(placeable, carried, StringComparison.Ordinal)
+            ? name
+            : placeable.StartsWith(carried + "/", StringComparison.Ordinal)
+                ? name + placeable[carried.Length..]
+                : placeable;
+
+        return under.Length == 0 ? rest : under + "/" + rest;
     }
 
     /// <summary>A path as it is written here, with the Vault's unplaced mark taken off the front.</summary>

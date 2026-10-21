@@ -57,7 +57,17 @@ internal static class CheckinCommand
     {
         ArgumentNullException.ThrowIfNull(references);
 
-        List<string> arguments = ["--theme-choice=" + Sync.Theme, "--json", "checkin", .. references];
+        List<string> arguments = ["--theme-choice=" + Sync.Theme, "--json", "checkin"];
+
+        // What a drop or a paste carried lands where it was put, so a destination from one makes the run rebase every
+        // reference on its own parent: a file keeps its name, a folder the tree it is. Without one the entries land at
+        // the paths the Vault gives them, which is what the word alone says.
+        if (to is { Length: > 0 })
+        {
+            arguments.Add("--by-name");
+        }
+
+        arguments.AddRange(references);
 
         // The destination is the last operand, which is how the command line reads them: every word but the last is a
         // reference, and a run with one word has none. It is a path of this run's rather than of the Vault's, which is
@@ -81,6 +91,21 @@ internal static class CheckinCommand
         ArgumentNullException.ThrowIfNull(entry);
 
         return entry.Path.AsSpan().IndexOfAny(PatternCharacters) < 0 ? entry.Path : entry.Uuid;
+    }
+
+    /// <summary>
+    /// What a drag carried is named by on the command line: the path it was carried at, or the uuid of what it is
+    /// when the path reads as a pattern.
+    /// </summary>
+    /// <param name="carry">What the drag carried.</param>
+    /// <returns>The reference to give the command.</returns>
+    public static string Reference(UpstreamCarry carry)
+    {
+        ArgumentNullException.ThrowIfNull(carry);
+
+        return carry.Path.AsSpan().IndexOfAny(PatternCharacters) < 0 || carry.Entry is null
+            ? carry.Path
+            : carry.Entry.Uuid;
     }
 
     /// <summary>Runs the checkin and reads what it answered.</summary>
