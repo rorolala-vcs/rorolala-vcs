@@ -1,0 +1,4 @@
+name = "psd-basic"
+format = "psd"
+made-with = "Photoshop 2021; 000 is the 2021 re-save of the original document, in-place-edit changes one layer per save, metadata-only renames layers and edits metadata, full-rewrite hides then shows a layer and saves, and shared-asset edits one layer on each path"
+patterns = ["big-file", "in-place-edit", "metadata-only", "full-rewrite", "shared-asset"]
