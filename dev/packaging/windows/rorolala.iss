@@ -74,7 +74,10 @@ WizardStyle=modern
 ; The project's own title image, drawn by the wizard itself rather than by this script: Inno reads a PNG in its
 ; own image slots and scales it, where the bitmap a `[Code]` page can show is a Windows bitmap and nothing
 ; else. It is the same picture the title page of the README is, so the installer looks like the project.
-WizardImageFile=..\..\..\res\icons\rorolala-title.png
+; Only the small slot is filled: the large, upright image Inno draws down the side of the Welcome and Setup
+; Completed pages is a second copy of the same picture, and blanking it is how Inno is told not to draw one —
+; leaving the directive out would bring back Inno's own image instead. The page layout is unchanged.
+WizardImageFile=
 WizardSmallImageFile=..\..\..\res\icons\rorolala-title.png
 ; What the installer itself is drawn as in a file list and on a shortcut: the installer's own icon rather
 ; than the program's, and the multi-frame one this project generates for it — Windows asks a program for one
@@ -114,7 +117,7 @@ en.RolaEdit=The editor helper (rola-edit)
 en.Lib=The C ABI and its bindings (library, header, RolaSharp)
 en.Desktop=The Desktop program
 en.Shortcuts=Start menu shortcuts
-en.Daemon=The daemon (rola-daemon)
+en.Daemon=The daemon and its window (rola-daemon, rola-daemon-gui)
 en.Jj=Jujutsu support (rola-jj)
 en.Completions=The PowerShell completion scripts
 en.Profile=The block in your PowerShell profile
@@ -137,7 +140,7 @@ zh.RolaEdit=编辑器助手（rola-edit）
 zh.Lib=C ABI 与其绑定（库、头文件、RolaSharp）
 zh.Desktop=桌面端程序
 zh.Shortcuts=开始菜单快捷方式
-zh.Daemon=服务端（rola-daemon）
+zh.Daemon=服务端与其窗口（rola-daemon、rola-daemon-gui）
 zh.Jj=Jujutsu 支持（rola-jj）
 zh.Completions=PowerShell 补全脚本
 zh.Profile=写入 PowerShell profile 的段落
@@ -193,8 +196,11 @@ Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 ; The daemon and Jujutsu are programs of their own rather than parts of the command line: what a reader
-; installs is what they use.
+; installs is what they use. The daemon's window is laid down beside the daemon it starts, since that is
+; where it looks for it — the two are one component because a window without the daemon it starts is a
+; program that opens only to say it cannot.
 Source: "{#SourceDir}\bin\rola-daemon.exe"; DestDir: "{app}\bin"; Components: daemon; Flags: ignoreversion
+Source: "{#SourceDir}\bin\rola-daemon-gui.exe"; DestDir: "{app}\bin"; Components: daemon; Flags: ignoreversion
 Source: "{#SourceDir}\bin\rola-jj.exe"; DestDir: "{app}\bin"; Components: jj; Flags: ignoreversion
 
 ; The Desktop program: the whole directory it was published as, plugins and translations included, since
@@ -213,8 +219,15 @@ Source: "{#SourcePath}\desktop-here.vbs"; DestDir: "{app}\bin"; Components: menu
 ; The launcher, which is where a reader starts: it lists the Workspaces on this machine and opens one through
 ; `rola desktop`, which is what finds the Workspace and hands the window the command line it is to work with.
 ; A shortcut straight to the Desktop program would open a window whose commands could not run, and one straight
-; to the command line is the item below it.
-Name: "{group}\Rorolala Desktop"; Filename: "{app}\bin\desktop\ROLALauncher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\bin\desktop\ROLALauncher.exe"; IconIndex: 0; Components: shortcuts
+; to the command line is the third item. Each item carries the name of the program it starts, so that what a
+; reader finds on the menu is what they would name on a command line.
+;
+; The daemon's window is offered on its own as well: it is started before a Workspace is opened and
+; keeps running behind one, so opening it is not opening the Desktop program. The entry asks for both
+; the shortcut and the daemon components, since a shortcut to a program whose component was cleared
+; would open nothing.
+Name: "{group}\ROLALauncher"; Filename: "{app}\bin\desktop\ROLALauncher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\bin\desktop\ROLALauncher.exe"; IconIndex: 0; Components: shortcuts
+Name: "{group}\ROLADaemon"; Filename: "{app}\bin\rola-daemon-gui.exe"; WorkingDir: "{app}"; IconFilename: "{app}\bin\rola-daemon-gui.exe"; IconIndex: 0; Components: shortcuts and daemon
 Name: "{group}\Rorolala"; Filename: "{app}\bin\rola.exe"; WorkingDir: "{app}"; Comment: "The command line"; Components: shortcuts
 Name: "{group}\Uninstall Rorolala"; Filename: "{uninstallexe}"
 
