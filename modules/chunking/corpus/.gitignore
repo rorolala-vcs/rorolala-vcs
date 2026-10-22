@@ -1,2 +1,13 @@
+# A corpus is what a score is taken over, and it is not carried by this repository: a format's own
+# files are megabytes each, several per pattern, and a repository that carried one set per format
+# would be a repository nobody clones.
+#
+# What is carried is the two small files that make a corpus a record rather than a directory of
+# pictures: what it is and how it was made (`policy.toml`), and what a measurement over it came to
+# (`SCORE.md`). Everything else here is local — made again with `./run.sh chunker --capture <format>`,
+# or pointed at with `--corpus <dir>` when it is somebody's own files.
 *
+!*/
 !.gitignore
+!*/policy.toml
+!*/SCORE.md

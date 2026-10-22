@@ -10,7 +10,7 @@ version chains, and prints the comparison.
 ```sh
 ./run.sh chunker                        # measure every corpus, against the yardsticks
 ./run.sh chunker --score                # and write each policy's SCORE.md beside its corpus
-./run.sh chunker --capture png          # write the PNG corpus, then measure it
+./run.sh chunker --corpus ~/my-corpus   # measure chains that live somewhere else
 ./run.sh chunker --generate synthetic   # write a synthetic chain set, then measure it
 ./run.sh chunker --check                # validate the corpora, cut nothing
 ./run.sh chunker --store                # also write it into a real store and compare
@@ -66,16 +66,29 @@ one strategy, and a directory named after a format would have to be told which o
 it means. A `policy.toml` beside the patterns is what says the directory is a policy's — it records how
 the corpus was made — and a directory without one is a chain set measured against the yardsticks alone.
 
+## The bytes are not carried; the record is
+
+A corpus is megabytes of a format's own files, several per pattern. A repository that carried one set
+per format would be one nobody clones, so `modules/chunking/corpus/.gitignore` ignores everything in
+it except the two small files that make a corpus a record rather than a directory of pictures:
+
+- `policy.toml` — what the corpus is and how it came to be;
+- `SCORE.md` — what a measurement over it came to.
+
+The chains themselves are local, and there are two ways to have them: put the files where the
+directory says they go, or measure them where they are with `--corpus <dir>`. Either way they are the
+contributor's: a corpus captured from a paint program is a picture of somebody's work.
+
+What that costs is stated in every `SCORE.md`: the digest names the bytes exactly, so two scores over
+one digest can be compared, and a machine without the bytes cannot re-derive the number. A score is a
+record the author stands behind, which is why it says so where the number is.
+
 ## What a corpus is, and what a score over it means
 
 A policy's corpus is meant to be *captured*: files a real tool wrote, edited the way that tool edits
 them. The plan for this work says as much, and the reason is that a score is only as good as the
-edits it was taken over.
-
-`--capture` exists for the formats nobody has a tool for on hand. What it writes for PNG is real output
-from a real encoder, edited the way a paint program edits a picture — so the *format* is real and the
-*edits* are this repository's idea of an edit. `corpus/png-chunks/policy.toml` says so, and a corpus
-captured from a real tool replaces those files and keeps that note honest.
+edits it was taken over. `policy.toml` is where a corpus says what it is and how it was made, and a
+corpus of files this repository drew itself says so there.
 
 The synthetic chain set — `--generate synthetic` — is not a corpus for any policy. It exists so the
 yardstick can be shown to work, and so the model of the store can be shown to agree with a store byte

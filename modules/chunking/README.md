@@ -14,8 +14,16 @@ against them so that the measurement does not move when a strategy does.
 The strategies are beside them, one file each in `src/policies/`. Adding one is adding a file: the
 crate's build script reads the `impl Policy` blocks and writes the registry they are found through,
 so there is no list anybody has to edit — which is what lets several people write several formats
-without ever colliding. A policy's corpus and its score live in `corpus/`, and
-`dev/chunker-harness` is what writes and takes them.
+without ever colliding. A policy's corpus and its score live in `corpus/`, and `dev/chunker-harness`
+is what takes the score; `corpus/.gitignore` is where the line between what is carried and what is
+kept locally is drawn.
+
+There is no strategy here yet, and that is a result rather than a gap. The first one —
+`png-chunks`, cutting a PNG at the boundaries between its chunks — was written, captured, measured
+and removed: it scored **0.715** against **0.805** for the best general cut, because a PNG compresses
+its whole picture into one `IDAT` and an edit to a pixel rewrites the one piece a cut at the
+boundaries can find. A format that the general cut already handles is a format that owes its own
+strategy a better number than that, and nothing was left behind for it to collide with.
 
 ## The boundary
 

@@ -26,7 +26,6 @@
 #![deny(clippy::nursery)]
 
 mod baseline;
-mod capture;
 mod corpus;
 mod generate;
 mod measure;
@@ -67,9 +66,8 @@ const WEIGHTS_FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/score.toml");
 const USAGE: &str = "\
 usage: chunker [options]
 
-  --corpus <dir>     read the chains from <dir> (default: the crate's corpus/)
-  --generate <name>  write a synthetic corpus under <dir>/<name>, then measure it
-  --capture <format> write a format policy's corpus under <dir>, then measure it
+  --corpus <dir>     read the chains from <dir> (default: the chunking crate's corpus/)
+  --generate <name>  write a synthetic chain set under <dir>/<name>, then measure it
   --check            validate the corpus and cut nothing
   --score            write each policy's SCORE.md beside its corpus
   --store            also measure through a real store, and compare it with the model
@@ -103,30 +101,25 @@ const ARG_STORE: PickerArg<'static, Flag> = PickerArg::new(&["store"], None, fal
 /// Say what the options are and stop.
 const ARG_HELP: PickerArg<'static, Flag> = PickerArg::new(&["help"], Some('h'), false);
 
-/// The format a corpus is captured for.
-const ARG_CAPTURE: PickerArg<'static, Option<String>> = PickerArg::new(&["capture"], None, false);
-
 /// The options that take a value, so that one written last can be refused.
 ///
 /// `arg-picker` consumes the option's own word and then finds nothing after it, which answers "not
 /// given" — and a run that meant to measure one corpus would measure the default one instead. A
 /// measurement of something other than what was asked for is the one thing this tool must not do, so
 /// the words are looked at as well as the picks.
-const WITH_VALUE: [&str; 3] = ["--corpus", "--generate", "--capture"];
+const WITH_VALUE: [&str; 2] = ["--corpus", "--generate"];
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let (corpus, generate, capture, check, writing, through_store, help, unmatched) =
-        Picker::from_args()
-            .pick_or_default(ARG_CORPUS)
-            .pick_or_default(ARG_GENERATE)
-            .pick_or_default(ARG_CAPTURE)
-            .pick_or_default(ARG_CHECK)
-            .pick_or_default(ARG_SCORE)
-            .pick_or_default(ARG_STORE)
-            .pick_or_default(ARG_HELP)
-            .pick(&UNMATCHED)
-            .unwrap();
+    let (corpus, generate, check, writing, through_store, help, unmatched) = Picker::from_args()
+        .pick_or_default(ARG_CORPUS)
+        .pick_or_default(ARG_GENERATE)
+        .pick_or_default(ARG_CHECK)
+        .pick_or_default(ARG_SCORE)
+        .pick_or_default(ARG_STORE)
+        .pick_or_default(ARG_HELP)
+        .pick(&UNMATCHED)
+        .unwrap();
 
     if *help {
         print!("{USAGE}");
@@ -154,7 +147,6 @@ async fn main() -> ExitCode {
 
     let asked = Asked {
         generate: generate.as_deref(),
-        capture: capture.as_deref(),
         checking: *check,
         scoring: *writing,
         through_store: *through_store,
@@ -173,8 +165,6 @@ async fn main() -> ExitCode {
 struct Asked<'a> {
     /// The policy name a synthetic corpus is written under.
     generate: Option<&'a str>,
-    /// The format a corpus is captured for.
-    capture: Option<&'a str>,
     /// Validate the corpus and cut nothing.
     checking: bool,
     /// Write each policy's `SCORE.md` beside its corpus.
@@ -187,12 +177,10 @@ struct Asked<'a> {
 async fn run(root: &std::path::Path, asked: &Asked<'_>) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(name) = asked.generate {
         crate::generate::synthetic(root, name, crate::generate::Scale::Full)?;
-        println!("wrote a synthetic corpus to {}", root.join(name).display());
-    }
-
-    if let Some(format) = asked.capture {
-        capture::corpus(root, format)?;
-        println!("captured a {format} corpus under {}", root.display());
+        println!(
+            "wrote a synthetic chain set to {}",
+            root.join(name).display()
+        );
     }
 
     let corpus = Corpus::read(root)?;
@@ -209,8 +197,9 @@ async fn run(root: &std::path::Path, asked: &Asked<'_>) -> Result<(), Box<dyn st
 
     if corpus.policies.is_empty() {
         println!(
-            "no corpus under {}: `./run.sh chunker --capture png` writes one, and \
-             `--generate synthetic` writes a chain set for the yardsticks alone",
+            "no corpus under {}: a policy's chains are put beside its corpus by whoever captured \
+             them, or named with `--corpus <dir>`, and `--generate synthetic` writes a chain set for \
+             the yardsticks alone",
             root.display()
         );
         return Ok(());

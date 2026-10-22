@@ -19,9 +19,5 @@ blake3.workspace = true
 serde.workspace = true
 toml.workspace = true
 
-# Writing a policy's corpus: the one format with no tool on hand here is captured by writing it,
-# and what is written has to be real output from a real encoder rather than bytes shaped like one.
-image.workspace = true
-
 # Writing a chain into a store is asynchronous, and so is reading it back.
 tokio = { workspace = true }

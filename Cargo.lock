@@ -3708,7 +3708,6 @@ version = "0.1.0"
 dependencies = [
  "arg-picker",
  "blake3",
- "image",
  "rorolala-storage",
  "serde",
  "tokio",

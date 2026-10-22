@@ -51,8 +51,9 @@ __*
 # ignored because what is drawn from them is what is committed. See `./run.sh icons`.
 /THIRD-PARTY/material-icons/
 
-# The synthetic corpus the chunker harness generates rather than carries: it is derived from the
-# generator, so committing it would commit the same bytes twice. A format policy's own corpus is
-# captured, is committed beside the policy, and is what a score is taken against. See
-# `dev/chunker-harness/README.md`.
+# Corpora are not carried: a format's own files are megabytes each, several per pattern, and a
+# repository that carried one set per format would be a repository nobody clones. What is carried is
+# the two small files inside each one that make it a record — `policy.toml` and `SCORE.md` — and
+# `modules/chunking/corpus/.gitignore` is where that line is drawn. The synthetic chain set is
+# generated here rather than there, so it is ignored whole. See `dev/chunker-harness/README.md`.
 /modules/chunking/corpus/synthetic/
