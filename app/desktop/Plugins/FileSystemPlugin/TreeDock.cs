@@ -449,6 +449,12 @@ internal sealed class TreeBrowser : UserControl
         tree.Items.Add(Node(root));
         _tree = tree;
 
+        // What the tree calls selected is what the keys act on, and it is not always a row's own press: the
+        // arrows move the toolkit's selection without touching a row, and a reading that lands puts the choice
+        // back by selecting the row itself. Both are a step drawn as chosen, so both have to be the one the
+        // keys are about rather than a step that was chosen earlier (see `Selected`).
+        _tree.SelectionChanged += (_, _) => Selected();
+
         // A drag is taken over the whole tree and not over the rows alone: the space beside and below them is
         // not a directory, and a drag let go there is refused by saying so rather than by saying nothing.
         DragDrop.SetAllowDrop(this, true);
@@ -850,11 +856,17 @@ internal sealed class TreeBrowser : UserControl
             }
         }
 
-        // The choice is put back once its row is drawn, which is after the reading holding it has landed.
+        // The choice is put back once its row is drawn, which is after the reading holding it has landed. A choice
+        // whose row is not drawn once a reading has landed is one that is gone, and the reading that says a step is
+        // missing says it of this one too: it is let go of rather than kept for a row that will never be drawn.
         if (_choosing is { } choose && Find(_tree.Items, choose) is { } pick)
         {
             _chosen = choose;
             pick.IsSelected = true;
+            _choosing = null;
+        }
+        else if (landed)
+        {
             _choosing = null;
         }
     }
@@ -963,6 +975,37 @@ internal sealed class TreeBrowser : UserControl
         _listing.Clicked(entry);
     }
 
+    /// <summary>Keeps what the tree calls selected and what the keys act on the same step.</summary>
+    /// <remarks>
+    /// A press on a row is `Choose`, which is the whole of a click: it marks the row, publishes what is chosen, and
+    /// says which entry was clicked. The arrows and a reading that puts a choice back move the toolkit's selection
+    /// without touching a row's own handler, and a step the eye reads as chosen has to be the step a key acts on, or
+    /// Delete removes what was chosen one gesture ago. What is published is the choice alone and not a click, since a
+    /// listing's arrows publish only that much.
+    /// </remarks>
+    private void Selected()
+    {
+        // Nothing while a reading is putting the choice back: `Resume` is the one that says what is chosen then, and
+        // a selection it is making is not a user choosing anything.
+        if (_choosing is not null)
+        {
+            return;
+        }
+
+        // The tree's own answer, which is nothing while nothing is selected: a cleared tree is a tree whose Delete
+        // does nothing rather than one that removes what was chosen before.
+        var path = (_tree.SelectedItem as TreeViewItem)?.Tag as string;
+
+        if (string.Equals(path, _chosen, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _chosen = path;
+
+        _listing.Chosen(path is null ? [] : [Being(path)]);
+    }
+
     /// <summary>Copies the chosen step to the clipboard.</summary>
     public void Copy()
     {
@@ -1000,16 +1043,52 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Removes the chosen step, asking first unless told not to.</summary>
     /// <remarks>
     /// The root is left out: it is the row the tree stands on rather than a step of it, and removing it would
-    /// leave the tree rooted at a directory that is no longer there.
+    /// leave the tree rooted at a directory that is no longer there. A step holding the root is left out for the
+    /// same reason, since removing it would take the root with it, and a tree that was rooted somewhere else
+    /// earlier in the run can still have chosen one.
+    /// <para>
+    /// Both refusals are said in the log rather than passed over in silence: the key is taken and answered above
+    /// this (see `Keys.Forget`), so a press that removed nothing is otherwise indistinguishable from a press that never
+    /// arrived at all.
+    /// </para>
     /// </remarks>
     /// <param name="ask">Whether to put the question to the user first.</param>
     public void Delete(bool ask)
     {
-        if (Chosen() is { } path && !string.Equals(path, _root, StringComparison.Ordinal))
+        if (Chosen() is not { } path)
         {
-            _actions.Remove([Being(path)], ask);
+            _host.Log.Info("delete: nothing is chosen in the tree");
+
+            return;
         }
+
+        if (HoldsRoot(path))
+        {
+            _host.Log.Info($"delete: `{path}` is what the tree stands on, or holds it, and is not removed");
+
+            return;
+        }
+
+        _actions.Remove([Being(path)], ask);
     }
+
+    /// <summary>Whether removing a path would take the directory the tree stands on with it.</summary>
+    /// <remarks>
+    /// The tree's own root and everything over it: a chosen step is read off a tree that was drawn, and a tree that
+    /// has been rooted elsewhere since still holds the paths it was drawn with.
+    /// </remarks>
+    /// <param name="path">The path that would be removed.</param>
+    /// <returns>Whether the tree is rooted at it or under it.</returns>
+    private bool HoldsRoot(string path) =>
+        _root.Length >= path.Length
+        && _root.StartsWith(path, StringComparison.Ordinal)
+        && (_root.Length == path.Length || Divider(_root[path.Length]));
+
+    /// <summary>Whether a character is one a path is joined with.</summary>
+    /// <param name="character">The character.</param>
+    /// <returns>Whether it divides one part of a path from the next.</returns>
+    private static bool Divider(char character) =>
+        character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar;
 
     /// <summary>
     /// Makes a directory inside a step of the tree, and opens the step so that it can be seen.
