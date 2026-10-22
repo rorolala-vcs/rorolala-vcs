@@ -13,6 +13,7 @@ use rorolala_utils_location::Locate as _;
 
 use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
+use super::entry::key_of;
 use crate::{
     AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout, Manifest,
     StorageBackend as _, TransferableBackend as _, store_file, transfer,
@@ -1025,6 +1026,59 @@ async fn a_key_a_pack_names_but_cannot_produce_does_not_stall_an_exchange() {
 
     assert!(holds(&from, &key).await, "held is the index's answer");
     assert!(!holds(&to, &key).await, "nothing crossed for it");
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+/// What a batch writes is what the store reads back, and it is the store's from the moment it is
+/// published rather than before.
+#[tokio::test]
+async fn a_batch_writes_a_store_that_reads_back() {
+    let (parent, store) = store("batch");
+
+    let one = b"the first thing".to_vec();
+    let two = b"the second thing".to_vec();
+    // A cut content keeps the whole of itself under its key as well as the manifest that says how it
+    // was cut, so this is the one key that really is two entries: the content, and the way it is put
+    // back together.
+    let whole = b"the content that was cut".to_vec();
+    let cut = key_of(&whole);
+    let first = key_of(&one);
+    let second = key_of(&two);
+
+    let mut manifest = Manifest::default();
+    manifest.push(Chunk::new(key_of(b"a chunk"), 7));
+
+    let mut batch = store.begin_batch().await;
+    batch.add(&first, &one).await.unwrap();
+    batch.add(&second, &two).await.unwrap();
+    // A key named twice in one run is one entry, since an index holds one of each.
+    // One key, one object and one manifest: a chunk whose bytes are the very content some key names
+    // is exactly this, and the two are entries of different kinds rather than one entry written
+    // twice.
+    batch.add(&cut, &whole).await.unwrap();
+    batch.add_manifest(&cut, &manifest).await.unwrap();
+
+    // A pack is found by its index, so what a batch has written is a pack no reader reaches until
+    // the batch publishes it.
+    assert!(!holds(&store, &second).await, "not a store's yet");
+
+    assert_eq!(batch.publish().await.unwrap(), 4);
+
+    assert_eq!(store.read_object(&first).await.unwrap(), one);
+    assert_eq!(store.read_object(&second).await.unwrap(), two);
+    assert_eq!(store.read_object(&cut).await.unwrap(), whole);
+    assert_eq!(store.manifest_of(&cut).await.unwrap(), Some(manifest));
+    assert!(holds(&store, &first).await);
+    assert!(holds(&store, &second).await, "the pack's index names it");
+
+    // Laid down in a pack rather than as one file per object, which is the whole of what a batch is
+    // for: a store taking a thousand chunks writes one pack and its index rather than a thousand
+    // files.
+    assert!(
+        !store.object_path(&first).exists(),
+        "no loose object was written"
+    );
 
     let _ = fs::remove_dir_all(&parent);
 }

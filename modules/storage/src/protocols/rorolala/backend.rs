@@ -84,7 +84,7 @@ impl StorageBackend for RorolalaStorage {
         // both kinds are asked.
         let state = self.root_state();
         for kind in [PackKind::Object, PackKind::Manifest] {
-            for index in self.packs_of(kind).await? {
+            for index in self.packs_of(&state, kind).await? {
                 let Some(directory) = self.pack_index(&state, kind, index).await? else {
                     continue;
                 };
@@ -151,7 +151,7 @@ impl StorageBackend for RorolalaStorage {
         // would still answer with.
         let mut packed = Vec::new();
         for kind in [PackKind::Object, PackKind::Manifest] {
-            for index in self.packs_of(kind).await? {
+            for index in self.packs_of(&state, kind).await? {
                 if self
                     .pack_index(&state, kind, index)
                     .await?

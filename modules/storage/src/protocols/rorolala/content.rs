@@ -450,7 +450,7 @@ impl RorolalaStorage {
         collect(&self.root.join(MANIFEST_DIR), &mut keys).await?;
 
         let state = self.root_state();
-        for index in self.packs_of(PackKind::Manifest).await? {
+        for index in self.packs_of(&state, PackKind::Manifest).await? {
             let Some(directory) = self.pack_index(&state, PackKind::Manifest, index).await? else {
                 continue;
             };

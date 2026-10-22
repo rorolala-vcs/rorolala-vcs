@@ -3549,7 +3549,6 @@ dependencies = [
  "colored",
  "console",
  "embed-resource",
- "futures",
  "globset",
  "indicatif",
  "just_template",
@@ -3735,6 +3734,18 @@ dependencies = [
 [[package]]
 name = "rorolala-dev-rsharp-bindgen"
 version = "0.1.0"
+
+[[package]]
+name = "rorolala-dev-sync-harness"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "rorolala-auth",
+ "rorolala-daemon",
+ "rorolala-protocol",
+ "rorolala-storage",
+ "tokio",
+]
 
 [[package]]
 name = "rorolala-errors"

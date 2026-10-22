@@ -11,24 +11,24 @@ use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, Onl
 use rorolala_storage::Key;
 
 use super::sync_all::local_store;
-use super::sync_storage::{Side, Unit, UnitKind, carry_blob, sync_units};
+use super::sync_storage::{DEFAULT_WINDOW, Side, Unit, UnitKind, carry_blob, sync_units};
 
-/// An Action that makes the two stores hold the units it is given, and answers how many lanes the
-/// Vault will serve.
+/// An Action that makes the two stores hold the units it is given, and answers how many reads it was
+/// granted at once.
 ///
 /// # Input
 ///
 /// The units, separated by whitespace — one a line, as a listing prints them. `m:<key>` carries only
 /// the manifest a content was cut into, `o:<key>` only the object, `q:<key>` whichever of the two
 /// the sender holds, and a bare key the whole of what it names; a hash is read the way a key is
-/// anywhere else. A token `c:<n>` asks the Vault for `n`
-/// lanes where the asking happens, so a caller that wants to know what it is granted sends `c:<n>`
-/// and nothing else and reads the answer.
+/// anywhere else. A token `c:<n>` asks the Vault to read `n` at once where the asking happens, so a
+/// caller that wants to know what it is granted sends `c:<n>` and nothing else and reads the answer.
 ///
 /// # Output
 ///
-/// The number of lanes the Vault will serve, as decimal text: what the caller asked for, held to
-/// what the Vault is set to serve. A caller that asked for none is granted one.
+/// How many reads at once the Vault will serve, as decimal text: what the caller asked for, held to
+/// what the Vault is set to serve. A caller that asked for none is granted what this primitive reads
+/// at once by default.
 pub struct ActionSyncHashes;
 
 impl Action for ActionSyncHashes {
@@ -38,7 +38,7 @@ impl Action for ActionSyncHashes {
     type Input = String;
     type Output = String;
 
-    /// Has the two stores carry the named units, granted as many lanes as the Vault serves.
+    /// Has the two stores carry the named units, with as many reads at once as the Vault serves.
     ///
     /// # Errors
     ///
@@ -62,11 +62,12 @@ impl Action for ActionSyncHashes {
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
             .unwrap_or_default();
 
-        // How many lanes the caller wants, and how many the Vault will serve: the ask crosses, the
-        // answer comes back, and the answer is what the caller is told. Both ends read the same text
-        // and take the ask out of it, so they name the same units.
+        // How much the caller wants read at once, and how much the Vault will serve: the ask crosses,
+        // the answer comes back, and the answer is what the caller is told. Both ends read the same
+        // text and take the ask out of it, so they name the same units.
         let (asked, units) = split_ask(&text);
         let granted = grant(&mut ctx, asked).await?;
+        let window = usize::try_from(granted).unwrap_or(DEFAULT_WINDOW);
 
         let required: Vec<Unit> = units.split_whitespace().filter_map(unit_of).collect();
 
@@ -74,23 +75,24 @@ impl Action for ActionSyncHashes {
         // exactly as a full sync hands them in.
         let workspace = OnlyWorkspace::new(&ctx, || local.clone());
         let vault = OnlyVault::new(&ctx, || local.clone());
-        sync_units(&mut ctx, workspace, vault, Both::new(required)).await?;
+        sync_units(&mut ctx, workspace, vault, Both::new(required), window).await?;
 
         Ok(granted.to_string())
     }
 }
 
-/// The lanes the caller asks for, and the units it names.
+/// The reads the caller asks for at once, and the units it names.
 ///
-/// A token `c:<n>` is the ask and is taken out of the text; a caller that names none asks for one,
-/// which is what a plain listing of keys has always meant.
+/// A token `c:<n>` is the ask and is taken out of the text; a caller that names none asks for the
+/// number this primitive reads at once by default — see [`DEFAULT_WINDOW`] — which is what a plain
+/// listing of keys has always meant.
 fn split_ask(text: &str) -> (u32, String) {
-    let mut asked = 1_u32;
+    let mut asked = u32::try_from(DEFAULT_WINDOW).unwrap_or(1);
     let mut units = String::new();
 
     for token in text.split_whitespace() {
         if let Some(count) = token.strip_prefix("c:") {
-            asked = count.parse().unwrap_or(1);
+            asked = count.parse().unwrap_or(asked);
 
             continue;
         }
@@ -104,11 +106,11 @@ fn split_ask(text: &str) -> (u32, String) {
     (asked, units)
 }
 
-/// Asks the Vault for `asked` lanes and answers what it grants.
+/// Asks the Vault for `asked` reads at once and answers what it grants.
 ///
 /// The ask goes to the Vault, which holds it to what it is set to serve — the configuration's
-/// `max_concurrency` — and the grant comes back to the Workspace, which is the side that opens the
-/// lanes. A Vault that is set to no number serves what is asked for.
+/// `max_concurrency` — and the grant comes back to the Workspace, which is the side that asks with
+/// it. A Vault that is set to no number serves what is asked for.
 async fn grant(ctx: &mut ActionContext<'_>, asked: u32) -> Result<u32, ActionError> {
     let ask: OnlyWorkspace<u32> = ctx.only_workspace(|| asked);
     let arrived: OnlyVault<u32> = ctx.transfer(ask).await?;
@@ -132,8 +134,8 @@ async fn grant(ctx: &mut ActionContext<'_>, asked: u32) -> Result<u32, ActionErr
 /// What a Vault with a cap of `cap` grants a caller that asked for `asked`.
 ///
 /// Never fewer than one, and never more than the Vault serves: the two bounds are what make a
-/// caller that asked for none still a caller with one lane, and a caller that asked for the world
-/// still one the Vault can answer.
+/// caller that asked for none still a caller that reads one at a time, and a caller that asked for
+/// the world still one the Vault can answer.
 fn granted(asked: u32, cap: u32) -> u32 {
     asked.clamp(1, cap.max(1))
 }
@@ -170,7 +172,7 @@ mod tests {
 
     use rorolala_storage::Key;
 
-    use super::{UnitKind, granted, split_ask, unit_of};
+    use super::{DEFAULT_WINDOW, UnitKind, granted, split_ask, unit_of};
 
     /// A token names a key and how much of it is carried: `m:` a manifest, `o:` an object, a bare
     /// key the whole.
@@ -201,16 +203,18 @@ mod tests {
     }
 
     /// The ask is what the caller wants and the units are what it names, and a caller that asks for
-    /// nothing gets one lane.
+    /// nothing gets what the primitive reads at once by default.
     #[test]
     fn the_ask_is_taken_out_of_the_units() {
+        let by_default = u32::try_from(DEFAULT_WINDOW).unwrap();
+
         assert_eq!(split_ask("c:8 abc def"), (8, "abc def".to_string()));
-        assert_eq!(split_ask("abc def"), (1, "abc def".to_string()));
+        assert_eq!(split_ask("abc def"), (by_default, "abc def".to_string()));
         assert_eq!(split_ask("c:4"), (4, String::new()));
-        assert_eq!(split_ask(""), (1, String::new()));
+        assert_eq!(split_ask(""), (by_default, String::new()));
     }
 
-    /// A Vault grants no more than it serves and never fewer than one lane.
+    /// A Vault grants no more than it serves and never fewer than one read at a time.
     #[test]
     fn a_grant_is_held_to_what_the_vault_serves() {
         assert_eq!(granted(4, 16), 4);

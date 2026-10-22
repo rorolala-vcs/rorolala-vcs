@@ -17,6 +17,11 @@
 //! the most of it, so the fewest Vaults are reached. A candidate that cannot be reached, or that
 //! answers with none of what is left, is passed over rather than waited on.
 //!
+//! One connection is one pass: a key names the whole of what it names, and the side holding it is the
+//! one that expands it, so a content kept as chunks crosses with its manifest in the same exchange as
+//! one kept whole. What a Vault keeps is not something this side has to learn before it can ask, which
+//! is why asking is one exchange rather than a discovery and a fetching of what it discovered.
+//!
 //! What was brought is said once, on stderr, when the run is done with it: a fetch a run did not
 //! make is one it does not report, and an offline run makes none at all.
 
@@ -83,7 +88,7 @@ pub struct Sources<'a> {
     /// The runtime the exchanges are waited on: a command is not asynchronous, and this one is made
     /// where the fetches are rather than borrowed, since a command that fetches has no other.
     runtime: tokio::runtime::Runtime,
-    /// How many connections a transfer of many keys is spread over, which is never less than one.
+    /// How many reads a transfer keeps in flight, which is never less than one.
     concurrency: usize,
 }
 
@@ -102,8 +107,6 @@ struct Asked {
     /// empty set for a Vault that could not be reached, which is a Vault holding nothing as far as
     /// this run is concerned.
     held: Option<HashSet<Key>>,
-    /// How many lanes it granted, once it has been asked: `None` until the run asks.
-    granted: Option<usize>,
     /// Whether what is left has already been asked of it, so it is not reached again.
     used: bool,
     /// How many objects it actually handed over, for the one line the run says.
@@ -165,10 +168,11 @@ impl<'a> Sources<'a> {
         })
     }
 
-    /// Spreads a transfer of many keys over this many connections.
+    /// Spreads a transfer of many keys over this many reads at once.
     ///
-    /// A run that names none keeps the one connection a fetch has always used; `--concurrency` is
-    /// what this is handed.
+    /// A run that names none keeps the number the sync primitive reads at once by default;
+    /// `--concurrency` is what this is handed. It is one connection either way: what a transfer
+    /// spreads over is the reads its sending side keeps in flight, not the connections it opens.
     #[must_use]
     pub fn with_concurrency(mut self, concurrency: usize) -> Self {
         self.concurrency = concurrency.max(1);
@@ -227,7 +231,7 @@ impl<'a> Sources<'a> {
             };
             let before = left.len();
 
-            self.carry(store, index, &wanted);
+            self.carry(index, &wanted);
             left = self.missing(store, &left);
             self.asked.borrow_mut()[index].brought += before - left.len();
         }
@@ -254,101 +258,32 @@ impl<'a> Sources<'a> {
             return Ok(0);
         }
 
-        // What is named is exploded into units here, before the keys are split: a content kept as
-        // chunks becomes its manifest and each chunk, so the chunks travel over different lanes
-        // rather than one behind another. What a run asked for is what it asks with: the units are
-        // split into as many runs as there are lanes, and each travels over a connection of its own,
-        // so the Vault serves them at once.
-        let lines = self.unit_lines(store, keys);
-        let ordered = primary.address.to_string();
-        let width = self.granted(0);
-        let results = self.runtime.block_on(async {
-            futures::future::join_all(Self::lane_inputs(&lines, width).into_iter().map(|input| {
-                action_sync_hashes_async(
-                    self.workspace,
-                    self.account,
-                    ordered.clone(),
-                    input,
-                    self.progress.clone(),
-                )
-            }))
-            .await
-        });
+        // A bare key is the whole of what it names, and the side holding it is the one that expands
+        // it: the Vault records this side's manifest and takes its chunks rather than cutting the
+        // content over again, and one pass carries it either way.
+        let units = self.unit_count(store, keys);
+        let tokens: Vec<String> = keys.iter().map(Key::hex).collect();
 
-        results
-            .into_iter()
-            .find_map(Result::err)
-            .map_or(Ok(lines.len()), |error| Err(error.to_string()))
+        self.exchange(&primary.address.to_string(), &tokens)
+            .map(|()| units)
     }
 
-    /// How many lanes a Vault grants, asking it once and remembering the answer.
+    /// How many units of stored content `keys` are: one per key kept whole, and a manifest and its
+    /// chunks for one kept cut.
     ///
-    /// A Vault is asked for as many lanes as the run wants and answers no more than it serves, so
-    /// the run opens no more than that. A Vault that could not be answered grants what was asked
-    /// for, since the failure to reach it is said where the transfer is.
-    fn granted(&self, index: usize) -> usize {
-        if let Some(granted) = self.asked.borrow()[index].granted {
-            return granted;
-        }
-
-        let address = self.candidates[index].address.clone();
-        let requested = self.concurrency;
-        let granted = self
-            .runtime
-            .block_on(action_sync_hashes_async(
-                self.workspace,
-                self.account,
-                address.to_string(),
-                format!("c:{requested}"),
-                self.progress.clone(),
-            ))
-            .ok()
-            .and_then(|answer| answer.trim().parse::<usize>().ok())
-            .map_or(requested, |granted| granted.clamp(1, requested.max(1)));
-
-        self.asked.borrow_mut()[index].granted = Some(granted);
-
-        granted
-    }
-
-    /// The tokens `keys` are sent as: `m:` before a content kept as chunks, then `o:` before each
-    /// chunk it names, and the key itself when the content is one object.
-    ///
-    /// A store is what says which of the two a key is; a run without one sends every key whole,
-    /// which the Vault expands itself.
-    fn unit_lines(&self, store: Option<&RorolalaStorage>, keys: &[Key]) -> Vec<String> {
+    /// This is what the run says moved, so it is counted from what is here rather than from what
+    /// crossed: the exchange answers how many reads it was granted, not what it carried.
+    fn unit_count(&self, store: Option<&RorolalaStorage>, keys: &[Key]) -> usize {
         let Some(store) = store else {
-            return keys.iter().map(Key::hex).collect();
+            return keys.len();
         };
 
-        let mut lines = Vec::new();
-        for key in keys {
-            match self.runtime.block_on(store.manifest_of(key)) {
-                Ok(Some(manifest)) => {
-                    lines.push(format!("m:{}", key.hex()));
-                    for chunk in manifest.chunks() {
-                        lines.push(format!("o:{}", chunk.key().hex()));
-                    }
-                }
-                _ => lines.push(key.hex()),
-            }
-        }
-
-        lines
-    }
-
-    /// `tokens` split into as many runs as the run carries at once, each joined as the exchange
-    /// reads it: one unit a line, as a listing prints its keys.
-    fn lane_inputs(tokens: &[String], width: usize) -> Vec<String> {
-        if tokens.is_empty() {
-            return Vec::new();
-        }
-
-        let count = width.clamp(1, tokens.len());
-        tokens
-            .chunks(tokens.len().div_ceil(count))
-            .map(|chunk| chunk.join("\n"))
-            .collect()
+        keys.iter()
+            .map(|key| match self.runtime.block_on(store.manifest_of(key)) {
+                Ok(Some(manifest)) => manifest.len().saturating_add(1),
+                _ => 1,
+            })
+            .sum()
     }
 
     /// Says what was brought, in one line, once the run is done with it.
@@ -432,54 +367,48 @@ impl<'a> Sources<'a> {
 
     /// Asks a candidate for the named keys, and marks it as used.
     ///
+    /// A bare key is the whole of what it names — the manifest and the chunks it names, or the object
+    /// — and the side holding it is the one that expands it. So one pass brings a content kept as
+    /// chunks as readily as one kept whole, and what the Vault keeps is not something this side has
+    /// to learn first.
+    ///
     /// A failure carries no further than the next candidate: what did not arrive is still missing,
     /// and the loop asks whichever candidate is left.
-    fn carry(&self, store: &RorolalaStorage, index: usize, keys: &[Key]) {
+    fn carry(&self, index: usize, keys: &[Key]) {
         self.asked.borrow_mut()[index].used = true;
 
+        let tokens: Vec<String> = keys.iter().map(Key::hex).collect();
         let address = self.candidates[index].address.to_string();
-        let width = self.granted(index);
 
-        // What is asked for first is whichever of a manifest or an object the Vault holds: a content
-        // kept as chunks answers with its manifest, which says what to ask for next, and one kept
-        // whole answers with the object and is done.
-        let discovered: Vec<String> = keys.iter().map(|key| format!("q:{}", key.hex())).collect();
-        self.transfer(&address, &discovered, width);
-
-        // What arrived kept as chunks is asked for a chunk at a time, the chunks of one content
-        // spread over the lanes: the manifest the first pass brought is what says which they are.
-        let mut chunks = Vec::new();
-        for key in keys {
-            if let Ok(Some(manifest)) = self.runtime.block_on(store.manifest_of(key)) {
-                for chunk in manifest.chunks() {
-                    chunks.push(format!("o:{}", chunk.key().hex()));
-                }
-            }
-        }
-
-        self.transfer(&address, &chunks, width);
+        // What a candidate did not hand over is still missing, and the next one is asked for it: a
+        // failure here is one more thing not brought rather than the end of the run.
+        let _ = self.exchange(&address, &tokens);
     }
 
-    /// Makes the Vault hold everything here and this side hold everything there, in units spread over
-    /// as many lanes as it granted.
-    fn transfer(&self, address: &str, tokens: &[String], width: usize) {
+    /// Asks a Vault to make both stores hold what `tokens` names, with this many reads at once.
+    ///
+    /// The ask is one connection: what a transfer spreads over is the reads its sending side keeps in
+    /// flight, and the number is carried in the text the exchange reads rather than opened as a
+    /// connection each.
+    fn exchange(&self, address: &str, tokens: &[String]) -> Result<(), String> {
         if tokens.is_empty() {
-            return;
+            return Ok(());
         }
 
-        let inputs = Self::lane_inputs(tokens, width);
-        let _ = self.runtime.block_on(async {
-            futures::future::join_all(inputs.iter().map(|input| {
-                action_sync_hashes_async(
-                    self.workspace,
-                    self.account,
-                    address.to_owned(),
-                    input.clone(),
-                    self.progress.clone(),
-                )
-            }))
-            .await
-        });
+        let asked = self.concurrency;
+        let mut input = format!("c:{asked}\n");
+        input.push_str(&tokens.join("\n"));
+
+        self.runtime
+            .block_on(action_sync_hashes_async(
+                self.workspace,
+                self.account,
+                address.to_owned(),
+                input,
+                self.progress.clone(),
+            ))
+            .map(|_granted| ())
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -528,31 +457,10 @@ mod tests {
         Key::new([seed; 32])
     }
 
-    /// The units are split into as many lanes as the run carries at once, one whole run per lane and
-    /// none of them empty.
-    #[test]
-    fn the_units_are_split_into_as_many_lanes_as_asked() {
-        let tokens: Vec<String> = (0..10).map(|at| at.to_string()).collect();
-
-        let four = Sources::lane_inputs(&tokens, 4);
-        assert_eq!(four.len(), 4);
-        assert_eq!(
-            four.iter().map(|lane| lane.lines().count()).sum::<usize>(),
-            10
-        );
-        assert!(four.iter().all(|lane| !lane.is_empty()));
-
-        // More lanes than there are units is one lane a unit, and one lane is every unit at once.
-        assert_eq!(Sources::lane_inputs(&tokens, 100).len(), 10);
-        assert_eq!(Sources::lane_inputs(&tokens, 1).len(), 1);
-        assert_eq!(Sources::lane_inputs(&[], 4), Vec::<String>::new());
-    }
-
     /// A candidate that was asked and answered with `keys`.
     fn holds(keys: &[u8]) -> Asked {
         Asked {
             held: Some(keys.iter().copied().map(key).collect()),
-            granted: None,
             used: false,
             brought: 0,
         }
@@ -584,7 +492,7 @@ mod tests {
         let asked = [
             Asked {
                 held: Some(std::iter::once(key(1)).collect()),
-                granted: None,
+
                 used: true,
                 brought: 1,
             },
@@ -610,7 +518,7 @@ mod tests {
         let asked = [
             Asked {
                 held: None,
-                granted: None,
+
                 used: false,
                 brought: 0,
             },

@@ -48,7 +48,7 @@ align:
 
             --vault             Include this Vault as a Layout source during alignment
             --offline           Look for the content needed to restore only locally without asking the Vault
-            --concurrency <N>   Carry the content over N connections at once (default 4)
+            --concurrency <N>   Carry the content N units at a time (default 4)
     zh-CN: |
         让工作区下的文件结构与记录的保持一致
 
@@ -67,7 +67,7 @@ align:
 
             --vault             在校准时把该保险库作为布局来源一起纳入
             --offline           还原需要的内容只从本地查找，不向保险库请求
-            --concurrency <N>   用 N 条连接同时传输内容（默认 4）
+            --concurrency <N>   每次同时搬运 N 份内容（默认 4）
 
   description:
     en: Bring the file structure under the Workspace into agreement with what is recorded

@@ -12,6 +12,7 @@ members = [
     "dev/i18n-check",
     "dev/icons",
     "dev/rsharp-bindgen",
+    "dev/sync-harness",
     "modules/auth",
     "modules/chunking",
     "modules/daemon",
