@@ -299,6 +299,16 @@ public interface ILogicalRefusal
 /// </remarks>
 public interface ILogicalFolderEditor
 {
+    /// <summary>Whether the place makes folders of this side's at an address.</summary>
+    /// <remarks>
+    /// Asked before a menu offers to make one, because a place is not somewhere folders may be made everywhere it can
+    /// be read: a level that only lists what there is holds no folders of its own, and an item offered there would do
+    /// nothing when it was chosen.
+    /// </remarks>
+    /// <param name="address">The place being asked about.</param>
+    /// <returns>Whether a folder may be made in it.</returns>
+    bool MakesFolders(LogicalAddress address);
+
     /// <summary>Makes an empty folder under an address, which the place then lists.</summary>
     /// <param name="address">The place the folder is made in.</param>
     /// <returns>Whether one was made, which is nothing when the place does not make them.</returns>

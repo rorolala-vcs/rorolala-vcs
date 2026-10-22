@@ -446,26 +446,31 @@ internal sealed class UpstreamPlace
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Only a Vault's upstream holds folders of this side's: the Layouts under `layouts` are read from the work
+    /// itself, and a folder there would be a path this side made up about the work. The lists over them — a Vault's, a
+    /// Layout's — are read from the Vault rather than being a folder of it, so they hold none either.
+    /// </remarks>
+    public bool MakesFolders(LogicalAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        return Target(address) is { } target
+            && string.Equals(target.Source.Domain, Vaults, StringComparison.Ordinal)
+            && target.Source.Vault is { Length: > 0 };
+    }
+
+    /// <inheritdoc />
     public bool NewFolder(LogicalAddress address)
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        if (Target(address) is not { } target)
+        if (Target(address) is not { } target || !MakesFolders(address))
         {
             return false;
         }
 
         var (source, prefix) = target;
-
-        // Only a Vault's upstream holds folders of this side's: the Layouts under `layouts` are read from the work
-        // itself, and a folder there would be a path this side made up about the work.
-        if (
-            !string.Equals(source.Domain, Vaults, StringComparison.Ordinal)
-            || source.Vault is not { Length: > 0 }
-        )
-        {
-            return false;
-        }
 
         _made = Join(prefix, Free(source, prefix));
         _drafts.Add(_made);

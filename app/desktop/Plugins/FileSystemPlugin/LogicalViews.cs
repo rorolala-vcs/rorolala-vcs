@@ -238,18 +238,35 @@ internal sealed class Places : Listing<LogicalEntry>
     }
 
     /// <summary>
-    /// The menu on the space around the entries: what a place can be asked of itself, which is a read again.
+    /// The menu on the space around the entries: what a place can be asked of itself, which is a folder made in it
+    /// and a read again.
     /// </summary>
     /// <remarks>
-    /// Everything else a menu might offer is about a file, and there is none here. The space is the place rather
-    /// than an entry, so the provider is not asked — it has said what its entries offer, and nothing about the
-    /// room between them.
+    /// Everything else a menu might offer is about a file, and there is none here. A folder is the one thing a place
+    /// may let this side arrange (see <see cref="ILogicalFolderEditor"/>), and the space is where it is asked for,
+    /// since the room between the rows is the place rather than a row of it.
+    /// <para>
+    /// The box for a new folder's name belongs to the view, because the row it goes in is the view's: what is made
+    /// here is the folder, and what names it is the same wait a new directory in a listing makes.
+    /// </para>
     /// </remarks>
     /// <param name="from">The control the menu is opened from.</param>
     /// <returns>The menu.</returns>
     public override ContextMenu? Space(Control from)
     {
         var menu = new ContextMenu();
+
+        // Only a place that makes folders where the menu was opened is offered one, and the view is what is asked
+        // for it: a folder made here has a row in that view, and the name is typed in the row.
+        if (
+            from is EntryView<LogicalEntry> view
+            && Editor() is { } editor
+            && editor.MakesFolders(_place.Address)
+        )
+        {
+            menu.Items.Add(BrowserActions.Item("rorolala_file_system.new_folder", view.NewFolder));
+        }
+
         menu.Items.Add(BrowserActions.Item("rorolala_file_system.refresh", _browser.Refresh));
 
         return menu;

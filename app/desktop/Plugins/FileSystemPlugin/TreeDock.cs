@@ -511,7 +511,7 @@ internal sealed class TreeBrowser : UserControl
         var land = Landing(e);
 
         Mark(land?.Row);
-        e.DragEffects = land is null ? DragDropEffects.None : Drops.Over(e);
+        e.DragEffects = land is null ? DragDropEffects.None : Over(e);
         e.Handled = e.DragEffects != DragDropEffects.None;
     }
 
@@ -541,14 +541,45 @@ internal sealed class TreeBrowser : UserControl
     /// and below them names nothing to go into, so a drag let go there is let go nowhere rather than being read
     /// as the base. The computer is a place to choose a drive from rather than a directory, so a step standing
     /// for it is not somewhere a drag can go either.
+    /// <para>
+    /// A drag that is not files is a place's own object, and what a directory does with one is not this view's to
+    /// decide: it is offered to what was registered, and a step nothing takes is a step the drop is not offered on.
+    /// The files are read first, because a drag of this program's own files carries the payload as well, and it is a
+    /// file operation whatever a place made of it.
+    /// </para>
     /// </remarks>
     /// <param name="e">The drag.</param>
-    private Land? Landing(DragEventArgs e) =>
-        e.DataTransfer.Contains(DataFormat.File) &&
-        Step(e.GetPosition(this)) is { } path &&
-        !Browser.IsComputer(path)
-            ? new Land(path, path)
-            : null;
+    private Land? Landing(DragEventArgs e)
+    {
+        if (Step(e.GetPosition(this)) is not { } path || Browser.IsComputer(path))
+        {
+            return null;
+        }
+
+        if (e.DataTransfer.Contains(DataFormat.File))
+        {
+            return new Land(path, path);
+        }
+
+        // A place's drag is a thing being put *in* a folder, so a step naming a file is not a place to let one
+        // go: a listing refuses a drop on a file row the same way (see `Files.Landing`).
+        return e.DataTransfer.TryGetValue(Drag.Payload) is { } logical
+            && Directory.Exists(path)
+            && _drops.Takes(path, logical)
+                ? new Land(path, path)
+                : null;
+    }
+
+    /// <summary>What letting go on a step would do.</summary>
+    /// <remarks>
+    /// A place's drag is a copy whichever key is held: what it brings is not the files the source holds, and nothing
+    /// is moved out of anywhere by taking it, so the answer is the one that leaves the source where it is. A drag of
+    /// files is the platform's own, and the key held says which of the two it is.
+    /// </remarks>
+    /// <param name="e">The drag.</param>
+    /// <returns>What the platform is told.</returns>
+    private static DragDropEffects Over(DragEventArgs e) =>
+        e.DataTransfer.Contains(DataFormat.File) ? Drops.Over(e) : DragDropEffects.Copy;
 
     /// <summary>
     /// Takes a press as the beginning of a drag of the step it landed on.
