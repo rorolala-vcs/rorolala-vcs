@@ -1,0 +1,34 @@
+# What a chunking strategy's numbers are worth.
+#
+# Four ratios against the best yardstick on the same chain, combined by a weighted geometric mean. The
+# weights are here rather than in the code because what a term should weigh is an argument a reader
+# should be able to have with the numbers, and an argument made by editing a file leaves a diff.
+#
+# `version` is the number a score is taken under. A score is only comparable with one that names the
+# same version, the same corpus digest and the same weights — which is why the report prints all three.
+# Moving any weight means moving this.
+
+version = 1
+
+# What a chunker has to clear to be called usable, whatever its score. These are not terms of the
+# score: time is the one thing a laptop and a build machine disagree about, and a weighted timing term
+# would make a score that only means something on the machine that took it. The floor is what keeps a
+# strategy that is beautifully small and catastrophically slow out of the table as an option.
+[floors]
+min-split-mb-per-s = 20.0
+max-peak-multiple = 8.0
+
+# What each term weighs.
+#
+# - dedup: the share of the content the store did not already have. The largest weight, because a
+#   version control system for large binaries is a deduplication engine before it is anything else.
+# - worst-marginal: the worst single version's cost. Second, because a chain is what gets written, and
+#   a strategy that is good on the first version and ruinous on the tenth has not been understood.
+# - stored: the bytes the store holds per byte of content, frame headers and manifests included.
+# - manifest: the manifests' own share. The smallest weight, and it is the counterweight that stops a
+#   strategy from looking perfect by cutting into pieces too small to be worth a record.
+[terms]
+dedup = 4.0
+worst-marginal = 3.0
+stored = 2.0
+manifest = 1.0

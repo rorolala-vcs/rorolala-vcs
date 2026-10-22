@@ -8,6 +8,7 @@ license.workspace = true
 blake3.workspace = true
 futures.workspace = true
 lz4.workspace = true
+rorolala-chunking.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-location.workspace = true
 serde.workspace = true

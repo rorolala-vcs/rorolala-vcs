@@ -198,14 +198,7 @@ pub(crate) fn take(layout: &Layout, id: Uuid, owner: &str) -> Result<Ownership, 
     }
 
     layout
-        .update_entry(
-            id,
-            MutableData::new(
-                Some(owner.to_owned()),
-                data.version(),
-                data.description().to_owned(),
-            ),
-        )
+        .update_entry(id, data.renewed(Some(owner.to_owned()), data.version()))
         .map_err(|error| ActionError::Store(error.to_string()))?;
 
     Ok(Ownership::Owner(Some(owner.to_owned())))
@@ -230,10 +223,7 @@ pub(crate) fn giveup(layout: &Layout, id: Uuid, owner: &str) -> Result<Ownership
         None => Ok(Ownership::Owner(None)),
         Some(_) => {
             layout
-                .update_entry(
-                    id,
-                    MutableData::new(None, data.version(), data.description().to_owned()),
-                )
+                .update_entry(id, data.renewed(None, data.version()))
                 .map_err(|error| ActionError::Store(error.to_string()))?;
 
             Ok(Ownership::Owner(None))
@@ -510,11 +500,7 @@ pub(crate) fn set_remote(
     layout
         .update_entry(
             id,
-            MutableData::new(
-                data.owner().map(str::to_owned),
-                *version.digest(),
-                data.description().to_owned(),
-            ),
+            data.renewed(data.owner().map(str::to_owned), *version.digest()),
         )
         .map_err(|error| ActionError::Store(error.to_string()))?;
 

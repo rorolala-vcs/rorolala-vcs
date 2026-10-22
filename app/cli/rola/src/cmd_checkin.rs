@@ -1175,13 +1175,11 @@ fn bring_in(
             continue;
         }
 
-        // What the Layout says is the version the Vault holds and the holder it names; the path is
-        // this side's own, which is what the run was asked for.
-        let data = MutableData::new(
-            data.owner().map(str::to_owned),
-            data.version(),
-            data.description().to_owned(),
-        );
+        // What the Layout says is the version the Vault holds, the holder it names and the cut it
+        // prefers; the path is this side's own, which is what the run was asked for. Nothing is
+        // rebuilt from its parts: rebuilding is how a preference would be dropped, and a dropped
+        // preference is reported nowhere — the entry would go on being written, cut another way
+        // than the one it asked for.
         if let Err(error) = batch.create_file(id, data, &path) {
             failed.push(format!("{id}: {error}"));
 

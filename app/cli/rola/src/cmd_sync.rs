@@ -28,7 +28,7 @@ use librorolala::daemon::{
     EntryWrite, RemoteWrites, action_fetch_layout, action_sync_index_all_async,
     action_write_remote_entries,
 };
-use librorolala::layout::{Batch, Layout, LayoutPath, MutableData};
+use librorolala::layout::{Batch, Layout, LayoutPath};
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::VCSIndex;
 use mingling::{
@@ -946,14 +946,8 @@ fn receive(
         return Ok(false);
     };
 
-    if let Err(error) = batch.update_entry(
-        id,
-        MutableData::new(
-            entry.owner.clone(),
-            *version.digest(),
-            data.description().to_owned(),
-        ),
-    ) {
+    if let Err(error) = batch.update_entry(id, data.renewed(entry.owner.clone(), *version.digest()))
+    {
         failed.push(format!("{}: {error}", entry.uuid));
 
         return Ok(false);

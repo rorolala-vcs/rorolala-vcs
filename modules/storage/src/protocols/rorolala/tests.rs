@@ -728,13 +728,19 @@ async fn the_choice_is_a_container_taken_apart_or_the_content_itself() {
     assert_eq!(choice.codec(), Codec::Raw);
     assert_eq!(choice.chunking(), Chunking::Zip);
 
-    // What a store was told to write is what it writes, and what it was told applies to
-    // content of any kind.
-    let told = store.with_codec(Codec::Lz4).with_cut(Chunking::Cdc {
-        min: 64 * 1024,
-        average: 256 * 1024,
-        max: 1024 * 1024,
-    });
+    // What a store was told to write is what it writes, and what it was told applies to content of
+    // any kind: a signature or a policy's claim is not allowed to overrule a caller who named the
+    // strategy. What it does *not* change is how the content is encoded — a cut is a cut, and text
+    // is still text.
+    let told = store
+        .clone()
+        .with_codec(Codec::Lz4)
+        .with_forced_cut(Chunking::Cdc {
+            min: 64 * 1024,
+            average: 256 * 1024,
+            max: 1024 * 1024,
+        });
+
     let choice = told.choose_algorithm(&binary);
     assert_eq!(choice.codec(), Codec::Lz4);
     assert_eq!(
@@ -745,6 +751,22 @@ async fn the_choice_is_a_container_taken_apart_or_the_content_itself() {
             max: 1024 * 1024,
         }
     );
+
+    for file in [&packed, &long] {
+        let choice = told.choose_algorithm(file);
+
+        // The container is still stored as it came in and the text is still compressed: forcing the
+        // cut decided how the pieces are found and nothing else.
+        assert_eq!(choice.codec(), store.choose_algorithm(file).codec());
+        assert_eq!(
+            choice.chunking(),
+            Chunking::Cdc {
+                min: 64 * 1024,
+                average: 256 * 1024,
+                max: 1024 * 1024,
+            }
+        );
+    }
 
     let _ = fs::remove_dir_all(&parent);
 }

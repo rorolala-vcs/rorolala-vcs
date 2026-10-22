@@ -290,7 +290,10 @@ mod tests {
     #[test]
     fn every_kind_of_change_round_trips_through_its_bytes() {
         let id = Uuid::from_u128(7);
-        let data = MutableData::new(Some("alice".to_owned()), [3; 32], "first".to_owned());
+        // The data carries a preference, because a preference is part of what a record holds and a
+        // record that dropped it would be a record that says less than it read.
+        let data = MutableData::new(Some("alice".to_owned()), [3; 32], "first".to_owned())
+            .with_preference(Some("maya-binary".to_owned()));
 
         for record in [
             Record::CreatePath {

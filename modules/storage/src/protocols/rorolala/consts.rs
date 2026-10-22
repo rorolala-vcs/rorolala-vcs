@@ -24,14 +24,7 @@ pub(super) const SLICE_FIRST: usize = 2;
 /// How many hex characters of a key name its second directory level.
 pub(super) const SLICE_SECOND: usize = 2;
 
-/// The cut a store writes content with unless it is told otherwise.
-///
-/// Content is written whole by default: cutting makes a store *smaller*, not *correct*, so it is
-/// something a store is asked for — see [`with_cut`](super::RorolalaStorage::with_cut) — and the cuts
-/// that pay for themselves without being asked for are the ones text and packed containers ask for.
-pub(super) const DEFAULT_CUT: Chunking = Chunking::Whole;
-
-/// The codec a store writes content with unless it is told otherwise.
+/// The codec content no rule recognises is written with, unless the store was told otherwise.
 ///
 /// Content is written as it came in by default, for the same reason: compressing makes a store
 /// smaller, so it is something a store is asked for — see

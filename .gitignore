@@ -50,3 +50,9 @@ __*
 # Third-party sources the build draws from rather than carries: cloned where a script needs them, and
 # ignored because what is drawn from them is what is committed. See `./run.sh icons`.
 /THIRD-PARTY/material-icons/
+
+# The synthetic corpus the chunker harness generates rather than carries: it is derived from the
+# generator, so committing it would commit the same bytes twice. A format policy's own corpus is
+# captured, is committed beside the policy, and is what a score is taken against. See
+# `dev/chunker-harness/README.md`.
+/modules/chunking/corpus/synthetic/

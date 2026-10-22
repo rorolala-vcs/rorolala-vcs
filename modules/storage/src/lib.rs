@@ -11,8 +11,12 @@ pub use algorithm::*;
 mod backend;
 pub use backend::*;
 
-mod chunk;
-pub use chunk::*;
+// Cutting is a domain of its own: the cut a write makes, its general forms, and — in time — the
+// per-format policies that claim content by extension. It lives in its own crate because the policy
+// registry has to be read by the store, while a policy must be able to implement the trait without
+// depending on the store; with both here that is a cycle. It is re-exported rather than named by a
+// caller, so nothing above storage knows the crate exists.
+pub use rorolala_chunking::*;
 
 mod codec;
 pub use codec::*;
@@ -44,9 +48,6 @@ pub mod internals;
 
 mod presence;
 pub use presence::*;
-
-mod zip;
-pub use zip::*;
 
 pub mod protocols;
 

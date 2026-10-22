@@ -14,6 +14,9 @@ track:
     replace:
       en: Redo the version the file is at, like `git commit --amend`
       zh-CN: 重做文件当前所在的版本，如同 `git commit --amend`
+    policy:
+      en: Cut these files with the named chunking policy, and prefer it for them from now on
+      zh-CN: 用指定的分块策略切分这些文件，并在此后沿用
   help:
     en: |
       Record files into the current Layout
@@ -23,6 +26,7 @@ track:
           --message <MESSAGE>        Give the whole group one commit message
           --file-message <MESSAGE>   Give each file its own commit message, one per file
 
+          --policy <NAME>            Cut these files with the named chunking policy, and prefer it from now on
           --no-editor                Record only what is already known, without opening an editor
           --replace                  Redo the version the file is at, like `git commit --amend`
           --force                    Record files that belong to another account
@@ -34,6 +38,7 @@ track:
           --message <信息>         为整组文件指定提交信息
           --file-message <信息>    为单个文件指定提交信息，每个文件一个
 
+          --policy <名称>          用指定的分块策略切分这些文件，并在此后沿用
           --no-editor              只记录已知信息，不打开编辑器
           --replace                重做文件当前所在的版本，如同 `git commit --amend`
           --force                  记录属于其他账户的文件
@@ -220,3 +225,25 @@ track:
       Check that the store, the index and the Layout are writable, then try again
     zh-CN: |
       请检查仓库、索引与布局是否可写，然后重试
+
+  err_policy_unknown:
+    en: "`%{name}` is not a chunking policy this build carries"
+    zh-CN: "`%{name}` 不是本构建携带的分块策略"
+
+  err_policy_unknown_help:
+    en: "Policies this build carries: %{known}"
+    zh-CN: "本构建携带的策略：%{known}"
+
+  err_policy_none:
+    en: This build carries no chunking policy of its own
+    zh-CN: 本构建不携带任何自带的分块策略
+
+  err_preference:
+    en: "`%{path}` is written with the chunking policy `%{name}`, and this build does not carry it"
+    zh-CN: "`%{path}` 约定用分块策略 `%{name}` 写入，而本构建不携带它"
+
+  err_preference_help:
+    en: |
+      Choose another one with `rola track --policy <NAME>`, or use a build that carries `%{name}`. Policies this build carries: %{known}
+    zh-CN: |
+      用 `rola track --policy <名称>` 换一个策略，或改用携带 `%{name}` 的构建。本构建携带的策略：%{known}

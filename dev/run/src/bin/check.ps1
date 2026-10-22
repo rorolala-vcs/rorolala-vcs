@@ -13,6 +13,9 @@ $ErrorActionPreference = 'Stop'
 Invoke-Script fmt-check
 Invoke-Script test
 Invoke-Script build
+# After the build rather than before it: what it checks is whether the build changed the files it
+# generates, which only a build can answer.
+Invoke-Script generated
 Invoke-Script clippy
 Invoke-Script doc
 Invoke-Script integration-test

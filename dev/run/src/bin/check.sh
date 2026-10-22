@@ -16,6 +16,9 @@ again fmt-check
 again i18n
 again test
 again build
+# After the build rather than before it: what it checks is whether the build changed the files it
+# generates, which only a build can answer.
+again generated
 again clippy
 again doc
 again integration-test

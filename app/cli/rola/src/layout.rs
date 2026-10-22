@@ -249,8 +249,8 @@ pub fn remote_spec(name: &str) -> Option<(&str, &str)> {
 /// The fetched copy of the Vault `vault`'s Layout `layout`, opened for reading.
 ///
 /// It is what a name written `layout@vault` resolves to, so it is where a query reads a Vault's
-/// own Layout from: the copy lives under the Workspace — see [`readonly_layout_dir`] — and a run
-/// that has not fetched it has no copy to read.
+/// own Layout from: the copy lives under the Workspace, where [`readonly_layout_copy`] finds it, and
+/// a run that has not fetched it has no copy to read.
 ///
 /// # Errors
 ///
@@ -705,10 +705,7 @@ pub fn set_cached_owner(
         return Ok(());
     };
 
-    layout.update_entry(
-        id,
-        MutableData::new(owner, data.version(), data.description().to_owned()),
-    )
+    layout.update_entry(id, data.renewed(owner, data.version()))
 }
 
 /// Moves the path `from` to `to` in the fetched copy, when the copy is there and names `from`.
@@ -809,14 +806,7 @@ pub fn set_cached_version(
         return Ok(());
     };
 
-    copy.update_entry(
-        id,
-        MutableData::new(
-            data.owner().map(str::to_owned),
-            version,
-            data.description().to_owned(),
-        ),
-    )
+    copy.update_entry(id, data.renewed(data.owner().map(str::to_owned), version))
 }
 
 /// Error: the Vault's Layout has not been fetched, so there is no copy to read.

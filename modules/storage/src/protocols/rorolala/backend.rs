@@ -202,7 +202,12 @@ impl TransferableBackend for RorolalaStorage {
         verify(key, &content)?;
 
         let magic = content.get(..SNIFF_LEN).unwrap_or(&content);
-        let choice = self.choose_for(magic, content.len());
+
+        // No extension to claim: what arrives from another store is content and a key, and a key
+        // names no file. So a container arrives here cut by the rules that read its bytes rather than
+        // by the policy that would have claimed it on the sending side — which costs deduplication
+        // between the two ends, never the content, because the key is the hash of what was sent.
+        let choice = self.choose_for(magic, content.len(), None);
         self.write_content(&content, choice).await?;
 
         Ok(())

@@ -54,7 +54,12 @@ use crate::path::LayoutPath;
 pub const LAYOUT_FILE_MAGIC: [u8; 4] = *b"RLYT";
 
 /// The version of the layout file format this build writes.
-pub const LAYOUT_FILE_VERSION: u8 = 1;
+///
+/// It went to 2 when an entry gained a preference for the chunking policy its content is cut with.
+/// An earlier file names no preference and this build will not guess at one for it, so it is
+/// refused: a Layout that was written by another build is something to be re-fetched rather than
+/// read approximately.
+pub const LAYOUT_FILE_VERSION: u8 = 2;
 
 /// The flag bit that says the file carries the keys a checkout needs.
 const FLAG_REQUIRES: u8 = 0b0000_0001;

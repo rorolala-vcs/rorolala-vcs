@@ -1,0 +1,18 @@
+[package]
+name = "rorolala-chunking"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Nothing. What a chunker does is a function of bytes and bounds, and the crate being free of
+# dependencies is what will let a per-format policy implement the trait without dragging the store,
+# or anything the store carries, into the same build.
+[dependencies]
+
+# The registry is generated from the `impl Policy` blocks themselves, so a policy is added by adding
+# a file. `syn` sees exactly what a reader sees, and `just_template` keeps the wording of what is
+# generated in `tmpl/` rather than in the script — the same two `modules/daemon` builds its own
+# generated files with.
+[build-dependencies]
+just_template.workspace = true
+syn.workspace = true

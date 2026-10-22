@@ -183,29 +183,9 @@ fn span(content: &[u8], start: usize, compressed: usize) -> Option<(usize, usize
 /// next, or whatever a writer left behind — and what belongs to no member is a range of its own, so
 /// that what comes back out is always all of what went in.
 fn ranges(len: usize, spans: Vec<(usize, usize)>) -> Vec<Range<usize>> {
-    let mut ranges = Vec::with_capacity(spans.len() + 1);
-    let mut at = 0;
-
-    for (start, end) in spans {
-        let start = start.max(at);
-        let end = end.max(start).min(len);
-
-        if start > at {
-            ranges.push(at..start);
-        }
-        if end > start {
-            ranges.push(start..end);
-        }
-
-        at = end;
-    }
-
-    // Whatever is left over is the central directory and its end record, and they are cut as one.
-    if at < len {
-        ranges.push(at..len);
-    }
-
-    ranges
+    // The last of the between-bytes in a container is its central directory and end record, which
+    // are cut as one because they are the last thing there is.
+    crate::spans::covering(len, spans)
 }
 
 #[cfg(test)]

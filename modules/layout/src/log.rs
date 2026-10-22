@@ -32,9 +32,8 @@ use crate::error::LayoutError;
 
 /// One shard's log.
 pub struct ShardLog {
-    /// The file the log is kept in, kept so a compaction can open it to empty it.
-    path: PathBuf,
-    /// The handle writes are appended through, and the file a write locks exclusively.
+    /// The handle writes are appended through, the file a write locks exclusively, and the handle a
+    /// compaction shortens: one handle, because Windows denies a second one what the first has locked.
     write: File,
     /// The handle reads are taken through.
     read: File,
@@ -53,16 +52,17 @@ impl ShardLog {
     ///
     /// Returns why the file could not be opened, or why the age beside it could not be read.
     pub fn open(path: &Path) -> io::Result<Self> {
-        // The write handle is opened for reading too, and reading is not for this program: on
-        // Windows a handle opened to append alone cannot be locked — `LockFileEx`, which every
-        // write and every compaction is taken under, wants `GENERIC_READ` or `GENERIC_WRITE`
-        // access, and `append` grants neither — so an append-only log could be read but never
-        // written to. Asking for reading as well is what makes the lock possible, and appending
-        // is still what the writes below do.
+        // One handle for writing, truncating and locking, opened for reading as well. Windows
+        // refuses `LockFileEx` on a handle that has neither `GENERIC_READ` nor `GENERIC_WRITE`, and
+        // refuses `SetEndOfFile` on a handle that only has append access — so a log written through
+        // an append-only handle could be locked but never emptied, and a compaction is both. Appends
+        // therefore seek to the end first, which they do with the lock held, so nothing can be
+        // writing there at the same time.
         let write = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
-            .append(true)
+            .write(true)
             .open(path)?;
         let read = File::open(path)?;
 
@@ -70,7 +70,6 @@ impl ShardLog {
         let generation = read_generation(&epoch_path)?;
 
         Ok(Self {
-            path: path.to_path_buf(),
             write,
             read,
             epoch_path,
@@ -91,16 +90,15 @@ impl ShardLog {
     /// Returns [`io::ErrorKind::NotFound`] when the log is not there, and whatever else the open
     /// fails with.
     pub fn open_existing(path: &Path) -> io::Result<Self> {
-        // Opened for appending as `open` does and without `create`, because a reader still holds the
-        // handle a compaction takes its lock through, and the two opens are one shape.
-        let write = OpenOptions::new().read(true).append(true).open(path)?;
+        // Opened as `open` does and without `create`, because a reader still holds the handle a
+        // compaction takes its lock through, and the two opens are one shape.
+        let write = OpenOptions::new().read(true).write(true).open(path)?;
         let read = File::open(path)?;
 
         let epoch_path = path.with_extension(EPOCH_EXTENSION);
         let generation = read_generation(&epoch_path)?;
 
         Ok(Self {
-            path: path.to_path_buf(),
             write,
             read,
             epoch_path,
@@ -115,6 +113,9 @@ impl ShardLog {
     /// cannot overlap — and on Windows an exclusive lock is also what lets the one holding it write,
     /// a shared lock there denying writes even to its own holder.
     ///
+    /// The end of the file is asked for under that lock rather than trusted from the handle's mode:
+    /// a handle opened to append would be one that cannot be shortened, and a compaction shortens.
+    ///
     /// # Errors
     ///
     /// Returns why the write, the flush or the lock failed.
@@ -122,7 +123,8 @@ impl ShardLog {
         self.write.lock()?;
         let result = self
             .write
-            .write_all(bytes)
+            .seek(SeekFrom::End(0))
+            .and_then(|_| self.write.write_all(bytes))
             .and_then(|()| self.write.sync_data());
         self.write.unlock()?;
 
@@ -193,15 +195,20 @@ impl ShardLog {
     }
 
     /// The bytes appended since the last read, with the caller already holding the lock.
+    ///
+    /// Read through the handle that holds the lock and never through the other one: Windows denies a
+    /// read of a range another handle holds exclusively — the same process's other handle included —
+    /// so a compaction that read through the reader's handle would be a compaction that could not
+    /// read the log it was compacting. The writer's handle is opened for reading, so it can.
     fn pending_locked(&mut self) -> io::Result<Vec<u8>> {
-        let length = self.read.metadata()?.len();
+        let length = self.write.metadata()?.len();
         if length <= self.consumed {
             return Ok(Vec::new());
         }
 
-        self.read.seek(SeekFrom::Start(self.consumed))?;
+        self.write.seek(SeekFrom::Start(self.consumed))?;
         let mut bytes = vec![0_u8; usize::try_from(length - self.consumed).unwrap_or(0)];
-        self.read.read_exact(&mut bytes)?;
+        self.write.read_exact(&mut bytes)?;
 
         Ok(bytes)
     }
@@ -238,16 +245,18 @@ impl ShardLog {
     }
 
     /// Empties the log, so what comes next starts at the beginning.
+    ///
+    /// Through the handle that holds the lock, and no other. Windows refuses to shorten a file that
+    /// another handle has a byte of locked — even when the lock is the caller's own, held through a
+    /// different handle — and a compaction runs with the log locked, so a handle of its own to
+    /// truncate through is a handle that cannot. Unix ignores the lock here and would let the third
+    /// handle work, which is why this only ever failed on one of the two.
     fn empty_locked(&mut self) -> io::Result<()> {
-        // The log is emptied through a handle of its own, opened for writing and nothing else: a
-        // handle opened to append cannot shorten a file — on Windows `SetEndOfFile` refuses one —
-        // so the handle this reader appends through is not the one that can empty it.
-        let truncate = OpenOptions::new().write(true).open(&self.path)?;
-        truncate.set_len(0)?;
-        truncate.sync_all()?;
+        self.write.set_len(0)?;
+        self.write.sync_all()?;
 
         self.consumed = 0;
-        self.read.seek(SeekFrom::Start(0))?;
+        self.write.seek(SeekFrom::Start(0))?;
 
         Ok(())
     }

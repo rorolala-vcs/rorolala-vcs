@@ -383,7 +383,14 @@ pub fn handle_layout_entry(
         Ok(version) => version,
         Err(error) => return error.into(),
     };
+    // A run that sets an entry's holder, version or words is not saying anything about how its
+    // content is cut, so a preference the entry already had is kept: nothing here was asked about
+    // it, and clearing it would quietly change what the next write does.
     let data = MutableData::new(owner, *version.digest(), description.unwrap_or_default());
+    let data = match layout.entry(id) {
+        Some(existing) => data.with_preference(existing.preference().map(str::to_owned)),
+        None => data,
+    };
 
     let written = if update {
         layout.update_entry(id, data)

@@ -152,7 +152,7 @@ impl LayoutCopy {
     ///
     /// What is cleared is everything the copy is not: a generation no pointer names, the shape a
     /// copy was kept in before generations, and a staging directory a run that died left. Nothing
-    /// the pointer names is touched, and nothing younger than [`LEFTOVER_AGE`] before `started` is
+    /// the pointer names is touched, and nothing younger than the leftover age before `started` is
     /// either — a run of another fetch is a few seconds long, and removing what it is writing would
     /// fail it for no reason.
     ///

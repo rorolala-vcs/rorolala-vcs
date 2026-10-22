@@ -34,7 +34,9 @@ use std::time::Duration;
 
 use librorolala::layout::{Batch, Layout, LayoutPath, MutableData};
 use librorolala::status::{tracked_vault, unowned};
-use librorolala::storage::{Key, Lockable as _, RorolalaStorage, key_of_file, store_file};
+use librorolala::storage::{
+    Chunking, Key, Lockable as _, RorolalaStorage, key_of_file, store_file,
+};
 use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
 use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
 use librorolala::workspace::{DATA_DIR, Merging, Pending};
@@ -62,7 +64,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::complete::{filling_flag, is_flag, strip_written, typing_flag};
+use crate::complete::{filling_flag, is_flag, offer, strip_written, typing_flag};
 use crate::editor::{ResEditor, open};
 use crate::exit_codes::{
     EC_ABORT, EC_ERR_TRACK, EC_ERR_TRACK_ARGUMENT, EC_ERR_TRACK_OWNERSHIP, EC_HELP,
@@ -108,6 +110,9 @@ const ARG_NO_EDITOR: PickerArg<'static, Flag> = arg![no_editor: Flag];
 /// Replace the version the Layout names for each file, the way `git commit --amend` replaces one.
 const ARG_REPLACE: PickerArg<'static, Flag> = arg![replace: Flag];
 
+/// Cut these files with the named chunking policy, and prefer it for them from now on.
+const ARG_POLICY: PickerArg<'static, Option<String>> = arg![policy: Option<String>];
+
 #[help(buffer)]
 pub fn help_track(_: EntryTrack, ec: &mut ResExitCode) {
     r_eprintln!("{}", trd!(t!("track.help")).trim());
@@ -134,12 +139,20 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
                 ARG_FILE_MESSAGE: t!("track.complete.file_message"),
                 ARG_NO_EDITOR: t!("track.complete.no_editor"),
                 ARG_REPLACE: t!("track.complete.replace"),
+                ARG_POLICY: t!("track.complete.policy"),
             },
         );
     }
 
     if filling_flag(&ctx, &ARG_MESSAGE) || filling_flag(&ctx, &ARG_FILE_MESSAGE) {
         return suggest!();
+    }
+
+    // What a policy may be is this build's to say rather than the run's, so the names are offered
+    // from the registry: a shell that could only complete file names would leave a caller typing a
+    // name nothing answers to.
+    if filling_flag(&ctx, &ARG_POLICY) {
+        return offer(&ctx, librorolala::storage::names());
     }
 
     Suggest::file_comp()
@@ -178,10 +191,17 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 /// made here would be one this side cannot push, so recording it makes the conflict rather than
 /// avoiding it. `--force` records it anyway, for a run that knows this and means it.
 ///
+/// `--policy` cuts the files this run writes with the named strategy, and records that as what they
+/// are to be cut with from then on. A file whose preference names a policy this build does not have
+/// is refused rather than written by a default: cutting it another way is not a smaller thing than
+/// stopping, it is a write that does not deduplicate against everything already stored for it.
+///
 /// # Errors
 ///
 /// Renders [`ErrorTrackNoFiles`] when no file is named, [`ErrorTrackFile`] when a path is not a file
-/// or is not inside the Workspace, [`ErrorTrackReplace`] when `--replace` names a file the Layout
+/// or is not inside the Workspace, [`ErrorTrackPolicy`] when `--policy` names a strategy this build
+/// does not carry, [`ErrorTrackPreference`] when a file's recorded preference names one it does not
+/// carry, [`ErrorTrackReplace`] when `--replace` names a file the Layout
 /// records no version for or one whose version is a merge, [`ErrorTrackMessage`] when the messages
 /// do not line up or are too long, [`ErrorTrackUnowned`] when a file named is one another account
 /// holds, [`ErrorNoEditor`](crate::editor::ErrorNoEditor) when an editor is needed and none is
@@ -194,10 +214,11 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
         .pick(ARG_FILE_MESSAGE)
         .pick(ARG_NO_EDITOR)
         .pick(ARG_REPLACE)
+        .pick(ARG_POLICY)
         .pick_or_route(arg![Vec<String>], || ErrorTrackNoFiles.to_chain())
         .pick(&UNMATCHED)
         .to_result();
-    let (message, file_message, no_editor, replace, files, unmatched) = match picked {
+    let (message, file_message, no_editor, replace, policy, files, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -210,6 +231,16 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
         return ErrorTrackNoFiles.into();
     }
 
+    // A name this build does not carry is refused before any file is read, which is where a typo
+    // belongs: the run has nothing to undo and the list of what it could have said is right there.
+    let policy = match policy {
+        None => None,
+        Some(name) => match librorolala::storage::policy(&name) {
+            Some(found) => Some(found.name),
+            None => return ErrorTrackPolicy { name }.into(),
+        },
+    };
+
     StateTrack {
         files,
         message,
@@ -221,6 +252,7 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
             .collect(),
         no_editor: matches!(no_editor, Flag::Active),
         replace: matches!(replace, Flag::Active),
+        policy,
         force: **force,
     }
     .into()
@@ -239,6 +271,8 @@ pub struct StateTrack {
     no_editor: bool,
     /// Whether each file's version is replaced rather than added after.
     replace: bool,
+    /// The cut every file this run writes is to be made with, by its registered name.
+    policy: Option<&'static str>,
     /// Whether a file another account holds is recorded anyway.
     force: bool,
 }
@@ -290,6 +324,7 @@ fn record(
         file_messages,
         no_editor,
         replace,
+        policy,
         force,
     } = state;
 
@@ -346,7 +381,15 @@ fn record(
         Err(error) => return fail(error.to_string()),
     };
 
-    let prepared = match prepare(&layout, &root, &cwd, &files, &diff.renamed, &ignored) {
+    let prepared = match prepare(
+        &layout,
+        &root,
+        &cwd,
+        &files,
+        &diff.renamed,
+        &ignored,
+        policy,
+    ) {
         Ok(prepared) => prepared,
         Err(next) => return next,
     };
@@ -609,6 +652,11 @@ struct Prepared {
     id: Uuid,
     /// What the Layout holds for it, when it holds anything.
     data: Option<MutableData>,
+    /// The cut it is to be written with, by its registered name, when one was settled.
+    ///
+    /// It is both what the write is made with and what the version goes on to prefer: a run that
+    /// says how a file is to be cut is saying it for next time as much as for this one.
+    policy: Option<&'static str>,
     /// Where the reading found it, when naming it confirmed a move.
     ///
     /// A path that moved is recorded only when what it holds changed: a move by itself is not
@@ -661,6 +709,12 @@ struct Recorded {
 /// reads them, so what a Workspace keeps for itself and what another Workspace holds are left out.
 /// What is neither a file nor a directory, is not inside the Workspace, or is part of the
 /// Workspace's own data is refused rather than recorded.
+///
+/// Each file's cut is settled here as well: `policy` if the run named one, else the preference the
+/// entry already has, else nothing. Settling it before anything is asked or written is what lets a
+/// preference this build cannot honour stop the run with the workspace untouched — and it settles
+/// every file, not only the ones that turn out to have changed, because a file's preference is not
+/// something a change is needed to discover.
 fn prepare(
     layout: &Layout,
     root: &Path,
@@ -668,6 +722,7 @@ fn prepare(
     names: &[String],
     renames: &[PathRename],
     ignored: &BTreeSet<LayoutPath>,
+    policy: Option<&'static str>,
 ) -> Result<Vec<Prepared>, Next> {
     let root = normalize(root);
 
@@ -764,16 +819,50 @@ fn prepare(
             None => (Uuid::new_v4(), None),
         };
 
+        let chosen = settle(policy, data.as_ref(), path.as_str())?;
+
         prepared.push(Prepared {
             path,
             disk,
             id,
             data,
+            policy: chosen,
             moved_from,
         });
     }
 
     Ok(prepared)
+}
+
+/// The cut one file is to be written with: the run's, else the entry's preference, else none.
+///
+/// A preference this build cannot honour is a refusal rather than a fall back. Falling back would
+/// write the file cut by something other than what it asks for, which is not a smaller failure than
+/// stopping: it is a write that does not deduplicate against what is already stored for the file,
+/// made silently, and discovered only when someone measures the store months later.
+fn settle(
+    policy: Option<&'static str>,
+    data: Option<&MutableData>,
+    path: &str,
+) -> Result<Option<&'static str>, Next> {
+    if let Some(name) = policy {
+        return Ok(Some(name));
+    }
+
+    let Some(name) = data.and_then(MutableData::preference) else {
+        return Ok(None);
+    };
+
+    librorolala::storage::policy(name).map_or_else(
+        || {
+            Err(ErrorTrackPreference {
+                path: path.to_owned(),
+                name: name.to_owned(),
+            }
+            .into())
+        },
+        |found| Ok(Some(found.name)),
+    )
 }
 
 /// What one name on the command line stands for.
@@ -1222,8 +1311,15 @@ fn write(
     for Enumerated { file, recorded, .. } in changing {
         let size = size_of(&file.disk);
 
+        // What a file is cut with is settled per file, so the store handed to the write is the store
+        // told which cut to make. A file nothing settled is written by the store's own choosing.
+        let told = file.policy.map_or_else(
+            || store.clone(),
+            |name| store.clone().with_forced_cut(Chunking::Policy(name)),
+        );
+
         let storage = runtime
-            .block_on(store_file(store, &file.disk))
+            .block_on(store_file(&told, &file.disk))
             .map_err(|error| fail(error.to_string()))?;
 
         if let Some(task) = &mut task {
@@ -1345,11 +1441,15 @@ fn commit(
         .block_on(index.write(version))
         .map_err(|error| fail(error.reason()))?;
 
+    // What the version goes on to prefer, whatever this write did: the preference is what the *next*
+    // write is cut by, so it is recorded from what was settled rather than from what the store did.
+    // A file nothing was settled for keeps saying nothing, and the next write chooses again.
     let data = MutableData::new(
         Some(creator_name.to_owned()),
         *version_key.digest(),
         String::new(),
-    );
+    )
+    .with_preference(file.file.policy.map(str::to_owned));
 
     // A moved file is brought to where it is now: the move is the last thing done, so that a
     // failure before it — writing the version the change is — leaves the Layout as it was. The
@@ -1846,6 +1946,94 @@ pub fn render_error_track_failed(error: ErrorTrackFailed, ec: &mut ResExitCode) 
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("track.err_failed_help").trim()));
     ec.exit_code = EC_ERR_TRACK;
+}
+
+/// Error: `--policy` names a chunking policy this build does not carry.
+#[derive(Grouped)]
+pub struct ErrorTrackPolicy {
+    /// The name that was asked for.
+    name: String,
+}
+
+impl Failure for ErrorTrackPolicy {
+    fn name(&self) -> &'static str {
+        "error_track_policy"
+    }
+
+    fn reason(&self) -> String {
+        t!("track.err_policy_unknown", name = self.name)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorTrackPolicy);
+
+#[renderer(buffer)]
+pub fn render_error_track_policy(error: ErrorTrackPolicy, ec: &mut ResExitCode) {
+    // The name is a mistake in the argument rather than a failure of the run, so the exit code is
+    // the one every other argument mistake gets, and nothing was read or written before this.
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("track.err_policy_unknown_help", known = known_policies()).trim())
+    );
+    ec.exit_code = EC_ERR_TRACK_ARGUMENT;
+}
+
+/// Error: a file's recorded preference names a chunking policy this build does not carry.
+///
+/// It is a refusal rather than a fall back to the default cut: what a fall back would write is a
+/// version cut another way than the file asks for, which deduplicates against nothing already stored
+/// for it and says so nowhere.
+#[derive(Grouped)]
+pub struct ErrorTrackPreference {
+    /// The path whose preference it is.
+    path: String,
+    /// The name the preference holds.
+    name: String,
+}
+
+impl Failure for ErrorTrackPreference {
+    fn name(&self) -> &'static str {
+        "error_track_preference"
+    }
+
+    fn reason(&self) -> String {
+        t!("track.err_preference", path = self.path, name = self.name)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorTrackPreference);
+
+#[renderer(buffer)]
+pub fn render_error_track_preference(error: ErrorTrackPreference, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(
+            t!(
+                "track.err_preference_help",
+                name = error.name,
+                known = known_policies()
+            )
+            .trim()
+        )
+    );
+    ec.exit_code = EC_ERR_TRACK;
+}
+
+/// The chunking policies this build carries, as one line a reader can act on.
+fn known_policies() -> String {
+    let names: Vec<&str> = librorolala::storage::names().collect();
+
+    if names.is_empty() {
+        return t!("track.err_policy_none").trim().to_string();
+    }
+
+    names.join(", ")
 }
 
 #[cfg(test)]

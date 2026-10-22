@@ -312,7 +312,9 @@ internal sealed class PluginCache : ICache
     /// <param name="id">The plugin's identity, which names its directory.</param>
     public PluginCache(PluginId id)
     {
-        ArgumentNullException.ThrowIfNull(id);
+        // No null check: an identity is a value, so there is no null to check for, and the analyzer
+        // says so (CA2264) rather than leaving a check that cannot fail in the way it looks like it
+        // might.
         _directory = Path.Combine(ConfigPaths.Cache, id.Value);
     }
 

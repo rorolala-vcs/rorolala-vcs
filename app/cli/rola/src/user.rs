@@ -4,7 +4,7 @@
 //! enough to be plain files rather than configurations. A machine that does not say where
 //! its local data directory is — and no run that names one — has nowhere to keep them, so every
 //! path here is an `Option`. Which directory that is is
-//! [`data_home`](rorolala_utils_location::data_home)'s to say, so a run that must keep its files
+//! [`data_home`]'s to say, so a run that must keep its files
 //! to itself keeps these with them.
 
 use std::path::PathBuf;

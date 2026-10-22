@@ -33,47 +33,96 @@ impl RorolalaStorage {
         let filled = read_magic(file, &mut magic);
         let size = fs::metadata(file).map_or(0, |data| data.len());
 
+        // A container is claimed by its extension, and an extension is written by whoever saved the
+        // file: `.MB` and `.mb` are one container to them, so they are one here. Lowercasing is one
+        // small allocation in front of a write that reads the whole file.
+        let extension = file
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(str::to_ascii_lowercase);
+
         self.choose_for(
             &magic[..filled],
             usize::try_from(size).unwrap_or(usize::MAX),
+            extension.as_deref(),
         )
     }
 
-    /// Chooses how content is written, from its opening and how long it is.
+    /// Chooses how content is written, from a cut it was told, a container it claims, its opening and
+    /// how long it is.
     ///
-    /// Three answers, and none of them needs to read the whole content to give one:
+    /// Four answers, in this order, and none of them needs to read the whole content to give one:
     ///
+    /// - **A cut that was asked for** wins over every other answer: a store told which strategy a
+    ///   write is to use is not being advised, so neither a claim nor a signature may overrule it.
+    /// - **A container a policy claims** is cut by the policy that claims it. The claim is the one
+    ///   thing here that knows what the bytes are without reading them, which is what makes it the
+    ///   cheapest of the answers and the most predictable.
     /// - **A packed container** — anything that starts with a ZIP's signature, which is what a `.zip`
     ///   and every format built on one are — is cut at the boundaries of what it packs. See
     ///   [`Chunking::Zip`]: boundaries given rather than searched for, and the cut that can tell what
     ///   is still the same bytes it was.
-    /// - **Text** is compressed, and — once there is enough of it to be worth a manifest — cut at the
-    ///   ends of its lines, so that what a chunk holds is whole lines. See [`Text`]: lines are what an
-    ///   edit moves, so a few of them changed costs those chunks rather than the file.
-    /// - **Anything else** is written the way the store was told to write, which by default is as it
-    ///   came in, whole: compressing arbitrary content is not the bargain it is for text, and cutting
-    ///   it takes a manifest to say where the pieces are.
+    /// - **Text** is cut at the ends of its lines once there is enough of it to be worth a manifest,
+    ///   so that what a chunk holds is whole lines. See [`Text`]: lines are what an edit moves, so a
+    ///   few of them changed costs those chunks rather than the file.
+    /// - **Anything else** is written as it came in, whole: cutting it takes a manifest to say where
+    ///   the pieces are, and that is a cost nothing pays for itself. That is also what this store did
+    ///   before there were claims at all, so a store with no policy and nothing forced writes exactly
+    ///   what it used to.
     ///
     /// What any answer comes to is not written down anywhere, so a store may be told to write
     /// differently tomorrow without a key changing.
     ///
     /// [`Text`]: crate::Chunking::Text
-    pub(super) fn choose_for(&self, magic: &[u8], size: usize) -> AlgorithmChoice {
-        if starts_a_container(magic) {
-            return AlgorithmChoice::new(Codec::Raw, Chunking::Zip);
+    pub(super) fn choose_for(
+        &self,
+        magic: &[u8],
+        size: usize,
+        extension: Option<&str>,
+    ) -> AlgorithmChoice {
+        // The encoding and the cut are two decisions, taken apart from each other. What a caller
+        // forces is a cut — a policy names how content is cut, not how it is stored — so forcing one
+        // leaves the other where the content put it: text stays compressed and a container stays as
+        // it came in.
+        let container = starts_a_container(magic);
+        let codec = if container {
+            Codec::Raw
+        } else if is_text(magic) {
+            Codec::Zstd
+        } else {
+            self.codec
+        };
+
+        AlgorithmChoice::new(codec, self.choose_cut(magic, size, extension, container))
+    }
+
+    /// Which cut, in the order this store decides it.
+    fn choose_cut(
+        &self,
+        magic: &[u8],
+        size: usize,
+        extension: Option<&str>,
+        container: bool,
+    ) -> Chunking {
+        if let Some(cut) = self.cut {
+            return cut;
         }
 
-        if is_text(magic) {
-            let chunking = if size < TEXT_CUT_FROM {
-                Chunking::Whole
-            } else {
-                TEXT_CUT
-            };
-
-            return AlgorithmChoice::new(Codec::Zstd, chunking);
+        if let Some(extension) = extension
+            && let Some(claimed) = crate::claiming(extension)
+        {
+            return Chunking::Policy(claimed.name);
         }
 
-        AlgorithmChoice::new(self.codec, self.cut)
+        if container {
+            return Chunking::Zip;
+        }
+
+        if is_text(magic) && size >= TEXT_CUT_FROM {
+            return TEXT_CUT;
+        }
+
+        Chunking::Whole
     }
 }
 

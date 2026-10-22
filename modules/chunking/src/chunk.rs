@@ -3,8 +3,8 @@ use std::ops::Range;
 /// How content is cut into chunks before it is written.
 ///
 /// Cutting is a **write-time** choice and nothing else. What a chunked entry records is the
-/// ordered list of the chunks it was made of — see [`Manifest`](crate::Manifest) — which says
-/// nothing about how the cuts were found. So content cut by *any* chunker reads back the same:
+/// ordered list of the chunks it was made of — the manifest a store keeps — which says nothing
+/// about how the cuts were found. So content cut by *any* chunker reads back the same:
 /// a fixed-size one, a content-defined one, or one that does not exist yet. That is what makes
 /// the boundary algorithm free to change, and free to be chosen later.
 ///
@@ -14,7 +14,11 @@ use std::ops::Range;
 ///
 /// Chunking is not remembered anywhere: a reader reassembles from the manifest alone, so a
 /// chunker that was used to write yesterday's objects does not have to exist to read them.
-pub trait Chunker {
+///
+/// `Send` and `Sync` because the table of policies is a `static` and a store is written from more
+/// than one task: a cut keeps nothing between calls, so both bounds are free for anything that obeys
+/// the one rule above.
+pub trait Chunker: Send + Sync {
     /// The ranges of `content` that are stored as chunks of their own.
     ///
     /// The ranges are in order, do not overlap, and cover all of `content`, so concatenating the
@@ -327,6 +331,16 @@ pub enum Chunking {
     /// is what went in byte for byte, and a member that would unpack to something enormous is never
     /// opened to find out.
     Zip,
+    /// The content is cut by a policy: a strategy this build carries, named.
+    ///
+    /// What is carried is the name and not the cut. A chunker answers with ranges and has nothing to
+    /// serialise, so naming one keeps this a `Copy` value, and the table it names is resolved when
+    /// the cut is made — see [`policy`](crate::policy).
+    ///
+    /// A name that names nothing is cut whole rather than refused: `split` answers with ranges and
+    /// cannot fail, so it is total. Every path that *chooses* a policy resolves the name through the
+    /// table first and refuses an unknown one there, where there is somewhere to report it.
+    Policy(&'static str),
 }
 
 impl Chunker for Chunking {
@@ -337,6 +351,10 @@ impl Chunker for Chunking {
             Self::Cdc { min, average, max } => Cdc::new(min, average, max).split(content),
             Self::Text { min, average, max } => Text::new(min, average, max).split(content),
             Self::Zip => crate::Zip.split(content),
+            Self::Policy(name) => crate::policy(name).map_or_else(
+                || Whole.split(content),
+                |found| found.chunker.split(content),
+            ),
         }
     }
 }
@@ -517,12 +535,26 @@ mod tests {
                 max: 16,
             },
             Chunking::Zip,
+            // A name that names no policy of this build: still a cut, and still one that covers
+            // what it was given, which is what lets `split` stay a total function.
+            Chunking::Policy("no-policy-is-called-this"),
         ] {
             assert!(
                 covers(&chunking.split(content), content.len()),
                 "{chunking:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_name_that_names_nothing_is_cut_whole() {
+        // `split` answers with ranges and cannot fail, so a policy this build does not carry is the
+        // one answer it can give that is always right. Nothing chooses a policy this way: the paths
+        // that do resolve the name first and refuse it where there is somewhere to report it.
+        assert_eq!(
+            Chunking::Policy("no-policy-is-called-this").split(b"abc"),
+            Chunking::Whole.split(b"abc")
+        );
     }
 
     #[test]

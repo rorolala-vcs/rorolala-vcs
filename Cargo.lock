@@ -3641,6 +3641,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-chunking"
+version = "0.1.0"
+dependencies = [
+ "just_template",
+ "syn 3.0.5",
+]
+
+[[package]]
 name = "rorolala-cli-setups"
 version = "0.1.0"
 dependencies = [
@@ -3692,6 +3700,19 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-lazyffi-core",
  "syn 3.0.5",
+]
+
+[[package]]
+name = "rorolala-dev-chunker-harness"
+version = "0.1.0"
+dependencies = [
+ "arg-picker",
+ "blake3",
+ "image",
+ "rorolala-storage",
+ "serde",
+ "tokio",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -3808,6 +3829,7 @@ dependencies = [
  "blake3",
  "futures",
  "lz4",
+ "rorolala-chunking",
  "rorolala-utils-constants",
  "rorolala-utils-location",
  "serde",

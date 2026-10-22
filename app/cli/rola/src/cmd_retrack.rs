@@ -31,7 +31,7 @@ use std::str::FromStr as _;
 
 use librorolala::auth::Account;
 use librorolala::daemon::{action_fetch_layout, action_read_remote_index_async};
-use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{tracked_vault, variant_moves};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
 use librorolala::tree_analyze::{Cache, cache_path, entry_of, tree_diff};
@@ -405,9 +405,8 @@ pub fn handle_retrack(
 
     if moved {
         let owner = data.owner().map(str::to_owned);
-        let description = data.description().to_owned();
 
-        if let Err(error) = layout.update_entry(id, MutableData::new(owner, target, description)) {
+        if let Err(error) = layout.update_entry(id, data.renewed(owner, target)) {
             return layout_failed(&error);
         }
     }

@@ -22,6 +22,13 @@ use crate::slot::Slot;
 /// What a snapshot starts with, so one this build did not write is refused rather than misread.
 const MAGIC: &[u8; 4] = b"RLAY";
 
+/// The version of the snapshot this build writes.
+///
+/// A snapshot carries what an entry's data is, and that shape changed when an entry gained a
+/// preference. The version is what refuses an older one by name, rather than leaving the refusal to
+/// a decoder that would read the next entry's bytes as this one's and call the result malformed.
+const VERSION: u8 = 2;
+
 /// Writes `slots` to `path` as a whole shard.
 ///
 /// # Errors
@@ -48,8 +55,9 @@ pub fn write(path: &Path, slots: &HashMap<Uuid, Slot>) -> Result<(), LayoutError
         }
     }
 
-    let mut bytes = Vec::with_capacity(MAGIC.len() + 4 + body.len());
+    let mut bytes = Vec::with_capacity(MAGIC.len() + 1 + 4 + body.len());
     bytes.extend_from_slice(MAGIC);
+    bytes.push(VERSION);
     bytes.extend_from_slice(&crc32(&body).to_be_bytes());
     bytes.extend_from_slice(&body);
 
@@ -81,6 +89,11 @@ pub fn read(path: &Path) -> Result<Option<HashMap<Uuid, Slot>>, LayoutError> {
         .split_at_checked(MAGIC.len())
         .ok_or(LayoutError::Malformed)?;
     if magic != MAGIC {
+        return Err(LayoutError::Malformed);
+    }
+
+    let (&version, rest) = rest.split_first().ok_or(LayoutError::Malformed)?;
+    if version != VERSION {
         return Err(LayoutError::Malformed);
     }
 

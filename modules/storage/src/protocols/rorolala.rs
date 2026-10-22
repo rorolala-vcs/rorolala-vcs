@@ -37,7 +37,7 @@ use rorolala_utils_constants::{LOCK_FILE, STORAGE_CONFIG_PATH};
 use rorolala_utils_location::{Locate, LocateHelper};
 
 use crate::{Chunking, Codec, LockError, Lockable, LockingGuard};
-use consts::{DEFAULT_CODEC, DEFAULT_CUT, MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR};
+use consts::{DEFAULT_CODEC, MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR};
 
 /// Rorolala's store of objects, kept under the content addresses they are named by.
 ///
@@ -67,9 +67,15 @@ use consts::{DEFAULT_CODEC, DEFAULT_CUT, MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR};
 pub struct RorolalaStorage {
     /// The directory the store is rooted at.
     root: PathBuf,
-    /// The cut content is written with once it is big enough to cut.
-    cut: Chunking,
-    /// The codec content is written with once it is worth compressing.
+    /// The cut this store was told to write with, whatever the content looks like.
+    ///
+    /// `None` is the ordinary store, which chooses per file: a claim from a policy, then what the
+    /// content says about itself, then whole. A `Some` is a caller saying which strategy this write
+    /// is to use — `track` does that when a file's strategy is switched, and so does a test that
+    /// wants one particular cut. It is deliberately not a default: a default would be a third thing
+    /// a file's cut could come from, and there are already three.
+    cut: Option<Chunking>,
+    /// The codec content no rule recognises is written with.
     codec: Codec,
 }
 
@@ -125,7 +131,7 @@ impl RorolalaStorage {
     const fn rooted(root: PathBuf) -> Self {
         Self {
             root,
-            cut: DEFAULT_CUT,
+            cut: None,
             codec: DEFAULT_CODEC,
         }
     }
@@ -168,31 +174,38 @@ impl RorolalaStorage {
         Self::rooted(root)
     }
 
-    /// The cut this store writes content with once it is big enough to cut.
+    /// The cut this store was told to write with, if it was told.
     #[must_use]
-    pub const fn cut(&self) -> Chunking {
+    pub const fn cut(&self) -> Option<Chunking> {
         self.cut
     }
 
-    /// The codec this store writes content with once it is worth compressing.
+    /// The codec content no rule recognises is written with.
     #[must_use]
     pub const fn codec(&self) -> Codec {
         self.codec
     }
 
-    /// Writes content with `cut` once it is big enough to cut.
+    /// Writes content with `cut`, whatever the content looks like.
     ///
-    /// This is how a store is told to cut one way rather than another: [`Cdc`](crate::Cdc) for
-    /// content that is edited, [`Fixed`](crate::Fixed) for content that is written once, and
-    /// [`Whole`](crate::Chunking::Whole) to never cut at all.
+    /// This is a store told which strategy to use rather than one choosing: it wins over a policy's
+    /// claim and over what the content says about itself. [`Cdc`](crate::Cdc) for content that is
+    /// edited, [`Fixed`](crate::Fixed) for content that is written once, and a
+    /// [`Policy`](crate::Chunking::Policy) for a format this build has a strategy for.
+    ///
+    /// A store that is not told anything is the ordinary one and does the choosing per file, which
+    /// is why this is not a default.
     #[must_use]
-    pub const fn with_cut(mut self, cut: Chunking) -> Self {
-        self.cut = cut;
+    pub const fn with_forced_cut(mut self, cut: Chunking) -> Self {
+        self.cut = Some(cut);
 
         self
     }
 
-    /// Writes content with `codec` once it is worth compressing.
+    /// Writes the content no rule recognises with `codec`.
+    ///
+    /// Content a rule *does* recognise keeps its own: text is compressed because it is text, a
+    /// container is not because compressing one is compressing what is already compressed.
     #[must_use]
     pub const fn with_codec(mut self, codec: Codec) -> Self {
         self.codec = codec;

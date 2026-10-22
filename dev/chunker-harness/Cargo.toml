@@ -1,0 +1,27 @@
+[package]
+name = "rorolala-dev-chunker-harness"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The argument parser, used on its own rather than through mingling: this program is a development
+# tool with five options and no command tree, which is the same reason `rola-edit` uses it directly.
+# The version has to be the one mingling resolves to, so that the `SinglePickable` behind each
+# argument is the trait this crate picks against.
+arg-picker.workspace = true
+
+# The chunkers that are measured, and the keys a chunk is stored under. The store itself is used too:
+# what a chain costs is checked against a real one rather than only predicted.
+rorolala-storage.workspace = true
+blake3.workspace = true
+
+# The weights, the floors and what a chain is made of are read from files.
+serde.workspace = true
+toml.workspace = true
+
+# Writing a policy's corpus: the one format with no tool on hand here is captured by writing it,
+# and what is written has to be real output from a real encoder rather than bytes shaped like one.
+image.workspace = true
+
+# Writing a chain into a store is asynchronous, and so is reading it back.
+tokio = { workspace = true }

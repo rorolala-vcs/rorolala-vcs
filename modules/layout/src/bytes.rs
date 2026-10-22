@@ -57,7 +57,8 @@ pub fn take_str(bytes: &[u8]) -> Result<(&str, &[u8]), LayoutError> {
     ))
 }
 
-/// Writes the data an entry holds: whether an owner is named and who, the version, and what it says.
+/// Writes the data an entry holds: whether an owner is named and who, the version, what it says, and
+/// whether it has a preference and which.
 pub fn put_data(out: &mut Vec<u8>, data: &MutableData) {
     match data.owner() {
         Some(owner) => {
@@ -69,6 +70,14 @@ pub fn put_data(out: &mut Vec<u8>, data: &MutableData) {
 
     out.extend_from_slice(&data.version());
     put_str(out, data.description());
+
+    match data.preference() {
+        Some(preference) => {
+            out.push(1);
+            put_str(out, preference);
+        }
+        None => out.push(0),
+    }
 }
 
 /// Reads what [`put_data`] wrote.
@@ -92,8 +101,18 @@ pub fn take_data(bytes: &[u8]) -> Result<(MutableData, &[u8]), LayoutError> {
 
     let (description, rest) = take_str(rest)?;
 
+    let (&flag, rest) = rest.split_first().ok_or(LayoutError::Malformed)?;
+    let (preference, rest) = match flag {
+        0 => (None, rest),
+        1 => {
+            let (preference, rest) = take_str(rest)?;
+            (Some(preference.to_owned()), rest)
+        }
+        _ => return Err(LayoutError::Malformed),
+    };
+
     Ok((
-        MutableData::new(owner, version, description.to_owned()),
+        MutableData::new(owner, version, description.to_owned()).with_preference(preference),
         rest,
     ))
 }
@@ -167,7 +186,41 @@ pub fn crc32(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{crc32, put_str, take_str};
+    use super::{crc32, put_data, put_str, take_data, take_str};
+    use crate::data::MutableData;
+
+    /// An entry holding everything an entry can hold, a preference included.
+    fn full() -> MutableData {
+        MutableData::new(Some("alice".to_owned()), [3; 32], "a drawing".to_owned())
+            .with_preference(Some("maya-binary".to_owned()))
+    }
+
+    #[test]
+    fn an_entry_round_trips_with_its_preference() {
+        let mut bytes = Vec::new();
+        put_data(&mut bytes, &full());
+
+        let (read, rest) = take_data(&bytes).unwrap();
+
+        assert_eq!(read, full());
+        assert_eq!(read.preference(), Some("maya-binary"));
+        assert_eq!(rest, [] as [u8; 0]);
+    }
+
+    #[test]
+    fn an_entry_without_a_preference_round_trips_as_itself() {
+        let data = MutableData::new(None, [4; 32], String::new());
+        let mut bytes = Vec::new();
+        put_data(&mut bytes, &data);
+
+        let (read, rest) = take_data(&bytes).unwrap();
+
+        // A preference that is not there is not the same byte as one that is, which is what lets a
+        // reader tell "nothing was chosen" from "some name was chosen".
+        assert_eq!(read, data);
+        assert_eq!(read.preference(), None);
+        assert_eq!(rest, [] as [u8; 0]);
+    }
 
     #[test]
     fn a_string_round_trips_through_its_bytes() {
