@@ -6,3 +6,6 @@
 //! A file here that declares no `impl Policy` is still a module of this one: what a policy needs that
 //! is not a policy — a parser for a format's blocks, say — lives beside it. Only a policy gets a row
 //! in the registry.
+
+pub mod blend;
+pub use blend::*;

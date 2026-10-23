@@ -7,7 +7,11 @@
 /// same way round. The table is written out by `build.rs` in the same pass that reads the names, so
 /// a row and the policy it names cannot disagree.
 pub static POLICIES: &[crate::PolicyEntry] = &[
-
+    crate::PolicyEntry {
+        name: crate::policies::blend::Blend::NAME,
+        extensions: crate::policies::blend::Blend::EXTENSIONS,
+        chunker: &crate::policies::blend::Blend,
+    },
 ];
 
 /// The policy called `name`, if this build carries one.
