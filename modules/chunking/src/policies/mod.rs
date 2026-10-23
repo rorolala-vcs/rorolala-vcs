@@ -7,5 +7,8 @@
 //! is not a policy — a parser for a format's blocks, say — lives beside it. Only a policy gets a row
 //! in the registry.
 
+pub mod blend;
+pub use blend::*;
+
 pub mod psd_basic;
 pub use psd_basic::*;

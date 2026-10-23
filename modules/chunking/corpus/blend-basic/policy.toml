@@ -1,0 +1,4 @@
+name = "blend-basic"
+format = "blend"
+made-with = "Blender 5.2.2 LTS; moved one object, then removed a material node; renamed several objects and the scene; resaved the unchanged base; shared base with one material texture changed in path A and one object moved in path B"
+patterns = ["big-file", "in-place-edit", "metadata-only", "full-rewrite", "shared-asset"]
