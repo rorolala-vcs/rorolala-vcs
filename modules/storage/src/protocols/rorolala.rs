@@ -27,6 +27,12 @@ mod entry;
 mod pack;
 mod paths;
 
+// What a caller of a batch names: the run of entries it is writing into packs, handed back by
+// `begin_batch` and written into by `add`, `add_manifest` and `publish`. It is defined beside the
+// packing it does rather than here, so it is named here too — a type a caller cannot write down is
+// one it cannot keep in a field or hand to a function.
+pub use pack::Batch;
+
 #[cfg(test)]
 mod tests;
 

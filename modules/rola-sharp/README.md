@@ -19,7 +19,7 @@ about: `RolaWorkspace`, `RolaOwnership`, `RolaUser`, `RolaStatus` and `RolaVersi
 
 The C header is the Rust side's output, under `.cache/rs-target/<profile>/ffi_bindings/`, so Rust has
 to have been built first: a build of this project alone, before any Rust build, has nothing to read,
-and the target says so rather than compiling a stale file. `./run.sh check` and `./run.sh export`
+and the target says so rather than compiling a stale file. `cargo ci check` and `cargo dev export`
 always build Rust first. The generator itself is a Rust program (`dev/rsharp-bindgen`), run by the
 build through `cargo`.
 

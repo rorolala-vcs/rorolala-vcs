@@ -1,0 +1,11 @@
+[package]
+name = "rorolala-utils-icons"
+version.workspace = true
+edition.workspace = true
+
+# Nothing is compiled into a library: the crate is its build script, which draws the icons the tree's
+# descriptions ask for. See `build.rs` for why that has to be a crate of its own.
+
+[build-dependencies]
+image.workspace = true
+toml.workspace = true

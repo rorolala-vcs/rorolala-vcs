@@ -9,7 +9,7 @@ They are Google's Material Design icons, taken from the maintained mirror of the
 `LICENSE`, copied from the commit below.
 
 **The set is not vendored here.** It is a shallow clone under `THIRD-PARTY/material-icons/`, which
-git ignores, and the pictures are drawn from it by `./run.sh icons` rather than copied by hand, so
+git ignores, and the pictures are drawn from it by `cargo dev icons` rather than copied by hand, so
 that what is drawn is what the pinned commit holds. The manifest is `app/desktop/icons.toml`:
 another picture is another name there rather than another file in this directory.
 

@@ -10,7 +10,7 @@ namespace RorolalaDesktop;
 /// <remarks>
 /// The window's own buttons, and nothing else: everything a dock or a menu is drawn with belongs to the
 /// plugin that draws it, and what is here is the part of the window the host owns. They are drawn from the
-/// pinned Material Design set by <c>./run.sh icons</c> — the manifest is <c>app/desktop/icons.toml</c> —
+/// pinned Material Design set by <c>cargo dev icons</c> — the manifest is <c>app/desktop/icons.toml</c> —
 /// and the keys below are generated from that manifest rather than written by hand.
 /// <para>
 /// They travel embedded in the host's own assembly rather than beside it, for the reason a plugin's do:

@@ -18,13 +18,6 @@ without ever colliding. A policy's corpus and its score live in `corpus/`, and `
 is what takes the score; `corpus/.gitignore` is where the line between what is carried and what is
 kept locally is drawn.
 
-There is no strategy here yet, and that is a result rather than a gap. The first one —
-`png-chunks`, cutting a PNG at the boundaries between its chunks — was written, captured, measured
-and removed: it scored **0.715** against **0.805** for the best general cut, because a PNG compresses
-its whole picture into one `IDAT` and an edit to a pixel rewrites the one piece a cut at the
-boundaries can find. A format that the general cut already handles is a format that owes its own
-strategy a better number than that, and nothing was left behind for it to collide with.
-
 ## The boundary
 
 Nothing here is remembered by a store. What a chunked entry records is the ordered list of the chunks

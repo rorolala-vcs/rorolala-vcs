@@ -131,23 +131,26 @@ public sealed class RorolalaDockTests
 
         foreach (var registration in services.Docks.Registrations)
         {
-            var view = Assert.IsAssignableFrom<UserControl>(
-                registration.Create(DockPlacement.Center).View
-            );
+            var view = registration.Create(DockPlacement.Center).View;
 
-            Assert.NotNull(view.Content);
+            Assert.NotNull(view);
 
-            // The two docks that show something of their own rather than a line about the base: the Overview's
-            // table and the Accounts dock, which is about the machine rather than about a base at all.
+            // The three docks that show something of their own rather than a line about the base: the
+            // Overview's table, the Accounts dock, which is about the machine rather than about a base
+            // at all, and the Version Graph, which draws one file's chain. What they show is their own
+            // control rather than a `UserControl` holding one line, so what is checked about them is
+            // that the registration made something; the words are checked for the docks made of a line.
             if (
                 registration.DockNameId == RorolalaDocks.OverviewNameId
                 || registration.DockNameId == RorolalaDocks.AccountsNameId
+                || registration.DockNameId == RorolalaDocks.VersionGraphNameId
             )
             {
                 continue;
             }
 
-            var line = Assert.IsType<TextBlock>(view.Content);
+            var dock = Assert.IsAssignableFrom<UserControl>(view);
+            var line = Assert.IsType<TextBlock>(dock.Content);
 
             Assert.True(line.IsVisible);
             Assert.False(string.IsNullOrEmpty(line.Text));

@@ -36,6 +36,18 @@ error:
       zh-CN: |
         请确认索要该 key 的一方确实持有它
 
+    err_not_confirmed:
+      en: The side that took it could not produce it again
+      zh-CN: 接收方无法再次产出刚收到的内容
+
+    err_not_confirmed_help:
+      en: |
+        What crossed was written, but reading it back did not work
+        Please check the Vault's store and the disk it sits on
+      zh-CN: |
+        内容已经写出，但读回来时失败了
+        请检查保险库的存储与其所在的磁盘
+
     err_store:
       en: The store failed — %{reason}
       zh-CN: 仓库失败 —— %{reason}

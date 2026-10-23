@@ -51,7 +51,7 @@
 
   <ItemGroup>
     <!-- The pictures this program is drawn with, embedded so that they travel in it: the three its own
-         toolbar wears, which are drawn into `icons/` from the pinned Material set by `./run.sh icons`, and
+         toolbar wears, which are drawn into `icons/` from the pinned Material set by `cargo dev icons`, and
          the two marks a window's frame carries, which are the Desktop program's own files — the frames the
          two programs draw are one frame, so the marks on them are one set. The Desktop's are linked rather
          than copied, so the tree keeps one place a picture lives. -->

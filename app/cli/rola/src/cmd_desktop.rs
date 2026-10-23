@@ -247,7 +247,7 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
 /// The Desktop program is where the work that a windowless run does not suit is done, so this is
 /// a way to it rather than a way to work: the program is started and the run ends, leaving it to
 /// the reader. It sits in a `desktop` directory beside the program that was run — the layout
-/// `./run.sh export` lays down — so a run reaches it without being told where it is.
+/// `cargo dev export` lays down — so a run reaches it without being told where it is.
 ///
 /// There is one Desktop program per user, not one per run: a run that finds one already going does not
 /// open a second, it asks the one that is there to come forward and ends with `EC_DESKTOP_CALLED` (174).

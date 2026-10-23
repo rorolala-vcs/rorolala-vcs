@@ -147,8 +147,12 @@ fn main() {
         "the namespace was expected in the JSON, got {:?}",
         said.stdout
     );
+    // The result is JSON, where a Windows separator is written twice: both sides are read with one
+    // spelling of the separator, so that the assertion says the same thing on either platform.
     assert!(
-        said.stdout.contains(&text(&auto)),
+        said.stdout
+            .replace("\\\\", "/")
+            .contains(&text(&auto).replace('\\', "/")),
         "the Vault the run was inside was expected, got {:?}",
         said.stdout
     );

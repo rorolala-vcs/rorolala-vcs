@@ -27,7 +27,7 @@
     <!-- The pictures the window's own buttons are drawn as, embedded so that they travel in the program
          itself and not beside it: the program is what they belong to, and a picture in a directory is one
          more thing that can be left behind by a copy of it. They are drawn from the pinned Material Design
-         set by `./run.sh icons`, and the keys they are read by are generated from the same manifest. -->
+         set by `cargo dev icons`, and the keys they are read by are generated from the same manifest. -->
     <EmbeddedResource Include="icons/*.png" />
   </ItemGroup>
 

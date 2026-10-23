@@ -23,7 +23,9 @@ use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
 use super::entry::{collect, is_directory, read_range, sync_directory, write_whole_durably};
 use super::paths::index_of_pack;
-use crate::{Error, Key, LockingGuard, PackEntry, PackIndex};
+use crate::{
+    Codec, Error, FRAME_VERSION, Frame, Key, Layout, LockingGuard, Manifest, PackEntry, PackIndex,
+};
 
 impl LockingGuard<RorolalaStorage> {
     /// Packs the loose entries stored under `keys`, of either kind, into packs of their own.
@@ -231,7 +233,7 @@ impl RorolalaStorage {
         let mut entries: BTreeMap<(PackKind, Key), (u64, Source)> = BTreeMap::new();
 
         for kind in [PackKind::Object, PackKind::Manifest] {
-            for index in self.packs_of(kind).await? {
+            for index in self.packs_of(&state, kind).await? {
                 let Some(directory) = self.pack_index(&state, kind, index).await? else {
                     continue;
                 };
@@ -475,6 +477,7 @@ impl RorolalaStorage {
             file,
             directory: PackIndex::default(),
             size: 0,
+            staging: Vec::new(),
         })
     }
 
@@ -483,7 +486,8 @@ impl RorolalaStorage {
     /// The pack's bytes are on the disk before its name is made durable, and its name before the index
     /// is written: a reader that finds this index after a crash has to find a pack that is there and
     /// all there, and bytes on the disk are not the same as a name in the directory.
-    async fn finish_pack(&self, packing: Packing) -> Result<(), Error> {
+    async fn finish_pack(&self, mut packing: Packing) -> Result<(), Error> {
+        packing.flush_staged().await?;
         packing.file.sync_all().await?;
         drop(packing.file);
         sync_directory(&self.root.join(PACKED_DIR)).await?;
@@ -491,6 +495,36 @@ impl RorolalaStorage {
         let index_path = self.index_path(packing.kind, packing.index);
 
         write_whole_durably(&index_path, &packing.directory.encode()).await
+    }
+
+    /// Begins a run of entries written into packs rather than one file each.
+    ///
+    /// What a batch is for is the case one file per entry cannot serve: a sync of many small
+    /// contents arrives as thousands of entries, and each one laid down as a loose object costs a
+    /// file of its own — a create, a write and a rename per chunk, which is where a store of small
+    /// chunks spends nearly all of a sync's time. A batch writes them into the packs they would have
+    /// been moved into anyway, and gives those packs their indexes once, at the end.
+    ///
+    /// Nothing a batch writes is visible to a lookup until it is
+    /// [published](Batch::publish): a pack is found by its index, so entries written but not
+    /// published are, to every reader, a pack that is not there. A batch dropped unpublished
+    /// therefore leaves `.pack` files no reader can reach — the same garbage a write cut short
+    /// leaves — rather than a store holding half of something.
+    ///
+    /// A batch is not a transaction against what the store already holds: it is the caller's
+    /// [`contains_keys`](crate::StorageBackend::contains_keys) that says what is worth writing, and
+    /// asking again here would be the per-entry cost the batch exists to avoid.
+    #[must_use]
+    pub async fn begin_batch(&self) -> Batch {
+        Batch {
+            store: self.clone(),
+            objects: None,
+            manifests: None,
+            written: BTreeSet::new(),
+            max: self.max_pack_size().await,
+            codec: self.codec,
+            entries: 0,
+        }
     }
 
     /// The bytes of one entry, wherever it is being read from.
@@ -578,13 +612,55 @@ impl RorolalaStorage {
     ///
     /// A pack counts as held once its index is there, which is what the pack is found by.
     ///
+    /// The list is one this process remembers: a lookup walks every pack of its kind, so a store
+    /// whose entries are packed was listing the directory once per entry read. What is kept goes with
+    /// the directory's stamp, the way a pack's index goes with the file's — a pack is begun by
+    /// creating its file here and finished by renaming its index into here, so a directory that has
+    /// not changed still names the packs it named, and one that has is listed again.
+    ///
+    /// The state is passed in rather than looked up here, so that a lookup walking over many
+    /// packs asks for it once rather than once a pack — looking one up means resolving the store's
+    /// root, which is a walk of the path rather than a read of anything.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Io`] if the directory the indexes are kept in cannot be read.
-    pub(super) async fn packs_of(&self, kind: PackKind) -> Result<Vec<u64>, Error> {
-        let mut indices = Vec::new();
+    pub(super) async fn packs_of(
+        &self,
+        state: &RootState,
+        kind: PackKind,
+    ) -> Result<Vec<u64>, Error> {
+        let directory = self.index_directory(kind);
 
-        for path in super::entry::entries(&self.index_directory(kind)).await? {
+        let stamp = match tokio::fs::metadata(&directory).await {
+            Ok(metadata) => Stamp {
+                modified: metadata.modified().ok(),
+                len: metadata.len(),
+            },
+            // No directory is no pack: a store that has never been packed has not one either, and
+            // asking again is how a directory that arrives later is seen.
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                Self::forget_packs(state, kind);
+
+                return Ok(Vec::new());
+            }
+            Err(error) => return Err(error.into()),
+        };
+
+        let kept = state
+            .packs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&kind)
+            .filter(|kept| kept.stamp == stamp)
+            .map(|kept| Arc::clone(&kept.indices));
+
+        if let Some(kept) = kept {
+            return Ok(kept.as_ref().clone());
+        }
+
+        let mut indices = Vec::new();
+        for path in super::entry::entries(&directory).await? {
             if let Some(index) = path
                 .file_name()
                 .and_then(|name| name.to_str())
@@ -597,7 +673,28 @@ impl RorolalaStorage {
         indices.sort_unstable();
         indices.dedup();
 
+        state
+            .packs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                kind,
+                KeptPacks {
+                    stamp,
+                    indices: Arc::new(indices.clone()),
+                },
+            );
+
         Ok(indices)
+    }
+
+    /// Drops what was listed of the packs of `kind`, since there is no directory to have listed.
+    fn forget_packs(state: &RootState, kind: PackKind) {
+        state
+            .packs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&kind);
     }
 
     /// Every pack this store holds, of either kind, lowest index first.
@@ -609,8 +706,9 @@ impl RorolalaStorage {
     ///
     /// Returns [`Error::Io`] if a directory an index is kept in cannot be read.
     pub(crate) async fn packs(&self) -> Result<Vec<u64>, Error> {
-        let mut indices = self.packs_of(PackKind::Object).await?;
-        indices.extend(self.packs_of(PackKind::Manifest).await?);
+        let state = self.root_state();
+        let mut indices = self.packs_of(&state, PackKind::Object).await?;
+        indices.extend(self.packs_of(&state, PackKind::Manifest).await?);
         indices.sort_unstable();
         indices.dedup();
 
@@ -647,7 +745,7 @@ impl RorolalaStorage {
         let mut broken = Vec::new();
 
         for kind in [PackKind::Object, PackKind::Manifest] {
-            for index in self.packs_of(kind).await? {
+            for index in self.packs_of(&state, kind).await? {
                 let index_path = self.index_path(kind, index);
                 let bytes = match tokio::fs::read(&index_path).await {
                     Ok(bytes) => bytes,
@@ -760,7 +858,7 @@ impl RorolalaStorage {
     async fn packed_entry(&self, kind: PackKind, key: &Key) -> Result<Option<Vec<u8>>, Error> {
         let state = self.root_state();
 
-        for index in self.packs_of(kind).await? {
+        for index in self.packs_of(&state, kind).await? {
             let Some(directory) = self.pack_index(&state, kind, index).await? else {
                 continue;
             };
@@ -796,7 +894,7 @@ impl RorolalaStorage {
     ) -> Result<Option<Vec<u8>>, Error> {
         let state = self.root_state();
 
-        for index in self.packs_of(kind).await? {
+        for index in self.packs_of(&state, kind).await? {
             let Some(directory) = self.pack_index(&state, kind, index).await? else {
                 continue;
             };
@@ -824,7 +922,7 @@ impl RorolalaStorage {
         let state = self.root_state();
         let mut keys = BTreeSet::new();
 
-        for index in self.packs_of(kind).await? {
+        for index in self.packs_of(&state, kind).await? {
             let Some(directory) = self.pack_index(&state, kind, index).await? else {
                 continue;
             };
@@ -841,7 +939,7 @@ impl RorolalaStorage {
     pub(super) async fn find_packed(&self, key: &Key) -> Result<Option<u64>, Error> {
         let state = self.root_state();
 
-        for index in self.packs_of(PackKind::Object).await? {
+        for index in self.packs_of(&state, PackKind::Object).await? {
             if self
                 .pack_index(&state, PackKind::Object, index)
                 .await?
@@ -998,6 +1096,199 @@ impl RorolalaStorage {
     }
 }
 
+/// A run of entries being written into packs, rather than one file each.
+///
+/// It is what [`RorolalaStorage::begin_batch`] hands back, and what a sync of many small contents
+/// writes what arrived through. The entries of one kind share a pack, and the pack is closed once the
+/// next entry would take it over the size the store allows — the same bound
+/// [`pack`](LockingGuard::pack) keeps, so a store filled by batches is one packing is not surprised by.
+///
+/// What is written is what a loose entry would have been, frame and all: packing changes where an
+/// entry lives and nothing else, so everything that reads a store back reads a batch's packs the way
+/// it reads any other.
+pub struct Batch {
+    /// The store the packs are written into.
+    store: RorolalaStorage,
+    /// The object pack being written, once an object has arrived.
+    objects: Option<Packing>,
+    /// The manifest pack being written, once a manifest has arrived.
+    manifests: Option<Packing>,
+    /// Every entry this batch has already written, as its kind and its key.
+    ///
+    /// One key has one entry *per kind*: an object and a manifest under the same key are two
+    /// entries — a chunk whose bytes are the very content some key names is exactly that case — and
+    /// a key this batch was handed twice would otherwise have the pack name it twice, which an index
+    /// refuses.
+    written: BTreeSet<(PackKind, Key)>,
+    /// How large a pack may grow before another is started.
+    max: u64,
+    /// The codec arrived content is framed with.
+    codec: Codec,
+    /// How many entries have been written, which is what publishing answers with.
+    entries: usize,
+}
+
+impl Batch {
+    /// Writes `plain` as the object kept under `key`.
+    ///
+    /// The key must be the hash of `plain` — what a caller of a batch has is a key and the bytes it
+    /// arrived with, so hashing again would be a hash of every byte that crosses for the sake of
+    /// what the caller already knew.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the pack cannot be written.
+    pub async fn add(&mut self, key: &Key, plain: &[u8]) -> Result<(), Error> {
+        self.put(PackKind::Object, key, Layout::Single, plain).await
+    }
+
+    /// Writes `manifest` as how the content under `key` is put back together.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the pack cannot be written.
+    pub async fn add_manifest(&mut self, key: &Key, manifest: &Manifest) -> Result<(), Error> {
+        let plain = manifest.encode();
+
+        self.put(PackKind::Manifest, key, Layout::Chunked, &plain)
+            .await
+    }
+
+    /// Gives the packs their indexes, which is what makes them a store's.
+    ///
+    /// The object pack is published before the manifest pack: a manifest names chunks, and a manifest
+    /// a reader can find before the chunks it names is a content the store claims and cannot put back
+    /// together, while chunks with no manifest are objects nothing refers to — which a store may hold
+    /// as readily as any other object.
+    ///
+    /// What is answered is how many entries were written.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if a pack or its index cannot be written.
+    pub async fn publish(mut self) -> Result<usize, Error> {
+        let written = self.entries;
+
+        for kind in [PackKind::Object, PackKind::Manifest] {
+            let slot = match kind {
+                PackKind::Object => self.objects.take(),
+                PackKind::Manifest => self.manifests.take(),
+            };
+            let Some(packing) = slot else {
+                continue;
+            };
+
+            // A pack nothing was written into is not a pack: its file was claimed by beginning one,
+            // and what is left of it is the garbage a write cut short leaves rather than an entry a
+            // reader could reach.
+            if packing.directory.is_empty() {
+                self.store
+                    .drop_entry(&self.store.pack_path(packing.index))
+                    .await?;
+
+                continue;
+            }
+
+            self.store.finish_pack(packing).await?;
+        }
+
+        Ok(written)
+    }
+
+    /// Writes one entry, framed as its kind says, into the pack of that kind.
+    async fn put(
+        &mut self,
+        kind: PackKind,
+        key: &Key,
+        layout: Layout,
+        plain: &[u8],
+    ) -> Result<(), Error> {
+        if !self.written.insert((kind, *key)) {
+            return Ok(());
+        }
+
+        let frame = Frame {
+            version: FRAME_VERSION,
+            codec: self.codec,
+            layout,
+            plain_len: plain.len() as u64,
+        };
+        let header = frame.encode();
+        let payload = self.codec.encode(plain)?;
+        let len = u64::try_from(header.len().saturating_add(payload.len())).unwrap_or(u64::MAX);
+
+        // A pack is closed once the next entry would take it over the size the store allows. An
+        // entry larger than that is a pack of its own, since a limit cannot be met by an entry that
+        // is over it — the same rule `pack_ranges` keeps.
+        let reached = self.slot(kind).is_some_and(|packing| {
+            !packing.directory.is_empty() && packing.held().saturating_add(len) > self.max
+        });
+        if reached {
+            let Some(packing) = self.take_slot(kind) else {
+                return Err(Error::Malformed);
+            };
+            self.store.finish_pack(packing).await?;
+        }
+
+        let packing = self.open(kind).await?;
+
+        // What is staged is handed over before it takes on more, so a stage is one write of about
+        // one stage rather than a write per entry.
+        if !packing.staging.is_empty()
+            && packing
+                .staging
+                .len()
+                .saturating_add(header.len())
+                .saturating_add(payload.len())
+                > STAGING_BYTES
+        {
+            packing.flush_staged().await?;
+        }
+
+        let offset = packing.held();
+        packing.staging.extend_from_slice(&header);
+        packing.staging.extend_from_slice(&payload);
+        packing.directory.push(PackEntry::new(*key, offset, len));
+
+        self.entries = self.entries.saturating_add(1);
+
+        Ok(())
+    }
+
+    /// The pack of `kind` being written, begun if there is none yet.
+    async fn open(&mut self, kind: PackKind) -> Result<&mut Packing, Error> {
+        if self.slot(kind).is_none() {
+            let packing = self.store.begin_pack(kind).await?;
+            *self.slot_mut(kind) = Some(packing);
+        }
+
+        // UNWRAP: the pack was just begun when there was none, so there is one to write into — a
+        // caller only reaches here having inserted above or found one already there.
+        self.slot_mut(kind).as_mut().ok_or(Error::Malformed)
+    }
+
+    /// The pack of `kind` being written, if one is.
+    const fn slot(&self, kind: PackKind) -> Option<&Packing> {
+        match kind {
+            PackKind::Object => self.objects.as_ref(),
+            PackKind::Manifest => self.manifests.as_ref(),
+        }
+    }
+
+    /// The pack of `kind`, for beginning one in its place.
+    const fn slot_mut(&mut self, kind: PackKind) -> &mut Option<Packing> {
+        match kind {
+            PackKind::Object => &mut self.objects,
+            PackKind::Manifest => &mut self.manifests,
+        }
+    }
+
+    /// Takes the pack of `kind` out, so that it can be finished.
+    const fn take_slot(&mut self, kind: PackKind) -> Option<Packing> {
+        self.slot_mut(kind).take()
+    }
+}
+
 /// One entry to be written into a pack: which kind it is, its key, how long it is, and where its bytes
 /// are read from.
 type Planned = (PackKind, Key, u64, Source);
@@ -1027,9 +1318,47 @@ struct Packing {
     file: tokio::fs::File,
     /// What the pack holds so far, in key order.
     directory: PackIndex,
-    /// How many bytes of the pack have been written.
+    /// How many bytes of the pack have been written to the file.
     size: u64,
+    /// Entries accepted but not yet written to the file, in the order they were taken on.
+    ///
+    /// A pack of small entries is written a few megabytes at a time rather than an entry at a time:
+    /// every write to a file is a hand-over to a thread that can block, and a store taking a
+    /// thousand chunks of a few kilobytes would otherwise pay one per chunk for a file that is
+    /// written once.
+    staging: Vec<u8>,
 }
+
+impl Packing {
+    /// How many bytes of the pack are spoken for, whether or not they have reached the file.
+    fn held(&self) -> u64 {
+        self.size
+            .saturating_add(u64::try_from(self.staging.len()).unwrap_or(u64::MAX))
+    }
+
+    /// Writes what is staged to the file, so that it is the pack's rather than this being built.
+    async fn flush_staged(&mut self) -> Result<(), Error> {
+        use tokio::io::AsyncWriteExt as _;
+
+        if self.staging.is_empty() {
+            return Ok(());
+        }
+
+        self.file.write_all(&self.staging).await?;
+        self.size = self
+            .size
+            .saturating_add(u64::try_from(self.staging.len()).unwrap_or(u64::MAX));
+        self.staging.clear();
+
+        Ok(())
+    }
+}
+
+/// How many bytes of a pack are staged in memory before they are written.
+///
+/// It bounds what one pack being written holds beyond the entries themselves, and it is large enough
+/// that a content of small entries is a handful of writes rather than one per entry.
+const STAGING_BYTES: usize = 1 << 20;
 
 /// Where the entries of one kind begin and end.
 ///
@@ -1106,6 +1435,22 @@ pub(super) struct RootState {
     pub(super) packing: AsyncMutex<()>,
     /// The pack indexes that have been read, by kind and pack number.
     pub(super) indices: StdMutex<HashMap<(PackKind, u64), KeptIndex>>,
+    /// The packs of each kind as they were last listed, and the directory that said so.
+    pub(super) packs: StdMutex<HashMap<PackKind, KeptPacks>>,
+}
+
+/// The packs of one kind as they were last listed, and what the directory looked like then.
+///
+/// A lookup walks every pack of its kind, so a store whose entries are packed pays for the list of
+/// them on every read: listing a directory is a walk, and it was being walked once per entry read.
+/// The list is kept with the directory's stamp, in the same way a pack's index is kept with the
+/// file's — a pack begins by creating its file and ends by renaming its index into this directory, so
+/// a directory that has not changed names the packs it named before.
+pub(super) struct KeptPacks {
+    /// The directory's length and modification time, which is how a changed one is told.
+    stamp: Stamp,
+    /// The pack numbers, lowest first, shared so that handing it out copies a pointer.
+    indices: Arc<Vec<u64>>,
 }
 
 /// A pack index that has been read, and what its file looked like when it was.

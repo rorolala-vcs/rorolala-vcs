@@ -1,7 +1,7 @@
 # rorolala-dev-icons
 
 Draws the Desktop's own pictures from the pinned Material Design icon set, and writes what goes beside
-them. It is a development tool: it is what `./run.sh icons` runs, and nothing at run time depends on it.
+them. It is a development tool: it is what `cargo dev icons` runs, and nothing at run time depends on it.
 
 ## What it reads
 
@@ -39,3 +39,4 @@ The pictures are shipped resources rather than artifacts local to one machine, a
 able to stand alone — a `dotnet build` on a fresh checkout must find them. So they are committed, and this is
 the step that makes them rather than a step every build takes. `resvg` is a library inside this tool rather
 than a program the machine has to have, so what is drawn is the same wherever it is drawn.
+

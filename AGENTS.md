@@ -33,8 +33,7 @@ semantics may not.
 
 - `app/` — the user's side: the programs, the C ABI, the desktop program; may use `modules/` and
   `utils/`.
-- `dev/` — development tools: the C header generator, the build scripts; may use `modules/` and
-  `utils/`.
+- `dev/` — development tools: the two build crates (`dev/build` is `cargo dev`, what produces the artifacts; `dev/ci` is `cargo ci`, what checks the tree), the C header generator and the other tools the two run; may use `modules/` and `utils/`.
 - `modules/` — Rust and C# feature modules. Only `app/` and `dev/` may depend on them, and they may
   depend on each other, but never in a cycle.
 - `utils/` — Rust and C# shared facilities, which anything may depend on. They are not meant to
@@ -60,7 +59,7 @@ semantics may not.
 - The suite builds `rorolala-ffi` itself, because the release programs do not depend on that
   crate: nothing else in the gate produces the library a C caller links.
 - The programs are C11 (`cc -std=c11 -Wall -Wextra -Werror`), and only Unix is spelled out — the
-  runner's `.ps1` twins have never been run.
+  suite compiles with `cc` and links with `-Wl,-rpath,`.
 
 ## Subcommands
 
@@ -96,7 +95,7 @@ A command is a file, a node and a shape. What it carries before it is done:
   `complete_xxx(ctx: ShellContext, ...) -> Suggest`, answering what only the run can know — bound
   Vault names, accounts, the address history, paths — and `suggest!()` where nothing is known.
 - **i18n.** Every key a call site names is stated in `i18n/` in `en` and `zh-CN`, checked by
-  `./run.sh i18n`. stdout is the contract, so results are drawn through `t!` while progress and
+  `cargo ci i18n`. stdout is the contract, so results are drawn through `t!` while progress and
   errors go to stderr.
 - **Errors.** A failure is a `Grouped` type implementing `Failure` (`name`, `reason`), registered
   with `failure!(Type)` and rendered by a `#[renderer(buffer)]` function that sets its exit code. The
@@ -129,11 +128,10 @@ A command is a file, a node and a shape. What it carries before it is done:
 
 ## Mechanics
 
-- The gate is `./run.sh check`, and its exit code is the only thing it signals — read it with
-  `./run.sh check > /tmp/log 2>&1; echo $?`. The scripts are `dev/run/src/bin/*.sh`; their `.ps1`
-  twins have never been run.
+- The gate is `cargo ci check`, and its exit code is the only thing it signals — read it with
+  `cargo ci check > /tmp/log 2>&1; echo $?`. The steps are the commands of `dev/ci` and `dev/build`.
 - Every crate denies `warnings`, `missing_docs`, `rust_2018_idioms`, `clippy::pedantic` and
-  `clippy::nursery`. The C# side is held to the same standard: `./run.sh dotnet-lint` runs the
+  `clippy::nursery`. The C# side is held to the same standard: `cargo ci dotnet-lint` runs the
   analyzers at their widest (`AnalysisMode=All`) with every diagnostic an error, and the root
   `.editorconfig` names each rule that is excused and the reason it is there. What a rule excuses is
   a rule excused on purpose, not a tier lowered.

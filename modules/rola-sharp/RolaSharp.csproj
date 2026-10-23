@@ -21,10 +21,23 @@
     compiled against the other's library — the header is kept apart by profile for the same reason.
   -->
   <PropertyGroup>
-    <RsharpProfile Condition="'$(Configuration)' == 'Debug'">debug</RsharpProfile>
+    <RsharpProfile
+            Condition="'$(Configuration)' == 'Debug'"
+        >debug</RsharpProfile>
     <RsharpProfile Condition="'$(RsharpProfile)' == ''">release</RsharpProfile>
     <RsharpRoot>$(MSBuildThisFileDirectory)../../</RsharpRoot>
-    <RsharpHeader>$(RsharpRoot).cache/rs-target/$(RsharpProfile)/ffi_bindings/rorolala_ffi.h</RsharpHeader>
+    <!--
+      Cargo writes the output of a named target under a directory of its own —
+      `.cache/rs-target/<triple>/<profile>` — and the build is told that target through
+      `CARGO_BUILD_TARGET`, the same variable cargo reads. Reading it here is what keeps this project
+      looking where the header was written when the Rust side was built for another platform, which
+      is what a musl hand-off is. A build for this machine names no triple and is read from beside it.
+    -->
+    <RsharpTarget
+            Condition="'$(CARGO_BUILD_TARGET)' != ''"
+        >$(CARGO_BUILD_TARGET)/</RsharpTarget>
+    <RsharpHeader
+        >$(RsharpRoot).cache/rs-target/$(RsharpTarget)$(RsharpProfile)/ffi_bindings/rorolala_ffi.h</RsharpHeader>
     <RsharpBinding>$(MSBuildThisFileDirectory)RorolalaBinding.cs</RsharpBinding>
   </PropertyGroup>
 
@@ -43,14 +56,17 @@
     and cargo is not a question. The file is checked in, so the IDE reads the last one written.
   -->
   <Target
-    Name="GenerateRorolalaBinding"
-    BeforeTargets="BeforeBuild"
-    Condition="'$(DesignTimeBuild)' != 'true'">
+        Name="GenerateRorolalaBinding"
+        BeforeTargets="BeforeBuild"
+        Condition="'$(DesignTimeBuild)' != 'true'"
+    >
     <Error
-      Condition="!Exists('$(RsharpHeader)')"
-      Text="the C header is not there: `$(RsharpHeader)`. Build Rust first, with `./run.sh build`." />
+            Condition="!Exists('$(RsharpHeader)')"
+            Text="the C header is not there: `$(RsharpHeader)`. Build Rust first, with `cargo dev build`."
+        />
     <Exec
-      Command="cargo run --quiet --manifest-path &quot;$(RsharpRoot)Cargo.toml&quot; -p rorolala-dev-rsharp-bindgen -- &quot;$(RsharpHeader)&quot; &quot;$(RsharpBinding)&quot;" />
+            Command="cargo run --quiet --manifest-path &quot;$(RsharpRoot)Cargo.toml&quot; -p rorolala-dev-rsharp-bindgen -- &quot;$(RsharpHeader)&quot; &quot;$(RsharpBinding)&quot;"
+        />
   </Target>
 
 </Project>

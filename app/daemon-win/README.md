@@ -8,7 +8,7 @@ of a rule. It links no Rust and depends on no crate.
 app/daemon-win/
   src/          C sources
   res/          the dialog script and the manifest
-dev/run/src/bin/
+scripts/
   daemon-win-build.ps1   builds, and exports under `build/bin`
   daemon-win-check.ps1   the same build with `/analyze`
   daemon-win-clean.ps1   removes this program's artifacts only
@@ -26,9 +26,9 @@ finds them through `vswhere` and `vcvars64.bat` and refuses rather than guessing
 to `.cache/daemon-win`, so nothing is left in the source tree.
 
 ```powershell
-.\run.ps1 daemon-win-build
-.\run.ps1 daemon-win-check
-.\run.ps1 daemon-win-clean
+.\app\daemon-win\scripts\daemon-win-build.ps1
+.\app\daemon-win\scripts\daemon-win-check.ps1
+.\app\daemon-win\scripts\daemon-win-clean.ps1
 ```
 
 ## The four tabs
@@ -61,3 +61,4 @@ rather than translated by the window.
 %LOCALAPPDATA%\rola\daemon\registry.toml  namespace to Vault path
 <vault>\vault.toml                        the `[auth] admins` of a Vault
 ```
+

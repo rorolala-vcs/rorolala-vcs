@@ -12,6 +12,11 @@ pub static POLICIES: &[crate::PolicyEntry] = &[
         extensions: crate::policies::blend::Blend::EXTENSIONS,
         chunker: &crate::policies::blend::Blend,
     },
+    crate::PolicyEntry {
+        name: crate::policies::psd_basic::PsdBasic::NAME,
+        extensions: crate::policies::psd_basic::PsdBasic::EXTENSIONS,
+        chunker: &crate::policies::psd_basic::PsdBasic,
+    },
 ];
 
 /// The policy called `name`, if this build carries one.

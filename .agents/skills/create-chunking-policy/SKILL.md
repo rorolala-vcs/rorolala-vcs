@@ -79,7 +79,7 @@ stops rather than let two policies disagree, naming what is wrong:
 
 - `` `A` and `B` both claim the name `x` ``
 - `` `A` and `B` both claim `mb`, and one container is cut one way ``
-- `` `X`: `x` is not kebab-case… `` — and the same shape for a non-kebab name, a non-container
+- `` `X`: `x` is not kebab-case…`` — and the same shape for a non-kebab name, a non-container
   extension, a missing `NAME`/`EXTENSIONS`, or a const that is not the expected literal or array.
 
 ## Phase 3 — Scaffold the corpus and leave the user a `__TODO.md`
@@ -97,7 +97,7 @@ modules/chunking/corpus/<name>/__TODO.md
 ```
 
 `shared-asset` may also get its lane directories now, one per path, or the user may add them with the
-files; a lane is `<lane>/000.<ext>`, `001.<ext>`, ….
+files; a lane is `<lane>/000.<ext>`, `001.<ext>`, …
 
 Write `policy.toml` beside them:
 
@@ -109,9 +109,9 @@ patterns = ["big-file", "in-place-edit", "metadata-only", "full-rewrite", "share
 ```
 
 **The empty pattern directories make the corpus unmeasurable until they are filled**:
-`Corpus::read` refuses a pattern with no version (`names no version`), and `./run.sh chunker` exits
+`Corpus::read` refuses a pattern with no version (`names no version`), and `cargo dev chunker` exits
 non-zero. That is the intended signal that the corpus is not ready — but it means this intermediate
-state is local only. Do not run `./run.sh check` against it and do not commit it: the gate's
+state is local only. Do not run `cargo ci check` against it and do not commit it: the gate's
 `generated` step runs the harness, and a `policy.toml` committed without its corpus and without a real
 `SCORE.md` is a record of nothing. The empty directories are not carried by git anyway; the tree is
 whole again once the versions are in place.
@@ -130,7 +130,7 @@ harness. It must state:
   - `full-rewrite` — the same bytes written again: whether a cut hits when nothing changed.
   - `shared-asset` — one body shared by two paths, each edited elsewhere: cross-file deduplication,
     which no single chain shows.
-- **The file names**: `000.<ext>`, `001.<ext>`, … from zero, counting by one, **no gaps**.
+- **The file names**: `000.<ext>`, `001.<ext>`, …from zero, counting by one, **no gaps**.
 - **One lane, one container**: every version in one directory (or one lane directory) has the same
   extension; mixing them is refused.
 - **`shared-asset` is the only pattern with lane directories** — one per path, at least two, and the
@@ -141,7 +141,7 @@ harness. It must state:
   `.DS_Store` or a `README` there is a refused corpus.
 - **Real sizes**: a chain worth measuring is made of documents at the sizes the tool really writes.
 - **The version files never enter git** (`corpus/.gitignore` carries only `policy.toml` and
-  `SCORE.md`); files that must stay elsewhere are measured with `./run.sh chunker --corpus <dir>`.
+  `SCORE.md`); files that must stay elsewhere are measured with `cargo dev chunker --corpus <dir>`.
 - **Tell the agent when it is done.**
 
 `__TODO.md` is already ignored by `corpus/.gitignore`, and it is scratch: delete it in Phase 4 once
@@ -152,7 +152,7 @@ the corpus passes.
 When the user says the corpus is ready, check it before writing a line of the splitter.
 
 ```sh
-./run.sh chunker --check      # structure only: numbering, one container per lane, non-empty patterns
+cargo dev chunker --check      # structure only: numbering, one container per lane, non-empty patterns
 ```
 
 The harness checks the shape and nothing else. Check the rest yourself, and report each finding as the
@@ -208,8 +208,8 @@ the same as anywhere else in the crate.
 ## Phase 6 — Measure, then iterate
 
 ```sh
-./run.sh chunker          # the crate's own corpus/, by default
-./run.sh chunker --store  # also write through a real store and compare it to the model
+cargo dev chunker          # the crate's own corpus/, by default
+cargo dev chunker --store  # also write through a real store and compare it to the model
 ```
 
 The report prints a per-pattern table and then an aggregate table. The policy appears as a row because
@@ -235,7 +235,7 @@ preference → an extension claim → a ZIP signature → text → whole.
 ## Phase 8 — Write the record and commit
 
 ```sh
-./run.sh chunker --score
+cargo dev chunker --score
 ```
 
 This generates `SCORE.md` beside the corpus: the corpus digest, the patterns, the weights version,
@@ -249,7 +249,7 @@ Commit exactly these, and nothing else from `corpus/`:
   committed)
 - `modules/chunking/corpus/<name>/policy.toml` and `modules/chunking/corpus/<name>/SCORE.md`
 
-The scaffold from Phases 2–3 is committed only as this finished set: a `policy.toml` without a real
+The scaffold from Phases 2… is committed only as this finished set: a `policy.toml` without a real
 `SCORE.md` records nothing, and the placeholder splitter is not the policy. The version files stay out:
 `corpus/.gitignore` carries only `policy.toml` and `SCORE.md`, which is what keeps the repository from
 bloating as formats multiply.
@@ -257,7 +257,7 @@ bloating as formats multiply.
 Then:
 
 ```sh
-./run.sh check
+cargo ci check
 ```
 
 The `generated` step regenerates the registry and `SCORE.md` and compares the working tree against
@@ -274,8 +274,7 @@ rola track big.mb -m "edited one object"    # later writes reuse the recorded pr
   the available names listed.
 - The preference is recorded on the version, and survives `sync`, `fetch`, `checkin` and
   `layout entry`.
-- A file whose recorded preference names a policy this build lacks is an error and writes nothing —
-  there is no silent fallback, because falling back writes a version that deduplicates against nothing
+- A file whose recorded preference names a policy this build lacks is an error and writes nothing — there is no silent fallback, because falling back writes a version that deduplicates against nothing
   already stored.
 - A policy with `EXTENSIONS = &[]` is reachable only by being named.
 - Reads are unaffected: the cut matters only at write time; reading relies on the manifest alone.

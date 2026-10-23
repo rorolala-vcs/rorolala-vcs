@@ -13,7 +13,7 @@ checkin:
             --by-name       Land each reference under the destination by its own name
             --offline        Build the file only from content already stored locally
             --force          Skip the chain consistency check for a variant checkin
-            --concurrency <N>  Carry the content over N connections at once (default 4)
+            --concurrency <N>  Carry the content N units at a time (default 4)
 
         **About landing**:
             A destination that is a directory is a prefix: a reference keeps its whole Vault path under it
@@ -35,7 +35,7 @@ checkin:
             --by-name            每条参考按自己的名字落在目标目录下
             --offline            仅使用本地已存储的内容来构建文件
             --force              跳过变体签入的链一致性检查
-            --concurrency <N>    用 N 条连接同时传输内容（默认 4）
+            --concurrency <N>    每次同时搬运 N 份内容（默认 4）
 
         **关于落点**：
             目录型目标是前缀：参考保留它在 Vault 里的整条路径
@@ -115,6 +115,10 @@ checkin:
   err_join_no_store:
     en: this run has no store to write the content out of
     zh-CN: 本次运行没有可写出内容的存储
+
+  err_join_no_content:
+    en: the content this entry's version needs could not be brought here
+    zh-CN: 无法取回该条目版本所需的内容
 
   err_join_place:
     en: nowhere here can hold a variant file

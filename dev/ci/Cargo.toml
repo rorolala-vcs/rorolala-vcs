@@ -1,0 +1,16 @@
+[package]
+name = "rola-ci"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# A workspace of its own — see the note in `dev/build/Cargo.toml` for why the tool that checks this
+# tree is not built as a member of it.
+[workspace]
+
+[dependencies]
+mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267fe16686e1ac22d68da14a26005b8c9", default-features = false }
+
+# The build's own steps, called rather than re-described: a check that needs an artifact is run
+# against the same code that produces it, so the two cannot disagree about where it is.
+rola-build = { path = "../build" }

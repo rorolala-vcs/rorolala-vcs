@@ -1,7 +1,7 @@
 ; Rorolala, as Windows is given it: one program that lays the export out where a shell and a file manager
 ; find it, and that can be asked to take all of it back.
 ;
-; What it installs is the layout `./run.sh export` lays down, taken as it stands: the command line programs
+; What it installs is the layout `cargo dev export` lays down, taken as it stands: the command line programs
 ; and the two libraries beside them, the Desktop program with its plugins, and the completion scripts, with
 ; README and LICENSE going in with all of it. It is offered as two presets over the parts — `compact`, the
 ; command line and its interface, and `full`, everything — with every part still on the page for a reader who
@@ -10,7 +10,7 @@
 ; item — and each of them is written conservatively, so that an uninstall removes what this installer wrote
 ; and nothing else.
 ;
-; It is compiled with the pinned Inno Setup that `./run.sh publish` lays out; the four things that differ
+; It is compiled with the pinned Inno Setup that `cargo dev publish` lays out; the four things that differ
 ; from one build to the next are given to it on the command line rather than written here.
 
 #ifndef Version

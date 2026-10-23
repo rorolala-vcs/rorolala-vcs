@@ -142,5 +142,17 @@ pub fn render_error_action(err: ErrorAction, ec: &mut ResExitCode) {
             r_eprintln!("{}", help_line!(t!("error.action.err_auth_help").trim()));
             ec.exit_code = EC_ERR_ACTION_AUTH;
         }
+        // A key the other side took but cannot produce again. It is told apart from the words of
+        // `MissingObject` because a reader acts on it differently — there the object was nowhere to
+        // begin with, here it was written and did not land — while what a caller can do about it is
+        // the same, which is why it is the same exit code rather than a subject of its own.
+        ActionError::NotConfirmed(key) => {
+            r_eprintln!("{}", err_line!(t!("error.action.err_not_confirmed").trim()));
+            r_eprintln!(
+                "{}",
+                help_line!(t!("error.action.err_not_confirmed_help", key = key.as_str()).trim())
+            );
+            ec.exit_code = EC_ERR_ACTION_MISSING_OBJECT;
+        }
     }
 }

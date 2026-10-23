@@ -55,8 +55,11 @@ internal static class Workspaces
     /// <returns>The name it is known by.</returns>
     public static string Named(string path)
     {
-        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var name = Path.GetFileName(trimmed);
+        // Both separators, because the name is read off a path a person chose: on Windows a path may
+        // be written with either, and a path written the other way is still the path it names.
+        var trimmed = path.TrimEnd('\\', '/');
+        var index = trimmed.LastIndexOfAny(['\\', '/']);
+        var name = index >= 0 ? trimmed[(index + 1)..] : trimmed;
 
         return name.Length > 0 ? name : trimmed;
     }

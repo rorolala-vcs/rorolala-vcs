@@ -8,12 +8,12 @@ and how fast the cut is. This program answers those for every chunker it is give
 version chains, and prints the comparison.
 
 ```sh
-./run.sh chunker                        # measure every corpus, against the yardsticks
-./run.sh chunker --score                # and write each policy's SCORE.md beside its corpus
-./run.sh chunker --corpus ~/my-corpus   # measure chains that live somewhere else
-./run.sh chunker --generate synthetic   # write a synthetic chain set, then measure it
-./run.sh chunker --check                # validate the corpora, cut nothing
-./run.sh chunker --store                # also write it into a real store and compare
+cargo dev chunker                        # measure every corpus, against the yardsticks
+cargo dev chunker --score                # and write each policy's SCORE.md beside its corpus
+cargo dev chunker --corpus ~/my-corpus   # measure chains that live somewhere else
+cargo dev chunker --generate synthetic   # write a synthetic chain set, then measure it
+cargo dev chunker --check                # validate the corpora, cut nothing
+cargo dev chunker --store                # also write it into a real store and compare
 ```
 
 ## What is frozen, and why
@@ -110,3 +110,4 @@ of the weights, whether the policy claims a container, the table, and one senten
 beats the best general chunker and by how much. It is generated and committed rather than written by
 hand, and the `generated` step of the gate regenerates it and asks git whether it moved — a number
 nobody re-derives is a number that stops being true.
+

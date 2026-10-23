@@ -30,7 +30,7 @@ namespace FileSystemPlugin;
 /// <para>
 /// The toolbar's own pictures are the program's: a switch that shows what the rules hide, and whether a dock
 /// follows the whole, are this program's own ideas, which no system has a picture for. They are drawn from the
-/// pinned Material Design set by <c>./run.sh icons</c> — the manifest is <c>app/desktop/icons.toml</c> — and
+/// pinned Material Design set by <c>cargo dev icons</c> — the manifest is <c>app/desktop/icons.toml</c> — and
 /// embedded in this assembly, so that what the host loads is the one file it found the plugin in. The keys they
 /// are handed over under are generated from that manifest into the other half of this class, so that no one
 /// writes them twice.

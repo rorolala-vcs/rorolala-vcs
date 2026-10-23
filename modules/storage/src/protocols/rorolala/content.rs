@@ -246,6 +246,41 @@ impl RorolalaStorage {
         Ok(content)
     }
 
+    /// Which of `keys` this store cannot produce again.
+    ///
+    /// This is what a side says when it is asked whether it holds what it was just given: a key is
+    /// confirmed only when the content under it reads back — a content kept as chunks is put back
+    /// together, every chunk read, and the whole checked against its key. A manifest that reads
+    /// while the chunks it names are gone is **not** confirmed: a manifest is how content is put
+    /// back together, and content that cannot be put back together is what a sync carried nothing
+    /// for. A caller that means to ask about a manifest and nothing else asks
+    /// [`manifest_of`](Self::manifest_of) instead.
+    ///
+    /// What it costs is a read of every content asked about: this is a check, not a lookup, and a
+    /// lookup is the thing whose answer was not trusted in the first place.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the store cannot be read at all, which is a store that is failing
+    /// rather than a key that is not here.
+    pub async fn unreadable(&self, keys: &[Key]) -> Result<Vec<Key>, Error> {
+        let mut missing = Vec::new();
+
+        for key in keys {
+            match self.read_content(key).await {
+                Ok(_) => {}
+                // A store that cannot be read is not content that is not here: the first says the
+                // answer is not known, and reporting it as a missing key would say it is.
+                Err(Error::Io(error)) => return Err(Error::Io(error)),
+                // Anything else — nothing under the key, a manifest that will not read, a chunk that
+                // is gone, content that does not hash to its key — is a key this store cannot produce.
+                Err(_) => missing.push(*key),
+            }
+        }
+
+        Ok(missing)
+    }
+
     /// How many bytes the content stored under `key` is carried to another store as, read without
     /// taking the content apart.
     ///
@@ -450,7 +485,7 @@ impl RorolalaStorage {
         collect(&self.root.join(MANIFEST_DIR), &mut keys).await?;
 
         let state = self.root_state();
-        for index in self.packs_of(PackKind::Manifest).await? {
+        for index in self.packs_of(&state, PackKind::Manifest).await? {
             let Some(directory) = self.pack_index(&state, PackKind::Manifest, index).await? else {
                 continue;
             };

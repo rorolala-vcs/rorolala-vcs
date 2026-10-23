@@ -534,6 +534,55 @@ pub async fn store_of(index: &VCSIndex, digest: &[u8; 32]) -> Result<Option<Key>
     }
 }
 
+/// Every store key the chain from `head` back to its root names, head first.
+///
+/// A version is only a meaning once what it stored is in the store that names it, so what a run has
+/// to carry for a version is not one content but the whole chain the version stands on. A run that
+/// named only the top of a chain left every version below it a name in the Layout with no content
+/// behind it: the version crossed, nothing it stored did, and nothing said so.
+///
+/// A version the index does not hold ends the walk — a chain the index cannot read is one it cannot
+/// name content for, and guessing past it would name content no version is known to want.
+///
+/// # Errors
+///
+/// Returns a message when the index could not be read.
+pub async fn chain_store_keys(index: &VCSIndex, head: &[u8; 32]) -> Result<Vec<Key>, String> {
+    let mut keys = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut at = *head;
+
+    while seen.insert(at) {
+        if let Some(key) = store_of(index, &at).await? {
+            keys.push(key);
+        }
+
+        let Some(base) = base_of(index, &at).await? else {
+            break;
+        };
+        if base == [0_u8; 32] {
+            break;
+        }
+
+        at = base;
+    }
+
+    Ok(keys)
+}
+
+/// The version `digest` stands on, when the index holds the chain to it.
+async fn base_of(index: &VCSIndex, digest: &[u8; 32]) -> Result<Option<Blake3Hash>, String> {
+    let Some(version) = version(index, digest).await? else {
+        return Ok(None);
+    };
+
+    match index.read(Key::new(*version.variant())).await {
+        Ok(VCSIndexObject::Variant(variant)) => Ok(Some(*variant.base_version())),
+        Ok(_) | Err(VCSIndexReadingError::NotFound { .. }) => Ok(None),
+        Err(error) => Err(error.reason()),
+    }
+}
+
 /// The variant the index holds under `digest`.
 async fn read_variant(
     index: &VCSIndex,
@@ -556,11 +605,93 @@ fn hex(digest: [u8; 32]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use librorolala::layout::LayoutPath;
+    use std::str::FromStr as _;
 
-    use super::{Direction, Kind, Relation, create_remote_path, decide, kept, split_extension};
+    use librorolala::layout::LayoutPath;
+    use librorolala::storage::Key;
+    use librorolala::vcs::{VCSIndex, Variant, Version};
+
+    use super::{
+        Direction, Kind, Relation, chain_store_keys, create_remote_path, decide, kept,
+        split_extension,
+    };
 
     const UUID: &str = "1a2b3c4d-0000-0000-0000-000000000000";
+
+    /// An index of its own, in a directory of its own that is emptied first.
+    fn index(label: &str) -> VCSIndex {
+        let path =
+            std::env::temp_dir().join(format!("rola-sync-chain-{}-{label}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+
+        VCSIndex::create(path)
+    }
+
+    /// Writes `variant` and the version made of it down, and answers both.
+    fn record(index: &VCSIndex, variant: &Variant) -> (String, Version) {
+        let version = variant.new_version();
+
+        index
+            .write_variant(variant)
+            .expect("the variant is written");
+        let hex = index
+            .write_version(&version)
+            .expect("the version is written");
+
+        (hex, version)
+    }
+
+    /// The digest a version is named by, read back out of its hex.
+    fn digest(hex: &str) -> [u8; 32] {
+        *Key::from_str(hex)
+            .expect("a version reads as a key")
+            .digest()
+    }
+
+    /// Every version a chain stands on names content, not just the version at the top: what a run
+    /// carries for a version is the whole chain, because a version below it is what a pointer moved
+    /// back reaches for.
+    #[test]
+    fn a_chain_names_the_content_of_every_version_it_stands_on() {
+        let index = index("every");
+        let first = [1_u8; 32];
+        let second = [2_u8; 32];
+        let third = [3_u8; 32];
+
+        let (_, one) = record(
+            &index,
+            &Version::root().new_variant(first, [0; 32], [0; 32]),
+        );
+        let (_, two) = record(&index, &one.new_variant(second, [0; 32], [0; 32]));
+        let (three, _) = record(&index, &two.new_variant(third, [0; 32], [0; 32]));
+
+        let keys = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(chain_store_keys(&index, &digest(&three)))
+            .expect("the index reads");
+
+        assert_eq!(
+            keys,
+            vec![Key::new(third), Key::new(second), Key::new(first)],
+            "the version, then every version it stands on"
+        );
+    }
+
+    /// A chain that is one version long names that version's content and stops at the root.
+    #[test]
+    fn a_chain_of_one_stops_at_the_root() {
+        let index = index("one");
+        let only = [7_u8; 32];
+
+        let (one, _) = record(&index, &Version::root().new_variant(only, [0; 32], [0; 32]));
+
+        let keys = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(chain_store_keys(&index, &digest(&one)))
+            .expect("the index reads");
+
+        assert_eq!(keys, vec![Key::new(only)]);
+    }
 
     #[test]
     fn a_new_file_is_named_by_its_path() {

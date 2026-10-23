@@ -28,7 +28,7 @@
 
     The stricter analyzer tier — every rule rather than the recommended ones — is asked for by the
     `dotnet-lint` gate rather than here, so that an ordinary build is held to what the compiler says
-    and the gate to the whole of what the analyzers say. See `dev/run/src/bin/dotnet-lint.sh` and the
+    and the gate to the whole of what the analyzers say. See the `dotnet-lint` command of `dev/ci` and the
     root `.editorconfig`.
   -->
   <PropertyGroup>

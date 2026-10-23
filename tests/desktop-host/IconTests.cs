@@ -16,7 +16,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// What is checked is the link between the three things a picture passes through — the manifest, the run that
 /// draws it, and the assembly the plugin is built as — because a break in any of them is a window that opens
 /// with a hole in its toolbar and nothing said. What is not checked is the drawing: that needs a renderer, and
-/// it is <c>./run.sh icons</c> that runs one.
+/// it is <c>cargo dev icons</c> that runs one.
 /// </remarks>
 public sealed class IconTests
 {

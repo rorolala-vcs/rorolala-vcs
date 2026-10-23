@@ -1,0 +1,24 @@
+[package]
+name = "rola-build"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# A workspace of its own, and deliberately not a member of the one whose artifacts it builds.
+#
+# Cargo unifies a dependency's features across one workspace build, so a dev crate inside the main
+# workspace would be built with the programs' `pathf` and `structural_renderer` — features that make
+# `gen_program!()` demand path analysis and serde from its own crate, neither of which a build tool
+# has any use for. This is the same arrangement mingling reaches for its own `dev/ci`, and for the
+# same reason. The two are reached through the aliases in `.cargo/config.toml`.
+[workspace]
+
+[dependencies]
+# The command tree and help plumbing. The features are the framework's defaults on purpose: a build
+# tool has a command to dispatch and nothing beside it.
+mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267fe16686e1ac22d68da14a26005b8c9", default-features = false }
+
+# The workspace's own manifest is read for what no program knows — the version everything is at, and
+# the publisher a package is named for — and it is read as TOML rather than as lines, so a value
+# that moves within the section is still found.
+toml = "0.8.23"

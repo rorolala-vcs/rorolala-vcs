@@ -141,24 +141,35 @@ public sealed class DesktopConfigTests
             UseShellExecute = false,
         };
         start.ArgumentList.Add(Program);
+        // Both names, because they say the same thing to different readers: `ROLA_DATA_HOME` is this
+        // project's own and is read on every platform, while `XDG_DATA_HOME` is the name a Unix
+        // machine knows — a Windows program would read neither it nor anything else here, and would
+        // go on to its window with the real user's configuration instead of the scratch one.
+        start.Environment["ROLA_DATA_HOME"] = data;
         start.Environment["XDG_DATA_HOME"] = data;
 
         using var process = Process.Start(start)!;
 
-        // Read before waiting: a program that filled a pipe while waiting to be reaped would be
-        // waiting for a reader that was waiting for it.
-        var error = process.StandardError.ReadToEnd();
-        _ = process.StandardOutput.ReadToEnd();
+        // Reading and waiting at the same time: a program that filled a pipe while waiting to be
+        // reaped would wait for a reader that was waiting for it, so the reads are started first and
+        // the wait is what comes back with an answer. A program that never stops is killed and the
+        // test fails, rather than the run hanging until the job's own limit.
+        var error = process.StandardError.ReadToEndAsync();
+        var output = process.StandardOutput.ReadToEndAsync();
 
         if (!process.WaitForExit(30_000))
         {
             process.Kill(entireProcessTree: true);
+            process.WaitForExit();
             throw new InvalidOperationException("the program did not stop");
         }
 
+        var stripped = error.GetAwaiter().GetResult();
+        _ = output.GetAwaiter().GetResult();
+
         Directory.Delete(data, recursive: true);
 
-        return new Run(process.ExitCode, error);
+        return new Run(process.ExitCode, stripped);
     }
 
     /// <summary>What the program exited with, and what it said on standard error.</summary>

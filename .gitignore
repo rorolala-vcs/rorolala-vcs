@@ -48,7 +48,7 @@ nul
 __*
 
 # Third-party sources the build draws from rather than carries: cloned where a script needs them, and
-# ignored because what is drawn from them is what is committed. See `./run.sh icons`.
+# ignored because what is drawn from them is what is committed. See `cargo dev icons`.
 /THIRD-PARTY/material-icons/
 
 # Corpora are not carried: a format's own files are megabytes each, several per pattern, and a

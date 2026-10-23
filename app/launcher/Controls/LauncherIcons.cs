@@ -12,7 +12,7 @@ namespace RorolalaLauncher;
 /// </summary>
 /// <remarks>
 /// The three the toolbar wears are this project's own set, drawn from the pinned Material Design set by
-/// <c>./run.sh icons</c> and named by the generated <see cref="Icons"/>; the two a window's frame carries are
+/// <c>cargo dev icons</c> and named by the generated <see cref="Icons"/>; the two a window's frame carries are
 /// the Desktop program's own files, because the two programs draw one frame.
 /// <para>
 /// They are read once and kept: a picture is stamped every time its button is drawn, and a file opened once

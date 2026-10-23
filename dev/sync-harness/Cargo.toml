@@ -1,0 +1,21 @@
+[package]
+name = "rorolala-dev-sync-harness"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The sync primitive itself, waiting on as the real thing rather than a copy of it: what is measured
+# is the action a run reaches the Vault through, not a stand-in for it.
+rorolala-daemon.workspace = true
+rorolala-protocol.workspace = true
+
+# The two stores a sync is between, and the keys it names. A key is the hash of what it names, so
+# making the entries this measures needs the same hash the store would have taken.
+rorolala-storage.workspace = true
+blake3.workspace = true
+
+# The channel a sync crosses, which is the encrypted session a Vault serves and never a plain stream.
+rorolala-auth.workspace = true
+
+# Running two ends of a sync at once is what measures it, so the harness is asynchronous.
+tokio = { workspace = true }

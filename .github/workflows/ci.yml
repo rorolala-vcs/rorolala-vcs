@@ -1,0 +1,499 @@
+name: CI
+
+# Every way work reaches this repository is checked the same way, and a tag only adds the release to
+# what was already checked: a push to `main`, a push to any other branch, a pull request into `main`,
+# and a tag. The shape is deliberately one workflow rather than several — what a branch and a tag are
+# held to must not be able to drift apart.
+on:
+  push:
+    branches: ["**"]
+    tags: ["*"]
+  pull_request:
+    branches: [main]
+
+# A tag publishes a release, and only a tag does.
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The cheap gate in front of the matrices: the run must leave the tree exactly as it found it. The
+  # `git-lock` / `git-unlock` pair around the regeneration is what measures that — the unlock fails
+  # when anything tracked moved — so a source generated into the tree and left stale is caught here
+  # rather than after a full matrix has run.
+  #
+  # What is regenerated is the chunking crate's own registry and module list, which its build script
+  # writes into `src/`. The `generated` step of `cargo ci check` additionally measures the chunking
+  # corpus, and the corpus is deliberately not carried by this repository (see
+  # `modules/chunking/corpus/.gitignore`): on a clean runner it is absent, and a score taken over
+  # nothing would rewrite each `SCORE.md` while saying nothing about the policy. That half stays a
+  # check for a machine that has the corpus; this is the half a runner can make.
+  fast-check:
+    name: Fast-Check
+    runs-on: ubuntu-latest
+    steps:
+      # The runner checks out CRLF on Windows (the tree's own files are LF). A build rewrites a
+      # generated file as LF, and `git-unlock` would read the difference between the two as a change
+      # the run made. Setting this before the checkout is what makes the working tree the one the
+      # build writes.
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # The action brings rust-cache, which covers the registry and the dependency artifacts. It
+          # has to be told where they are: cargo's output is `.cache/rs-target` rather than `target/`,
+          # and the integration suites under `tests/` are a workspace of their own.
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
+
+      - name: Install the musl toolchain
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@rorolala.invalid"
+          git config --global user.name "rola CI"
+
+      - name: Check formatting and translations
+        run: |
+          cargo ci fmt-check
+          cargo ci i18n
+
+      - name: Lock workspace for CI
+        run: cargo ci git-lock
+
+      - name: Regenerate the sources the build writes
+        run: cargo build --quiet -p rorolala-chunking
+
+      - name: Unlock workspace (idempotency check)
+        if: always()
+        run: cargo ci git-unlock --show-diff
+
+  # Compiles, once per platform, what every job of that platform after this one would otherwise
+  # compile on its own. The two are separate jobs rather than one matrix on purpose: a job waits for
+  # everything it names in `needs`, so one pre-warm over both platforms would make the Linux jobs wait
+  # for the Windows build, and Windows is the slower of the two.
+  #
+  # What is shared is the dependency artifacts, through rust-cache with a key that is the same in every
+  # job of a platform — `cache-shared-key` replaces rust-cache's automatic per-job key. The workspace's
+  # own crates are not shared: a fresh checkout gives them new mtimes, so cargo rebuilds them whatever
+  # the cache holds, and caching them would only take space. What they are built against — `jj-lib`
+  # above all — is the expensive part and is the same for all of them.
+  #
+  # The C ABI library is built by the same step the packaging uses, so what a musl target can make
+  # there — the static library alone, see `dev/build/src/ops/library.rs` — is what this job produces
+  # too, rather than a `cdylib` the target cannot make on a glibc machine.
+  #
+  # What this job does not share is the binaries themselves. A later job that needs a program gets it
+  # by building it, as `cargo ci integration-test` does, because a cargo artifact is tied to the
+  # checkout it was built from (cargo compares source mtimes); the cache is worth what it is worth
+  # for dependencies, which do not change from job to job.
+  prewarm-windows:
+    name: Pre-Warm (windows)
+    needs: [fast-check]
+    runs-on: windows-latest
+    env:
+      MUSL: "false"
+    steps: &prewarm-steps
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # Stable over every job of this platform, so the matrix and the packaging job restore what
+          # this job built instead of each building it again.
+          cache-shared-key: rola-${{ runner.os }}
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Install the musl toolchain
+        if: env.MUSL == 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
+
+      # Debug is what the tests and the documentation checks compile; release is what the programs
+      # and the integration suites need, and what an export lays down.
+      - name: Build the dependencies in debug
+        run: cargo build --workspace --exclude rorolala-ffi --all-targets --all-features
+
+      - name: Build what ships, in release
+        run: cargo dev build
+
+      # The two build tools are workspaces of their own, and every later step runs one of them.
+      - name: Build the build tools
+        run: |
+          cargo build --manifest-path dev/build/Cargo.toml
+          cargo build --manifest-path dev/ci/Cargo.toml
+
+      - name: Restore the .NET side
+        run: dotnet restore RorolalaSharp.sln
+
+  prewarm-linux:
+    name: Pre-Warm (linux)
+    needs: [fast-check]
+    runs-on: ubuntu-latest
+    env:
+      MUSL: "true"
+    steps: *prewarm-steps
+
+  # The gate itself, one check to a job so a failure is the failure of that check rather than of the
+  # runner it happened to share. Each platform waits for its own pre-warm and for nothing of the
+  # other's.
+  #
+  # Linux is built with the musl toolchain — `musl-gcc` is the linker (see the root
+  # `.cargo/config.toml`) and the C runtime is static, which is what lets a musl binary run on a
+  # machine with no musl installed.
+  #
+  # The one suite that does not run on that target is `tests/ffi-c`: it compiles C against the built
+  # shared library, and a musl build has none (a `cdylib` needs a dynamic C runtime, and `musl-tools`
+  # carries no `libgcc_s` to link one on a glibc machine). The gate skips it there and says so; see
+  # `dev/ci/src/task/integration_test.rs`.
+  #
+  # `cargo ci check` is deliberately not what runs here: one of its steps is `generated`, which cannot
+  # run without the corpus (see Fast-Check above), and a gate run in a shape of its own would be a
+  # second gate. The steps below are that gate's own commands.
+  check-windows:
+    name: Check (windows / ${{ matrix.item }})
+    needs: [fast-check, prewarm-windows]
+    strategy:
+      fail-fast: false
+      matrix:
+        item: [build, test, clippy, fmt, doc, integration, dotnet]
+    runs-on: windows-latest
+    env:
+      MUSL: "false"
+    steps: &check-steps
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # The key Pre-Warm saved under, so this job restores its dependencies rather than building
+          # them again.
+          cache-shared-key: rola-${{ runner.os }}
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          # The version `global.json` pins; the projects themselves target `net8.0`.
+          dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Install the musl toolchain
+        if: env.MUSL == 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@rorolala.invalid"
+          git config --global user.name "rola CI"
+
+      # The C# bindings are generated from the header the Rust side writes, and the two items that
+      # touch .NET — the .NET checks and the integration suites, whose projects reach the plugins that
+      # bind the C ABI — are the ones that do not build Rust on their way there. It writes into cargo's
+      # output only; the binding it generates is checked in, and the lock below is what says whether
+      # what was generated is what is committed.
+      - name: Build the C ABI header
+        if: "matrix.item == 'dotnet' || matrix.item == 'integration'"
+        run: cargo dev lib
+
+      # Every check runs inside a lock / unlock pair: the final unlock doubles as the idempotency
+      # check, failing the job when the check left the working tree dirty.
+      - name: Lock workspace for CI
+        run: cargo ci git-lock
+
+      - name: Run the check
+        id: check
+        shell: bash
+        continue-on-error: true
+        run: |
+          case "${{ matrix.item }}" in
+            build) cargo dev build ;;
+            test) cargo ci test ;;
+            clippy) cargo ci clippy ;;
+            fmt) cargo ci fmt-check && cargo ci i18n ;;
+            doc) cargo ci doc ;;
+            integration) cargo ci integration-test ;;
+            dotnet) cargo ci dotnet-lint && cargo ci dotnet-check ;;
+          esac
+
+      - name: Unlock workspace (idempotency check)
+        if: always()
+        run: cargo ci git-unlock --show-diff
+
+      - name: Fail when the check failed
+        if: steps.check.outcome == 'failure'
+        run: exit 1
+
+      # Collected reports are uploaded even on failure, so the report job can render them.
+      - name: Upload collected reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-collect-${{ github.job }}-${{ matrix.item }}
+          path: .cache/reports/collect/
+          if-no-files-found: ignore
+
+  check-linux:
+    name: Check (linux / ${{ matrix.item }})
+    needs: [fast-check, prewarm-linux]
+    strategy:
+      fail-fast: false
+      matrix:
+        item: [build, test, clippy, fmt, doc, integration, dotnet]
+    runs-on: ubuntu-latest
+    env:
+      MUSL: "true"
+    steps: *check-steps
+
+  # What a person is handed, built on the platform it is for. Windows is given the installer the
+  # project packages with, and Linux is given the export as it was laid out — a musl build has no
+  # installer, so the `build/` directory's own files are what the archive carries, at its root. The
+  # Linux export holds the static C ABI library and no shared one; see `dev/build/src/ops/library.rs`.
+  #
+  # Split by platform for the same reason the pre-warms are: each waits only for its own.
+  package-windows:
+    name: Package (windows)
+    needs: [fast-check, prewarm-windows]
+    runs-on: windows-latest
+    steps: &package-steps
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # The key Pre-Warm saved under, so the export is built against dependencies already compiled.
+          cache-shared-key: rola-${{ runner.os }}
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Install the musl toolchain
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
+
+      - name: Read the workspace version
+        id: version
+        shell: bash
+        run: |
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          if [ -z "$version" ]; then
+            echo "::error::Cargo.toml declares no workspace version"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      # The compiler the installer is made with is the one `dev/build/src/iscc.rs` names, laid out
+      # where it looks for it first (`.cache/toolchains/innosetup`). Nothing is fetched by the build
+      # itself, so fetching it is the workflow's to do — and the hash is checked, because what a
+      # package is built with decides what is in it.
+      - name: Install the pinned Inno Setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
+          $expected = '9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732'
+          Invoke-WebRequest -Uri $url -OutFile innosetup.exe
+          $actual = (Get-FileHash innosetup.exe -Algorithm SHA256).Hash
+          if ($actual -ne $expected) {
+            throw "innosetup.exe hashed to $actual, not $expected"
+          }
+          $directory = Join-Path (Get-Location) '.cache\toolchains\innosetup'
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          Start-Process -FilePath .\innosetup.exe -Wait -ArgumentList '/VERYSILENT', '/CURRENTUSER', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS', "/DIR=$directory"
+          Remove-Item innosetup.exe
+
+      - name: Build the Windows installer
+        if: runner.os == 'Windows'
+        run: cargo dev publish
+
+      - name: Lay the Linux export out
+        if: runner.os == 'Linux'
+        run: cargo dev export
+
+      - name: Pack the Linux export
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          mkdir -p dist
+          tar -czf "dist/rorolala-${VERSION}-linux-x86_64-musl.tar.gz" -C build .
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rola-${{ runner.os }}-package
+          path: |
+            build/rorolala-*-setup.exe
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  package-linux:
+    name: Package (linux)
+    needs: [fast-check, prewarm-linux]
+    runs-on: ubuntu-latest
+    steps: *package-steps
+
+  # Every matrix run's reports, rendered as one page and written into the job summary. It runs even
+  # when checks failed, so what failed is still what a reader is shown.
+  report:
+    name: Report
+    needs: [check-windows, check-linux]
+    # No reports exist when Fast-Check stopped the matrices.
+    if: always() && (needs.check-windows.result != 'skipped' || needs.check-linux.result != 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Download collected reports
+        uses: actions/download-artifact@v4
+        with:
+          path: .cache/reports/collect
+          pattern: ci-collect-*
+          merge-multiple: true
+
+      - name: Render the report
+        run: cargo ci report-collect
+
+      - name: Publish the report to the step summary
+        run: cat .cache/reports/result.md >> "$GITHUB_STEP_SUMMARY"
+
+  # A tag is released only once both the checks and the packages succeeded, and what is released is
+  # the tag's own commit: its message is the body, its date and short hash are the heading, and the
+  # people whose commits made up the range since the previous tag are named below it.
+  release:
+    name: Release
+    needs: [check-windows, check-linux, package-windows, package-linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The previous tag has to be here for the range that names the co-authors.
+          fetch-depth: 0
+
+      - name: Download the packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          # The collected reports are artifacts of this run as well, and what a release carries is
+          # the packages alone.
+          pattern: rola-*-package
+          merge-multiple: true
+
+      - name: Write the release body
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          commit="$(git rev-parse --short=7 "$tag")"
+          date="$(git log -1 --format=%cd --date=format:%Y-%m-%d "$tag")"
+          message="$(git log -1 --format=%B "$tag")"
+
+          # The tag before this one, when there is one: that is what the range of commit authors is
+          # taken over. An empty range is the tag itself, which is the first release.
+          previous="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)"
+          range="${tag}"
+          if [ -n "$previous" ]; then
+            range="${previous}..${tag}"
+          fi
+          co="$(git log "$range" --format=%an | sort -u | paste -sd ', ' -)"
+
+          {
+            echo "Release ${tag} - (${date}-${commit})"
+            echo
+            printf '%s\n' "$message"
+            echo
+            echo "Co: ${co}"
+          } > release.md
+
+          cat release.md
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          body_path: release.md
+          files: dist/*
+          make_latest: true
+          draft: false
+          prerelease: false
