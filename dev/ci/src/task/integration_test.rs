@@ -42,6 +42,26 @@ fn is_musl(workspace: &Workspace) -> bool {
         .is_some_and(|triple| triple.contains("musl"))
 }
 
+/// Why a suite is not run here, when it is not.
+///
+/// Only the C ABI suite has a reason, and it has two: it links the shared library, which a musl
+/// target does not make, and it is POSIX C, which a platform whose C toolchain is not is not.
+fn skipped(suite: &str, workspace: &Workspace) -> Option<&'static str> {
+    if suite != FFI_SUITE {
+        return None;
+    }
+
+    if is_musl(workspace) {
+        return Some("a musl build has no shared C ABI library to link");
+    }
+
+    if cfg!(windows) {
+        return Some("the suite is POSIX C, and this platform's C toolchain is not");
+    }
+
+    None
+}
+
 /// Runs the cargo suites one at a time, then the .NET ones, and names every suite that failed.
 fn run_integration_test() -> Result<(), Error> {
     let workspace = Workspace::discover()?;
@@ -60,12 +80,14 @@ fn run_integration_test() -> Result<(), Error> {
             .unwrap_or_default()
             .to_owned();
 
-        // The C ABI is met by compiling C against the built shared library and linking it, and a musl
-        // build has none: rustc refuses a `cdylib` whose C runtime is static, and the dynamic one
-        // needs a musl `libgcc_s` a glibc machine does not carry (see `rola_build::ops::library`).
-        // The suite is skipped on that target and run where the library it links can be built.
-        if name == FFI_SUITE && is_musl(&workspace) {
-            println!("==> {name}/ skipped: a musl build has no shared C ABI library to link");
+        // The C ABI is met by compiling C against the built shared library and linking it, and that
+        // needs two things this run may not have: a shared library, which a musl build does not make
+        // (rustc refuses a `cdylib` whose C runtime is static, and the dynamic one needs a musl
+        // `libgcc_s` a glibc machine does not carry — see `rola_build::ops::library`), and a POSIX C
+        // toolchain, which the suite is written for: `mkdtemp`, `cc -std=c11`, `-Wl,-rpath,`. The
+        // suite is skipped where either is missing and run where both hold.
+        if let Some(reason) = skipped(&name, &workspace) {
+            println!("==> {name}/ skipped: {reason}");
             continue;
         }
 
