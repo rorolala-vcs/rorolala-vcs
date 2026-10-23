@@ -4,7 +4,7 @@
 #
 # What is carried is the two small files that make a corpus a record rather than a directory of
 # pictures: what it is and how it was made (`policy.toml`), and what a measurement over it came to
-# (`SCORE.md`). Everything else here is local — made again with `./run.sh chunker --capture <format>`,
+# (`SCORE.md`). Everything else here is local — made again with `cargo dev chunker --capture <format>`,
 # or pointed at with `--corpus <dir>` when it is somebody's own files.
 *
 !*/

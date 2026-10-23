@@ -48,7 +48,7 @@
     Condition="'$(DesignTimeBuild)' != 'true'">
     <Error
       Condition="!Exists('$(RsharpHeader)')"
-      Text="the C header is not there: `$(RsharpHeader)`. Build Rust first, with `./run.sh build`." />
+      Text="the C header is not there: `$(RsharpHeader)`. Build Rust first, with `cargo dev build`." />
     <Exec
       Command="cargo run --quiet --manifest-path &quot;$(RsharpRoot)Cargo.toml&quot; -p rorolala-dev-rsharp-bindgen -- &quot;$(RsharpHeader)&quot; &quot;$(RsharpBinding)&quot;" />
   </Target>

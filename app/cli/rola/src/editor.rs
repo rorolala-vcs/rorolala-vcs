@@ -186,7 +186,7 @@ fn named_by_environment() -> Option<Editor> {
 
 /// The editor this project ships, beside this program, when it is laid down there.
 ///
-/// `rola-edit` is exported beside `rola` (see `./run.sh export`), which is the place a word of this
+/// `rola-edit` is exported beside `rola` (see `cargo dev export`), which is the place a word of this
 /// program's reaches a program next to it — `rola edit` runs it the same way. A run that named no
 /// editor anywhere falls back here rather than refusing, so a machine with nothing else to edit with
 /// still has this.

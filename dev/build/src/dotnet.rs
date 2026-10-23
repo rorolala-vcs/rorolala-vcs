@@ -3,7 +3,7 @@
 //! A restore is made first and on its own, and what follows is told not to restore. The order is
 //! load-bearing rather than incidental: a restore that reaches a feed which cannot be reached waits
 //! rather than failing, so a machine that is offline with everything cached would hang in the middle
-//! of the gate 閳?and a build or a test that restores on its own asks that feed once per project it
+//! of the gate — and a build or a test that restores on its own asks that feed once per project it
 //! touches.
 
 use std::path::{Path, PathBuf};
@@ -76,7 +76,7 @@ pub fn restore(workspace: &Workspace, args: &[&str]) -> Result<(), Error> {
 /// of.
 ///
 /// A restore is per solution rather than per project, and a project restored on its own is the same
-/// packages resolved over again 閳?which one export pays once per project, four times over, for
+/// packages resolved over again — which one export pays once per project, four times over, for
 /// nothing. What the projects are is the solution's own list, so nothing here names them.
 ///
 /// # Errors
@@ -118,7 +118,7 @@ pub fn check_solution(workspace: &Workspace) -> Result<(), Error> {
 ///   three programs would take three runs to find; `MSBuild`'s promotes the same warnings to errors
 ///   and carries on, so every one is reported in one run and the run still fails.
 /// * `-t:Rebuild` rather than a plain build. The analyzers are the point of this gate, and a
-///   project `MSBuild` calls up to date is one nothing analyzes 鈥?which a change to `.editorconfig`
+///   project `MSBuild` calls up to date is one nothing analyzes — which a change to `.editorconfig`
 ///   or `Directory.Build.props` does not by itself undo.
 ///
 /// # Errors
@@ -265,7 +265,7 @@ pub fn publish_desktop(workspace: &Workspace, into: &Path) -> Result<(), Error> 
     // The native library the Desktop's own bindings reach for, beside the program that binds it: a
     // plugin asks the C ABI through the C# bindings, which `DllImport` `rorolala`, and the runtime
     // looks for that in the program's own directory before anywhere else. Only the shared library
-    // is taken 閳?the import library is for a C link, and the header for a C compile.
+    // is taken — the import library is for a C link, and the header for a C compile.
     let library = workspace
         .release_dir()?
         .join(Platform::current().cargo_shared());
@@ -303,7 +303,7 @@ pub fn publish_desktop(workspace: &Workspace, into: &Path) -> Result<(), Error> 
 ///
 /// The launcher is published after the Desktop program rather than before: the two share a
 /// directory, and what a publish lays down is what that program is made of. The launcher comes
-/// second because it is the one that reads the other 閳?the command line and the window are found by
+/// second because it is the one that reads the other — the command line and the window are found by
 /// where they sit beside it.
 ///
 /// # Errors
@@ -353,7 +353,7 @@ pub fn publish_launcher(workspace: &Workspace, into: &Path) -> Result<(), Error>
 /// assembly, its translations and any private dependency under `plugins/` beside the program.
 ///
 /// The contract and Avalonia a plugin was built against are the host's own copies, delegated to
-/// rather than carried, so laying them down would be laying down a second of each 閳?but a
+/// rather than carried, so laying them down would be laying down a second of each — but a
 /// dependency the host does not carry is the plugin's own and travels with it.
 ///
 /// # Errors
@@ -411,7 +411,7 @@ pub fn publish_plugins(workspace: &Workspace, into: &Path) -> Result<(), Error> 
 /// Lays the C# bindings down beside the native library they bind.
 ///
 /// Nothing is built here: the bindings are a project of the solution, and built rather than
-/// published even there 閳?it is a library with nothing beside it, since the library it binds is the
+/// published even there — it is a library with nothing beside it, since the library it binds is the
 /// export's own `lib/`.
 ///
 /// # Errors
@@ -427,7 +427,7 @@ pub fn publish_rsharp(workspace: &Workspace) -> Result<(), Error> {
 /// The platform the Desktop program is laid out for, as .NET spells one.
 ///
 /// A publish that names no platform carries the native libraries of every platform `NuGet` holds
-/// them for 閳?sixteen of them and half a gigabyte, of which one is ever loaded 閳?so the layout names
+/// them for — sixteen of them and half a gigabyte, of which one is ever loaded — so the layout names
 /// the one it is for. It is the machine's own, asked of the SDK rather than worked out here, because
 /// the SDK is what knows the machine.
 ///

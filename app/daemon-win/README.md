@@ -33,19 +33,19 @@ to `.cache/daemon-win`, so nothing is left in the source tree.
 
 ## The four tabs
 
-- **Daemon** 鈥?starts the `rola-daemon.exe` beside the window, appending its stdout and stderr to
+- **Daemon** — starts the `rola-daemon.exe` beside the window, appending its stdout and stderr to
   the log below and showing its exit code. `Stop` is `TerminateProcess`, because `rola-daemon` has
   no stop subcommand. Closing the window stops a daemon it started and leaves one it did not.
-- **Registry** 鈥?`%LOCALAPPDATA%\rola\daemon\registry.toml` through `list`, `check`, `register`
+- **Registry** — `%LOCALAPPDATA%\rola\daemon\registry.toml` through `list`, `check`, `register`
   and `remove`, with the full path of the selected entry at the bottom. The table is sorted by
   namespace, so there is no reordering. A namespace that is already taken is refused by
   `register`, and the window shows that answer; `Edit` rewrites a line by removing it and
   registering it again, and puts the old one back when the new one is refused.
-- **Keys** 鈥?`%LOCALAPPDATA%\rola\keys`, listed through `rola key`. Importing is the one action
+- **Keys** — `%LOCALAPPDATA%\rola\keys`, listed through `rola key`. Importing is the one action
   that does not go through a command, because the CLI generates keys and does not import them:
   each chosen `.pem` or `.pub` is checked for its extension, its stem and its PEM header, and an
   existing file is overwritten only when the overwrite is confirmed one at a time.
-- **Admins** 鈥?the `[auth] admins` of the registered Vaults, through `rola vault admin`. The last
+- **Admins** — the `[auth] admins` of the registered Vaults, through `rola vault admin`. The last
   administrator is refused by the CLI and the window shows that answer as it came; the first one is
   written into `vault.toml` by hand, since a Vault with no administrator has nobody who may name
   one.

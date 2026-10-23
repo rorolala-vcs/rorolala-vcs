@@ -90,8 +90,8 @@ impl Tool {
     /// # Errors
     ///
     /// Reports [`Error::Tool`] when the program cannot be started at all. A status that is not a
-    /// success is the caller's to read: a step that tolerates a failure 鈥?the offline-first restore
-    /// does 鈥?is where that is decided.
+    /// success is the caller's to read: a step that tolerates a failure — the offline-first restore
+    /// does — is where that is decided.
     pub fn status<I>(&self, args: I) -> Result<ExitStatus, Error>
     where
         I: IntoIterator,

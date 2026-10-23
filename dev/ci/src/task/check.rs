@@ -2,7 +2,7 @@
 //!
 //! The gate is composed rather than repeated: every step here is the command of its own name, run
 //! in the order a failure is most cheaply met in. `fmt-check` comes first because it is instant and
-//! it is the one that is forgotten 閳?`fmt` rewrites the sources in place, so nothing else here would
+//! it is the one that is forgotten — `fmt` rewrites the sources in place, so nothing else here would
 //! notice a crate that was left unformatted. The i18n check follows it for the same reason, and
 //! `generated` after the build rather than before it: what it checks is whether the build changed
 //! the files it generates, which only a build can answer.
@@ -45,7 +45,7 @@ pub struct StateCheck;
 /// What one step of the gate does to the run.
 type Step = fn(&mut ResExitCode);
 
-/// Builds what the gate's later steps check 閳?the library, then the programs.
+/// Builds what the gate's later steps check — the library, then the programs.
 fn build(ec: &mut ResExitCode) {
     run_check(
         "build",

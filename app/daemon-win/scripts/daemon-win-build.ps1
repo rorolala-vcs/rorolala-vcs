@@ -5,14 +5,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# dev/run/src/bin -> the tree root. The script is self-contained on purpose: it must run in
+# app/daemon-win/scripts -> the tree root. The script is self-contained on purpose: it must run in
 # this standalone tree and, unchanged, in the rorolala tree after a directory-level merge.
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $sourceDir = Join-Path $root 'app\daemon-win'
 $srcDir = Join-Path $sourceDir 'src'
 $resDir = Join-Path $sourceDir 'res'
 
-# `BUILD_DIR` is the same override common.ps1 honours; `build/bin` is the export layout.
+# `BUILD_DIR` is the same override `cargo dev` honours; `build/bin` is the export layout.
 $buildRoot = if ($env:BUILD_DIR) { $env:BUILD_DIR } else { Join-Path $root 'build' }
 if (-not [System.IO.Path]::IsPathRooted($buildRoot)) {
     $buildRoot = Join-Path $root $buildRoot

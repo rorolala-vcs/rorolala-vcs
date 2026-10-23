@@ -15,5 +15,3 @@ BUILD:
 
 UTILS:
    show-shape    Print what the build works out about the tree before it does anything
-
-The old entry point still reaches every command here as `./run.sh <name>`.

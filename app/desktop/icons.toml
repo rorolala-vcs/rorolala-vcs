@@ -3,7 +3,7 @@
 #
 # What is drawn is Google's Material Design icons, from the maintained mirror of the set. The set is not
 # vendored: it is a shallow clone under `THIRD-PARTY/`, which git ignores, and every picture is drawn from
-# that clone by `./run.sh icons` — so what is drawn is what the pinned commit holds, and another picture is
+# that clone by `cargo dev icons` — so what is drawn is what the pinned commit holds, and another picture is
 # another name below rather than another file copied into a plugin.
 #
 # The pictures are committed, so a build needs neither the clone nor a renderer: only drawing them does, and

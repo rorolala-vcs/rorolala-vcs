@@ -6,8 +6,8 @@ use std::path::PathBuf;
 /// What a step reports when it cannot do its work.
 ///
 /// Every failure carries the status the program exits with: that is the whole of what a build step
-/// is worth to whatever asked for it, and it is what both entry points (`cargo dev` and
-/// `./run.sh`) agree on.
+/// is worth to whatever asked for it, and it is what `cargo dev` exits with, so that a caller branches
+/// on one number however it reached the step.
 #[derive(Debug)]
 pub enum Error {
     /// No workspace above the directory the program was started in.

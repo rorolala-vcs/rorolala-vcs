@@ -5,8 +5,7 @@
 //! `rola-ci`; the two are reached as `cargo dev` and `cargo ci`.
 //!
 //! A build step is a program of the workspace rather than a script beside it, written once and the
-//! same on every platform. The steps still under `./run.sh` are being moved here one at a time, so
-//! both entry points work until the last one has arrived.
+//! same on every platform.
 //!
 //! What a step needs before it can do anything — where the workspace is, where its output goes, how
 //! this platform spells an artifact — is [`paths`] and [`platform`]; how a toolchain is run is

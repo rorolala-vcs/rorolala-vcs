@@ -1,4 +1,4 @@
-//! `lib`: the C ABI artifact 鈥?a release shared and static library 鈥?and, as a side effect of the
+//! `lib`: the C ABI artifact — a release shared and static library — and, as a side effect of the
 //! root build script, the C header that describes it.
 
 use crate::toolchain::Tool;

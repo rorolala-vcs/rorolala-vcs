@@ -3,9 +3,6 @@
 //! A check is a command of the workspace rather than a script beside it, so the gate is one program
 //! with one exit status and one place each check lives. The programs it checks are built by
 //! `rola-build`; the two are reached as `cargo ci` and `cargo dev`.
-//!
-//! The checks still under `./run.sh` are being moved here one at a time, so both entry points work
-//! until the last one has arrived.
 
 #![deny(missing_docs)]
 #![deny(warnings)]

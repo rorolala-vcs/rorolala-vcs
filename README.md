@@ -29,9 +29,9 @@ If you are interested, you can pull the source code and build it. The dependency
 
 | Dependency | Version |
 |---|---|
-| `cargo` + `rustc` | `鈮?1.85` |
+| `cargo` + `rustc` | `≥ 1.85` |
 | `cc`/`gcc` | Any |
-| .NET SDK | `鈮?10.0.100`|
+| .NET SDK | `≥ 10.0.100`|
 | .NET 8 Targeting Pack | 8.0 SDK |
 | | or restore `Microsoft.NETCore.App.Ref 8.0.x` via `NuGet` |
 | `NuGet` packages | `Avalonia 12.1.3`, `Avalonia.Desktop`, `Avalonia.Themes.Simple`, etc. |

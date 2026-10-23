@@ -10,7 +10,7 @@ namespace RorolalaLauncher;
 /// <remarks>
 /// Everything else the program is drawn with is a picture from the pinned Material Design set — the three
 /// the toolbar wears and the two a window's frame carries — because those are the product's artwork and are
-/// drawn from one manifest by <c>./run.sh icons</c>. The cog is the exception: the set this project pins has
+/// drawn from one manifest by <c>cargo dev icons</c>. The cog is the exception: the set this project pins has
 /// no settings picture, and a mark from another set would be a second artwork in a program drawn with one.
 /// </remarks>
 internal static class Marks

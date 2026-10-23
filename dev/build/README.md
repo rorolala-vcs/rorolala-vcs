@@ -4,7 +4,7 @@ What this workspace's artifacts are made of, and how they are laid out.
 
 This is the product side of the build: the library and the programs, the icons a package carries,
 the export a hand-off is made of, and the package itself. It is reached as `cargo dev <command>`,
-through the alias in `.cargo/config.toml`; what *checks* the tree is `rola-ci`, reached as
+through the alias in `.cargo/config.toml`; what _checks_ the tree is `rola-ci`, reached as
 `cargo ci <command>`.
 
 The crate is a workspace of its own, and deliberately not a member of the workspace whose artifacts
@@ -28,8 +28,3 @@ for the same reason.
 - `src/fs.rs` — copying and removing, naming the file in a failure.
 - `src/ops/` — one module per command: `lib`, `bin`, `build`, `icons`, `chunker`, `cargo-clean`,
   `desktop`, `export`, `publish`, `clean`.
-
-## The old entry point
-
-Every command here is also still reached as `./run.sh <name>`: the file under `dev/run/src/bin/` is
-a shim that runs the same command, kept while both entry points exist.

@@ -1,7 +1,7 @@
 //! Running a program beside this one for a word that names no command.
 //!
 //! `rola daemon` is `rola-daemon`: what a run writes after this program's name may be the rest of
-//! another program's, and the two are exported together — see `./run.sh export`. The word is used
+//! another program's, and the two are exported together — see `cargo dev export`. The word is used
 //! as it was written, so a program whose own name has hyphens in it is reached the same way `rola
 //! aa-bb-cc` is `rola-aa-bb-cc`. It is one word and not several: `rola aa bb` looks for `rola-aa`
 //! and hands it `bb`.

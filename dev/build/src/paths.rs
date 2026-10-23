@@ -235,7 +235,7 @@ impl Workspace {
     /// The plugins that ship with the Desktop program.
     ///
     /// A plugin is a project under `Plugins/`, one directory to one plugin, and the name of the
-    /// directory is also the assembly's name 鈥?which is what says which files to take from the
+    /// directory is also the assembly's name — which is what says which files to take from the
     /// output it was built into. The tree is the one place a plugin is declared, so a directory
     /// added there is one a build lays down without being told about it.
     ///
@@ -526,7 +526,7 @@ mod tests {
             Some(PathBuf::from("./out/here"))
         );
 
-        // What would reach outside it 鈥?or remove it 鈥?is refused.
+        // What would reach outside it — or remove it — is refused.
         for refused in ["..", "build/../../etc", "/tmp/rola", "."] {
             assert!(
                 checked_relative("BUILD_DIR", Some(refused), "build").is_err(),

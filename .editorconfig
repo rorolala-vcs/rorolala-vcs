@@ -1,6 +1,6 @@
 # What the C# linter makes of this tree, and why.
 #
-# The gate is `./run.sh dotnet-lint`, which asks for the strictest tier the analyzer set carries
+# The gate is `cargo ci dotnet-lint`, which asks for the strictest tier the analyzer set carries
 # (`AnalysisMode=All`) and makes every diagnostic an error. Some of what that tier carries does not
 # fit an application, and each such rule is excused here, one at a time, with the reason it is
 # excused. The tier is not lowered for them: a rule excused in writing and a rule never asked are

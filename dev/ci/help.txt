@@ -23,5 +23,4 @@ RUNS:
    git-unlock      Restore the workspace `git-lock` locked; --show-diff prints what a run left
 
 `check` runs neither `git-lock` nor `git-unlock`: they are utilities around a run, not steps of one,
-and a run that wraps itself in them is composed outside this program. The old entry point still
-reaches every command here as `./run.sh <name>`.
+and a run that wraps itself in them is composed outside this program.
