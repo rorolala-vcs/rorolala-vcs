@@ -67,10 +67,14 @@ pub fn export_artifacts() -> Result<(), crate::Error> {
     fs::create_directory(&programs)?;
 
     let release = workspace.release_dir()?;
-    fs::copy_file(
-        &release.join(platform.cargo_shared()),
-        &library.join(platform.shared_exported()),
-    )?;
+
+    // A build that has no shared library — a musl one, see `library.rs` — hands over the static one
+    // alone rather than a shared library that is not there. The header beside it is the same.
+    let shared = release.join(platform.cargo_shared());
+    if shared.is_file() {
+        fs::copy_file(&shared, &library.join(platform.shared_exported()))?;
+    }
+
     fs::copy_file(
         &release.join(platform.cargo_static()),
         &library.join(platform.static_exported()),

@@ -34,8 +34,24 @@ jobs:
     name: Fast-Check
     runs-on: ubuntu-latest
     steps:
+      # The runner checks out CRLF on Windows (the tree's own files are LF). A build rewrites a
+      # generated file as LF, and `git-unlock` would read the difference between the two as a change
+      # the run made. Setting this before the checkout is what makes the working tree the one the
+      # build writes.
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # The action brings rust-cache, which covers the registry and the dependency artifacts. It
+          # has to be told where they are: cargo's output is `.cache/rs-target` rather than `target/`,
+          # and the integration suites under `tests/` are a workspace of their own.
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
 
       - name: Install the musl toolchain
         shell: bash
@@ -43,7 +59,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends musl musl-tools
           rustup target add x86_64-unknown-linux-musl
-          echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl' >> "$GITHUB_ENV"
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
 
       - name: Configure git identity
         run: |
@@ -65,19 +84,104 @@ jobs:
         if: always()
         run: cargo ci git-unlock --show-diff
 
+  # Compiles, once per platform, what every job after this one would otherwise compile on its own.
+  #
+  # What is shared is the dependency artifacts, through rust-cache with a key that is the same in every
+  # job of a platform — `cache-shared-key` replaces rust-cache's automatic per-job key. The workspace's
+  # own crates are not shared: a fresh checkout gives them new mtimes, so cargo rebuilds them whatever
+  # the cache holds, and caching them would only take space. What they are built against — `jj-lib`
+  # above all — is the expensive part and is the same for all of them.
+  #
+  # The C ABI library is built by the same step the packaging uses, so what a musl target can make
+  # there — the static library alone, see `dev/build/src/ops/library.rs` — is what this job produces
+  # too, rather than a `cdylib` the target cannot make on a glibc machine.
+  #
+  # What this job does not share is the binaries themselves. A later job that needs a program gets it
+  # by building it, as `cargo ci integration-test` does, because a cargo artifact is tied to the
+  # checkout it was built from (cargo compares source mtimes); the cache is worth what it is worth
+  # for dependencies, which do not change from job to job.
+  prewarm:
+    name: Pre-Warm (${{ matrix.name }})
+    needs: [fast-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows, runner: windows-latest, musl: false }
+          - { name: linux, runner: ubuntu-latest, musl: true }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # Stable over every job of this platform, so the matrix and the packaging job restore what
+          # this job built instead of each building it again.
+          cache-shared-key: rola-${{ runner.os }}
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Install the musl toolchain
+        if: matrix.musl
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
+
+      # Debug is what the tests and the documentation checks compile; release is what the programs
+      # and the integration suites need, and what an export lays down.
+      - name: Build the dependencies in debug
+        run: cargo build --workspace --exclude rorolala-ffi --all-targets --all-features
+
+      - name: Build what ships, in release
+        run: cargo dev build
+
+      # The two build tools are workspaces of their own, and every later step runs one of them.
+      - name: Build the build tools
+        run: |
+          cargo build --manifest-path dev/build/Cargo.toml
+          cargo build --manifest-path dev/ci/Cargo.toml
+
+      - name: Restore the .NET side
+        run: dotnet restore RorolalaSharp.sln
+
   # The gate itself, one check to a job so a failure is the failure of that check rather than of the
   # runner it happened to share. Both platforms are checked, and Linux is built with the musl
-  # toolchain: `musl-gcc` is the linker (see the root `.cargo/config.toml`) and the C runtime is
-  # dynamic, because `tests/ffi-c` builds the shared library again and compiles C against it with
-  # `cc` — the one artifact that cannot use musl's static runtime. What is packaged keeps its
-  # programs static; see `dev/build/src/ops/library.rs`.
+  # toolchain — `musl-gcc` is the linker (see the root `.cargo/config.toml`) and the C runtime is
+  # static, which is what lets a musl binary run on a machine with no musl installed.
+  #
+  # The one suite that does not run on that target is `tests/ffi-c`: it compiles C against the built
+  # shared library, and a musl build has none (a `cdylib` needs a dynamic C runtime, and `musl-tools`
+  # carries no `libgcc_s` to link one on a glibc machine). The gate skips it there and says so; see
+  # `dev/ci/src/task/integration_test.rs`.
   #
   # `cargo ci check` is deliberately not what runs here: one of its steps is `generated`, which cannot
   # run without the corpus (see Fast-Check above), and a gate run in a shape of its own would be a
   # second gate. The steps below are that gate's own commands.
   check:
     name: Check (${{ matrix.os.name }} / ${{ matrix.item }})
-    needs: [fast-check]
+    needs: [fast-check, prewarm]
     strategy:
       fail-fast: false
       matrix:
@@ -87,12 +191,32 @@ jobs:
         item: [build, test, clippy, fmt, doc, integration, dotnet]
     runs-on: ${{ matrix.os.runner }}
     steps:
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # The key Pre-Warm saved under, so this job restores its dependencies rather than building
+          # them again.
+          cache-shared-key: rola-${{ runner.os }}
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
       - uses: actions/setup-dotnet@v4
         with:
           # The version `global.json` pins; the projects themselves target `net8.0`.
           dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Install the musl toolchain
         if: matrix.os.musl
@@ -103,7 +227,6 @@ jobs:
           rustup target add x86_64-unknown-linux-musl
           {
             echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
-            echo 'RUSTFLAGS=-C target-feature=-crt-static'
             echo 'CC=musl-gcc'
           } >> "$GITHUB_ENV"
 
@@ -151,10 +274,11 @@ jobs:
 
   # What a person is handed, built on the platform it is for. Windows is given the installer the
   # project packages with, and Linux is given the export as it was laid out — a musl build has no
-  # installer, so the `build/` directory's own files are what the archive carries, at its root.
+  # installer, so the `build/` directory's own files are what the archive carries, at its root. The
+  # Linux export holds the static C ABI library and no shared one; see `dev/build/src/ops/library.rs`.
   package:
     name: Package (${{ matrix.name }})
-    needs: [fast-check]
+    needs: [fast-check, prewarm]
     strategy:
       fail-fast: false
       matrix:
@@ -163,11 +287,30 @@ jobs:
           - { name: linux, runner: ubuntu-latest, musl: true }
     runs-on: ${{ matrix.runner }}
     steps:
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # The key Pre-Warm saved under, so the export is built against dependencies already compiled.
+          cache-shared-key: rola-${{ runner.os }}
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Install the musl toolchain
         if: matrix.musl
@@ -176,7 +319,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends musl musl-tools
           rustup target add x86_64-unknown-linux-musl
-          echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl' >> "$GITHUB_ENV"
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
 
       - name: Read the workspace version
         id: version

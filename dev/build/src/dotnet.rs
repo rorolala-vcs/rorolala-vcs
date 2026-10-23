@@ -266,10 +266,14 @@ pub fn publish_desktop(workspace: &Workspace, into: &Path) -> Result<(), Error> 
     // plugin asks the C ABI through the C# bindings, which `DllImport` `rorolala`, and the runtime
     // looks for that in the program's own directory before anywhere else. Only the shared library
     // is taken — the import library is for a C link, and the header for a C compile.
+    //
+    // A build that makes no shared library — a musl one, see `ops/library.rs` — lays nothing here.
     let library = workspace
         .release_dir()?
         .join(Platform::current().cargo_shared());
-    copy_file(&library, &into.join(Platform::current().cargo_shared()))?;
+    if library.is_file() {
+        copy_file(&library, &into.join(Platform::current().cargo_shared()))?;
+    }
 
     // The icon sets, laid beside the program rather than built into it: a tree with no sets is a
     // program that offers only the system's own icons, which is why this is a copy and not a

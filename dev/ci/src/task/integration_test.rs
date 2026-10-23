@@ -32,6 +32,16 @@ pub fn integration_test() -> StateIntegrationTest {
 #[derive(Grouped)]
 pub struct StateIntegrationTest;
 
+/// The suite that compiles C against the built shared library, and so needs one to exist.
+const FFI_SUITE: &str = "ffi-c";
+
+/// Whether this build is for a musl target, which has no shared library to link against.
+fn is_musl(workspace: &Workspace) -> bool {
+    workspace
+        .target_triple()
+        .is_some_and(|triple| triple.contains("musl"))
+}
+
 /// Runs the cargo suites one at a time, then the .NET ones, and names every suite that failed.
 fn run_integration_test() -> Result<(), Error> {
     let workspace = Workspace::discover()?;
@@ -49,6 +59,16 @@ fn run_integration_test() -> Result<(), Error> {
             .and_then(std::ffi::OsStr::to_str)
             .unwrap_or_default()
             .to_owned();
+
+        // The C ABI is met by compiling C against the built shared library and linking it, and a musl
+        // build has none: rustc refuses a `cdylib` whose C runtime is static, and the dynamic one
+        // needs a musl `libgcc_s` a glibc machine does not carry (see `rola_build::ops::library`).
+        // The suite is skipped on that target and run where the library it links can be built.
+        if name == FFI_SUITE && is_musl(&workspace) {
+            println!("==> {name}/ skipped: a musl build has no shared C ABI library to link");
+            continue;
+        }
+
         println!("==> {name}/");
 
         let manifest = suite.join("Cargo.toml");
