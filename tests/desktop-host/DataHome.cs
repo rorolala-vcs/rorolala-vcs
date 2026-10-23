@@ -7,14 +7,10 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The host writes its files under the platform's data directory. A test run must not touch the
-/// person's own, so the standard <c>XDG_DATA_HOME</c> — which is what the platform's data-directory
-/// resolution reads — is set before anything reads it. The module initializer runs when this
-/// assembly is loaded, which is before any test body, and the root is removed when the run ends.
-/// <para>
-/// The redirection is the XDG one, so it is Linux and macOS where this bites; on Windows the data
-/// directory comes from the shell rather than from the environment and cannot be pointed elsewhere
-/// this way.
-/// </para>
+/// person's own, so <c>ROLA_DATA_HOME</c> — the name this project's own resolution reads on every
+/// platform — is set before anything reads it. The module initializer runs when this assembly is
+/// loaded, which is before any test body, and the root is removed when the run ends. The XDG name is
+/// set beside it for anything that reads the standard one.
 /// </remarks>
 internal static class DataHome
 {
@@ -29,6 +25,7 @@ internal static class DataHome
     internal static void SetUp()
     {
         Directory.CreateDirectory(Root);
+        System.Environment.SetEnvironmentVariable("ROLA_DATA_HOME", Root);
         System.Environment.SetEnvironmentVariable("XDG_DATA_HOME", Root);
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Remove();
