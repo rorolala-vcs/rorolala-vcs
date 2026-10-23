@@ -198,14 +198,18 @@ impl<'a> Sources<'a> {
     /// offline: what is missing stays missing, and the read that wanted it fails in its own words.
     /// A Vault that cannot be reached is passed over, so a fetch that cannot be made is not a
     /// failure of the run — it is one more thing that was not brought.
-    pub fn bring(&self, store: &RorolalaStorage, keys: &[Key]) {
+    ///
+    /// What is answered is the keys that were wanted and are still not here, so that a caller which
+    /// needs them — a checkin handing over a version — says so rather than leaving a version behind
+    /// that nothing can produce.
+    pub fn bring(&self, store: &RorolalaStorage, keys: &[Key]) -> Vec<Key> {
         if self.offline || self.candidates.is_empty() || keys.is_empty() {
-            return;
+            return keys.to_vec();
         }
 
         let mut left = self.missing(store, keys);
         if left.is_empty() {
-            return;
+            return Vec::new();
         }
 
         // Ask the candidates in order, and stop asking as soon as what has been seen covers what is
@@ -235,6 +239,10 @@ impl<'a> Sources<'a> {
             left = self.missing(store, &left);
             self.asked.borrow_mut()[index].brought += before - left.len();
         }
+
+        // What is still missing is what asking came to: a caller that needs the content says so
+        // rather than finding out later that a version it was handed cannot be produced.
+        left
     }
 
     /// Sends `keys` to the Vault the run is speaking to.
@@ -284,6 +292,17 @@ impl<'a> Sources<'a> {
                 _ => 1,
             })
             .sum()
+    }
+
+    /// Whether there is a Vault to ask at all.
+    ///
+    /// A run with no candidate has nowhere to bring anything from, which is not the same as a run
+    /// that asked and was not answered: the first says the content never had a way here, the second
+    /// says it had one and did not come. A caller that fails on what it did not get needs to know
+    /// which it is, or a local checkin is accused of a fetch it never made.
+    #[must_use]
+    pub fn can_ask(&self) -> bool {
+        !self.candidates.is_empty()
     }
 
     /// Says what was brought, in one line, once the run is done with it.

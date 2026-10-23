@@ -49,6 +49,14 @@ pub enum ActionError {
     /// the Vault's own Layout is a file to the Vault. The path is carried in the message, because a
     /// failure that says "access is denied" and nothing else says nothing a reader can go and look at.
     LocalFile(IoError),
+    /// The side that took what an exchange carried could not produce it again.
+    ///
+    /// A value crosses as frames that are written and read and never acknowledged, so a side that has
+    /// sent everything knows only that it wrote it. What the other side says at the end of a
+    /// direction is whether it can produce what it took — and a key it cannot is a key that is not
+    /// here, whatever either side believed a moment ago. The message names the first such key, since
+    /// what a caller does about it is look at that content.
+    NotConfirmed(String),
 }
 
 impl fmt::Display for ActionError {
@@ -78,6 +86,12 @@ impl fmt::Display for ActionError {
             }
             Self::LocalFile(source) => {
                 write!(formatter, "a file could not be read or written: {source}")
+            }
+            Self::NotConfirmed(what) => {
+                write!(
+                    formatter,
+                    "the side that took it could not produce it again: {what}"
+                )
             }
         }
     }
@@ -135,6 +149,7 @@ impl rorolala_errors::Failure for ActionError {
             Self::Addr(_) => "action_error_addr",
             Self::Auth(_) => "action_error_auth",
             Self::LocalFile(_) => "action_error_local_file",
+            Self::NotConfirmed(_) => "action_error_not_confirmed",
         }
     }
 

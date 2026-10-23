@@ -513,6 +513,10 @@ internal enum RolaActionErrorTag : int
     /// A file the action had to read or write could not be.
     /// </summary>
     RolaActionError_LocalFile = 11,
+    /// <summary>
+    /// The side that took what an exchange carried could not produce it again.
+    /// </summary>
+    RolaActionError_NotConfirmed = 12,
 }
 
 [StructLayout(LayoutKind.Explicit)]
@@ -558,6 +562,11 @@ internal struct RolaActionErrorPayload
     /// </summary>
     [FieldOffset(0)]
     public nint LocalFile;
+    /// <summary>
+    /// The side that took what an exchange carried could not produce it again.
+    /// </summary>
+    [FieldOffset(0)]
+    public nint NotConfirmed;
 }
 
 /// <summary>

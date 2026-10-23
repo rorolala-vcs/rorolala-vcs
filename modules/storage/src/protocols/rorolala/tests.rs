@@ -1082,3 +1082,29 @@ async fn a_batch_writes_a_store_that_reads_back() {
 
     let _ = fs::remove_dir_all(&parent);
 }
+
+/// What cannot be produced is named: a chunk taken out from under a manifest is a key the store
+/// cannot answer for, and that is what a sync's confirmation asks of the side that took it.
+#[tokio::test]
+async fn a_content_whose_chunk_is_gone_is_not_readable() {
+    let (parent, store) = store("unreadable");
+
+    let content = b"the only chunk of it";
+    let chunk = store.write_object(content, Codec::Raw).await.unwrap();
+    let mut manifest = Manifest::default();
+    manifest.push(Chunk::new(chunk, content.len() as u64));
+
+    // The key is the content the manifest puts back together, since that is what a key promises.
+    let key = key_of(content);
+    lay_manifest(&store, &key, &manifest);
+
+    // While the chunk is there the content reads, and nothing is named.
+    assert_eq!(store.unreadable(&[key]).await.unwrap(), Vec::new());
+
+    // A manifest is not a content: without the chunk it names, the key cannot be produced, even
+    // though the manifest itself still reads.
+    store.remove(&chunk).await.unwrap();
+    assert_eq!(store.unreadable(&[key]).await.unwrap(), vec![key]);
+
+    let _ = fs::remove_dir_all(&parent);
+}

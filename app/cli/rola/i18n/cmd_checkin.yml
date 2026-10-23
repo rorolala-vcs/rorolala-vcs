@@ -116,6 +116,10 @@ checkin:
     en: this run has no store to write the content out of
     zh-CN: 本次运行没有可写出内容的存储
 
+  err_join_no_content:
+    en: the content this entry's version needs could not be brought here
+    zh-CN: 无法取回该条目版本所需的内容
+
   err_join_place:
     en: nowhere here can hold a variant file
     zh-CN: 本地没有可以放置变体文件的位置

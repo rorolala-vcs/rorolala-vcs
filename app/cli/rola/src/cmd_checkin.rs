@@ -493,8 +493,16 @@ fn checkin_variant(
         if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline)
             .map(|sources| sources.with_concurrency(**concurrency))
         {
-            sources.bring(store, &[content]);
+            let missing = sources.bring(store, &[content]);
             sources.report();
+
+            // A version is only a meaning once what it stored is here. A run that could have asked
+            // for it and did not get it fails now, rather than handing over a name whose content is
+            // nowhere and leaving the next run to discover it. A run with no Vault to ask never had a
+            // way to bring it, which is a checkin of what is here rather than a fetch that failed.
+            if sources.can_ask() && !missing.is_empty() {
+                return join_failed(target, t!("checkin.err_join_no_content").trim());
+            }
         }
     }
 

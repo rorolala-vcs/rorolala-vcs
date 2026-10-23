@@ -1093,6 +1093,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-sync-chain"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-sandbox",
+]
+
+[[package]]
 name = "it-vault-auth"
 version = "0.1.0"
 dependencies = [

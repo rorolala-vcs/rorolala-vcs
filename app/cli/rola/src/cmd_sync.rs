@@ -780,9 +780,13 @@ fn indexed(carry: &Carry<'_>) -> Vec<Key> {
 /// the Vault's store.
 ///
 /// A version is only a meaning once what it stored is in the store that names it, so each entry
-/// names one object on the side it is about — a pull the Vault's version, a push this side's. An
-/// entry that is neither — a refusal, a block, or a `Diverged` a run is not forcing — names nothing
-/// to move, and its content is never asked for.
+/// names what the version it moves stands on as well as the version itself — the whole chain back to
+/// its root. Naming only the version at the top is what left every version below it a name in the
+/// Layout with no content behind it: the chain crossed, the content did not, and a later run that
+/// needed an older version found a name nothing could produce.
+///
+/// An entry that is neither — a refusal, a block, or a `Diverged` a run is not forcing — names
+/// nothing to move, and its content is never asked for.
 fn content_of(entries: &[&Entry], state: StateSync, carry: &Carry<'_>) -> (Vec<Key>, Vec<Key>) {
     let mut receive = Vec::new();
     let mut send = Vec::new();
@@ -807,22 +811,29 @@ fn content_of(entries: &[&Entry], state: StateSync, carry: &Carry<'_>) -> (Vec<K
         let Some(version) = named.and_then(|text| Key::from_str(text).ok()) else {
             continue;
         };
-        let Ok(stored) = carry
+
+        // The version and everything it stands on: a version read back needs its own content, and
+        // the versions below it are what a run reaches for when it moves a pointer back.
+        let Ok(chain) = carry
             .runtime
-            .block_on(sync::store_of(carry.index, version.digest()))
+            .block_on(sync::chain_store_keys(carry.index, version.digest()))
         else {
-            continue;
-        };
-        let Some(stored) = stored else {
             continue;
         };
 
         if pull {
-            receive.push(stored);
+            receive.extend(chain);
         } else {
-            send.push(stored);
+            send.extend(chain);
         }
     }
+
+    // One object is asked for once, however many chains name it: a store is content-addressed, and
+    // the list is what the exchange counts and asks about.
+    receive.sort_unstable();
+    receive.dedup();
+    send.sort_unstable();
+    send.dedup();
 
     (receive, send)
 }

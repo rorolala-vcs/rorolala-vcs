@@ -355,11 +355,103 @@ async fn carry_direction(
     base: u64,
     window: usize,
 ) -> Result<(), ActionError> {
-    if sending(ctx, to) {
+    let sender = sending(ctx, to);
+
+    let carried = if sender {
         send_direction(ctx, local, units, to, everything, base, window).await
     } else {
         take_direction(ctx, local, to, everything, base).await
+    };
+
+    // Both ends reach this, whatever came of the carrying: a side that returned early would leave
+    // the other waiting for a value that is never coming, which is a hang rather than a failure
+    // anybody is told about. What the side taking it says is a status byte and then, when it could
+    // not read what it took, the digests of the units it could not produce.
+    let confirmed = if sender {
+        let said = carry_value(ctx, opposite(to), Vec::new())
+            .await?
+            .ok_or(ActionError::MissingValue)?;
+
+        match said.split_first() {
+            // The side taking it could not carry what it took, so neither side may say it did.
+            Some((1, _)) => Err(ActionError::NotConfirmed(
+                "the side taking it failed".to_owned(),
+            )),
+            // These are the units it took and cannot read back, and one is enough to fail the run.
+            Some((2, rest)) => {
+                first_of(rest).map_or(Ok(()), |key| Err(ActionError::NotConfirmed(key.hex())))
+            }
+            _ => Ok(()),
+        }
+    } else {
+        let (said, broken) = if carried.is_ok() {
+            // A unit that names a manifest alone is asked about the manifest; every other unit is
+            // asked whether its content can be produced again, chunk by chunk.
+            let mut asked: Vec<Key> = units
+                .iter()
+                .filter(|unit| unit.kind != UnitKind::Manifest)
+                .map(|unit| unit.key)
+                .collect();
+            asked.sort_unstable();
+            asked.dedup();
+
+            match local.unreadable(&asked).await {
+                Ok(mut missing) => {
+                    for unit in units.iter().filter(|unit| unit.kind == UnitKind::Manifest) {
+                        if local
+                            .manifest_of(&unit.key)
+                            .await
+                            .map_err(store_failed)?
+                            .is_none()
+                        {
+                            missing.push(unit.key);
+                        }
+                    }
+
+                    if missing.is_empty() {
+                        (vec![0_u8], None)
+                    } else {
+                        let mut said = vec![2_u8];
+                        said.extend(missing.iter().flat_map(|key| *key.digest()));
+
+                        (said, None)
+                    }
+                }
+                // A store that cannot be read at all is not a list of keys: the other side is told
+                // the direction failed, and this side fails with what the store said.
+                Err(error) => (vec![1_u8], Some(store_failed(error))),
+            }
+        } else {
+            (vec![1_u8], None)
+        };
+
+        // Said before anything is returned: the other side is waiting for it.
+        carry_value(ctx, opposite(to), said).await?;
+
+        broken.map_or(Ok(()), Err)
+    };
+
+    carried?;
+    confirmed
+}
+
+/// The side a direction does not name.
+///
+/// A value is sent by the side that owns it, so what a side taking a direction says is carried the
+/// other way: it is the Workspace's wrapper the Vault sends, and the Vault's the Workspace sends,
+/// whichever way the units themselves went.
+const fn opposite(to: Side) -> Side {
+    match to {
+        Side::Vault => Side::Workspace,
+        Side::Workspace => Side::Vault,
     }
+}
+
+/// The first key a confirmation named, when it named one.
+fn first_of(said: &[u8]) -> Option<Key> {
+    let first = said.as_chunks::<{ size_of::<Blake3Hash>() }>().0.first()?;
+
+    Some(Key::new(*first))
 }
 
 /// Whether this side is the one that has the units, which is the side `to` does not name.
@@ -396,6 +488,7 @@ async fn send_direction(
 ) -> Result<(), ActionError> {
     let mut task = everything.spawn(direction(to), "", None);
     let mut outgoing = Outgoing::default();
+    let mut failure = None;
 
     for (at, unit) in units.iter().enumerate() {
         outgoing.completed = u32::try_from(at).unwrap_or(u32::MAX);
@@ -403,8 +496,14 @@ async fn send_direction(
         // What is being carried is named as it is carried: a unit of a cut content is a chunk, and a
         // reader watching one content move wants to see which one is in hand.
         let working = task.doing(unit.key.hex());
-        add_unit(ctx, local, unit, to, &mut outgoing, &mut task, window).await?;
+        let added = add_unit(ctx, local, unit, to, &mut outgoing, &mut task, window).await;
         drop(working);
+
+        if let Err(error) = added {
+            failure = Some(error);
+
+            break;
+        }
 
         // Said once the unit's entries are all in hand, so a packet flushed by the next unit's first
         // entry carries the count that includes this one.
@@ -412,16 +511,22 @@ async fn send_direction(
         everything.advance(base.saturating_add(u64::from(outgoing.completed)));
     }
 
-    if !outgoing.carried.is_empty() {
-        flush(ctx, to, &mut outgoing, &mut task).await?;
+    if failure.is_none()
+        && !outgoing.carried.is_empty()
+        && let Err(error) = flush(ctx, to, &mut outgoing, &mut task).await
+    {
+        failure = Some(error);
     }
 
     // A direction ends where its sender says it does. An empty packet is the one thing the two ends
     // cannot mistake for entries — a packet holding none is one nothing was added to — so it is what
     // says there is no more, whatever the two of them happen to have counted.
-    carry_value(ctx, to, Packet::last(outgoing.completed).encode()).await?;
+    //
+    // It is sent even when the carrying failed: the side taking it is looking for the end of the
+    // direction, and a side that stops without saying it is one the other waits on for good.
+    let ended = carry_value(ctx, to, Packet::last(outgoing.completed).encode()).await;
 
-    Ok(())
+    failure.or_else(|| ended.err()).map_or(Ok(()), Err)
 }
 
 /// Takes the packets of one direction and writes what they hold into `local`.
@@ -443,6 +548,7 @@ async fn take_direction(
     let mut task = everything.spawn(direction(to), "", None);
 
     let mut batch = local.begin_batch().await;
+    let mut failure = None;
 
     loop {
         // What this side holds is never looked at: the side taking a packet runs nothing of the other
@@ -450,7 +556,13 @@ async fn take_direction(
         let Some(bytes) = carry_value(ctx, to, Vec::new()).await? else {
             return Err(ActionError::MissingValue);
         };
-        let packet = Packet::decode(&bytes).ok_or_else(packet_unread)?;
+        let Some(packet) = Packet::decode(&bytes) else {
+            // A packet that does not read is not the end of the direction: the loop goes on to the
+            // one that is, so the side sending them is never left with nobody reading.
+            failure.get_or_insert_with(packet_unread);
+
+            continue;
+        };
         let last = packet.carried.is_empty();
 
         // One name for a whole packet: what a reader is shown is the work in hand, and a packet is
@@ -465,7 +577,8 @@ async fn take_direction(
 
         for entry in &packet.carried {
             // An entry too big to be in the packet has its bytes after it, as the blob it has always
-            // been — a length and then pieces — so what is written is what arrived either way.
+            // been — a length and then pieces — so it is read either way: a side that stopped
+            // reading here would leave the other writing into a channel nobody drains.
             let followed;
             let bytes: &[u8] = if entry.lead.large() {
                 followed = carry_blob_moving(ctx, to, None, Some(&mut task))
@@ -477,15 +590,25 @@ async fn take_direction(
                 &entry.bytes
             };
 
-            if entry.lead.manifest() {
-                let manifest = Manifest::decode(bytes)
-                    .map_err(|error| ActionError::Codec(BincodeError::new(error.to_string())))?;
-                batch
-                    .add_manifest(&entry.key, &manifest)
-                    .await
-                    .map_err(store_failed)?;
+            if failure.is_some() {
+                continue;
+            }
+
+            let stored = if entry.lead.manifest() {
+                match Manifest::decode(bytes) {
+                    Ok(manifest) => batch.add_manifest(&entry.key, &manifest).await,
+                    Err(error) => {
+                        failure = Some(ActionError::Codec(BincodeError::new(error.to_string())));
+
+                        continue;
+                    }
+                }
             } else {
-                batch.add(&entry.key, bytes).await.map_err(store_failed)?;
+                batch.add(&entry.key, bytes).await
+            };
+
+            if let Err(error) = stored {
+                failure = Some(store_failed(error));
             }
         }
 
@@ -501,10 +624,15 @@ async fn take_direction(
 
     // The packs become the store's here, and a direction is not done until they have: a reader that
     // arrives before this finds the store it found before the sync started, rather than a store whose
-    // manifests name chunks that cannot be read yet.
-    batch.publish().await.map_err(store_failed)?;
+    // manifests name chunks that cannot be read yet. What failed is not published: half of a content
+    // is not a content, and what it leaves is the garbage a write cut short leaves.
+    if failure.is_none()
+        && let Err(error) = batch.publish().await
+    {
+        failure = Some(store_failed(error));
+    }
 
-    Ok(())
+    failure.map_or(Ok(()), Err)
 }
 
 /// What a packet that does not read is reported as.
