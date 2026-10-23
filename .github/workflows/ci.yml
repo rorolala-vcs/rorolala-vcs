@@ -244,6 +244,15 @@ jobs:
           git config --global user.email "ci@rorolala.invalid"
           git config --global user.name "rola CI"
 
+      # The C# bindings are generated from the header the Rust side writes, and the two items that
+      # touch .NET — the .NET checks and the integration suites, whose projects reach the plugins that
+      # bind the C ABI — are the ones that do not build Rust on their way there. It writes into cargo's
+      # output only; the binding it generates is checked in, and the lock below is what says whether
+      # what was generated is what is committed.
+      - name: Build the C ABI header
+        if: "matrix.item == 'dotnet' || matrix.item == 'integration'"
+        run: cargo dev lib
+
       # Every check runs inside a lock / unlock pair: the final unlock doubles as the idempotency
       # check, failing the job when the check left the working tree dirty.
       - name: Lock workspace for CI
