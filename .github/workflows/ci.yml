@@ -84,7 +84,10 @@ jobs:
         if: always()
         run: cargo ci git-unlock --show-diff
 
-  # Compiles, once per platform, what every job after this one would otherwise compile on its own.
+  # Compiles, once per platform, what every job of that platform after this one would otherwise
+  # compile on its own. The two are separate jobs rather than one matrix on purpose: a job waits for
+  # everything it names in `needs`, so one pre-warm over both platforms would make the Linux jobs wait
+  # for the Windows build, and Windows is the slower of the two.
   #
   # What is shared is the dependency artifacts, through rust-cache with a key that is the same in every
   # job of a platform — `cache-shared-key` replaces rust-cache's automatic per-job key. The workspace's
@@ -100,17 +103,13 @@ jobs:
   # by building it, as `cargo ci integration-test` does, because a cargo artifact is tied to the
   # checkout it was built from (cargo compares source mtimes); the cache is worth what it is worth
   # for dependencies, which do not change from job to job.
-  prewarm:
-    name: Pre-Warm (${{ matrix.name }})
+  prewarm-windows:
+    name: Pre-Warm (windows)
     needs: [fast-check]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { name: windows, runner: windows-latest, musl: false }
-          - { name: linux, runner: ubuntu-latest, musl: true }
-    runs-on: ${{ matrix.runner }}
-    steps:
+    runs-on: windows-latest
+    env:
+      MUSL: "false"
+    steps: &prewarm-steps
       - name: Use the tree's own line endings
         shell: bash
         run: git config --global core.autocrlf false
@@ -138,7 +137,7 @@ jobs:
             nuget-${{ runner.os }}-
 
       - name: Install the musl toolchain
-        if: matrix.musl
+        if: env.MUSL == 'true'
         shell: bash
         run: |
           sudo apt-get update
@@ -166,10 +165,21 @@ jobs:
       - name: Restore the .NET side
         run: dotnet restore RorolalaSharp.sln
 
+  prewarm-linux:
+    name: Pre-Warm (linux)
+    needs: [fast-check]
+    runs-on: ubuntu-latest
+    env:
+      MUSL: "true"
+    steps: *prewarm-steps
+
   # The gate itself, one check to a job so a failure is the failure of that check rather than of the
-  # runner it happened to share. Both platforms are checked, and Linux is built with the musl
-  # toolchain — `musl-gcc` is the linker (see the root `.cargo/config.toml`) and the C runtime is
-  # static, which is what lets a musl binary run on a machine with no musl installed.
+  # runner it happened to share. Each platform waits for its own pre-warm and for nothing of the
+  # other's.
+  #
+  # Linux is built with the musl toolchain — `musl-gcc` is the linker (see the root
+  # `.cargo/config.toml`) and the C runtime is static, which is what lets a musl binary run on a
+  # machine with no musl installed.
   #
   # The one suite that does not run on that target is `tests/ffi-c`: it compiles C against the built
   # shared library, and a musl build has none (a `cdylib` needs a dynamic C runtime, and `musl-tools`
@@ -179,18 +189,17 @@ jobs:
   # `cargo ci check` is deliberately not what runs here: one of its steps is `generated`, which cannot
   # run without the corpus (see Fast-Check above), and a gate run in a shape of its own would be a
   # second gate. The steps below are that gate's own commands.
-  check:
-    name: Check (${{ matrix.os.name }} / ${{ matrix.item }})
-    needs: [fast-check, prewarm]
+  check-windows:
+    name: Check (windows / ${{ matrix.item }})
+    needs: [fast-check, prewarm-windows]
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - { name: windows, runner: windows-latest, musl: false }
-          - { name: linux, runner: ubuntu-latest, musl: true }
         item: [build, test, clippy, fmt, doc, integration, dotnet]
-    runs-on: ${{ matrix.os.runner }}
-    steps:
+    runs-on: windows-latest
+    env:
+      MUSL: "false"
+    steps: &check-steps
       - name: Use the tree's own line endings
         shell: bash
         run: git config --global core.autocrlf false
@@ -219,7 +228,7 @@ jobs:
             nuget-${{ runner.os }}-
 
       - name: Install the musl toolchain
-        if: matrix.os.musl
+        if: env.MUSL == 'true'
         shell: bash
         run: |
           sudo apt-get update
@@ -268,25 +277,33 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-collect-${{ matrix.os.name }}-${{ matrix.item }}
+          name: ci-collect-${{ github.job }}-${{ matrix.item }}
           path: .cache/reports/collect/
           if-no-files-found: ignore
+
+  check-linux:
+    name: Check (linux / ${{ matrix.item }})
+    needs: [fast-check, prewarm-linux]
+    strategy:
+      fail-fast: false
+      matrix:
+        item: [build, test, clippy, fmt, doc, integration, dotnet]
+    runs-on: ubuntu-latest
+    env:
+      MUSL: "true"
+    steps: *check-steps
 
   # What a person is handed, built on the platform it is for. Windows is given the installer the
   # project packages with, and Linux is given the export as it was laid out — a musl build has no
   # installer, so the `build/` directory's own files are what the archive carries, at its root. The
   # Linux export holds the static C ABI library and no shared one; see `dev/build/src/ops/library.rs`.
-  package:
-    name: Package (${{ matrix.name }})
-    needs: [fast-check, prewarm]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { name: windows, runner: windows-latest, musl: false }
-          - { name: linux, runner: ubuntu-latest, musl: true }
-    runs-on: ${{ matrix.runner }}
-    steps:
+  #
+  # Split by platform for the same reason the pre-warms are: each waits only for its own.
+  package-windows:
+    name: Package (windows)
+    needs: [fast-check, prewarm-windows]
+    runs-on: windows-latest
+    steps: &package-steps
       - name: Use the tree's own line endings
         shell: bash
         run: git config --global core.autocrlf false
@@ -313,7 +330,7 @@ jobs:
             nuget-${{ runner.os }}-
 
       - name: Install the musl toolchain
-        if: matrix.musl
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           sudo apt-get update
@@ -340,7 +357,7 @@ jobs:
       # itself, so fetching it is the workflow's to do — and the hash is checked, because what a
       # package is built with decides what is in it.
       - name: Install the pinned Inno Setup
-        if: matrix.name == 'windows'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $url = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
@@ -356,15 +373,15 @@ jobs:
           Remove-Item innosetup.exe
 
       - name: Build the Windows installer
-        if: matrix.name == 'windows'
+        if: runner.os == 'Windows'
         run: cargo dev publish
 
       - name: Lay the Linux export out
-        if: matrix.name == 'linux'
+        if: runner.os == 'Linux'
         run: cargo dev export
 
       - name: Pack the Linux export
-        if: matrix.name == 'linux'
+        if: runner.os == 'Linux'
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.value }}
@@ -375,19 +392,25 @@ jobs:
       - name: Upload the package
         uses: actions/upload-artifact@v4
         with:
-          name: rola-${{ matrix.name }}-package
+          name: rola-${{ runner.os }}-package
           path: |
             build/rorolala-*-setup.exe
             dist/*.tar.gz
           if-no-files-found: error
 
+  package-linux:
+    name: Package (linux)
+    needs: [fast-check, prewarm-linux]
+    runs-on: ubuntu-latest
+    steps: *package-steps
+
   # Every matrix run's reports, rendered as one page and written into the job summary. It runs even
   # when checks failed, so what failed is still what a reader is shown.
   report:
     name: Report
-    needs: [check]
-    # No reports exist when Fast-Check stopped the matrix.
-    if: always() && needs.check.result != 'skipped'
+    needs: [check-windows, check-linux]
+    # No reports exist when Fast-Check stopped the matrices.
+    if: always() && (needs.check-windows.result != 'skipped' || needs.check-linux.result != 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -411,7 +434,7 @@ jobs:
   # people whose commits made up the range since the previous tag are named below it.
   release:
     name: Release
-    needs: [check, package]
+    needs: [check-windows, check-linux, package-windows, package-linux]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
