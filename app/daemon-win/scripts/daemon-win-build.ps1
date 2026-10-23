@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$Check
 )
@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 
 # dev/run/src/bin -> the tree root. The script is self-contained on purpose: it must run in
 # this standalone tree and, unchanged, in the rorolala tree after a directory-level merge.
-$root = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $sourceDir = Join-Path $root 'app\daemon-win'
 $srcDir = Join-Path $sourceDir 'src'
 $resDir = Join-Path $sourceDir 'res'
@@ -106,3 +106,4 @@ if (-not (Test-Path -LiteralPath $daemon)) {
 }
 
 exit 0
+

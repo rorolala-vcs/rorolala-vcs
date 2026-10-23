@@ -1,8 +1,4 @@
 #!/bin/sh
-# Removes cargo's build output. `$BUILD_DIR` survives: it holds an export, not a build.
-set -eu
-
-. "$(dirname "$0")/../lib/common.sh"
-
-# shellcheck disable=SC2086
-$CARGO clean
+# Migrated to `cargo dev cargo-clean`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/build` now — see `__PLAN_BUILD_CI.md` in the working tree.
+exec cargo run --quiet --manifest-path dev/build/Cargo.toml --bin rola-build -- cargo-clean "$@"

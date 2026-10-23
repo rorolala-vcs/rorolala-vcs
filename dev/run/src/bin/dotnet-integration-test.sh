@@ -1,35 +1,4 @@
 #!/bin/sh
-# Runs the .NET integration suites under `tests/`. Like the cargo suites beside them, they exercise
-# the Desktop program the way a caller meets it, so what is checked is the program rather than the
-# parts it is made of; unlike them they are run by the .NET test host, since the Desktop program is a
-# .NET program and its suites are written in C#.
-#
-# A suite is a project of its own, and is run on its own rather than through a solution. That is
-# deliberate: a project a solution does not list is built with its own default configuration, so a
-# solution holding only the suites would build the Desktop program they reference in Debug whatever
-# `-c` said. Run this way, the release reaches everything a suite references.
-#
-# They run one at a time, so a suite that fails is named rather than lost among the output of the
-# others — and the ones after it still run, so one run reports every suite that failed.
-#
-# Each suite is restored before it is run, and run with `--no-restore`: a test that restores on its
-# own asks the feed once per project it reaches, and on a machine that cannot reach the feed each of
-# those is a wait rather than a failure.
-set -eu
-
-. "$(dirname "$0")/../lib/common.sh"
-
-failed=
-for suite in tests/*/*.IntegrationTests.csproj; do
-	echo "==> $suite"
-	restore "$suite"
-	# shellcheck disable=SC2086
-	if ! $DOTNET test "$suite" -c Release --no-restore; then
-		failed="$failed $suite"
-	fi
-done
-
-if [ -n "$failed" ]; then
-	echo "==> failed:$failed"
-	exit 1
-fi
+# Migrated to `cargo ci dotnet-integration-test`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/ci` now — see `__PLAN_BUILD_CI.md` in the working tree.
+exec cargo run --quiet --manifest-path dev/ci/Cargo.toml --bin rola-ci -- dotnet-integration-test "$@"

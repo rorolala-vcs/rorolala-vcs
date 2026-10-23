@@ -1,0 +1,19 @@
+What this workspace's artifacts are made of, and how they are laid out.
+USAGE: cargo dev <COMMAND> [ARGS...]
+
+BUILD:
+   lib           Build the C ABI artifact and the header that describes it
+   bin           Build the release command line programs
+   build         Build both: the library first, the programs after it
+   icons         Draw the Desktop's pictures from the icon sets the tree carries
+   chunker       Run the chunking harness: its own options are passed through unchanged
+   desktop       Lay the Desktop program, its launcher and its plugins out
+   export        Lay the build out for hand-off under `build/`
+   publish       Lay an export out and package it: an installer on Windows, an archive elsewhere
+   cargo-clean   Remove cargo's build output
+   clean         Remove everything the build produced
+
+UTILS:
+   show-shape    Print what the build works out about the tree before it does anything
+
+The old entry point still reaches every command here as `./run.sh <name>`.

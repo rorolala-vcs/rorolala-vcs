@@ -1,8 +1,4 @@
 #!/bin/sh
-# The full gate, and nothing besides: the gate already builds everything that ships, so asking for a
-# build after it would be asking twice.
-set -eu
-
-. "$(dirname "$0")/../lib/common.sh"
-
-again check
+# Migrated to `cargo ci all`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/ci` now — see `__PLAN_BUILD_CI.md` in the working tree.
+exec cargo run --quiet --manifest-path dev/ci/Cargo.toml --bin rola-ci -- all "$@"

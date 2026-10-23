@@ -1,10 +1,4 @@
 #!/bin/sh
-# Removes everything the build ever produced: cargo's output, whatever else `$TARGET_DIR` holds (the
-# generated header, mingling's completion scripts), .NET's output, and the exported `$BUILD_DIR`.
-set -eu
-
-. "$(dirname "$0")/../lib/common.sh"
-
-again cargo-clean
-
-rm -rf "$TARGET_DIR" "$CS_TARGET_DIR" "$BUILD_DIR"
+# Migrated to `cargo dev clean`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/build` now — see `__PLAN_BUILD_CI.md` in the working tree.
+exec cargo run --quiet --manifest-path dev/build/Cargo.toml --bin rola-build -- clean "$@"

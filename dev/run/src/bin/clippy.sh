@@ -1,8 +1,4 @@
 #!/bin/sh
-# Runs clippy over the workspace; warnings are errors.
-set -eu
-
-. "$(dirname "$0")/../lib/common.sh"
-
-# shellcheck disable=SC2086
-$CARGO clippy --workspace --all-targets --all-features -- -D warnings
+# Migrated to `cargo ci clippy`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/ci` now — see `__PLAN_BUILD_CI.md` in the working tree.
+exec cargo run --quiet --manifest-path dev/ci/Cargo.toml --bin rola-ci -- clippy "$@"

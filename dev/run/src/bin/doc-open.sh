@@ -1,8 +1,4 @@
 #!/bin/sh
-# Builds the API documentation, then opens it in a browser.
-set -eu
-
-. "$(dirname "$0")/../lib/common.sh"
-
-# shellcheck disable=SC2086
-$CARGO doc --workspace --no-deps --all-features --open
+# Migrated to `cargo ci doc-open`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/ci` now — see `__PLAN_BUILD_CI.md` in the working tree.
+exec cargo run --quiet --manifest-path dev/ci/Cargo.toml --bin rola-ci -- doc-open "$@"

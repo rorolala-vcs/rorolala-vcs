@@ -1,0 +1,27 @@
+What rola is checked with.
+USAGE: cargo ci <COMMAND> [ARGS...]
+
+CHECKS:
+   check          Run the whole gate: every check below, in the order it is read in
+   all            The whole gate under the name it was first known by
+   fmt            Format every crate in the workspace in place
+   fmt-check      Check that every crate is formatted, without rewriting anything
+   i18n           Check that every translation key a call site names is stated
+   test           Run the workspace's own tests
+   clippy         Lint the workspace, with warnings as errors
+   doc            Build the API documentation of every crate
+   doc-open       Build the API documentation, then open it
+   generated      Check that the files the build writes into the tree are the sources' own
+   integration-test  Run every integration suite under `tests/`, cargo and .NET
+   dotnet-lint    Lint the .NET side of the workspace, with every analyzer rule
+   dotnet-check   Build and test the .NET side of the workspace
+
+RUNS:
+   report-collect  Render what this run recorded into .cache/reports/result.md
+   report-clean    Remove what a previous run recorded, and the report rendered from it
+   git-lock        Temporarily commit the workspace so a run can happen on a stable tree
+   git-unlock      Restore the workspace `git-lock` locked; --show-diff prints what a run left
+
+`check` runs neither `git-lock` nor `git-unlock`: they are utilities around a run, not steps of one,
+and a run that wraps itself in them is composed outside this program. The old entry point still
+reaches every command here as `./run.sh <name>`.

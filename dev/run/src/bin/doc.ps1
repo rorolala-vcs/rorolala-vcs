@@ -1,8 +1,4 @@
-#Requires -Version 5.1
-# Builds the API documentation for every crate in the workspace.
-$ErrorActionPreference = 'Stop'
-
-. "$PSScriptRoot/../lib/common.ps1"
-
-& $CargoProgram @CargoFlags doc --workspace --no-deps --all-features
-Assert-Exit
+# Migrated to `cargo ci doc`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/ci` now — see `__PLAN_BUILD_CI.md` in the working tree.
+& cargo run --quiet --manifest-path dev/ci/Cargo.toml --bin rola-ci -- doc @args
+exit $LASTEXITCODE

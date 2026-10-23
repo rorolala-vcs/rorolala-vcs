@@ -1,9 +1,4 @@
-#Requires -Version 5.1
-# Runs the test suites. Deliberately left on cargo's default profile: release builds turn
-# `debug_assert!` off, which is the opposite of what a test run wants.
-$ErrorActionPreference = 'Stop'
-
-. "$PSScriptRoot/../lib/common.ps1"
-
-& $CargoProgram @CargoFlags test --workspace --all-features
-Assert-Exit
+# Migrated to `cargo ci test`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/ci` now — see `__PLAN_BUILD_CI.md` in the working tree.
+& cargo run --quiet --manifest-path dev/ci/Cargo.toml --bin rola-ci -- test @args
+exit $LASTEXITCODE

@@ -2,7 +2,7 @@
 
 Act as a professional Rorolala VCS developer and do what the user asks.
 
-`rolavcs` is a version control system for artists, whose material is binary — PSD, PPT and the
+`rolavcs` is a version control system for artists, whose material is binary 鈥?PSD, PPT and the
 like. `rola` is its command line, meant to make development convenient rather than to be the final
 shape; the desktop program (`app/desktop`, Avalonia) is. The CLI may stay crude; the libraries'
 semantics may not.
@@ -14,14 +14,14 @@ semantics may not.
 - Code comments and docs are English, imperative or present tense.
 - Mark every escape hatch and say why it holds: `// SAFETY:`, `// UNWRAP:`, `// WORKAROUND:`.
 - Public items carry docs (`missing_docs` is enforced). The C header keeps only the first line and
-  the `# FFI` section, so words meant for a C reader go under `# FFI` — see `dev/bindgen`.
+  the `# FFI` section, so words meant for a C reader go under `# FFI` 鈥?see `dev/bindgen`.
 
 ## Dependencies and other projects
 
 - mingling, the CLI framework, is at https://github.com/mingling-rs/mingling; it is taken from a
   git revision on the 0.6 line rather than the crates.io release, with the revision and features in
   the root `Cargo.toml`.
-- A framework problem — hooks, picking, completion, rendering, argument parsing — is fixed in
+- A framework problem 鈥?hooks, picking, completion, rendering, argument parsing 鈥?is fixed in
   mingling, with an entry in its `CHANGELOG.md`. Working around it in `rola` only means meeting it
   again on the next upgrade.
 - `arg-picker` must resolve to mingling's own version, or `SinglePickable` is two traits with one
@@ -31,20 +31,19 @@ semantics may not.
 
 ## Layers
 
-- `app/` — the user's side: the programs, the C ABI, the desktop program; may use `modules/` and
+- `app/` 鈥?the user's side: the programs, the C ABI, the desktop program; may use `modules/` and
   `utils/`.
-- `dev/` — development tools: the C header generator, the build scripts; may use `modules/` and
-  `utils/`.
-- `modules/` — Rust and C# feature modules. Only `app/` and `dev/` may depend on them, and they may
+- `dev/` 鈥?development tools: the two build crates (`dev/build` is `cargo dev`, what produces the artifacts; `dev/ci` is `cargo ci`, what checks the tree), the C header generator and the shims the old entry point still reaches; may use `modules/` and `utils/`.
+- `modules/` 鈥?Rust and C# feature modules. Only `app/` and `dev/` may depend on them, and they may
   depend on each other, but never in a cycle.
-- `utils/` — Rust and C# shared facilities, which anything may depend on. They are not meant to
+- `utils/` 鈥?Rust and C# shared facilities, which anything may depend on. They are not meant to
   depend on each other; the exceptions are same-family implementation-plus-proc-macro splits
   (`lazyffi`, `lazyffi-core`, `lazyffi-macros`, `configure-macros`) and the crates using
   `lazyffi`'s export macro (`configure`, `constants`). Both kinds are one-way, and none is a cycle.
-- the root `src/` — `librorolala`, tying the modules together for the CLI and the C ABI.
-- `tests/<name>/` — integration suites, workspaces of their own, which run the real programs.
+- the root `src/` 鈥?`librorolala`, tying the modules together for the CLI and the C ABI.
+- `tests/<name>/` 鈥?integration suites, workspaces of their own, which run the real programs.
 - Generated files are never edited: the header comes from the root `build.rs` scanning `src`,
-  `modules` and `utils` — not `app` or `dev` — so the FFI surface lives in those three trees.
+  `modules` and `utils` 鈥?not `app` or `dev` 鈥?so the FFI surface lives in those three trees.
 
 ## FFI tests
 
@@ -52,14 +51,14 @@ semantics may not.
   against the generated header and linked to the built library, so what is checked is the ABI a
   caller meets rather than the Rust under it. A test in Rust can only meet the same types again.
 - A module is a directory `tests/ffi-c/ffi-<area>/` holding a `test.c`; the suite finds every one
-  and runs it, so adding a module is adding a directory. What they share — a check, a way to end
-  on them — is `tests/ffi-c/harness.h`.
+  and runs it, so adding a module is adding a directory. What they share 鈥?a check, a way to end
+  on them 鈥?is `tests/ffi-c/harness.h`.
 - What a module checks is behaviour: making and locating, a lock held and given back, the
   tag-and-payload of a fallible export and the release that goes with it. Not the values of
   constants, which the header already spells out and a test would only pin a copy of.
 - The suite builds `rorolala-ffi` itself, because the release programs do not depend on that
   crate: nothing else in the gate produces the library a C caller links.
-- The programs are C11 (`cc -std=c11 -Wall -Wextra -Werror`), and only Unix is spelled out — the
+- The programs are C11 (`cc -std=c11 -Wall -Wextra -Werror`), and only Unix is spelled out 鈥?the
   runner's `.ps1` twins have never been run.
 
 ## Subcommands
@@ -68,8 +67,8 @@ A command is a file, a node and a shape. What it carries before it is done:
 
 - **Layering.** One file under the module of its area, declared by
   `#[command(node = "...", entry = Entry...)]`. The `#[command]` function parses arguments and
-  pre-validates what can be refused on the spot — mutually exclusive modes, missing or unpaired
-  positions — and returns `Next` for those. Everything else goes into a `StateXxx` value and a
+  pre-validates what can be refused on the spot 鈥?mutually exclusive modes, missing or unpaired
+  positions 鈥?and returns `Next` for those. Everything else goes into a `StateXxx` value and a
   `#[chain]` handler: the entry turns arguments into state, the handler does the work.
   `#[chain(routeify)]` is what lets a handler use `?` on a failure the framework knows.
 - **Global flags are consumed, not declared.** `--vault`, `--force` and `--offline` are picked out
@@ -79,24 +78,24 @@ A command is a file, a node and a shape. What it carries before it is done:
 - **Network.** A command whose work is the exchange with the Vault is refused when `--offline` is
   set, with `ErrorOffline` (252), rather than reaching. A command that only fetches the Vault's
   Layout or content on the way to local work goes on without it. Content is brought on demand
-  through `crate::fetch::Sources` — never by a bulk store sync — and only the explicit
+  through `crate::fetch::Sources` 鈥?never by a bulk store sync 鈥?and only the explicit
   `storage ...` commands move whole stores. Check for what is missing immediately before the read
   that wants it, so nothing is fetched ahead of its use.
 - **Exit codes.** Every way of failing a caller may branch on gets a constant in
   `src/exit_codes.rs`, with its `exit_codes.<key>` doc comment above it and that key stated in
   `i18n/exit_codes.yml` in both languages. Where the gate runs, an exit status is one byte: no
   constant above 255. Blocks are ten apart, one per subject, and the room is nearly spent.
-  `src/exit_codes/explain.rs` is generated from the constants — never edited, always committed with
+  `src/exit_codes/explain.rs` is generated from the constants 鈥?never edited, always committed with
   them.
 - **Help.** `#[help(buffer)]` renders `t!("<area>.help")`, and the usage line names every flag the
   command takes, the global ones it honours included.
 - **Description.** `#[metadata(Entry...)]` and `desc_xxx() -> Description` exist, and the text is
   translated: it is what the command is listed and searched by.
 - **Completion.** Every command registers `#[completion(Entry...)]` with
-  `complete_xxx(ctx: ShellContext, ...) -> Suggest`, answering what only the run can know — bound
-  Vault names, accounts, the address history, paths — and `suggest!()` where nothing is known.
+  `complete_xxx(ctx: ShellContext, ...) -> Suggest`, answering what only the run can know 鈥?bound
+  Vault names, accounts, the address history, paths 鈥?and `suggest!()` where nothing is known.
 - **i18n.** Every key a call site names is stated in `i18n/` in `en` and `zh-CN`, checked by
-  `./run.sh i18n`. stdout is the contract, so results are drawn through `t!` while progress and
+  `cargo ci i18n`. stdout is the contract, so results are drawn through `t!` while progress and
   errors go to stderr.
 - **Errors.** A failure is a `Grouped` type implementing `Failure` (`name`, `reason`), registered
   with `failure!(Type)` and rendered by a `#[renderer(buffer)]` function that sets its exit code. The
@@ -124,16 +123,15 @@ A command is a file, a node and a shape. What it carries before it is done:
   what you did not do, why, and what is needed next.
 - An unclear request is asked about again and again, with choices and their costs, until the plan is
   clear.
-- **Restate** the plan in your own words before touching anything, listing every decision — types,
+- **Restate** the plan in your own words before touching anything, listing every decision 鈥?types,
   names, placement, what breaks, who calls what. **Restate! Restate! Restate!**
 
 ## Mechanics
 
-- The gate is `./run.sh check`, and its exit code is the only thing it signals — read it with
-  `./run.sh check > /tmp/log 2>&1; echo $?`. The scripts are `dev/run/src/bin/*.sh`; their `.ps1`
-  twins have never been run.
+- The gate is `cargo ci check`, and its exit code is the only thing it signals 鈥?read it with
+  `cargo ci check > /tmp/log 2>&1; echo $?`. The steps are the commands of `dev/ci` and `dev/build`; each file under `dev/run/src/bin/` is now a shim that runs the same command, kept while both entry points exist.
 - Every crate denies `warnings`, `missing_docs`, `rust_2018_idioms`, `clippy::pedantic` and
-  `clippy::nursery`. The C# side is held to the same standard: `./run.sh dotnet-lint` runs the
+  `clippy::nursery`. The C# side is held to the same standard: `cargo ci dotnet-lint` runs the
   analyzers at their widest (`AnalysisMode=All`) with every diagnostic an error, and the root
   `.editorconfig` names each rule that is excused and the reason it is there. What a rule excuses is
   a rule excused on purpose, not a tier lowered.
@@ -148,3 +146,6 @@ A command is a file, a node and a shape. What it carries before it is done:
   against the generated header (`cc -std=c17 -Wall -Wextra -Werror -fsyntax-only`); that is what
   caught `struct X;` being nothing but a tag in C. `tests/ffi-c/` is the fuller check: it compiles
   and runs C11 against the header and the library.
+
+
+

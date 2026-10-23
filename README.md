@@ -29,9 +29,9 @@ If you are interested, you can pull the source code and build it. The dependency
 
 | Dependency | Version |
 |---|---|
-| `cargo` + `rustc` | `≥ 1.85` |
+| `cargo` + `rustc` | `鈮?1.85` |
 | `cc`/`gcc` | Any |
-| .NET SDK | `≥ 10.0.100`|
+| .NET SDK | `鈮?10.0.100`|
 | .NET 8 Targeting Pack | 8.0 SDK |
 | | or restore `Microsoft.NETCore.App.Ref 8.0.x` via `NuGet` |
 | `NuGet` packages | `Avalonia 12.1.3`, `Avalonia.Desktop`, `Avalonia.Themes.Simple`, etc. |
@@ -39,7 +39,7 @@ If you are interested, you can pull the source code and build it. The dependency
 After pulling the project, you can build it with the following command:
 
 ```bash
-./run.sh export # On Windows devices, use .\run.ps1 export
+cargo dev export
 ```
 
 Once the build is complete, the artifacts will be exported to the `build/` directory.
@@ -59,3 +59,5 @@ cd my-vault && rola-daemon
 This project is released under the **MIT License**. Anyone is free to use, copy, modify, merge, publish, distribute, sublicense, and even sell copies of this software, with the sole requirement that the original copyright notice and permission notice be retained in all copies or substantial portions of the software.
 
 See [LICENSE](./LICENSE) for the full terms.
+
+

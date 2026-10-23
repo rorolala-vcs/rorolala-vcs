@@ -1,13 +1,4 @@
-#Requires -Version 5.1
-# Removes everything the build ever produced: cargo's output, whatever else `$TargetDir` holds (the
-# generated header, mingling's completion scripts), .NET's output, the Daemon window's intermediates
-# and the exported `$BuildDir`.
-$ErrorActionPreference = 'Stop'
-
-. "$PSScriptRoot/../lib/common.ps1"
-
-Invoke-Script cargo-clean
-
-foreach ($directory in @($TargetDir, $CsTargetDir, '.cache/daemon-win', $BuildDir)) {
-    if (Test-Path $directory) { Remove-Item -Recurse -Force $directory }
-}
+# Migrated to `cargo dev clean`; this is the strangler shim kept while both entry points exist. The
+# logic lives in `dev/build` now — see `__PLAN_BUILD_CI.md` in the working tree.
+& cargo run --quiet --manifest-path dev/build/Cargo.toml --bin rola-build -- clean @args
+exit $LASTEXITCODE
