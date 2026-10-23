@@ -107,7 +107,18 @@ internal static class AccountActions
     /// <returns>The account's name, or nothing when the path names no file stem.</returns>
     public static string? Named(string path)
     {
-        var stem = Path.GetFileNameWithoutExtension(path);
+        // A path that ends at a separator names a directory rather than a file, so there is no stem to
+        // read off it.
+        if (path.Length == 0 || path[^1] is '\\' or '/')
+        {
+            return null;
+        }
+
+        // Both separators, for the same reason a name is read off a path at all: it is a path a person
+        // chose, and on Windows either separator may have been used.
+        var index = path.LastIndexOfAny(['\\', '/']);
+        var name = index >= 0 ? path[(index + 1)..] : path;
+        var stem = Path.GetFileNameWithoutExtension(name);
 
         return stem is { Length: > 0 } ? stem : null;
     }

@@ -245,12 +245,18 @@ public sealed class UpstreamEntriesTests
     }
 
     /// <summary>A checkin landed under a directory names it last, because that is how the operands are read.</summary>
+    /// <remarks>
+    /// The run carries the flag that rebases every reference on its own name before the references
+    /// themselves: what is dropped keeps the name it was dropped under rather than the Vault's whole
+    /// path, which is what a destination is for.
+    /// </remarks>
     [Fact]
     public void ACheckinLandedUnderADirectoryNamesItLast()
     {
         var landed = CheckinCommand.Arguments(["Assets/hero.psd", "Assets/bg.psd"], @"C:\work\art");
 
-        Assert.Equal("checkin", landed[^4]);
+        Assert.Equal("checkin", landed[^5]);
+        Assert.Equal("--by-name", landed[^4]);
         Assert.Equal("Assets/hero.psd", landed[^3]);
         Assert.Equal("Assets/bg.psd", landed[^2]);
         Assert.Equal(@"C:\work\art", landed[^1]);

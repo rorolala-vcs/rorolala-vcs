@@ -97,7 +97,10 @@ public sealed class CheckinTests
 
         LayoutEntry[] local = [];
         var tree = UpstreamEntriesTree.Build([Entry("Assets/hero.psd", "b")], local);
-        var carrying = new[] { new UpstreamCarry(Origin, "Assets/hero.psd") };
+
+        // What is carried is the folder, not the file: a folder dragged in is the folder, remade where
+        // it was put, with the tree it holds under it.
+        var carrying = new[] { new UpstreamCarry(Origin, "Assets") };
 
         var landed = CheckinPlanning.Of(tree, local, root, under, "origin", carrying);
 
