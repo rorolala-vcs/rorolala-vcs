@@ -20,7 +20,10 @@ rust-i18n.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
-# The program's own icon, linked into the Windows executable and nowhere else: the resource compiler
-# is the platform's, so the build script reaches for this only where there is one.
+# The program's own icon, linked into the Windows executable and nowhere else: the resource
+# compiler is the platform's, so the build script reaches for this only where there is one. The icon
+# itself is drawn by `rorolala-utils-icons`'s build script, which is depended on so that it has run
+# before this program's build script links one in.
 [target.'cfg(windows)'.build-dependencies]
 embed-resource.workspace = true
+rorolala-utils-icons.workspace = true

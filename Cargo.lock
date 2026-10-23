@@ -2282,7 +2282,6 @@ dependencies = [
 name = "librorolala"
 version = "0.1.0"
 dependencies = [
- "image",
  "rola-desktop-pty",
  "rorolala-auth",
  "rorolala-daemon",
@@ -2295,6 +2294,7 @@ dependencies = [
  "rorolala-storage",
  "rorolala-tree-analyze",
  "rorolala-utils-constants",
+ "rorolala-utils-icons",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vault",
@@ -3560,6 +3560,7 @@ dependencies = [
  "rorolala-errors",
  "rorolala-utils-cli-theme",
  "rorolala-utils-constants",
+ "rorolala-utils-icons",
  "rorolala-utils-location",
  "rorolala-utils-progress",
  "rorolala-vault",
@@ -3585,6 +3586,7 @@ dependencies = [
  "rorolala-utils-cli-theme",
  "rorolala-utils-configure",
  "rorolala-utils-constants",
+ "rorolala-utils-icons",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vault",
@@ -3901,6 +3903,14 @@ name = "rorolala-utils-constants"
 version = "0.1.0"
 dependencies = [
  "rorolala-utils-lazyffi",
+]
+
+[[package]]
+name = "rorolala-utils-icons"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "toml 0.8.23",
 ]
 
 [[package]]

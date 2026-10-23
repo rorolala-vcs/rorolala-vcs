@@ -32,6 +32,7 @@ members = [
     "utils/configure",
     "utils/configure-macros",
     "utils/constants",
+    "utils/icons",
     "utils/lazyffi",
     "utils/lazyffi-core",
     "utils/lazyffi-macros",
@@ -90,6 +91,7 @@ rorolala-utils-cli-theme = { path = "utils/cli-theme" }
 rorolala-utils-configure = { path = "utils/configure" }
 rorolala-utils-configure-macros = { path = "utils/configure-macros" }
 rorolala-utils-constants = { path = "utils/constants" }
+rorolala-utils-icons = { path = "utils/icons" }
 rorolala-utils-lazyffi = { path = "utils/lazyffi" }
 rorolala-utils-lazyffi-core = { path = "utils/lazyffi-core" }
 rorolala-utils-lazyffi-macros = { path = "utils/lazyffi-macros" }
@@ -247,8 +249,9 @@ rorolala-workspace.workspace = true
 rola-desktop-pty.workspace = true
 
 [build-dependencies]
-image.workspace = true
 rorolala-dev-bindgen.workspace = true
+# The tree's icons, drawn by this crate's build script before any build script that links one in.
+rorolala-utils-icons.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 
