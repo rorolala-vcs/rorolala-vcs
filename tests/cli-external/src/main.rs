@@ -23,8 +23,11 @@ const WORD: &str = "probe";
 /// The word of a name with hyphens in it, which is one word and not three.
 const HYPHENS: &str = "aa-bb-cc";
 
-/// What only the daemon's own help says, in either language it is written in.
-const ITS_OWN_WORDS: &str = "registry.toml";
+/// What only the daemon's own help says, in either language it is written in: the usage line names
+/// the program, and a translation of the help does not rename it. An English word would say nothing
+/// on a machine whose locale is another, because the help is translated — which is why this is not
+/// one of the words the help is written in.
+const ITS_OWN_WORDS: &str = "rola-daemon";
 
 fn main() {
     let sandbox = Guard::new("cli-external");
