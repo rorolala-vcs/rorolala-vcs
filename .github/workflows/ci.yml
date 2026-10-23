@@ -1,0 +1,321 @@
+name: CI
+
+# Every way work reaches this repository is checked the same way, and a tag only adds the release to
+# what was already checked: a push to `main`, a push to any other branch, a pull request into `main`,
+# and a tag. The shape is deliberately one workflow rather than several — what a branch and a tag are
+# held to must not be able to drift apart.
+on:
+  push:
+    branches: ["**"]
+    tags: ["*"]
+  pull_request:
+    branches: [main]
+
+# A tag publishes a release, and only a tag does.
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The cheap gate in front of the matrices: the run must leave the tree exactly as it found it. The
+  # `git-lock` / `git-unlock` pair around the regeneration is what measures that — the unlock fails
+  # when anything tracked moved — so a source generated into the tree and left stale is caught here
+  # rather than after a full matrix has run.
+  #
+  # What is regenerated is the chunking crate's own registry and module list, which its build script
+  # writes into `src/`. The `generated` step of `cargo ci check` additionally measures the chunking
+  # corpus, and the corpus is deliberately not carried by this repository (see
+  # `modules/chunking/corpus/.gitignore`): on a clean runner it is absent, and a score taken over
+  # nothing would rewrite each `SCORE.md` while saying nothing about the policy. That half stays a
+  # check for a machine that has the corpus; this is the half a runner can make.
+  fast-check:
+    name: Fast-Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install the musl toolchain
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl' >> "$GITHUB_ENV"
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@rorolala.invalid"
+          git config --global user.name "rola CI"
+
+      - name: Check formatting and translations
+        run: |
+          cargo ci fmt-check
+          cargo ci i18n
+
+      - name: Lock workspace for CI
+        run: cargo ci git-lock
+
+      - name: Regenerate the sources the build writes
+        run: cargo build --quiet -p rorolala-chunking
+
+      - name: Unlock workspace (idempotency check)
+        if: always()
+        run: cargo ci git-unlock --show-diff
+
+  # The gate itself, one check to a job so a failure is the failure of that check rather than of the
+  # runner it happened to share. Both platforms are checked, and Linux is built with the musl
+  # toolchain: `musl-gcc` is the linker (see the root `.cargo/config.toml`) and the C runtime is
+  # dynamic, because `tests/ffi-c` builds the shared library again and compiles C against it with
+  # `cc` — the one artifact that cannot use musl's static runtime. What is packaged keeps its
+  # programs static; see `dev/build/src/ops/library.rs`.
+  #
+  # `cargo ci check` is deliberately not what runs here: one of its steps is `generated`, which cannot
+  # run without the corpus (see Fast-Check above), and a gate run in a shape of its own would be a
+  # second gate. The steps below are that gate's own commands.
+  check:
+    name: Check (${{ matrix.os.name }} / ${{ matrix.item }})
+    needs: [fast-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - { name: windows, runner: windows-latest, musl: false }
+          - { name: linux, runner: ubuntu-latest, musl: true }
+        item: [build, test, clippy, fmt, doc, integration, dotnet]
+    runs-on: ${{ matrix.os.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/setup-dotnet@v4
+        with:
+          # The version `global.json` pins; the projects themselves target `net8.0`.
+          dotnet-version: "10.0.x"
+
+      - name: Install the musl toolchain
+        if: matrix.os.musl
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'RUSTFLAGS=-C target-feature=-crt-static'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@rorolala.invalid"
+          git config --global user.name "rola CI"
+
+      # Every check runs inside a lock / unlock pair: the final unlock doubles as the idempotency
+      # check, failing the job when the check left the working tree dirty.
+      - name: Lock workspace for CI
+        run: cargo ci git-lock
+
+      - name: Run the check
+        id: check
+        shell: bash
+        continue-on-error: true
+        run: |
+          case "${{ matrix.item }}" in
+            build) cargo dev build ;;
+            test) cargo ci test ;;
+            clippy) cargo ci clippy ;;
+            fmt) cargo ci fmt-check && cargo ci i18n ;;
+            doc) cargo ci doc ;;
+            integration) cargo ci integration-test ;;
+            dotnet) cargo ci dotnet-lint && cargo ci dotnet-check ;;
+          esac
+
+      - name: Unlock workspace (idempotency check)
+        if: always()
+        run: cargo ci git-unlock --show-diff
+
+      - name: Fail when the check failed
+        if: steps.check.outcome == 'failure'
+        run: exit 1
+
+      # Collected reports are uploaded even on failure, so the report job can render them.
+      - name: Upload collected reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-collect-${{ matrix.os.name }}-${{ matrix.item }}
+          path: .cache/reports/collect/
+          if-no-files-found: ignore
+
+  # What a person is handed, built on the platform it is for. Windows is given the installer the
+  # project packages with, and Linux is given the export as it was laid out — a musl build has no
+  # installer, so the `build/` directory's own files are what the archive carries, at its root.
+  package:
+    name: Package (${{ matrix.name }})
+    needs: [fast-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows, runner: windows-latest, musl: false }
+          - { name: linux, runner: ubuntu-latest, musl: true }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install the musl toolchain
+        if: matrix.musl
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools
+          rustup target add x86_64-unknown-linux-musl
+          echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl' >> "$GITHUB_ENV"
+
+      - name: Read the workspace version
+        id: version
+        shell: bash
+        run: |
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          if [ -z "$version" ]; then
+            echo "::error::Cargo.toml declares no workspace version"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      # The compiler the installer is made with is the one `dev/build/src/iscc.rs` names, laid out
+      # where it looks for it first (`.cache/toolchains/innosetup`). Nothing is fetched by the build
+      # itself, so fetching it is the workflow's to do — and the hash is checked, because what a
+      # package is built with decides what is in it.
+      - name: Install the pinned Inno Setup
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
+          $expected = '9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732'
+          Invoke-WebRequest -Uri $url -OutFile innosetup.exe
+          $actual = (Get-FileHash innosetup.exe -Algorithm SHA256).Hash
+          if ($actual -ne $expected) {
+            throw "innosetup.exe hashed to $actual, not $expected"
+          }
+          $directory = Join-Path (Get-Location) '.cache\toolchains\innosetup'
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          Start-Process -FilePath .\innosetup.exe -Wait -ArgumentList '/VERYSILENT', '/CURRENTUSER', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOICONS', "/DIR=$directory"
+          Remove-Item innosetup.exe
+
+      - name: Build the Windows installer
+        if: matrix.name == 'windows'
+        run: cargo dev publish
+
+      - name: Lay the Linux export out
+        if: matrix.name == 'linux'
+        run: cargo dev export
+
+      - name: Pack the Linux export
+        if: matrix.name == 'linux'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          mkdir -p dist
+          tar -czf "dist/rorolala-${VERSION}-linux-x86_64-musl.tar.gz" -C build .
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rola-${{ matrix.name }}-package
+          path: |
+            build/rorolala-*-setup.exe
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  # Every matrix run's reports, rendered as one page and written into the job summary. It runs even
+  # when checks failed, so what failed is still what a reader is shown.
+  report:
+    name: Report
+    needs: [check]
+    # No reports exist when Fast-Check stopped the matrix.
+    if: always() && needs.check.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Download collected reports
+        uses: actions/download-artifact@v4
+        with:
+          path: .cache/reports/collect
+          pattern: ci-collect-*
+          merge-multiple: true
+
+      - name: Render the report
+        run: cargo ci report-collect
+
+      - name: Publish the report to the step summary
+        run: cat .cache/reports/result.md >> "$GITHUB_STEP_SUMMARY"
+
+  # A tag is released only once both the checks and the packages succeeded, and what is released is
+  # the tag's own commit: its message is the body, its date and short hash are the heading, and the
+  # people whose commits made up the range since the previous tag are named below it.
+  release:
+    name: Release
+    needs: [check, package]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The previous tag has to be here for the range that names the co-authors.
+          fetch-depth: 0
+
+      - name: Download the packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          # The collected reports are artifacts of this run as well, and what a release carries is
+          # the packages alone.
+          pattern: rola-*-package
+          merge-multiple: true
+
+      - name: Write the release body
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          commit="$(git rev-parse --short=7 "$tag")"
+          date="$(git log -1 --format=%cd --date=format:%Y-%m-%d "$tag")"
+          message="$(git log -1 --format=%B "$tag")"
+
+          # The tag before this one, when there is one: that is what the range of commit authors is
+          # taken over. An empty range is the tag itself, which is the first release.
+          previous="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)"
+          range="${tag}"
+          if [ -n "$previous" ]; then
+            range="${previous}..${tag}"
+          fi
+          co="$(git log "$range" --format=%an | sort -u | paste -sd ', ' -)"
+
+          {
+            echo "Release ${tag} - (${date}-${commit})"
+            echo
+            printf '%s\n' "$message"
+            echo
+            echo "Co: ${co}"
+          } > release.md
+
+          cat release.md
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          body_path: release.md
+          files: dist/*
+          make_latest: true
+          draft: false
+          prerelease: false

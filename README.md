@@ -8,8 +8,8 @@
 </p>
 
 > [!WARNING]
-> 
-> It is being written from nothing and is under active development. Nothing here is usable yet.
+>
+> This project is under active development and makes no attempt at version compatibility whatsoever, but you are very welcome to try it out!
 
 <h2> <img src="res/icons/yi.png" height="40"/> Rorolala VCS </h2>
 
@@ -27,14 +27,14 @@ Rorolala is a version control system for artists that treats "structure" and "co
 
 If you are interested, you can pull the source code and build it. The dependency requirements are as follows:
 
-| Dependency | Version |
-|---|---|
-| `cargo` + `rustc` | `≥ 1.85` |
-| `cc`/`gcc` | Any |
-| .NET SDK | `≥ 10.0.100`|
-| .NET 8 Targeting Pack | 8.0 SDK |
-| | or restore `Microsoft.NETCore.App.Ref 8.0.x` via `NuGet` |
-| `NuGet` packages | `Avalonia 12.1.3`, `Avalonia.Desktop`, `Avalonia.Themes.Simple`, etc. |
+| Dependency            | Version                                                               |
+| --------------------- | --------------------------------------------------------------------- |
+| `cargo` + `rustc`     | `≥ 1.85`                                                              |
+| `cc`/`gcc`            | Any                                                                   |
+| .NET SDK              | `≥ 10.0.100`                                                          |
+| .NET 8 Targeting Pack | 8.0 SDK                                                               |
+|                       | or restore `Microsoft.NETCore.App.Ref 8.0.x` via `NuGet`              |
+| `NuGet` packages      | `Avalonia 12.1.3`, `Avalonia.Desktop`, `Avalonia.Themes.Simple`, etc. |
 
 After pulling the project, you can build it with the following command:
 
@@ -44,20 +44,27 @@ cargo dev export
 
 Once the build is complete, the artifacts will be exported to the `build/` directory.
 
-<h2> <img src="res/icons/yi.png" height="40"/> The Server </h2>
+<h2> <img src="res/icons/yi.png" height="40"/> Server </h2>
 
-Rorolala's remote collaboration relies on the `rola-daemon` server for management. You need to deploy it at a location reachable on your network using the following commands:
+Remote collaboration in Rorolala relies on the `rola-daemon` server for management. You need to deploy it somewhere reachable on the network, using the following commands:
 
 ```bash
-# Create a remote Vault and run it in its directory
+# Create and register a remote Vault, and start the rola-daemon service listener
 rola create -v my-vault
-cd my-vault && rola-daemon
+cd my-vault && rola-daemon register default
+rola-daemon
 ```
+
+If you are using `Windows Server` or another `Windows` system, you can also simply run `rola-daemon-gui.exe` to quickly manage and start clients:
+
+![](res\screenshots\windows-daemon-gui.png)
+
+<h2> <img src="res/icons/zi_love.png" height="40"/> Contributors <img src="res/icons/yi_love.png" height="40"/> </h2>
+
+<img src="https://contrib.rocks/image?repo=rorolala-vcs/rorolala-vcs" />
 
 <h2> <img src="res/icons/zi.png" height="40"/> License </h2>
 
 This project is released under the **MIT License**. Anyone is free to use, copy, modify, merge, publish, distribute, sublicense, and even sell copies of this software, with the sole requirement that the original copyright notice and permission notice be retained in all copies or substantial portions of the software.
 
 See [LICENSE](./LICENSE) for the full terms.
-
-

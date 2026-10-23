@@ -39,6 +39,9 @@ const COMPLETION_DIR_IN_TARGET: &str = "mingling";
 /// The directory inside cargo's output that release artifacts are written to.
 const RELEASE_DIR_IN_TARGET: &str = "release";
 
+/// The variable cargo reads the triple a build is for from.
+const CARGO_BUILD_TARGET: &str = "CARGO_BUILD_TARGET";
+
 /// The generated C header, inside the release directory.
 const HEADER_IN_RELEASE: &str = "ffi_bindings/rorolala_ffi.h";
 
@@ -68,6 +71,9 @@ const SOLUTION: &str = "RorolalaSharp.sln";
 
 /// The C# bindings to the C ABI.
 const RSHARP_PROJECT: &str = "modules/rola-sharp/RolaSharp.csproj";
+
+/// The script that builds the Win32 window over the daemon into an export, on Windows.
+const DAEMON_WINDOW_SCRIPT: &str = "app/daemon-win/scripts/daemon-win-build.ps1";
 
 /// The `NuGet` configuration a restore is tried with first: the one with no sources.
 const NUGET_OFFLINE: &str = "dev/configs/nuget.offline.config";
@@ -124,13 +130,31 @@ impl Workspace {
         self.directory("TARGET_DIR", DEFAULT_TARGET_DIR)
     }
 
+    /// The architecture a build is for, when one is named: `CARGO_BUILD_TARGET`, the variable cargo
+    /// reads the same value from.
+    ///
+    /// A build for the machine it runs on names no triple; one for another — a musl hand-off built on
+    /// a glibc machine, or the reverse — names the triple cargo then writes its output under. Reading
+    /// cargo's own variable rather than a second one is what keeps the two from disagreeing about
+    /// where an artifact is.
+    #[must_use]
+    pub fn target_triple(&self) -> Option<String> {
+        std::env::var(CARGO_BUILD_TARGET)
+            .ok()
+            .map(|triple| triple.trim().to_owned())
+            .filter(|triple| !triple.is_empty())
+    }
+
     /// Where cargo writes the release artifacts.
     ///
     /// # Errors
     ///
     /// As [`Self::target_dir`].
     pub fn release_dir(&self) -> Result<PathBuf, Error> {
-        Ok(self.target_dir()?.join(RELEASE_DIR_IN_TARGET))
+        Ok(release_dir_in(
+            self.target_dir()?,
+            self.target_triple().as_deref(),
+        ))
     }
 
     /// The generated C header, written by the root build script while the library builds.
@@ -143,6 +167,10 @@ impl Workspace {
     }
 
     /// The directory mingling writes the completion scripts into while the programs compile.
+    ///
+    /// It is under the target directory and not under a triple inside it, because what mingling reads
+    /// is the target directory `cargo metadata` answers, which names no triple: a completion script
+    /// written for one architecture is a script the others can use as well.
     ///
     /// # Errors
     ///
@@ -324,6 +352,15 @@ impl Workspace {
         self.root.join(DESKTOP_PLUGINS)
     }
 
+    /// The script that builds the daemon's window, on Windows.
+    ///
+    /// It is a script rather than a cargo build because the window is a C program of its own, with a
+    /// resource script and the platform's compiler behind it — see `app/daemon-win/README.md`.
+    #[must_use]
+    pub fn daemon_window_script(&self) -> PathBuf {
+        self.root.join(DAEMON_WINDOW_SCRIPT)
+    }
+
     /// The manifest, read as text.
     fn read_manifest(&self) -> Result<String, Error> {
         let path = self.manifest_path();
@@ -410,6 +447,18 @@ fn plugin_names(entries: &[(String, bool)]) -> Vec<String> {
     names
 }
 
+/// Where cargo writes release artifacts, given its target directory and the triple a build is for.
+///
+/// Cargo puts a named triple between the target directory and the profile; a build for the machine it
+/// runs on has no such directory, so nothing is added.
+fn release_dir_in(mut target: PathBuf, triple: Option<&str>) -> PathBuf {
+    if let Some(triple) = triple {
+        target.push(triple);
+    }
+
+    target.join(RELEASE_DIR_IN_TARGET)
+}
+
 /// A directory a build writes to, from an override or the default, refused when it does not stay
 /// inside the workspace.
 fn checked_relative(
@@ -457,7 +506,10 @@ fn checked_relative(
 mod tests {
     use std::path::PathBuf;
 
-    use super::{checked_relative, declares_a_workspace, plugin_names, publisher_of, version_of};
+    use super::{
+        checked_relative, declares_a_workspace, plugin_names, publisher_of, release_dir_in,
+        version_of,
+    };
 
     #[test]
     fn a_manifest_declaring_a_workspace_is_recognised_and_another_is_not() {
@@ -502,6 +554,23 @@ mod tests {
             ["FileSystemPlugin", "TerminalPlugin"]
         );
         assert_eq!(plugin_names(&[]).len(), 0);
+    }
+
+    #[test]
+    fn release_artifacts_sit_under_the_triple_only_when_a_build_names_one() {
+        let target = PathBuf::from(".cache/rs-target");
+
+        // A build for this machine: cargo writes straight into the target directory.
+        assert_eq!(
+            release_dir_in(target.clone(), None),
+            PathBuf::from(".cache/rs-target/release")
+        );
+
+        // A build for another: cargo puts the triple in between, and so must the lookup.
+        assert_eq!(
+            release_dir_in(target, Some("x86_64-unknown-linux-musl")),
+            PathBuf::from(".cache/rs-target/x86_64-unknown-linux-musl/release")
+        );
     }
 
     #[test]

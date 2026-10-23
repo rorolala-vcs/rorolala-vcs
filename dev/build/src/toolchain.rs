@@ -36,6 +36,12 @@ impl Tool {
         Self::from_env("RSVG", "rsvg-convert")
     }
 
+    /// The PowerShell a Windows-only step runs: `POWERSHELL`, or the machine's own when it is unset.
+    #[must_use]
+    pub fn powershell() -> Self {
+        Self::from_env("POWERSHELL", "powershell")
+    }
+
     /// The toolchain a step runs `git` with.
     #[must_use]
     pub fn git() -> Self {
@@ -114,6 +120,42 @@ impl Tool {
         I::Item: Into<OsString>,
     {
         let status = self.status(args)?;
+
+        if status.success() {
+            Ok(())
+        } else {
+            Err(Error::Status {
+                program: self.name(),
+                code: status.code().unwrap_or(1),
+            })
+        }
+    }
+
+    /// Runs the tool with `args`, with `environment` set for this run, and reports the status it
+    /// ended with unless it was a success.
+    ///
+    /// It is for a run that has to differ from the one around it: the C ABI's shared library is
+    /// linked against the dynamic C runtime on musl while the programs beside it keep the static
+    /// default, and the two runs are children of one process.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`Error::Tool`] when the program cannot be started, and [`Error::Status`] carrying the
+    /// status it ended with when that status is not a success.
+    pub fn run_with_env<I>(&self, environment: &[(&str, &OsStr)], args: I) -> Result<(), Error>
+    where
+        I: IntoIterator,
+        I::Item: Into<OsString>,
+    {
+        let mut command = self.command(args);
+
+        for (name, value) in environment {
+            command.env(name, value);
+        }
+
+        let status = command
+            .status()
+            .map_err(|error| self.could_not_start(&error))?;
 
         if status.success() {
             Ok(())

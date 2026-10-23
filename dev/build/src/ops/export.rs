@@ -12,6 +12,13 @@
 //! | `rola[.exe]` …               | `build/bin/rola[.exe]` …          |
 //! | `ffi_bindings/rorolala_ffi.h`| `build/lib/rorolala.h`/`.hpp`     |
 //! | `mingling/<program>_comp.*`  | `build/scripts/<program>/*`       |
+//!
+//! Windows has one artifact that is not cargo's at all: the Win32 window over the daemon, built from
+//! C by the script beside it after the programs are laid down — it looks for `rola-daemon.exe` beside
+//! itself, so what it is built beside has to be there first.
+
+#[cfg(windows)]
+use std::ffi::OsString;
 
 use mingling::{
     Grouped,
@@ -42,6 +49,11 @@ pub struct StateExport;
 pub fn export_artifacts() -> Result<(), crate::Error> {
     let workspace = Workspace::discover()?;
     let platform = Platform::current();
+
+    // The programs about to be written are stopped first: a running program holds its own executable
+    // open, and on Windows a file in use can be neither replaced nor removed with the directory it
+    // sits in.
+    stop_running_programs()?;
 
     Tool::cargo().run(["run", "--quiet", "-p", "rorolala-dev-icons"])?;
     crate::build_everything()?;
@@ -81,6 +93,10 @@ pub fn export_artifacts() -> Result<(), crate::Error> {
         let name = format!("{program}{}", platform.exe_suffix());
         fs::copy_file(&release.join(&name), &programs.join(&name))?;
     }
+
+    // The window over the daemon is laid down after them rather than with them: it is a C program
+    // rather than a cargo one, and it looks for `rola-daemon.exe` beside itself.
+    build_daemon_window(&workspace)?;
 
     // The completions are laid down for the programs that have them: one directory per program, so
     // what a shell's setup sources is named once per program rather than once per program and shell.
@@ -127,4 +143,64 @@ pub fn handle_export(_state: StateExport, ec: &mut ResExitCode) -> Next {
     run_step(ec, export_artifacts);
 
     empty_result!()
+}
+
+/// Stops the programs a build is about to write, on Windows.
+///
+/// A running program holds its own executable open, and Windows refuses to replace it or to remove the
+/// directory it is in — which is what an export does to the layout a previous export left. The three
+/// are the programs of an export that are started by hand and left running; the Desktop program is
+/// not among them, because it is opened through the launcher rather than from the layout.
+///
+/// Nothing running is the usual case, and it is not a failure: PowerShell answers 1 when
+/// `Get-Process` matches nothing, so the run is ended with `exit 0` and a program it could not stop
+/// is left for the removal below to name.
+#[cfg(windows)]
+fn stop_running_programs() -> Result<(), crate::Error> {
+    const STOP: &str = "Get-Process -Name 'rola','rola-daemon','rola-daemon-gui' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; exit 0";
+
+    Tool::powershell().run(["-NoProfile", "-NonInteractive", "-Command", STOP])
+}
+
+/// Leaves what is running alone: no platform but Windows holds a program's own file open against a
+/// build, so there is nothing to stop.
+///
+/// The signature is the one the Windows twin has, so the call site reads the same on both platforms.
+#[cfg(not(windows))]
+#[allow(clippy::unnecessary_wraps)]
+fn stop_running_programs() -> Result<(), crate::Error> {
+    Ok(())
+}
+
+/// Builds the Win32 window over the daemon into the export, on Windows.
+///
+/// It is the script beside the C sources rather than a cargo build, and it is told which export to
+/// write into: `BUILD_DIR` is the same override this build honours, so an export laid out elsewhere
+/// is still the one the window lands in.
+#[cfg(windows)]
+fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
+    let script = workspace.daemon_window_script().into_os_string();
+    let build = workspace.build_dir()?.into_os_string();
+
+    Tool::powershell().run_with_env(
+        &[("BUILD_DIR", build.as_os_str())],
+        [
+            OsString::from("-NoProfile"),
+            OsString::from("-NonInteractive"),
+            // The tree may have been checked out with a policy that refuses unsigned scripts; this
+            // one is the tree's own, next to the sources it builds.
+            OsString::from("-ExecutionPolicy"),
+            OsString::from("Bypass"),
+            OsString::from("-File"),
+            script,
+        ],
+    )
+}
+
+/// Lays nothing down: the window is a Win32 program, and the platforms without one have no window to
+/// build.
+#[cfg(not(windows))]
+#[allow(clippy::unnecessary_wraps)]
+fn build_daemon_window(_workspace: &Workspace) -> Result<(), crate::Error> {
+    Ok(())
 }

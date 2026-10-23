@@ -8,3 +8,9 @@ target-dir = "./.cache/rs-target/"
 # because that is what these are.
 ci = "run --quiet --manifest-path dev/ci/Cargo.toml --bin rola-ci --"
 dev = "run --quiet --manifest-path dev/build/Cargo.toml --bin rola-build --"
+
+# A build for a musl triple is linked with musl's own driver rather than the machine's `cc`: what `cc`
+# links is glibc's start files and C library, which would make a build asked to be musl a glibc one
+# carrying the name. It is inert unless that triple is what is being built.
+[target.x86_64-unknown-linux-musl]
+linker = "musl-gcc"
