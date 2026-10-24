@@ -4,6 +4,9 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+// mingling's macros expand the program's entries and chain functions, and the expansion does not
+// carry the `const` a hand-written item would; `missing_const_for_fn` fires on the generated items,
+// which cannot carry an allow of their own. The allow has to be this wide for that reason.
 #![allow(clippy::missing_const_for_fn)]
 
 rust_i18n::i18n!("i18n", fallback = "en");
@@ -89,8 +92,12 @@ const MAX_GUESSES: usize = 3;
 fn main() {
     restore_default_sigpipe();
 
+    // A console that will not take VT output would show the escape sequences rather than colour, so
+    // the colour is dropped instead of the run: the program's output is the contract, not its palette.
     #[cfg(windows)]
-    colored::control::set_virtual_terminal(true).unwrap();
+    if colored::control::set_virtual_terminal(true).is_err() {
+        rorolala_utils_cli_theme::set_enabled(false);
+    }
 
     let mut program = ThisProgram::new();
     program.with_setup(RorolalaDefaultSetup);
