@@ -98,7 +98,7 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
 /// objects could not be read or a pack could not be written.
 #[command(node = "pack", entry = EntryPack)]
 pub fn pack(args: EntryPack) -> Next {
-    // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
+    // UNWRAP: Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
     let (no_index, no_storage, unmatched) = args
         .pick(ARG_NO_INDEX)
         .pick(ARG_NO_STORAGE)

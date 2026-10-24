@@ -88,8 +88,8 @@ pub fn storage_ls_remote_storaged(
     args: EntryStorageLsRemoteStoraged,
     format: &mut ResFormat,
 ) -> StateStorageLsRemoteStoraged {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
-    // Workspace's own choice be the one that is reached for.
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is reached for.
     let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     format.default_template(DEFAULT_FORMAT);

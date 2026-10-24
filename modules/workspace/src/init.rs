@@ -24,6 +24,9 @@ mod hidden {
     /// What a call that answers with a path's attributes answers when it could not read them.
     const INVALID: u32 = u32::MAX;
 
+    // SAFETY: `kernel32` provides both symbols under these signatures, and the module is behind
+    // `#[cfg(windows)]`, so nothing else compiles the declaration; each call site carries its own
+    // safety argument.
     #[link(name = "kernel32")]
     unsafe extern "system" {
         /// Reads what a path's attributes are.

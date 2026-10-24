@@ -91,8 +91,8 @@ pub fn desc_vcs_index_sync_all() -> Description {
 // answer the run gave.
 #[command(node = "vcs-index.sync-all")]
 pub fn vcs_index_sync_all(args: EntryVcsIndexSyncAll) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
-    // Workspace's own choice be the one that is reached for.
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is reached for.
     let (named, unmatched): (Option<String>, _) =
         args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 

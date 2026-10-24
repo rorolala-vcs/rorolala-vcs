@@ -36,6 +36,8 @@ pub type RolaWorkspaceLocking = LockingGuard<Workspace>;
 ///
 /// `workspace` must be a pointer `locate_rola_workspace` handed out, and its owner must not have
 /// released it.
+// The name is the C header's spelling: the exported type, an underscore, then the action. That is
+// what the generated header declares and what a C caller links against, not a Rust identifier style.
 #[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn RolaWorkspace_is_locking(workspace: *const RolaWorkspace) -> bool {
@@ -66,6 +68,8 @@ pub unsafe extern "C" fn RolaWorkspace_is_locking(workspace: *const RolaWorkspac
 ///
 /// As [`RolaWorkspace_is_locking`]: the pointer must be one `locate_rola_workspace` handed out and
 /// not yet released.
+// The name is the C header's spelling: the exported type, an underscore, then the action. That is
+// what the generated header declares and what a C caller links against, not a Rust identifier style.
 #[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn RolaWorkspace_get_locking_guard(
@@ -100,6 +104,8 @@ pub unsafe extern "C" fn RolaWorkspace_get_locking_guard(
 ///
 /// `guard` must be a pointer from `RolaWorkspace_get_locking_guard` that has not been released, or
 /// null.
+// The name is the C header's spelling: the exported type, an underscore, then the action. That is
+// what the generated header declares and what a C caller links against, not a Rust identifier style.
 #[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn RolaWorkspace_drop_locking_guard(guard: *mut RolaWorkspaceLocking) {

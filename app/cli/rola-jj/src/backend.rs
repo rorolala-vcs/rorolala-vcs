@@ -112,6 +112,9 @@ macro_rules! rola_backend {
                     reason = "every body here is a hole, so no parameter is used yet"
                 )]
                 fn $s_name($($s_args)*) -> $s_ret {
+                    // PANIC: every body here is a hole until the backend operation it stands for
+                    // is connected, so reaching this one is a call to a feature that is not
+                    // implemented yet.
                     todo!(concat!("rola's backend does not ", stringify!($s_name), " yet"))
                 }
             )*
@@ -122,6 +125,9 @@ macro_rules! rola_backend {
                     reason = "every body here is a hole, so no parameter is used yet"
                 )]
                 async fn $a_name($($a_args)*) -> $a_ret {
+                    // PANIC: every body here is a hole until the backend operation it stands for
+                    // is connected, so reaching this one is a call to a feature that is not
+                    // implemented yet.
                     todo!(concat!("rola's backend does not ", stringify!($a_name), " yet"))
                 }
             )*

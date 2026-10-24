@@ -16,6 +16,9 @@
 //! files that will actually be recorded rather than a guess at them. What the run is doing while it
 //! does it is said through [`crate::progress`], on a bar or as one record per line.
 
+// The handler that records a file is one pass over everything the run is handed: the source, the
+// store, the index and the report about them are moved through together, and the borrows `#[chain]`
+// hands the handler would be scattered across helpers if that pass were cut up.
 #![allow(clippy::too_many_lines)]
 // A recording of one file needs everything about it — where it is, what it holds, the version it is
 // at, the merge waiting for it and the move it confirms — and gathering them into one value would

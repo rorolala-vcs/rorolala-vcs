@@ -157,6 +157,9 @@ where
     ThisProgram: ProgramCollect<Enum = ThisProgram>,
 {
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
+        // UNWRAP: the working directory is the process's own; a run that cannot read it has no
+        // place to look for a Vault, so there is no degraded answer to give. `ProgramSetup::setup`
+        // returns `()`, so this setup cannot report a failure even if it wanted to.
         let vault_dir = program
             .pick_argument(&GLOBAL_ARG_VAULT_DIR)
             .unwrap_or_else(|| current_dir().unwrap());

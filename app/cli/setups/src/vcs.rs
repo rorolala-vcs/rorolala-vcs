@@ -84,6 +84,10 @@ where
 {
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
         program.with_resource(ResVCSIndex::lazy_init(|| {
+            // UNWRAP: the working directory is this process's own; a run that cannot read it has
+            // no place to look for an index, so there is no degraded answer to give.
+            // `ProgramSetup::setup` returns `()`, so this setup cannot report a failure even if it
+            // wanted to.
             init_vcs_index(&current_dir().unwrap())
         }));
     }

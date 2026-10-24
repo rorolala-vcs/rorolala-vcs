@@ -4,7 +4,14 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+// Deserializing builds each value out of plain fields; the `unsafe` methods the lint sees are the
+// FFI conversions `lazyffi` generates beside the types, not anything the data goes through.
 #![allow(clippy::unsafe_derive_deserialize)]
+// The `pub(crate)` items are the plumbing of this crate's own modules, and `pub use data::*;` below
+// would carry a `pub` one out to a caller: `OnlyVault::holding` and its like are what let a module
+// here build a side-tagged value, and an outside caller must not be able to claim the tag itself.
+// The lint reads the private modules as making `pub` and `pub(crate)` the same visibility; the
+// re-exports are what makes them differ.
 #![allow(clippy::redundant_pub_crate)]
 
 #[macro_use]

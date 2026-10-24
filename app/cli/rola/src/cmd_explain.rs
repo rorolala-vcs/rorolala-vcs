@@ -105,7 +105,7 @@ pub fn desc_explain_exit_code() -> Description {
 /// [`ErrorLastExitCodeUnknown`] when the recorded one is not.
 #[command(node = "explain.exit-code")]
 pub fn explain_exit_code(args: EntryExplainExitCode) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // makes this about the run before.
     let (named, unmatched): (Option<i32>, _) =
         args.pick(arg![Option<i32>]).pick(&UNMATCHED).unwrap();

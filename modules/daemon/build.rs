@@ -89,6 +89,8 @@ fn main() {
     println!("cargo:rerun-if-changed={MODULES_TEMPLATE}");
     println!("cargo:rerun-if-changed=build.rs");
 
+    // UNWRAP: cargo sets `CARGO_MANIFEST_DIR` for every build script it runs, so the variable is
+    // a build-script contract rather than a runtime input.
     let manifest = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR for build scripts"),
     );

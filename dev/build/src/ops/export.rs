@@ -203,6 +203,9 @@ fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
 
 /// Lays nothing down: the window is a Win32 program, and the platforms without one have no window to
 /// build.
+///
+/// The signature is the Windows twin's, so both call sites read the same and the non-Windows side
+/// compiles into the same shape.
 #[cfg(not(windows))]
 #[allow(clippy::unnecessary_wraps)]
 fn build_daemon_window(_workspace: &Workspace) -> Result<(), crate::Error> {

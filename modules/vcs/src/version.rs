@@ -11,7 +11,11 @@ use crate::{ComputeBlake3, Hash, ROOT_VERSION, SALT_VER};
 /// The core datum of version control in Rola, confirming the direction of the version chain
 /// through the variant it points at. Who made the change and what was done belong to the variant,
 /// not to the version: fixing one does not change either.
+// Deserializing builds the value out of plain fields; the `unsafe` methods the lint sees are the
+// FFI conversions `lazyffi` generates beside them, not anything the data goes through.
 #[allow(clippy::unsafe_derive_deserialize)]
+// The fields name the version model's own parts, so sharing the type's prefix is the model's
+// naming rather than an accident.
 #[allow(clippy::struct_field_names)]
 #[lazyffi(export = RolaVersion)]
 #[derive(Debug, Clone, Serialize, Deserialize)]

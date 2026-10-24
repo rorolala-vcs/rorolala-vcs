@@ -87,6 +87,9 @@ fn main() {
         println!("cargo:rerun-if-changed={ICON_SCRIPT}");
         println!("cargo:rerun-if-changed={ICON}");
 
+        // UNWRAP: a build script that cannot link the icon has no artifact to continue with — the
+        // program would be built without the icon its Windows resources are for — so aborting the
+        // build is the answer, rather than handing out an executable that has no icon.
         embed_resource::compile(ICON_SCRIPT, embed_resource::NONE)
             .manifest_optional()
             .expect("the program's icon could not be linked in");
@@ -102,6 +105,8 @@ fn main() {
     println!("cargo:rerun-if-changed={}", OUTPUT_DIR);
     println!("cargo:rerun-if-changed=build.rs");
 
+    // UNWRAP: Cargo sets `CARGO_MANIFEST_DIR` for every build script it runs, so the variable is a
+    // build-script contract rather than a runtime input.
     let manifest = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR for build scripts"),
     );

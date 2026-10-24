@@ -318,6 +318,7 @@ fn try_expand_paren_group(
     let mut out = Vec::new();
     for n in 1..=repeat_count {
         if n > 1 && !sep_str.is_empty() {
+            // UNWRAP: `!sep_str.is_empty()` is what makes `chars().next()` a value.
             out.push(TokenTree::Punct(proc_macro::Punct::new(
                 sep_str.chars().next().unwrap(),
                 proc_macro::Spacing::Alone,

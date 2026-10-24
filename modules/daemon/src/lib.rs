@@ -4,6 +4,10 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+// The `pub(crate)` items are the plumbing between this crate's own modules. `action` and
+// `namespaces` are re-exported with `pub use` below, so a `pub` item there would leave the crate.
+// The lint reads the private modules as making `pub` and `pub(crate)` one visibility; those
+// re-exports are what makes them differ.
 #![allow(clippy::redundant_pub_crate)]
 
 use std::{path::Path, pin::Pin};
@@ -49,6 +53,10 @@ pub use namespaces::*;
 #[lazyffi(export = rola_daemon_begin)]
 #[must_use]
 pub fn daemon_begin(registry: &Path, port: u16) -> DaemonExit {
+    // UNWRAP: `daemon_begin` is the FFI-facing entry, and it answers with `DaemonExit` rather
+    // than a `Result`: there is no exit code for a runtime that will not build, so the failure is
+    // one it has no shape to report. What `build()` reads is this process itself — its threads and
+    // its I/O driver — and a daemon without a runtime has nothing to serve.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -120,6 +128,10 @@ pub async fn daemon_begin_with_async(
 /// Panics if the multi-threaded Tokio runtime fails to build.
 #[must_use]
 pub fn daemon_begin_with(registry: &Path, port: u16, max_concurrency: Option<u16>) -> DaemonExit {
+    // UNWRAP: `daemon_begin_with` is the entry `--concurrency` reaches, and it answers with
+    // `DaemonExit` rather than a `Result`: there is no exit code for a runtime that will not
+    // build, so the failure is one it has no shape to report. What `build()` reads is this process
+    // itself — its threads and its I/O driver — and a daemon without a runtime has nothing to serve.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

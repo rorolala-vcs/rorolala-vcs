@@ -11,12 +11,17 @@ use std::path::PathBuf;
 use crate::convert::{InputPtr, InputRef, InputType, ReturnPtr, ReturnType};
 
 /// Implements the four conversion traits for a scalar type, whose repr is itself.
+///
+/// The items it emits carry no markers of their own — a comment in a macro body is dropped with
+/// the token stream — so each `unsafe fn` here states why its implementation is sound.
 macro_rules! impl_scalar {
     ($($ty:ty),* $(,)?) => {
         $(
             impl InputType for $ty {
                 type From = $ty;
 
+                // SAFETY: this impl obeys the trait's contract stated in `convert.rs`; a scalar
+                // is its own repr, so there is no block inside this one to mark.
                 unsafe fn input_type(input: Self::From) -> Self {
                     input
                 }
@@ -25,11 +30,15 @@ macro_rules! impl_scalar {
             impl InputPtr for $ty {
                 type From = $ty;
 
+                // SAFETY: this impl obeys the trait's contract stated in `convert.rs`, and the
+                // dereference inside it carries its own argument.
                 unsafe fn input_ptr(input: *mut Self::From) -> Self {
                     // SAFETY: the caller guarantees a valid, aligned, readable pointer.
                     unsafe { *input }
                 }
 
+                // SAFETY: this impl obeys the trait's contract stated in `convert.rs`, and the
+                // write inside it carries its own argument.
                 unsafe fn write_ptr(self, target: *mut Self::From) {
                     // SAFETY: the caller guarantees a valid, aligned, writable pointer.
                     unsafe { *target = self };
@@ -39,6 +48,8 @@ macro_rules! impl_scalar {
             impl InputRef for $ty {
                 type From = $ty;
 
+                // SAFETY: this impl obeys the trait's contract stated in `convert.rs`, and the
+                // borrow it takes carries its own argument.
                 unsafe fn input_ref<'a>(input: *const Self::From) -> &'a Self {
                     // SAFETY: the caller guarantees a valid, aligned, readable pointer
                     // that stays readable for the duration of the borrow.
@@ -80,6 +91,8 @@ rorolala_utils_lazyffi_core::for_each_scalar!(impl_scalar);
 impl InputType for String {
     type From = *mut c_char;
 
+    // SAFETY: this impl obeys the trait's contract stated in `convert.rs`; the `CStr` read it
+    // makes carries its own argument, null having been answered before it.
     unsafe fn input_type(input: Self::From) -> Self {
         if input.is_null() {
             return Self::new();
@@ -119,6 +132,8 @@ impl ReturnType for String {
 impl InputType for PathBuf {
     type From = *mut c_char;
 
+    // SAFETY: this impl obeys the trait's contract stated in `convert.rs`; the `CStr` and
+    // `OsStr` reads it makes carry their own arguments, null having been answered before them.
     unsafe fn input_type(input: Self::From) -> Self {
         if input.is_null() {
             return Self::new();

@@ -16,6 +16,9 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+// mingling's macros expand the program's entries and chain functions, and the expansion does not
+// carry the `const` a hand-written item would; `missing_const_for_fn` fires on the generated items,
+// which cannot carry an allow of their own. The allow has to be this wide for that reason.
 #![allow(clippy::missing_const_for_fn)]
 
 use std::io::Write as _;
@@ -54,6 +57,8 @@ pub use ops::chunker::passthrough as chunker_passthrough;
 // a caller of this library — which is why `pub(crate)` is not the redundancy clippy reads it as.
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use ops::*;
+// `gen_program!()` reaches these functions by name, so the re-export exists for the macro rather
+// than for a Rust caller, and a wildcard is what that expansion expects.
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use show_shape::*;
 

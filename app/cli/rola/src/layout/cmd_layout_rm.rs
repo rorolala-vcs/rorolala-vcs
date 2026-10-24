@@ -68,8 +68,8 @@ pub fn complete_layout_rm(ctx: ShellContext, workspace: &mut LazyRes<ResWorkspac
 /// Layout-not-there failure otherwise.
 #[command(node = "layout.rm", entry = EntryLayoutRm)]
 pub fn layout_rm(args: EntryLayoutRm) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`, and what a place makes of a name
-    // that is missing is its own to say.
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and what a place makes of
+    // a name that is missing is its own to say.
     let name: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     StateLayoutRm { name }.into()

@@ -111,6 +111,8 @@ pub struct TreeDiff {
 /// Returns [`TreeDiffError::Layout`] if the Layout cannot be read back, and [`TreeDiffError::Io`]
 /// if the tree cannot be walked or what was found cannot be written down. A single file that
 /// cannot be read is not one of these: it is recorded in [`TreeDiff::failed`].
+// The whole scan is one pass: a split would have to re-establish the order its borrows are taken
+// in, and the early returns the scan answers with would become a step's own.
 #[allow(clippy::too_many_lines)]
 pub fn tree_diff(
     layout: &Layout,
@@ -324,6 +326,9 @@ fn read_together<'a>(
                 })
                 .collect();
 
+            // UNWRAP: the thread body only builds `Entry` values from the `fs::read` results it
+            // collects, so its only `Err` is a panic propagated from the OS layer, which the
+            // `Result` from `join` reports here.
             readers
                 .into_iter()
                 .map(|reader| reader.join().expect("reading a file never panics"))
@@ -355,6 +360,9 @@ fn read_entry(file: &scan::Found) -> Result<Entry, std::io::Error> {
 /// same file moved only when its digest says so, which the first pass already found. A pair is
 /// taken only when the two are alike enough and neither has been taken already, and the likeliest
 /// pairs are taken first.
+// A likeness is a ratio of byte counts: the counts themselves are exact integers, while the ratio
+// is deliberately `f32`, so the loss the lint warns about is what the comparison is made of rather
+// than a hazard of it.
 #[allow(clippy::cast_precision_loss)]
 fn likeness(
     sources: &[&LayoutPath],

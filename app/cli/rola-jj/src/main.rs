@@ -36,6 +36,9 @@ const PANIC: u8 = 101;
 /// version of a library it happens to carry would be lying about itself. What it carries is in
 /// `Cargo.toml`.
 fn main() -> std::process::ExitCode {
+    // UNWRAP: without that thread there is no command line to run at all, and the only way the
+    // spawn fails is this process's own resource exhaustion — nothing is left to report but the
+    // panic, which is the one answer that does not pretend a command line ran.
     let run = std::thread::Builder::new()
         .name("rola jj".to_owned())
         .stack_size(STACK)

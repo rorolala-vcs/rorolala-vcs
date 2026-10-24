@@ -165,6 +165,8 @@ pub fn sync(
         return ErrorOffline.into();
     }
 
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None` and a flag that is absent
+    // is `Inactive`, neither of them an error.
     let (up_only, down_only, both, dry_run, no_index, no_storage, no_layout, unmatched) = args
         .pick(ARG_UP_ONLY)
         .pick(ARG_DOWN_ONLY)

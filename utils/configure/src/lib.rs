@@ -1104,6 +1104,9 @@ mod tests {
         assert_eq!(payload.column, 7);
 
         // C → Rust, which borrows the repr — so the string is still ours to release.
+        // SAFETY: `repr` came from the value this test constructed just above, and its tag was
+        // just asserted to be `Parse`, so the repr and the tag it carries are the pair `InputType`
+        // requires of its caller.
         let back = unsafe { Error::input_type(repr) };
         unsafe { free_string(c_file) };
 

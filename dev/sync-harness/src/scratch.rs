@@ -32,6 +32,8 @@ pub fn at(label: &str) -> PathBuf {
     ));
 
     let _ = fs::remove_dir_all(&path);
+    // UNWRAP: the `# Panics` section above is the contract — a measurement with no writable directory
+    // is not one that can be taken — so a directory that will not be made stops the run.
     fs::create_dir_all(&path).expect("a scratch directory can be made");
 
     path

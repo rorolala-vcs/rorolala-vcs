@@ -44,6 +44,8 @@ impl Action for ActionHandshake {
         // Obtain the Vault's information
         let vault_cfg = ctx.current_vault_config();
         let vault_name_and_desc = ctx.only_vault(|| {
+            // UNWRAP: `current_vault_config()` is `Option`, and `only_vault` runs the closure only
+            // on the Vault side, which is the side the value exists on.
             let vault_cfg = vault_cfg.unwrap();
             (
                 vault_cfg.vault_config().name().to_owned(),

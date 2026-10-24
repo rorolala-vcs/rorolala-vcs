@@ -74,8 +74,8 @@ pub fn complete_layout_ls_ownership(
 /// [`ErrorLayoutFailed`]: crate::layout::ErrorLayoutFailed
 #[command(node = "layout.ls-ownership", entry = EntryLayoutLsOwnership)]
 pub fn layout_ls_ownership(args: EntryLayoutLsOwnership) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
-    // Workspace's own choice be the one that is read.
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is read.
     let (named, unmatched): (Option<String>, _) =
         args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 

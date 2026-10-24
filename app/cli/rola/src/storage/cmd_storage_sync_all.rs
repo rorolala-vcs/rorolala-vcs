@@ -88,8 +88,8 @@ pub fn desc_storage_sync_all() -> Description {
 // answer the run gave.
 #[command(node = "storage.sync-all")]
 pub fn storage_sync_all(args: EntryStorageSyncAll) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
-    // Workspace's own choice be the one that is reached for.
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is reached for.
     let (named, unmatched): (Option<String>, _) =
         args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 

@@ -60,8 +60,8 @@ pub fn vcs_index_ls_remote_versions(
     args: EntryVcsIndexLsRemoteVersions,
     format: &mut ResFormat,
 ) -> StateVcsIndexLsRemoteVersions {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
-    // Workspace's own choice be the one that is reached for.
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is reached for.
     let named: Option<String> = args.pick(arg![Option<String>]).unwrap();
 
     format.default_template(DEFAULT_FORMAT_HASHES);

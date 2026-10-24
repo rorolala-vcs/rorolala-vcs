@@ -538,8 +538,10 @@ fn nonce(counter: u64) -> Nonce {
 fn ratchet(key: &[u8; 32]) -> [u8; 32] {
     let mut next = [0u8; 32];
     Hkdf::<Sha256>::from_prk(key)
+        // UNWRAP: HKDF-SHA256's PRK is exactly 32 bytes, and `key` is a `[u8; 32]`.
         .expect("a 32-byte key is a valid pseudo-random key")
         .expand(b"rekey", &mut next)
+        // UNWRAP: HKDF's expand accepts up to 255 blocks of 32 bytes, and this asks for one.
         .expect("32 bytes always fits an HKDF-SHA256 expansion");
 
     next
@@ -577,8 +579,10 @@ impl Schedule {
     fn expand(&self, label: &str) -> [u8; 32] {
         let mut key = [0u8; 32];
         Hkdf::<Sha256>::from_prk(&self.0)
+            // UNWRAP: HKDF-SHA256's PRK is exactly 32 bytes, and `self.0` is a `[u8; 32]`.
             .expect("a 32-byte secret is a valid pseudo-random key")
             .expand(label.as_bytes(), &mut key)
+            // UNWRAP: HKDF's expand accepts up to 255 blocks of 32 bytes, and this asks for one.
             .expect("32 bytes always fits an HKDF-SHA256 expansion");
 
         key

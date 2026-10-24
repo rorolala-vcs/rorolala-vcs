@@ -12,8 +12,10 @@ use proc_macro::TokenStream;
 // does, and its shape is what the lints object to: expanding placeholders over a token
 // stream is one long, deeply nested walk (`too_many_lines`, `cognitive_complexity`), it
 // builds identifiers by joining formatted parts (`uninlined_format_args`,
-// `unnecessary_join`), and it has a `pub(crate)` entry point in a private module, which
-// `rorolala-protocol` allows for the same reason.
+// `unnecessary_join`), it predates the shape `option_if_let_else` asks for and stays as
+// written because rewriting it would end the byte-for-byte comparison, and it has a
+// `pub(crate)` entry point in a private module, which `rorolala-protocol` allows for the
+// same reason.
 #[allow(
     clippy::too_many_lines,
     clippy::cognitive_complexity,

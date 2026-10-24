@@ -87,6 +87,8 @@ where
     ///
     /// Panics if the contained value is `None`.
     pub fn unwrap(self) -> Inner {
+        // UNWRAP: The documented contract is that the value is `Some`; the `# Panics` section
+        // states that `None` panics, which is this API's public behaviour rather than a bug.
         self.inner.unwrap()
     }
 
@@ -257,6 +259,8 @@ where
     ///
     /// Panics if the contained value is `None`.
     pub fn unwrap(self) -> Inner {
+        // UNWRAP: The documented contract is that the value is `Some`; the `# Panics` section
+        // states that `None` panics, which is this API's public behaviour rather than a bug.
         self.inner.unwrap()
     }
 

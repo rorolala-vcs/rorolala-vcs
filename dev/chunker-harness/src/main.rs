@@ -111,6 +111,8 @@ const WITH_VALUE: [&str; 2] = ["--corpus", "--generate"];
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // UNWRAP: picking cannot fail — a positional or flag that is absent answers `None`/`Inactive`
+    // rather than an error, and a word no option claimed lands in `UNMATCHED` rather than in `Err`.
     let (corpus, generate, check, writing, through_store, help, unmatched) = Picker::from_args()
         .pick_or_default(ARG_CORPUS)
         .pick_or_default(ARG_GENERATE)

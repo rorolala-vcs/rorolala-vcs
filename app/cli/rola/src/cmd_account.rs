@@ -61,7 +61,7 @@ pub fn desc_account() -> Description {
 /// anywhere is reported rather than recorded.
 #[command(node = "account")]
 pub fn account(args: EntryAccount) -> Next {
-    // Picking an `Option` cannot fail: an account that is absent is `None` rather than an
+    // UNWRAP: Picking an `Option` cannot fail: an account that is absent is `None` rather than an
     // error, so this unwrap never panics.
     let chosen: Option<String> = args.pick(arg![Option<String>]).unwrap();
 

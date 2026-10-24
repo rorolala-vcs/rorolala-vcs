@@ -34,6 +34,8 @@ pub fn at(label: &str) -> PathBuf {
     let _ = fs::remove_dir_all(&path);
 
     if let Err(error) = fs::create_dir_all(&path) {
+        // PANIC: the `# Panics` section above is the contract — a measurement with no writable
+        // directory is not one that can be taken — so this stops rather than report from nowhere.
         panic!("making {}: {error}", path.display());
     }
 

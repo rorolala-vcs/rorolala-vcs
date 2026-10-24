@@ -4,6 +4,8 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+// Deserializing builds each value out of plain fields; the `unsafe` methods the lint sees are the
+// FFI conversions `lazyffi` generates beside the types, not anything the data goes through.
 #![allow(clippy::unsafe_derive_deserialize)]
 
 mod account;

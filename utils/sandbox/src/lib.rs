@@ -1,4 +1,7 @@
 #![doc = include_str!("../README.md")]
+//!
+//! Every failure here panics: the crate is test support, so its caller is a test program with
+//! nothing to recover with and no answer to hand back.
 #![deny(missing_docs)]
 #![deny(warnings)]
 #![deny(rust_2018_idioms)]
@@ -51,6 +54,8 @@ pub fn run(command: &mut Command) -> Ran {
     let program = command.get_program().to_owned();
     command.stdin(Stdio::null());
 
+    // PANIC: a program that cannot be started is a broken environment rather than an answer to
+    // check, so it is reported rather than handed back as a run with nothing in it.
     let output = command
         .output()
         .unwrap_or_else(|error| panic!("running {}: {error}", Path::new(&program).display()));
@@ -82,6 +87,8 @@ pub fn serve(command: &mut Command, at: impl ToSocketAddrs, within: Duration) ->
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
+    // PANIC: a program that cannot be started will not be listening whatever is waited for, so
+    // it is reported instead of the deadline being waited out for nothing.
     let mut child = command
         .spawn()
         .unwrap_or_else(|error| panic!("starting {}: {error}", Path::new(&program).display()));
@@ -95,6 +102,8 @@ pub fn serve(command: &mut Command, at: impl ToSocketAddrs, within: Duration) ->
         // A program that stopped on its own is one that will not be listening whatever is
         // waited for, so it is reported rather than waited out.
         if let Ok(Some(exit)) = child.try_wait() {
+            // PANIC: nothing is left to wait for once the program has stopped, and a suite that
+            // went on would hang until the deadline instead of saying what happened.
             panic!(
                 "{} stopped before it listened: {exit}",
                 Path::new(&program).display()
@@ -104,6 +113,8 @@ pub fn serve(command: &mut Command, at: impl ToSocketAddrs, within: Duration) ->
         if Instant::now() >= deadline {
             let _ = child.kill();
             let _ = child.wait();
+            // PANIC: the program was asked to serve within this deadline, and a suite that read
+            // on would check a connection nothing was there to answer.
             panic!(
                 "{} was not listening within {within:?}",
                 Path::new(&program).display()
@@ -166,6 +177,8 @@ impl Guard {
         let dir = std::env::temp_dir().join(format!("rolavcs-{label}-{}", std::process::id()));
 
         let _ = fs::remove_dir_all(&dir);
+        // UNWRAP: a directory under the system's temp directory is the one thing a suite cannot
+        // run without, so a sandbox that could not be made leaves nothing to check.
         fs::create_dir_all(&dir).expect("the sandbox");
 
         Self {
@@ -216,6 +229,8 @@ impl Ran {
     /// Panics with what the program wrote, since a run that failed is a suite that has to
     /// say what was wrong with the program to be worth reading.
     pub fn expect_success(&self) {
+        // PANIC: the caller asked for a run that succeeded, and one that did not is the answer —
+        // both streams travel with it because that is all a failed run can be read from.
         assert!(
             self.success(),
             "expected success, got {:?}\n--- stdout ---\n{}\n--- stderr ---\n{}",

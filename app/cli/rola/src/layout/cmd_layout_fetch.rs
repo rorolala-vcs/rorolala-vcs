@@ -81,8 +81,8 @@ pub fn complete_layout_fetch(
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "layout.fetch", entry = EntryLayoutFetch)]
 pub fn layout_fetch(args: EntryLayoutFetch) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
-    // Workspace's own choice be the one that is reached for.
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is reached for.
     let (named, unmatched): (Option<String>, _) =
         args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 

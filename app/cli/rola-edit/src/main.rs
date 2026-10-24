@@ -4,6 +4,9 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+// mingling's macros expand the program's entries and chain functions, and the expansion does not
+// carry the `const` a hand-written item would; `missing_const_for_fn` fires on the generated items,
+// which cannot carry an allow of their own. The allow has to be this wide for that reason.
 #![allow(clippy::missing_const_for_fn)]
 
 //! The command line is one file to open and nothing else: what a run was going to say is in the
@@ -66,6 +69,10 @@ enum Failure {
 fn main() -> ExitCode {
     // Positional first and the flag after it, so the file is claimed by the one position there is
     // before any word is read as the language.
+    // UNWRAP: `pick_or_default` installs the type's `Default` as the fallback for a position or a
+    // flag the run left out, so `parse` answers every value through that fallback and the unwrap
+    // meets nothing missing; the file's fallback is `None`, which is the branch below that says the
+    // run named no file.
     let (file, language) = Picker::from_args()
         .pick_or_default(FILE_ARG)
         .pick_or_default(LANG_ARG)

@@ -63,8 +63,8 @@ pub fn complete_fetch(ctx: ShellContext, remote: &mut LazyRes<ResCurrentRemoteVa
 /// ([`ActionError`](librorolala::protocol::ActionError)).
 #[command(node = "fetch", entry = EntryFetch)]
 pub fn fetch(args: EntryFetch) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what lets the
-    // Workspace's own choice be the one that is reached for.
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // lets the Workspace's own choice be the one that is reached for.
     let (named, unmatched): (Option<String>, _) =
         args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
 

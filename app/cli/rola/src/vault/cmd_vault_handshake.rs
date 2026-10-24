@@ -69,7 +69,7 @@ pub fn desc_vault_handshake() -> Description {
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "vault.handshake")]
 pub fn vault_handshake(args: EntryVaultHandshake) -> Next {
-    // Picking cannot fail: a positional that is absent is `None`, and naming none is what
+    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
     // lets the Workspace's own choice be the one that is reached for.
     let (named, unmatched): (Option<String>, _) =
         args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();

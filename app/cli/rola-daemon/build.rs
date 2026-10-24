@@ -26,6 +26,9 @@ fn main() {
         println!("cargo:rerun-if-changed={ICON_SCRIPT}");
         println!("cargo:rerun-if-changed={ICON}");
 
+        // UNWRAP: a build script that cannot link the icon has no artifact to carry on with — the
+        // program would be built without the icon its Windows resources are for — so aborting here
+        // is the answer rather than letting the build finish and hand out an iconless executable.
         embed_resource::compile(ICON_SCRIPT, embed_resource::NONE)
             .manifest_optional()
             .expect("the program's icon could not be linked in");

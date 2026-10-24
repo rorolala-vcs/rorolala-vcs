@@ -26,8 +26,13 @@ macro_rules! on_workspace {
     ($ctx:expr, |$($param:ident),* $(,)?| $($body:tt)*) => {
         $ctx.only_workspace(|| {
             $(
+                // UNWRAP: Each parameter is unwrapped only in the branch the macro selects: the
+                // closure runs only on the side that holds the value, and an absent one is what
+                // keeps the other branch from being taken.
                 let $param = $param.unwrap();
             )*
+            // The body arrives as a token list, and several statements have nowhere else to go;
+            // a body of one expression is what the lint then reads as redundant braces.
             #[allow(unused_braces)]
             { $($body)* }
         })
@@ -56,8 +61,13 @@ macro_rules! on_vault {
     ($ctx:expr, |$($param:ident),* $(,)?| $($body:tt)*) => {
         $ctx.only_vault(|| {
             $(
+                // UNWRAP: Each parameter is unwrapped only in the branch the macro selects: the
+                // closure runs only on the side that holds the value, and an absent one is what
+                // keeps the other branch from being taken.
                 let $param = $param.unwrap();
             )*
+            // The body arrives as a token list, and several statements have nowhere else to go;
+            // a body of one expression is what the lint then reads as redundant braces.
             #[allow(unused_braces)]
             { $($body)* }
         })

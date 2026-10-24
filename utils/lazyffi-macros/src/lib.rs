@@ -406,6 +406,14 @@ fn expand_const(args: &LazyFfiArgs, konst: &ItemConst) -> syn::Result<TokenStrea
     let mirrored = mirrored_attrs(&format!("`{rust_name}`"), &konst.attrs);
 
     if is_str_ref(ty) {
+        // The generated function takes its name from C: `#[lazyffi(export = ...)]` decides the
+        // spelling, so a salt exported as `ROLA_SALT_VRT` names it that way, and
+        // `nonstandard_style` reads that as a function in the wrong case. The attribute is
+        // emitted with the item, and the reason cannot be: a comment written inside `quote!` is
+        // dropped with the token stream, so the justification is written here instead.
+        // SAFETY: `no_mangle` is what gives the function the symbol name `export` declares, and
+        // the item exists for the C caller that reaches it through the generated header; the
+        // marker cannot be emitted with it, for the reason above.
         return Ok(quote! {
             #konst
 
@@ -420,6 +428,14 @@ fn expand_const(args: &LazyFfiArgs, konst: &ItemConst) -> syn::Result<TokenStrea
     }
 
     if is_scalar(ty) {
+        // The generated static is spelled for C: `#[lazyffi(export = ...)]` decides the name, and
+        // the generator cannot tell whether that spelling keeps Rust's constant convention, which
+        // is what `nonstandard_style` reads. The attribute is emitted with the item, and the
+        // reason cannot be: a comment written inside `quote!` is dropped with the token stream,
+        // so the justification is written here instead.
+        // SAFETY: `no_mangle` is what gives the static the symbol name `export` declares, and the
+        // item exists for the C caller that reads it through the generated header; the marker
+        // cannot be emitted with it, for the reason above.
         return Ok(quote! {
             #konst
 
@@ -459,6 +475,14 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
         &item.attrs,
     );
 
+    // The emitted names are the C header's spelling — the type from `#[lazyffi(export = ...)]`,
+    // the release from that name — so `nonstandard_style` is emitted with them. The attribute
+    // is emitted with the item, and the reason cannot be: a comment written inside `quote!` is
+    // dropped with the token stream, which is why it is written here instead.
+    // SAFETY: the `unsafe fn`s emitted below are the `InputType`, `InputPtr` and `InputRef`
+    // implementations, whose contract is the trait's `# Safety` documentation in
+    // `utils/lazyffi/src/convert.rs`, and each generated body only forwards to it: the pointer
+    // is one the caller must leave valid for the conversion, as that documentation states.
     Ok(quote! {
         #item
 
@@ -635,6 +659,10 @@ fn enum_release(args: &LazyFfiArgs, rust_name: &Ident, ffi_name: &Ident) -> Toke
         &[],
     );
 
+    // The release function is named for C: `free_` over the name C knows the type by, so
+    // `nonstandard_style` is emitted with it — the header's spelling, not Rust's. The
+    // attribute is emitted with the item, and the reason cannot be: a comment written inside
+    // `quote!` is dropped with the token stream, which is why it is written here instead.
     quote! {
         #(#docs)*
         #[doc = #SAFETY_DOC]
@@ -691,6 +719,14 @@ fn expand_unit_enum(item: &ItemEnum, rust_name: &Ident, ffi_name: &Ident) -> Tok
         &quote! { match self { #(#to_ffi)* } },
     );
 
+    // The emitted enum is named and stocked from C: `#[lazyffi(export = ...)]` fixes the type,
+    // and C spells each enumerator `<repr>_<variant>`, so the header repeats the type's prefix
+    // where Rust keeps the variant names as they are. `nonstandard_style` is therefore emitted
+    // with the enum, and `clippy::enum_variant_names` with it because a header whose variants
+    // share a word — `ParseVCSIndexObjectError`'s `ExpectVariant`, `ExpectVersion`,
+    // `ExpectCreator`, `ExpectMessage` — is the header's to name. The attribute is emitted
+    // with the item, and the reason cannot be: a comment written inside `quote!` is dropped
+    // with the token stream.
     quote! {
         #item
 
@@ -833,6 +869,14 @@ fn expand_data_enum(item: &ItemEnum, rust_name: &Ident, ffi_name: &Ident) -> Tok
         &quote! { match self { #(#to_ffi)* } },
     );
 
+    // The emitted tag enum, payload union and repr are named and stocked from C:
+    // `#[lazyffi(export = ...)]` fixes the repr, the tag enum keeps the header's variant
+    // spelling, and the union carries `__unit` for the variants without a payload — the field
+    // `lazyffi-core` names (`PAYLOAD_UNIT_FIELD`) and the header generator leaves out of the C
+    // union. So `nonstandard_style`, `clippy::enum_variant_names` (a header whose variants share
+    // a word) and `clippy::pub_underscore_fields` (that `__unit` slot) are emitted with them. The
+    // attribute is emitted with the item, and the reason cannot be: a comment written inside
+    // `quote!` is dropped with the token stream, which is why it is written here instead.
     quote! {
         #item
 
@@ -938,6 +982,10 @@ fn expand_data_variant(
             } else {
                 quote! { input.payload.#variant_name }
             };
+            // SAFETY: the arm this read is spliced into is the one the tag names, so the
+            // payload's field for that variant is the live one, and the value in it is the one
+            // the write side put there. The tag is what makes the read sound, and the wrapper's
+            // `# Safety` doc (`SAFETY_DOC`) carries the same contract to C.
             quote! {
                 unsafe { <#ty as ::rorolala_utils_lazyffi::InputType>::input_type(#access) }
             }
@@ -1000,6 +1048,12 @@ fn payload_repr(
         docs_or_fallback(&format!("payload of the `{variant_name}` variant"), attrs);
 
     (
+        // The companion struct's fields are the payload's own names — `_0`, `_1` for a tuple
+        // payload, the variant's field names for a braced one — and the header reads the very
+        // same names, so `clippy::pub_underscore_fields` and `clippy::struct_field_names` are
+        // emitted with the struct rather than answered by renaming what C is told. The
+        // attribute is emitted with the item, and the reason cannot be: a comment written
+        // inside `quote!` is dropped with the token stream.
         quote! {
             #(#companion_docs)*
             #[doc(hidden)]
@@ -1039,6 +1093,8 @@ fn payload_value(companion: Option<&Ident>, fields: &[PayloadField]) -> TokenStr
 const fn first_field(fields: &[PayloadField]) -> &PayloadField {
     match fields.first() {
         Some(field) => field,
+        // PANIC: the payload enum is generated with at least one field, so this arm is a
+        // generator invariant the emitted code can never reach.
         None => panic!("a payload has at least one field"),
     }
 }
@@ -1050,6 +1106,13 @@ fn conversion_impls(
     input_body: &TokenStream2,
     return_body: &TokenStream2,
 ) -> TokenStream2 {
+    // SAFETY: the implementations emitted below are `InputType`, `ReturnType`, `InputPtr` and
+    // `ReturnPtr` — no `InputRef`, which only a repr borrowed in place can carry — and the
+    // `unsafe fn`s among them are the `InputType` and `InputPtr` ones, whose contract is the
+    // trait's `# Safety` documentation in `utils/lazyffi/src/convert.rs`; each generated body
+    // only forwards to it — `input_body` is the conversion this function is handed, and
+    // `InputPtr`'s two bodies go through `InputType` and `ReturnType`. The marker cannot be
+    // emitted with them: a comment written inside `quote!` is dropped with the token stream.
     quote! {
         #[doc(hidden)]
         impl ::rorolala_utils_lazyffi::InputType for #rust_name {
@@ -1199,6 +1262,9 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
                     parts.params.push(quote! {
                         #name: <#owned as ::rorolala_utils_lazyffi::InputType>::From
                     });
+                    // SAFETY: the pointer is the C string the wrapper's `# Safety` doc
+                    // (`SAFETY_DOC`) has the caller hand over NUL-terminated and readable for the
+                    // call, which is the contract `InputType` states for this `From`.
                     parts.prelude.push(quote! {
                         let #name = unsafe {
                             <#owned as ::rorolala_utils_lazyffi::InputType>::input_type(#name)
@@ -1216,6 +1282,9 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
                 parts.params.push(quote! {
                     #name: *const <#inner as ::rorolala_utils_lazyffi::InputRef>::From
                 });
+                // SAFETY: the pointer is the one the wrapper's `# Safety` doc (`SAFETY_DOC`) has
+                // the caller leave aligned and readable for the call, which is the contract
+                // `InputRef` states for this `From`; the borrow ends with the call.
                 parts.prelude.push(quote! {
                     let #name = unsafe {
                         <#inner as ::rorolala_utils_lazyffi::InputRef>::input_ref(#name)
@@ -1232,12 +1301,18 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
             parts.params.push(quote! {
                 #name: *mut <#inner as ::rorolala_utils_lazyffi::InputPtr>::From
             });
+            // SAFETY: the pointer is the one the wrapper's `# Safety` doc (`SAFETY_DOC`) has the
+            // caller leave valid, aligned and readable for the call, which is the contract
+            // `InputPtr` states for this `From`.
             parts.prelude.push(quote! {
                 let mut #local = unsafe {
                     <#inner as ::rorolala_utils_lazyffi::InputPtr>::input_ptr(#name)
                 };
             });
             parts.call_args.push(quote! { &mut #local });
+            // SAFETY: the write goes through the very pointer `input_ptr` read, which the
+            // wrapper's `# Safety` doc (`SAFETY_DOC`) has the caller leave writable for the call,
+            // and it happens before the call returns.
             parts.write_back.push(quote! {
                 unsafe {
                     <#inner as ::rorolala_utils_lazyffi::InputPtr>::write_ptr(#local, #name);
@@ -1252,6 +1327,9 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
         parts.params.push(quote! {
             #name: <#ty as ::rorolala_utils_lazyffi::InputType>::From
         });
+        // SAFETY: the argument is what the wrapper's `# Safety` doc (`SAFETY_DOC`) and this
+        // type's `InputType` implementation demand of the caller — a value, or a pointer paired
+        // with its tag — and the conversion reads nothing beyond it.
         parts.prelude.push(quote! {
             let #name = unsafe { <#ty as ::rorolala_utils_lazyffi::InputType>::input_type(#name) };
         });
@@ -1343,6 +1421,11 @@ fn wrapper_tokens(
     let mut ffi_docs = mirrored_attrs(label, attrs);
     ffi_docs.push(quote! { #[doc = #SAFETY_DOC] });
 
+    // The wrapper takes its name from C: `#[lazyffi(export = ...)]` decides it, and a value-level
+    // export is spelled the header's way, which `nonstandard_style` reads as the wrong case for a
+    // function. The attribute is emitted with the item, and the reason cannot be because a
+    // comment written inside `quote!` is dropped with the token stream, so the justification
+    // is written here instead.
     Ok(quote! {
         #(#ffi_docs)*
         #[doc(hidden)]
@@ -1523,6 +1606,9 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
                 parts.params.push(quote! {
                     #param: *const <Self as ::rorolala_utils_lazyffi::InputRef>::From
                 });
+                // SAFETY: the receiver is the pointer the wrapper's `# Safety` doc
+                // (`SAFETY_DOC`) has the caller leave aligned and readable for the call, which
+                // is the contract `InputRef` states for `Self`, and nothing is taken from it.
                 parts.prelude.push(quote! {
                     let #local = unsafe {
                         <Self as ::rorolala_utils_lazyffi::InputRef>::input_ref(#param)
@@ -1536,12 +1622,18 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
             parts.params.push(quote! {
                 #param: *mut <Self as ::rorolala_utils_lazyffi::InputPtr>::From
             });
+            // SAFETY: the receiver is the pointer the wrapper's `# Safety` doc (`SAFETY_DOC`)
+            // has the caller leave valid, aligned and readable for the call, which is the
+            // contract `InputPtr` states for `Self`.
             parts.prelude.push(quote! {
                 let mut #local = unsafe {
                     <Self as ::rorolala_utils_lazyffi::InputPtr>::input_ptr(#param)
                 };
             });
             parts.call_args.push(quote! { &mut #local });
+            // SAFETY: the write goes back through the pointer `input_ptr` read, which the
+            // wrapper's `# Safety` doc (`SAFETY_DOC`) has the caller leave writable for the call,
+            // and it happens before the call returns.
             parts.write_back.push(quote! {
                 unsafe {
                     <Self as ::rorolala_utils_lazyffi::InputPtr>::write_ptr(#local, #param);
@@ -1558,6 +1650,9 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
             parts.params.push(quote! {
                 #param: <Self as ::rorolala_utils_lazyffi::InputType>::From
             });
+            // SAFETY: the receiver is what the wrapper's `# Safety` doc (`SAFETY_DOC`) and this
+            // type's `InputType` implementation demand of the caller — a value, or a pointer
+            // paired with its tag — and the conversion reads nothing beyond it.
             parts.prelude.push(quote! {
                 #binding = unsafe {
                     <Self as ::rorolala_utils_lazyffi::InputType>::input_type(#param)

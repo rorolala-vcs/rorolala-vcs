@@ -17,6 +17,10 @@
 //! `--packed` packs the source before syncing, which is what a store that has been packed looks
 //! like; `--fs` also measures the raw filesystem, so what the machine charges for one file written
 //! and moved into place is a number beside the store's.
+//!
+//! This is a measurement harness, so a measurement whose conditions do not hold ends with a panic: a
+//! phase that did not run leaves no number, and a number taken over it would be read as what the
+//! machine charges.
 
 #![deny(warnings)]
 #![deny(rust_2018_idioms)]
@@ -134,14 +138,20 @@ async fn measure(setting: &Setting) {
     if setting.packed {
         let started = Instant::now();
         {
+            // UNWRAP: `scratch::at` emptied this directory just before the store was made, so no
+            // lock file is there for `lock` to refuse.
             let guard = source.lock().await.expect("the store can be locked");
 
+            // UNWRAP: the guard above is held, so no other holder can be writing, and the keys are
+            // the ones `fill` has just laid down loose in this store.
             guard.pack(&keys).await.expect("the source packs");
         }
         said("store: pack them", setting, started.elapsed());
     }
 
     let started = Instant::now();
+    // UNWRAP: every key asked about is one `fill` has just written into this store, and
+    // `contains_keys` answers which of them it holds rather than failing on a miss.
     let _ = source
         .contains_keys(&keys)
         .await
@@ -154,6 +164,8 @@ async fn measure(setting: &Setting) {
 
     let started = Instant::now();
     for key in &keys {
+        // UNWRAP: the keys are `fill`'s own, as above; one key per call is what this phase
+        // measures, not a doubt about the answer.
         let _ = source
             .contains_keys(std::slice::from_ref(key))
             .await
@@ -181,7 +193,11 @@ async fn measure(setting: &Setting) {
         let here = source.clone();
         let there = target.clone();
         let workspace_local = OnlyWorkspace::new(&workspace, || here);
+        // PANIC: `vault` is a Vault context, so `OnlyWorkspace::new` takes its `empty()` branch and
+        // the closure is never called.
         let vault_other = OnlyWorkspace::new(&vault, || unreachable!("the Vault holds nothing"));
+        // PANIC: `workspace` is a Workspace context, so `OnlyVault::new` takes its `empty()` branch
+        // and the closure is never called.
         let workspace_other = OnlyVault::new(&workspace, || unreachable!("nothing to take yet"));
         let vault_local = OnlyVault::new(&vault, || there);
 
@@ -200,13 +216,21 @@ async fn measure(setting: &Setting) {
         );
         let elapsed = started.elapsed();
 
+        // UNWRAP: the sync ran between two stores this run made over a channel `pair::handshaken`
+        // has completed, so a refusal is the primitive failing and leaves no phase to report.
         from_workspace.expect("the Workspace side of the sync succeeds");
+        // UNWRAP: the same pair, the other end: the channel it reads was handshaken before either
+        // side was asked, so an error here is the Vault half of the primitive failing.
         from_vault.expect("the Vault side of the sync succeeds");
 
+        // UNWRAP: the target is the store `RorolalaStorage::create` has just made, so it has an
+        // index to ask about the keys the sync has laid into it.
         let arrived = target
             .contains_keys(&keys)
             .await
             .expect("the target answers");
+        // PANIC: the message is this measurement's own invariant, and a target short of what crossed
+        // is a wrong number rather than a slower one, so the run stops instead of reporting it.
         assert!(
             (0..keys.len()).all(|at| arrived.held(at)),
             "the target holds everything that crossed",
@@ -280,6 +304,8 @@ async fn fill(store: &RorolalaStorage, setting: &Setting) -> Vec<Key> {
         let content = body(at, setting);
         let key = Key::new(*blake3::hash(&content).as_bytes());
 
+        // UNWRAP: the key is the `blake3` hash of the very bytes it goes with, so the store has a
+        // verified entry to lay into this run's own scratch directory.
         store.accept(&key, content).await.expect("the store writes");
         keys.push(key);
     }

@@ -65,7 +65,7 @@ pub fn desc_key() -> Description {
 /// it is looked up. Finding nothing is not a failure: it prints nothing and returns.
 #[command(node = "key", entry = EntryKey)]
 pub fn key(args: EntryKey, format: &mut ResFormat) -> Next {
-    // Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
+    // UNWRAP: Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
     let (pem, unmatched) = args.pick(ARG_PEM).pick(&UNMATCHED).unwrap();
 
     if let Some(next) = crate::unmatched::refused(&unmatched, "key") {

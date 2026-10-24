@@ -42,6 +42,8 @@ fn main() {
 
 /// The workspace root, which is two directories above this crate.
 fn manifest_dir() -> PathBuf {
+    // UNWRAP: the crate sits at `utils/icons`, so the workspace root is two directories above its
+    // manifest directory — a fact of this tree's layout, which holds wherever it is checked out.
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
@@ -398,6 +400,8 @@ impl TargetSize {
             ));
         }
 
+        // UNWRAP: the check above refused either side being zero or above `ICO_MAX_SIDE`, which is
+        // what makes both sides fit a `u32`; nothing between that ceiling and `u32::MAX` is left.
         Ok((
             u32::try_from(width).expect("a side within the limit is a u32"),
             u32::try_from(height).expect("a side within the limit is a u32"),
