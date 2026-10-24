@@ -12,7 +12,9 @@ semantics may not.
 - Comments state facts and reasons, never what the code does: why it is done this way, why not
   another way, what constrains it.
 - Code comments and docs are English, imperative or present tense.
-- Mark every escape hatch and say why it holds: `// SAFETY:`, `// UNWRAP:`, `// WORKAROUND:`.
+- Mark every escape hatch and say why it holds: `// SAFETY:` on `unsafe`, `// UNWRAP:` on a
+  panicking `unwrap`/`expect`, `// PANIC:` on a panic path, and `// WORKAROUND:` on a bypass, with
+  what it works around and when it can go.
 - Public items carry docs (`missing_docs` is enforced). The C header keeps only the first line and
   the `# FFI` section, so words meant for a C reader go under `# FFI` — see `dev/bindgen`.
 
