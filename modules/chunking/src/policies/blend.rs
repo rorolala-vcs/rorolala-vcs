@@ -49,8 +49,10 @@ pub struct Blend;
 
 impl Chunker for Blend {
     fn split(&self, content: &[u8]) -> Vec<Range<usize>> {
-        // WORKAROUND: An unknown or damaged Blender layout remains byte-exact as one object;
-        // guessed boundaries cannot earn reliable sharing across saves.
+        // An unknown or damaged Blender layout stays byte-exact as one object: guessed boundaries
+        // cannot earn reliable sharing across saves. This is the policy's answer for data it cannot
+        // account for rather than a bypass of anything, so it stays as long as the policy accepts
+        // files it cannot parse.
         walk(content).unwrap_or_else(|| Whole.split(content))
     }
 }
