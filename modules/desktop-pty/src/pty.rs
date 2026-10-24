@@ -67,7 +67,6 @@ struct Inner {
 ///
 /// Each pointer must be null or a NUL-terminated UTF-8 string, and `arguments` must be the list the
 /// paragraph above describes.
-#[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rola_desktop_pty_open(
     program: *const c_char,
@@ -150,7 +149,6 @@ pub unsafe extern "C" fn rola_desktop_pty_open(
 ///
 /// `handle` must be one `rola_desktop_pty_open` handed out and not closed, and `buffer` must be
 /// writable for `capacity` bytes.
-#[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rola_desktop_pty_read(
     handle: *mut RolaDesktopPty,
@@ -186,7 +184,6 @@ pub unsafe extern "C" fn rola_desktop_pty_read(
 ///
 /// `handle` must be one `rola_desktop_pty_open` handed out and not closed, and `data` must be
 /// readable for `length` bytes.
-#[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rola_desktop_pty_write(
     handle: *mut RolaDesktopPty,
@@ -225,7 +222,6 @@ pub unsafe extern "C" fn rola_desktop_pty_write(
 /// # Safety
 ///
 /// `handle` must be one `rola_desktop_pty_open` handed out and not closed.
-#[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rola_desktop_pty_resize(
     handle: *mut RolaDesktopPty,
@@ -261,7 +257,6 @@ pub unsafe extern "C" fn rola_desktop_pty_resize(
 /// # Safety
 ///
 /// `handle` must be one `rola_desktop_pty_open` handed out and not closed, or null.
-#[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rola_desktop_pty_close(handle: *mut RolaDesktopPty) {
     if handle.is_null() {

@@ -4,7 +4,6 @@
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
-#![allow(async_fn_in_trait)]
 
 use std::future::Future;
 use std::io::Error;
