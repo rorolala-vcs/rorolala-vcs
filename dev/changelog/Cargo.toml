@@ -1,0 +1,20 @@
+[package]
+name = "rola-changelog"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# A workspace of its own, for the reason `dev/build` states: cargo unifies a dependency's features
+# across one workspace build, and this tool needs the picker's `arg!` while the programs it records
+# the history of do not. The alias in `.cargo/config.toml` is what reaches it.
+[workspace]
+
+[dependencies]
+mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267fe16686e1ac22d68da14a26005b8c9", default-features = false, features = [
+    "picker",
+] }
+
+# The draft's front matter is YAML, read as YAML rather than as lines so a quoted summary or a
+# folded list is read as what it says. `serde` is the derive beside it.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_yaml = "0.9.34"

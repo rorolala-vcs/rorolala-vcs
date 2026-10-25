@@ -1,0 +1,12 @@
+Record what changed, and seal a version when it is released.
+USAGE: cargo changelog <COMMAND> [ARGS...]
+
+COMMANDS:
+   set-version <VERSION>  Set workspace.package.version and refresh Cargo.lock
+   get-version            Print the workspace version; exit 10 when it is absent
+   write-reset            Reset the draft at __CHANGELOG_DRAFT.md
+   write                  Merge the draft into CHANGELOG.md
+   archive                Date the newest Unreleased section and seal it
+
+GLOBAL FLAGS:
+   --allow-dirty          Go on where a command would refuse a dirty tree
