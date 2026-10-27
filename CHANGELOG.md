@@ -282,7 +282,21 @@ is beside it. Building it needs GTK 4.10 or newer with its development files.
 Stopping a daemon the window started asks it to terminate and falls back to killing it, because
 `rola-daemon` has no stop command.
 
-### 4. [`modules`] [`define-format`] Add rola-define-format, the rola.lock format
+### 4. [`dev`] [`rola-build`] [`publish`] Package the Linux hand-off as deb, rpm, Arch and AppImage
+
+`cargo dev publish` on Linux now lays the export out as the packages a distribution installs —
+`rorolala-vcs`, `rorolala-desktop` and `rorolala-dev` — a `rorolala-full` meta package that names
+all three, an all-in-one `rorolala` package that holds them, and a launcher-only AppImage. The
+Desktop program and launcher are published self-contained, so the packages that hold them carry the
+.NET runtime; the AppImage carries `rola`, `ROLALauncher` and `RororalaDesktop`, and no other
+program.
+
+The packages install the six programs, both desktop entries, the icons and completions, and a user
+`rolad.service`. The unit is installed but never enabled or started by the package: whether the
+daemon runs is its user's decision. Package metadata is read from the workspace's own `Cargo.toml`,
+and nFPM and appimagetool are pinned beside the export.
+
+### 5. [`modules`] [`define-format`] Add rola-define-format, the rola.lock format
 
 `rola.lock` names the materials a project places and the Vaults their content can be fetched
 from. It is generated — `rola.toml` is the file a person writes — so the grammar is deliberately
@@ -297,7 +311,7 @@ a format version this build does not know is refused whole.
 Paths, Vault names and content hashes are validated types rather than strings, and the crate is
 the only place a lock is read or written: it holds no files, no network and no git.
 
-### 5. [`modules`] [`git-support`] Add rola-git-support for project files and the work tree
+### 6. [`modules`] [`git-support`] Add rola-git-support for project files and the work tree
 
 A project is a directory holding `rola.toml` — the Vaults, the features, and one `[[mapping]]` per
 material — with the generated `rola.lock` beside it. This crate reads both, finds the project and
@@ -323,20 +337,20 @@ must not be able to make another's materials visible to git.
 This change adds the Rorolala VCS 0.1.0 suite, as follows:
 
 - Added the complete VCS subcommands to the `rola` CLI, including:
-  - VCS subcommands track, retrack, checkin, fetch, sync, pack, status, entries, align, etc. (`app/cli/rola/src/`)
-  - Commands related to `vcs-index`, `storage`, `layout`, and `ownership` (`app/cli/rola/src/vcs_index/`, `app/cli/rola/src/storage/`, `app/cli/rola/src/layout/`, `app/cli/rola/src/cmd_ownership.rs`)
+    - VCS subcommands track, retrack, checkin, fetch, sync, pack, status, entries, align, etc. (`app/cli/rola/src/`)
+    - Commands related to `vcs-index`, `storage`, `layout`, and `ownership` (`app/cli/rola/src/vcs_index/`, `app/cli/rola/src/storage/`, `app/cli/rola/src/layout/`, `app/cli/rola/src/cmd_ownership.rs`)
 - Added new Rust modules, including:
-  - `modules/vcs` (versions, variants, creators, messages, index, and lookback) (`modules/vcs/`)
-  - `modules/status` (status, version graph, merging, and ownership) (`modules/status/`)
-  - `modules/tree-analyze` (scanning, fingerprints, tree diffs, and caching) (`modules/tree-analyze/`)
-  - `modules/chunking` (chunking strategy registry, including the `blend-basic` and `psd-basic` corpora) (`modules/chunking/`)
+    - `modules/vcs` (versions, variants, creators, messages, index, and lookback) (`modules/vcs/`)
+    - `modules/status` (status, version graph, merging, and ownership) (`modules/status/`)
+    - `modules/tree-analyze` (scanning, fingerprints, tree diffs, and caching) (`modules/tree-analyze/`)
+    - `modules/chunking` (chunking strategy registry, including the `blend-basic` and `psd-basic` corpora) (`modules/chunking/`)
 - Added VCS-related remote actions to the daemon, including:
-  - Creating/writing remote entries, fetching layouts, requesting/abandoning ownership, syncing storage and indexes, etc. (`modules/daemon/src/actions/`)
+    - Creating/writing remote entries, fetching layouts, requesting/abandoning ownership, syncing storage and indexes, etc. (`modules/daemon/src/actions/`)
 - Added the desktop-side `RorolalaVCSPlugin`, including:
-  - Commands such as checkin/fetch/sync/track (`app/desktop/Plugins/RorolalaVCSPlugin/CheckinCommand.cs`, `Fetch.cs`, `Sync.cs`, `TrackCommand.cs`, etc.)
-  - Account and ownership operations (`app/desktop/Plugins/RorolalaVCSPlugin/AccountActions.cs`, `OwnershipActions.cs`)
-  - Version graph view, progress panel, and report view (`app/desktop/Plugins/RorolalaVCSPlugin/VersionGraphView.cs`, `ProgressPanel.cs`, `ReportView.cs`)
-  - Sync watching and status badge (`app/desktop/Plugins/RorolalaVCSPlugin/SyncWatcher.cs`, `RorolalaStandingBadge.cs`)
+    - Commands such as checkin/fetch/sync/track (`app/desktop/Plugins/RorolalaVCSPlugin/CheckinCommand.cs`, `Fetch.cs`, `Sync.cs`, `TrackCommand.cs`, etc.)
+    - Account and ownership operations (`app/desktop/Plugins/RorolalaVCSPlugin/AccountActions.cs`, `OwnershipActions.cs`)
+    - Version graph view, progress panel, and report view (`app/desktop/Plugins/RorolalaVCSPlugin/VersionGraphView.cs`, `ProgressPanel.cs`, `ReportView.cs`)
+    - Sync watching and status badge (`app/desktop/Plugins/RorolalaVCSPlugin/SyncWatcher.cs`, `RorolalaStandingBadge.cs`)
 - Added accompanying test projects and i18n resources, including:
-  - Test cases for checkin/fetch/retrack/variants in the test projects `tests/vcs-index`, `tests/vcs-index-remote`, `tests/vcs-index-sync`, `tests/sync-chain`, and `tests/desktop-host` (`tests/`)
-  - i18n resources `cmd_vcs_index*.yml` and `rorolala_vcs/strings.yml` (`app/cli/rola/i18n/`, `app/desktop/Plugins/RorolalaVCSPlugin/i18n/rorolala_vcs/strings.yml`)
+    - Test cases for checkin/fetch/retrack/variants in the test projects `tests/vcs-index`, `tests/vcs-index-remote`, `tests/vcs-index-sync`, `tests/sync-chain`, and `tests/desktop-host` (`tests/`)
+    - i18n resources `cmd_vcs_index*.yml` and `rorolala_vcs/strings.yml` (`app/cli/rola/i18n/`, `app/desktop/Plugins/RorolalaVCSPlugin/i18n/rorolala_vcs/strings.yml`)

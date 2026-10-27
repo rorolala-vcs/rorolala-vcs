@@ -35,6 +35,9 @@ const DEFAULT_BUILD_DIR: &str = "build";
 /// Where a toolchain fetched rather than installed is kept.
 const DEFAULT_TOOLCHAIN_DIR: &str = ".cache/toolchains";
 
+/// Where a package's staging trees are assembled.
+const DEFAULT_PACKAGE_DIR: &str = ".cache/package";
+
 /// The directory inside cargo's output that mingling writes completion scripts into.
 const COMPLETION_DIR_IN_TARGET: &str = "mingling";
 
@@ -214,6 +217,15 @@ impl Workspace {
         self.directory("TOOLCHAIN_DIR", DEFAULT_TOOLCHAIN_DIR)
     }
 
+    /// Where a package's staging trees are assembled, from `PACKAGE_DIR` when it is set.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`Error::Directory`] when the override is not a directory inside the workspace.
+    pub fn package_dir(&self) -> Result<PathBuf, Error> {
+        self.directory("PACKAGE_DIR", DEFAULT_PACKAGE_DIR)
+    }
+
     /// The completion scripts inside an export.
     ///
     /// # Errors
@@ -264,6 +276,66 @@ impl Workspace {
         publisher_of(&manifest).ok_or_else(|| Error::Manifest {
             path: self.manifest_path(),
             detail: "it states no author under `[workspace.package]`".to_owned(),
+        })
+    }
+
+    /// The person a package names as its maintainer: the second of the workspace's authors.
+    ///
+    /// The second is taken because the first is the publisher a package is made by, and a package
+    /// manager wants a person it can write to. The entry is kept as the manifest spells it, so a
+    /// maintainer with an address keeps the address.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`Error::Manifest`] when the manifest cannot be read or states fewer than two authors.
+    pub fn maintainer(&self) -> Result<String, Error> {
+        let manifest = self.read_manifest()?;
+
+        maintainer_of(&manifest).ok_or_else(|| Error::Manifest {
+            path: self.manifest_path(),
+            detail: "it states no second author under `[workspace.package]`".to_owned(),
+        })
+    }
+
+    /// The project's home page, read from `[workspace.package]`.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`Error::Manifest`] when the manifest cannot be read or states no home page.
+    pub fn homepage(&self) -> Result<String, Error> {
+        let manifest = self.read_manifest()?;
+
+        homepage_of(&manifest).ok_or_else(|| Error::Manifest {
+            path: self.manifest_path(),
+            detail: "it states no `homepage` under `[workspace.package]`".to_owned(),
+        })
+    }
+
+    /// What the project is, in one line, read from `[workspace.package]`.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`Error::Manifest`] when the manifest cannot be read or states no description.
+    pub fn description(&self) -> Result<String, Error> {
+        let manifest = self.read_manifest()?;
+
+        description_of(&manifest).ok_or_else(|| Error::Manifest {
+            path: self.manifest_path(),
+            detail: "it states no `description` under `[workspace.package]`".to_owned(),
+        })
+    }
+
+    /// The licence the whole workspace is under, read from `[workspace.package]`.
+    ///
+    /// # Errors
+    ///
+    /// Reports [`Error::Manifest`] when the manifest cannot be read or states no licence.
+    pub fn license(&self) -> Result<String, Error> {
+        let manifest = self.read_manifest()?;
+
+        license_of(&manifest).ok_or_else(|| Error::Manifest {
+            path: self.manifest_path(),
+            detail: "it states no `license` under `[workspace.package]`".to_owned(),
         })
     }
 
@@ -434,10 +506,47 @@ fn version_of(manifest: &str) -> Option<String> {
 
 /// The first author `manifest` states under `[workspace.package]`, when it states one.
 fn publisher_of(manifest: &str) -> Option<String> {
+    authors_of(manifest)?.first().cloned()
+}
+
+/// The second author `manifest` states under `[workspace.package]`, when it states one.
+fn maintainer_of(manifest: &str) -> Option<String> {
+    authors_of(manifest)?.get(1).cloned()
+}
+
+/// Every author `manifest` states under `[workspace.package]`, in the order it states them.
+fn authors_of(manifest: &str) -> Option<Vec<String>> {
     let value = toml::from_str::<toml::Value>(manifest).ok()?;
     let authors = value.get("workspace")?.get("package")?.get("authors")?;
 
-    Some(authors.as_array()?.first()?.as_str()?.to_owned())
+    authors
+        .as_array()?
+        .iter()
+        .map(|author| author.as_str().map(str::to_owned))
+        .collect()
+}
+
+/// A string `manifest` states under `[workspace.package]`.
+fn package_string(manifest: &str, key: &str) -> Option<String> {
+    let value = toml::from_str::<toml::Value>(manifest).ok()?;
+    let package = value.get("workspace")?.get("package")?;
+
+    Some(package.get(key)?.as_str()?.to_owned())
+}
+
+/// The home page `manifest` states under `[workspace.package]`, when it states one.
+fn homepage_of(manifest: &str) -> Option<String> {
+    package_string(manifest, "homepage")
+}
+
+/// The description `manifest` states under `[workspace.package]`, when it states one.
+fn description_of(manifest: &str) -> Option<String> {
+    package_string(manifest, "description")
+}
+
+/// The licence `manifest` states under `[workspace.package]`, when it states one.
+fn license_of(manifest: &str) -> Option<String> {
+    package_string(manifest, "license")
 }
 
 /// The names of the plugins among `entries`, in the order a directory listing of them would be read
@@ -516,8 +625,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        checked_relative, declares_a_workspace, plugin_names, publisher_of, release_dir_in,
-        version_of,
+        checked_relative, declares_a_workspace, description_of, homepage_of, license_of,
+        maintainer_of, plugin_names, publisher_of, release_dir_in, version_of,
     };
 
     #[test]
@@ -547,6 +656,31 @@ mod tests {
         assert_eq!(version_of("[package]\nname = \"x\"\n"), None);
         assert_eq!(publisher_of("[package]\nname = \"x\"\n"), None);
         assert_eq!(version_of("this is not a manifest"), None);
+    }
+
+    #[test]
+    fn the_package_metadata_is_read_from_the_workspace_section() {
+        let manifest = "[workspace.package]\nlicense = \"MIT\"\nversion = \"0.1.0\"\n\
+                        description = \"A thing\"\nhomepage = \"https://example.com\"\n\
+                        authors = [\"First Person\", \"Second Person <b@example.com>\"]\n";
+
+        assert_eq!(
+            homepage_of(manifest).as_deref(),
+            Some("https://example.com")
+        );
+        assert_eq!(description_of(manifest).as_deref(), Some("A thing"));
+        assert_eq!(license_of(manifest).as_deref(), Some("MIT"));
+        assert_eq!(
+            maintainer_of(manifest).as_deref(),
+            Some("Second Person <b@example.com>")
+        );
+
+        // The maintainer is the second author, and a workspace with one names none.
+        assert_eq!(
+            maintainer_of("[workspace.package]\nauthors = [\"Only\"]\n"),
+            None
+        );
+        assert_eq!(homepage_of("[workspace.package]\n"), None);
     }
 
     #[test]

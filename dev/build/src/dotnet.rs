@@ -237,15 +237,21 @@ pub fn run_integration_suites(workspace: &Workspace) -> Result<(), Error> {
 ///
 /// `dotnet publish` is the form that produces a program with everything beside it that running it
 /// needs, which is what an export holds; a plain build leaves a program whose dependencies are only
-/// in the build tree.
+/// in the build tree. `self_contained` decides whether the .NET runtime travels with it: a developer's
+/// export leaves it to the machine, and a package that has to run after one install carries it.
 ///
 /// # Errors
 ///
 /// Reports the restore, the publish, or a copy's own failure.
-pub fn publish_desktop(workspace: &Workspace, into: &Path) -> Result<(), Error> {
+pub fn publish_desktop(
+    workspace: &Workspace,
+    into: &Path,
+    self_contained: bool,
+) -> Result<(), Error> {
     let rid = runtime_identifier()?;
     let project = workspace.desktop_project().to_string_lossy().into_owned();
     let destination = into.to_string_lossy().into_owned();
+    let contained = if self_contained { "true" } else { "false" };
 
     restore(workspace, &[&project, "-r", &rid])?;
     Tool::dotnet().run([
@@ -257,7 +263,7 @@ pub fn publish_desktop(workspace: &Workspace, into: &Path) -> Result<(), Error> 
         "-r",
         &rid,
         "--self-contained",
-        "false",
+        contained,
         "-o",
         &destination,
     ])?;
@@ -308,15 +314,20 @@ pub fn publish_desktop(workspace: &Workspace, into: &Path) -> Result<(), Error> 
 /// The launcher is published after the Desktop program rather than before: the two share a
 /// directory, and what a publish lays down is what that program is made of. The launcher comes
 /// second because it is the one that reads the other — the command line and the window are found by
-/// where they sit beside it.
+/// where they sit beside it. `self_contained` is the Desktop publish's, for the same reason.
 ///
 /// # Errors
 ///
 /// Reports the restore, the publish, or a copy's own failure.
-pub fn publish_launcher(workspace: &Workspace, into: &Path) -> Result<(), Error> {
+pub fn publish_launcher(
+    workspace: &Workspace,
+    into: &Path,
+    self_contained: bool,
+) -> Result<(), Error> {
     let rid = runtime_identifier()?;
     let project = workspace.launcher_project().to_string_lossy().into_owned();
     let destination = into.to_string_lossy().into_owned();
+    let contained = if self_contained { "true" } else { "false" };
 
     restore(workspace, &[&project, "-r", &rid])?;
     Tool::dotnet().run([
@@ -328,7 +339,7 @@ pub fn publish_launcher(workspace: &Workspace, into: &Path) -> Result<(), Error>
         "-r",
         &rid,
         "--self-contained",
-        "false",
+        contained,
         "-o",
         &destination,
     ])?;

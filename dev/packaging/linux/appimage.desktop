@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ROLALauncher
+Comment=@COMMENT@
+Exec=ROLALauncher
+Icon=rorolala
+Terminal=false
+Categories=Development;

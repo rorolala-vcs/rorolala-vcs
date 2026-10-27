@@ -47,7 +47,11 @@ pub fn export() -> StateExport {
 pub struct StateExport;
 
 /// Lays the build out for hand-off.
-pub fn export_artifacts() -> Result<(), crate::Error> {
+///
+/// `self_contained` is what the Desktop program and the launcher are published as. A plain export
+/// leaves the .NET runtime to the machine, which is what a developer runs; a package carries it, so
+/// that installing the package is the whole of what a reader does.
+pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
     let workspace = Workspace::discover()?;
     let platform = Platform::current();
 
@@ -124,8 +128,8 @@ pub fn export_artifacts() -> Result<(), crate::Error> {
     dotnet::build_solution(&workspace)?;
 
     let desktop = workspace.desktop_dir()?;
-    dotnet::publish_desktop(&workspace, &desktop)?;
-    dotnet::publish_launcher(&workspace, &desktop)?;
+    dotnet::publish_desktop(&workspace, &desktop, self_contained)?;
+    dotnet::publish_launcher(&workspace, &desktop, self_contained)?;
     dotnet::publish_plugins(&workspace, &desktop)?;
 
     // The C# bindings beside the native library they bind, under `lib/` where a consumer of the C
@@ -145,7 +149,7 @@ pub fn export_artifacts() -> Result<(), crate::Error> {
 /// Lays the export out.
 #[chain]
 pub fn handle_export(_state: StateExport, ec: &mut ResExitCode) -> Next {
-    run_step(ec, export_artifacts);
+    run_step(ec, || export_artifacts(false));
 
     empty_result!()
 }

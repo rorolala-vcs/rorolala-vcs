@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ROLADaemon
+Comment=@COMMENT@
+Exec=/usr/bin/rola-daemon-gui
+Icon=rorolala
+Terminal=false
+Categories=Development;

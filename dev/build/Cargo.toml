@@ -22,3 +22,9 @@ mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267f
 # the publisher a package is named for — and it is read as TOML rather than as lines, so a value
 # that moves within the section is still found.
 toml = "0.8.23"
+
+# The packager's configuration is written as YAML, and the package metadata is read from the
+# workspace rather than restated: what a package says about itself is one reading, not a second
+# copy that could go stale.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_yaml = "0.9.34"

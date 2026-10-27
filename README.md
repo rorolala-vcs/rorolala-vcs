@@ -44,6 +44,17 @@ cargo dev export
 
 Once the build is complete, the artifacts will be exported to the `build/` directory.
 
+On Linux, `cargo dev publish` builds that export and packages it as `rorolala-vcs`, `rorolala-desktop`
+and `rorolala-dev` in deb, rpm and Arch form, plus a `rorolala-full` meta package, an all-in-one
+`rorolala` package and a launcher-only AppImage. The all-in-one holds what the three split packages
+hold; the meta names them; the two are mutually exclusive. The package installs a **user**
+`rolad.service` but does not start or enable it:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now rolad.service
+```
+
 <h2> <img src="res/icons/yi.png" height="40"/> Server </h2>
 
 Remote collaboration in Rorolala relies on the `rola-daemon` server for management. You need to deploy it somewhere reachable on the network, using the following commands:

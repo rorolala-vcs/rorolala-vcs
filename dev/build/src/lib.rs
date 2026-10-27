@@ -29,10 +29,14 @@ use mingling::{
     res::ResExitCode,
 };
 
+pub mod appimagetool;
 pub mod dotnet;
 pub mod error;
 mod fs;
 pub mod iscc;
+#[cfg(target_os = "linux")]
+pub mod linux;
+pub mod nfpm;
 mod ops;
 pub mod paths;
 pub mod platform;

@@ -26,6 +26,14 @@ for the same reason.
 - `src/dotnet.rs` — the .NET side: the offline-first restore, the solution, the two programs a layout
   holds, the plugins, the bindings, and the suites.
 - `src/iscc.rs` — the compiler a Windows installer is built with, and what to do when it is missing.
+- `src/nfpm.rs` — the packager the Linux deb, rpm and Arch packages are built with; pinned like the
+  installer's compiler.
+- `src/appimagetool.rs` — the tool the Linux AppImage is made with; pinned by hash, since its
+  release is a continuous one.
+- `src/linux.rs` — what Linux is handed: the three split packages, the `rorolala-full` meta
+  package, the all-in-one `rorolala` package, and the AppImage.
 - `src/fs.rs` — copying and removing, naming the file in a failure.
 - `src/ops/` — one module per command: `lib`, `bin`, `build`, `icons`, `chunker`, `cargo-clean`,
   `desktop`, `export`, `publish`, `clean`.
+- `../packaging/linux/` — the `.desktop` files, the user unit, the AppImage's `AppRun`, and the
+  scripts a package runs; the templates say `@COMMENT@` where the workspace's description goes.

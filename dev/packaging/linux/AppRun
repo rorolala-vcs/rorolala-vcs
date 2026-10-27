@@ -1,0 +1,4 @@
+#!/bin/sh
+# The launcher is the program a person starts; it finds `rola` and the Desktop program beside it in
+# this AppDir, by the same relative paths an export lays them out with.
+exec "$APPDIR/usr/bin/desktop/ROLALauncher" "$@"

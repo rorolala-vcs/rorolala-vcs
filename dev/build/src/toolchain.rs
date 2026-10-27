@@ -5,7 +5,7 @@
 //! command that does not exist.
 
 use std::ffi::{OsStr, OsString};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Output};
 
 use crate::Error;
@@ -48,6 +48,18 @@ impl Tool {
         Self::from_env("SH", "sh")
     }
 
+    /// A program at a known path, with no words of its own.
+    ///
+    /// It is for a tool a step has found rather than one the machine names — the pinned packager a
+    /// package is built with, which is looked for under the project's cache before the path.
+    #[must_use]
+    pub fn at(program: impl Into<OsString>) -> Self {
+        Self {
+            program: program.into(),
+            flags: Vec::new(),
+        }
+    }
+
     /// The toolchain a step runs `git` with.
     #[must_use]
     pub fn git() -> Self {
@@ -64,6 +76,19 @@ impl Tool {
     fn from_env(variable: &str, default: &'static str) -> Self {
         let raw = std::env::var(variable).ok();
         Self::read(raw.as_deref(), default)
+    }
+
+    /// Where a program named `name` is on this machine's path, if it is.
+    ///
+    /// It is the lookup a Unix tool prefers over a pinned copy: a program already installed is not made
+    /// to be laid down a second time. The name is a file name, not a command name — no extension is
+    /// guessed, since the platforms that guess one are not the ones this is for.
+    pub(crate) fn on_path(name: &str) -> Option<PathBuf> {
+        let path = std::env::var_os("PATH")?;
+
+        std::env::split_paths(&path)
+            .map(|directory| directory.join(name))
+            .find(|candidate| candidate.is_file())
     }
 
     /// A toolchain read from one value: the program first, then the words it is always run with.
