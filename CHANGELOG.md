@@ -212,7 +212,38 @@ moving one would be renaming a file another writer may be claiming.
 
 ## Feature
 
-### 1. [`app`] [`git-rola`] Add git rola, the git support program
+### 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`docking`] Replace the dock area's five fixed regions with a recursive layout tree
+
+The main window's docks are no longer five fixed regions. Its arrangement is a tree: a leaf is a group
+of tabs, any group may be split on any side, and a group made by splitting may itself be split, without
+a depth limit. Every split has its own splitter and keeps the share of its first child as a ratio rather
+than a width, so the arrangement follows the window. A split whose room cannot give both children their
+least size has its splitter disabled instead of squeezing one out of reach, and the last dock leaving a
+group takes the group with it, collapsing the split it was in.
+
+A dragged dock is answered in two steps: carried into a group, the group is approached and five points
+are drawn over it — four trapezoids along its edges, one for each way it may be split, and a centre
+rectangle for joining its tabs — and the pointer is always on one of them. A drop on the centre joins
+the group's tabs at the end of their order; a drop on an edge splits the group.
+
+The group last clicked or focused is the active one, and a dock opened without a place of its own goes
+there. The chosen tab of every group is remembered, and a dock moved into a window of its own returns to
+the group it came from when that window goes.
+
+The saved layout is version 2: the tree with a ratio for every split, the active group, and each group's
+chosen tab. A version 1 file states placements and pixel widths, which cannot be turned into a tree
+without inventing a window size; it is not converted — the starting arrangement is used, the log says
+so, and the next save writes version 2. The starting arrangement is the old five-region one expressed as
+a split of two groups, with the same tab orders and the same band.
+
+**Breaking:** the plugin contract is 0.13.0. `DockPlacement` is now `DockSide`, the intent of a drop
+rather than a region a dock sits in; `DockRegistration.DefaultPlacement` is `DefaultSide`; and `Create`
+takes no side, because where a dock ends up is the layout tree's answer and is unknown when its view is
+made. A plugin must be rebuilt against the new contract; one built against 0.12.0 is not loaded.
+
+Resolves [#2](https://github.com/rorolala-vcs/rorolala-vcs/issues/2).
+
+### 2. [`app`] [`git-rola`] Add git rola, the git support program
 
 `git-rola` is reached by Git as `git rola`, and is laid out beside the other programs so Git finds
 it on the same path. It speaks git's manners rather than rola's: quiet on success, one
@@ -236,7 +267,7 @@ Every command refuses a linked work tree, because a repository keeps one exclude
 in all of its work trees. Every word is translated from `i18n/` in the language `--lang` names or
 the environment provides.
 
-### 2. [`modules`] [`define-format`] Add rola-define-format, the rola.lock format
+### 3. [`modules`] [`define-format`] Add rola-define-format, the rola.lock format
 
 `rola.lock` names the materials a project places and the Vaults their content can be fetched
 from. It is generated — `rola.toml` is the file a person writes — so the grammar is deliberately
@@ -251,7 +282,7 @@ a format version this build does not know is refused whole.
 Paths, Vault names and content hashes are validated types rather than strings, and the crate is
 the only place a lock is read or written: it holds no files, no network and no git.
 
-### 3. [`modules`] [`git-support`] Add rola-git-support for project files and the work tree
+### 4. [`modules`] [`git-support`] Add rola-git-support for project files and the work tree
 
 A project is a directory holding `rola.toml` — the Vaults, the features, and one `[[mapping]]` per
 material — with the generated `rola.lock` beside it. This crate reads both, finds the project and

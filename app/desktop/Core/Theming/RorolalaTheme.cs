@@ -59,8 +59,10 @@ namespace RorolalaDesktop.Theming;
 /// <see cref="DockArea.TitleClass"/> on a dock's own tab — with <see cref="DockArea.SelectedClass"/> on
 /// the one being shown and <see cref="DockArea.LeadingClass"/> on the first of them — and
 /// <see cref="DockArea.CloseClass"/> on the close it carries, with
-/// <see cref="DockArea.SplitterClass"/> on the grab between regions, and
-/// <see cref="DockArea.DropZoneClass"/> on where a dragged dock would land.
+/// <see cref="DockArea.SplitterClass"/> on the grab between groups, and
+/// <see cref="DockArea.DockPointClass"/> on each point of the cluster a drop is aimed with —
+/// <see cref="DockArea.DockPointCenterClass"/> and the four sides — with
+/// <see cref="DockArea.DockPointOverClass"/> on the one the pointer is on.
 /// </para>
 /// </remarks>
 internal sealed class RorolalaTheme
@@ -307,9 +309,6 @@ internal sealed class RorolalaTheme
     /// <summary>How long a surface answers the pointer with.</summary>
     private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(120);
 
-    /// <summary>How long a drop zone takes to light up.</summary>
-    private static readonly TimeSpan Light = TimeSpan.FromMilliseconds(120);
-
     /// <summary>How long a bar takes to reach a new step, which is long enough to be read as a slide.</summary>
     /// <remarks>
     /// Longer than a fade on purpose: a fill that slides is a movement the eye follows, while a colour that
@@ -428,17 +427,6 @@ internal sealed class RorolalaTheme
     /// </remarks>
     private static readonly Color MacInk = Color.FromArgb(0x66, 0x00, 0x00, 0x00);
 
-    /// <summary>
-    /// The veil a drag lays over the places it is not over.
-    /// </summary>
-    /// <remarks>
-    /// Black at fifteen percent, which is what dims whatever it lies on rather than being a colour of the look's
-    /// own: a veil says "this is set aside", and a colour picked for the job would be one more letter in a
-    /// palette that is the user's. Black is also the one colour that reads as darker on both of the grounds a
-    /// user may have chosen — the light one's neutrals are almost white, so the hollow laid thin over them is
-    /// no dimming at all.
-    /// </remarks>
-    private static readonly Color Mask = Color.FromArgb(0x26, 0x00, 0x00, 0x00);
     private const string Shadow = "rorolala.shadow";
     private const string Ring = "rorolala.ring";
 
@@ -512,7 +500,7 @@ internal sealed class RorolalaTheme
     private readonly Color _accentBrightWash;
 
     /// <summary>
-    /// The accent at the alpha a drop zone is filled with.
+    /// The accent at the alpha a dock point is filled with when it is the one being aimed at.
     /// </summary>
     /// <remarks>
     /// Read from a field rather than mixed where the rule is written, because the rules are built once
@@ -1702,32 +1690,45 @@ internal sealed class RorolalaTheme
                 Brushed(TemplatedControl.BackgroundProperty, SplitterAcrossHover)
             ),
 
-            // Where a dragged dock could land. All of them are up while a drag is on, because they are
-            // the question — which regions are there to land in — and the one being aimed at is drawn in
-            // the accent, because it is the answer and must not read as a selection.
+            // The points a dragged dock may be put on, filling the group the drag is over: four isosceles trapezoids
+            // around a centre rectangle. They are the answer rather than a hint — a drag that is on one of them can
+            // be let go of — so they are drawn filled rather than as hairlines, and the one the pointer is on is
+            // filled with the accent. Nothing is drawn around or behind them: they fill the group, so a box over the
+            // same rectangle would be a second surface saying what the five already say, and two translucent
+            // surfaces over one another are a darker rectangle rather than a clearer answer.
             //
-            // The places that are not the answer are a veil rather than a cover: a solid fill took the docks
-            // under it away, where what a drag says about them is that they are out of reach for the moment.
-            // A veil at fifteen percent dims them enough to be read as set aside and leaves them legible,
-            // which is what a user needs to choose where the dock goes.
+            // The shape is filled with the accent laid thin so that what is under it is still read: the points sit
+            // over the group being aimed at, and a solid fill would be five cards drawn over the content rather
+            // than five places it could go.
             On(
-                selector => selector.OfType<Border>().Class(DockArea.DropZoneClass),
-                new Setter(Border.BorderThicknessProperty, Edge),
-                Brushed(Border.BorderBrushProperty, Strong),
-                NewBrush(Border.BackgroundProperty, Mask),
-                new Setter(Border.TransitionsProperty, Fading(Light))
+                selector => selector.OfType<Polygon>().Class(DockArea.DockPointClass),
+                NewBrush(Shape.FillProperty, _accentWash),
+                Brushed(Shape.StrokeProperty, Accent),
+                new Setter(Shape.StrokeThicknessProperty, 1.0),
+                new Setter(Visual.OpacityProperty, 0.85)
             ),
-            // No box takes a corner, and the answer least of all: the five of them tile the area, so a corner
-            // rounded on each would leave a notch at every seam and at the area's own edges — and the answer
-            // would be drawn as a card where what it says is the rectangle the dock is about to be given.
             On(
                 selector =>
                     selector
-                        .OfType<Border>()
-                        .Class(DockArea.DropZoneClass)
-                        .Class(DockArea.DropTargetClass),
-                NewBrush(Border.BackgroundProperty, _dropZone),
-                Brushed(Border.BorderBrushProperty, Accent)
+                        .OfType<Polygon>()
+                        .Class(DockArea.DockPointClass)
+                        .Class(DockArea.DockPointOverClass),
+                NewBrush(Shape.FillProperty, _dropZone),
+                Brushed(Shape.StrokeProperty, Accent),
+                new Setter(Shape.StrokeThicknessProperty, 2.0),
+                new Setter(Visual.OpacityProperty, 1.0)
+            ),
+
+            // The centre point is the one that says "among these tabs" rather than "beside them", so it is drawn a
+            // little stronger than the four around it even when it is not the one being aimed at.
+            On(
+                selector =>
+                    selector
+                        .OfType<Polygon>()
+                        .Class(DockArea.DockPointClass)
+                        .Class(DockArea.DockPointCenterClass),
+                NewBrush(Shape.FillProperty, _dropZone),
+                new Setter(Shape.StrokeThicknessProperty, 1.0)
             ),
         ];
 

@@ -61,8 +61,17 @@ internal sealed class DockInstance
     /// </remarks>
     public bool OpenedHere { get; set; }
 
-    /// <summary>Where the dock currently sits.</summary>
-    public DockPlacement Placement { get; set; }
+    /// <summary>
+    /// The group of the main window's tree the dock sits in, or the one it came from while it is in a window
+    /// of its own.
+    /// </summary>
+    /// <remarks>
+    /// A group id rather than a place, because a place is a rectangle and a dock does not have one: it has a
+    /// group, and the group has a place in a tree that is arranged over its siblings. A dock in a window of
+    /// its own is out of the tree but keeps the id, so returning it is returning it where it was rather than
+    /// wherever happens to be active.
+    /// </remarks>
+    public string GroupId { get; set; } = "";
 
     /// <summary>
     /// Whether the dock is shown.

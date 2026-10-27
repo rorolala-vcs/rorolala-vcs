@@ -67,10 +67,6 @@ dotnet_diagnostic.CA1040.severity = none
 # worse for everyone else.
 dotnet_diagnostic.CA1716.severity = none
 
-# `DockPlacement.Float`: `float` is the word this program's own interface uses for a dock in a
-# window of its own. It is read as that word and not as the type.
-dotnet_diagnostic.CA1720.severity = none
-
 # A type apparently never instantiated: these are the records a JSON answer is deserialized into.
 # The analyzer cannot see the serializer that makes them, so it cannot see the use.
 dotnet_diagnostic.CA1812.severity = none

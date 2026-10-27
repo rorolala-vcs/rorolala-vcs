@@ -50,7 +50,7 @@ public sealed class TerminalPlugin : IRolaPlugin
         TerminalSettings.Declare(host.Config);
 
         // A factory rather than a toggle: every activation is a shell of its own, which is what a terminal
-        // is for. It stands at the bottom because that is where a prompt is looked at, and the region is a
+        // is for. It stands at the bottom because that is where a prompt is looked at, and the side is a
         // preference the user may drag it out of.
         host.Docks.Register(
             new DockRegistration(
@@ -58,8 +58,8 @@ public sealed class TerminalPlugin : IRolaPlugin
                 TerminalDockNameId,
                 "rorolala_terminal.name",
                 DockOpenMode.New,
-                DockPlacement.Bottom,
-                _ => new TerminalDock(host.Log)
+                DockSide.Bottom,
+                () => new TerminalDock(host.Log)
             )
         );
     }

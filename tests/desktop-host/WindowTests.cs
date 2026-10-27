@@ -24,13 +24,12 @@ namespace RorolalaDesktopHost.IntegrationTests;
 public sealed class WindowTests
 {
     /// <summary>
-    /// A dock moved into a window of its own is in that window, and keeps the region it was in.
+    /// A dock moved into a window of its own is in that window, and keeps the group it came from.
     /// </summary>
     /// <remarks>
-    /// The window and the region are two questions: being in a window of its own is a change of window and
-    /// not of region, so a dock pulled out of the bottom band comes back to it when it returns. A placement
-    /// that meant "a window of its own" would be the one name meaning both, which is what this checks is not
-    /// the case.
+    /// The window and the group are two questions: being in a window of its own is a change of window and not of
+    /// group, so a dock taken out of the bottom band comes back to it when it returns — and the group it was in
+    /// may be pruned when it was the only dock there, which is why the id is kept rather than the place.
     /// </remarks>
     [Fact]
     public void ADockMovedIntoAWindowOfItsOwnIsInThatWindow()
@@ -47,11 +46,11 @@ public sealed class WindowTests
         Assert.NotNull(mine);
         Assert.NotNull(theirs);
 
-        services.Docks.Move(mine, DockPlacement.Bottom);
+        services.Docks.Move(mine, Beside(services.Docks, mine, DockSide.Bottom));
         services.Windows.ToOwnWindow(mine);
 
         Assert.NotNull(mine.Window);
-        Assert.Equal(DockPlacement.Bottom, mine.Placement);
+        Assert.Equal("g-2", mine.GroupId);
 
         // The dock beside it is where it was: one dock's window is that dock's, and nothing else moved.
         Assert.Null(theirs.Window);
@@ -93,9 +92,10 @@ public sealed class WindowTests
     /// A dock brought back to the main window leaves the window it was in behind.
     /// </summary>
     /// <remarks>
-    /// What the option a window of one dock offers does: the dock goes back where it came from, to the region
-    /// it was in, and the window that held it — which is a window of that dock and of nothing else — goes with
-    /// it. A window left standing would be a frame around a dock that is drawn in another window.
+    /// What the option a window of one dock offers does: the dock goes back where it came from, to the group it
+    /// was in — or the active group where that one has been pruned since — and the window that held it, which is
+    /// a window of that dock and of nothing else, goes with it. A window left standing would be a frame around a
+    /// dock that is drawn in another window.
     /// </remarks>
     [Fact]
     public void ADockBroughtBackToTheMainWindowLeavesItsWindowBehind()
@@ -113,7 +113,7 @@ public sealed class WindowTests
         Assert.NotNull(instance);
 
         services.Windows.OpenMain();
-        services.Docks.Move(instance, DockPlacement.Bottom);
+        services.Docks.Move(instance, Beside(services.Docks, instance, DockSide.Bottom));
         services.Windows.ToOwnWindow(instance);
 
         Assert.NotNull(instance.Window);
@@ -121,12 +121,12 @@ public sealed class WindowTests
 
         services.Windows.MoveToMain(instance);
 
-        // Back in the main window, in the region it was in, and still open: what was moved is where the dock
-        // is drawn, and not whether it is.
+        // Back in the main window, in a group of it, and still open: what was moved is where the dock is drawn,
+        // and not whether it is. The group it came from was pruned with it, so it came back to the active one.
         Assert.Null(instance.Window);
         Assert.True(instance.IsOpen);
-        Assert.Equal(DockPlacement.Bottom, instance.Placement);
-        Assert.Contains(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.browser");
+        Assert.NotNull(DockTree.GroupOf(services.Docks.Layout, instance.DockNameId, instance.Ordinal));
+        Assert.Contains("it.dock.browser", Saved(services));
 
         // And the window it was in is gone, since a window of one dock holds that dock and nothing else.
         Assert.Equal(1, services.Windows.Count);
@@ -250,7 +250,7 @@ public sealed class WindowTests
         // Gone with the window, and not moved into the main window: what is left there is the dock that was
         // in it from the start.
         Assert.DoesNotContain(services.Docks.Instances, one => one.DockNameId == "it.dock.browser");
-        Assert.DoesNotContain(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.browser");
+        Assert.DoesNotContain("it.dock.browser", Saved(services));
         Assert.Equal(1, services.Windows.Count);
         Assert.Same(stays, services.Docks.InstanceOf(kept.DockNameId));
     }
@@ -273,8 +273,8 @@ public sealed class WindowTests
             "it.dock.toggle",
             "it_dock.title",
             DockOpenMode.Toggle,
-            DockPlacement.Bottom,
-            _ => new FakeDockView { Control = new Border() }
+            DockSide.Bottom,
+            () => new FakeDockView { Control = new Border() }
         );
         services.Docks.Register(registration);
 
@@ -308,13 +308,13 @@ public sealed class WindowTests
     }
 
     /// <summary>
-    /// A header dragged away from every region becomes a window of its own.
+    /// A header dragged away from every dock area becomes a window of its own.
     /// </summary>
     /// <remarks>
-    /// The whole of what letting go of a header away from a region means: the dock is pulled out of the
-    /// window it was in and lands nowhere, so it is given a window of its own rather than being left where it
-    /// was. The gesture before it is the host's — a press is not a drag until the pointer has moved — and what
-    /// the press becomes is the toolkit's own drag, which is what can carry a dock out of a window.
+    /// The whole of what letting go of a header away from an area means: the dock is pulled out of the window it
+    /// was in and lands nowhere, so it is given a window of its own rather than being left where it was. The
+    /// gesture before it is the host's — a press is not a drag until the pointer has moved — and what the press
+    /// becomes is the toolkit's own drag, which is what can carry a dock out of a window.
     /// </remarks>
     [Fact]
     public void ADockDraggedAwayFromEveryRegionBecomesAWindowOfItsOwn()
@@ -325,8 +325,8 @@ public sealed class WindowTests
             "it.dock.dragged",
             "it.dock.dragged.title",
             DockOpenMode.New,
-            DockPlacement.Center,
-            _ => new FakeDockView { Control = new Border() }
+            DockSide.Center,
+            () => new FakeDockView { Control = new Border() }
         );
         var kept = New("it.dock.kept");
         services.Docks.Register(dragged);
@@ -367,8 +367,8 @@ public sealed class WindowTests
         // In a window of its own, and out of the arrangement the main window's layout keeps.
         Assert.NotNull(instance.Window);
         Assert.Equal(2, services.Windows.Count);
-        Assert.DoesNotContain(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.dragged");
-        Assert.Contains(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.kept");
+        Assert.DoesNotContain("it.dock.dragged", Saved(services));
+        Assert.Contains("it.dock.kept", Saved(services));
     }
 
     /// <summary>
@@ -421,8 +421,8 @@ public sealed class WindowTests
             "it.dock.titled",
             "it.dock.titled.title",
             DockOpenMode.New,
-            DockPlacement.Center,
-            _ => new FakeDockView { Control = new Border() }
+            DockSide.Center,
+            () => new FakeDockView { Control = new Border() }
         );
         var kept = New("it.dock.kept");
         services.Docks.Register(registration);
@@ -460,16 +460,16 @@ public sealed class WindowTests
     }
 
     /// <summary>
-    /// A dock dropped over a region of the main window is placed in it.
+    /// A dock dropped on the point that means "to the left" splits the group, and the new group is on that side.
     /// </summary>
     /// <remarks>
-    /// The half of a drag that a window answers: what arrives is the payload of a drag, and what is drawn from
-    /// it is the dock landing where the pointer was. Asked of a real window, with the toolkit's own drag event,
-    /// because what is being checked is that the area is a place a drag can land at all — the payload and the
-    /// lookup are checked without one.
+    /// The second half of the two-step gesture: a drag over a group only shows what could be done, and what is
+    /// dropped is the point it was let go of. Asked of a real window, with the toolkit's own drag event, because
+    /// what is being checked is that the area is a place a drag can land at all — the payload and the lookup are
+    /// checked without one.
     /// </remarks>
     [Fact]
-    public void ADockDroppedOverARegionLandsInIt()
+    public void ADockDroppedOnTheLeftPointSplitsTheGroup()
     {
         var (services, _) = Windows();
         var registration = New("it.dock.dropped");
@@ -485,13 +485,53 @@ public sealed class WindowTests
 
         var main = (MainWindow)services.Shell.Window!;
 
-        Drop(main, OverTheLeftBand(main), instance);
+        Drop(main, OverDockPoint(main, DockSide.Left), instance);
 
-        // The left band of the area, which is where the pointer was: the region a drop lands in is the region
-        // the pointer was over, and one that is empty is still a place a dock can be put.
-        Assert.Equal(DockPlacement.Left, instance.Placement);
+        // The left point of the group, which is what the pointer was over: a drop there means the new group stands
+        // to the left of the group it was dropped on, and it is the same group the dock was already a tab of.
+        var root = Assert.IsType<LayoutSplit>(services.Docks.Layout.Root);
+        var added = Assert.IsType<LayoutGroup>(root.First);
+
+        Assert.Equal(DockAxis.Columns, root.Axis);
+        Assert.Equal(instance.GroupId, added.Id);
+        Assert.Equal(["it.dock.dropped"], added.Docks.Select(dock => dock.DockNameId));
         Assert.Null(instance.Window);
-        Assert.Contains(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.dropped");
+        Assert.Contains("it.dock.dropped", Saved(services));
+    }
+
+    /// <summary>A dock dropped on the centre point joins the group's tabs rather than splitting it.</summary>
+    /// <remarks>
+    /// The one point of a group that does not make a new group: the dock is put among the tabs of the group it was
+    /// dropped on, which is what a drop on the middle of a group means.
+    /// </remarks>
+    [Fact]
+    public void ADockDroppedOnTheCentrePointJoinsTheGroup()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.joined");
+        var kept = New("it.dock.kept");
+        services.Docks.Register(registration);
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
+        services.Windows.OpenMain();
+
+        var main = (MainWindow)services.Shell.Window!;
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        services.Windows.ToOwnWindow(instance);
+
+        Assert.NotNull(instance.Window);
+
+        Drop(main, OverDockPoint(main, DockSide.Center), instance);
+
+        // No split: the dock is a tab of the one group there is, which it was taken out of a moment ago.
+        var group = Assert.IsType<LayoutGroup>(services.Docks.Layout.Root);
+
+        Assert.Null(instance.Window);
+        Assert.Contains("it.dock.joined", group.Docks.Select(dock => dock.DockNameId));
+        Assert.Contains("it.dock.kept", group.Docks.Select(dock => dock.DockNameId));
     }
 
     /// <summary>
@@ -499,9 +539,9 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// The other direction of the same gesture, and the one a window of one dock is brought back by: what is
-    /// dragged is the dock, and the window it is drawn in is where the drag began — so landing in the main
-    /// window is a change of window, and the window that held it is left with nothing to draw and closes.
-    /// The region the drop was over is the region it arrives in, and not the one it left.
+    /// dragged is the dock, and the window it is drawn in is where the drag began — so landing in the main window
+    /// is a change of window, and the window that held it is left with nothing to draw and closes. Where it lands
+    /// is where the drop said, and not the group it left.
     /// </remarks>
     [Fact]
     public void ADockDroppedOnTheMainWindowComesBackFromAWindowOfItsOwn()
@@ -524,19 +564,117 @@ public sealed class WindowTests
         Assert.NotNull(instance.Window);
         Assert.Equal(2, services.Windows.Count);
 
-        Drop(main, OverTheLeftBand(main), instance);
+        Drop(main, OverDockPoint(main, DockSide.Left), instance);
 
         Assert.Null(instance.Window);
-        Assert.Equal(DockPlacement.Left, instance.Placement);
+        Assert.NotNull(DockTree.GroupOf(services.Docks.Layout, instance.DockNameId, instance.Ordinal));
         Assert.Equal(1, services.Windows.Count);
+    }
+
+    /// <summary>
+    /// A dock brought back from a window of its own goes back into the group it came from, when that is there.
+    /// </summary>
+    /// <remarks>
+    /// What keeping the group is for: a window of its own is a leave of absence, so a dock taken out of a group
+    /// and brought back is put in that group rather than wherever happens to be active. The group only survives
+    /// the leaving when it still has a dock of its own, which is what the third dock is for.
+    /// </remarks>
+    [Fact]
+    public void AReturnedDockGoesBackIntoItsOwnGroup()
+    {
+        var (services, _) = Windows();
+        var one = New("it.dock.one");
+        var two = New("it.dock.two");
+        var three = New("it.dock.three");
+        services.Docks.Register(one);
+        services.Docks.Register(two);
+        services.Docks.Register(three);
+
+        var first = services.Docks.Activate(one);
+        var second = services.Docks.Activate(two);
+        var third = services.Docks.Activate(three);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.NotNull(third);
+
+        // The first dock is split off into a group of its own, the third is put in that group, and then the first
+        // is taken out into a window of its own: the group is still there, holding the third.
+        services.Docks.Move(first, Beside(services.Docks, first, DockSide.Left));
+
+        var home = first.GroupId;
+
+        services.Docks.Move(third, new DockTarget(home, DockSide.Center, 1));
+        services.Windows.ToOwnWindow(first);
+
+        Assert.NotNull(first.Window);
+        Assert.Equal(home, first.GroupId);
+
+        services.Windows.MoveToMain(first);
+
+        Assert.Null(first.Window);
+        Assert.Equal(home, first.GroupId);
+        Assert.Contains(
+            first.DockNameId,
+            DockTree.Find(services.Docks.Layout, home)!.Docks.Select(dock => dock.DockNameId)
+        );
+    }
+
+    /// <summary>
+    /// A splitter that is dragged writes the share it was left at, and the tree keeps it.
+    /// </summary>
+    /// <remarks>
+    /// What a drag of a divider is for: the room it gives each side is a share of the whole, so the same drag in a
+    /// window of another size puts the divider in the same place. The root has to still be the same split
+    /// afterwards — what a drag writes is a number, not an arrangement — which is also what says the rebuild it
+    /// causes did not throw away the tree it was rebuilding from.
+    /// </remarks>
+    [Fact]
+    public void ADraggedSplitterWritesTheShareBack()
+    {
+        var (services, _) = Windows();
+        var left = New("it.dock.left");
+        var right = New("it.dock.right");
+        services.Docks.Register(left);
+        services.Docks.Register(right);
+
+        var first = services.Docks.Activate(left);
+        var second = services.Docks.Activate(right);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+
+        services.Docks.Move(second, Beside(services.Docks, first, DockSide.Right));
+        services.Windows.OpenMain();
+
+        var main = (MainWindow)services.Shell.Window!;
+        var split = Assert.IsType<LayoutSplit>(services.Docks.Layout.Root);
+        var before = split.Ratio;
+        var handle = main
+            .GetVisualDescendants()
+            .OfType<GridSplitter>()
+            .First(one => one.Classes.Contains(DockArea.SplitterClass));
+        var from = handle.TranslatePoint(
+            new Point(handle.Bounds.Width / 2, handle.Bounds.Height / 2),
+            main
+        );
+
+        Assert.NotNull(from);
+
+        main.MouseDown(from.Value, MouseButton.Left);
+        main.MouseMove(from.Value + new Point(80, 0), RawInputModifiers.LeftMouseButton);
+        main.MouseUp(from.Value + new Point(80, 0), MouseButton.Left);
+
+        Assert.Same(split, services.Docks.Layout.Root);
+        Assert.NotEqual(before, split.Ratio);
     }
 
     /// <summary>
     /// Drops a dock at a point in a window, the way the platform delivers a drag.
     /// </summary>
     /// <remarks>
-    /// A drag arrives in the order the platform delivers it, and what it takes to land in a region is the whole
-    /// of it: a target that says nothing as the drag enters it is a target the platform gives up on.
+    /// A drag arrives in the order the platform delivers it, and what it takes to land somewhere is the whole of
+    /// it: a target that says nothing as the drag enters it is a target the platform gives up on.
     /// </remarks>
     /// <param name="main">The window whose area the dock is dropped on.</param>
     /// <param name="at">Where in it.</param>
@@ -558,22 +696,32 @@ public sealed class WindowTests
         }
     }
 
-    /// <summary>A point over the left band of a window's dock area.</summary>
+    /// <summary>The point of a window's one group that a drop would land on to do one thing.</summary>
     /// <remarks>
-    /// The band is the edge of the area, which is the region a drop there means: what a drag lands in is the
-    /// band the region is drawn in, and a region holding nothing is drawn as the narrow band it is aimed at.
-    /// The area has to have been laid out for any of that to mean anything, which is why it is asked of the
-    /// window that was shown.
+    /// The group fills the area, so its leaf is the area's own rectangle, and the five points are worked out from
+    /// it by the same function the area hit tests with. What is aimed at is the middle of the outline — a point
+    /// inside a convex shape's corners is inside the shape — and the area has to have been laid out for any of that
+    /// to mean anything, which is why it is asked of the window that was shown.
     /// </remarks>
     /// <param name="main">The window to find the point in.</param>
+    /// <param name="side">Which point of the cluster to aim at.</param>
     /// <returns>The point, in that window's own coordinates.</returns>
-    private static Point OverTheLeftBand(MainWindow main)
+    private static Point OverDockPoint(MainWindow main, DockSide side)
     {
         var area = main.GetVisualDescendants().OfType<DockArea>().First();
 
         Assert.True(area.Bounds.Height > 0, "the window was shown, so its area was laid out");
 
-        var at = area.TranslatePoint(new Point(2, area.Bounds.Height / 2), main);
+        var leaf = new Rect(0, 0, area.Bounds.Width, area.Bounds.Height);
+        var shape = DockArea.Shapes(leaf).First(one => one.Side == side);
+        var middle = new Point(
+            shape.Outline.Average(corner => corner.X),
+            shape.Outline.Average(corner => corner.Y)
+        );
+
+        Assert.True(DockArea.Contains(shape.Outline, middle), "the aim is inside the point it aims at");
+
+        var at = area.TranslatePoint(middle, main);
 
         Assert.NotNull(at);
 
@@ -581,12 +729,192 @@ public sealed class WindowTests
     }
 
     /// <summary>
+    /// A group whose docks are all hidden is not drawn, and so offers no dock point to be dropped on.
+    /// </summary>
+    /// <remarks>
+    /// A hidden toggle is still a dock, so its group is still in the tree — but a group that would be drawn empty is
+    /// a band of the window kept for nothing and five points offered for a place with no docks in it. What is drawn
+    /// is what has something open in it; the group is kept and comes back when its dock is shown again.
+    /// </remarks>
+    [Fact]
+    public void AGroupWhoseDocksAreAllHiddenIsNotDrawn()
+    {
+        var (services, _) = Windows();
+        var registration = new DockRegistration(
+            Core.Id,
+            "it.dock.toggle",
+            "it_dock.title",
+            DockOpenMode.Toggle,
+            DockSide.Center,
+            () => new FakeDockView { Control = new Border() }
+        );
+        services.Docks.Register(registration);
+
+        var toggle = services.Docks.Activate(registration);
+
+        Assert.NotNull(toggle);
+
+        services.Windows.OpenMain();
+
+        var main = (MainWindow)services.Shell.Window!;
+
+        Assert.Contains(
+            main.GetVisualDescendants().OfType<Button>(),
+            button => button.Classes.Contains(DockArea.TitleClass)
+        );
+
+        services.Docks.Close(toggle);
+
+        Assert.DoesNotContain(
+            main.GetVisualDescendants().OfType<Button>(),
+            button => button.Classes.Contains(DockArea.TitleClass)
+        );
+
+        // Kept rather than pruned: hiding a dock is not closing it, and the group it is in comes back with it.
+        Assert.Single(DockTree.Groups(services.Docks.Layout));
+    }
+
+    /// <summary>
+    /// The five points a drag offers are four 120-wide trapezoid bands around the rectangle they leave, filling the
+    /// group.
+    /// </summary>
+    /// <remarks>
+    /// The shape of the answer, asked of the same function the area draws and hit tests with: five points, one per
+    /// thing a drop can do, no two of them overlapping, and between them covering the whole group — the group is the
+    /// target once a drag has found it, so there is no room in it that is near the answer without being on it. What
+    /// the edges take is a band rather than a share, and what the centre is, is the group less that band: a group is
+    /// approached from its edge, so the edge is where the pointer arrives and the middle is what is left.
+    /// </remarks>
+    [Fact]
+    public void TheDockPointsFillTheGroupAsFourTrapezoidsAroundACentre()
+    {
+        var leaf = new Rect(0, 0, 800, 600);
+        var shapes = DockArea.Shapes(leaf);
+
+        Assert.Equal(5, shapes.Count);
+        Assert.Equal(
+            [DockSide.Center, DockSide.Left, DockSide.Right, DockSide.Top, DockSide.Bottom],
+            shapes.Select(shape => shape.Side)
+        );
+
+        // The band is 120 from the edge and the centre is what is left: 560 by 360 here, and the four trapezoids'
+        // long sides are the group's own edges while their short sides are the centre's.
+        var inner = new Rect(120, 120, 560, 360);
+
+        Assert.Equal(Corners(inner), shapes[0].Outline);
+        Assert.Equal(
+            [new Point(0, 0), new Point(120, 120), new Point(120, 480), new Point(0, 600)],
+            shapes.Single(shape => shape.Side == DockSide.Left).Outline
+        );
+        Assert.Equal(
+            [new Point(680, 120), new Point(800, 0), new Point(800, 600), new Point(680, 480)],
+            shapes.Single(shape => shape.Side == DockSide.Right).Outline
+        );
+        Assert.Equal(
+            [new Point(0, 0), new Point(800, 0), new Point(680, 120), new Point(120, 120)],
+            shapes.Single(shape => shape.Side == DockSide.Top).Outline
+        );
+        Assert.Equal(
+            [new Point(120, 480), new Point(680, 480), new Point(800, 600), new Point(0, 600)],
+            shapes.Single(shape => shape.Side == DockSide.Bottom).Outline
+        );
+
+        // Each point holds its own middle and no other point does, so a pointer on one of them means one thing.
+        foreach (var shape in shapes)
+        {
+            var middle = new Point(
+                shape.Outline.Average(corner => corner.X),
+                shape.Outline.Average(corner => corner.Y)
+            );
+
+            Assert.True(DockArea.Contains(shape.Outline, middle));
+            Assert.DoesNotContain(
+                shapes.Where(other => other.Side != shape.Side),
+                other => DockArea.Contains(other.Outline, middle)
+            );
+        }
+
+        // The five tile the whole group and nothing outside it: the areas add up to the leaf's, and every point of a
+        // shape is within the leaf.
+        Assert.Equal(leaf.Width * leaf.Height, shapes.Sum(shape => Area(shape.Outline)), 3);
+        Assert.All(
+            shapes,
+            shape =>
+                Assert.All(
+                    shape.Outline,
+                    corner =>
+                    {
+                        Assert.InRange(corner.X, leaf.X, leaf.Right);
+                        Assert.InRange(corner.Y, leaf.Y, leaf.Bottom);
+                    }
+                )
+        );
+
+        // A point just inside each edge and the middle are each on an answer: there is no dead room in the group.
+        var inside = new[]
+        {
+            new Point(leaf.X + (leaf.Width / 2), leaf.Y + 2),
+            new Point(leaf.X + (leaf.Width / 2), leaf.Bottom - 2),
+            new Point(leaf.X + 2, leaf.Y + (leaf.Height / 2)),
+            new Point(leaf.Right - 2, leaf.Y + (leaf.Height / 2)),
+            new Point(leaf.X + (leaf.Width / 2), leaf.Y + (leaf.Height / 2)),
+        };
+
+        Assert.All(
+            inside,
+            at => Assert.Single(shapes, shape => DockArea.Contains(shape.Outline, at))
+        );
+    }
+
+    /// <summary>A drag is torn out into a window of its own only when it was let go of in the open.</summary>
+    /// <remarks>
+    /// What the platform cannot say: a drag called off with Esc, a drag let go of over a dock area without an answer,
+    /// and a drag let go of where there is nothing all apply no effect. What tells them apart is the host's own
+    /// record of the gesture, and this is the one place that reading is made.
+    /// </remarks>
+    [Fact]
+    public void ADragIsTornOutOnlyWhenItWasLetGoOfInTheOpen()
+    {
+        Assert.True(DockWindows.TearsOut(DragDropEffects.None, over: false, cancelled: false, window: null));
+        Assert.False(DockWindows.TearsOut(DragDropEffects.None, over: true, cancelled: false, window: null));
+        Assert.False(DockWindows.TearsOut(DragDropEffects.None, over: false, cancelled: true, window: null));
+        Assert.False(DockWindows.TearsOut(DragDropEffects.Move, over: false, cancelled: false, window: null));
+        Assert.False(DockWindows.TearsOut(DragDropEffects.None, over: false, cancelled: false, window: "dock-1"));
+    }
+
+    /// <summary>The four corners of a box, in drawing order.</summary>
+    /// <param name="box">The box.</param>
+    /// <returns>Its corners.</returns>
+    private static Point[] Corners(Rect box) =>
+        [
+            new Point(box.X, box.Y),
+            new Point(box.Right, box.Y),
+            new Point(box.Right, box.Bottom),
+            new Point(box.X, box.Bottom),
+        ];
+
+    /// <summary>The area a polygon encloses, by the shoelace formula.</summary>
+    /// <param name="outline">Its corners, in order.</param>
+    /// <returns>Its area.</returns>
+    private static double Area(IReadOnlyList<Point> outline)
+    {
+        var area = 0.0;
+
+        for (int corner = 0, previous = outline.Count - 1; corner < outline.Count; previous = corner++)
+        {
+            area += (outline[previous].X * outline[corner].Y) - (outline[corner].X * outline[previous].Y);
+        }
+
+        return Math.Abs(area) / 2;
+    }
+
+    /// <summary>
     /// A dock in a window of its own is not written into the layout of the main window.
     /// </summary>
     /// <remarks>
-    /// The layout states where in the main window each dock sits, and a dock that is somewhere else has no
-    /// region to state: written down as though it were in one, it would be read back into the main window
-    /// and leave the window it was left in.
+    /// The layout states what the main window's tree is, and a dock that is somewhere else has no group in it:
+    /// written down as though it had one, it would be read back into the main window and leave the window it was
+    /// left in.
     /// </remarks>
     [Fact]
     public void ADockInAWindowOfItsOwnIsNotWrittenIntoTheLayout()
@@ -598,11 +926,11 @@ public sealed class WindowTests
         var instance = services.Docks.Activate(registration);
 
         Assert.NotNull(instance);
-        Assert.Contains(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.browser");
+        Assert.Contains("it.dock.browser", Saved(services));
 
         services.Windows.ToOwnWindow(instance);
 
-        Assert.DoesNotContain(services.Docks.Snapshot().Docks, dock => dock.DockNameId == "it.dock.browser");
+        Assert.DoesNotContain("it.dock.browser", Saved(services));
     }
 
     /// <summary>
@@ -627,8 +955,8 @@ public sealed class WindowTests
             "it.dock.toggle",
             "it_dock.title",
             DockOpenMode.Toggle,
-            DockPlacement.Bottom,
-            _ => new FakeDockView { Control = new Border() }
+            DockSide.Bottom,
+            () => new FakeDockView { Control = new Border() }
         );
         services.Docks.Register(registration);
 
@@ -666,11 +994,11 @@ public sealed class WindowTests
     /// A dock opened in a window of its own is there before anything draws it.
     /// </summary>
     /// <remarks>
-    /// The window is stated as the instance is made rather than assigned after it, because there is no
-    /// moment at which a dock opened in a window of its own is in the main one: it would be drawn in a
-    /// region of the main window for as long as the assignment took. What is asked of the manager rather
-    /// than of the windows, because it is the manager's own answer: a window of the host's does not exist
-    /// yet at this point, and the dock is already where it is going.
+    /// The window is stated as the instance is made rather than assigned after it, because there is no moment at
+    /// which a dock opened in a window of its own is in the main one: it would be drawn in a group of the main
+    /// window for as long as the assignment took. What is asked of the manager rather than of the windows,
+    /// because it is the manager's own answer: a window of the host's does not exist yet at this point, and the
+    /// dock is already where it is going — in no group at all.
     /// </remarks>
     [Fact]
     public void ADockOpenedInAWindowOfItsOwnIsNeverInTheMainOne()
@@ -679,18 +1007,17 @@ public sealed class WindowTests
         var registration = New("it.dock.browser");
         services.Docks.Register(registration);
 
-        var instance = services.Docks.Create(
+        var instance = services.Docks.CreateInWindow(
             registration,
-            DockPlacement.Center,
             new DockRequest(registration.DockNameId, "/work"),
             "dock-1"
         );
 
         Assert.NotNull(instance);
         Assert.Equal("dock-1", instance.Window);
-        Assert.Equal(DockPlacement.Center, instance.Placement);
+        Assert.Equal("", instance.GroupId);
         Assert.Equal("/work", instance.Request.StartAt);
-        Assert.Empty(services.Docks.Snapshot().Docks);
+        Assert.Empty(Saved(services));
     }
 
     /// <summary>
@@ -699,13 +1026,12 @@ public sealed class WindowTests
     /// <remarks>
     /// What a window of a dock's own is: the dock, under the window's own row. No strip of tabs, because
     /// there is nothing to switch between; no splitter, because there is nothing to resize it against; and no
-    /// empty band where a region is not, because there are no regions. A window that drew the chrome anyway
-    /// would be a strip around a view that nothing can be put beside — and the one thing a torn-out dock must
-    /// not look like is the window it came out of.
+    /// band of a group, because a group is a place a second view is put beside the first. A window that drew the
+    /// chrome anyway would be a strip around a view that nothing can be put beside — and the one thing a torn-out
+    /// dock must not look like is the window it came out of.
     /// <para>
-    /// Asked of the layer rather than of a window, because the chrome is the layer's: what a window does with
-    /// it is put it under the row. The two layers are compared by how much they hold, since a layer that
-    /// kept its regions would hold the five of them whether or not any dock were in it.
+    /// Asked of the layer rather than of a window, because the chrome is the layer's: what a window does with it
+    /// is put it under the row. A layer that held a group would hold one whether or not any dock were in it.
     /// </para>
     /// </remarks>
     [Fact]
@@ -726,8 +1052,9 @@ public sealed class WindowTests
         Assert.False(many.Alone);
         Assert.True(alone.Alone);
 
-        // A layer that is not one dock holds the surface it is laid out in: the five regions, the four
-        // splitters, and the boxes a drag could land in. It draws no dock itself.
+        // A layer that is not one dock holds only the surface the tree is drawn in and the places a drag could
+        // land: there is no fixed strip or splitter to hold, since the tree has one group and no split. It draws
+        // no dock itself.
         Assert.IsAssignableFrom<Grid>(many.Content);
         Assert.Null(many.Sole);
 
@@ -843,8 +1170,8 @@ public sealed class WindowTests
                 "it.dock.visible",
                 "it_dock.title",
                 DockOpenMode.New,
-                DockPlacement.Center,
-                _ => new FakeDockView { Control = control }
+                DockSide.Center,
+                () => new FakeDockView { Control = control }
             );
             services.Docks.Register(registration);
 
@@ -964,10 +1291,35 @@ public sealed class WindowTests
         return (services, []);
     }
 
+    /// <summary>The docks a snapshot of the main window's layout records, in document order.</summary>
+    /// <param name="services">Everything the host holds.</param>
+    /// <returns>The docks' stable name ids.</returns>
+    private static string[] Saved(HostServices services) =>
+        [
+            .. DockTree
+                .Groups(services.Docks.Snapshot())
+                .SelectMany(group => group.Docks)
+                .Select(dock => dock.DockNameId),
+        ];
+
+    /// <summary>The target a drop on one side of a dock's own group would name.</summary>
+    /// <param name="docks">The docks.</param>
+    /// <param name="instance">The dock whose group is being split.</param>
+    /// <param name="side">The side to split it on.</param>
+    /// <returns>The target.</returns>
+    private static DockTarget Beside(DockManager docks, DockInstance instance, DockSide side)
+    {
+        var group =
+            DockTree.GroupOf(docks.Layout, instance.DockNameId, instance.Ordinal)
+            ?? throw new InvalidOperationException("the dock is not in the main window's tree");
+
+        return new DockTarget(group.Id, side, 0);
+    }
+
     /// <summary>A registration for a dock that may be made again, as a browser is.</summary>
     /// <remarks>
     /// The view is given a control, because a test that makes a real window makes a real dock area, and an
-    /// area cannot put nothing in a region: what a dock is drawn as is part of what a window is made of.
+    /// area cannot put nothing in a group: what a dock is drawn as is part of what a window is made of.
     /// </remarks>
     /// <param name="nameId">Its stable name id.</param>
     /// <returns>The registration.</returns>
@@ -977,7 +1329,7 @@ public sealed class WindowTests
             nameId,
             "it_dock.title",
             DockOpenMode.New,
-            DockPlacement.Center,
-            _ => new FakeDockView { Control = new Border() }
+            DockSide.Center,
+            () => new FakeDockView { Control = new Border() }
         );
 }

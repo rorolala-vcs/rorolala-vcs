@@ -16,27 +16,28 @@ public enum DockOpenMode
     New,
 }
 
-/// <summary>Where a dock view is placed in the dock area of the window it is in.</summary>
+/// <summary>Where a dock is asked to go when it is opened or dropped.</summary>
 /// <remarks>
-/// A region of one window, and never a window: which window a dock is in is the host's own answer rather
-/// than a placement, and a placement that could also be a window would be one name meaning two things —
-/// which the two must not be, since they are read apart.
+/// No longer a place a dock sits — a dock's place is its group in the layout tree, which the host keeps and
+/// the contract never names. This is the intent of a request: <see cref="Center"/> means "into the tabs of
+/// the target group", and an edge means "split the target group on that side". Which group is the target is
+/// the host's answer, so a plugin says what it wants done and not where the result ends up.
 /// </remarks>
-public enum DockPlacement
+public enum DockSide
 {
-    /// <summary>The top region.</summary>
+    /// <summary>Split the target group, the new one above it.</summary>
     Top,
 
-    /// <summary>The left region.</summary>
+    /// <summary>Split the target group, the new one to its left.</summary>
     Left,
 
-    /// <summary>The right region.</summary>
+    /// <summary>Split the target group, the new one to its right.</summary>
     Right,
 
-    /// <summary>The bottom region.</summary>
+    /// <summary>Split the target group, the new one below it.</summary>
     Bottom,
 
-    /// <summary>The central region.</summary>
+    /// <summary>Put the dock among the target group's tabs.</summary>
     Center,
 }
 
@@ -167,15 +168,21 @@ public interface IDockView
 /// </param>
 /// <param name="DisplayNameKey">An i18n key for the dock's title.</param>
 /// <param name="OpenMode">Whether the dock toggles or is created anew each time.</param>
-/// <param name="DefaultPlacement">Where the dock is placed when none is asked for.</param>
-/// <param name="Create">The factory making a view for a requested placement.</param>
+/// <param name="DefaultSide">
+/// How the dock is put into the active group when no drop says otherwise: among its tabs for
+/// <see cref="DockSide.Center"/>, or beside it for an edge.
+/// </param>
+/// <param name="Create">
+/// The factory making a view. It is told nothing about where the dock will be, because where it ends up is
+/// the layout tree's answer and is not known when the view is made: a dock moved by hand is the same dock.
+/// </param>
 public sealed record DockRegistration(
     PluginId Owner,
     string DockNameId,
     string DisplayNameKey,
     DockOpenMode OpenMode,
-    DockPlacement DefaultPlacement,
-    Func<DockPlacement, IDockView> Create
+    DockSide DefaultSide,
+    Func<IDockView> Create
 );
 
 /// <summary>Where a plugin registers docks.</summary>

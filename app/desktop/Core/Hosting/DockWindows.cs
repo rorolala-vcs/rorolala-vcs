@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
@@ -164,7 +165,7 @@ internal sealed class DockWindows : IWindows
     /// heard about it.
     /// </summary>
     /// <remarks>
-    /// What a drag that ended in no drop is read as: a drag the host last heard of over a region was one that
+    /// What a drag that ended in no drop is read as: a drag the host last heard of over a dock area was one that
     /// ended without a drop there, which is a drag called off rather than let go of, while one it last heard of
     /// nowhere was let go of in the open — and a dock let go of in the open is a dock the user pulled out of
     /// the window it was in. The platform says the same thing about both, since neither landed anywhere, so
@@ -172,6 +173,38 @@ internal sealed class DockWindows : IWindows
     /// is why it is here and not in the drag itself.
     /// </remarks>
     public bool OverArea { get; set; }
+
+    /// <summary>
+    /// Whether the drag in flight has been called off with Esc.
+    /// </summary>
+    /// <remarks>
+    /// The platform reports a drag called off with Esc as one that applied no effect, which is the same thing it
+    /// reports for a drag let go of where there was nothing to take it — so the two cannot be told apart by what
+    /// the drag returns. This is the other half: while a drag is in flight the window it was picked up in is heard
+    /// for Esc, and an area that sees this set offers no place to land and takes none.
+    /// </remarks>
+    public bool Cancelled { get; private set; }
+
+    /// <summary>
+    /// Whether a drag that is in flight was let go of over a dock area.
+    /// </summary>
+    /// <remarks>
+    /// Told apart from <see cref="OverArea"/>, which is where the pointer was last heard of: the platform says a drop
+    /// was delivered by delivering it, so an area that took a drop — even one with no place to put the dock — says
+    /// the release was there. That matters because a released drag is followed by the platform's own
+    /// <c>DragLeave</c>, which would otherwise leave the record reading "last heard of nowhere" for a drag that was
+    /// very much let go of over a dock area.
+    /// </remarks>
+    public bool Dropped { get; set; }
+
+    /// <summary>
+    /// Raised when a drag that was picked up has ended, however it ended.
+    /// </summary>
+    /// <remarks>
+    /// What an area hears instead of a drop: a drag called off with Esc, or let go of where it was over nothing,
+    /// has no drop to be told about, and an area that had drawn the points would otherwise leave them up.
+    /// </remarks>
+    public event Action? DragEnded;
 
     /// <summary>
     /// The main window.
@@ -279,7 +312,7 @@ internal sealed class DockWindows : IWindows
         }
 
         var key = $"dock-{++_made}";
-        var made = _docks.Create(registration, DockPlacement.Center, request, key);
+        var made = _docks.CreateInWindow(registration, request, key);
 
         if (made is null)
         {
@@ -318,11 +351,11 @@ internal sealed class DockWindows : IWindows
 
         _held[key] = instance;
 
-        // The region is the one it already had rather than the centre of its new window: pulling a dock out
-        // of a region is about where it is shown, and being in a window of its own is a change of window and
-        // not a change of region — a dock dragged out of the bottom band comes back to it when it returns.
-        // The main window is left standing even where this was the last dock in it (see `Settle`).
-        _docks.Move(instance, instance.Placement, key);
+        // The group it came from is kept as its home rather than replaced by the centre of its new window:
+        // pulling a dock out of a group is about where it is shown, and being in a window of its own is a
+        // change of window and not of group — a dock taken out of the bottom band comes back to it. The main
+        // window is left standing even where this was the last dock in it (see `Settle`).
+        _docks.DetachToWindow(instance, key);
 
         if (Add(key, instance) is { } opened)
         {
@@ -334,18 +367,24 @@ internal sealed class DockWindows : IWindows
     /// Takes a dock by the pointer: hands it to the platform, and lands what comes back.
     /// </summary>
     /// <remarks>
-    /// A drag that no region took is a dock the user pulled out of the window it was in, so it becomes a
-    /// window of its own — which is the whole of what letting go of a header away from every region means. A
-    /// dock in a window of its own has nothing to tear out of: the window it is in is already its own, so a
-    /// drag of it that lands nowhere leaves it where it is.
+    /// A drag that no dock area took is a dock the user pulled out of the window it was in, so it becomes a window
+    /// of its own — which is the whole of what letting go of a header away from every area means. A dock in a
+    /// window of its own has nothing to tear out of: the window it is in is already its own, so a drag of it that
+    /// lands nowhere leaves it where it is.
     /// <para>
-    /// A drag whose pointer was over a region when it ended, and which no region dropped, is one that was
-    /// called off rather than let go of, and a dock that was never let go of stays where it was.
+    /// A drag whose pointer was over a dock area when it ended, and which no drop took, is one that was called off
+    /// rather than let go of, and a dock that was never let go of stays where it was.
     /// </para>
     /// <para>
-    /// A platform that will not carry a drag at all — a toolkit given no drag of its own — leaves the dock
-    /// where it was as well: the gesture never reached anything, and a window nobody asked for is worse than
-    /// a drag that did nothing.
+    /// Esc is the third way a drag can end, and the one the platform does not report differently: a drag called off
+    /// with Esc is returned as having applied no effect, exactly as a drag let go of where there is nothing to take
+    /// it. So the window the dock was picked up in is heard for Esc for as long as the platform owns the gesture,
+    /// and a drag that heard one is not a drag let go of in the open — it is one the user called off.
+    /// </para>
+    /// <para>
+    /// A platform that will not carry a drag at all — a toolkit given no drag of its own — leaves the dock where it
+    /// was as well: the gesture never reached anything, and a window nobody asked for is worse than a drag that did
+    /// nothing.
     /// </para>
     /// </remarks>
     /// <param name="instance">The dock the pointer took hold of.</param>
@@ -357,6 +396,24 @@ internal sealed class DockWindows : IWindows
         ArgumentNullException.ThrowIfNull(from);
 
         OverArea = false;
+        Dropped = false;
+        Cancelled = false;
+
+        var host = Host(window);
+        void Called(object? sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                Cancelled = true;
+            }
+        }
+
+        host?.AddHandler(
+            InputElement.KeyDownEvent,
+            Called,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true
+        );
 
         DragDropEffects applied;
 
@@ -374,12 +431,21 @@ internal sealed class DockWindows : IWindows
 
             return;
         }
+        finally
+        {
+            host?.RemoveHandler(InputElement.KeyDownEvent, Called);
+        }
 
         var over = OverArea;
+        var dropped = Dropped;
+        var cancelled = Cancelled;
 
         OverArea = false;
+        Dropped = false;
+        Cancelled = false;
+        DragEnded?.Invoke();
 
-        if (applied != DragDropEffects.None || over || window is not null)
+        if (!TearsOut(applied, over || dropped, cancelled, window))
         {
             return;
         }
@@ -396,22 +462,56 @@ internal sealed class DockWindows : IWindows
     }
 
     /// <summary>
-    /// Lands a dragged dock in a region of one of the host's windows.
+    /// Whether a drag that has ended with no drop is a dock the user pulled out of the window it was in.
     /// </summary>
     /// <remarks>
-    /// The same judgement <see cref="MoveToMain"/> makes, because a dock dropped on the main window is the
-    /// same thing asked for with the hand: a dock that keeps one instance of its own, where that window
-    /// already shows it, is not moved in — the dock is already there, so what is let go of is the instance
-    /// that was being dragged, and the window it came from goes with it.
+    /// The one reading of what can only be guessed at from the outside, kept as a function of its own so that it can
+    /// be said what it answers rather than only how it is used: a drag that applied an effect landed somewhere; one
+    /// that was called off with Esc was the user's own; one over a dock area when it ended, or which a dock area took
+    /// a drop for, was let go of over that area and so was called off; and one picked up in a window of its own has
+    /// no window to be torn into. What is left is a drag let go of in the open, which is the dock becoming a window
+    /// of its own.
+    /// </remarks>
+    /// <param name="applied">What the platform said the drag came to.</param>
+    /// <param name="over">Whether the drag ended over a dock area, or was let go of into one.</param>
+    /// <param name="cancelled">Whether the drag was called off with Esc.</param>
+    /// <param name="window">The window it was picked up in, or nothing for the main one.</param>
+    /// <returns>Whether it is to become a window of its own.</returns>
+    internal static bool TearsOut(
+        DragDropEffects applied,
+        bool over,
+        bool cancelled,
+        string? window
+    ) => applied == DragDropEffects.None && !over && !cancelled && window is null;
+
+    /// <summary>The window a dock was picked up in, or nothing when that window is not up.</summary>
+    /// <param name="key">The window's key, or nothing for the main one.</param>
+    /// <returns>The window, or nothing.</returns>
+    private Window? Host(string? key) =>
+        key is null
+            ? _main
+            : _windows.TryGetValue(key, out var found)
+                ? found
+                : null;
+
+    /// <summary>
+    /// Lands a dragged dock where a drop of it in one of the host's windows said.
+    /// </summary>
+    /// <remarks>
+    /// The same judgement <see cref="MoveToMain"/> makes, because a dock dropped on the main window is the same
+    /// thing asked for with the hand: a dock that keeps one instance of its own, where that window already
+    /// shows it, is not moved in — the dock is already there, so what is let go of is the instance that was
+    /// being dragged, and the window it came from goes with it.
     /// <para>
-    /// A drag let go of over the region it was already in is not a move at all, which is
-    /// <see cref="DockManager.Move"/>'s own answer rather than a second one here.
+    /// A drag let go of where it already was is not a move at all, which is <see cref="DockManager.Move"/>'s own
+    /// answer rather than a second one here. Only the main window accepts a drop, since a window of one dock has
+    /// nothing to put a second one beside.
     /// </para>
     /// </remarks>
     /// <param name="instance">The dock that was dragged.</param>
-    /// <param name="placement">The region it was let go of over.</param>
+    /// <param name="target">Where the drop said it goes.</param>
     /// <param name="window">The window it was let go of in, or nothing for the main one.</param>
-    public void Land(DockInstance instance, DockPlacement placement, string? window)
+    public void Land(DockInstance instance, DockTarget target, string? window)
     {
         ArgumentNullException.ThrowIfNull(instance);
 
@@ -422,7 +522,7 @@ internal sealed class DockWindows : IWindows
             return;
         }
 
-        _docks.Move(instance, placement, window);
+        _docks.Move(instance, target);
     }
 
     /// <summary>
@@ -459,9 +559,10 @@ internal sealed class DockWindows : IWindows
             return;
         }
 
-        // The region it is in is the region it goes back to: a window of its own was a change of window and
-        // not of region, which is what a dock dragged out of a band and back finds again.
-        _docks.Move(instance, instance.Placement, null);
+        // The group it came from is the group it goes back to, which is what a dock taken out of a band and
+        // brought back finds again — or the active group where that one has been pruned since (see
+        // `DockManager.Rehome`).
+        _docks.ReturnToMain(instance);
     }
 
     /// <summary>
@@ -540,7 +641,7 @@ internal sealed class DockWindows : IWindows
 
         var instance = _docks.Create(
             registration,
-            registration.DefaultPlacement,
+            registration.DefaultSide,
             new DockRequest(registration.DockNameId, startAt)
         );
 

@@ -230,8 +230,8 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 DirectoryDockNameId,
                 "rorolala_file_system.directories",
                 DockOpenMode.New,
-                DockPlacement.Center,
-                _ => new DirectoryDock(host, shared, browser, clip, logical)
+                DockSide.Center,
+                () => new DirectoryDock(host, shared, browser, clip, logical)
             )
         );
 
@@ -241,8 +241,8 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 TreeDockNameId,
                 "rorolala_file_system.tree",
                 DockOpenMode.Toggle,
-                DockPlacement.Left,
-                _ => new TreeDock(host, browser, clip, logical)
+                DockSide.Left,
+                () => new TreeDock(host, browser, clip, logical)
             )
         );
     }

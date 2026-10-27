@@ -197,8 +197,8 @@ internal sealed class Desktop
                 "rorolala.core.plugin_manager",
                 "dock.plugin_manager",
                 DockOpenMode.Toggle,
-                DockPlacement.Center,
-                _ =>
+                DockSide.Center,
+                () =>
                     new PluginManagerDock(
                         plugins,
                         services.I18n,
@@ -213,8 +213,8 @@ internal sealed class Desktop
                 "rorolala.core.log",
                 "dock.log",
                 DockOpenMode.Toggle,
-                DockPlacement.Bottom,
-                _ => new LogDock(services.Log)
+                DockSide.Bottom,
+                () => new LogDock(services.Log)
             )
         );
 
@@ -224,8 +224,8 @@ internal sealed class Desktop
                 "rorolala.core.preference",
                 "dock.preferences",
                 DockOpenMode.Toggle,
-                DockPlacement.Center,
-                _ =>
+                DockSide.Center,
+                () =>
                     new PreferenceDock(
                         services.Settings,
                         plugins,

@@ -92,17 +92,17 @@ internal static class RorolalaDocks
             owner,
             OverviewNameId,
             OverviewKey,
-            _ => new OverviewDock(host, host.Log, host.Files, host.Refocus, hub, sync, fetch)
+            () => new OverviewDock(host, host.Log, host.Files, host.Refocus, hub, sync, fetch)
         );
-        Add(host, owner, WorkspaceNameId, WorkspaceKey, _ => new RorolalaDock(host.Log));
+        Add(host, owner, WorkspaceNameId, WorkspaceKey, () => new RorolalaDock(host.Log));
         Add(
             host,
             owner,
             VersionGraphNameId,
             VersionGraphKey,
-            _ => new VersionGraphDock(host, statuses, sync, fetch, hub)
+            () => new VersionGraphDock(host, statuses, sync, fetch, hub)
         );
-        Add(host, owner, AccountsNameId, AccountsKey, _ => new AccountsDock(host));
+        Add(host, owner, AccountsNameId, AccountsKey, () => new AccountsDock(host));
     }
 
     /// <summary>
@@ -123,10 +123,10 @@ internal static class RorolalaDocks
         PluginId owner,
         string nameId,
         string labelKey,
-        Func<DockPlacement, IDockView> make
+        Func<IDockView> make
     ) =>
         host.Docks.Register(
-            new DockRegistration(owner, nameId, labelKey, DockOpenMode.Toggle, DockPlacement.Center, make)
+            new DockRegistration(owner, nameId, labelKey, DockOpenMode.Toggle, DockSide.Center, make)
         );
 }
 

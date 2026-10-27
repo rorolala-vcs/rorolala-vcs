@@ -131,7 +131,7 @@ public sealed class RorolalaDockTests
 
         foreach (var registration in services.Docks.Registrations)
         {
-            var view = registration.Create(DockPlacement.Center).View;
+            var view = registration.Create().View;
 
             Assert.NotNull(view);
 
@@ -203,7 +203,7 @@ public sealed class RorolalaDockTests
         var overview = services.Docks.Registrations.Single(dock =>
             dock.DockNameId == RorolalaDocks.OverviewNameId
         );
-        var view = overview.Create(DockPlacement.Center);
+        var view = overview.Create();
         var strip = Assert.IsType<DockHeaderView>(Assert.Single(view.Header));
 
         Assert.IsType<SyncStrip>(strip.View);
