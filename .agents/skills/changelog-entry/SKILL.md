@@ -1,6 +1,6 @@
 ---
 name: changelog-entry
-description: Record a change to rola's shipped content in `CHANGELOG.md` with `cargo changelog`. Use when a change under `app/`, `modules/`, `utils/` or the root `src/` is made, or when the user asks for a changelog entry, a release note, or how to fill `__CHANGELOG_DRAFT.md`. Do not use for `dev/` tooling, docs-only, or test-only changes.
+description: Record a change to rola's shipped content in `CHANGELOG.md` with `cargo changelog`, and decide whether the current version already covers it. Use when a change under `app/`, `modules/`, `utils/` or the root `src/` is made, or when the user asks for a changelog entry, a release note, or how to fill `__CHANGELOG_DRAFT.md`. Do not use for `dev/` tooling, docs-only, or test-only changes.
 ---
 
 # Writing a Changelog Entry
@@ -31,6 +31,45 @@ its own; the content change does.
 would not notice it. Use `bugfix` when something was wrong, `optimized` when it works better,
 `feature` when it is new, and `refactor` when the shape changed without changing what it is. If a
 change sits on the boundary, ask the user rather than guessing.
+
+## The version boundary: introduced here, or earlier
+
+A version is one delivery, and what changes inside something this version introduced is part of
+that introduction. A user of the version cannot tell "the feature" from "the feature and the two
+fixes it took": the entry already says what the version ships, and a second entry would only
+repeat it. What changes inside something an earlier version introduced is a change a user
+receives, and is recorded even when it is small.
+
+Decide which side the changed unit stands on before writing anything:
+
+1. `cargo changelog get-version` states the version `CHANGELOG.md` is written under.
+2. Find that version's `# <version> (Unreleased)` section. With none, nothing was introduced by
+   this version: write a draft.
+3. Compare the entries there with the scope the change would carry (see below). An entry covers
+   the unit when its scope is a prefix of the change's scope, so one entry for
+   `["modules", "vault"]` covers `["modules", "vault", "config"]`.
+
+| the `(Unreleased)` section                                    | what to do                       |
+| ------------------------------------------------------------- | -------------------------------- |
+| an entry introduced the unit in this version                  | amend that entry; write no draft |
+| the unit appears only under dated versions, or nowhere at all | write a draft                    |
+
+Amending is a hand edit of that entry's body followed by a commit of `CHANGELOG.md`: no
+`write-reset`, no draft, no `write`. Leave the numbering and the order to the tool, which rewrites
+both on the next `write` or `archive`; extend the body to say what the version now ships.
+
+Inside the current version, the category earns no separate entry either: a `bugfix`, an
+`optimized` or a `refactor` of what this version introduced is still that introduction. Such a
+change cannot be `breaking`: the version has not reached a caller and cannot break one; `breaking`
+marks an incompatibility with a version that shipped.
+
+The other direction is an entry: a change to a unit some earlier version introduced is recorded
+even when it is a one-line `bugfix` or `optimized`, because that earlier entry already shipped and
+cannot be corrected. A change that touches both a unit this version introduced and a unit it did
+not is two changes: amend the entry for the first and write a draft for the second.
+
+If the change adds something the introduction entry does not claim — a new capability rather than
+a corrected or quicker one — it may deserve an entry of its own; ask the user rather than guessing.
 
 ## Scope: the directory, broadest first
 

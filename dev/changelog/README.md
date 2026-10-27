@@ -44,8 +44,8 @@ The body of the entry.
 `category` is one of `bugfix`, `optimized`, `feature`, `refactor`. `breaking: true` marks the
 change as incompatible. `scope` is the hierarchy the change touches, primary first; it may be a
 list or a single string. The scope follows the directory tree; the changelog-entry skill
-(`.agents/skills/changelog-entry/SKILL.md`) is the project's guide to choosing it. The body may be
-empty.
+(`.agents/skills/changelog-entry/SKILL.md`) is the project's guide to whether a change needs an
+entry at all and to choosing it. The body may be empty.
 
 ## The changelog
 
