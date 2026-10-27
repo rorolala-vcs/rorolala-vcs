@@ -8,9 +8,11 @@
 //! shared from there.
 //!
 //! Which Vault a connection is *served as*, though, changes with every connection: an address
-//! names a namespace, and the registry says which Vault that namespace is. The namespace is
-//! read per connection rather than once, so a Vault registered while the daemon runs is served
-//! without it being restarted.
+//! names a namespace, and the registry says which Vault that namespace is. The table and the
+//! configurations a Vault is served with are read per connection rather than once, so a Vault
+//! registered or reconfigured while the daemon runs is served without it being restarted — and what
+//! was read is kept with the files it was read from, so a connection that names a Vault nothing has
+//! changed since pays a few stats rather than a table, two configurations and a walk to the root.
 //!
 //! # Identity
 //!
@@ -19,10 +21,12 @@
 //! key directory. A registered Vault's members are still checked against that Vault's own
 //! configuration, which is what decides who may act on it.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex, PoisonError};
+use std::time::SystemTime;
 
 use rorolala_auth::{
     KeyLocateRule, SecureStream, SigningKey, env_keys_dir, find_member, global_keys_dir,
@@ -113,6 +117,8 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         max_concurrency,
         // Built once: the list a caller's id is read against is the one this daemon runs.
         actions: build_action_registry(),
+        // Nothing has been asked for yet, so nothing has been resolved.
+        served: StdMutex::new(HashMap::new()),
     });
 
     listen(listener, host, signal.rx).await;
@@ -219,7 +225,8 @@ fn identity_in(roots: &[PathBuf]) -> Option<SigningKey> {
 /// Everything the daemon needs to answer a connection.
 ///
 /// The identity it proves and the table it reads are fixed for as long as it runs; which Vault
-/// a request names is resolved per connection rather than kept here.
+/// a request names is resolved per connection, and what a resolution came to is kept here with what
+/// it was read from.
 struct Host {
     /// The identity the daemon proves to every peer.
     signing: SigningKey,
@@ -229,6 +236,63 @@ struct Host {
     max_concurrency: Option<u16>,
     /// Every action this daemon serves, laid out by id.
     actions: Vec<Option<Box<dyn ActionEntry>>>,
+    /// The Vaults requests have named, as they were resolved, so a table and two configurations are
+    /// not read again for every connection. A resolution whose sources have changed is made again
+    /// rather than served from here.
+    served: StdMutex<HashMap<String, KeptServed>>,
+}
+
+/// How many resolved Vaults the daemon keeps.
+///
+/// A request names a Vault and a daemon is made to serve the namespaces it was given, so what is kept
+/// is a handful. The bound is what keeps a peer that names a different Vault every time from growing
+/// the daemon's memory for as long as it is left running.
+const KEPT_SERVED: usize = 64;
+
+/// A Vault a request named, and what says the resolution still holds.
+struct KeptServed {
+    /// The files the resolution was read from, as they looked when it read them.
+    sources: [Source; 3],
+    /// The Vault, and what it is served with.
+    served: Arc<Served>,
+}
+
+/// One file a resolution was read from, and how it looked when it was.
+///
+/// It is the length and the modification time rather than either alone: a configuration rewritten to
+/// say something else is a file whose time moved, and the length agreeing with it is one more thing
+/// that has to match for two readings to be the same reading.
+struct Source {
+    /// Where the file is.
+    path: PathBuf,
+    /// How long it was.
+    len: u64,
+    /// When it was last written, where the filesystem tells it.
+    modified: Option<SystemTime>,
+}
+
+impl Source {
+    /// How the file at `path` looks now, which is how it looked when it is not there at all.
+    fn of(path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
+
+        let (len, modified) = std::fs::metadata(&path).map_or((0, None), |metadata| {
+            (metadata.len(), metadata.modified().ok())
+        });
+
+        Self {
+            path,
+            len,
+            modified,
+        }
+    }
+
+    /// Whether the file is still the file the resolution read.
+    fn holds(&self) -> bool {
+        let now = Self::of(self.path.clone());
+
+        now.len == self.len && now.modified == self.modified
+    }
 }
 
 /// Serves connections until `cancel` fires.
@@ -252,6 +316,18 @@ async fn listen(listener: TcpListener, host: Arc<Host>, mut cancel: watch::Recei
         tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok((stream, peer)) => {
+                    // A request and its answer are small and alternate, and a sealed record is
+                    // written as its own buffer: left to Nagle, the second record of an exchange
+                    // waits for the first to be acknowledged, which is a round trip a small action
+                    // spends on nothing. Everything this connection carries is that shape, so the
+                    // delay is turned off for the whole of it.
+                    if let Err(error) = stream.set_nodelay(true) {
+                        eprintln!(
+                            "{}",
+                            warn_line!("A connection from {peer} could not be tuned: {error}")
+                        );
+                    }
+
                     // The permit is taken before the connection is spawned, so a daemon serving
                     // its limit holds the next peer at the accept rather than admitting it to
                     // wait: what a caller meets is backpressure, not a connection that does
@@ -330,7 +406,9 @@ where
         .map_err(SessionError::Exchange)?;
 
     // The Vault being served and its root live for this connection, so the action reaches them,
-    // and what either is configured with, by borrowing them for as long as the action runs.
+    // and what either is configured with, by borrowing them for as long as the action runs. The
+    // resolution is held here rather than borrowed from the daemon's memory, so what a connection is
+    // served with is one whole even if the next request resolves a Vault and replaces it.
     let ctx = ActionContext::new_vault_ctx(member)
         .with_current_vault(&served.vault)
         .with_current_root_vault(&served.root_vault)
@@ -346,9 +424,11 @@ where
 
 /// The Vault one connection is served for, with what it is served with.
 ///
-/// A Vault is one thing for the duration of a connection and a different one for the next, so
-/// what a request names is resolved into this: the Vault itself, what its file is configured
-/// with, the root above it, and where its members are looked for.
+/// A request names a Vault, and what that comes to is this: the Vault itself, what its file is
+/// configured with, the root above it, and where its members are looked for. It is kept by the daemon
+/// beside the files it was read from — see [`KeptServed`] — and held by a connection for as long as the
+/// action it serves runs, so what that action is served with is one whole however many requests arrive
+/// after it.
 struct Served {
     /// The Vault the action is run over.
     vault: Vault,
@@ -367,6 +447,60 @@ struct Served {
 impl Host {
     /// The Vault a request naming `sub` is served for, if this daemon can serve one there.
     ///
+    /// What it comes to is kept, so the next connection naming the same Vault reads a table, two
+    /// configurations and a walk to the root only when one of them has changed since.
+    async fn serve_for(&self, sub: &str) -> Option<Arc<Served>> {
+        if let Some(kept) = self.kept(sub) {
+            return Some(kept);
+        }
+
+        let served = Arc::new(self.resolve(sub).await?);
+        self.keep(sub, Arc::clone(&served));
+
+        Some(served)
+    }
+
+    /// The Vault `sub` names, as it was resolved, when nothing it was resolved from has changed.
+    fn kept(&self, sub: &str) -> Option<Arc<Served>> {
+        let kept = self
+            .served
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(sub)
+            .map(|kept| {
+                (
+                    kept.sources.each_ref().map(Source::holds),
+                    Arc::clone(&kept.served),
+                )
+            })?;
+
+        let (holds, served) = kept;
+
+        holds.iter().all(|holds| *holds).then_some(served)
+    }
+
+    /// Keeps how `sub` was resolved, with what it was resolved from.
+    fn keep(&self, sub: &str, served: Arc<Served>) {
+        let sources = [
+            Source::of(&self.registry),
+            Source::of(served.vault.config_path()),
+            Source::of(served.root_vault.config_path()),
+        ];
+
+        let mut kept = self.served.lock().unwrap_or_else(PoisonError::into_inner);
+
+        // A peer may name a Vault it has made up every time it connects, so what is kept is bounded:
+        // the daemon serves the namespaces it was given, and a cache that grows with a stranger's
+        // requests is one a stranger can spend the machine with.
+        if kept.len() >= KEPT_SERVED && !kept.contains_key(sub) {
+            kept.clear();
+        }
+
+        kept.insert(sub.to_owned(), KeptServed { sources, served });
+    }
+
+    /// Resolves the Vault a request naming `sub` is served for, reading everything it comes to.
+    ///
     /// `sub` is a namespace, or a namespace and the Vault below it: the first segment picks the
     /// entry out of the namespace table, and what follows is resolved under the Vault that entry
     /// names — by the path it sits at or by the name it is held under. A namespace that is not
@@ -376,7 +510,7 @@ impl Host {
     /// startup: a Vault reconfigured while the daemon runs is served under the rules it has, and
     /// a Vault under a root that keeps the group's keys admits them without either having to be
     /// restarted.
-    async fn serve_for(&self, sub: &str) -> Option<Served> {
+    async fn resolve(&self, sub: &str) -> Option<Served> {
         let (namespace, under) = split_namespace(sub);
 
         if namespace.is_empty() {

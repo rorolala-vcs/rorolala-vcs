@@ -7,7 +7,7 @@
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
 
-use super::layout_remote::{remote_write, set_remote};
+use super::layout_remote::{batched, remote_write, set_remote};
 
 /// An Action that sets the version an entry of the Vault's Layout is at.
 ///
@@ -47,7 +47,9 @@ impl Action for ActionSetRemoteVersion {
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
         let outcome = remote_write(&mut ctx, input, |layout, (uuid, version), me, admin| {
-            set_remote(layout, &uuid, &version, me, admin)
+            batched(layout, |batch| {
+                set_remote(batch, &uuid, &version, me, admin)
+            })
         })
         .await?;
 

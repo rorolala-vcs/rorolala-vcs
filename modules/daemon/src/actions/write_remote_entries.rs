@@ -8,7 +8,7 @@
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
 use serde::{Deserialize, Serialize};
 
-use super::layout_remote::{create_remote, remote_transact, set_remote};
+use super::layout_remote::{batched, create_remote, remote_transact, set_remote};
 
 /// The writes a sync asks the Vault to make, as they cross.
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,15 +58,20 @@ impl Action for ActionWriteRemoteEntries {
             let writes: RemoteWrites =
                 serde_json::from_str(&writes).map_err(|error| ActionError::Json(error.into()))?;
 
-            let mut outcomes = Vec::with_capacity(writes.creates.len() + writes.sets.len());
-            for (path, uuid, version) in &writes.creates {
-                outcomes.push(create_remote(layout, path, uuid, version, me)?);
-            }
-            for (uuid, version) in &writes.sets {
-                outcomes.push(set_remote(layout, uuid, version, me, admin)?);
-            }
+            // The writes are one batch: what a sync is ahead on is written with one flush per shard
+            // rather than one per entry, and each write is checked against the writes before it, so
+            // the answers are the ones one exchange per entry would give.
+            batched(layout, |batch| {
+                let mut outcomes = Vec::with_capacity(writes.creates.len() + writes.sets.len());
+                for (path, uuid, version) in &writes.creates {
+                    outcomes.push(create_remote(batch, path, uuid, version, me)?);
+                }
+                for (uuid, version) in &writes.sets {
+                    outcomes.push(set_remote(batch, uuid, version, me, admin)?);
+                }
 
-            Ok(outcomes)
+                Ok(outcomes)
+            })
         })
         .await?;
 

@@ -672,46 +672,61 @@ pub fn vault_and_uuids(words: &[String]) -> Option<(Option<String>, Vec<Uuid>)> 
         .map(|ids| (vault, ids))
 }
 
-/// Names the entry `id` in the fetched copy as held by `owner`, when the copy holds it.
+/// Names the entries of the fetched copy as held by what a Vault said, in one write.
 ///
 /// What is changed is the Vault's own Layout — the one known as [`VAULT_LAYOUT_NAME`] — since that
-/// is the copy an ownership exchange is about. Nothing is a failure here but a copy that cannot be
-/// read or written: a run may ask for ownership without ever having fetched, and one that has
-/// fetched may hold a copy that does not name the entry yet — the Vault is the truth, and the copy
-/// is brought up to date by `rola layout fetch`, not by this.
+/// is the copy an ownership exchange is about. The changes go into `copy`, which is a batch of a copy
+/// a caller opened once: opening a copy reads sixteen shards and writing one change at a time reads
+/// and flushes for each entry, so a run of a thousand entries would be a thousand of both otherwise.
+///
+/// An entry the copy does not name is passed over rather than refused: a run may ask for ownership
+/// without ever having fetched, and one that has fetched may hold a copy older than the Vault. The
+/// Vault is the truth, and the copy is brought up to date by `rola layout fetch`, not by this.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] if a change cannot be made in `copy`.
+pub fn set_cached_owners(
+    copy: &mut Batch<'_>,
+    changes: &[(Uuid, Option<String>)],
+) -> Result<(), LayoutError> {
+    for (id, owner) in changes {
+        let Some(data) = copy.entry(*id) else {
+            continue;
+        };
+
+        copy.update_entry(*id, data.renewed(owner.clone(), data.version()))?;
+    }
+
+    Ok(())
+}
+
+/// Writes the ownership changes a run agreed with the Vault into the copy it keeps, if it keeps one.
+///
+/// It is the whole of what a run that moved ownership does to the copy afterwards: a copy that is not
+/// there is left as it is — the Vault is the truth, and a fetch is what brings a copy up to date —
+/// and one that is there is opened and written once for the whole run.
 ///
 /// # Errors
 ///
 /// Returns [`LayoutError`] if a copy that is there cannot be read back or written.
-pub fn set_cached_owner(
-    workspace: &Workspace,
-    vault: &str,
-    id: Uuid,
-    owner: Option<String>,
+pub fn write_cached_owners(
+    copy: Option<&Layout>,
+    changes: &[(Uuid, Option<String>)],
 ) -> Result<(), LayoutError> {
-    let Some(dir) = readonly_layout_copy(workspace, vault, VAULT_LAYOUT_NAME) else {
+    let Some(copy) = copy else {
         return Ok(());
     };
 
-    let layout = match Layout::open_existing(&dir) {
-        Ok(layout) => layout,
-        // A directory that holds none of the Layout's own files is not a copy, and following a change into it would
-        // make one: what is not there is left as it is, as a copy that was never fetched is.
-        Err(error) if error.is_not_found() => return Ok(()),
-        Err(error) => return Err(error),
-    };
-
-    let Some(data) = layout.entry(id) else {
-        return Ok(());
-    };
-
-    layout.update_entry(id, data.renewed(owner, data.version()))
+    let mut batch = copy.batch();
+    set_cached_owners(&mut batch, changes)?;
+    batch.commit()
 }
 
 /// Moves the path `from` to `to` in the fetched copy, when the copy is there and names `from`.
 ///
 /// It follows a move the Vault accepted, so that a copy read afterwards says what the Vault says —
-/// the same reason [`set_cached_owner`] follows an ownership change. A copy that is not there, or
+/// the same reason [`write_cached_owners`] follows an ownership change. A copy that is not there, or
 /// one that does not name the path, is left as it is: the Vault is the truth, and the copy is
 /// brought up to date by `rola layout fetch`.
 ///

@@ -35,9 +35,34 @@ const VERSION: u8 = 2;
 ///
 /// Returns why the snapshot could not be written.
 pub fn write(path: &Path, slots: &HashMap<Uuid, Slot>) -> Result<(), LayoutError> {
+    let bytes = encode(slots);
+
+    // The name is one writer's own, so two writers compacting at once do not write over each
+    // other's half-written snapshot.
+    let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
+    let mut file = std::fs::File::create(&temporary)?;
+    file.write_all(&bytes)?;
+    file.sync_all()?;
+    std::fs::rename(&temporary, path)?;
+
+    Ok(())
+}
+
+/// `slots` written down whole, as [`write`] writes them.
+///
+/// It is what a layout is copied *as*: a shard's memory written out is the whole of what the shard
+/// is at that moment, where the files on disk may be a snapshot and a log that are a change apart.
+///
+/// The entries are written in `Uuid` order rather than in the order the map yields them, so what one
+/// shard holds is the same bytes whenever it is written: a copy is compared with the layout it came
+/// from by its bytes, and a map's order is a different answer in every process.
+pub fn encode(slots: &HashMap<Uuid, Slot>) -> Vec<u8> {
+    let mut ordered: Vec<(&Uuid, &Slot)> = slots.iter().collect();
+    ordered.sort_unstable_by_key(|(id, _)| **id);
+
     let mut body = Vec::new();
-    put_count(&mut body, slots.len());
-    for (id, slot) in slots {
+    put_count(&mut body, ordered.len());
+    for (id, slot) in ordered {
         put_uuid(&mut body, *id);
         match &slot.path {
             Some(path) => {
@@ -61,30 +86,15 @@ pub fn write(path: &Path, slots: &HashMap<Uuid, Slot>) -> Result<(), LayoutError
     bytes.extend_from_slice(&crc32(&body).to_be_bytes());
     bytes.extend_from_slice(&body);
 
-    // The name is one writer's own, so two writers compacting at once do not write over each
-    // other's half-written snapshot.
-    let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
-    let mut file = std::fs::File::create(&temporary)?;
-    file.write_all(&bytes)?;
-    file.sync_all()?;
-    std::fs::rename(&temporary, path)?;
-
-    Ok(())
+    bytes
 }
 
-/// The shard `path` holds, or nothing when there is no snapshot there.
+/// The shard `bytes` hold, which [`encode`] is what made.
 ///
 /// # Errors
 ///
-/// Returns [`LayoutError::Io`] if it could not be read, and [`LayoutError::Malformed`] if it is not
-/// a snapshot this build wrote.
-pub fn read(path: &Path) -> Result<Option<HashMap<Uuid, Slot>>, LayoutError> {
-    let bytes = match std::fs::read(path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.into()),
-    };
-
+/// Returns [`LayoutError::Malformed`] if the bytes are not a snapshot this build wrote.
+pub fn decode(bytes: &[u8]) -> Result<HashMap<Uuid, Slot>, LayoutError> {
     let (magic, rest) = bytes
         .split_at_checked(MAGIC.len())
         .ok_or(LayoutError::Malformed)?;
@@ -137,5 +147,5 @@ pub fn read(path: &Path) -> Result<Option<HashMap<Uuid, Slot>>, LayoutError> {
 
     rest_empty(rest)?;
 
-    Ok(Some(slots))
+    Ok(slots)
 }

@@ -7,7 +7,7 @@
 
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 
-use super::layout_remote::{PathMove, codec_failed, local_layout, move_remote};
+use super::layout_remote::{PathMove, batched, codec_failed, local_layout, move_remote};
 use super::sync_storage::{Side, carry_blob};
 
 /// An Action that moves a path in the Vault's Layout.
@@ -73,7 +73,9 @@ impl Action for ActionMoveRemotePath {
                 .into_inner()
                 .is_some_and(|config| config.auth_config().is_admin(&me));
 
-            Some(move_remote(&local_layout(&ctx)?, &from, &to, &me, admin)?)
+            Some(batched(&local_layout(&ctx)?, |batch| {
+                move_remote(batch, &from, &to, &me, admin)
+            })?)
         } else {
             None
         };

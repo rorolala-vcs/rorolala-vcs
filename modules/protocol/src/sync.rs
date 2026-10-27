@@ -1,5 +1,7 @@
 use std::future::Future;
+use std::mem::size_of;
 
+use rorolala_auth::MAX_PLAINTEXT;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use crate::{ActionContext, ActionError, Both, Channel, Encodable, OnlyVault, OnlyWorkspace};
@@ -263,6 +265,15 @@ where
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 
 /// Frames `value` and writes it to `channel`.
+///
+/// A value is its length and then its bytes, and a small one — the length and the bytes together
+/// fitting one record of the channel — is written as one buffer rather than two. That is one record
+/// instead of two for every outcome, count and packet a run exchanges, where the two-write shape was
+/// a sealed record apiece: the channel seals what a write hands it, so a length written on its own is
+/// a record of its own.
+///
+/// A value too long for one record is left as the two writes it was: joining it would copy it for the
+/// sake of a boundary the channel is going to make anyway.
 pub(crate) async fn send_value<Inner>(
     channel: &mut Channel,
     value: &Inner,
@@ -275,6 +286,17 @@ where
         return Err(ActionError::ValueTooLarge);
     }
     let length = u32::try_from(bytes.len()).map_err(|_| ActionError::ValueTooLarge)?;
+
+    if size_of::<u32>() + bytes.len() <= MAX_PLAINTEXT {
+        let mut framed = Vec::with_capacity(size_of::<u32>() + bytes.len());
+        framed.extend_from_slice(&length.to_be_bytes());
+        framed.extend_from_slice(&bytes);
+
+        channel.write_all(&framed).await?;
+        channel.flush().await?;
+
+        return Ok(());
+    }
 
     channel.write_all(&length.to_be_bytes()).await?;
     channel.write_all(&bytes).await?;

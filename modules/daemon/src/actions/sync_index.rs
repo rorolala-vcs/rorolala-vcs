@@ -6,14 +6,18 @@
 //! is none of the manifest-and-chunks a store's content may need — a key crosses as its bytes, and
 //! the other side accepts them under the key they hash to.
 
+use rorolala_errors::BincodeError;
 use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{Blake3Hash, Key, Presence, StorageBackend as _, TransferableBackend as _};
 use rorolala_utils_constants::{VAULT_INDEX_DIR, WORKSPACE_INDEX_DIR};
 use rorolala_utils_location::Locate;
-use rorolala_utils_progress::Direction;
+use rorolala_utils_progress::Task;
 use rorolala_vcs::{VCSIndex, VCSIndexError};
 
-use super::sync_storage::{Side, carry_blob, reach_the_other_end};
+use super::sync_storage::{
+    Outgoing, Packet, Side, Taken, carry_blob, carry_blob_moving, carry_value, direction, flush,
+    opposite, packet_unread, push, reach_the_other_end, read_taken, say_taken, sending,
+};
 
 /// An Action that makes the Workspace's index and the Vault's hold the same objects.
 ///
@@ -124,16 +128,18 @@ pub(crate) fn local_index(ctx: &ActionContext<'_>) -> Result<VCSIndex, ActionErr
 ///
 /// It is the same exchange [`sync_storage`](super::sync_storage) runs — each side says which of the
 /// keys it holds, the answers cross, and then every key one side holds and the other does not is
-/// carried over, the Workspace's first — with the carrying reduced to what an index object needs:
-/// one object, read on the side that has it and written on the side that has not.
+/// carried over, the Workspace's first — with the carrying shaped for what an index object is: an
+/// object is one object and is never cut, so a whole packet of them crosses in one value, and what
+/// the taker receives it writes as one pack rather than a file apiece.
 ///
 /// # Errors
 ///
 /// Returns [`ActionError::NoChannel`] if there is nothing to exchange over,
 /// [`ActionError::MissingValue`] if the context did not say which index this side has or the answers
-/// did not come back, [`ActionError::MissingObject`] if a required key is held by neither side, and
-/// [`ActionError::LocalFile`] if the index could not be read or written, and
-/// [`ActionError::Store`] for what an index failed with otherwise.
+/// did not come back, [`ActionError::MissingObject`] if a required key is held by neither side,
+/// [`ActionError::Codec`] if a packet from the peer does not read, [`ActionError::NotConfirmed`] if
+/// the side taking a direction could not keep what it took, [`ActionError::LocalFile`] if the index
+/// could not be read or written, and [`ActionError::Store`] for what an index failed with otherwise.
 async fn sync_index(
     ctx: &mut ActionContext<'_>,
     workspace: OnlyWorkspace<VCSIndex>,
@@ -200,37 +206,12 @@ async fn sync_index(
     // The Workspace's keys go first, then the Vault's. The order is the same on both ends, and it is
     // what keeps the two in step: a key crosses in one direction only, and both know which.
     if !up.is_empty() {
-        let mut task = everything.spawn(
-            Direction::Up,
-            "",
-            Some(u64::try_from(up.len()).unwrap_or(u64::MAX)),
-        );
-
-        for key in &up {
-            let working = task.doing(key.hex());
-            carry_index(ctx, &local, key, Side::Vault).await?;
-            drop(working);
-
-            task.advance_by(1);
-            everything.advance_by(1);
-        }
+        carry_keys(ctx, &local, &up, Side::Vault, &mut everything, 0).await?;
     }
 
     if !down.is_empty() {
-        let mut task = everything.spawn(
-            Direction::Down,
-            "",
-            Some(u64::try_from(down.len()).unwrap_or(u64::MAX)),
-        );
-
-        for key in &down {
-            let working = task.doing(key.hex());
-            carry_index(ctx, &local, key, Side::Workspace).await?;
-            drop(working);
-
-            task.advance_by(1);
-            everything.advance_by(1);
-        }
+        let done = u64::try_from(up.len()).unwrap_or(u64::MAX);
+        carry_keys(ctx, &local, &down, Side::Workspace, &mut everything, done).await?;
     }
 
     // As a store sync does: the Workspace waits for the Vault to say it got here, so a run that
@@ -240,40 +221,208 @@ async fn sync_index(
     Ok(())
 }
 
-/// Carries the object under `key` to `to`, where it is written down.
+/// Carries one direction of keys, a packet of objects at a time, and hears what became of it.
 ///
-/// `local` is the index on this side: what it holds is read here when this is the side sending, and
-/// what arrives is written into it when this is the side taking. Which of the two it is is `to`'s to
-/// say — the side a value goes to is the side that does not have it. An index object is one object,
-/// so what crosses for a key is its bytes and nothing else.
-async fn carry_index(
+/// Both ends reach what the side taking it says, whatever came of the carrying: a side that returned
+/// early would leave the other waiting for a value that is never coming, which is a hang rather than
+/// a failure anybody is told about.
+async fn carry_keys(
     ctx: &mut ActionContext<'_>,
     local: &VCSIndex,
-    key: &Key,
+    keys: &[&Key],
     to: Side,
+    everything: &mut Task,
+    base: u64,
 ) -> Result<(), ActionError> {
-    // The side a key is going to is the side that does not have it, so the side sending is the
-    // other one.
-    let sending = match to {
-        Side::Vault => ctx.is_workspace(),
-        Side::Workspace => ctx.is_vault(),
+    let sender = sending(ctx, to);
+
+    let carried = if sender {
+        send_keys(ctx, local, keys, to, everything, base).await
+    } else {
+        take_keys(ctx, local, to, everything, base).await
     };
 
-    let content = if sending {
-        let Some(bytes) = local.content(key).await.map_err(index_failed)? else {
+    let mut broken = None;
+    let confirmed = if sender {
+        read_taken(ctx, opposite(to)).await
+    } else {
+        // What this side holds of what it was just handed, asked by lookup: a direction that wrote
+        // its objects into one pack is confirmed by finding them there, not by reading every one
+        // back to say it is there.
+        let taken = if carried.is_ok() {
+            let asked: Vec<Key> = keys.iter().map(|key| **key).collect();
+
+            match local.contains_keys(&asked).await {
+                Ok(held) => Taken::Held(
+                    asked
+                        .iter()
+                        .enumerate()
+                        .filter(|(at, _)| !held.held(*at))
+                        .map(|(_, key)| *key)
+                        .collect(),
+                ),
+                Err(error) => {
+                    broken = Some(index_failed(error));
+
+                    Taken::Failed
+                }
+            }
+        } else {
+            Taken::Failed
+        };
+
+        // Said before anything is returned: the other side is waiting for it.
+        say_taken(ctx, opposite(to), taken).await
+    };
+
+    carried?;
+    broken.map_or(confirmed, Err)
+}
+
+/// Sends `keys` to `to`, a packet of objects at a time.
+///
+/// An object is read as its packet is built, so a sync of many never holds all of them at once, and
+/// a packet is sent as soon as it is full rather than after the whole direction has been read. What
+/// one object is bigger than a packet can hold is carried as a blob after the packet that names it,
+/// the same way a store's content is.
+async fn send_keys(
+    ctx: &mut ActionContext<'_>,
+    local: &VCSIndex,
+    keys: &[&Key],
+    to: Side,
+    everything: &mut Task,
+    base: u64,
+) -> Result<(), ActionError> {
+    let mut task = everything.spawn(direction(to), "", None);
+    let mut outgoing = Outgoing::default();
+
+    for (at, key) in keys.iter().enumerate() {
+        outgoing.completed = u32::try_from(at).unwrap_or(u32::MAX);
+
+        // What is being carried is named as it is carried, so a reader watching one object move
+        // knows which one is in hand.
+        let working = task.doing(key.hex());
+        let content = local.content(key).await.map_err(index_failed)?;
+        drop(working);
+
+        // What this side held a moment ago is not there now, which is the same answer as the check
+        // having found neither side holding it.
+        let Some(content) = content else {
             return Err(ActionError::MissingObject);
         };
 
-        Some(bytes)
-    } else {
-        None
-    };
+        push(ctx, &mut outgoing, &mut task, to, key, false, content).await?;
 
-    if let Some(bytes) = carry_blob(ctx, to, content).await? {
-        local.accept(key, bytes).await.map_err(index_failed)?;
+        outgoing.completed = u32::try_from(at.saturating_add(1)).unwrap_or(u32::MAX);
+        everything.advance(base.saturating_add(u64::from(outgoing.completed)));
     }
 
-    Ok(())
+    if !outgoing.carried.is_empty() {
+        flush(ctx, to, &mut outgoing, &mut task).await?;
+    }
+
+    // A direction ends where its sender says it does. An empty packet is the one thing the two ends
+    // cannot mistake for entries, so it is what says there is no more.
+    carry_value(ctx, to, Packet::last(outgoing.completed).encode())
+        .await
+        .map(drop)
+}
+
+/// Takes the packets of one direction and writes what they hold into `local` as one pack.
+///
+/// Nothing is written loose: an index object is small and the run of them is many, so the entries of
+/// a whole direction become one pack with one index rather than a file apiece. That is also what
+/// makes a direction one commit — a reader finds the objects of a sync when the pack naming them is
+/// there, and not one at a time as they arrive.
+async fn take_keys(
+    ctx: &mut ActionContext<'_>,
+    local: &VCSIndex,
+    to: Side,
+    everything: &mut Task,
+    base: u64,
+) -> Result<(), ActionError> {
+    let mut task = everything.spawn(direction(to), "", None);
+    let mut batch = local.batch();
+    let mut failure = None;
+
+    loop {
+        // What this side holds is never looked at: the side taking a packet runs nothing of the
+        // other side's, so what it passes is a value nothing reads.
+        let Some(bytes) = carry_value(ctx, to, Vec::new()).await? else {
+            return Err(ActionError::MissingValue);
+        };
+        let Some(packet) = Packet::decode(&bytes) else {
+            // A packet that does not read is not the end of the direction: the loop goes on to the
+            // one that is, so the side sending them is never left with nobody reading.
+            failure.get_or_insert_with(packet_unread);
+
+            continue;
+        };
+        let last = packet.carried.is_empty();
+
+        // One name for a whole packet: what a reader is shown is the work in hand, and a packet is
+        // what is in hand — naming every object of it would be the chatter this shape is rid of.
+        let named = packet
+            .carried
+            .first()
+            .map(|entry| entry.key.hex())
+            .unwrap_or_default();
+        let working = task.doing(named);
+
+        for entry in &packet.carried {
+            // An entry too big to be in the packet has its bytes after it, as the blob it has
+            // always been, so it is read either way: a side that stopped reading here would leave
+            // the other writing into a channel nobody drains.
+            let followed;
+            let bytes: &[u8] = if entry.lead.large() {
+                followed = carry_blob_moving(ctx, to, None, Some(&mut task))
+                    .await?
+                    .ok_or(ActionError::MissingValue)?;
+
+                &followed
+            } else {
+                &entry.bytes
+            };
+
+            if failure.is_some() {
+                continue;
+            }
+
+            // An index object is one object and is never cut, so a packet that says what it carries
+            // is a manifest is not one this sync sent.
+            if entry.lead.manifest() {
+                failure = Some(ActionError::Codec(BincodeError::new(
+                    "an index sync carries objects, not manifests".to_owned(),
+                )));
+
+                continue;
+            }
+
+            if let Err(error) = batch.accept(&entry.key, bytes) {
+                failure = Some(index_failed(error));
+            }
+        }
+
+        drop(working);
+
+        task.advance_by(packet.bytes());
+        everything.advance(base.saturating_add(u64::from(packet.finished)));
+
+        if last {
+            break;
+        }
+    }
+
+    // The batch becomes an index's here, and a direction is not done until it has: a reader that
+    // arrives before this finds the index it found before the sync started rather than one whose
+    // objects are part of the way through being written. What failed is not published.
+    if failure.is_none()
+        && let Err(error) = batch.publish().await
+    {
+        failure = Some(index_failed(error));
+    }
+
+    failure.map_or(Ok(()), Err)
 }
 
 /// What an index failure means to an action.

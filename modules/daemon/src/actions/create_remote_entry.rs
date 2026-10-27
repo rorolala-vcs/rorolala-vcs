@@ -8,7 +8,7 @@
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
 
-use super::layout_remote::{create_remote, remote_write};
+use super::layout_remote::{batched, create_remote, remote_write};
 
 /// An Action that creates an entry of the Vault's Layout.
 ///
@@ -52,7 +52,9 @@ impl Action for ActionCreateRemoteEntry {
             &mut ctx,
             input,
             |layout, (path, uuid, version), me, _admin| {
-                create_remote(layout, &path, &uuid, &version, me)
+                batched(layout, |batch| {
+                    create_remote(batch, &path, &uuid, &version, me)
+                })
             },
         )
         .await?;

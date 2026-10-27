@@ -367,72 +367,116 @@ async fn carry_direction(
     // the other waiting for a value that is never coming, which is a hang rather than a failure
     // anybody is told about. What the side taking it says is a status byte and then, when it could
     // not read what it took, the digests of the units it could not produce.
+    let mut broken = None;
     let confirmed = if sender {
-        let said = carry_value(ctx, opposite(to), Vec::new())
-            .await?
-            .ok_or(ActionError::MissingValue)?;
-
-        match said.split_first() {
-            // The side taking it could not carry what it took, so neither side may say it did.
-            Some((1, _)) => Err(ActionError::NotConfirmed(
-                "the side taking it failed".to_owned(),
-            )),
-            // These are the units it took and cannot read back, and one is enough to fail the run.
-            Some((2, rest)) => {
-                first_of(rest).map_or(Ok(()), |key| Err(ActionError::NotConfirmed(key.hex())))
-            }
-            _ => Ok(()),
-        }
+        read_taken(ctx, opposite(to)).await
     } else {
-        let (said, broken) = if carried.is_ok() {
-            // A unit that names a manifest alone is asked about the manifest; every other unit is
-            // asked whether its content can be produced again, chunk by chunk.
-            let mut asked: Vec<Key> = units
-                .iter()
-                .filter(|unit| unit.kind != UnitKind::Manifest)
-                .map(|unit| unit.key)
-                .collect();
-            asked.sort_unstable();
-            asked.dedup();
-
-            match local.unreadable(&asked).await {
-                Ok(mut missing) => {
-                    for unit in units.iter().filter(|unit| unit.kind == UnitKind::Manifest) {
-                        if local
-                            .manifest_of(&unit.key)
-                            .await
-                            .map_err(store_failed)?
-                            .is_none()
-                        {
-                            missing.push(unit.key);
-                        }
-                    }
-
-                    if missing.is_empty() {
-                        (vec![0_u8], None)
-                    } else {
-                        let mut said = vec![2_u8];
-                        said.extend(missing.iter().flat_map(|key| *key.digest()));
-
-                        (said, None)
-                    }
-                }
+        // What this side holds of what it was just handed, asked the same way the run opened: a
+        // content is held when its manifest and every chunk it names are, which is the question a
+        // lookup answers. Asking it as a read — putting every content back together and hashing it —
+        // is a second reading of everything that just arrived, and what it would find that a lookup
+        // does not is a chunk that crossed whole and arrived whole but was corrupted on its way to
+        // the disk.
+        let taken = if carried.is_ok() {
+            match presence(local, &held_of(units)).await {
+                Ok(shared) => Taken::Held(
+                    units
+                        .iter()
+                        .enumerate()
+                        .filter(|(at, _)| !shared.held(*at))
+                        .map(|(_, unit)| unit.key)
+                        .collect(),
+                ),
                 // A store that cannot be read at all is not a list of keys: the other side is told
                 // the direction failed, and this side fails with what the store said.
-                Err(error) => (vec![1_u8], Some(store_failed(error))),
+                Err(error) => {
+                    broken = Some(error);
+
+                    Taken::Failed
+                }
             }
         } else {
-            (vec![1_u8], None)
+            Taken::Failed
         };
 
         // Said before anything is returned: the other side is waiting for it.
-        carry_value(ctx, opposite(to), said).await?;
-
-        broken.map_or(Ok(()), Err)
+        say_taken(ctx, opposite(to), taken).await
     };
 
     carried?;
-    confirmed
+    broken.map_or(confirmed, Err)
+}
+
+/// What the side taking a direction came to.
+///
+/// A direction is carried without being acknowledged, so what the taker says at the end of one is
+/// the whole of what its sender knows: it is a status, and then the units the taker cannot produce,
+/// which is what a sender acts on rather than "it failed" alone.
+pub(crate) enum Taken {
+    /// It holds every unit of what was carried, or the units it cannot produce.
+    Held(Vec<Key>),
+    /// It could not carry out the taking at all, and says so rather than naming units.
+    Failed,
+}
+
+impl Taken {
+    /// What this is said as: a status byte, and then the digests of the units it cannot produce.
+    fn said(&self) -> Vec<u8> {
+        match self {
+            Self::Held(missing) if missing.is_empty() => vec![0_u8],
+            Self::Held(missing) => {
+                let mut said = vec![2_u8];
+                said.extend(missing.iter().flat_map(|key| *key.digest()));
+
+                said
+            }
+            Self::Failed => vec![1_u8],
+        }
+    }
+}
+
+/// Says what the side taking a direction came to.
+///
+/// It is said before anything is returned: the other side is waiting for it, and a side that
+/// returned early would leave it waiting for a value that is never coming.
+///
+/// # Errors
+///
+/// Returns whatever the exchange fails with.
+pub(crate) async fn say_taken(
+    ctx: &mut ActionContext<'_>,
+    to: Side,
+    taken: Taken,
+) -> Result<(), ActionError> {
+    carry_value(ctx, to, taken.said()).await.map(drop)
+}
+
+/// Reads what the side that took a direction said it came to.
+///
+/// A unit it cannot produce is [`ActionError::NotConfirmed`] naming the first of them, since what a
+/// caller does about it is look at that content; a taking that failed outright is the same error
+/// without a unit to name.
+///
+/// # Errors
+///
+/// Returns [`ActionError::NotConfirmed`] when the side taking it could not, and whatever the
+/// exchange fails with.
+pub(crate) async fn read_taken(ctx: &mut ActionContext<'_>, to: Side) -> Result<(), ActionError> {
+    let said = carry_value(ctx, to, Vec::new())
+        .await?
+        .ok_or(ActionError::MissingValue)?;
+
+    match said.split_first() {
+        // The side taking it could not carry what it took, so neither side may say it did.
+        Some((1, _)) => Err(ActionError::NotConfirmed(
+            "the side taking it failed".to_owned(),
+        )),
+        // These are the units it took and cannot produce again, and one is enough to fail the run.
+        Some((2, rest)) => {
+            first_of(rest).map_or(Ok(()), |key| Err(ActionError::NotConfirmed(key.hex())))
+        }
+        _ => Ok(()),
+    }
 }
 
 /// The side a direction does not name.
@@ -440,7 +484,7 @@ async fn carry_direction(
 /// A value is sent by the side that owns it, so what a side taking a direction says is carried the
 /// other way: it is the Workspace's wrapper the Vault sends, and the Vault's the Workspace sends,
 /// whichever way the units themselves went.
-const fn opposite(to: Side) -> Side {
+pub(crate) const fn opposite(to: Side) -> Side {
     match to {
         Side::Vault => Side::Workspace,
         Side::Workspace => Side::Vault,
@@ -448,16 +492,24 @@ const fn opposite(to: Side) -> Side {
 }
 
 /// The first key a confirmation named, when it named one.
-fn first_of(said: &[u8]) -> Option<Key> {
+pub(crate) fn first_of(said: &[u8]) -> Option<Key> {
     let first = said.as_chunks::<{ size_of::<Blake3Hash>() }>().0.first()?;
 
     Some(Key::new(*first))
 }
 
+/// The units a direction is made of, as the list of units a presence answer is asked about.
+///
+/// A direction is a run of units borrowed from the run's own list, and asking about them is asking
+/// about the same units in the same order — which is what makes the answer line up with the direction.
+fn held_of(units: &[&Unit]) -> Vec<Unit> {
+    units.iter().map(|unit| **unit).collect()
+}
+
 /// Whether this side is the one that has the units, which is the side `to` does not name.
 ///
 /// The side a unit goes to is the side that does not have it, so the side sending is the other one.
-const fn sending(ctx: &ActionContext<'_>, to: Side) -> bool {
+pub(crate) const fn sending(ctx: &ActionContext<'_>, to: Side) -> bool {
     match to {
         Side::Vault => ctx.is_workspace(),
         Side::Workspace => ctx.is_vault(),
@@ -465,7 +517,7 @@ const fn sending(ctx: &ActionContext<'_>, to: Side) -> bool {
 }
 
 /// The direction a side's work moves, as a bar draws it.
-const fn direction(to: Side) -> Direction {
+pub(crate) const fn direction(to: Side) -> Direction {
     match to {
         Side::Vault => Direction::Up,
         Side::Workspace => Direction::Down,
@@ -603,6 +655,17 @@ async fn take_direction(
                         continue;
                     }
                 }
+            } else if Key::new(*blake3::hash(bytes).as_bytes()) != entry.key {
+                // The key is the object's own hash, so bytes that do not hash to it are not the
+                // object that was asked for, whatever they say for themselves. It is checked here,
+                // once, as the bytes arrive: what is written into the store is then one entry the
+                // side taking it need not read back to believe.
+                failure = Some(ActionError::Store(format!(
+                    "what arrived under `{}` is not that object",
+                    entry.key.hex()
+                )));
+
+                continue;
             } else {
                 batch.add(&entry.key, bytes).await
             };
@@ -636,7 +699,7 @@ async fn take_direction(
 }
 
 /// What a packet that does not read is reported as.
-fn packet_unread() -> ActionError {
+pub(crate) fn packet_unread() -> ActionError {
     ActionError::Codec(BincodeError::new("a packet does not read".to_owned()))
 }
 
@@ -734,7 +797,7 @@ async fn add_unit(
 /// key and saying nothing else about it. A content kept whole can be any size at all, so one that is
 /// bigger than a frame is the case that piece-splitting exists for and this shape would otherwise
 /// lose.
-async fn push(
+pub(crate) async fn push(
     ctx: &mut ActionContext<'_>,
     outgoing: &mut Outgoing,
     task: &mut Task,
@@ -792,7 +855,7 @@ async fn push_large(
 }
 
 /// Sends what the packet being built holds, and starts another.
-async fn flush(
+pub(crate) async fn flush(
     ctx: &mut ActionContext<'_>,
     to: Side,
     outgoing: &mut Outgoing,
@@ -809,9 +872,9 @@ async fn flush(
 /// What is being built to cross as one value: the entries so far, and how much of the direction is
 /// behind them.
 #[derive(Default)]
-struct Outgoing {
+pub(crate) struct Outgoing {
     /// The entries this packet holds.
-    carried: Vec<Carried>,
+    pub(crate) carried: Vec<Carried>,
     /// How many bytes of entries it holds.
     bytes: usize,
     /// How many units of the direction its sender has carried whole.
@@ -819,7 +882,7 @@ struct Outgoing {
     /// This is what the other side moves its bar by: a bar drawn in units cannot be moved by entries,
     /// since one unit of a cut content is many entries, and only the side that expanded it knows how
     /// many.
-    completed: u32,
+    pub(crate) completed: u32,
 }
 
 impl Outgoing {
@@ -862,7 +925,7 @@ impl Outgoing {
 /// and whether they are in the packet at all or follow it as a blob. The second is what a content
 /// kept whole and bigger than one value needs — see [`push`].
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct Lead(u8);
+pub(crate) struct Lead(u8);
 
 impl Lead {
     /// The byte an entry whose bytes are of this kind has.
@@ -879,12 +942,12 @@ impl Lead {
     }
 
     /// Whether the entry is a manifest naming chunks rather than content of its own.
-    const fn manifest(self) -> bool {
+    pub(crate) const fn manifest(self) -> bool {
         self.0 & 1 == 1
     }
 
     /// Whether the entry's bytes follow it as a blob rather than being in the packet.
-    const fn large(self) -> bool {
+    pub(crate) const fn large(self) -> bool {
         self.0 & 2 == 2
     }
 
@@ -895,14 +958,14 @@ impl Lead {
 }
 
 /// One thing a packet carries: a key, what kind of bytes they are, and the bytes themselves.
-struct Carried {
+pub(crate) struct Carried {
     /// The key the bytes belong to.
-    key: Key,
+    pub(crate) key: Key,
     /// Whether what is carried is a manifest or content, and whether it is in the packet.
-    lead: Lead,
+    pub(crate) lead: Lead,
     /// The bytes themselves: a manifest's encoding, or an object's content — and nothing at all for
     /// an entry whose bytes are too many for one value and follow it as a blob.
-    bytes: Vec<u8>,
+    pub(crate) bytes: Vec<u8>,
 }
 
 /// What crosses in one value: as many entries as one packet holds.
@@ -912,16 +975,16 @@ struct Carried {
 /// entry, and one that repeats itself in every entry is not. What a packet holds is read from the
 /// packet itself, so the two ends do not have to agree on how it was cut — only on the order, which
 /// both read from the same two presence answers.
-struct Packet {
+pub(crate) struct Packet {
     /// How many units of the direction its sender had carried whole when it filled this packet.
-    finished: u32,
+    pub(crate) finished: u32,
     /// The entries, in the order the store reads them.
-    carried: Vec<Carried>,
+    pub(crate) carried: Vec<Carried>,
 }
 
 impl Packet {
     /// The packet that says a direction is over, with `finished` units of it behind it.
-    const fn last(finished: u32) -> Self {
+    pub(crate) const fn last(finished: u32) -> Self {
         Self {
             finished,
             carried: Vec::new(),
@@ -929,14 +992,14 @@ impl Packet {
     }
 
     /// How many bytes of entries it holds.
-    fn bytes(&self) -> u64 {
+    pub(crate) fn bytes(&self) -> u64 {
         self.carried.iter().fold(0_u64, |total, entry| {
             total.saturating_add(u64::try_from(entry.bytes.len()).unwrap_or(u64::MAX))
         })
     }
 
     /// Writes the packet down, so it can be read back by [`decode`](Self::decode).
-    fn encode(&self) -> Vec<u8> {
+    pub(crate) fn encode(&self) -> Vec<u8> {
         let held: usize = self.carried.iter().map(|entry| entry.bytes.len()).sum();
         let mut bytes = Vec::with_capacity(
             size_of::<u32>() * 2 + self.carried.len() * ENTRY_HEADER + held.min(PACKET_BYTES),
@@ -971,7 +1034,7 @@ impl Packet {
     /// a record cut short, or bytes left over at the end. Nothing is reserved from a count the bytes
     /// do not back — the frame the bytes came in is what bounds them, and a count is what a corrupt
     /// packet would aim at.
-    fn decode(bytes: &[u8]) -> Option<Self> {
+    pub(crate) fn decode(bytes: &[u8]) -> Option<Self> {
         let (finished, rest) = split_u32(bytes)?;
         let (count, mut rest) = split_u32(rest)?;
         let count = usize::try_from(count).ok()?;

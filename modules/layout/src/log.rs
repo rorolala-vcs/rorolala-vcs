@@ -157,6 +157,39 @@ impl ShardLog {
         self.consumed += count;
     }
 
+    /// Reads a shard as one whole: the snapshot at `snapshot`, and every byte the log holds after it.
+    ///
+    /// The two are read under the log's shared lock, which is what makes them one whole rather than
+    /// two reads a compaction can fall between: a compaction holds the log exclusively across writing
+    /// the snapshot and emptying the log, so what is read here is all of the state before it or all
+    /// of the state after it, never a snapshot from one and a log from the other.
+    ///
+    /// A first value of no bytes is no snapshot at all — a shard nothing has been written down for —
+    /// rather than a malformed one; the second is what the log holds past what this handle had read.
+    ///
+    /// # Errors
+    ///
+    /// Returns why the snapshot or the log could not be read, or the lock could not be taken.
+    pub fn read_whole(&mut self, snapshot: &Path) -> io::Result<(Vec<u8>, Vec<u8>)> {
+        self.read.lock_shared()?;
+        let result = self.read_whole_locked(snapshot);
+        self.read.unlock()?;
+
+        result
+    }
+
+    /// The whole of a shard, with the shared lock already held.
+    fn read_whole_locked(&mut self, snapshot: &Path) -> io::Result<(Vec<u8>, Vec<u8>)> {
+        let snapshot = match std::fs::read(snapshot) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => return Err(error),
+        };
+        let appended = self.poll_locked()?;
+
+        Ok((snapshot, appended))
+    }
+
     /// Writes everything the log still holds down whole, and empties it.
     ///
     /// An exclusive lock is held for the whole of this, so no other process is part of the way
@@ -185,6 +218,14 @@ impl ShardLog {
         &mut self,
         replay: &mut impl FnMut(&[u8]) -> Result<(), LayoutError>,
     ) -> Result<(), LayoutError> {
+        // A log with no bytes in it has nothing to fold into the snapshot and nothing to empty, so a
+        // shard nothing has been appended to is left exactly as it is rather than spending three
+        // flushes to say so. The bytes this handle has already read count as content: they are in
+        // the caller's memory and only the flush of a snapshot takes them from the log.
+        if self.write.metadata()?.len() == 0 {
+            return Ok(());
+        }
+
         let remaining = self.pending_locked()?;
         replay(&remaining)?;
 

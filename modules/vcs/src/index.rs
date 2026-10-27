@@ -1,4 +1,4 @@
-//! The version control index: where a run's variants and versions are kept.
+﻿//! The version control index: where a run's variants and versions are kept.
 //!
 //! The index is a store of its own, kept in a directory of its own and addressed by the same
 //! kind of key a store is — but it is not the store: what it holds are the index objects the
@@ -15,7 +15,8 @@ use std::str::FromStr as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use rorolala_storage::{
-    Blake3Hash, Codec, FRAME_VERSION, Frame, Layout, LockError, Lockable, LockingGuard,
+    Blake3Hash, Codec, FRAME_HEADER_LEN, FRAME_VERSION, Frame, Layout, LockError, Lockable,
+    LockingGuard,
 };
 use rorolala_utils_constants::{
     LOCK_FILE, VAULT_CONFIG_PATH, VAULT_INDEX_DIR, WORKSPACE_DATA_DIR, WORKSPACE_INDEX_DIR,
@@ -34,6 +35,8 @@ mod object;
 mod pack;
 
 pub use object::{VCSIndexKind, VCSWrite};
+use pack::Source;
+pub use pack::VCSIndexBatch;
 
 /// The directory loose objects are kept under, inside an index.
 const OBJECTS_DIR: &str = "obj";
@@ -46,6 +49,10 @@ const SLICE_SECOND: usize = 2;
 
 /// The suffix a temporary file's name ends in.
 const TEMPORARY_SUFFIX: &str = ".tmp";
+
+/// How many bytes of an entry are read to learn what kind it is: its frame, and the first byte
+/// behind it.
+const KIND_HEAD: u64 = FRAME_HEADER_LEN as u64 + 1;
 
 /// The Rorolala version control index
 ///
@@ -649,7 +656,7 @@ impl VCSIndex {
         // whichever way the object happens to be kept.
         for index in self.packs().await? {
             match self.read_pack_index(index).await {
-                Ok(directory) => {
+                Ok(Some(directory)) => {
                     for entry in directory.entries() {
                         keys.insert(entry.key());
                     }
@@ -657,7 +664,7 @@ impl VCSIndex {
                 // An index that does not decode is one nothing can be found in; `broken_packs`
                 // names it. A pack taken away between the scan and the read holds nothing, which is
                 // the same answer as an index that was never there.
-                Err(VCSIndexError::Malformed) => {}
+                Ok(None) | Err(VCSIndexError::Malformed) => {}
                 Err(VCSIndexError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
                 Err(error) => return Err(error),
             }
@@ -765,6 +772,81 @@ impl VCSIndex {
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error.into()),
         }
+    }
+
+    /// The kind the object stored under `key` is, or `None` when nothing is stored under it.
+    ///
+    /// It is what a listing that filters by kind needs, and a read would answer with the whole
+    /// object: what tells a variant from a version is the first byte of the payload, right behind the
+    /// frame, so only that much of the entry is read — one short read out of a pack rather than the
+    /// entry's worth of bytes, its decode and its hash check.
+    ///
+    /// An entry written under a codec other than raw is the one case that has to be read whole: what
+    /// kind it is then sits behind an encoding rather than at the front of it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VCSIndexError::Io`] if the index cannot be read, and [`VCSIndexError::Malformed`] if
+    /// an entry that is there does not lead with a frame this build writes.
+    pub async fn kind_of(&self, key: &Hash) -> Result<Option<VCSIndexKind>, VCSIndexError> {
+        let Some(head) = self.entry_head(key).await? else {
+            return Ok(None);
+        };
+        let (frame, header) = Frame::decode(&head)?;
+
+        if frame.codec == Codec::Raw
+            && let Some(&kind) = head.get(header)
+        {
+            return Ok(VCSIndexKind::from_id(kind));
+        }
+
+        let Some(bytes) = self.entry_bytes(key).await? else {
+            return Ok(None);
+        };
+        let (frame, header) = Frame::decode(&bytes)?;
+        let payload = bytes.get(header..).ok_or(VCSIndexError::Malformed)?;
+        let plain_len = usize::try_from(frame.plain_len).map_err(|_| VCSIndexError::Malformed)?;
+        let plain = frame.codec.decode(payload, plain_len)?;
+
+        Ok(plain.first().copied().and_then(VCSIndexKind::from_id))
+    }
+
+    /// The first bytes of the entry stored under `key`, loose or in a pack, or `None` when there is
+    /// none.
+    async fn entry_head(&self, key: &Hash) -> Result<Option<Vec<u8>>, VCSIndexError> {
+        if let Some(head) = self.read_entry_head(key).await? {
+            return Ok(Some(head));
+        }
+
+        let Some(source @ Source::Packed(..)) = self.find_packed(key).await? else {
+            return Ok(None);
+        };
+        let head = self.read_source_head(&source, KIND_HEAD).await?;
+
+        Ok((!head.is_empty()).then_some(head))
+    }
+
+    /// The first bytes of the loose entry stored under `key`, or `None` when there is none.
+    async fn read_entry_head(&self, key: &Hash) -> Result<Option<Vec<u8>>, VCSIndexError> {
+        use tokio::io::AsyncReadExt as _;
+
+        let mut file = match tokio::fs::File::open(self.object_path(key)).await {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+
+        let mut head = vec![0_u8; usize::try_from(KIND_HEAD).unwrap_or(FRAME_HEADER_LEN + 1)];
+        let mut read = 0;
+        while read < head.len() {
+            match file.read(&mut head[read..]).await? {
+                0 => break,
+                more => read += more,
+            }
+        }
+        head.truncate(read);
+
+        Ok(Some(head))
     }
 }
 
@@ -1266,6 +1348,130 @@ mod tests {
     }
 
     #[test]
+    fn a_batch_writes_what_it_took_as_one_pack() {
+        let index = index("batch-pack");
+        let one = variant();
+        let other = Version::new_bare_version([4_u8; 32], 0);
+
+        let mut batch = index.batch();
+        let one_key = batch.add(&one);
+        let other_key = batch.add(&other);
+        assert_eq!(batch.len(), 2);
+
+        // Nothing is visible until the batch is published: what it holds is written as one pack, and
+        // a pack is found by its index, which is written after the pack.
+        assert!(!run(index.holds_object(&one_key)).unwrap().unwrap());
+        assert_eq!(run(batch.publish()).unwrap().unwrap(), 2);
+
+        assert_eq!(run(index.packs()).unwrap().unwrap(), vec![0]);
+        assert_eq!(
+            run(index.list_loose_keys()).unwrap().unwrap(),
+            Vec::<Hash>::new(),
+            "a batch that writes a pack leaves nothing loose"
+        );
+        assert!(run(index.holds_object(&one_key)).unwrap().unwrap());
+        assert_eq!(
+            run(index.read(one_key)).unwrap().unwrap(),
+            crate::VCSIndexObject::Variant(one)
+        );
+        assert_eq!(
+            run(index.read(other_key)).unwrap().unwrap(),
+            crate::VCSIndexObject::Version(other)
+        );
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_batch_takes_the_same_key_once_and_writes_nothing_for_nothing() {
+        let index = index("batch-dedup");
+        let object = variant();
+
+        // A batch of nothing is a batch that writes no pack: an empty pack is a file nothing names.
+        assert_eq!(run(index.batch().publish()).unwrap().unwrap(), 0);
+        assert_eq!(run(index.packs()).unwrap().unwrap(), Vec::<u64>::new());
+
+        let mut batch = index.batch();
+        let key = batch.add(&object);
+        let again = batch.add(&object);
+        assert_eq!(key, again);
+        assert_eq!(batch.len(), 1);
+        assert_eq!(run(batch.publish()).unwrap().unwrap(), 1);
+        assert_eq!(
+            run(index.read_pack_index(0))
+                .unwrap()
+                .unwrap()
+                .unwrap()
+                .len(),
+            1
+        );
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_batch_takes_what_a_transfer_accepts_and_refuses_what_is_not_that_object() {
+        let index = index("batch-accept");
+        let object = variant();
+        let key = object.hash();
+
+        // What a peer sends is decoded and held to the key it came under, as one object's own accept
+        // does; what is not that object is refused rather than written under a name that would read
+        // back wrong.
+        let mut batch = index.batch();
+        assert!(matches!(
+            batch.accept(&key, b"not an index object"),
+            Err(VCSIndexError::Malformed)
+        ));
+        let other = Version::new_bare_version([5_u8; 32], 0);
+        assert!(matches!(
+            batch.accept(&key, &other.encode()),
+            Err(VCSIndexError::Corrupt(corrupt)) if corrupt == key
+        ));
+        batch.accept(&key, &object.encode()).unwrap();
+        assert_eq!(batch.len(), 1);
+        run(batch.publish()).unwrap().unwrap();
+
+        assert_eq!(
+            run(index.read(key)).unwrap().unwrap(),
+            crate::VCSIndexObject::Variant(object)
+        );
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_batch_that_finds_a_pack_under_a_number_takes_the_one_after() {
+        let index = index("batch-claim");
+        let packed = variant();
+        let packed_key = run(index.write(packed)).unwrap().unwrap();
+        run(index.repack()).unwrap().unwrap();
+
+        // Pack 0 is there, so what a batch claims is 1: two writers never take one number for two
+        // packs, which is what keeps a pack from being written over while another names it.
+        let mut batch = index.batch();
+        let other = Version::new_bare_version([6_u8; 32], 0);
+        let other_key = batch.add(&other);
+        run(batch.publish()).unwrap().unwrap();
+
+        assert_eq!(run(index.packs()).unwrap().unwrap(), vec![0, 1]);
+        assert!(run(index.holds_object(&packed_key)).unwrap().unwrap());
+        assert!(run(index.holds_object(&other_key)).unwrap().unwrap());
+        assert_eq!(
+            run(index.read(other_key)).unwrap().unwrap(),
+            crate::VCSIndexObject::Version(other)
+        );
+
+        // A repacking gathers both packs into one, and every object is still where it was.
+        assert!(run(index.repack()).unwrap().unwrap());
+        assert_eq!(run(index.packs()).unwrap().unwrap().len(), 1);
+        assert!(run(index.holds_object(&packed_key)).unwrap().unwrap());
+        assert!(run(index.holds_object(&other_key)).unwrap().unwrap());
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
     fn a_pack_whose_index_does_not_read_does_not_hide_the_other_keys() {
         let index = index("broken-pack");
         let packed = variant();
@@ -1301,6 +1507,56 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_batch_presence_is_read_from_the_packs_and_the_loose_tree_once() {
+        let held = index("batch-presence");
+        let packed_key = run(held.write(variant())).unwrap().unwrap();
+        run(held.repack()).unwrap().unwrap();
+
+        // Two keys laid into the pack, and one written after it — which is the loose tree — and one
+        // this index has never held.
+        let also_packed = Version::new_bare_version([8_u8; 32], 0);
+        let loose = Version::new_bare_version([9_u8; 32], 0);
+        let also_packed_key = run(held.write(also_packed)).unwrap().unwrap();
+        run(held.repack()).unwrap().unwrap();
+        let loose_key = run(held.write(loose)).unwrap().unwrap();
+
+        let elsewhere = index("batch-presence-elsewhere");
+        let missing = Version::new_bare_version([7_u8; 32], 0);
+        let missing_key = run(elsewhere.write(missing)).unwrap().unwrap();
+        let elsewhere_root = elsewhere.get_root().to_path_buf();
+
+        let asked = [packed_key, loose_key, also_packed_key, missing_key];
+
+        let presence = run(held.contains_keys(&asked)).unwrap().unwrap();
+
+        assert_eq!(
+            presence.iter().collect::<Vec<_>>(),
+            vec![true, true, true, false]
+        );
+
+        // A pack whose index does not decode is passed over rather than failing the whole batch:
+        // what is loose is still found, and what was only in that pack is answered as not held.
+        let packed = held.get_root().join("packed");
+        let index_file = fs::read_dir(&packed)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| path.extension().is_some_and(|extension| extension == "idx"))
+            .expect("the pack's index");
+        fs::write(&index_file, b"not a pack index").unwrap();
+
+        let presence = run(held.contains_keys(&asked)).unwrap().unwrap();
+
+        assert_eq!(
+            presence.iter().collect::<Vec<_>>(),
+            vec![false, true, false, false]
+        );
+
+        let _ = fs::remove_dir_all(held.get_root());
+        let _ = fs::remove_dir_all(elsewhere_root);
     }
 
     #[test]

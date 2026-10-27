@@ -1702,6 +1702,16 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult do_action_write_remote_entries(nint workspace, nint account, nint target, nint input);
 
     /// <summary>
+    /// Runs the [`ActionBringRemoteIndex`](crate::ActionBringRemoteIndex) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_bring_remote_index(nint workspace, nint account, nint target, nint input);
+
+    /// <summary>
     /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
     ///
     /// `daemon_begin_async` is not supported for use on the FFI side; only the

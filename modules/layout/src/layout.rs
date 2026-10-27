@@ -97,6 +97,21 @@ pub struct Orphans {
     pub without_entry: Vec<LayoutPath>,
 }
 
+/// How much disk a layout's two kinds of file take.
+///
+/// The logs are what an open replays and the snapshots are what it reads whole, so this is the pair
+/// a caller weighs when deciding whether a compaction is worth its write: a log far longer than the
+/// snapshot it would be folded into is time paid on every open, while a log shorter than it is not.
+/// It is read from the directory as it stands, so two processes writing at once make it a moment's
+/// answer rather than a fact.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct LayoutSizes {
+    /// How many bytes the shards' logs hold between them.
+    pub logs: u64,
+    /// How many bytes the shards' snapshots hold between them.
+    pub snapshots: u64,
+}
+
 impl Layout {
     /// Opens the layout kept in `dir`, making the directory and its shards if they are not there.
     ///
@@ -133,6 +148,12 @@ impl Layout {
 
     /// Opens the layout kept in `dir`, making what is missing only where `create` says it may.
     ///
+    /// A shard is read as one whole — its snapshot and the log after it under one lock — because
+    /// the two are written by a compaction in the order that makes them a pair only together: a
+    /// snapshot written down whole and the log emptied after it. Read apart, an open that fell
+    /// between the two would answer a layout missing every change the compaction had just folded
+    /// into the snapshot it did not see.
+    ///
     /// # Errors
     ///
     /// Returns what [`Layout::open`] does: the files are made here when `create` is true, and asked
@@ -146,31 +167,95 @@ impl Layout {
 
         let mut shards = Vec::with_capacity(SHARD_COUNT);
         for shard in 0..SHARD_COUNT {
-            let path = dir.join(format!("{LOG_PREFIX}{shard}{LOG_SUFFIX}"));
-            let log = if create {
+            let path = log_path(&dir, shard);
+            let mut log = if create {
                 ShardLog::open(&path)?
             } else {
                 ShardLog::open_existing(&path)?
             };
-            let slots = crate::snapshot::read(&snapshot_path(&dir, shard))?.unwrap_or_default();
+
+            let (snapshot, appended) = log.read_whole(&snapshot_path(&dir, shard))?;
+            let mut slots = if snapshot.is_empty() {
+                HashMap::new()
+            } else {
+                crate::snapshot::decode(&snapshot)?
+            };
+            let read = replay(&appended, &mut slots, &mut Vec::new())?;
+            log.advance(read as u64);
+
             shards.push(RwLock::new(Shard { log, slots }));
         }
 
         let index = derived_index(&shards);
-        let layout = Self {
+
+        Ok(Self {
             dir,
             shards,
             index: RwLock::new(index),
-        };
-        layout.refresh()?;
+        })
+    }
 
-        Ok(layout)
+    /// Every file a layout keeps, written down whole, as a copy of it is kept.
+    ///
+    /// What a shard is written down as is its memory rather than its own two files: a snapshot and a
+    /// log on disk are a change or more apart whenever another process is writing or compacting, and
+    /// what a copy of a layout is for is one whole of it rather than the halves of two. Each shard is
+    /// therefore written as a snapshot holding all of it, with an empty log after it, which is a
+    /// layout a reader opens without replaying anything.
+    ///
+    /// What is written is a function of what the layout holds and nothing else — a shard's entries in
+    /// `Uuid` order — so one unchanged layout is the same bytes every time it is written. That is
+    /// what lets a copy's own bytes say whether it is up to date with the layout it was taken from.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::Malformed`] if what a shard holds cannot be written down.
+    pub fn as_files(&self) -> Result<Vec<(String, Vec<u8>)>, LayoutError> {
+        let mut files = Vec::with_capacity(SHARD_COUNT * 2);
+
+        for shard in 0..SHARD_COUNT {
+            // The shard is held only while it is written down: what comes after is a list being built,
+            // and a lock held over it is a writer kept waiting for nothing.
+            let encoded = {
+                let slots = lock_read(&self.shards[shard]);
+
+                crate::snapshot::encode(&slots.slots)
+            };
+
+            files.push((snapshot_name(shard), encoded));
+            files.push((log_name(shard), Vec::new()));
+        }
+
+        files.sort();
+
+        Ok(files)
     }
 
     /// The directory the layout is kept in.
     #[must_use]
     pub fn dir(&self) -> &Path {
         &self.dir
+    }
+
+    /// How many bytes the shards' logs and snapshots hold between them.
+    ///
+    /// It is one `metadata` per file rather than a read of them, so what it costs is a directory's
+    /// worth of lookups and not a layout's worth of bytes — which is what makes it cheap enough to
+    /// ask before every change an action makes. A file that is not there counts as no bytes, since
+    /// a compaction may be part of the way through emptying a log when this is asked.
+    #[must_use]
+    pub fn sizes(&self) -> LayoutSizes {
+        let mut sizes = LayoutSizes::default();
+
+        for shard in 0..SHARD_COUNT {
+            let log = log_path(&self.dir, shard);
+            let snapshot = snapshot_path(&self.dir, shard);
+
+            sizes.logs += size_of(&log);
+            sizes.snapshots += size_of(&snapshot);
+        }
+
+        sizes
     }
 
     /// Reads and applies every change appended since the last read.
@@ -209,7 +294,9 @@ impl Layout {
     ///
     /// One shard is compacted at a time, each under its own lock, so a writer changing one shard is
     /// never held up by another shard being compacted. What a shard is compacted from is its own
-    /// snapshot and log, so nothing another shard does reaches it.
+    /// snapshot and log, so nothing another shard does reaches it. A shard whose log holds no bytes
+    /// is passed over: it has nothing to fold into a snapshot, and what it costs to say so is a
+    /// flush of a snapshot that would be what is already there.
     ///
     /// A shard's log is locked exclusively for the whole of its compaction — reading what it still
     /// holds, writing the snapshot down, raising the age and emptying it. Appending locks the log
@@ -644,6 +731,12 @@ impl Batch<'_> {
         self.index.id_of.contains_key(path)
     }
 
+    /// The `Uuid` `path` names as the batch leaves it, if it names one.
+    #[must_use]
+    pub fn id_of(&self, path: &LayoutPath) -> Option<Uuid> {
+        self.index.id_of.get(path).copied()
+    }
+
     /// Adds `record` to the batch, and makes it true of what the checks read.
     fn push(&mut self, record: Record) -> Result<(), LayoutError> {
         update_data(&mut self.data, &record);
@@ -839,9 +932,29 @@ fn shard_of(id: Uuid) -> usize {
     usize::from(id.as_bytes()[0]) % SHARD_COUNT
 }
 
+/// What a shard's snapshot is called.
+fn snapshot_name(shard: usize) -> String {
+    format!("{SNAPSHOT_PREFIX}{shard}{SNAPSHOT_SUFFIX}")
+}
+
+/// What a shard's log is called.
+fn log_name(shard: usize) -> String {
+    format!("{LOG_PREFIX}{shard}{LOG_SUFFIX}")
+}
+
 /// Where a shard's snapshot is kept.
 fn snapshot_path(dir: &Path, shard: usize) -> PathBuf {
-    dir.join(format!("{SNAPSHOT_PREFIX}{shard}{SNAPSHOT_SUFFIX}"))
+    dir.join(snapshot_name(shard))
+}
+
+/// Where a shard's log is kept.
+fn log_path(dir: &Path, shard: usize) -> PathBuf {
+    dir.join(log_name(shard))
+}
+
+/// How many bytes the file at `path` holds, or none when it is not there.
+fn size_of(path: &Path) -> u64 {
+    std::fs::metadata(path).map_or(0, |meta| meta.len())
 }
 
 /// Takes a read lock, recovering from a holder that panicked.
@@ -1159,5 +1272,68 @@ mod tests {
         assert_eq!(layout.entry(bound), Some(data(21)));
         assert_eq!(layout.entry(alone), Some(data(22)));
         assert_eq!(layout.orphans().without_path, vec![alone]);
+    }
+
+    #[test]
+    fn a_compaction_empties_the_logs_it_folded_and_leaves_the_empty_ones_alone() {
+        let dir = scratch("sizes");
+        let id = Uuid::from_u128(31);
+
+        let layout = Layout::open(&dir).unwrap();
+        layout.create_entry(id, data(31)).unwrap();
+
+        // One shard was appended to, so one shard is what a compaction has to write down.
+        let before = layout.sizes();
+        assert!(before.logs > 0, "the change was written nowhere");
+
+        layout.compact().unwrap();
+        let after = layout.sizes();
+        assert_eq!(after.logs, 0, "a log the compaction folded is still there");
+        assert!(after.snapshots > 0, "nothing was written down");
+
+        // A shard whose log is empty has nothing to fold, and asking again changes nothing.
+        layout.compact().unwrap();
+        assert_eq!(layout.sizes(), after);
+    }
+
+    #[test]
+    fn a_layout_written_out_whole_is_the_same_layout_every_time() {
+        let dir = scratch("as-files");
+        let id = Uuid::from_u128(41);
+
+        let layout = Layout::open(&dir).unwrap();
+        layout.create_entry(id, data(41)).unwrap();
+        layout.create_path(&path("a/b.txt"), id).unwrap();
+
+        // What is written out is the layout as it stands, so every shard's snapshot holds its whole
+        // content and the log after it is empty rather than part of a change.
+        let files = layout.as_files().unwrap();
+        assert!(
+            files.iter().any(|(name, _)| name.starts_with("snap-")),
+            "no snapshot was written out"
+        );
+        assert!(
+            files
+                .iter()
+                .all(|(name, bytes)| !name.starts_with("log-") || bytes.is_empty()),
+            "a log was written out with a change in it"
+        );
+
+        // Written out and opened again, it is the layout it was taken from.
+        let copied = scratch("as-files-copy");
+        std::fs::create_dir_all(&copied).unwrap();
+        for (name, bytes) in &files {
+            std::fs::write(copied.join(name), bytes).unwrap();
+        }
+
+        let reopened = Layout::open_existing(&copied).unwrap();
+        assert_eq!(reopened.entry(id), Some(data(41)));
+        assert_eq!(reopened.id_of(&path("a/b.txt")), Some(id));
+
+        // The same layout says the same bytes next time, and a compaction is not a change to it:
+        // what a copy is compared with the layout by is what the layout holds, not how it is kept.
+        assert_eq!(layout.as_files().unwrap(), files);
+        layout.compact().unwrap();
+        assert_eq!(layout.as_files().unwrap(), files);
     }
 }

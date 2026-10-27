@@ -64,7 +64,7 @@ use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_OWNERSHIP, EC_HELP};
 use crate::failure::failure;
 use crate::keys::account_named;
-use crate::layout::{ErrorLayoutFailed, ErrorLayoutMissing, cached_vault_copy, set_cached_owner};
+use crate::layout::{ErrorLayoutFailed, ErrorLayoutMissing, cached_vault_copy, set_cached_owners};
 use crate::progress::Reporting;
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
@@ -512,7 +512,7 @@ fn change(
         .into();
     }
 
-    let (entries, refused) = act(kind, wanted, held, &account, &target, &vault_name, progress);
+    let (entries, refused) = act(kind, wanted, held, &copy, &account, &target, progress);
     failed.extend(refused);
 
     ResultOwnership {
@@ -729,13 +729,17 @@ fn free(kind: Own, path: &LayoutPath, upstream: &MutableData, me: &str) -> Resul
 /// come back together, one per entry in the order they were asked for. That is what a run naming a
 /// directory wants — one handshake rather than one per file — and the bar is drawn over the entries
 /// as they are done, so a reader is shown which one the Vault is on now.
+///
+/// What the Vault agreed to is written into `copy` — the copy this run opened once — as one batch
+/// after the whole exchange: what a run of a thousand entries costs the copy is one open and one
+/// flush per shard, rather than an open and a flush for each of them.
 fn act(
     kind: Own,
     wanted: Vec<Wanted>,
     held: &Workspace,
+    copy: &Layout,
     account: &Account,
     target: &VaultAddress,
-    vault_name: &str,
     progress: &Progress,
 ) -> (Vec<OwnershipItem>, Vec<Refusal>) {
     if wanted.is_empty() {
@@ -797,15 +801,12 @@ fn act(
 
     let mut entries = Vec::with_capacity(wanted.len());
     let mut failed = Vec::new();
+    let mut changes = Vec::with_capacity(wanted.len());
 
     for (item, outcome) in wanted.into_iter().zip(outcomes) {
         match outcome {
             Ownership::Owner(owner) => {
-                if let Err(error) = set_cached_owner(held, vault_name, item.id, owner.clone()) {
-                    failed.push(Refusal::Failed(error.to_string()));
-                    continue;
-                }
-
+                changes.push((item.id, owner.clone()));
                 entries.push(OwnershipItem {
                     path: item.path.as_str().to_owned(),
                     uuid: item.id.to_string(),
@@ -818,6 +819,14 @@ fn act(
                 owner,
             }),
         }
+    }
+
+    // A copy that cannot be written is the one failure here that is not the Vault's: the change it
+    // follows is already made, so what is said is that the copy did not follow it — a fetch, which
+    // every one of these runs begins with, is what brings a copy back.
+    let mut batch = copy.batch();
+    if let Err(error) = set_cached_owners(&mut batch, &changes).and_then(|()| batch.commit()) {
+        failed.push(Refusal::Failed(error.to_string()));
     }
 
     (entries, failed)

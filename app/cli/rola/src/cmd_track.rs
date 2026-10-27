@@ -41,7 +41,7 @@ use librorolala::storage::{
     Chunking, Key, Lockable as _, RorolalaStorage, key_of_file, store_file,
 };
 use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
-use librorolala::vcs::{Creator, Message, VCSIndex, Variant, Version};
+use librorolala::vcs::{Creator, Message, VCSIndex, VCSIndexBatch, Variant, Version};
 use librorolala::workspace::{DATA_DIR, Merging, Pending};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
@@ -100,6 +100,20 @@ const EDIT_ATTEMPTS: usize = 10;
 /// reader most wants to watch: the whole of every file it is to record is read before anything is
 /// written, and a bar that appeared only once that reading was over would be a bar for nothing.
 const WATCH_AFTER: Duration = Duration::from_secs(1);
+
+/// How many loose objects a recording leaves before it packs the index.
+///
+/// What a pack costs is a rewrite of every object the index holds, so packing after every run is a run
+/// whose cost grows with the index for a saving that does not. A few hundred loose objects is when one
+/// pack is worth the rewrite; until then they are valid loose objects a later run settles.
+const LOOSE_BEFORE_PACK: usize = 256;
+
+/// How many packs the index may hold before a recording gathers them into one.
+///
+/// A run writes what it makes as one pack, so a run that never gathered would leave a pack per run
+/// behind — and every lookup walks every pack. A handful is what a run of them is worth; past that the
+/// walk is the reading rather than the lookup, and one rewrite is cheaper than it.
+const PACKS_BEFORE_REPACK: usize = 8;
 
 /// What the whole group did; the message every file carries unless it is given its own.
 const ARG_MESSAGE: PickerArg<'static, Option<String>> = arg![message: Option<String>];
@@ -526,6 +540,10 @@ fn record(
     // than the same for each file.
     let mut batch = layout.batch();
 
+    // What the run makes in the index is gathered up the same way: a run writes its objects as one
+    // pack rather than a file per object, which is what a file creation each was.
+    let mut writes = vcs.batch();
+
     for (at, file) in staged.iter().enumerate() {
         let text = &messages[at];
 
@@ -538,6 +556,7 @@ fn record(
             vcs,
             &runtime,
             &creator_name,
+            &mut writes,
             &mut batch,
             file,
             text,
@@ -581,6 +600,13 @@ fn record(
         }
     }
 
+    // What the run made in the index is written before the Layout that names it: a Layout naming a
+    // version the index does not hold is a version nothing reads, so the objects are made first and
+    // the Layout follows them. One pack for the whole run, and nothing the run wrote is left loose.
+    if let Err(error) = runtime.block_on(writes.publish()) {
+        return fail(error.to_string());
+    }
+
     // What was recorded is what the tree and the Layout now agree on, so the reading remembers it —
     // only for the paths recorded, since remembering the whole tree would take every other change
     // with it and a later `rola status` would have nothing to say about them.
@@ -607,19 +633,22 @@ fn record(
     ResultTrack { items }.into()
 }
 
-/// Lays the index's objects out as one pack, when this run wrote any.
+/// Lays the index's objects out as one pack, when this run has left enough of them to gather.
 ///
-/// A recording writes a variant and a version per file, and a run that never packed would gather a
-/// loose object for every one forever. It is best effort: the objects are valid loose, so a pack that
-/// cannot be made — because another run holds the lock, or the pack cannot be written — leaves an
-/// index that is correct and merely uncompacted, which a later `rola pack` settles. So a failure here
-/// does not fail a recording that is already durable.
+/// A run writes what it makes as a pack already, so what gathers between packings is a pack per run
+/// rather than a loose file per object. What a gathering costs is a rewrite of every object the index
+/// holds, though, which grows with the index while what it saves does not — so a run gathers only when
+/// the loose objects it left number [`LOOSE_BEFORE_PACK`], or when the packs it left number more than
+/// [`PACKS_BEFORE_REPACK`], and until then they are valid where they are: a later run or `rola pack`
+/// settles them. It is best effort — a pack that cannot be made because another run holds the lock
+/// leaves an index that is correct and merely ungathered, and a failure here does not fail a recording
+/// that is already durable.
 fn pack_index(index: &VCSIndex, runtime: &tokio::runtime::Runtime) {
     let Ok(guard) = runtime.block_on(index.lock()) else {
         return;
     };
 
-    let _ = runtime.block_on(guard.repack());
+    let _ = runtime.block_on(guard.repack_when_due(LOOSE_BEFORE_PACK, PACKS_BEFORE_REPACK));
 }
 
 /// Writes down what a recording left the tree and the Layout agreeing on.
@@ -1358,6 +1387,7 @@ fn commit(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     creator_name: &str,
+    writes: &mut VCSIndexBatch,
     batch: &mut Batch<'_>,
     file: &Staged,
     text: &str,
@@ -1378,12 +1408,8 @@ fn commit(
         Creator::try_from(creator_name.to_owned()).map_err(|error| fail(error.to_string()))?;
     let message = Message::try_from(text.to_owned()).map_err(|error| fail(error.to_string()))?;
 
-    let creator_key = runtime
-        .block_on(index.write(creator))
-        .map_err(|error| fail(error.reason()))?;
-    let message_key = runtime
-        .block_on(index.write(message))
-        .map_err(|error| fail(error.reason()))?;
+    let creator_key = writes.add(&creator);
+    let message_key = writes.add(&message);
 
     let variant = match (&file.recorded, replace) {
         (Some(recorded), true) => Variant::new_bare_variant(
@@ -1425,9 +1451,7 @@ fn commit(
         }
         (None, _) => {
             let root = Version::root();
-            runtime
-                .block_on(index.write(root.clone()))
-                .map_err(|error| fail(error.reason()))?;
+            writes.add(&root);
             root.new_variant(
                 *file.storage.digest(),
                 *creator_key.digest(),
@@ -1437,12 +1461,8 @@ fn commit(
     };
     let version = variant.new_version();
 
-    runtime
-        .block_on(index.write(variant))
-        .map_err(|error| fail(error.reason()))?;
-    let version_key = runtime
-        .block_on(index.write(version))
-        .map_err(|error| fail(error.reason()))?;
+    writes.add(&variant);
+    let version_key = writes.add(&version);
 
     // What the version goes on to prefer, whatever this write did: the preference is what the *next*
     // write is cut by, so it is recorded from what was settled rather than from what the store did.

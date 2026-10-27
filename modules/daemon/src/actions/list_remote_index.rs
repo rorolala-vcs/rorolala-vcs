@@ -8,7 +8,7 @@
 
 use rorolala_errors::Failure as _;
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
-use rorolala_vcs::{VCSIndex, VCSIndexObject};
+use rorolala_vcs::{VCSIndex, VCSIndexKind};
 
 use super::sync_index::local_index;
 use super::sync_storage::{Side, carry_blob};
@@ -74,33 +74,50 @@ impl Action for ActionListRemoteIndex {
 }
 
 /// The hashes `which` names, from `local`, written as the hex a listing prints.
+///
+/// What a listing is made of is the index's keys, and the keys alone are the answer unless a kind was
+/// asked for: every object read whole to be filtered is a read, a decode and a hash check apiece for
+/// an answer the keys already gave. When a kind was asked for, the one byte behind each object's frame
+/// is what tells it apart — see [`VCSIndex::kind_of`].
 async fn listed(local: &VCSIndex, which: &str) -> Result<String, ActionError> {
-    let objects = local
-        .read_objects()
+    let keys = local
+        .object_keys()
         .await
         .map_err(|error| ActionError::Store(error.reason()))?;
 
-    let hashes: Vec<String> = objects
-        .into_iter()
-        .filter(|(_, object)| wanted(which, object))
-        .map(|(key, _)| key.hex())
-        .collect();
+    let mut hashes = Vec::with_capacity(keys.len());
+    for key in keys {
+        if !asks_for_kind(which) {
+            hashes.push(key.hex());
+            continue;
+        }
+
+        let kind = local
+            .kind_of(&key)
+            .await
+            .map_err(|error| ActionError::Store(error.to_string()))?;
+        if wanted(which, kind) {
+            hashes.push(key.hex());
+        }
+    }
 
     Ok(hashes.join("\n"))
 }
 
-/// Whether `object` is one of the kinds `which` names.
+/// Whether the word `which` asks for a kind rather than for every object.
 ///
 /// A word that names no kind names every one, which is what a caller that asked for nothing in
-/// particular is answered with.
-fn wanted(which: &str, object: &VCSIndexObject) -> bool {
+/// particular is answered with — and it is what lets a listing answer without reading an object.
+fn asks_for_kind(which: &str) -> bool {
+    matches!(which.trim(), "variants" | "versions" | "str")
+}
+
+/// Whether the object of kind `kind` is one of the kinds `which` names.
+fn wanted(which: &str, kind: Option<VCSIndexKind>) -> bool {
     match which.trim() {
-        "variants" => matches!(object, VCSIndexObject::Variant(_)),
-        "versions" => matches!(object, VCSIndexObject::Version(_)),
-        "str" => matches!(
-            object,
-            VCSIndexObject::Creator(_) | VCSIndexObject::Message(_)
-        ),
+        "variants" => kind == Some(VCSIndexKind::Variant),
+        "versions" => kind == Some(VCSIndexKind::Version),
+        "str" => matches!(kind, Some(VCSIndexKind::Creator | VCSIndexKind::Message)),
         _ => true,
     }
 }

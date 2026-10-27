@@ -4,14 +4,24 @@
 //! holds. It is fetched rather than synced, and nothing moves the other way — what a Workspace
 //! finds in the copy is who holds what upstream, so the copy is read and not worked in.
 //!
-//! What crosses is the Vault's Layout directory as it stands, every file of it, and the Workspace
-//! writes that under its cache named by the Vault. The whole directory is one blob: a Layout is a
-//! fixed set of small files beside snapshots, and carrying them one at a time would say the same
-//! thing in more exchanges.
+//! What crosses is the Vault's Layout **written out whole**: every shard is a snapshot holding all
+//! of what it holds, with an empty log after it. That is a layout a reader opens without replaying
+//! anything, and it is the layout the Vault holds at the moment it answers rather than the files it
+//! keeps it in — a snapshot and a log on disk are a change apart whenever another action is writing
+//! or compacting, so reading the directory as it stands would carry away the two halves of two
+//! states.
 //!
 //! What a fetch writes is a **generation** of the copy, published by moving a pointer — see
 //! [`LayoutCopy`] for why. A copy is therefore never renamed over, and a run that is reading one
 //! cannot make a fetch fail.
+//!
+//! A fetch asks with what the copy here **is**, in the terms the Vault can compare with its own: the
+//! shape of every file — the name, the length and the hash — as the copy's own state writes out. A
+//! Vault whose layout is that very state answers "unchanged" instead of carrying it again. Because
+//! what a layout is written out as depends on what it holds and not on how it is kept, a compaction
+//! changes nothing about that answer, and a copy that was written to after it was fetched — an
+//! ownership change followed into it — answers for the state it was brought to rather than for the
+//! files it arrived in.
 
 use std::fs;
 use std::io::Write as _;
@@ -23,6 +33,7 @@ use rorolala_layout::Layout;
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_workspace::LayoutCopy;
+use serde::{Deserialize, Serialize};
 
 use super::layout_remote::local_layout;
 use super::sync_storage::{Side, carry_blob};
@@ -54,9 +65,9 @@ impl Action for ActionFetchLayout {
     /// # Errors
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
-    /// Vault, [`ActionError::Store`] if the Vault sent something that is not a Layout, and
-    /// [`ActionError::LocalFile`] if the Layout could not be read where it is or the copy could not
-    /// be written here — besides whatever the exchange fails with.
+    /// Vault, [`ActionError::Store`] if the Vault's Layout could not be written out,
+    /// [`ActionError::LocalFile`] if the copy could not be written here — besides whatever the
+    /// exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
@@ -65,14 +76,28 @@ impl Action for ActionFetchLayout {
         // here and never looked at on the Vault.
         let cache = input.into_inner().unwrap_or_default();
 
-        // What the Vault holds is read there: it is the side with a Layout of its own, and the
-        // Workspace side has none to read.
-        let held = if ctx.is_vault() {
-            Some(read_layout(&local_layout(&ctx)?)?)
+        // What the copy here is, in the terms the Vault can compare with its own. The Vault side has
+        // no Workspace to look at, so its wrapper is empty and it is told this one value.
+        let here = ctx.only_workspace(|| current_shapes(&ctx, &cache));
+        let held = ctx.transfer(here).await?.into_inner().flatten();
+
+        // What the Vault holds is written out there: it is the side with a Layout, and the Workspace
+        // side has none to read.
+        let answer = if ctx.is_vault() {
+            let layout = local_layout(&ctx)?;
+            let files = layout
+                .as_files()
+                .map_err(|error| ActionError::Store(error.to_string()))?;
+
+            Some(if Some(FileShape::of(&files)) == held {
+                Fetched::Unchanged
+            } else {
+                Fetched::Files(files)
+            })
         } else {
             None
         };
-        let mine = held
+        let mine = answer
             .as_ref()
             .map(rorolala_protocol::Encodable::encode)
             .transpose()
@@ -84,49 +109,69 @@ impl Action for ActionFetchLayout {
         let bytes = arrived.or(mine).unwrap_or_default();
 
         if ctx.is_workspace() {
-            let files = Vec::<(String, Vec<u8>)>::decode(bytes).map_err(codec_failed)?;
-            write_cache(&ctx, &cache, &files)?;
+            match Fetched::decode(bytes).map_err(codec_failed)? {
+                // The copy here is already the layout the Vault holds, so this fetch wrote nothing.
+                Fetched::Unchanged => {}
+                Fetched::Files(files) => write_cache(&ctx, &cache, &files)?,
+            }
         }
 
         Ok(())
     }
 }
 
-/// Every file the Layout keeps, by the name it is kept under, in name order.
+/// What one file of a layout is, without the bytes themselves.
 ///
-/// The directory is read as it stands rather than by the names a Layout is known to keep: what a
-/// fetch is for is the Layout as the Vault has it, and a file this build does not know is still
-/// part of what a later build may read. Directories are passed over, since a Layout keeps none.
-///
-/// # Errors
-///
-/// Returns [`ActionError::LocalFile`] naming the directory or the file when one cannot be read.
-fn read_layout(layout: &Layout) -> Result<Vec<(String, Vec<u8>)>, ActionError> {
-    let dir = layout.dir();
-    let mut files = Vec::new();
+/// It is how a copy says what it holds: the Vault writes its layout out the same way, so a copy
+/// whose every file is the length and hash its shapes name is the copy the Vault's layout already is,
+/// and nothing has to cross to find that out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FileShape {
+    /// The name the file is kept under.
+    name: String,
+    /// How many bytes it holds.
+    len: u64,
+    /// What those bytes hash to.
+    digest: [u8; 32],
+}
 
-    for entry in fs::read_dir(dir).map_err(|error| local(dir, &error))? {
-        let entry = entry.map_err(|error| local(dir, &error))?;
-        let path = entry.path();
-
-        if !entry
-            .file_type()
-            .map_err(|error| local(&path, &error))?
-            .is_file()
-        {
-            continue;
-        }
-
-        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
-            continue;
-        };
-
-        files.push((name, fs::read(&path).map_err(|error| local(&path, &error))?));
+impl FileShape {
+    /// The shape of each of `files`, in the order they are given.
+    fn of(files: &[(String, Vec<u8>)]) -> Vec<Self> {
+        files
+            .iter()
+            .map(|(name, bytes)| Self {
+                name: name.clone(),
+                len: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+                digest: *blake3::hash(bytes).as_bytes(),
+            })
+            .collect()
     }
+}
 
-    files.sort();
+/// What a fetch answers with.
+#[derive(Debug, Serialize, Deserialize)]
+enum Fetched {
+    /// The Vault's Layout is what the copy the fetch was asked with already holds.
+    Unchanged,
+    /// The files of the Vault's Layout, by the name each is kept under.
+    Files(Vec<(String, Vec<u8>)>),
+}
 
-    Ok(files)
+/// The shapes the copy this side keeps of `name` would be written out as, when it holds a copy.
+///
+/// What is asked is the copy's own state rather than the files it arrived as: a copy that an
+/// ownership change was followed into holds a change its files' shapes no longer describe, and one
+/// read back as a layout says what it holds however it is kept. A directory that is not a copy — a
+/// fetch cut short, or one this build did not write — is no shapes at all, which is a copy asked for
+/// whole rather than taken as it stands.
+fn current_shapes(ctx: &ActionContext<'_>, name: &str) -> Option<Vec<FileShape>> {
+    let workspace = ctx.current_workspace().into_inner()?;
+    let dir = LayoutCopy::of(workspace, name, VAULT_LAYOUT_NAME).current()?;
+    let layout = Layout::open_existing(&dir).ok()?;
+    let files = layout.as_files().ok()?;
+
+    Some(FileShape::of(&files))
 }
 
 /// Writes the fetched files as a new generation of the Workspace's copy.
@@ -193,6 +238,12 @@ fn publish(copy: &LayoutCopy, files: &[(String, Vec<u8>)]) -> Result<(), ActionE
         }
     }
 
+    if let Err(error) = sync_dir(&staging) {
+        let _ = fs::remove_dir_all(&staging);
+
+        return Err(local(&staging, &error));
+    }
+
     copy.publish(&staging).map_err(|error| {
         let _ = fs::remove_dir_all(&staging);
 
@@ -209,9 +260,8 @@ fn publish(copy: &LayoutCopy, files: &[(String, Vec<u8>)]) -> Result<(), ActionE
 /// It runs before anything is written, so a name this refuses costs nothing: validation inside the
 /// write loop was what lost the old copy when the last name the Vault sent was not one.
 ///
-/// A Layout is at least the sixteen logs `Layout::open` makes, because the Vault opens its own
-/// Layout before reading it: nothing at all is not a Layout, and keeping it would replace a good
-/// copy with an empty one.
+/// A Layout is at least the sixteen logs and snapshots a fetch writes out, so nothing at all is not
+/// a Layout, and keeping it would replace a good copy with an empty one.
 ///
 /// # Errors
 ///
@@ -235,25 +285,58 @@ fn check(files: &[(String, Vec<u8>)]) -> Result<(), ActionError> {
     Ok(())
 }
 
-/// Writes `bytes` to `path`, and does not return until they are on disk.
+/// Writes `bytes` to `path`.
 ///
-/// `fs::write` leaves the bytes with the operating system rather than on the disk, and what a copy
-/// is read from after a crash should be what the Vault sent.
+/// What a fetch writes is a copy rather than the truth: the Vault still holds the Layout this was
+/// taken from, so a machine that lost power before the copy reached the disk has lost this fetch
+/// and not what it was a copy of. The bytes are therefore left with the operating system rather
+/// than flushed one file at a time, which on a directory of small files is most of what a fetch
+/// costs — and one flush of the generation as a whole is asked for instead, where there is one.
 ///
 /// # Errors
 ///
-/// Returns why the file could not be made, written or flushed.
+/// Returns why the file could not be made or written.
 fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut file = fs::File::create(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()
+    file.write_all(bytes)
+}
+
+/// Pushes the generation directory to the disk as a whole, where an operating system can be asked.
+///
+/// It is the one flush a fetch spends: a directory is a file a Unix system will flush, and one on
+/// Windows is not — so what a machine cut off between the writes and the pointer costs there is this
+/// fetch, which is the cost the copy was chosen to take rather than a cost on every fetch.
+///
+/// # Errors
+///
+/// Returns why the directory could not be flushed.
+#[cfg(unix)]
+fn sync_dir(dir: &Path) -> std::io::Result<()> {
+    fs::File::open(dir)?.sync_all()
+}
+
+/// Pushes the generation directory to the disk as a whole, where an operating system can be asked.
+///
+/// A Windows system keeps no handle on a directory to flush, so this is nothing: see the reason the
+/// copy takes a whole fetch from a machine cut off rather than a flush of every file.
+///
+/// # Errors
+///
+/// Nothing, so this never fails.
+#[cfg(not(unix))]
+#[allow(
+    clippy::missing_const_for_fn,
+    clippy::unnecessary_wraps // one call for both systems: the Unix one can fail and this one cannot
+)]
+fn sync_dir(_dir: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// What a file that could not be read or written means to an action.
 ///
 /// The path is part of what is said: a failure that answers "access is denied" and nothing else is
 /// one a reader cannot go and look at, and the two sides of a fetch fail on files of their own — the
-/// Vault's Layout at one end, the copy at the other.
+/// copy at one end, the generation it is written as at the other.
 fn local(path: &Path, error: &std::io::Error) -> ActionError {
     ActionError::LocalFile(IoError::new(
         error.kind().into(),

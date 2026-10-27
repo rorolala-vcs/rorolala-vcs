@@ -12,6 +12,8 @@
 //! [`StorageBackend::write_file`] — so one key still names exactly one byte string, which is what
 //! makes reading it back checkable.
 
+use std::collections::HashSet;
+use std::io;
 use std::path::Path;
 
 use rorolala_storage::{
@@ -75,10 +77,42 @@ impl StorageBackend for VCSIndex {
     }
 
     async fn contains_keys(&self, keys: &[Key]) -> Result<Presence, Self::Error> {
+        // A transfer asks about a whole batch at once — a sync asks about every key before it moves
+        // anything — and one key used to cost three looks at the filesystem: the loose tree, the
+        // pack directory, and a pack's index. A batch of fifty thousand keys was a hundred and fifty
+        // thousand reads of what had not changed between them. The three are read once here, and
+        // every key of the batch is answered from what they said.
+        let mut packs = Vec::new();
+        for index in self.packs().await? {
+            match self.read_pack_index(index).await {
+                Ok(Some(directory)) => packs.push(directory),
+                // A pack whose index does not decode is one nothing can be found through, and a pack
+                // taken away between the scan and the read holds nothing. Neither fails the batch,
+                // for the same reason neither fails one lookup: `broken_packs` is where one is said.
+                Ok(None) | Err(VCSIndexError::Malformed) => {}
+                Err(VCSIndexError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+
         let mut presence = Presence::all_missing(keys.len());
 
+        // What is not in a pack has to be loose, and the loose tree is walked only for a key that got
+        // that far: a settled index — every object packed — never reads it at all.
+        let mut loose: Option<HashSet<Key>> = None;
+
         for (at, key) in keys.iter().enumerate() {
-            if self.holds_object(key).await? {
+            if packs.iter().any(|directory| directory.find(key).is_some()) {
+                presence.set_held(at, true);
+
+                continue;
+            }
+
+            if loose.is_none() {
+                loose = Some(self.list_loose_keys().await?.into_iter().collect());
+            }
+
+            if loose.as_ref().is_some_and(|listed| listed.contains(key)) {
                 presence.set_held(at, true);
             }
         }

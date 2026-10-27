@@ -70,7 +70,15 @@ where
     // Prove who the action runs as, and hold the peer to an identity where the account
     // says which one that must be.
     let authority = address.authority();
-    let socket: Box<dyn Socket> = Box::new(TcpStream::connect(authority.as_str()).await?);
+    let stream = TcpStream::connect(authority.as_str()).await?;
+
+    // A request and its answer are small and alternate, and a sealed record is written as its own
+    // buffer: left to Nagle, the second record of an exchange waits for the first to be acknowledged,
+    // which is a round trip a small action spends on nothing. The whole session is that shape, so the
+    // delay is turned off for the whole of it.
+    stream.set_nodelay(true)?;
+
+    let socket: Box<dyn Socket> = Box::new(stream);
     let mut channel = match &expected {
         Some(expected) => SecureStream::connect(socket, &identity, expected).await?,
         None => SecureStream::connect_unpinned(socket, &identity).await?,

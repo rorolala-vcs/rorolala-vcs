@@ -56,8 +56,15 @@ impl Action for ActionSyncAll {
         // side and read back, so that both ends know what the two of them hold between them. The run
         // goes in pieces, like everything else that crosses, so a store of any size can say what it
         // holds without any one value being too long to frame.
+        //
+        // It is every key the store holds rather than only those it can produce: producing one means
+        // reading it back, chunk by chunk, which is a full read of the store before a byte moves, and
+        // the presence the two answers feed is what decides each key anyway. What that costs is the
+        // one thing this run is for: a key held but not producible — a manifest whose chunks are gone
+        // — is now asked for by both sides, and neither holds it, so the run says so rather than
+        // leaving it out of the sync in silence.
         let mine: Vec<u8> = local
-            .list_exist_keys()
+            .list_all_keys()
             .await
             .map_err(|error| ActionError::Store(error.to_string()))?
             .iter()

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::str::FromStr as _;
 
 use rorolala_errors::{BincodeError, IoError};
-use rorolala_layout::{Layout, LayoutError, LayoutPath, MutableData};
+use rorolala_layout::{Batch, Layout, LayoutError, LayoutPath, MutableData};
 use rorolala_protocol::{ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 use rorolala_storage::Key;
 use rorolala_utils_constants::VAULT_LAYOUT_DIR;
@@ -27,6 +27,25 @@ use super::sync_storage::{Side, carry_blob};
 /// rather than places, so `@` is reserved for them and a located path does not start with one —
 /// and `@` rather than `#`, which a shell reads as the start of a comment.
 const MARKERS: &[&str] = &["new", "removed"];
+
+/// The smallest log, in bytes, that is compacted for its own sake.
+///
+/// A compaction writes every shard's snapshot down and raises the age beside each log, so what it
+/// costs is a flush per shard rather than a flush per change. Reading a log costs far less than
+/// writing a snapshot, so a layout whose history is short is left alone: below this a log is many
+/// thousands of changes, and replaying them is cheaper than folding them — and a layout that small
+/// is one whose open is a few milliseconds either way.
+const COMPACT_AT: u64 = 1024 * 1024;
+
+/// How many times its own snapshots a log may hold before it is compacted.
+///
+/// What an open replays is the log, and what it reads whole is the snapshots, so the two are the
+/// same kind of cost once the log is longer: a log shorter than the snapshots beside it adds less to
+/// an open than the snapshots do, and one that is longer is most of it. A log no longer than them is
+/// where the fold is worth its flush: at twenty thousand entries a snapshot is about a mebibyte, so
+/// the log is folded back to that every eighteen thousand changes or so — a compaction of under a
+/// tenth of a second, spread over changes that each cost microseconds.
+const LOG_PER_SNAPSHOT: u64 = 1;
 
 /// What became of a request to take or let go of an entry.
 ///
@@ -52,6 +71,11 @@ pub enum Ownership {
 /// A Layout that could not be opened is [`ActionError::LocalFile`] when the operating system
 /// refused a file, naming the directory it is kept in: the path is what a reader acts on, and a
 /// failure that says "access is denied" and nothing else says nothing they can go and look at.
+///
+/// This is the one door a Vault-side action opens the Layout by, which is what makes it the place a
+/// layout that has grown too long a history is folded back down: what an open replays is paid by
+/// every action, and paying it forever is what turns a log kept on purpose into a log nobody can
+/// afford.
 pub(crate) fn local_layout(ctx: &ActionContext<'_>) -> Result<Layout, ActionError> {
     let vault = ctx
         .current_vault()
@@ -64,26 +88,47 @@ pub(crate) fn local_layout(ctx: &ActionContext<'_>) -> Result<Layout, ActionErro
         .components()
         .collect();
 
-    vault.layout().map_err(|error| match error {
+    let layout = vault.layout().map_err(|error| match error {
         LayoutError::Io(source) => ActionError::LocalFile(IoError::new(
             source.kind().into(),
             format!("`{}`: {source}", dir.display()),
         )),
         other => ActionError::Store(format!("`{}`: {other}", dir.display())),
-    })
+    })?;
+
+    compact_if_stale(&layout);
+
+    Ok(layout)
+}
+
+/// Folds a layout's log into its snapshots when the log has grown past what reading it costs.
+///
+/// A failure here is left to the next action rather than failing this one: a compaction is
+/// maintenance the action did not ask for, and what a bad one costs is an open that replays what it
+/// could not fold — the change that follows is still the change that was asked for. What it may not
+/// do is fail where the action would otherwise succeed, which is why nothing is returned.
+fn compact_if_stale(layout: &Layout) {
+    let sizes = layout.sizes();
+    let stale = sizes.logs > COMPACT_AT.max(sizes.snapshots.saturating_mul(LOG_PER_SNAPSHOT));
+
+    if stale {
+        // The layout is held for the whole of this by every shard's own lock, so a concurrent action
+        // waiting on a shard waits for that shard's compaction and not for all sixteen of them.
+        let _ = layout.compact();
+    }
 }
 
 /// Runs one ownership change per `Uuid`, all over the one session.
 ///
-/// The batch is what makes a run that names many entries one connection rather than one per entry:
-/// each `Uuid` crosses to the Vault, `decide` runs there, and the outcome crosses back, one entry at a
-/// time so that a reader watching is shown them as they are done. The `Uuid`s are the Workspace's to
-/// name and the Vault's to be told, so the count crosses first and both ends loop the same number of
-/// times.
+/// The whole list crosses at once rather than one `Uuid` per exchange: the Workspace already holds
+/// it, and the changes are written by one batch, so the Vault has to make every decision before it
+/// writes any of them — a `Uuid` read between two writes would be read from a layout a commit is
+/// part of the way through. What comes back is one outcome per `Uuid`, in the order they were named.
 ///
-/// Which change it is is `decide`'s to make, as it was for one entry: it is handed the Vault's Layout,
-/// the entry, and the name of the account the session was established as. The two actions that use
-/// this differ in nothing else.
+/// Which change it is is `decide`'s to make, as it was for one entry: it is handed the batch the
+/// changes are collected in, so what it reads is the layout as the changes already collected leave
+/// it, and what it writes is written once with the rest. The two actions that use this differ in
+/// nothing else.
 ///
 /// What the bar is called crosses with the input rather than being written here: the words for it
 /// belong to whoever asked the run for them, and this crate holds none of its own.
@@ -91,34 +136,33 @@ pub(crate) fn local_layout(ctx: &ActionContext<'_>) -> Result<Layout, ActionErro
 /// # Errors
 ///
 /// Returns [`ActionError::MissingValue`] if the Vault holds no member to act as,
-/// [`ActionError::Codec`] if an input or an outcome will not cross, and whatever the exchange fails
-/// with.
+/// [`ActionError::Codec`] if an input, a `Uuid` or an outcome will not cross,
+/// [`ActionError::Store`] if the Vault's Layout could not be written, and whatever the exchange
+/// fails with.
 pub(crate) async fn ownership_batch(
     ctx: &mut ActionContext<'_>,
     input: OnlyWorkspace<String>,
-    decide: impl Fn(&Layout, Uuid, &str) -> Result<Ownership, ActionError>,
+    decide: impl Fn(&mut Batch<'_>, Uuid, &str) -> Result<Ownership, ActionError>,
 ) -> Result<Vec<Ownership>, ActionError> {
     // What to change crosses as JSON — the name the bar is drawn under, and the `Uuid`s — because a
     // list is not a thing the C ABI can hand over, and JSON is how the other batched action carries
-    // its own. The Workspace holds it; the Vault holds nothing and is told each `Uuid` as it goes.
+    // its own. The Workspace holds it; the Vault is told the list as one value.
     let (name, ids) = match input.into_inner() {
         Some(json) => serde_json::from_str::<(String, Vec<String>)>(&json)
             .map_err(|error| ActionError::Json(error.into()))?,
         None => (String::new(), Vec::new()),
     };
 
-    // How many there are is the Workspace's to say and the Vault's to be told, since only the
-    // Workspace has the list: the count crosses first, and both ends loop that many times.
-    let count = u64::try_from(ids.len()).unwrap_or(u64::MAX);
-    let announced = ctx.is_workspace().then(|| count.to_be_bytes().to_vec());
+    // The `Uuid`s cross up whole: both ends come out holding the same list rather than counting it
+    // out one entry at a time.
+    let announced = ctx
+        .is_workspace()
+        .then(|| ids.encode())
+        .transpose()
+        .map_err(codec_failed)?;
     let arrived = carry_blob(ctx, Side::Vault, announced.clone()).await?;
-    let bytes = arrived.or(announced).unwrap_or_default();
-    let count = u64::from_be_bytes(
-        bytes
-            .as_slice()
-            .try_into()
-            .map_err(|_| codec_failed("the count does not read"))?,
-    );
+    let ids =
+        Vec::<String>::decode(arrived.or(announced).unwrap_or_default()).map_err(codec_failed)?;
 
     // Which account this runs as is the Vault's to say: the session was established as a member, and
     // a name the caller sent would be one the Vault cannot hold itself to. The Workspace side holds no
@@ -133,48 +177,104 @@ pub(crate) async fn ownership_batch(
         return Err(ActionError::MissingValue);
     }
 
+    let count = u64::try_from(ids.len()).unwrap_or(u64::MAX);
     let mut task = ctx.progress().begin(name, Some(count));
-    let mut outcomes = Vec::new();
 
-    for at in 0..count {
-        // The `Uuid` crosses up: the Workspace names it, the Vault reads it.
-        let up = ids
-            .get(usize::try_from(at).unwrap_or(usize::MAX))
-            .map(|id| id.clone().into_bytes());
-        let arrived = carry_blob(ctx, Side::Vault, up.clone()).await?;
-        let named = arrived
-            .or(up)
-            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+    if ctx.is_vault() {
+        let (outcomes, written) = decide_all(&local_layout(ctx)?, &ids, &me, &decide);
+
+        // What came of the write crosses before what came of each entry does: an outcome the Vault
+        // could not write down is not an outcome, and the Workspace has to hear that before it
+        // changes the copy it keeps. A write that failed says why, so the reason is the same one the
+        // caller is told; a write that succeeded says nothing.
+        let said = match &written {
+            Ok(()) => Vec::new(),
+            Err(error) => error.to_string().into_bytes(),
+        };
+        carry_blob(ctx, Side::Workspace, Some(said)).await?;
+
+        written?;
+
+        let encoded = outcomes.encode().map_err(codec_failed)?;
+        carry_blob(ctx, Side::Workspace, Some(encoded)).await?;
+        task.advance_by(count);
+
+        Ok(outcomes)
+    } else {
+        let said = carry_blob(ctx, Side::Workspace, None)
+            .await?
             .unwrap_or_default();
-        let id =
-            Uuid::parse_str(named.trim()).map_err(|_| codec_failed("the uuid does not read"))?;
+        if !said.is_empty() {
+            return Err(ActionError::Store(
+                String::from_utf8_lossy(&said).into_owned(),
+            ));
+        }
 
-        let outcome = if ctx.is_vault() {
-            Some(decide(&local_layout(ctx)?, id, &me)?)
-        } else {
-            None
+        let bytes = carry_blob(ctx, Side::Workspace, None)
+            .await?
+            .unwrap_or_default();
+        let outcomes = Vec::<Ownership>::decode(bytes).map_err(codec_failed)?;
+        task.advance_by(count);
+
+        Ok(outcomes)
+    }
+}
+
+/// Runs `decide` for every `Uuid` of `ids` against one batch, and commits it once.
+///
+/// A `decide` that fails part of the way through is not a reason to lose what it decided before
+/// that: each of those is a change the single-entry calls would have written already, and a batch is
+/// not a transaction. What it came to is handed back beside the error, so the caller can commit the
+/// changes that were made and then say what stopped the rest.
+fn decide_all(
+    layout: &Layout,
+    ids: &[String],
+    me: &str,
+    decide: &impl Fn(&mut Batch<'_>, Uuid, &str) -> Result<Ownership, ActionError>,
+) -> (Vec<Ownership>, Result<(), ActionError>) {
+    let mut batch = layout.batch();
+    let mut outcomes = Vec::with_capacity(ids.len());
+    let mut broken = None;
+
+    for named in ids {
+        let Ok(id) = Uuid::parse_str(named.trim()) else {
+            broken = Some(codec_failed("the uuid does not read"));
+            break;
         };
 
-        // The outcome crosses back.
-        let mine = outcome
-            .as_ref()
-            .map(rorolala_protocol::Encodable::encode)
-            .transpose()
-            .map_err(codec_failed)?;
-        let arrived = carry_blob(ctx, Side::Workspace, mine.clone()).await?;
-        let bytes = arrived.or(mine).unwrap_or_default();
-
-        // UNWRAP is avoided: on the side that made it the outcome is taken as it is, and on the other
-        // it is read from what crossed.
-        outcomes.push(match outcome {
-            Some(outcome) => outcome,
-            None => Ownership::decode(bytes).map_err(codec_failed)?,
-        });
-
-        task.advance_by(1);
+        match decide(&mut batch, id, me) {
+            Ok(outcome) => outcomes.push(outcome),
+            Err(error) => {
+                broken = Some(error);
+                break;
+            }
+        }
     }
 
-    Ok(outcomes)
+    let written = batch
+        .commit()
+        .map_err(|error| ActionError::Store(error.to_string()));
+
+    (outcomes, broken.map_or(written, Err))
+}
+
+/// Runs `write` against `layout` as one batch, so what it changes is written once per shard.
+///
+/// It is the shape every Vault-side write takes, one entry or a thousand: a change on its own reads
+/// what others have written and flushes a write to the shard it names, and a batch reads that once
+/// and flushes once per shard its changes fall in. What a writer may read while it writes is the
+/// layout as the changes before it leave it, which is what [`Batch`] answers.
+pub(crate) fn batched<Output>(
+    layout: &Layout,
+    write: impl FnOnce(&mut Batch<'_>) -> Result<Output, ActionError>,
+) -> Result<Output, ActionError> {
+    let mut batch = layout.batch();
+    let output = write(&mut batch)?;
+    batch
+        .commit()
+        .map_err(|error| ActionError::Store(error.to_string()))?;
+
+    Ok(output)
 }
 
 /// Names the entry `id` as held by `owner`, refusing when another account holds it.
@@ -183,11 +283,15 @@ pub(crate) async fn ownership_batch(
 /// Layout's log holds: the version and what it says are read back as they were and written
 /// unchanged, so naming an owner changes nothing else about the entry.
 ///
+/// What it writes is a change of `batch`, which is committed with whatever else the run collected —
+/// see [`ownership_batch`]. The entry it reads is the batch's, so a `Uuid` the run named twice is
+/// decided against the first change rather than against what the layout held before it.
+///
 /// # Errors
 ///
-/// Returns [`ActionError::Store`] if the Layout could not be written.
-pub(crate) fn take(layout: &Layout, id: Uuid, owner: &str) -> Result<Ownership, ActionError> {
-    let Some(data) = layout.entry(id) else {
+/// Returns [`ActionError::Store`] if the change could not be made.
+pub(crate) fn take(batch: &mut Batch<'_>, id: Uuid, owner: &str) -> Result<Ownership, ActionError> {
+    let Some(data) = batch.entry(id) else {
         return Ok(Ownership::Missing);
     };
 
@@ -197,7 +301,7 @@ pub(crate) fn take(layout: &Layout, id: Uuid, owner: &str) -> Result<Ownership, 
         return Ok(Ownership::HeldBy(held.to_owned()));
     }
 
-    layout
+    batch
         .update_entry(id, data.renewed(Some(owner.to_owned()), data.version()))
         .map_err(|error| ActionError::Store(error.to_string()))?;
 
@@ -210,11 +314,17 @@ pub(crate) fn take(layout: &Layout, id: Uuid, owner: &str) -> Result<Ownership, 
 /// success it is rather than as a change: a run that lets go of what it no longer holds has
 /// done what it asked.
 ///
+/// What it writes is a change of `batch`, as [`take`] does.
+///
 /// # Errors
 ///
-/// Returns [`ActionError::Store`] if the Layout could not be written.
-pub(crate) fn giveup(layout: &Layout, id: Uuid, owner: &str) -> Result<Ownership, ActionError> {
-    let Some(data) = layout.entry(id) else {
+/// Returns [`ActionError::Store`] if the change could not be made.
+pub(crate) fn giveup(
+    batch: &mut Batch<'_>,
+    id: Uuid,
+    owner: &str,
+) -> Result<Ownership, ActionError> {
+    let Some(data) = batch.entry(id) else {
         return Ok(Ownership::Missing);
     };
 
@@ -222,7 +332,7 @@ pub(crate) fn giveup(layout: &Layout, id: Uuid, owner: &str) -> Result<Ownership
         Some(held) if held != owner => Ok(Ownership::HeldBy(held.to_owned())),
         None => Ok(Ownership::Owner(None)),
         Some(_) => {
-            layout
+            batch
                 .update_entry(id, data.renewed(None, data.version()))
                 .map_err(|error| ActionError::Store(error.to_string()))?;
 
@@ -254,13 +364,13 @@ pub enum PathMove {
 ///
 /// Which account this runs as is already known — the session says — and whether it administrates
 /// the Vault is read from the Vault's own configuration by the caller, so both come in as values
-/// and the decision here is only about the Layout.
+/// and the decision here is only about the layout as `batch` leaves it.
 ///
 /// # Errors
 ///
-/// Returns [`ActionError::Store`] if the Layout could not be written.
+/// Returns [`ActionError::Store`] if the change could not be made.
 pub(crate) fn move_remote(
-    layout: &Layout,
+    batch: &mut Batch<'_>,
     from: &str,
     to: &str,
     me: &str,
@@ -274,21 +384,21 @@ pub(crate) fn move_remote(
         return Ok(PathMove::Malformed);
     }
 
-    let Some(id) = layout.id_of(&from) else {
+    let Some(id) = batch.id_of(&from) else {
         return Ok(PathMove::Missing);
     };
-    if layout.id_of(&to).is_some() {
+    if batch.id_of(&to).is_some() {
         return Ok(PathMove::Taken);
     }
 
-    let held = layout
+    let held = batch
         .entry(id)
         .and_then(|data| data.owner().map(str::to_owned));
     if !admin && held.as_deref() != Some(me) {
         return Ok(PathMove::Refused);
     }
 
-    layout
+    batch
         .move_path(&from, &to)
         .map_err(|error| ActionError::Store(error.to_string()))?;
 
@@ -342,7 +452,8 @@ pub enum EntryWrite {
 ///
 /// Which write it is is `decide`'s to make: it is handed the Vault's Layout, what crossed, the
 /// name of the account the session was established as, and whether that account administrates the
-/// Vault. Neither of the last two is taken from the caller.
+/// Vault. Neither of the last two is taken from the caller. What it writes it writes through
+/// [`batched`], so one write and a run's thousand are the same shape.
 ///
 /// # Errors
 ///
@@ -428,11 +539,15 @@ where
 /// submitted under is free it is that path, and when it is taken the caller disambiguates it, so two
 /// files submitted under one name are still two paths.
 ///
+/// The entry and the path that names it are made as one change rather than two: a create that was
+/// cut in half would leave an entry no path names or a path naming no entry, and a layout holds
+/// neither as anything but a `rola layout` reading of its orphans.
+///
 /// # Errors
 ///
-/// Returns [`ActionError::Store`] if the Layout could not be written.
+/// Returns [`ActionError::Store`] if the change could not be made.
 pub(crate) fn create_remote(
-    layout: &Layout,
+    batch: &mut Batch<'_>,
     path: &str,
     uuid: &str,
     version: &str,
@@ -451,20 +566,18 @@ pub(crate) fn create_remote(
     if !path.as_str().starts_with(NEW_PREFIX) {
         return Ok(EntryWrite::Malformed);
     }
-    if layout.entry(id).is_some() {
+    if batch.entry(id).is_some() {
         return Ok(EntryWrite::Exists);
     }
-    if layout.id_of(&path).is_some() {
+    if batch.names(&path) {
         return Ok(EntryWrite::Taken);
     }
 
-    layout
-        .create_path(&path, id)
-        .map_err(|error| ActionError::Store(error.to_string()))?;
-    layout
-        .create_entry(
+    batch
+        .create_file(
             id,
             MutableData::new(Some(owner.to_owned()), *version.digest(), String::new()),
+            &path,
         )
         .map_err(|error| ActionError::Store(error.to_string()))?;
 
@@ -475,9 +588,9 @@ pub(crate) fn create_remote(
 ///
 /// # Errors
 ///
-/// Returns [`ActionError::Store`] if the Layout could not be written.
+/// Returns [`ActionError::Store`] if the change could not be made.
 pub(crate) fn set_remote(
-    layout: &Layout,
+    batch: &mut Batch<'_>,
     uuid: &str,
     version: &str,
     me: &str,
@@ -490,14 +603,14 @@ pub(crate) fn set_remote(
         return Ok(EntryWrite::Malformed);
     };
 
-    let Some(data) = layout.entry(id) else {
+    let Some(data) = batch.entry(id) else {
         return Ok(EntryWrite::Missing);
     };
     if !admin && data.owner() != Some(me) {
         return Ok(EntryWrite::Refused);
     }
 
-    layout
+    batch
         .update_entry(
             id,
             data.renewed(data.owner().map(str::to_owned), *version.digest()),
@@ -514,7 +627,7 @@ mod tests {
 
     use std::str::FromStr as _;
 
-    use rorolala_layout::{Layout, LayoutPath, MutableData};
+    use rorolala_layout::{Batch, Layout, LayoutPath, MutableData};
     use rorolala_storage::Key;
 
     use super::{
@@ -535,6 +648,15 @@ mod tests {
         dir
     }
 
+    /// Runs `write` against `layout` as one batch, as an action does, and commits what it collected.
+    fn batched<T>(layout: &Layout, write: impl FnOnce(&mut Batch<'_>) -> T) -> T {
+        let mut batch = layout.batch();
+        let output = write(&mut batch);
+        batch.commit().unwrap();
+
+        output
+    }
+
     /// A Layout holding one entry nobody owns.
     fn held(label: &str) -> (Layout, uuid::Uuid) {
         let layout = Layout::open(scratch(label)).unwrap();
@@ -551,7 +673,7 @@ mod tests {
         let (layout, id) = held("take");
 
         assert_eq!(
-            take(&layout, id, "alice").unwrap(),
+            batched(&layout, |batch| take(batch, id, "alice")).unwrap(),
             Ownership::Owner(Some("alice".to_owned()))
         );
         // The version and what the entry says are not what an ownership change touches.
@@ -561,14 +683,14 @@ mod tests {
         assert_eq!(data.description(), "x");
 
         assert_eq!(
-            giveup(&layout, id, "alice").unwrap(),
+            batched(&layout, |batch| giveup(batch, id, "alice")).unwrap(),
             Ownership::Owner(None)
         );
         assert_eq!(layout.entry(id).unwrap().owner(), None);
 
         // Letting go of what nobody holds is already what was asked for.
         assert_eq!(
-            giveup(&layout, id, "alice").unwrap(),
+            batched(&layout, |batch| giveup(batch, id, "alice")).unwrap(),
             Ownership::Owner(None)
         );
     }
@@ -577,14 +699,14 @@ mod tests {
     fn an_entry_another_account_holds_is_left_alone() {
         let (layout, id) = held("held");
 
-        take(&layout, id, "alice").unwrap();
+        batched(&layout, |batch| take(batch, id, "alice")).unwrap();
 
         assert_eq!(
-            take(&layout, id, "bob").unwrap(),
+            batched(&layout, |batch| take(batch, id, "bob")).unwrap(),
             Ownership::HeldBy("alice".to_owned())
         );
         assert_eq!(
-            giveup(&layout, id, "bob").unwrap(),
+            batched(&layout, |batch| giveup(batch, id, "bob")).unwrap(),
             Ownership::HeldBy("alice".to_owned())
         );
 
@@ -597,11 +719,21 @@ mod tests {
         let (layout, _) = held("missing");
 
         assert_eq!(
-            take(&layout, uuid::Uuid::from_u128(9), "alice").unwrap(),
+            batched(&layout, |batch| take(
+                batch,
+                uuid::Uuid::from_u128(9),
+                "alice"
+            ))
+            .unwrap(),
             Ownership::Missing
         );
         assert_eq!(
-            giveup(&layout, uuid::Uuid::from_u128(9), "alice").unwrap(),
+            batched(&layout, |batch| giveup(
+                batch,
+                uuid::Uuid::from_u128(9),
+                "alice"
+            ))
+            .unwrap(),
             Ownership::Missing
         );
     }
@@ -633,13 +765,13 @@ mod tests {
 
         // A member who holds neither the entry nor the Vault may not move it.
         assert_eq!(
-            move_remote(
-                &layout,
+            batched(&layout, |batch| move_remote(
+                batch,
                 "@/new/临时文件/模型.fbx@a1b2c3",
                 "Models/model.fbx",
                 "bob",
                 false
-            )
+            ))
             .unwrap(),
             PathMove::Refused
         );
@@ -650,13 +782,13 @@ mod tests {
 
         // Its holder may locate it, and the marker path stops naming it.
         assert_eq!(
-            move_remote(
-                &layout,
+            batched(&layout, |batch| move_remote(
+                batch,
                 "@/new/临时文件/模型.fbx@a1b2c3",
                 "Models/model.fbx",
                 "alice",
                 false
-            )
+            ))
             .unwrap(),
             PathMove::Moved
         );
@@ -673,13 +805,13 @@ mod tests {
         // An administrator may move what it does not hold.
         let (other, other_id) = at("move-admin", "@/new/a.psd@d4e5f6", Some("bob"));
         assert_eq!(
-            move_remote(
-                &other,
+            batched(&other, |batch| move_remote(
+                batch,
                 "@/new/a.psd@d4e5f6",
                 "@/removed/a.psd",
                 "carol",
                 true
-            )
+            ))
             .unwrap(),
             PathMove::Moved
         );
@@ -695,19 +827,26 @@ mod tests {
 
         // Nothing is at the path that was to move.
         assert_eq!(
-            move_remote(&layout, "nowhere/a.psd", "Models/a.psd", "alice", false).unwrap(),
+            batched(&layout, |batch| move_remote(
+                batch,
+                "nowhere/a.psd",
+                "Models/a.psd",
+                "alice",
+                false
+            ))
+            .unwrap(),
             PathMove::Missing
         );
 
         // The path it was to move to already names something.
         assert_eq!(
-            move_remote(
-                &layout,
+            batched(&layout, |batch| move_remote(
+                batch,
                 "@/new/a.psd@d4e5f6",
                 "@/new/a.psd@d4e5f6",
                 "alice",
                 false
-            )
+            ))
             .unwrap(),
             PathMove::Taken
         );
@@ -716,7 +855,14 @@ mod tests {
         // rather than a place, so something has to be under it.
         for refused in ["@/archive/a.psd", "@/new", "@/removed"] {
             assert_eq!(
-                move_remote(&layout, "@/new/a.psd@d4e5f6", refused, "alice", true).unwrap(),
+                batched(&layout, |batch| move_remote(
+                    batch,
+                    "@/new/a.psd@d4e5f6",
+                    refused,
+                    "alice",
+                    true
+                ))
+                .unwrap(),
                 PathMove::Malformed,
                 "{refused}"
             );
@@ -730,13 +876,13 @@ mod tests {
         let version = "11".repeat(32);
 
         assert_eq!(
-            create_remote(
-                &layout,
+            batched(&layout, |batch| create_remote(
+                batch,
                 "@/new/art/hero.psd@abc1234",
                 &id.to_string(),
                 &version,
                 "alice"
-            )
+            ))
             .unwrap(),
             EntryWrite::Written
         );
@@ -748,37 +894,37 @@ mod tests {
 
         // The same `Uuid` again, and a path already taken, are told apart from a write.
         assert_eq!(
-            create_remote(
-                &layout,
+            batched(&layout, |batch| create_remote(
+                batch,
                 "@/new/other.psd@abc1234",
                 &id.to_string(),
                 &version,
                 "alice"
-            )
+            ))
             .unwrap(),
             EntryWrite::Exists
         );
         assert_eq!(
-            create_remote(
-                &layout,
+            batched(&layout, |batch| create_remote(
+                batch,
                 "@/new/art/hero.psd@abc1234",
                 &uuid::Uuid::from_u128(4).to_string(),
                 &version,
                 "alice"
-            )
+            ))
             .unwrap(),
             EntryWrite::Taken
         );
 
         // A path outside `@/new/` is not a name a new entry is made under.
         assert_eq!(
-            create_remote(
-                &layout,
+            batched(&layout, |batch| create_remote(
+                batch,
                 "art/hero.psd",
                 &uuid::Uuid::from_u128(4).to_string(),
                 &version,
                 "alice"
-            )
+            ))
             .unwrap(),
             EntryWrite::Malformed
         );
@@ -790,11 +936,25 @@ mod tests {
         let version = "22".repeat(32);
 
         assert_eq!(
-            set_remote(&layout, &id.to_string(), &version, "bob", false).unwrap(),
+            batched(&layout, |batch| set_remote(
+                batch,
+                &id.to_string(),
+                &version,
+                "bob",
+                false
+            ))
+            .unwrap(),
             EntryWrite::Refused
         );
         assert_eq!(
-            set_remote(&layout, &id.to_string(), &version, "alice", false).unwrap(),
+            batched(&layout, |batch| set_remote(
+                batch,
+                &id.to_string(),
+                &version,
+                "alice",
+                false
+            ))
+            .unwrap(),
             EntryWrite::Written
         );
         assert_eq!(
@@ -810,19 +970,26 @@ mod tests {
             Some(id)
         );
         assert_eq!(
-            set_remote(&layout, &id.to_string(), &version, "carol", true).unwrap(),
+            batched(&layout, |batch| set_remote(
+                batch,
+                &id.to_string(),
+                &version,
+                "carol",
+                true
+            ))
+            .unwrap(),
             EntryWrite::Written
         );
 
         // A `Uuid` the Layout does not hold is missing.
         assert_eq!(
-            set_remote(
-                &layout,
+            batched(&layout, |batch| set_remote(
+                batch,
                 &uuid::Uuid::from_u128(9).to_string(),
                 &version,
                 "alice",
                 false
-            )
+            ))
             .unwrap(),
             EntryWrite::Missing
         );

@@ -31,8 +31,8 @@ use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutArgument, ErrorLayoutFailed, ErrorOwnershipHeld, ErrorOwnershipMissing,
-    set_cached_owner, vault_and_uuids,
+    ErrorLayoutArgument, ErrorLayoutFailed, ErrorOwnershipHeld, ErrorOwnershipMissing, cached_copy,
+    vault_and_uuids, write_cached_owners,
 };
 
 #[help(buffer)]
@@ -165,25 +165,45 @@ pub fn handle_layout_req_ownership(
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     };
 
+    // What the Vault agreed to is written into the copy once, after the whole exchange: a copy that
+    // is not there is left as it is, and one that is opened and written per entry is what made this
+    // door cost its entries' worth of sixteen-shard reads.
+    let copy = match cached_copy(held, &name) {
+        Ok(copy) => copy,
+        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+    };
+
     let mut entries = Vec::with_capacity(state.ids.len());
+    let mut changes = Vec::with_capacity(state.ids.len());
 
     for (id, outcome) in state.ids.into_iter().zip(outcomes) {
         let uuid = id.to_string();
 
         match outcome {
             Ownership::Owner(owner) => {
-                // What the Vault agreed to is written into the copy as well, so reading it next does
-                // not show an owner the Vault no longer has. A copy that cannot be written is the
-                // one failure here: the change itself is already made.
-                if let Err(error) = set_cached_owner(held, &name, id, owner.clone()) {
+                changes.push((id, owner.clone()));
+                entries.push(OwnedItem { uuid, owner });
+            }
+            // What the Vault agreed to before this is already made, and the copy follows it.
+            Ownership::Missing => {
+                if let Err(error) = write_cached_owners(copy.as_ref(), &changes) {
                     return ErrorLayoutFailed::new(error.to_string()).into();
                 }
 
-                entries.push(OwnedItem { uuid, owner });
+                return ErrorOwnershipMissing { uuid }.into();
             }
-            Ownership::Missing => return ErrorOwnershipMissing { uuid }.into(),
-            Ownership::HeldBy(owner) => return ErrorOwnershipHeld { uuid, owner }.into(),
+            Ownership::HeldBy(owner) => {
+                if let Err(error) = write_cached_owners(copy.as_ref(), &changes) {
+                    return ErrorLayoutFailed::new(error.to_string()).into();
+                }
+
+                return ErrorOwnershipHeld { uuid, owner }.into();
+            }
         }
+    }
+
+    if let Err(error) = write_cached_owners(copy.as_ref(), &changes) {
+        return ErrorLayoutFailed::new(error.to_string()).into();
     }
 
     ResultLayoutOwned { entries }.into()

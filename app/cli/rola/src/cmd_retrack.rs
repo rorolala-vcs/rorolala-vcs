@@ -30,7 +30,7 @@ use std::path::{Component, Path, PathBuf};
 use std::str::FromStr as _;
 
 use librorolala::auth::Account;
-use librorolala::daemon::{action_fetch_layout, action_read_remote_index_async};
+use librorolala::daemon::{Chain, action_bring_remote_index_async, action_fetch_layout};
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{tracked_vault, variant_moves};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
@@ -349,7 +349,6 @@ pub fn handle_retrack(
 
                 let bringer = Bringer {
                     workspace: held,
-                    index: vcs,
                     runtime: &runtime,
                     end: vault_end(held, &layout, remote, current, vault)?,
                     text: &text,
@@ -781,15 +780,13 @@ struct VaultEnd {
 
 /// Reads the chain a version is the top of into this index, from the Vault that holds it.
 ///
-/// A retrack may go to a version the Vault holds and this side never fetched. The version, the
-/// variant that produced it and the words they are named by are read one object at a time, until
-/// the walk reaches a version this index already holds: what is left behind is then a chain as
-/// readable here as one a sync brought.
+/// A retrack may go to a version the Vault holds and this side never fetched. The chain under it —
+/// the version, the variant that produced it, the words they are named by, and so on down to a version
+/// this index already holds — is asked for in one exchange, and what the Vault walks is written here
+/// as one pack: what is left behind is a chain as readable here as one a sync brought.
 struct Bringer<'a> {
     /// The Workspace the exchange is spoken from.
     workspace: &'a Workspace,
-    /// The index the chain is written to.
-    index: &'a VCSIndex,
     /// The runtime the exchange is waited on.
     runtime: &'a tokio::runtime::Runtime,
     /// Where the objects are read from.
@@ -801,74 +798,40 @@ struct Bringer<'a> {
 impl Bringer<'_> {
     /// Walks the chain from `hash` down to a version this index already holds, writing each object.
     ///
+    /// One exchange rather than one per object: the Vault walks the chain itself, down to the first
+    /// version this side already holds, and sends the whole of what is missing — which is one
+    /// connection and one pack here however long the chain is.
+    ///
     /// # Errors
     ///
     /// [`ErrorRetrackLevel`] when the Vault answers with something that is not a version, and
     /// [`ErrorRetrackFailed`] when the exchange, the index or the chain refuses.
     fn bring(&self, hash: Blake3Hash) -> Result<(), Next> {
-        let mut key = hash;
+        let said = self
+            .runtime
+            .block_on(action_bring_remote_index_async(
+                self.workspace,
+                &self.end.account,
+                self.end.address.clone(),
+                Key::new(hash).hex(),
+                Progress::silent(),
+            ))
+            .map_err(|error| failed(error.to_string()))?;
 
-        loop {
-            if matches!(
-                self.runtime.block_on(self.index.read(Key::new(key))),
-                Ok(VCSIndexObject::Version(_))
-            ) {
-                return Ok(());
+        let chain: Chain =
+            serde_json::from_str(&said).map_err(|error| failed(error.to_string()))?;
+
+        match chain {
+            Chain::Brought => Ok(()),
+            Chain::NotAVersion => Err(ErrorRetrackLevel {
+                until: self.text.to_owned(),
+                kind: RetrackLevelError::NotAVersion,
             }
-
-            let read = |hash: Blake3Hash| {
-                self.runtime
-                    .block_on(action_read_remote_index_async(
-                        self.workspace,
-                        &self.end.account,
-                        self.end.address.clone(),
-                        Key::new(hash).hex(),
-                        Progress::silent(),
-                    ))
-                    .map_err(|error| failed(error.to_string()))
-            };
-
-            let VCSIndexObject::Version(version) = read(key)? else {
-                return Err(ErrorRetrackLevel {
-                    until: self.text.to_owned(),
-                    kind: RetrackLevelError::NotAVersion,
-                }
-                .into());
-            };
-            let variant_hash = *version.variant();
-            let VCSIndexObject::Variant(variant) = read(variant_hash)? else {
-                return Err(failed(format!(
-                    "the object {} is not the variant of the version",
-                    Key::new(variant_hash).hex()
-                )));
-            };
-
-            // The words are not what the chain is made of, but a version a reader is moved to is
-            // drawn with them: they are brought when this index does not hold them.
-            for word in [*variant.creator(), *variant.message()] {
-                if self
-                    .runtime
-                    .block_on(self.index.read(Key::new(word)))
-                    .is_ok()
-                {
-                    continue;
-                }
-
-                let object = read(word)?;
-
-                self.runtime
-                    .block_on(self.index.write(object))
-                    .map_err(|error| failed(error.reason()))?;
-            }
-
-            self.runtime
-                .block_on(self.index.write(version))
-                .map_err(|error| failed(error.reason()))?;
-            self.runtime
-                .block_on(self.index.write(variant.clone()))
-                .map_err(|error| failed(error.reason()))?;
-
-            key = *variant.base_version();
+            .into()),
+            Chain::NotAVariant(key) => Err(failed(format!(
+                "the object {key} is not the variant of the version"
+            ))),
+            Chain::Missing(key) => Err(failed(format!("nothing is stored under the hash {key}"))),
         }
     }
 }

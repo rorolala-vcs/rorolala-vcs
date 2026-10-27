@@ -1,9 +1,11 @@
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
+    use std::sync::Mutex as StdMutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use ed25519_dalek::SigningKey as Ed25519SigningKey;
@@ -108,6 +110,7 @@ mod tests {
             registry,
             max_concurrency: None,
             actions: build_action_registry(),
+            served: StdMutex::new(HashMap::new()),
         }
     }
 
@@ -487,6 +490,7 @@ mod tests {
             registry,
             max_concurrency: None,
             actions: vec![Some(Box::new(Failing))],
+            served: StdMutex::new(HashMap::new()),
         };
 
         let (client_io, server_io) = duplex(64 * 1024);
