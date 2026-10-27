@@ -291,6 +291,10 @@ Desktop program and launcher are published self-contained, so the packages that 
 .NET runtime; the AppImage carries `rola`, `ROLALauncher` and `RororalaDesktop`, and no other
 program.
 
+A build for a musl target makes one package instead, `rorolala-musl`: the same all-in-one, with the
+command-line programs built against musl and the Desktop side — .NET, GTK and the C ABI's shared
+library — the host's own, since those are glibc wherever they are built.
+
 The packages install the six programs, both desktop entries, the icons and completions, and a user
 `rolad.service`. The unit is installed but never enabled or started by the package: whether the
 daemon runs is its user's decision. Package metadata is read from the workspace's own `Cargo.toml`,

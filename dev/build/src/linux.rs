@@ -43,6 +43,9 @@ const FULL: &str = "rorolala-full";
 /// The package that holds all of `vcs`, `desktop` and `dev`, for one file that installs everything.
 const ALL: &str = "rorolala";
 
+/// The same package, with the command-line programs built against musl.
+const ALL_MUSL: &str = "rorolala-musl";
+
 /// The programs the command line package installs.
 const PROGRAMS: [&str; 6] = [
     "rola",
@@ -188,11 +191,21 @@ struct Override {
 pub fn publish(workspace: &Workspace) -> Result<(), Error> {
     // The tools are asked for before the export rather than after it: what an export costs is
     // minutes of compiling, and a machine without a packager should say so first.
+    let musl = workspace
+        .target_triple()
+        .is_some_and(|triple| triple.contains("musl"));
     let nfpm = Tool::at(nfpm::require(workspace)?);
-    let appimagetool = Tool::at(appimagetool::require(workspace)?);
+    let appimagetool = if musl {
+        None
+    } else {
+        Some(Tool::at(appimagetool::require(workspace)?))
+    };
     let metadata = Metadata::read(workspace)?;
 
     export_artifacts(true)?;
+    if musl {
+        add_shared_library_for_desktop(workspace, &workspace.build_dir()?)?;
+    }
 
     let build = workspace.build_dir()?;
     let staging = workspace.package_dir()?;
@@ -202,9 +215,16 @@ pub fn publish(workspace: &Workspace) -> Result<(), Error> {
     let vcs = vcs_package(workspace, &build, &staging, &metadata)?;
     let desktop = desktop_package(workspace, &build, &staging, &metadata)?;
     let dev = dev_package(workspace, &build, &staging, &metadata)?;
-    let full = full_package(workspace, &staging, &metadata)?;
-    let all = all_package(workspace, &staging, [&vcs, &desktop, &dev])?;
-    let packages = [vcs, desktop, dev, full, all];
+    let all = all_package(workspace, &staging, [&vcs, &desktop, &dev], musl)?;
+
+    // A musl build is one package: the complete one, built for musl. The split packages and the
+    // AppImage are the glibc hand-off's, and a second set of them would say nothing a reader needs.
+    let packages: Vec<PackageSpec> = if musl {
+        vec![all]
+    } else {
+        let full = full_package(workspace, &staging, &metadata)?;
+        vec![vcs, desktop, dev, full, all]
+    };
 
     for package in &packages {
         for (packager, extension) in [("deb", "deb"), ("rpm", "rpm"), ("archlinux", "pkg.tar.zst")]
@@ -224,16 +244,53 @@ pub fn publish(workspace: &Workspace) -> Result<(), Error> {
         }
     }
 
-    let appimage = build.join(format!("rola-launcher-{}.appimage", metadata.version));
-    appimage_package(
-        workspace,
-        &build,
-        &staging,
-        &metadata,
-        &appimagetool,
-        &appimage,
+    if let Some(appimagetool) = appimagetool {
+        let appimage = build.join(format!("rola-launcher-{}.appimage", metadata.version));
+        appimage_package(
+            workspace,
+            &build,
+            &staging,
+            &metadata,
+            &appimagetool,
+            &appimage,
+        )?;
+        report(&appimage)?;
+    }
+
+    Ok(())
+}
+
+/// Builds the C ABI's shared library for the host and lays it beside the Desktop program.
+///
+/// The Desktop program and its plugins are .NET, and the runtime they load is the machine's glibc
+/// one; the C ABI they reach is therefore glibc too. A musl build makes only the static library, so
+/// a musl package's Desktop tree is given one built for the host, where `DllImport("rorolala")`
+/// finds it.
+fn add_shared_library_for_desktop(workspace: &Workspace, build: &Path) -> Result<(), Error> {
+    let host = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
+
+    // `CC` is stated for this run because the run around it names `musl-gcc`: a dependency that
+    // compiles C would otherwise be compiled by a musl driver into a library the glibc target it is
+    // being built for cannot link.
+    Tool::cargo().run_with_env(
+        &[("CC", OsStr::new("cc"))],
+        [
+            "build",
+            "--release",
+            "-p",
+            "rorolala-ffi",
+            "--target",
+            host.as_str(),
+        ],
     )?;
-    report(&appimage)
+
+    let library = workspace
+        .target_dir()?
+        .join(&host)
+        .join("release")
+        .join("librorolala.so");
+
+    fs::copy_file(&library, &build.join("bin/desktop/librorolala.so"))
 }
 
 fn vcs_package(
@@ -450,10 +507,13 @@ fn dev_package(
         &build.join("lib/rorolala.hpp"),
         &root.join("usr/include/rorolala.hpp"),
     )?;
-    fs::copy_file(
-        &build.join("lib/rorolala.so"),
-        &root.join("usr/lib/librorolala.so"),
-    )?;
+    // A musl build has no shared library: a `cdylib` needs a dynamic C runtime, and the musl
+    // target makes the static one alone (see `ops/library.rs`). What is there is copied; what is
+    // not is the desktop tree's own, which was built for the machine that runs it.
+    let shared = build.join("lib/rorolala.so");
+    if shared.is_file() {
+        fs::copy_file(&shared, &root.join("usr/lib/librorolala.so"))?;
+    }
     fs::copy_file(
         &build.join("lib/rorolala.a"),
         &root.join("usr/lib/librorolala.a"),
@@ -529,8 +589,8 @@ fn full_package(
         contents,
         depends,
         recommends: BTreeMap::new(),
-        conflicts: vec![ALL.to_owned()],
-        replaces: vec![ALL.to_owned()],
+        conflicts: vec![ALL.to_owned(), ALL_MUSL.to_owned()],
+        replaces: vec![ALL.to_owned(), ALL_MUSL.to_owned()],
     })
 }
 
@@ -538,15 +598,18 @@ fn full_package(
 ///
 /// Its payload is the split packages' own: the staged trees are read where the split packages left
 /// them, and only the documentation is the whole's own. It conflicts with all three, because the
-/// same files cannot be owned twice, and with `rorolala-full`, because the two are two ways to
-/// install the same product.
+/// same files cannot be owned twice, and with the meta package and the other all-in-one variant,
+/// because they are ways to install the same product.
 fn all_package(
     workspace: &Workspace,
     staging: &Path,
     parts: [&PackageSpec; 3],
+    musl: bool,
 ) -> Result<PackageSpec, Error> {
-    let root = staging.join(ALL);
-    copy_docs(workspace, &root, ALL)?;
+    let name = if musl { ALL_MUSL } else { ALL };
+    let other = if musl { ALL } else { ALL_MUSL };
+    let root = staging.join(name);
+    copy_docs(workspace, &root, name)?;
 
     let mut contents = Vec::new();
     for part in parts {
@@ -558,8 +621,8 @@ fn all_package(
         }
     }
     contents.push(Content::tree(
-        &root.join(format!("usr/share/doc/{ALL}")),
-        &format!("/usr/share/doc/{ALL}"),
+        &root.join(format!("usr/share/doc/{name}")),
+        &format!("/usr/share/doc/{name}"),
     ));
 
     let depends = merged_dependencies(&[&parts[0].depends, &parts[1].depends, &parts[2].depends]);
@@ -568,11 +631,16 @@ fn all_package(
         DESKTOP.to_owned(),
         DEV.to_owned(),
         FULL.to_owned(),
+        other.to_owned(),
     ];
 
     Ok(PackageSpec {
-        name: ALL,
-        description: "The complete Rorolala suite, in one package".to_owned(),
+        name,
+        description: if musl {
+            "The complete Rorolala suite, with the command-line programs built for musl".to_owned()
+        } else {
+            "The complete Rorolala suite, in one package".to_owned()
+        },
         contents,
         depends,
         recommends: BTreeMap::new(),

@@ -302,17 +302,15 @@ jobs:
       MUSL: "true"
     steps: *check-steps
 
-  # What a person is handed, built on the platform it is for. Windows is given the installer the
-  # project packages with, and Linux is given the export as it was laid out — a musl build has no
-  # installer, so the `build/` directory's own files are what the archive carries, at its root. The
-  # Linux export holds the static C ABI library and no shared one; see `dev/build/src/ops/library.rs`.
-  #
-  # Split by platform for the same reason the pre-warms are: each waits only for its own.
+  # What a person is handed, built on the platform it is for. Windows is given the installer. Linux
+  # is given the all-in-one package, the AppImage, and a complete package whose command-line
+  # programs are built against musl; the split packages and the meta package stay for repositories.
+  # A tag publishes what all of them collected.
   package-windows:
     name: Package (windows)
     needs: [fast-check, prewarm-windows]
     runs-on: windows-latest
-    steps: &package-steps
+    steps:
       - name: Use the tree's own line endings
         shell: bash
         run: git config --global core.autocrlf false
@@ -338,18 +336,6 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      - name: Install the musl toolchain
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends musl musl-tools
-          rustup target add x86_64-unknown-linux-musl
-          {
-            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
-            echo 'CC=musl-gcc'
-          } >> "$GITHUB_ENV"
-
       - name: Read the workspace version
         id: version
         shell: bash
@@ -366,7 +352,6 @@ jobs:
       # itself, so fetching it is the workflow's to do — and the hash is checked, because what a
       # package is built with decides what is in it.
       - name: Install the pinned Inno Setup
-        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $url = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
@@ -382,36 +367,187 @@ jobs:
           Remove-Item innosetup.exe
 
       - name: Build the Windows installer
-        if: runner.os == 'Windows'
         run: cargo dev publish
 
-      - name: Lay the Linux export out
-        if: runner.os == 'Linux'
-        run: cargo dev export
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rola-windows-package
+          path: build/rorolala-*-setup.exe
+          if-no-files-found: error
 
-      - name: Pack the Linux export
-        if: runner.os == 'Linux'
+  package-linux:
+    name: Package (linux)
+    needs: [fast-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-shared-key: rola-linux-glibc
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Install GTK and pkg-config
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev pkg-config
+
+      - name: Install the pinned nFPM
+        shell: bash
+        run: |
+          url='https://github.com/goreleaser/nfpm/releases/download/v2.48.0/nfpm_2.48.0_Linux_x86_64.tar.gz'
+          expected='6d7f9a28b2f397934403950fcbba83f598b08d02edbe79a0815b3b4897341750'
+          directory='.cache/toolchains/nfpm'
+          mkdir -p "$directory"
+          curl -sSL -o "$directory/nfpm.tar.gz" "$url"
+          echo "$expected  $directory/nfpm.tar.gz" | sha256sum -c -
+          tar -xzf "$directory/nfpm.tar.gz" -C "$directory"
+          chmod +x "$directory/nfpm"
+
+      - name: Install the pinned appimagetool
+        shell: bash
+        run: |
+          url='https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage'
+          expected='95cbe7cce9717fce90c484e34052ee7c7f1d7635b33c12525b4776826a7d29b6'
+          directory='.cache/toolchains/appimagetool'
+          mkdir -p "$directory"
+          curl -sSL -o "$directory/appimagetool-x86_64.AppImage" "$url"
+          echo "$expected  $directory/appimagetool-x86_64.AppImage" | sha256sum -c -
+          chmod +x "$directory/appimagetool-x86_64.AppImage"
+
+      - name: Read the workspace version
+        id: version
+        shell: bash
+        run: |
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          if [ -z "$version" ]; then
+            echo "::error::Cargo.toml declares no workspace version"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      # Nothing names a target: the machine is the target, and the window over the daemon is compiled
+      # by `cc` as its script does by default. A musl package is the job below.
+      - name: Build the Linux packages
+        run: cargo dev publish
+
+      - name: Collect the all-in-one package and the AppImage
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.value }}
         run: |
           mkdir -p dist
-          tar -czf "dist/rorolala-${VERSION}-linux-x86_64-musl.tar.gz" -C build .
+          cp "build/rorolala-${VERSION}.deb" "build/rorolala-${VERSION}.rpm" "build/rorolala-${VERSION}.pkg.tar.zst" dist/
+          cp "build/rola-launcher-${VERSION}.appimage" dist/
 
       - name: Upload the package
         uses: actions/upload-artifact@v4
         with:
-          name: rola-${{ runner.os }}-package
-          path: |
-            build/rorolala-*-setup.exe
-            dist/*.tar.gz
+          name: rola-linux-package
+          path: dist/*
           if-no-files-found: error
 
-  package-linux:
-    name: Package (linux)
-    needs: [fast-check, prewarm-linux]
+  package-linux-musl:
+    name: Package (linux / musl)
+    needs: [fast-check]
     runs-on: ubuntu-latest
-    steps: *package-steps
+    steps:
+      - name: Use the tree's own line endings
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-shared-key: rola-linux-musl
+          cache-workspaces: |
+            . -> .cache/rs-target
+            tests -> .cache/rs-target
+          cache-on-failure: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Install the musl toolchain and GTK
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends musl musl-tools libgtk-4-dev pkg-config
+          rustup target add x86_64-unknown-linux-musl
+          {
+            echo 'CARGO_BUILD_TARGET=x86_64-unknown-linux-musl'
+            echo 'CC=musl-gcc'
+          } >> "$GITHUB_ENV"
+
+      - name: Install the pinned nFPM
+        shell: bash
+        run: |
+          url='https://github.com/goreleaser/nfpm/releases/download/v2.48.0/nfpm_2.48.0_Linux_x86_64.tar.gz'
+          expected='6d7f9a28b2f397934403950fcbba83f598b08d02edbe79a0815b3b4897341750'
+          directory='.cache/toolchains/nfpm'
+          mkdir -p "$directory"
+          curl -sSL -o "$directory/nfpm.tar.gz" "$url"
+          echo "$expected  $directory/nfpm.tar.gz" | sha256sum -c -
+          tar -xzf "$directory/nfpm.tar.gz" -C "$directory"
+          chmod +x "$directory/nfpm"
+
+      - name: Read the workspace version
+        id: version
+        shell: bash
+        run: |
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          if [ -z "$version" ]; then
+            echo "::error::Cargo.toml declares no workspace version"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build the musl package
+        # `CC` is `musl-gcc` from the toolchain step above. The window over the daemon and the C ABI's
+        # shared library are the glibc machine's either way — GTK and the .NET runtime are glibc — so
+        # the build gives those two runs `cc` of its own.
+        run: cargo dev publish
+
+      - name: Collect the musl package
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          mkdir -p dist
+          cp "build/rorolala-musl-${VERSION}.deb" "build/rorolala-musl-${VERSION}.rpm" "build/rorolala-musl-${VERSION}.pkg.tar.zst" dist/
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rola-linux-musl-package
+          path: dist/*
+          if-no-files-found: error
 
   # Every matrix run's reports, rendered as one page and written into the job summary. It runs even
   # when checks failed, so what failed is still what a reader is shown.
@@ -443,7 +579,14 @@ jobs:
   # people whose commits made up the range since the previous tag are named below it.
   release:
     name: Release
-    needs: [check-windows, check-linux, package-windows, package-linux]
+    needs:
+      [
+        check-windows,
+        check-linux,
+        package-windows,
+        package-linux,
+        package-linux-musl,
+      ]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:

@@ -11,10 +11,11 @@ use crate::Error;
 /// The programs an export lays down, each an artifact of its own.
 pub const PROGRAMS: [&str; 2] = ["rola", "rola-daemon"];
 
-/// The programs that bring no completion scripts of their own: they are built and laid out beside
-/// the others, and what an export copies for them differs. `git-rola` is reached by Git rather than
-/// by a word of `rola`'s, but it is laid out beside the others so that Git finds it on the same
-/// path.
+/// The programs that bring no completion scripts of their own.
+///
+/// They are built and laid out beside the others, and what an export copies for them differs.
+/// `git-rola` is reached by Git rather than by a word of `rola`'s, but it is laid out beside the
+/// others so that Git finds it on the same path.
 pub const PROGRAMS_WITHOUT_COMPLETIONS: [&str; 3] = ["git-rola", "rola-jj", "rola-edit"];
 
 /// The shells mingling writes a completion script for.

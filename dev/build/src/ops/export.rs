@@ -18,6 +18,8 @@
 //! Linux. Each looks for `rola-daemon` beside itself, so what it is built beside has to be there
 //! first.
 
+#[cfg(target_os = "linux")]
+use std::ffi::OsStr;
 #[cfg(windows)]
 use std::ffi::OsString;
 
@@ -210,11 +212,23 @@ fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
 ///
 /// It runs the script beside the C sources through the shell, so the script does not have to carry
 /// an executable bit through every checkout, and it is told the same export in the same way.
+///
+/// A musl build is told the machine's own `cc` as well, and deliberately: the window links against
+/// GTK, which every distribution builds against glibc, and `musl-gcc` cannot link it. What it is is
+/// therefore the host's, like the shared library a musl package lays beside the Desktop program (see
+/// `linux::add_shared_library_for_desktop`), while the programs beside it stay musl.
 #[cfg(target_os = "linux")]
 fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
     let script = workspace.daemon_window_script();
     let build = workspace.build_dir()?;
-    let environment = [("BUILD_DIR", build.as_os_str())];
+    let mut environment: Vec<(&str, &OsStr)> = vec![("BUILD_DIR", build.as_os_str())];
+
+    if workspace
+        .target_triple()
+        .is_some_and(|triple| triple.contains("musl"))
+    {
+        environment.push(("CC", OsStr::new("cc")));
+    }
 
     Tool::sh().run_with_env(&environment, [script])
 }
