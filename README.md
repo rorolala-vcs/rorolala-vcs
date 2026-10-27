@@ -59,6 +59,9 @@ If you are using `Windows Server` or another `Windows` system, you can also simp
 
 ![](res\screenshots\windows-daemon-gui.png)
 
+On a Linux desktop the same window is `rola-daemon-gui`, drawn with GTK 4 and built beside the
+programs it drives by `cargo dev export`.
+
 <h2> <img src="res/icons/zi_love.png" height="40"/> Contributors <img src="res/icons/yi_love.png" height="40"/> </h2>
 
 <img src="https://contrib.rocks/image?repo=rorolala-vcs/rorolala-vcs" />

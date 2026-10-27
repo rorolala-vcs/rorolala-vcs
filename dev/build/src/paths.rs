@@ -75,7 +75,12 @@ const SOLUTION: &str = "RorolalaSharp.sln";
 const RSHARP_PROJECT: &str = "modules/rola-sharp/RolaSharp.csproj";
 
 /// The script that builds the Win32 window over the daemon into an export, on Windows.
+#[cfg(windows)]
 const DAEMON_WINDOW_SCRIPT: &str = "app/daemon-win/scripts/daemon-win-build.ps1";
+
+/// The script that builds the GTK 4 window over the daemon into an export, on Linux.
+#[cfg(target_os = "linux")]
+const DAEMON_WINDOW_SCRIPT: &str = "app/daemon-linux/scripts/daemon-linux-build.sh";
 
 /// The `NuGet` configuration a restore is tried with first: the one with no sources.
 const NUGET_OFFLINE: &str = "dev/configs/nuget.offline.config";
@@ -354,10 +359,12 @@ impl Workspace {
         self.root.join(DESKTOP_PLUGINS)
     }
 
-    /// The script that builds the daemon's window, on Windows.
+    /// The script that builds the daemon's window, on the platform this build is for.
     ///
-    /// It is a script rather than a cargo build because the window is a C program of its own, with a
-    /// resource script and the platform's compiler behind it — see `app/daemon-win/README.md`.
+    /// It is a script rather than a cargo build because the window is a C program of its own: Win32
+    /// with a resource script on Windows, GTK 4 on Linux — see `app/daemon-win/README.md` and
+    /// `app/daemon-linux/README.md`.
+    #[cfg(any(windows, target_os = "linux"))]
     #[must_use]
     pub fn daemon_window_script(&self) -> PathBuf {
         self.root.join(DAEMON_WINDOW_SCRIPT)

@@ -20,8 +20,9 @@ for the same reason.
   and every override checked before it names anything an `export` or a `clean` removes.
 - `src/platform.rs` — how a platform spells an artifact; written for every platform rather than for
   the one it is compiled on, so a spelling can be checked by a test on any machine.
-- `src/toolchain.rs` — the tools a step runs (`CARGO`, `DOTNET`, `RSVG`, `GIT`, `TAR`, split the way
-  a shell splits them) and how a run is made, captured, or given a working directory and environment.
+- `src/toolchain.rs` — the tools a step runs (`CARGO`, `DOTNET`, `RSVG`, `POWERSHELL`, `SH`, `GIT`,
+  `TAR`, split the way a shell splits them) and how a run is made, captured, or given a working
+  directory and environment.
 - `src/dotnet.rs` — the .NET side: the offline-first restore, the solution, the two programs a layout
   holds, the plugins, the bindings, and the suites.
 - `src/iscc.rs` — the compiler a Windows installer is built with, and what to do when it is missing.

@@ -42,6 +42,12 @@ impl Tool {
         Self::from_env("POWERSHELL", "powershell")
     }
 
+    /// The shell a Unix-only step runs: `SH`, or the machine's own when it is unset.
+    #[must_use]
+    pub fn sh() -> Self {
+        Self::from_env("SH", "sh")
+    }
+
     /// The toolchain a step runs `git` with.
     #[must_use]
     pub fn git() -> Self {

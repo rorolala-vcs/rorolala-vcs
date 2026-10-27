@@ -267,7 +267,22 @@ Every command refuses a linked work tree, because a repository keeps one exclude
 in all of its work trees. Every word is translated from `i18n/` in the language `--lang` names or
 the environment provides.
 
-### 3. [`modules`] [`define-format`] Add rola-define-format, the rola.lock format
+### 3. [`app`] [`rola-daemon-gui`] Add the GTK 4 window over the daemon on Linux
+
+The daemon has a second window on Linux: `rola-daemon-gui`, built from C against GTK 4 and linked to
+no Rust. It shows the same four pages as the Windows window — the daemon and its output, the namespace
+registry, the user keys, and the Vaults' administrators — and every action behind them is still one
+the command-line programs answer.
+
+It reads the user's files where the Rust side does: `$ROLA_DATA_HOME` or `$XDG_DATA_HOME`, falling
+back to `~/.local/share`, and then `rola/keys` and `rola/daemon/registry.toml`. `cargo dev export`
+builds it on Linux into `build/bin/rola-daemon-gui`, after the programs it drives, so `rola-daemon`
+is beside it. Building it needs GTK 4.10 or newer with its development files.
+
+Stopping a daemon the window started asks it to terminate and falls back to killing it, because
+`rola-daemon` has no stop command.
+
+### 4. [`modules`] [`define-format`] Add rola-define-format, the rola.lock format
 
 `rola.lock` names the materials a project places and the Vaults their content can be fetched
 from. It is generated — `rola.toml` is the file a person writes — so the grammar is deliberately
@@ -282,7 +297,7 @@ a format version this build does not know is refused whole.
 Paths, Vault names and content hashes are validated types rather than strings, and the crate is
 the only place a lock is read or written: it holds no files, no network and no git.
 
-### 4. [`modules`] [`git-support`] Add rola-git-support for project files and the work tree
+### 5. [`modules`] [`git-support`] Add rola-git-support for project files and the work tree
 
 A project is a directory holding `rola.toml` — the Vaults, the features, and one `[[mapping]]` per
 material — with the generated `rola.lock` beside it. This crate reads both, finds the project and

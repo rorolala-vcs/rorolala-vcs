@@ -13,9 +13,10 @@
 //! | `ffi_bindings/rorolala_ffi.h`| `build/lib/rorolala.h`/`.hpp`     |
 //! | `mingling/<program>_comp.*`  | `build/scripts/<program>/*`       |
 //!
-//! Windows has one artifact that is not cargo's at all: the Win32 window over the daemon, built from
-//! C by the script beside it after the programs are laid down — it looks for `rola-daemon.exe` beside
-//! itself, so what it is built beside has to be there first.
+//! Windows and Linux each have one artifact that is not cargo's at all: the window over the daemon,
+//! built from C by the script beside it after the programs are laid down — Win32 on Windows, GTK 4 on
+//! Linux. Each looks for `rola-daemon` beside itself, so what it is built beside has to be there
+//! first.
 
 #[cfg(windows)]
 use std::ffi::OsString;
@@ -99,7 +100,7 @@ pub fn export_artifacts() -> Result<(), crate::Error> {
     }
 
     // The window over the daemon is laid down after them rather than with them: it is a C program
-    // rather than a cargo one, and it looks for `rola-daemon.exe` beside itself.
+    // rather than a cargo one, and it looks for `rola-daemon` beside itself.
     build_daemon_window(&workspace)?;
 
     // The completions are laid down for the programs that have them: one directory per program, so
@@ -201,12 +202,24 @@ fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
     )
 }
 
-/// Lays nothing down: the window is a Win32 program, and the platforms without one have no window to
-/// build.
+/// Builds the GTK 4 window over the daemon into the export, on Linux.
 ///
-/// The signature is the Windows twin's, so both call sites read the same and the non-Windows side
-/// compiles into the same shape.
-#[cfg(not(windows))]
+/// It runs the script beside the C sources through the shell, so the script does not have to carry
+/// an executable bit through every checkout, and it is told the same export in the same way.
+#[cfg(target_os = "linux")]
+fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
+    let script = workspace.daemon_window_script();
+    let build = workspace.build_dir()?;
+    let environment = [("BUILD_DIR", build.as_os_str())];
+
+    Tool::sh().run_with_env(&environment, [script])
+}
+
+/// Lays nothing down: a window is a Windows and a Linux program, and the other platforms have none
+/// to build.
+///
+/// The signature is the twins' above, so all three call sites read the same.
+#[cfg(not(any(windows, target_os = "linux")))]
 #[allow(clippy::unnecessary_wraps)]
 fn build_daemon_window(_workspace: &Workspace) -> Result<(), crate::Error> {
     Ok(())
