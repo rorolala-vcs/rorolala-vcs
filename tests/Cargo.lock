@@ -2058,7 +2058,6 @@ name = "rorolala-vcs"
 version = "0.1.1"
 dependencies = [
  "blake3",
- "futures",
  "rorolala-errors",
  "rorolala-storage",
  "rorolala-utils-constants",
