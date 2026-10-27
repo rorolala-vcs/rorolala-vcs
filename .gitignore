@@ -13,6 +13,9 @@
 .AppleDouble
 .LSOverride
 
+# Obsidian
+.obsidian
+
 # Thumbnails
 ._*
 
