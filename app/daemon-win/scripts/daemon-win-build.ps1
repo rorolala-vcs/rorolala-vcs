@@ -61,6 +61,14 @@ $common = @(
     '/D_CRT_SECURE_NO_WARNINGS'
     "/I`"$resDir`""
 )
+# The Windows SDK's own `um\winbase.h` (10.0.19041) expands a macro that produces `defined`; the
+# conforming preprocessor `/std:c11` selects diagnoses it as C5105, undefined behaviour per the
+# standard, in the SDK rather than here. `/WX` would fail on it before this program is parsed, so
+# the warning is silenced by number rather than `/WX` being dropped: the sources keep warnings as
+# errors, and a toolset or SDK that never emits it is unaffected. It can go once no supported SDK
+# still carries that macro.
+$common += '/wd5105'
+
 if ($analyze) {
     $common += $analyze
 }
