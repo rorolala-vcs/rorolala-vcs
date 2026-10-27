@@ -119,6 +119,7 @@ en.Desktop=The Desktop program
 en.Shortcuts=Start menu shortcuts
 en.Daemon=The daemon and its window (rola-daemon, rola-daemon-gui)
 en.Jj=Jujutsu support (rola-jj)
+en.Git=Git support (git-rola)
 en.Completions=The PowerShell completion scripts
 en.Profile=The block in your PowerShell profile
 en.Menu=The "Open with Rorolala Desktop" context menu
@@ -142,6 +143,7 @@ zh.Desktop=桌面端程序
 zh.Shortcuts=开始菜单快捷方式
 zh.Daemon=服务端与其窗口（rola-daemon、rola-daemon-gui）
 zh.Jj=Jujutsu 支持（rola-jj）
+zh.Git=Git 支持（git-rola）
 zh.Completions=PowerShell 补全脚本
 zh.Profile=写入 PowerShell profile 的段落
 zh.Menu=“用 Rorolala Desktop 打开”右键菜单
@@ -163,9 +165,9 @@ zh.Missed=程序已安装，但下面这些没能写入：
 ;
 ; `compact` is the command line and its interface and nothing that is only ever reached from a shell: the
 ; Desktop program, the daemon it talks to, the completion scripts, the path entry and the context menu.
-; `full` is that and the parts a developer reaches for — the editor helper, the C ABI, Jujutsu and the ones
-; the picker keeps off the compact list — which is why it is the one that is selected to begin with and the
-; one Inno is named for, so a reader who reads nothing gets all of it.
+; `full` is that and the parts a developer reaches for — the editor helper, the C ABI, Jujutsu, Git and
+; the ones the picker keeps off the compact list — which is why it is the one that is selected to begin
+; with and the one Inno is named for, so a reader who reads nothing gets all of it.
 Name: "compact"; Description: "{cm:Compact}"; Types: compact custom
 Name: "full"; Description: "{cm:Full}"; Types: full custom; Flags: fixed
 
@@ -176,6 +178,7 @@ Name: "desktop"; Description: "{cm:Desktop}"; Types: compact full custom
 Name: "shortcuts"; Description: "{cm:Shortcuts}"; Types: full custom
 Name: "daemon"; Description: "{cm:Daemon}"; Types: compact full custom
 Name: "jj"; Description: "{cm:Jj}"; Types: full custom
+Name: "git"; Description: "{cm:Git}"; Types: full custom
 Name: "completions"; Description: "{cm:Completions}"; Types: compact full custom
 Name: "profile"; Description: "{cm:Profile}"; Types: full custom
 Name: "menu"; Description: "{cm:Menu}"; Types: compact full custom
@@ -202,6 +205,7 @@ Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\bin\rola-daemon.exe"; DestDir: "{app}\bin"; Components: daemon; Flags: ignoreversion
 Source: "{#SourceDir}\bin\rola-daemon-gui.exe"; DestDir: "{app}\bin"; Components: daemon; Flags: ignoreversion
 Source: "{#SourceDir}\bin\rola-jj.exe"; DestDir: "{app}\bin"; Components: jj; Flags: ignoreversion
+Source: "{#SourceDir}\bin\git-rola.exe"; DestDir: "{app}\bin"; Components: git; Flags: ignoreversion
 
 ; The Desktop program: the whole directory it was published as, plugins and translations included, since
 ; what it is made of is what it reads beside itself.

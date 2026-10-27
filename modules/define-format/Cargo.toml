@@ -1,0 +1,10 @@
+[package]
+name = "rola-define-format"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# NFC is what makes a name written with combining characters on one machine and with precomposed
+# ones on another one path rather than two, which is the same reason the Layout's own paths are
+# normalized. It is the crate's only dependency: nothing else about a lock needs a library.
+unicode-normalization.workspace = true

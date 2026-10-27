@@ -1,0 +1,24 @@
+_version: 2
+
+init:
+  initialized:
+    en: Initialized rola project in %{path}
+    zh-CN: 已在 %{path} 初始化 rola 项目
+  reinitialized:
+    en: Reinitialized existing rola project in %{path}
+    zh-CN: 已重新初始化 %{path} 的 rola 项目
+  err_config_write:
+    en: "cannot write `%{path}`: %{error}"
+    zh-CN: "无法写入 `%{path}`：%{error}"
+  err_open:
+    en: cannot open the project that was just set up
+    zh-CN: 无法打开刚刚建立的项目
+  err_hooks_make:
+    en: "cannot make `%{path}`: %{error}"
+    zh-CN: "无法创建 `%{path}`：%{error}"
+  err_hook_exists:
+    en: "'%{event}' hook already exists; not installing it"
+    zh-CN: "已存在 '%{event}' 钩子，不安装它"
+  err_hook_write:
+    en: "cannot write '%{path}': %{error}"
+    zh-CN: "无法写入 '%{path}'：%{error}"

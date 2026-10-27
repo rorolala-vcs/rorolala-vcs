@@ -1,0 +1,6 @@
+_version: 2
+
+check:
+  err_digest:
+    en: "%{path}: %{error}"
+    zh-CN: "%{path}：%{error}"

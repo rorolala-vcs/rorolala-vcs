@@ -1,0 +1,6 @@
+_version: 2
+
+hook:
+  err_settle:
+    en: "%{event}: %{error}"
+    zh-CN: "%{event}：%{error}"

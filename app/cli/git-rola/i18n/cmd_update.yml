@@ -1,0 +1,57 @@
+_version: 2
+
+update:
+  updated:
+    en: "Updated rola.lock: %{materials} materials"
+    zh-CN: "已更新 rola.lock：%{materials} 个素材"
+  err_no_account:
+    en: no account is named on this machine; run `rola account <NAME>` to name one
+    zh-CN: 本机没有指定账号；运行 `rola account <账号>` 指定一个
+  err_no_key:
+    en: the account `%{name}` has no key on this machine
+    zh-CN: 账号 `%{name}` 在本机没有密钥
+  err_no_vault:
+    en: the project declares no Vault to resolve through, and the pin names none
+    zh-CN: 项目没有声明可用来解析的保险库，pin 也没有指定
+  err_undeclared:
+    en: "`%{vault}` is not named in [vaults]"
+    zh-CN: "`%{vault}` 没有在 [vaults] 里声明"
+  err_address:
+    en: "`%{vault}` is not a Vault address: %{error}"
+    zh-CN: "`%{vault}` 不是保险库地址：%{error}"
+  err_fetch:
+    en: "cannot reach `%{vault}`: %{error}"
+    zh-CN: "无法连接 `%{vault}`：%{error}"
+  err_no_layout:
+    en: "`%{vault}` answered with no Layout"
+    zh-CN: "`%{vault}` 没有返回布局"
+  err_not_in_layout:
+    en: "`%{vault}`'s Layout names no material `%{material}`"
+    zh-CN: "`%{vault}` 的布局里没有素材 `%{material}`"
+  err_layout:
+    en: "`%{vault}`'s Layout cannot be read: %{error}"
+    zh-CN: "无法读取 `%{vault}` 的布局：%{error}"
+  err_index:
+    en: "cannot read the index of `%{vault}`: %{error}"
+    zh-CN: "无法读取 `%{vault}` 的索引：%{error}"
+  err_not_a_version:
+    en: "the index holds `%{object}` where a version is named"
+    zh-CN: "索引在应当给出条目的位置给出的是 `%{object}`"
+  err_version:
+    en: "`%{material}` has no version %{number}"
+    zh-CN: "`%{material}` 没有第 %{number} 版"
+  err_chain:
+    en: "the version chain of `%{material}` cannot be read"
+    zh-CN: "无法读取 `%{material}` 的版本链"
+  err_content:
+    en: "cannot bring content from `%{vault}`: %{error}"
+    zh-CN: "无法从 `%{vault}` 取回内容：%{error}"
+  err_missing:
+    en: "no Vault holds the content %{content}"
+    zh-CN: "没有保险库持有内容 %{content}"
+  err_write:
+    en: "cannot write `%{path}`: %{error}"
+    zh-CN: "无法写入 `%{path}`：%{error}"
+  err_workarea:
+    en: "cannot keep the private area at `%{path}`"
+    zh-CN: "无法在 `%{path}` 维护私有区"

@@ -1,0 +1,13 @@
+[package]
+name = "rola-git-support"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The lock's text has one reader and one writer, and they are this crate's dependency rather than
+# its code: a second reading of the format here would be a second answer to what a lock is.
+rola-define-format.workspace = true
+blake3.workspace = true
+serde.workspace = true
+toml.workspace = true
+uuid.workspace = true

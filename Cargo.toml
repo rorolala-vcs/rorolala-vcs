@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "app/cli/git-rola",
     "app/cli/rola",
     "app/cli/rola-daemon",
     "app/cli/rola-edit",
@@ -16,8 +17,10 @@ members = [
     "modules/auth",
     "modules/chunking",
     "modules/daemon",
+    "modules/define-format",
     "modules/desktop-pty",
     "modules/errors",
+    "modules/git-support",
     "modules/inverse-index",
     "modules/layout",
     "modules/protocol",
@@ -65,9 +68,11 @@ jj-cli = { version = "0.46.0", default-features = false }
 jj-lib = { version = "0.46.0", default-features = false }
 
 # Members
+git-rola = { path = "app/cli/git-rola" }
 librorolala = { path = "." }
 rola = { path = "app/cli/rola" }
 rola-daemon = { path = "app/cli/rola-daemon" }
+rola-define-format = { path = "modules/define-format" }
 rola-desktop-pty = { path = "modules/desktop-pty" }
 rola-edit = { path = "app/cli/rola-edit" }
 rola-jj = { path = "app/cli/rola-jj" }
@@ -80,6 +85,7 @@ rorolala-dev-i18n-check = { path = "dev/i18n-check" }
 rorolala-dev-rsharp-bindgen = { path = "dev/rsharp-bindgen" }
 rorolala-errors = { path = "modules/errors" }
 rorolala-ffi = { path = "app/ffi" }
+rola-git-support = { path = "modules/git-support" }
 rorolala-inverse-index = { path = "modules/inverse-index" }
 rorolala-layout = { path = "modules/layout" }
 rorolala-protocol = { path = "modules/protocol" }
@@ -155,7 +161,7 @@ minijinja = "2.24.0"
 unicode-normalization = "0.1.25"
 
 # Identifiers
-uuid = { version = "1.26.1", features = ["v4"] }
+uuid = { version = "1.26.1", features = ["v4", "serde"] }
 
 # Compression
 lz4 = "1.28.1"

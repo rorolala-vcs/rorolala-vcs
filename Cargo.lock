@@ -1526,6 +1526,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "git-rola"
+version = "0.1.1"
+dependencies = [
+ "librorolala",
+ "mingling",
+ "rola-define-format",
+ "rola-git-support",
+ "rorolala-utils-constants",
+ "rust-i18n",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "gix-error"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3596,6 +3610,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rola-define-format"
+version = "0.1.1"
+dependencies = [
+ "unicode-normalization",
+]
+
+[[package]]
 name = "rola-desktop-pty"
 version = "0.1.1"
 dependencies = [
@@ -3610,6 +3631,17 @@ dependencies = [
  "crossterm",
  "rust-i18n",
  "unicode-width 0.2.2",
+]
+
+[[package]]
+name = "rola-git-support"
+version = "0.1.1"
+dependencies = [
+ "blake3",
+ "rola-define-format",
+ "serde",
+ "toml 0.8.23",
+ "uuid",
 ]
 
 [[package]]
@@ -5275,6 +5307,7 @@ dependencies = [
  "atomic",
  "getrandom 0.4.3",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 

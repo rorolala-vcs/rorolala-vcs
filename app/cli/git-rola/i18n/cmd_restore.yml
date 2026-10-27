@@ -1,0 +1,12 @@
+_version: 2
+
+restore:
+  err_path:
+    en: "'%{name}' is not a path rola.lock could name"
+    zh-CN: "'%{name}' 不是 rola.lock 能命名的路径"
+  err_not_in_lock:
+    en: "no material matches `%{name}`"
+    zh-CN: "没有素材匹配 `%{name}`"
+  err_outside:
+    en: "`%{name}` is not under the project"
+    zh-CN: "`%{name}` 不在项目内"

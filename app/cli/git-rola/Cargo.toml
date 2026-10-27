@@ -1,0 +1,30 @@
+[package]
+name = "git-rola"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The command line framework the project's programs are written against: the program, its
+# dispatch, its chains and the buffer its renderers write into are all mingling's.
+mingling.workspace = true
+# A content hash is named in the sources a command places materials from.
+rola-define-format.workspace = true
+# A result a program renders into structures is written down for the structural renderer, so the
+# types that carry one are `serde`'s.
+serde.workspace = true
+# The local half of git support: the project files, the work tree, the exclude block and the
+# staging area.
+rola-git-support.workspace = true
+# The program speaks the language the rest of rola speaks, from the translation files beside it.
+rust-i18n.workspace = true
+# `update` resolves a project's mappings to content, which is the Vault side: reaching a Vault,
+# reading its Layout and index, and bringing the content a version names into the store. That is
+# what the program layer of the project is for, so the root library is linked here rather than
+# reimplementing the exchange in this crate.
+librorolala.workspace = true
+# The names and directories shared with the rest of the project: a workspace's keys, the Vault's
+# one Layout, the file a store is found by.
+rorolala-utils-constants.workspace = true
+# A store reads and writes asynchronously, and a command is not: the two meet on a runtime the
+# program brings for its own reads.
+tokio.workspace = true

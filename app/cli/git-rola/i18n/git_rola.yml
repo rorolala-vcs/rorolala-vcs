@@ -1,0 +1,40 @@
+_version: 2
+
+git_rola:
+  help:
+    en: |
+      usage: git rola <command> [<args>]
+
+      The rola commands are:
+        init       Initialize a rola workspace inside the work tree
+        check      Check the difference between the work tree and currently checked-in assets
+        restore    Restore checked-in assets that have been modified
+        update     Re-parse rola.toml and update files
+        hook       Hook behavior provided; runs among the registered hooks
+    zh-CN: |
+      用法：git rola <命令> [<参数>]
+
+      rola 命令：
+         init       在工作树内初始化 rola 工作区
+         check      检查工作树和当前签入素材内容的差异
+         restore    将已经签入但修改的素材换原
+         update     重新解析 rola.toml 并更新文件
+         hook       提供的钩子行为，它会在注册的钩子中执行
+  version:
+    en: git-rola version %{version}
+    zh-CN: git-rola 版本 %{version}
+  err_usage:
+    en: unknown command line; see `git rola --help`
+    zh-CN: 无法识别的命令行；见 `git rola --help`
+  err_cwd:
+    en: "cannot read the current directory: %{error}"
+    zh-CN: "无法读取当前目录：%{error}"
+  err_no_project:
+    en: not inside a rola project
+    zh-CN: 不在任何 rola 项目内
+  err_lock:
+    en: "cannot read rola.lock: %{error}"
+    zh-CN: "无法读取 rola.lock：%{error}"
+  err_git:
+    en: "cannot run git: %{error}"
+    zh-CN: "无法运行 git：%{error}"

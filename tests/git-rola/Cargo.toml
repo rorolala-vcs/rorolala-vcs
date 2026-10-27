@@ -1,0 +1,12 @@
+[package]
+name = "it-git-rola"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# A sandbox of its own, and the programs of this build named to the suite by the gate.
+rorolala-utils-sandbox = { path = "../../utils/sandbox" }
+# The content a lock names is the content of the material, so the fixture's locks are written from
+# the same hash the store lays its objects down by.
+blake3 = "1.8.3"
