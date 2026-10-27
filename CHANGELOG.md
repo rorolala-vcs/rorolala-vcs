@@ -4,6 +4,32 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 # 0.1.1 (Unreleased)
 
+## Bugfix
+
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's scroll and chosen step when the files change under it
+
+A tree told that the files changed is now read again in place instead of being built again. The rows are
+read from disk, and the steps that were open and the step that was chosen are kept, so what a reader has
+scrolled to stays where it was. A tree built again came back with its scroll at the top, and put the choice
+back while its rows were still being made, which moved the scroll under the reader: in a tree longer than the
+dock, the chosen step appeared to page up or down.
+
+The choice is put back once the rows read again have been laid out, so a step the reader is already looking
+at is not scrolled to as though it had just been chosen. A tree re-rooted, or read by other hide rules, is
+still built again, since there the rows under the base are different rows.
+
+### 2. [`modules`] [`tree-analyze`] [`cache`] Keep a shared analysis cache whole while another reading writes it
+
+The cache a reading of the tree writes down is now written beside itself and moved over the file that is
+there, rather than written over it. One work is read by several readers at once — the desktop's Overview and
+each listing of it read it on threads of their own — and a reader opens either the cache that was there or
+the one being written, and never a file that is part of each.
+
+A reader that caught the old file between the truncation and the new bytes took it for a cache written by
+another build and started from no agreements at all. It then wrote the tree as it stands as what the Layout
+agrees with, and the changes it was about to report — a file edited without holding it, say — were gone from
+every reading after that until the files changed again.
+
 ## Feature
 
 ### 1. [`app`] [`git-rola`] Add git rola, the git support program

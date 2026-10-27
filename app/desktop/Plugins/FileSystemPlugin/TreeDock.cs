@@ -118,13 +118,13 @@ internal sealed class TreeControl : UserControl
         AttachedToVisualTree += (_, _) =>
         {
             _browser.Changed += Update;
-            _browser.Reread += Draw;
+            _browser.Reread += Again;
             Draw();
         };
         DetachedFromVisualTree += (_, _) =>
         {
             _browser.Changed -= Update;
-            _browser.Reread -= Draw;
+            _browser.Reread -= Again;
         };
 
         // Taken on the way down, like the keys a listing answers: F5 is a key the dock answers wherever in it the
@@ -214,13 +214,43 @@ internal sealed class TreeControl : UserControl
     private void Stepped(object? sender, StepEventArgs e) => _memory.Remember(e.Path, e.Open);
 
     /// <summary>
+    /// Reads what the tree is showing again, when the files have changed.
+    /// </summary>
+    /// <remarks>
+    /// What is read again is the tree that is on screen, not a new one: a tree is a view the reader has scrolled
+    /// and walked into, and a tree built again comes back with its own scroll at the top — which is the change of
+    /// the view's height a reader sees as the chosen step paging up or down under the pointer. The steps that are
+    /// open and the step that is chosen are kept by the tree itself, which is what makes reading it again one
+    /// drawing of the same view rather than a replacement of it.
+    /// <para>
+    /// A tree built again is still what a tree rooted elsewhere, or read by other rules, is: those change which
+    /// rows there are under the base rather than what the rows hold, and are drawn by <see cref="Draw"/>.
+    /// </para>
+    /// </remarks>
+    private void Again()
+    {
+        if (_content.Content is TreeBrowser tree)
+        {
+            tree.Refresh();
+
+            return;
+        }
+
+        Draw();
+    }
+
+    /// <summary>
     /// Builds the tree over the base, keeping the steps that were open and what was chosen.
     /// </summary>
     /// <remarks>
     /// The steps and the choice are asked of the tree being replaced rather than kept here, because they are
-    /// what that tree was drawn with: a directory whose contents have moved is a tree to build again — a step
-    /// may have come or gone — and a user who has walked down into a step should not be put back at the base for
-    /// it, nor lose the step the clipboard's keys would act on.
+    /// what that tree was drawn with: a tree rooted elsewhere, or one read by other rules, is a tree to build
+    /// again — the rows under the base are different rows — and a user who has walked down into a step should
+    /// not be put back at the base for it, nor lose the step the clipboard's keys would act on.
+    /// <para>
+    /// What the files having changed is not: that is the same tree over the same base, read again in place by
+    /// <see cref="Again"/>, which is what keeps its scroll.
+    /// </para>
     /// </remarks>
     private void Draw()
     {
@@ -376,6 +406,16 @@ internal sealed class TreeBrowser : UserControl
     private string? _choosing;
 
     /// <summary>
+    /// Whether the rows are being read again in place, so that what the toolkit calls selected is no choice.
+    /// </summary>
+    /// <remarks>
+    /// Reading the rows again takes them out from under the tree's own selection, which is published as a choice
+    /// the reader made. A choice that went out that way would have the listing and the version graph let go of
+    /// what they were reading for a step nobody unchose.
+    /// </remarks>
+    private bool _refreshing;
+
+    /// <summary>
     /// The box a step's name is being typed in, while one is, and nothing otherwise.
     /// </summary>
     /// <remarks>
@@ -421,6 +461,16 @@ internal sealed class TreeBrowser : UserControl
     /// </remarks>
     private bool _dragged;
 
+    /// <summary>
+    /// The word said where the base holds nothing under it, drawn over the tree's own space.
+    /// </summary>
+    /// <remarks>
+    /// One control rather than one made where the base is read, because what it says is read again whenever the
+    /// base's own level is: a word added once and never taken away would outlive the empty base it was added for,
+    /// and sit over a base that has since been given something.
+    /// </remarks>
+    private readonly Control _empty;
+
     /// <summary>Makes the tree rooted at a directory.</summary>
     /// <param name="host">The host, for what a drop or a drag cannot do.</param>
     /// <param name="browser">Where the browser is, which the tree reads and switches.</param>
@@ -444,6 +494,7 @@ internal sealed class TreeBrowser : UserControl
         _listing = listing;
         _root = root;
         _drops = new Drops(host, browser, Mark);
+        _empty = Empty();
 
         var tree = new TreeView { ContextMenu = actions.Empty(this) };
         tree.Items.Add(Node(root));
@@ -493,19 +544,33 @@ internal sealed class TreeBrowser : UserControl
 
         var grid = new Grid();
         grid.Children.Add(tree);
+        grid.Children.Add(_empty);
+        grid.Children.Add(over);
 
         // The base is a row of the tree whether or not it holds anything under it, so a base that holds
         // nothing still shows that one row; the word says so rather than leaving the pane reading as a
-        // tree that has not finished loading.
-        if (!HoldsAny(root))
+        // tree that has not finished loading. A root whose rules are not read yet holds the mark that says
+        // it may be opened rather than what it holds, so what it holds is read here for the word; a tree
+        // whose rules are read has had the word settled with the root's row (see `Settle`).
+        if (!HideRegistry.Ready(root))
         {
-            grid.Children.Add(Empty());
+            Emptiness(!HoldsAny(root));
         }
-
-        grid.Children.Add(over);
 
         Content = grid;
     }
+
+    /// <summary>
+    /// Says whether the base holds nothing under it, which is what the word drawn over the tree is for.
+    /// </summary>
+    /// <remarks>
+    /// Said again whenever the base's own level is read — the tree read again after the files changed, and a
+    /// reading of the root that lands — because what the base holds is not what it held when the tree was made:
+    /// a base that was empty when it was first read is a base that may have been given something since, and a
+    /// word kept from that first reading is a word about a tree that is no longer there.
+    /// </remarks>
+    /// <param name="empty">Whether the base holds nothing under it.</param>
+    private void Emptiness(bool empty) => _empty.IsVisible = empty;
 
     /// <summary>Says whether a drag may land here, and lights the step it would land in.</summary>
     /// <param name="sender">The tree.</param>
@@ -871,6 +936,109 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
+    /// <summary>
+    /// Reads what every step the tree is showing holds again, keeping the tree, its steps and its choice.
+    /// </summary>
+    /// <remarks>
+    /// The tree is the same control rather than a new one, which is what keeps what a reader has scrolled to: a
+    /// tree built again comes back with its scroll at the top, and a view whose scroll moved under the reader is
+    /// one where the chosen step is no longer where it was seen. What is read again is the rows — a directory
+    /// whose contents have moved is read from disk — and what is put back is what was open and what was chosen,
+    /// which is what those rows are read against.
+    /// <para>
+    /// The root is read whether or not it is open, since it is the one step every other step hangs from; a step
+    /// under it is read by being opened again, exactly as a tree built from nothing is (<see cref="Reopen"/>).
+    /// What a step held before is dropped with the row that held it: the rows are about to be made again, and one
+    /// kept beside the row it was drawn as would answer about a tree nothing is drawn from.
+    /// </para>
+    /// <para>
+    /// The choice is put back once the rows are laid out, and not while they are being made: a row that is chosen
+    /// before it is arranged is a row the toolkit brings into view from a position it does not have yet, which
+    /// moves the scroll the reader is reading at. A step the reader has chosen is one they are looking at, so
+    /// putting the choice back where it is already is a scroll asked for and not made.
+    /// </para>
+    /// </remarks>
+    public void Refresh()
+    {
+        var opened = Opened();
+        var chosen = Chosen();
+
+        // A box a name is being typed in does not outlive the row it was put in, and the row is about to be read
+        // again: the name is given up rather than left half-typed in a row nothing holds.
+        if (_editor is not null)
+        {
+            Stop();
+        }
+
+        // A reading on its way was asked for by a tree that is no longer drawn: its claim is moved past the
+        // newest one made, so that it lands as nothing rather than reopening a row nothing holds.
+        foreach (var path in _readings.Keys.ToArray())
+        {
+            _readings[path]++;
+        }
+
+        _stale.Clear();
+        _refreshing = true;
+
+        try
+        {
+            if (_tree.Items.OfType<TreeViewItem>().FirstOrDefault() is not { } root)
+            {
+                return;
+            }
+
+            Read(root, _root);
+
+            // What the base holds is settled again with the rows: a base that was empty when it was first read is
+            // a base that may have been given something since, and the word over the tree is about what it holds
+            // now rather than about what it held then. It is also the row that says whether the base can be opened
+            // at all, which a base read as empty is drawn without.
+            Settle(root, _root, root.Items.Count > 0);
+            Reopen(opened, chosen: null);
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+
+        if (chosen is not null)
+        {
+            ChooseOnceDrawn(chosen);
+        }
+    }
+
+    /// <summary>
+    /// Chooses the step a reader had chosen, once the rows read again have been laid out.
+    /// </summary>
+    /// <remarks>
+    /// What is chosen is put back only if it is still what is chosen: a reader who has chosen another step while
+    /// the rows were being made has chosen that one, and a reading that put the old choice back would be the view
+    /// undoing a choice rather than restoring one. A step whose row is not there once the rows are laid out is one
+    /// the tree no longer holds — a step that was open is opened again by the reading, so a gone row is gone — and
+    /// it is let go of rather than kept for a row that will never be drawn.
+    /// </remarks>
+    /// <param name="chosen">The step that was chosen when the rows were read again.</param>
+    private void ChooseOnceDrawn(string chosen) =>
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (!string.Equals(_chosen, chosen, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                if (Find(_tree.Items, chosen) is not { } pick)
+                {
+                    _chosen = null;
+
+                    return;
+                }
+
+                pick.IsSelected = true;
+            },
+            DispatcherPriority.Loaded
+        );
+
     /// <summary>Gathers the open steps under some items, outermost first.</summary>
     /// <param name="items">The items to walk.</param>
     /// <param name="opened">Where the paths are gathered.</param>
@@ -986,8 +1154,9 @@ internal sealed class TreeBrowser : UserControl
     private void Selected()
     {
         // Nothing while a reading is putting the choice back: `Resume` is the one that says what is chosen then, and
-        // a selection it is making is not a user choosing anything.
-        if (_choosing is not null)
+        // a selection it is making is not a user choosing anything. Nor while the rows are being read again in
+        // place, where the selection goes only because the rows it was on are being made again.
+        if (_refreshing || _choosing is not null)
         {
             return;
         }
@@ -1407,6 +1576,13 @@ internal sealed class TreeBrowser : UserControl
         else
         {
             item.Items.Clear();
+        }
+
+        // The word over the tree is about the base's own level, and this is where what that level holds is said
+        // when the tree is made: a root that holds nothing is one whose one row is all there is.
+        if (string.Equals(path, _root, StringComparison.Ordinal))
+        {
+            Emptiness(!holds);
         }
 
         // Faded here rather than where the row is made, because what a row is faded by is the rules, and the

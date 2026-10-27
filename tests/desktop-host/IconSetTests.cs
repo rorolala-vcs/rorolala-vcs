@@ -92,11 +92,11 @@ public sealed class IconSetTests
 
             Assert.True(ready.Wait(TimeSpan.FromSeconds(10)), "the set was not drawn");
 
-            using var ruled = IconSets.Picture(new Entry("scene.ma", EntryKind.File), 16);
-            using var fallback = IconSets.Picture(new Entry("notes.txt", EntryKind.File), 16);
-
-            Assert.NotNull(ruled);
-            Assert.NotNull(fallback);
+            // What is answered is the cache's own picture and not one this test made: disposing it here would
+            // leave the cache handing a disposed picture to whatever draws that set next — a listing of the
+            // entries this very set is for — so the pictures are left to the cache that owns them.
+            Assert.NotNull(IconSets.Picture(new Entry("scene.ma", EntryKind.File), 16));
+            Assert.NotNull(IconSets.Picture(new Entry("notes.txt", EntryKind.File), 16));
         }
         finally
         {
@@ -104,6 +104,11 @@ public sealed class IconSetTests
             {
                 Directory.Delete(cache, recursive: true);
             }
+
+            // The set is this test's, and the program's own sets are adopted by the plugin that carries them:
+            // one left selected with its cache taken away is a set every listing after this one would try to
+            // read pictures from, which is a test's state leaking into the next test's drawing.
+            IconSets.Adopt([], _ => { }, () => { });
         }
     }
 

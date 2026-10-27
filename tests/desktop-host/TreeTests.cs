@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -119,6 +120,189 @@ public sealed class TreeTests
         window.Close();
     }
 
+    /// <summary>
+    /// A tree told that the files changed keeps the scroll it was read at, and the step it had chosen.
+    /// </summary>
+    /// <remarks>
+    /// What a file operation says is that the tree's rows are to be read again, which is a drawing of the same
+    /// view rather than a replacement of it: a tree built again comes back with its scroll at the top, and a
+    /// reader scrolled into a long tree sees the step they had chosen page away from where they were reading it.
+    /// What is checked is the view the reader is looking at rather than the reading itself: the scroll and the
+    /// tree the scroll belongs to are the same before and after, and the chosen step is chosen in the rows that
+    /// were read again.
+    /// </remarks>
+    [Fact]
+    public void ARereadKeepsTheScrollAndTheChosenStep()
+    {
+        var directory = Scratch.New("tree-scroll");
+
+        for (var index = 0; index < 240; index++)
+        {
+            File.WriteAllText(Path.Combine(directory, $"file-{index:D3}.txt"), "x");
+        }
+
+        var (window, browser) = OpenAt(directory);
+
+        var root = Until(window, () => Root(window));
+
+        root.IsExpanded = true;
+
+        // The rows are made a turn or so after the step is opened, and a scroll of a tree with nothing drawn in
+        // it is a scroll of nowhere. The turns are drawn rather than waited for, since what is being waited for
+        // is a layout and not an answer: a reading of the rules behind the rows may be a turn or two behind.
+        PumpFrames(window, 30);
+
+        var scroll = Until(
+            window,
+            () =>
+                window.GetVisualDescendants()
+                    .OfType<TreeView>()
+                    .SelectMany(tree => tree.GetVisualDescendants())
+                    .OfType<ScrollViewer>()
+                    .FirstOrDefault(bars => bars.Extent.Height > bars.Viewport.Height)
+        );
+
+        var chosen = Until(
+            window,
+            () => root.Items.OfType<TreeViewItem>().ElementAtOrDefault(5)
+        );
+
+        var path = Assert.IsType<string>(chosen.Tag);
+
+        // The step a reader has chosen is one they are looking at, so it is chosen before the tree is scrolled:
+        // what a reread has to keep is where the reader was reading, and a step chosen and then scrolled out of
+        // sight is one the toolkit would bring back into view whatever the reread did.
+        chosen.IsSelected = true;
+
+        // What choosing a row leaves behind is a scroll asked for a turn later, so the scroll is read against a
+        // tree that has done it: what this is about is the reread, not the selection that came before it.
+        PumpFrames(window, 20);
+
+        scroll.Offset = new Vector(0, 96);
+
+        // What the scroll came to rather than what it was asked for: a tree whose extent is not the one the
+        // offset was read against clamps it, and it is the clamped offset a reread has to keep.
+        PumpFrames(window, 20);
+
+        var offset = scroll.Offset;
+
+        browser.Refresh();
+
+        Pump(window, () => RowByPath(window, path)?.IsSelected == true);
+
+        Assert.Same(
+            window.GetVisualDescendants()
+                .OfType<ScrollViewer>()
+                .First(bars => bars.Extent.Height > bars.Viewport.Height),
+            scroll
+        );
+        Assert.Equal(offset.Y, scroll.Offset.Y, 1);
+        Assert.True(RowByPath(window, path)?.IsSelected, "the chosen step is not chosen in the rows read again");
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// The word for an empty base is about what the base holds now, not about what it held when the tree was made.
+    /// </summary>
+    /// <remarks>
+    /// A base that was empty is a base that can be given something while the tree is looking at it — a sync, a
+    /// fetch, a file made by another program — and the word drawn over the tree has to go when it is. A tree read
+    /// again is the same view, so a word decided once where the tree was made would be a word about a base that is
+    /// no longer there: what is checked is the word after the base is given something, and again after the
+    /// something is taken away.
+    /// </remarks>
+    [Fact]
+    public void TheWordForAnEmptyBaseIsNotKeptWhenTheBaseIsGivenSomething()
+    {
+        var directory = Scratch.New("tree-empty");
+        var (window, browser) = OpenAt(directory);
+
+        var word = Assert.IsType<StackPanel>(Until(window, () => EmptyWord(window)));
+
+        Assert.True(word.IsVisible, "a base holding nothing is not said to hold nothing");
+
+        var root = Until(window, () => Root(window));
+
+        Assert.Empty(root.Items);
+
+        var file = Path.Combine(directory, "hero.psd");
+
+        File.WriteAllText(file, "x");
+        browser.Refresh();
+
+        Assert.False(word.IsVisible, "the word for an empty base outlived the base being given something");
+        Assert.NotEmpty(root.Items);
+
+        File.Delete(file);
+        browser.Refresh();
+
+        Assert.True(word.IsVisible, "a base emptied again is not said to hold nothing");
+        Assert.Empty(root.Items);
+
+        window.Close();
+    }
+
+    /// <summary>The step a path is drawn as, or nothing while it is not drawn.</summary>
+    /// <param name="window">The window the tree is in.</param>
+    /// <param name="path">The directory the step stands for.</param>
+    /// <returns>The step, or nothing.</returns>
+    private static TreeViewItem? RowByPath(Window window, string path) =>
+        window.GetVisualDescendants()
+            .OfType<TreeViewItem>()
+            .FirstOrDefault(step => string.Equals(step.Tag as string, path, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The panel the word for an empty base is drawn in, or nothing while the tree has no such word.
+    /// </summary>
+    /// <param name="window">The window the tree is in.</param>
+    /// <returns>The panel, whose visibility is whether the word is being said.</returns>
+    private static StackPanel? EmptyWord(Window window) =>
+        window.GetVisualDescendants()
+            .OfType<StackPanel>()
+            .FirstOrDefault(panel =>
+                panel.Children.OfType<TextBlock>().Any(text =>
+                    string.Equals(
+                        text.Text,
+                        RolaI18N.Get("rorolala_file_system.empty"),
+                        StringComparison.Ordinal
+                    )
+                )
+            );
+
+    /// <summary>Waits for something to be drawn, which happens a turn or so after it is asked for.</summary>
+    /// <param name="window">The window to draw.</param>
+    /// <param name="until">What is being waited for, which answers false until it is there.</param>
+    private static void Pump(Window window, Func<bool> until)
+    {
+        for (var turn = 0; turn < 200; turn++)
+        {
+            if (until())
+            {
+                return;
+            }
+
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(10);
+        }
+
+        throw new InvalidOperationException("what was asked for was never drawn");
+    }
+
+    /// <summary>Draws the window for a number of turns, whether or not anything is being waited for.</summary>
+    /// <param name="window">The window to draw.</param>
+    /// <param name="turns">How many turns to draw it for.</param>
+    private static void PumpFrames(Window window, int turns)
+    {
+        for (var turn = 0; turn < turns; turn++)
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(10);
+        }
+    }
+
     /// <summary>A tree over a scratch directory holding one directory, one directory under that, and one file.</summary>
     /// <returns>The window it is shown in, and the step the tree is rooted at.</returns>
     private static (Window Window, TreeViewItem Root) Open()
@@ -127,11 +311,23 @@ public sealed class TreeTests
         Directory.CreateDirectory(Path.Combine(directory, "alpha", "inner"));
         File.WriteAllText(Path.Combine(directory, "hero.psd"), "x");
 
+        var (window, _) = OpenAt(directory);
+
+        return (window, Until(window, () => Root(window)));
+    }
+
+    /// <summary>A tree dock over a directory, shown in a window, and the location it reads.</summary>
+    /// <remarks>
+    /// The providers the plugin brings itself are the state a run starts in; what any other test registered was
+    /// cleared before this one began.
+    /// </remarks>
+    /// <param name="directory">The directory the tree is rooted at.</param>
+    /// <returns>The window the tree is shown in, and the location it reads.</returns>
+    private static (Window Window, global::FileSystemPlugin.Browser Browser) OpenAt(string directory)
+    {
         var services = Host.Services();
         var host = services.For(new PluginId(FileSystem.Identity), 1);
 
-        // The providers the plugin brings itself, which is the state a run starts in; what any other test
-        // registered was cleared before this one began.
         global::FileSystemPlugin.HideRegistry.Declare(host);
 
         var shared = new global::FileSystemPlugin.Shared(
@@ -162,7 +358,7 @@ public sealed class TreeTests
         window.Show();
         window.Activate();
 
-        return (window, Until(window, () => Root(window)));
+        return (window, browser);
     }
 
     /// <summary>
@@ -252,7 +448,7 @@ public sealed class TreeTests
     private static T Until<T>(Window window, Func<T?> find)
         where T : class
     {
-        for (var turn = 0; turn < 200; turn++)
+        for (var turn = 0; turn < 400; turn++)
         {
             if (find() is { } found)
             {

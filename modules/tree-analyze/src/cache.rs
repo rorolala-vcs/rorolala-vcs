@@ -16,8 +16,12 @@
 //! build, is nothing rather than a failure, since the next reading makes it again.
 
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use rorolala_layout::LayoutPath;
 
@@ -178,14 +182,39 @@ impl Cache {
 
     /// Writes the cache to `path`, making the directory it sits in.
     ///
+    /// The file is written beside itself and moved over the one that is there, rather than written over it:
+    /// one work is read by several readers at once — the desktop reads it from the Overview and from every
+    /// listing of it — and a write that truncated the file first would let a reader take the moment before
+    /// its bytes for a cache written by another build. Such a reading starts from no agreements at all and
+    /// writes down the tree as it stands as what the Layout agrees with, which loses every change the
+    /// reading was about to report: what those agreements are read back from is this file, so a reader must
+    /// see the cache that was here or the one this call writes, and never a file that is part of each.
+    ///
     /// # Errors
     ///
-    /// Returns [`TreeDiffError::Io`] if the directory cannot be made or the file cannot be written.
+    /// Returns [`TreeDiffError::Io`] if the directory cannot be made, the file cannot be written, or what
+    /// was written cannot be moved into place.
     pub fn write(&self, path: &Path) -> Result<(), TreeDiffError> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(path, self.encode())?;
+
+        let staged = staging(path);
+
+        if let Err(error) = fs::write(&staged, self.encode()) {
+            let _ = fs::remove_file(&staged);
+
+            return Err(error.into());
+        }
+
+        // A move rather than a write over the file that is there: a reader opens either the old file or
+        // this one, both of them whole. The one that is there is replaced rather than left beside it, which
+        // a platform does while a reader holds it open because a read shares its deletion.
+        if let Err(error) = fs::rename(&staged, path) {
+            let _ = fs::remove_file(&staged);
+
+            return Err(error.into());
+        }
 
         Ok(())
     }
@@ -307,6 +336,31 @@ impl Cache {
     }
 }
 
+/// A path beside `path` to write and then move onto it, under a name no other write uses.
+///
+/// It is in the directory the cache is in rather than a temporary directory of its own, so that the move
+/// that publishes it is the file system's own and not a copy across devices. The name says which run wrote
+/// it, so two runs writing one cache at once never write the same staging file; what a run that stopped
+/// between writing and moving leaves behind is that file, which nothing reads as a cache.
+fn staging(path: &Path) -> PathBuf {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    let name = path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .unwrap_or("entries");
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|since| since.as_nanos())
+        .unwrap_or_default();
+
+    path.with_file_name(format!(
+        ".{name}.{}-{}-{nanos}.tmp",
+        process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
 /// Writes a number, big-endian.
 fn put_u32(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_be_bytes());
@@ -373,6 +427,70 @@ mod tests {
     /// A path, from text a test can read.
     fn path(text: &str) -> LayoutPath {
         LayoutPath::new(text).unwrap()
+    }
+
+    /// A directory of its own, emptied first so a rerun starts clean, and the cache file under it.
+    fn scratch(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-cache-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        (dir.clone(), dir.join("entries"))
+    }
+
+    /// A reader that has a cache open is not shown a file that is being written under it.
+    ///
+    /// The cache is shared: the desktop reads one work from the Overview and from every listing of it at
+    /// once, each reading on a thread of its own. A write that truncated the file first would let a reader
+    /// take the moment before the new bytes for a cache written by another build — which reads as nothing,
+    /// and the reading that took it for nothing writes the tree as it stands as what the Layout agrees
+    /// with. Every change it had to report is lost with that agreement, so what a reader already has open
+    /// has to be the file it opened, whole, whatever is written under it.
+    #[test]
+    fn a_cache_a_reader_already_has_is_not_changed_under_it() {
+        use std::io::Read as _;
+
+        let (dir, file) = scratch("open-reader");
+
+        let mut first = Cache::empty();
+        first.insert(path("kept.txt"), Entry::new(1, 2, 3, [7; 32], None));
+        first.write(&file).unwrap();
+
+        let mut open = std::fs::File::open(&file).unwrap();
+
+        let mut second = Cache::empty();
+        second.insert(path("other.txt"), Entry::new(4, 5, 6, [8; 32], None));
+        second.write(&file).unwrap();
+
+        let mut bytes = Vec::new();
+        open.read_to_end(&mut bytes).unwrap();
+
+        let read = Cache::decode(&bytes).expect("the cache a reader had open was emptied under it");
+
+        assert_eq!(read.get(&path("kept.txt")), first.get(&path("kept.txt")));
+
+        // What the path names is the cache written after it, whole.
+        assert_eq!(
+            Cache::read(&file).get(&path("other.txt")),
+            second.get(&path("other.txt"))
+        );
+
+        // Nothing is left beside the cache: a staging file is never one a reader finds.
+        let left: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .filter(|name| name != "entries")
+            .collect();
+
+        assert!(left.is_empty(), "a staging file was left behind: {left:?}");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
