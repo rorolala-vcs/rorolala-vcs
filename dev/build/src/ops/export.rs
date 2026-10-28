@@ -145,6 +145,10 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
         fs::copy_file(&workspace.root().join(file), &build.join(file))?;
     }
 
+    // Last, once everything is laid down: the label covers the whole tree rather than the files an
+    // earlier export left.
+    mark_export_integrity(&workspace)?;
+
     Ok(())
 }
 
@@ -206,6 +210,38 @@ fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
             script,
         ],
     )
+}
+
+/// Gives the export tree the integrity level that lets it run.
+///
+/// The export tree is handed to whoever runs it, so it is given the integrity level that lets it
+/// run rather than being left at whatever the tree was checked out with: a program marked low
+/// starts at low in every session it is started from, and a low process may not write to the
+/// medium-level places a run works in — a Workspace under `%LOCALAPPDATA%`, a project's cache.
+///
+/// The label is set on the tree rather than on each program so that a file added to it later is
+/// covered by inheritance, and `/C` keeps one unreadable file from leaving the rest unmarked.
+#[cfg(windows)]
+fn mark_export_integrity(workspace: &Workspace) -> Result<(), crate::Error> {
+    let build = workspace.build_dir()?.into_os_string();
+    let mut arguments = vec![build];
+
+    for word in ["/setintegritylevel", "(OI)(CI)M", "/T", "/C", "/Q"] {
+        arguments.push(OsString::from(word));
+    }
+
+    Tool::at("icacls").run(arguments)
+}
+
+/// Leaves the export as it is: an integrity level is Windows's, and no other platform asks a
+/// program what it may write to before it writes.
+///
+/// The signature is the one the Windows twin has, so the call site reads the same on both
+/// platforms.
+#[cfg(not(windows))]
+#[allow(clippy::unnecessary_wraps)]
+fn mark_export_integrity(_workspace: &Workspace) -> Result<(), crate::Error> {
+    Ok(())
 }
 
 /// Builds the GTK 4 window over the daemon into the export, on Linux.
