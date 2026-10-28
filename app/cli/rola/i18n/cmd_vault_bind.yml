@@ -15,6 +15,7 @@ vault_bind:
 
         Binding the same name again changes what it means
         The address may be a host and a port, such as `127.0.0.1:7000`, or a full link `rola://<host>[:<port>]/<sub-vault>`
+        A Vault reached over SSH is written the way an scp destination is, `user@host:path`, with the SSH port between the host and the path when one is named: `user@host:2222:/srv/vaults/alpha`
     zh-CN: |
         将名字绑定到保险库地址
 
@@ -24,6 +25,7 @@ vault_bind:
 
         重复绑定同一个名字即修改其含义
         地址可以是主机与端口，如 `127.0.0.1:7000`，也可以是完整链接 `rola://<host>[:<port>]/<sub-vault>`
+        经 SSH 抵达的保险库按 scp 目标的写法书写，即 `user@host:path`；写端口时放在主机与路径之间：`user@host:2222:/srv/vaults/alpha`
 
   cmd_vault_bind_description:
     en: Bind a name to a Vault address

@@ -14,7 +14,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rorolala_utils_configure::{Config as Staged, Configure};
-use rorolala_utils_constants::{DAEMON_DIR, DAEMON_REGISTRY_FILE, USER_DATA_DIR};
+use rorolala_utils_constants::{
+    DAEMON_DIR, DAEMON_PREFERENCE_FILE, DAEMON_REGISTRY_FILE, USER_DATA_DIR,
+};
 use rorolala_utils_location::data_home;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +33,20 @@ pub fn registry_path() -> Option<PathBuf> {
             .join(USER_DATA_DIR)
             .join(DAEMON_DIR)
             .join(DAEMON_REGISTRY_FILE),
+    )
+}
+
+/// Where this machine's preferences are kept, if this machine names a place.
+///
+/// They sit beside the table of namespaces — the same directory, because both are the machine's —
+/// and are read by the daemon only where they decide something: what a session may be served.
+#[must_use]
+pub fn preference_path() -> Option<PathBuf> {
+    Some(
+        data_home()?
+            .join(USER_DATA_DIR)
+            .join(DAEMON_DIR)
+            .join(DAEMON_PREFERENCE_FILE),
     )
 }
 

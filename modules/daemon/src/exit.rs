@@ -18,6 +18,22 @@ pub const REGISTRY_UNREADABLE: u8 = 2;
 /// The port could not be bound.
 pub const PORT_TAKEN: u8 = 3;
 
+/// The path a session was given holds no Vault.
+pub const NO_VAULT: u8 = 4;
+
+/// The session was established and then failed.
+///
+/// What it is for a caller is a diagnosis rather than a branch: the reason is on the standard
+/// error the far side of a session forwards, and the code only says that the failure was the
+/// session's rather than the machine's.
+pub const SESSION_FAILED: u8 = 5;
+
+/// The machine's preferences refuse SSH sessions, and the one asked for is one.
+pub const SSH_DISABLED: u8 = 6;
+
+/// The machine's preferences could not be read.
+pub const PREFERENCE_UNREADABLE: u8 = 7;
+
 /// Structure information for when the daemon exits
 #[lazyffi(export = RolaDaemonExit)]
 #[derive(Default)]

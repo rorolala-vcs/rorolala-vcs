@@ -229,6 +229,14 @@ pub const DAEMON_DIR: &str = "daemon";
 #[lazyffi(export = ROLA_DAEMON_REGISTRY_FILE)]
 pub const DAEMON_REGISTRY_FILE: &str = "registry.toml";
 
+/// The file, under [`DAEMON_DIR`], saying what this machine allows its daemon to do.
+///
+/// It is the machine's rather than any one Vault's, and it sits beside the table of namespaces
+/// for the same reason: both are about the daemon that runs here rather than about a Vault it
+/// happens to serve.
+#[lazyffi(export = ROLA_DAEMON_PREFERENCE_FILE)]
+pub const DAEMON_PREFERENCE_FILE: &str = "preference.toml";
+
 /// The file, under [`USER_DATA_DIR`], naming the account the work acts as
 pub const USER_ACCOUNT_FILE: &str = "user";
 

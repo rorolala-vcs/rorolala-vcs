@@ -12,11 +12,10 @@ use rorolala_protocol::{Action, ActionContext, OnlyWorkspace, Socket, VaultAddre
 use rorolala_utils_configure::Configure as _;
 use rorolala_utils_progress::Progress;
 use rorolala_workspace::Config as WorkspaceConfig;
-use tokio::net::TcpStream;
 
 // `Account`, `ActionError` and `Workspace` are named by the entry points generated below,
 // which bring them into scope; what `proc_action` needs of its own is here.
-use rorolala_auth::SecureStream;
+use rorolala_auth::{PublicKey, SecureStream, SigningKey};
 
 // A generated entry point names the action's own output type, and one action answers with an index
 // object rather than with a string: it is brought into scope here for the same reason the three
@@ -25,14 +24,15 @@ use rorolala_vcs::VCSIndexObject;
 
 use crate::wire;
 
-/// Runs the action `A` on `input`, taken from `workspace`, as `account`, against the daemon at
-/// `target`.
+/// Runs the action `A` on `input`, taken from `workspace`, as `account`, against what `target`
+/// names.
 ///
 /// The input is what the caller asked for, so it belongs to the Workspace side and is
 /// wrapped as the [`OnlyWorkspace`] the action takes; `workspace` is the copy the work is
 /// being taken from, handed on so that an action can reach it; the account is the one the
 /// caller named, so the action runs as that identity rather than as whatever was found first;
-/// and `target` is the daemon to reach, as a host and a port a Vault answers at.
+/// and `target` is where the Vault is — a daemon a host and a port reach, or a session an
+/// `ssh` carries — written as [`VaultAddress::parse`] reads it.
 ///
 /// The session is established before the action runs. The account's private key proves
 /// which identity the action runs as, and a public key beside it — if there is one — is
@@ -67,58 +67,126 @@ where
     let identity = account.get_key()?;
     let expected = account.peer_key()?;
 
-    // Prove who the action runs as, and hold the peer to an identity where the account
-    // says which one that must be.
-    let authority = address.authority();
-    let stream = TcpStream::connect(authority.as_str()).await?;
+    // What reaches the address is the transport's to know: a daemon is a connection to make and
+    // a Vault behind SSH is a program to start. What comes back is the stream either of them
+    // leaves behind, and — for a program — the watch that says what it ended with.
+    let crate::transport::Dialed { socket, exit } = crate::transport::dial(&address)
+        .await
+        .map_err(|error| ActionError::Transport(error.to_string()))?;
 
-    // A request and its answer are small and alternate, and a sealed record is written as its own
-    // buffer: left to Nagle, the second record of an exchange waits for the first to be acknowledged,
-    // which is a round trip a small action spends on nothing. The whole session is that shape, so the
-    // delay is turned off for the whole of it.
-    stream.set_nodelay(true)?;
-
-    let socket: Box<dyn Socket> = Box::new(stream);
-    let mut channel = match &expected {
-        Some(expected) => SecureStream::connect(socket, &identity, expected).await?,
-        None => SecureStream::connect_unpinned(socket, &identity).await?,
+    let session = Session::<A> {
+        workspace,
+        account,
+        address: &address,
+        identity: &identity,
+        expected: &expected,
+        socket,
+        input,
+        progress,
     };
 
-    // Name the action, the account we act as, and the Vault under the daemon we are reaching
-    // for, and wait for the peer to say it read the same request. An id the peer does not
-    // answer for never starts an action. The sub-vault is written as it was parsed rather than
-    // as it was typed, so `rola://host:port/` and `rola://host:port` reach the same Vault.
-    wire::write_request(
-        &mut channel,
-        &wire::Request {
-            id: A::ID,
-            account: account.name(),
-            sub: address.sub().to_string(),
-        },
-    )
-    .await?;
-
-    if wire::read_confirmation(&mut channel).await? != wire::confirmation(A::ID) {
-        return Err(ActionError::UnknownAction(A::ID));
+    match session.run().await {
+        Ok(output) => Ok(output),
+        // Why a session ended is not always in what the exchange saw: the far side closing its
+        // stream is all this side can see, so the program that carried it is asked what it ended
+        // with, and what it says is what a caller is told.
+        Err(error) => Err(crate::transport::explain(error, exit.as_ref()).await),
     }
+}
 
-    let input = OnlyWorkspace::from(Some(input));
-    let mut ctx = ActionContext::new_workspace_ctx(account.clone())
-        .with_current_workspace(workspace)
-        .with_channel(channel)
-        .with_progress(progress);
+/// One action's session, from the stream it runs over to the value it produces.
+///
+/// It is a value rather than a list of arguments because a session is what these are: the work
+/// the action is taken from, the identity it acts as, where the connection goes, and the stream
+/// it goes over. Nothing in it outlives the session, so it is made, run, and gone.
+struct Session<'a, A>
+where
+    A: Action,
+{
+    /// The copy of the work the action is taken from.
+    workspace: &'a Workspace,
+    /// The identity the action runs as.
+    account: &'a Account,
+    /// Where the session goes, which is what it names the Vault as.
+    address: &'a VaultAddress,
+    /// The key that proves the identity, already read.
+    identity: &'a SigningKey,
+    /// The key the peer must prove, where the account names one.
+    expected: &'a Option<PublicKey>,
+    /// The stream the exchange runs over.
+    socket: Box<dyn Socket>,
+    /// What the caller asked for.
+    input: A::Input,
+    /// What the action says about itself while it runs.
+    progress: Progress,
+}
 
-    // What the Workspace works from is read here rather than handed in: the copy the work is
-    // being taken from is the one that says it. A Workspace whose configuration will not read
-    // hands the action nothing instead of stopping it, since an action that needs a
-    // configuration reads it for itself and says so.
-    let workspace_config = WorkspaceConfig::read_from(&workspace.config_path()).ok();
+impl<A> Session<'_, A>
+where
+    A: Action,
+{
+    /// Runs the session: proves both ends, names the action, and leaves the action to run.
+    ///
+    /// The account's private key proves which identity the action runs as, and a public key
+    /// beside it — if there is one — is the identity the peer must prove in turn. An account
+    /// without one accepts the peer as whoever it proves itself to be, which is what lets a
+    /// Workspace that knows only its own key still be challenged by a Vault.
+    async fn run(self) -> Result<A::Output, ActionError> {
+        let Self {
+            workspace,
+            account,
+            address,
+            identity,
+            expected,
+            socket,
+            input,
+            progress,
+        } = self;
 
-    if let Some(workspace_config) = &workspace_config {
-        ctx = ctx.with_current_workspace_config(workspace_config);
+        // Prove who the action runs as, and hold the peer to an identity where the account says
+        // which one that must be.
+        let mut channel = match expected {
+            Some(expected) => SecureStream::connect(socket, identity, expected).await?,
+            None => SecureStream::connect_unpinned(socket, identity).await?,
+        };
+
+        // Name the action, the account we act as, and the Vault under the daemon we are reaching
+        // for, and wait for the peer to say it read the same request. An id the peer does not
+        // answer for never starts an action. The sub-vault is written as it was parsed rather than
+        // as it was typed, so `rola://host:port/` and `rola://host:port` reach the same Vault,
+        // and an SSH session names no sub-vault at all.
+        wire::write_request(
+            &mut channel,
+            &wire::Request {
+                id: A::ID,
+                account: account.name(),
+                sub: address.sub().to_string(),
+            },
+        )
+        .await?;
+
+        if wire::read_confirmation(&mut channel).await? != wire::confirmation(A::ID) {
+            return Err(ActionError::UnknownAction(A::ID));
+        }
+
+        let input = OnlyWorkspace::from(Some(input));
+        let mut ctx = ActionContext::new_workspace_ctx(account.clone())
+            .with_current_workspace(workspace)
+            .with_channel(channel)
+            .with_progress(progress);
+
+        // What the Workspace works from is read here rather than handed in: the copy the work is
+        // being taken from is the one that says it. A Workspace whose configuration will not read
+        // hands the action nothing instead of stopping it, since an action that needs a
+        // configuration reads it for itself and says so.
+        let workspace_config = WorkspaceConfig::read_from(&workspace.config_path()).ok();
+
+        if let Some(workspace_config) = &workspace_config {
+            ctx = ctx.with_current_workspace_config(workspace_config);
+        }
+
+        A::process(input, ctx).await
     }
-
-    A::process(input, ctx).await
 }
 
 // The entry points for every action under `src/actions`, and the registry they are

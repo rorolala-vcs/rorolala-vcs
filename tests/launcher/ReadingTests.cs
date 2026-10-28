@@ -29,6 +29,14 @@ public sealed class ReadingTests
     [InlineData("rola://host/ns/sub")]
     [InlineData("host/ns/sub")]
     [InlineData("host:7717/ns")]
+    // A Vault behind SSH is written the way an scp destination is, with the SSH port between the host
+    // and the path when one is named.
+    [InlineData("alice@host:/srv/vaults/alpha")]
+    [InlineData("alice@host:2222:/srv/vaults/alpha")]
+    [InlineData("alice@host:project/alpha")]
+    [InlineData("alice@[::1]:2222:/srv/vaults/alpha")]
+    [InlineData("alice@[::1]:/srv/vaults/alpha")]
+    [InlineData("alice@host:/srv/a vault path")]
     public void AnAddressIsReadAsOne(string written) => Assert.True(VaultAddressSyntax.Valid(written));
 
     /// <summary>And what does not name a daemon is not one.</summary>
@@ -43,6 +51,20 @@ public sealed class ReadingTests
     [InlineData("rola://")]
     [InlineData("[::1]")]
     [InlineData("host name")]
+    // A session names an account, a host and a path, and what would leave any of the three unclear is
+    // not one: this is the same list the command line is held to.
+    [InlineData("@host:/srv/alpha")]
+    [InlineData("alice@:/srv/alpha")]
+    [InlineData("alice@host:")]
+    [InlineData("alice@host:0:/srv/alpha")]
+    [InlineData("alice@host:70000:/srv/alpha")]
+    [InlineData("alice@host:2222:")]
+    [InlineData("alice@host:a:b:/srv/alpha")]
+    [InlineData("alice@host:/srv/alpha:beta")]
+    [InlineData("alice@host:-oProxyCommand=evil")]
+    [InlineData("ali ce@host:/srv/alpha")]
+    [InlineData("alice@not a host:/srv/alpha")]
+    [InlineData("rola://alice@host:/srv/alpha")]
     public void AnotherThingIsNotAnAddress(string written) =>
         Assert.False(VaultAddressSyntax.Valid(written));
 

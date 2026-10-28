@@ -141,3 +141,15 @@ error:
         Please check that the keys can be read, and that the daemon already counts the account's public key as a member
       zh-CN: |
         请确认密钥可读，且守护进程已把该账户的公钥认作成员
+
+    err_transport:
+      en: The Vault could not be reached — %{reason}
+      zh-CN: 无法抵达该保险库 —— %{reason}
+
+    err_transport_help:
+      en: |
+        For a Vault reached over SSH: check that `ssh` is installed here, that the host is one
+        `ssh` itself can reach, and that `rola-daemon` is installed there
+      zh-CN: |
+        若该保险库经 SSH 抵达：请确认本机已安装 `ssh`、该主机是 `ssh` 自身能连上的，
+        且对端已安装 `rola-daemon`

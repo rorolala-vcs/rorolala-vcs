@@ -20,11 +20,24 @@ rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
 
 
-tokio = { workspace = true, features = ["io-util"] }
+tokio = { workspace = true, features = [
+    "io-util",
+    # A session is a program started here and its standard streams: `process` is the program,
+    # `io-std` is the streams the far-side daemon serves over, and `time` is the bound on how long
+    # a failing session is waited for.
+    "io-std",
+    "process",
+    "time",
+] }
 blake3.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
+
+# The one signal this crate touches: a session is a pipe, and a pipe whose reader has gone
+# raises `SIGPIPE`, which is fatal here for the sake of every other pipe a run writes to.
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
 
 [build-dependencies]
 syn.workspace = true
@@ -32,3 +45,5 @@ just_template.workspace = true
 
 [dev-dependencies]
 ed25519-dalek = { workspace = true, features = ["pem", "pkcs8"] }
+# The preference file's own tests read it as it is written, which is TOML.
+toml.workspace = true

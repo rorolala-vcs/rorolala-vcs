@@ -11,6 +11,7 @@ bind:
             --no-set-layout           Do not set a Layout automatically when there is none
 
         Bind the Vault link to the Workspace
+        A Vault reached over SSH is written the way an scp destination is, `user@host:path`, with the SSH port between the host and the path when one is named
         By default, automatically set the default Vault for the current Workspace, and create and set a base Layout connected to it
     zh-CN: |
         快捷绑定保险库链接
@@ -21,6 +22,7 @@ bind:
             --no-set-layout           不在无布局时自动设置布局
 
         将保险库链接绑定至工作区
+        经 SSH 抵达的保险库按 scp 目标的写法书写，即 `user@host:path`；写端口时放在主机与路径之间
         默认情况下，会自动为当前工作区设置默认保险库，并创建和设置一个基础布局与之连接
 
   description:

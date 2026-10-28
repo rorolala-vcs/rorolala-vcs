@@ -28,7 +28,57 @@ What a rule set that cannot be read costs is a word on standard error and no rul
 rather than failing a reading that has an answer: the reading is the thing being answered, and the
 rules are a refinement of it.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Hide what a Workspace's ignore rules govern in the browser
+### 2. [`app`] [`rola`] Speak every action to a Vault behind SSH, one ssh per action
+
+Every command that speaks to a Vault now reaches one written as an scp destination. The client
+was already one place — `proc_action` — so what changed is what happens there: instead of a
+connection to a host and a port, the address is dialled, and a session becomes a process.
+
+```text
+ssh -T -o BatchMode=yes [-p PORT] -l USER -- HOST "rola-daemon serve 'PATH'"
+```
+
+The path is quoted the way a POSIX shell reads one back as the single word it was, which is what
+makes a Vault in a directory whose name carries a space or a quote reachable at all. The account
+travels as an option's value rather than as part of `user@host`, so nothing parses it twice, and
+`--` is what keeps a host that starts with a hyphen where a destination is expected.
+
+`BatchMode=yes` is fixed rather than chosen. The caller's standard input is the protocol, so a
+password or a passphrase can never be typed into it: a session needs a host key already known and
+an agent or a key without a passphrase, and a window that has no terminal at all fails at once
+instead of waiting for what can never be typed. What `ssh` says about a refused key or an unknown
+host goes where the command's own errors go, the standard error, and is not intercepted.
+
+What the program ends with is part of the answer, so it is watched from the moment it starts
+rather than from the moment its output ends: a session that failed before its first write — an
+`ssh` that could not reach the host — is exactly the case with no output to read. A leg that cannot
+be reached is a failure of its own, reported as `ActionError::Transport` and exit 152, and it says
+which leg: no `ssh` on this machine, no `rola-daemon` on that one, a daemon too old to know
+`serve`, a path that is not a Vault, a machine that refuses sessions, preferences that will not
+read, or an output that carried something the protocol is not.
+
+While a session lives, `SIGPIPE` is set aside: this program asks the kernel to make it fatal so
+that `rola | head` dies the way a filter is expected to, and a program that ends before it reads is
+the one thing that would then take the run down with no word about why.
+
+One action is one session, and one `rola sync` is several actions, so a run may pay several
+handshakes. That is not hidden: `ssh`'s own `ControlMaster` is what turns them into one
+connection, and a machine that pays it per action is a machine that has not configured it.
+
+### 3. [`app`] [`ROLALauncher`] Read the scp spelling of a Vault address in the window that creates a Workspace
+
+The address a window is being edited with is read by the launcher before the command line is run,
+which is a second reading of the same grammar: what the window accepts has to be what the command
+accepts, or a window takes an address the command then refuses. It now knows the scp spelling too —
+`user@host:path`, with the SSH port between the host and the path when one is named — and refuses
+what the command refuses: no account, no host, no path, a port no session is made to, two colons
+after the host, a path the far side would read as a flag.
+
+What a failed check says is unchanged and is what a person needs for this one: the command line's
+standard error, which carries what `ssh` said about the host key, the key, or the name that would
+not resolve.
+
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Hide what a Workspace's ignore rules govern in the browser
 
 The Rorolala plugin now contributes a hide rule to the File System plugin's catalogue, offered as
 `rola_ignored` and labelled with the plugin's own key. A directory under the root being read is
@@ -42,7 +92,7 @@ Layout records it, where the reading `rola status` makes keeps a recorded path o
 jurisdiction. That is the one place the browser and the reading can disagree, and it is the cost of
 answering about a row without walking the tree the reading walks.
 
-### 3. [`modules`] Manage ignore rules in one directory, and let a Vault hand rules down
+### 5. [`modules`] Manage ignore rules in one directory, and let a Vault hand rules down
 
 Rorolala now reads its ignore rules from one managed directory — `.rola/info/ignore/` in a
 Workspace, `./info/ignore/` in a Vault — instead of from the tree, and a fetch brings a Vault's
@@ -69,6 +119,58 @@ carries the same answer. `modules/daemon` gains the `fetch-ignore-rules` action 
 hands a Vault's whole rule directory over and replaces the Workspace's copy of it as one swap
 — a rule the Vault deleted is gone from here after the next fetch, without either side keeping a
 list of what used to be.
+
+### 6. [`modules`] Reach a Vault over an SSH session, with no port bound at either end
+
+A Vault can now be served to a caller that arrives through `ssh`, which binds no port and needs
+nothing of the network beyond the `ssh` program the caller already has. The far side runs
+`rola-daemon serve <PATH>`: one connection is carried by that process's own standard input and
+output, and the process ends when the connection does. The table of namespaces is not read in that
+mode — the path on the command line is the Vault, taken exactly as written — so a machine with
+nothing registered can still serve one.
+
+An address says which of the two ways to reach a Vault it means. The SSH spelling is scp's, with
+the SSH port between the host and the path when one is named, and no port when one is not:
+
+```text
+user@host:path
+user@host:port:path
+```
+
+Nothing that was written before is read differently: an account is what tells the two apart, and
+no daemon address ever carried one. `VaultAddress` gained `link()`, which answers the daemon or
+the session the address names, and lost `port()`, `authority()` and the `set_*` methods, which
+described the daemon way of reaching one and not the other.
+
+`modules/daemon` reads `rola/daemon/preference.toml` beside the namespace table — two switches,
+both defaulting to the shape the feature was designed for:
+
+```toml
+[security]
+ssh-connection = true
+auto-register-by-ssh = false
+```
+
+`ssh-connection` refuses a session before any Vault is looked at. `auto-register-by-ssh` lets a
+connection write the key it proved into the Vault's own keys when the name it uses has none there,
+which turns the first connection of somebody the Vault has never seen into a member with no hand
+placement of a key. It never writes over a key that is already there, never registers a name in
+`[auth] admins` — an administrator may move any file in the Vault — and never registers anything
+where the Vault's `key_discovery` does not name its own keys. Turning it on changes what revoking
+a member means: a deleted key is written back by the next connection, so revoking is turning the
+switch off or closing the SSH access.
+
+The mode has two contracts that a caller depends on. The standard output carries the protocol and
+nothing else, so a login script that prints breaks the session; everything the daemon has to say,
+including the audit line of a registration, goes to the standard error, which `ssh` forwards to
+the caller. And the exit code is the daemon's own — 4 for a path that is not a Vault, 5 for a failed
+session, 6 for a machine that refuses sessions, 7 for preferences that will not read — because that
+number is all the other end has to tell one failure from another.
+
+Both switches are policy rather than a security boundary: nothing in a process can prove it was
+started by `sshd`. What actually decides what a session may do is who may run `rola-daemon` as
+that user, which is why pinning the far side's `authorized_keys` entry to `command=` is what the
+switches are for.
 
 # 0.1.1 (2026-10-28)
 

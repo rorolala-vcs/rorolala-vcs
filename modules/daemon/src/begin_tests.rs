@@ -15,19 +15,22 @@ mod tests {
     use rorolala_auth::{
         Account, KeyAlgorithm, KeyLocateRule, PublicKey, SecureStream, SigningKey, find_account,
     };
-    use rorolala_utils_location::Locate;
     use rorolala_protocol::{
         Action as _, ActionContext, ActionError, Channel, OnlyWorkspace, Socket,
     };
+    use rorolala_utils_location::Locate;
     use rorolala_utils_progress::Progress;
     use rorolala_vault::{KEYS_DIR, RootVault, VAULTS_DIR, Vault};
     use rorolala_workspace::Workspace;
     use tokio::io::{AsyncWriteExt as _, DuplexStream, duplex};
     use tokio::net::TcpListener;
 
-    use super::{Host, SessionError, identity_in, member_scopes, serve, split_namespace};
+    use super::{
+        Host, Registry, Resolution, Served, SessionError, identity_in, member_scopes, serve,
+        split_namespace,
+    };
     use crate::{
-        ActionHandshake, Namespaces, build_action_registry, proc_action,
+        ActionHandshake, Namespaces, Preference, build_action_registry, proc_action,
         wire::{self, Request},
     };
 
@@ -77,21 +80,25 @@ mod tests {
         }
     }
 
-    /// A Vault named `name`, admitting members from its own keys alone.
-    fn vault_named(dir: &Path, name: &str) {
+    /// A Vault named `name`, saying `sections` about itself beside that.
+    fn vault_with(dir: &Path, name: &str, sections: &str) {
         Vault::create(dir).unwrap();
         fs::write(
             dir.join(rorolala_vault::CONFIG_PATH),
             format!(
-                "[vault_config]\nvault_name = \"{name}\"\nvault_description = \"A test Vault\"\n\n\
-                 [daemon_config]\nkey_discovery = [\"vault\"]\n"
+                "[vault_config]\nvault_name = \"{name}\"\nvault_description = \"A test Vault\"\n\n{sections}"
             ),
         )
         .unwrap();
     }
 
+    /// A Vault named `name`, admitting members from its own keys alone.
+    fn vault_named(dir: &Path, name: &str) {
+        vault_with(dir, name, "[daemon_config]\nkey_discovery = [\"vault\"]\n");
+    }
+
     /// The table naming each of `entries` under the namespace beside it.
-    fn registry(dir: &Path, entries: &[(&str, &Path)]) -> PathBuf {
+    fn registry(dir: &Path, entries: &[(&str, &Path)]) -> Arc<Registry> {
         let file = dir.join("registry.toml");
         let mut namespaces = Namespaces::default();
 
@@ -100,17 +107,37 @@ mod tests {
         }
 
         namespaces.write_to(&file).unwrap();
-        file
+
+        Arc::new(Registry {
+            path: file,
+            served: StdMutex::new(HashMap::new()),
+        })
     }
 
-    /// A daemon serving `registry`, proving `identity`.
-    fn host(registry: PathBuf, identity: SigningKey) -> Host {
+    /// A daemon proving `identity`, with nothing narrowed.
+    fn host(identity: SigningKey) -> Host {
         Host {
             signing: identity,
-            registry,
             max_concurrency: None,
             actions: build_action_registry(),
-            served: StdMutex::new(HashMap::new()),
+        }
+    }
+
+    /// This machine's preferences, with a registration allowed or not.
+    fn preference(auto_register: bool) -> Preference {
+        let mut preference = Preference::default();
+        preference
+            .security_mut()
+            .set_auto_register_by_ssh(auto_register);
+
+        preference
+    }
+
+    /// A connection served for one Vault, which is what a session is.
+    fn session(served: Served, preference: Preference) -> Resolution {
+        Resolution::Session {
+            served: Arc::new(served),
+            preference: Arc::new(preference),
         }
     }
 
@@ -135,6 +162,21 @@ mod tests {
         .unwrap();
     }
 
+    /// The greeting `ActionHandshake` produces, once its confirmation has been read.
+    ///
+    /// It takes the channel because the action is carried over it and not over anything else: a
+    /// session that reached the confirmation is one whose channel is the action's from there on.
+    async fn handshake_after(mut channel: Channel) -> String {
+        let confirmation = wire::read_confirmation(&mut channel).await.unwrap();
+        assert_eq!(confirmation, wire::confirmation(ActionHandshake::ID));
+
+        let ctx = ActionContext::new_workspace_ctx(Account::default()).with_channel(channel);
+
+        ActionHandshake::process(OnlyWorkspace::from(Some("world".to_string())), ctx)
+            .await
+            .unwrap()
+    }
+
     #[test]
     fn a_namespace_is_the_first_segment_and_the_rest_is_a_vault_below_it() {
         assert_eq!(split_namespace(""), ("", ""));
@@ -143,7 +185,10 @@ mod tests {
         assert_eq!(split_namespace("alpha/"), ("alpha", ""));
         assert_eq!(split_namespace("/alpha"), ("alpha", ""));
         assert_eq!(split_namespace("alpha/beta"), ("alpha", "beta"));
-        assert_eq!(split_namespace("alpha/vaults/beta/"), ("alpha", "vaults/beta"));
+        assert_eq!(
+            split_namespace("alpha/vaults/beta/"),
+            ("alpha", "vaults/beta")
+        );
     }
 
     #[test]
@@ -208,22 +253,18 @@ mod tests {
         let server = signing(1);
 
         let (client_io, server_io) = duplex(64 * 1024);
-        let serving = tokio::spawn(serve(server_io, Arc::new(host(registry, signing(1)))));
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(1))),
+            Resolution::Namespaces(registry),
+        ));
 
         let mut channel = connect(client_io, &signing(2), &server.public_key()).await;
         request_sub(&mut channel, ActionHandshake::ID, "client", "own").await;
-        let confirmation = wire::read_confirmation(&mut channel).await.unwrap();
-        assert_eq!(confirmation, wire::confirmation(ActionHandshake::ID));
 
-        // The input is a value only the Workspace holds, so it is where the action
-        // starts; both sides end up holding what comes back.
-        let ctx = ActionContext::new_workspace_ctx(Account::default()).with_channel(channel);
-
-        let output = ActionHandshake::process(OnlyWorkspace::from(Some("world".to_string())), ctx)
-            .await
-            .unwrap();
-
-        // What it says about itself is what the Vault the namespace named says.
+        // The input is a value only the Workspace holds, so it is where the action starts; both
+        // sides end up holding what comes back.
+        let output = handshake_after(channel).await;
         assert_eq!(output, "Hello, world, I'm Own Vault.\n\nA test Vault");
         serving.await.unwrap().unwrap();
     }
@@ -236,7 +277,11 @@ mod tests {
         let registry = registry(&scratch("unknown-registry"), &[("own", &vault)]);
 
         let (client_io, server_io) = duplex(64 * 1024);
-        let serving = tokio::spawn(serve(server_io, Arc::new(host(registry, signing(3)))));
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(3))),
+            Resolution::Namespaces(registry),
+        ));
 
         let mut channel = connect(client_io, &signing(4), &signing(3).public_key()).await;
         request_sub(&mut channel, ActionHandshake::ID, "nobody", "own").await;
@@ -255,10 +300,15 @@ mod tests {
         let vault = dir.join("own");
         vault_named(&vault, "Own Vault");
         let registry = registry(&scratch("unknown-vault-registry"), &[("own", &vault)]);
+        let daemon = host(signing(31));
 
         for sub in ["", "nowhere"] {
             let (client_io, server_io) = duplex(64 * 1024);
-            let serving = tokio::spawn(serve(server_io, Arc::new(host(registry.clone(), signing(31)))));
+            let serving = tokio::spawn(serve(
+                server_io,
+                Arc::new(host(signing(31))),
+                Resolution::Namespaces(Arc::clone(&registry)),
+            ));
 
             let mut channel = connect(client_io, &signing(32), &signing(31).public_key()).await;
             request_sub(&mut channel, ActionHandshake::ID, "client", sub).await;
@@ -267,6 +317,9 @@ mod tests {
             assert!(matches!(error, SessionError::UnknownVault(name) if name == sub));
             assert!(wire::read_confirmation(&mut channel).await.is_err());
         }
+
+        // The table is still the one it was read from, and what it holds is unchanged.
+        assert!(registry.serve_for(&daemon, "own").await.is_some());
     }
 
     #[tokio::test]
@@ -281,23 +334,20 @@ mod tests {
         publish(&alpha.join(KEYS_DIR), "client", &client);
 
         let registry = registry(&scratch("served-registry"), &[("root", &root)]);
-        let host = host(registry, signing(33));
 
         let (client_io, server_io) = duplex(64 * 1024);
-        let serving = tokio::spawn(serve(server_io, Arc::new(host)));
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(33))),
+            Resolution::Namespaces(registry),
+        ));
 
         let mut channel = connect(client_io, &signing(34), &signing(33).public_key()).await;
         request_sub(&mut channel, ActionHandshake::ID, "client", "root/alpha").await;
-        let confirmation = wire::read_confirmation(&mut channel).await.unwrap();
-        assert_eq!(confirmation, wire::confirmation(ActionHandshake::ID));
-
-        let ctx = ActionContext::new_workspace_ctx(Account::default()).with_channel(channel);
-        let output = ActionHandshake::process(OnlyWorkspace::from(Some("world".to_string())), ctx)
-            .await
-            .unwrap();
 
         // The greeting is named after the Vault the request reached, which is the one under the
         // namespace rather than the one the namespace names.
+        let output = handshake_after(channel).await;
         assert_eq!(output, "Hello, world, I'm Alpha.\n\nA test Vault");
         serving.await.unwrap().unwrap();
     }
@@ -310,13 +360,18 @@ mod tests {
         vault_named(&alpha, "Alpha");
 
         let registry = registry(&scratch("named-registry"), &[("ns", &root)]);
-        let host = host(registry, signing(35));
+        let daemon = host(signing(35));
 
         // Nothing, `.`, and the path the namespace names all name the Vault the namespace
         // registered itself.
         for own in ["ns", "ns/.", "ns/"] {
             assert_eq!(
-                host.serve_for(own).await.unwrap().vault.get_root(),
+                registry
+                    .serve_for(&daemon, own)
+                    .await
+                    .unwrap()
+                    .vault
+                    .get_root(),
                 root.as_path()
             );
         }
@@ -330,14 +385,19 @@ mod tests {
             "ns//vaults/alpha",
         ] {
             assert_eq!(
-                host.serve_for(named).await.unwrap().vault.get_root(),
+                registry
+                    .serve_for(&daemon, named)
+                    .await
+                    .unwrap()
+                    .vault
+                    .get_root(),
                 alpha.as_path(),
                 "{named}"
             );
         }
 
         // A name the root holds nothing under names no Vault.
-        assert!(host.serve_for("ns/nowhere").await.is_none());
+        assert!(registry.serve_for(&daemon, "ns/nowhere").await.is_none());
     }
 
     #[tokio::test]
@@ -346,12 +406,20 @@ mod tests {
         let vault = dir.join("own");
         vault_named(&vault, "Own Vault");
         // The Vault knows "client" as one key, but the peer proves another.
-        publish(&vault.join(KEYS_DIR), "client", &Ed25519SigningKey::from_bytes(&[6; 32]));
+        publish(
+            &vault.join(KEYS_DIR),
+            "client",
+            &Ed25519SigningKey::from_bytes(&[6; 32]),
+        );
 
         let registry = registry(&scratch("mismatch-registry"), &[("own", &vault)]);
 
         let (client_io, server_io) = duplex(64 * 1024);
-        let serving = tokio::spawn(serve(server_io, Arc::new(host(registry, signing(5)))));
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(5))),
+            Resolution::Namespaces(registry),
+        ));
 
         let mut channel = connect(client_io, &signing(7), &signing(5).public_key()).await;
         request_sub(&mut channel, ActionHandshake::ID, "client", "own").await;
@@ -373,7 +441,11 @@ mod tests {
         let registry = registry(&scratch("named-path-registry"), &[("own", &vault)]);
 
         let (client_io, server_io) = duplex(64 * 1024);
-        let serving = tokio::spawn(serve(server_io, Arc::new(host(registry, signing(9)))));
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(9))),
+            Resolution::Namespaces(registry),
+        ));
 
         let mut channel = connect(client_io, &signing(10), &signing(9).public_key()).await;
         request_sub(&mut channel, ActionHandshake::ID, "../client", "own").await;
@@ -397,12 +469,12 @@ mod tests {
         enroll(&workspace, "client", &client);
 
         let registry = registry(&scratch("tcp-registry"), &[("own", &vault)]);
-        let host = Arc::new(host(registry, signing(11)));
+        let host = Arc::new(host(signing(11)));
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let serving = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
-            serve(stream, host).await
+            serve(stream, host, Resolution::Namespaces(registry)).await
         });
 
         // The account is found the way a client finds one: by name, in its own keys.
@@ -423,6 +495,262 @@ mod tests {
         serving.await.unwrap().unwrap();
     }
 
+    #[tokio::test]
+    async fn a_session_serves_the_vault_it_was_started_for() {
+        let dir = scratch("session");
+        let vault = dir.join("own");
+        vault_named(&vault, "Own Vault");
+        let client = Ed25519SigningKey::from_bytes(&[40; 32]);
+        publish(&vault.join(KEYS_DIR), "client", &client);
+
+        let served = Served::from_path(&vault, None).unwrap();
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(41))),
+            session(served, preference(false)),
+        ));
+
+        // A session's request names no Vault: the path it was started with already did.
+        let mut channel = connect(client_io, &signing(40), &signing(41).public_key()).await;
+        request_sub(&mut channel, ActionHandshake::ID, "client", "").await;
+
+        let output = handshake_after(channel).await;
+        assert_eq!(output, "Hello, world, I'm Own Vault.\n\nA test Vault");
+        serving.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_session_answers_only_for_the_vault_it_was_started_for() {
+        let dir = scratch("session-other");
+        let vault = dir.join("own");
+        vault_named(&vault, "Own Vault");
+        let served = Served::from_path(&vault, None).unwrap();
+
+        for sub in ["other", "own", "vaults/alpha"] {
+            let (client_io, server_io) = duplex(64 * 1024);
+            let serving = tokio::spawn(serve(
+                server_io,
+                Arc::new(host(signing(44))),
+                session(Served::from_path(&vault, None).unwrap(), preference(false)),
+            ));
+
+            let mut channel = connect(client_io, &signing(45), &signing(44).public_key()).await;
+            request_sub(&mut channel, ActionHandshake::ID, "client", sub).await;
+
+            let error = serving.await.unwrap().unwrap_err();
+            assert!(matches!(error, SessionError::UnknownVault(name) if name == sub));
+        }
+
+        // What was resolved is still the Vault the path named.
+        assert_eq!(served.vault.get_root(), vault.as_path());
+    }
+
+    #[test]
+    fn only_a_vaults_own_root_is_what_a_session_serves() {
+        let dir = scratch("from-path");
+        let vault = dir.join("own");
+        vault_named(&vault, "Own Vault");
+        fs::create_dir_all(vault.join("nested")).unwrap();
+
+        // What is served is the Vault the path names, and a directory that merely lies inside one
+        // is not that: a session's path is exact rather than searched upward for.
+        assert!(Served::from_path(&vault, None).is_some());
+        assert!(Served::from_path(&vault.join("nested"), None).is_none());
+        assert!(Served::from_path(&scratch("not-a-vault"), None).is_none());
+    }
+
+    #[tokio::test]
+    async fn a_session_registers_a_name_it_was_allowed_to_register() {
+        let dir = scratch("register");
+        let vault = dir.join("own");
+        vault_named(&vault, "Own Vault");
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(43))),
+            session(
+                Served::from_path(&vault, None).unwrap(),
+                preference(true),
+            ),
+        ));
+
+        let mut channel = connect(client_io, &signing(42), &signing(43).public_key()).await;
+        request_sub(&mut channel, ActionHandshake::ID, "client", "").await;
+
+        // The name is registered before the confirmation is written, so a session that is told it
+        // may go ahead is one whose registration is already on disk.
+        let output = handshake_after(channel).await;
+        assert_eq!(output, "Hello, world, I'm Own Vault.\n\nA test Vault");
+        serving.await.unwrap().unwrap();
+
+        let written = fs::read_to_string(vault.join(KEYS_DIR).join("client.pub")).unwrap();
+        assert_eq!(
+            PublicKey::from_pem(&written).unwrap(),
+            signing(42).public_key()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_session_registers_nothing_when_it_was_not_allowed_to() {
+        let dir = scratch("register-off");
+        let vault = dir.join("own");
+        vault_named(&vault, "Own Vault");
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(46))),
+            session(
+                Served::from_path(&vault, None).unwrap(),
+                preference(false),
+            ),
+        ));
+
+        let mut channel = connect(client_io, &signing(47), &signing(46).public_key()).await;
+        request_sub(&mut channel, ActionHandshake::ID, "client", "").await;
+
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(error, SessionError::UnknownMember(name) if name == "client"));
+        assert!(!vault.join(KEYS_DIR).join("client.pub").exists());
+    }
+
+    #[tokio::test]
+    async fn a_registration_never_takes_a_name_that_holds_another_key() {
+        let dir = scratch("register-taken");
+        let vault = dir.join("own");
+        vault_named(&vault, "Own Vault");
+        // Somebody else already holds the name, with a key the peer does not have.
+        publish(
+            &vault.join(KEYS_DIR),
+            "client",
+            &Ed25519SigningKey::from_bytes(&[48; 32]),
+        );
+        let before = fs::read_to_string(vault.join(KEYS_DIR).join("client.pub")).unwrap();
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(49))),
+            session(
+                Served::from_path(&vault, None).unwrap(),
+                preference(true),
+            ),
+        ));
+
+        let mut channel = connect(client_io, &signing(50), &signing(49).public_key()).await;
+        request_sub(&mut channel, ActionHandshake::ID, "client", "").await;
+
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(error, SessionError::IdentityMismatch(name) if name == "client"));
+
+        // What was there is still what is there.
+        assert_eq!(
+            fs::read_to_string(vault.join(KEYS_DIR).join("client.pub")).unwrap(),
+            before
+        );
+        assert!(!vault.join(KEYS_DIR).join("client.pub.1").exists());
+    }
+
+    #[tokio::test]
+    async fn two_first_connections_for_one_name_both_get_in() {
+        let dir = scratch("register-race");
+        let vault = dir.join("own");
+        vault_named(&vault, "Own Vault");
+
+        // Both connections prove the same key, which is what a caller retrying a failed first
+        // connection does: what is registered is the key either of them proved.
+        let mut openings = Vec::new();
+
+        for _ in 0..2 {
+            let (client_io, server_io) = duplex(64 * 1024);
+            let serving = tokio::spawn(serve(
+                server_io,
+                Arc::new(host(signing(51))),
+                session(
+                    Served::from_path(&vault, None).unwrap(),
+                    preference(true),
+                ),
+            ));
+
+            let mut channel = connect(client_io, &signing(52), &signing(51).public_key()).await;
+            request_sub(&mut channel, ActionHandshake::ID, "client", "").await;
+
+            openings.push((serving, channel));
+        }
+
+        for (serving, channel) in openings {
+            let output = handshake_after(channel).await;
+            assert_eq!(output, "Hello, world, I'm Own Vault.\n\nA test Vault");
+            serving.await.unwrap().unwrap();
+        }
+
+        // One file, one key: the second registration found the first one's and agreed with it.
+        let written = fs::read_to_string(vault.join(KEYS_DIR).join("client.pub")).unwrap();
+        assert_eq!(
+            PublicKey::from_pem(&written).unwrap(),
+            signing(52).public_key()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_name_the_vault_does_not_look_for_cannot_be_registered() {
+        let dir = scratch("register-undiscovered");
+        let vault = dir.join("own");
+        // The Vault looks for its members in the user's own store, so a key written into its own
+        // keys is one nothing would find: saying it was registered would be a lie.
+        vault_with(&vault, "Own Vault", "[daemon_config]\nkey_discovery = [\"user\"]\n");
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(53))),
+            session(
+                Served::from_path(&vault, None).unwrap(),
+                preference(true),
+            ),
+        ));
+
+        let mut channel = connect(client_io, &signing(54), &signing(53).public_key()).await;
+        request_sub(&mut channel, ActionHandshake::ID, "client", "").await;
+
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(error, SessionError::RegisterNotDiscovered(name) if name == "client"));
+        assert!(!vault.join(KEYS_DIR).join("client.pub").exists());
+    }
+
+    #[tokio::test]
+    async fn an_administrators_name_is_never_registered_by_a_connection() {
+        let dir = scratch("register-admin");
+        let vault = dir.join("own");
+        vault_with(
+            &vault,
+            "Own Vault",
+            "[daemon_config]\nkey_discovery = [\"vault\"]\n\n[auth]\nadmins = [\"client\"]\n",
+        );
+
+        let (client_io, server_io) = duplex(64 * 1024);
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(55))),
+            session(
+                Served::from_path(&vault, None).unwrap(),
+                preference(true),
+            ),
+        ));
+
+        let mut channel = connect(client_io, &signing(56), &signing(55).public_key()).await;
+        request_sub(&mut channel, ActionHandshake::ID, "client", "").await;
+
+        // An administrator may move any file in the Vault, so a name that may be one is not a
+        // name a connection may claim.
+        let error = serving.await.unwrap().unwrap_err();
+        assert!(matches!(error, SessionError::RegisterAdmin(name) if name == "client"));
+        assert!(!vault.join(KEYS_DIR).join("client.pub").exists());
+    }
+
     /// An action that always fails, so the session's handling of that is exercised.
     struct Failing;
 
@@ -440,7 +768,11 @@ mod tests {
         let registry = registry(&scratch("exchange-registry"), &[("own", &vault)]);
 
         let (client_io, server_io) = duplex(64 * 1024);
-        let serving = tokio::spawn(serve(server_io, Arc::new(host(registry, signing(20)))));
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(20))),
+            Resolution::Namespaces(registry),
+        ));
 
         let mut channel = connect(client_io, &signing(21), &signing(20).public_key()).await;
         // A name longer than any request may carry is not one the vault reads, so the
@@ -464,7 +796,11 @@ mod tests {
         let registry = registry(&scratch("bad-key-registry"), &[("own", &vault)]);
 
         let (client_io, server_io) = duplex(64 * 1024);
-        let serving = tokio::spawn(serve(server_io, Arc::new(host(registry, signing(22)))));
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host(signing(22))),
+            Resolution::Namespaces(registry),
+        ));
 
         let mut channel = connect(client_io, &signing(23), &signing(22).public_key()).await;
         request_sub(&mut channel, ActionHandshake::ID, "client", "own").await;
@@ -487,14 +823,16 @@ mod tests {
         let registry = registry(&scratch("action-registry"), &[("own", &vault)]);
         let host = Host {
             signing: signing(24),
-            registry,
             max_concurrency: None,
             actions: vec![Some(Box::new(Failing))],
-            served: StdMutex::new(HashMap::new()),
         };
 
         let (client_io, server_io) = duplex(64 * 1024);
-        let serving = tokio::spawn(serve(server_io, Arc::new(host)));
+        let serving = tokio::spawn(serve(
+            server_io,
+            Arc::new(host),
+            Resolution::Namespaces(registry),
+        ));
 
         let mut channel = connect(client_io, &signing(25), &signing(24).public_key()).await;
         request_sub(&mut channel, ActionHandshake::ID, "client", "own").await;
@@ -513,7 +851,11 @@ mod tests {
         let (mut client_io, server_io) = duplex(64 * 1024);
         let serving = tokio::spawn(serve(
             server_io,
-            Arc::new(host(scratch("handshake-registry"), signing(26))),
+            Arc::new(host(signing(26))),
+            Resolution::Namespaces(registry(
+                &scratch("handshake-registry"),
+                &[],
+            )),
         ));
 
         // A message of no length is not the offer a handshake opens with, so accepting
@@ -541,10 +883,6 @@ mod tests {
                 "a member's key could not be read: a key or signature was malformed",
             ),
             (
-                SessionError::UnknownMember("alice".to_string()),
-                "no member is named alice",
-            ),
-            (
                 SessionError::IdentityMismatch("bob".to_string()),
                 "the peer is not the member it named (bob)",
             ),
@@ -561,5 +899,27 @@ mod tests {
         for (error, expected) in cases {
             assert_eq!(error.to_string(), expected);
         }
+
+        // A name that is not a member says what may be done about it, since that is the one
+        // failure a caller can act on from where it is sitting.
+        let refusal = SessionError::UnknownMember("alice".to_string()).to_string();
+        assert!(refusal.starts_with("no member is named alice"), "{refusal}");
+        assert!(refusal.contains("auto-register-by-ssh"), "{refusal}");
+
+        // A registration that was refused says which rule refused it.
+        let admin = SessionError::RegisterAdmin("alice".to_string()).to_string();
+        assert!(admin.contains("administrator"), "{admin}");
+
+        let undiscovered =
+            SessionError::RegisterNotDiscovered("alice".to_string()).to_string();
+        assert!(undiscovered.contains("key_discovery"), "{undiscovered}");
+
+        let unwritten = SessionError::Register {
+            path: PathBuf::from("/srv/keys/alice.pub"),
+            reason: "access is denied".to_string(),
+        }
+        .to_string();
+        assert!(unwritten.contains("/srv/keys/alice.pub"), "{unwritten}");
+        assert!(unwritten.contains("access is denied"), "{unwritten}");
     }
 }

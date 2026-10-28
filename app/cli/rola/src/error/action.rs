@@ -10,7 +10,7 @@ use crate::exit_codes::{
     EC_ERR_ACTION_ADDR, EC_ERR_ACTION_AUTH, EC_ERR_ACTION_CODEC, EC_ERR_ACTION_IO,
     EC_ERR_ACTION_JSON, EC_ERR_ACTION_LOCAL_FILE, EC_ERR_ACTION_MISSING_OBJECT,
     EC_ERR_ACTION_MISSING_VALUE, EC_ERR_ACTION_NO_CHANNEL, EC_ERR_ACTION_STORE,
-    EC_ERR_ACTION_UNKNOWN, EC_ERR_ACTION_VALUE_TOO_LARGE,
+    EC_ERR_ACTION_TRANSPORT, EC_ERR_ACTION_UNKNOWN, EC_ERR_ACTION_VALUE_TOO_LARGE,
 };
 
 // The error is foreign to this crate, so it is imported: that is what lets `?` route it
@@ -141,6 +141,20 @@ pub fn render_error_action(err: ErrorAction, ec: &mut ResExitCode) {
             );
             r_eprintln!("{}", help_line!(t!("error.action.err_auth_help").trim()));
             ec.exit_code = EC_ERR_ACTION_AUTH;
+        }
+        // The leg that reaches the Vault, rather than the exchange over it: what it says is a
+        // sentence naming which of them failed, so it is reported as it is rather than wrapped in
+        // words that would only repeat it.
+        ActionError::Transport(reason) => {
+            r_eprintln!(
+                "{}",
+                err_line!(t!("error.action.err_transport", reason = reason).trim())
+            );
+            r_eprintln!(
+                "{}",
+                help_line!(t!("error.action.err_transport_help").trim())
+            );
+            ec.exit_code = EC_ERR_ACTION_TRANSPORT;
         }
         // A key the other side took but cannot produce again. It is told apart from the words of
         // `MissingObject` because a reader acts on it differently — there the object was nowhere to

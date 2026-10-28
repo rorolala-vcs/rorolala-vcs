@@ -247,6 +247,13 @@ pub const EC_ERR_ACTION_STORE: i32 = 150;
 /// `exit_codes.action_local_file`
 pub const EC_ERR_ACTION_LOCAL_FILE: i32 = 151;
 
+// The connection to a Vault is the subject after it, and the number is the first one left: 152 is
+// where a leg that could not be reached — no `ssh` here, no `rola-daemon` there, a session the far
+// side refused — is told apart from an exchange that failed once it was open.
+
+/// `exit_codes.action_transport`
+pub const EC_ERR_ACTION_TRANSPORT: i32 = 152;
+
 // Explain
 
 /// `exit_codes.explain_unknown`

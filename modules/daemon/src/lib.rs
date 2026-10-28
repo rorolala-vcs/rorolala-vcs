@@ -22,11 +22,14 @@ mod action;
 mod begin;
 pub mod exit;
 mod namespaces;
+mod preference;
+mod transport;
 mod wire;
 
 pub use action::*;
 pub use exit::*;
 pub use namespaces::*;
+pub use preference::*;
 
 /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
 /// runtime.
@@ -137,6 +140,50 @@ pub fn daemon_begin_with(registry: &Path, port: u16, max_concurrency: Option<u16
         .build()
         .expect("Failed to build the runtime")
         .block_on(daemon_begin_with_async(registry, port, max_concurrency))
+}
+
+/// Serves one connection over this process's standard streams, and stops when it ends.
+///
+/// It is what a daemon behind an SSH session is: the far side runs `rola-daemon serve <path>`,
+/// and the two standard streams of that process are the connection — no port is bound and
+/// nothing is listened on. The process serves one connection and ends, so what a caller pays for
+/// is one session per action.
+///
+/// `path` is the root of the Vault to serve, on the far side's filesystem. `max_concurrency` is
+/// what a run named with `--concurrency`, which bounds what this one transfer carries: there is no
+/// second connection here for it to be shared across.
+///
+/// This function builds a new multi-threaded Tokio runtime and blocks the calling thread on
+/// [`daemon_serve_vault_async`].
+///
+/// # Panics
+///
+/// Panics if the multi-threaded Tokio runtime fails to build.
+///
+/// # Standard Error
+///
+/// Everything the session has to say goes there, never to the standard output: that stream is the
+/// protocol, and a word written to it is a word the caller reads as part of an answer.
+#[must_use]
+pub fn daemon_serve_vault(path: &Path, max_concurrency: Option<u16>) -> DaemonExit {
+    // UNWRAP: this is the entry a program's `serve` command reaches, and it answers with
+    // `DaemonExit` rather than a `Result`: there is no exit code for a runtime that will not build,
+    // so the failure is one it has no shape to report. What `build()` reads is this process itself
+    // — its threads and its I/O driver — and a session without a runtime has nothing to serve.
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to build the runtime")
+        .block_on(daemon_serve_vault_async(path, max_concurrency))
+}
+
+/// As [`daemon_serve_vault`], awaited from a runtime that is already running.
+///
+/// # Standard Error
+///
+/// Everything the session has to say goes there; the standard output is the protocol.
+pub async fn daemon_serve_vault_async(path: &Path, max_concurrency: Option<u16>) -> DaemonExit {
+    crate::begin::serve_vault(path, max_concurrency).await
 }
 
 /// A cancellation context that bundles the signalling channel together with

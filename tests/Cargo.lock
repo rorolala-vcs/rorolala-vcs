@@ -1106,6 +1106,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-ssh-transport"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-configure",
+ "rorolala-utils-sandbox",
+]
+
+[[package]]
 name = "it-storage"
 version = "0.1.0"
 dependencies = [
@@ -1846,6 +1855,7 @@ version = "0.1.2"
 dependencies = [
  "blake3",
  "just_template",
+ "libc",
  "rorolala-auth",
  "rorolala-errors",
  "rorolala-layout",

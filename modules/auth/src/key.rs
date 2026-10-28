@@ -8,7 +8,8 @@
 
 use std::fmt;
 
-use ed25519_dalek::pkcs8::{DecodePrivateKey as _, DecodePublicKey as _};
+use ed25519_dalek::pkcs8::spki::der::pem::LineEnding;
+use ed25519_dalek::pkcs8::{DecodePrivateKey as _, DecodePublicKey as _, EncodePublicKey as _};
 use ed25519_dalek::{
     Signature as Ed25519Signature, Signer as _, SigningKey as Ed25519SigningKey, Verifier as _,
     VerifyingKey as Ed25519VerifyingKey,
@@ -186,6 +187,24 @@ impl PublicKey {
             algorithm: KeyAlgorithm::Ed25519,
             bytes: key.to_bytes().to_vec(),
         })
+    }
+
+    /// Writes this key as a public key is written down.
+    ///
+    /// The inverse of [`from_pem`](Self::from_pem): an X.509 `SubjectPublicKeyInfo` in PEM, which
+    /// is the shape `openssl pkey -pubout` writes and the one every key file in a keys directory
+    /// holds, with the line endings a file has rather than the ones a terminal would.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Malformed`] if the key cannot be written as its algorithm states, which
+    /// is a key this build could not have read back as one.
+    pub fn to_pem(&self) -> Result<String, Error> {
+        match self.algorithm {
+            KeyAlgorithm::Ed25519 => verifying_key(&self.bytes)?
+                .to_public_key_pem(LineEnding::LF)
+                .map_err(|_| Error::Malformed),
+        }
     }
 
     /// The algorithm this key is for.
@@ -426,6 +445,24 @@ mod tests {
         let read = PublicKey::from_pem(&pem).unwrap();
 
         assert_eq!(read, public);
+    }
+
+    #[test]
+    fn a_public_key_is_written_as_a_key_file_is() {
+        let public = key(7).public_key();
+        let pem = public.to_pem().unwrap();
+
+        // What is written is a subject public key, on lines a file has, and it reads back as the
+        // key it was written from.
+        assert!(pem.starts_with("-----BEGIN PUBLIC KEY-----\n"), "{pem}");
+        assert!(pem.ends_with("-----END PUBLIC KEY-----\n"), "{pem}");
+        assert!(!pem.contains('\r'), "{pem}");
+        assert_eq!(PublicKey::from_pem(&pem).unwrap(), public);
+
+        // It is the same encoding the key a member is published as carries, byte for byte: a
+        // registration writes what a key file holds, and nothing about it is this crate's own.
+        let dalek = Ed25519SigningKey::from_bytes(&[7; 32]).verifying_key();
+        assert_eq!(pem, dalek.to_public_key_pem(LineEnding::LF).unwrap());
     }
 
     #[test]

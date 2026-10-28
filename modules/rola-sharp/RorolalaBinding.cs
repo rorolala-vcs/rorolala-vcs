@@ -517,6 +517,10 @@ internal enum RolaActionErrorTag : int
     /// The side that took what an exchange carried could not produce it again.
     /// </summary>
     RolaActionError_NotConfirmed = 12,
+    /// <summary>
+    /// The connection the action was to be spoken over could not be made, or it ended before the
+    /// </summary>
+    RolaActionError_Transport = 13,
 }
 
 [StructLayout(LayoutKind.Explicit)]
@@ -567,6 +571,11 @@ internal struct RolaActionErrorPayload
     /// </summary>
     [FieldOffset(0)]
     public nint NotConfirmed;
+    /// <summary>
+    /// The connection the action was to be spoken over could not be made, or it ended before the
+    /// </summary>
+    [FieldOffset(0)]
+    public nint Transport;
 }
 
 /// <summary>
@@ -1338,6 +1347,12 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_DAEMON_REGISTRY_FILE();
+
+    /// <summary>
+    /// The file, under [`DAEMON_DIR`], saying what this machine allows its daemon to do.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_DAEMON_PREFERENCE_FILE();
 
     /// <summary>
     /// The variable naming the directory the user's own files are kept under
@@ -2145,6 +2160,24 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern ushort vault_address_read_port(nint self);
+
+    /// <summary>
+    /// Which kind of link the address names, as the ABI spells it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern byte vault_address_read_kind(nint self);
+
+    /// <summary>
+    /// The account an SSH address names, as the ABI spells it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint vault_address_read_ssh_user(nint self);
+
+    /// <summary>
+    /// The directory an SSH address names, as the ABI spells it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint vault_address_read_ssh_path(nint self);
 
     /// <summary>
     /// How many paths the Layout names that the tree does not hold.

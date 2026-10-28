@@ -57,6 +57,16 @@ pub enum ActionError {
     /// here, whatever either side believed a moment ago. The message names the first such key, since
     /// what a caller does about it is look at that content.
     NotConfirmed(String),
+    /// The connection the action was to be spoken over could not be made, or it ended before the
+    /// exchange did.
+    ///
+    /// It is told apart from [`Io`](Self::Io), which is a channel that failed once it was open,
+    /// because a caller acts on the two differently: a channel that fails is a peer that went away,
+    /// while this is the leg *to* the peer — a program that is not installed here, a host that
+    /// cannot be reached, or a daemon on the far side that says, in its own words on its own
+    /// standard error, why it will not serve. The message is that leg's own sentence, so what a
+    /// caller prints says which of them it was.
+    Transport(String),
 }
 
 impl fmt::Display for ActionError {
@@ -93,6 +103,7 @@ impl fmt::Display for ActionError {
                     "the side that took it could not produce it again: {what}"
                 )
             }
+            Self::Transport(message) => formatter.write_str(message),
         }
     }
 }
@@ -150,6 +161,7 @@ impl rorolala_errors::Failure for ActionError {
             Self::Auth(_) => "action_error_auth",
             Self::LocalFile(_) => "action_error_local_file",
             Self::NotConfirmed(_) => "action_error_not_confirmed",
+            Self::Transport(_) => "action_error_transport",
         }
     }
 
@@ -246,6 +258,17 @@ mod tests {
         );
         assert!(error.source().is_some());
         assert_eq!(error.name(), "action_error_local_file");
+    }
+
+    #[test]
+    fn a_connection_that_could_not_be_made_says_what_the_leg_said() {
+        // What is carried is the sentence of the leg that failed, so a reader is told which of
+        // them it was rather than that "the channel" failed.
+        let error = ActionError::Transport("ssh could not be started: no such file".to_owned());
+
+        assert_eq!(error.to_string(), "ssh could not be started: no such file");
+        assert_eq!(error.name(), "action_error_transport");
+        assert!(error.source().is_none());
     }
 
     #[test]

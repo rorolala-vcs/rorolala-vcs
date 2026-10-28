@@ -11,6 +11,8 @@ daemon:
           register <NAMESPACE> [PATH]    Serve the Vault at PATH, or the one here, under NAMESPACE
           remove <NAMESPACE>             Stop serving a namespace
           check                          Check that every namespace reaches a Vault
+          serve <PATH>                   Serve the Vault at PATH over this process's standard
+                                         input and output, for `rola` to reach over SSH
       **Flags**:
           --port <PORT>                  Listen on PORT
           --concurrency <N>              Carry at most N transfers at once
@@ -25,6 +27,8 @@ daemon:
           register <命名空间> [路径]    将位于路径的保险库以该命名空间注册
           remove <命名空间>             停止服务某个命名空间
           check                         检查每个命名空间是否仍指向保险库
+          serve <路径>                  通过本进程的标准输入输出服务位于路径的保险库，
+                                         供 `rola` 经 SSH 访问
       **标识**：
           --port <端口>                 监听该端口
           --concurrency <N>             同时最多承载 N 个传输
@@ -160,6 +164,52 @@ check:
   description:
     en: Check that every namespace reaches a Vault
     zh-CN: 检查每个命名空间是否可达
+
+serve:
+  help:
+    en: |
+      Serve the Vault at PATH over this process's standard input and output
+
+      **Usage**: `rola-daemon serve <PATH>`
+
+      It is what a Vault reached over SSH is: one connection, carried by the two standard
+      streams, and the process ends when it does. No port is bound, and the standard output
+      carries the protocol rather than anything a person reads.
+    zh-CN: |
+      通过本进程的标准输入输出服务位于路径的保险库
+
+      **用法**：`rola-daemon serve <路径>`
+
+      这就是经 SSH 访问的保险库：一个连接，由两个标准流承载，连接结束即进程结束。
+      它不绑定任何端口；标准输出承载的是协议，而不是给人看的文字。
+
+  description:
+    en: Serve one Vault over this process's standard streams
+    zh-CN: 通过本进程的标准流服务一个保险库
+
+  err_ssh_disabled:
+    en: This machine does not allow its daemon to be reached over SSH
+    zh-CN: 本机不允许通过 SSH 访问守护进程
+
+  err_ssh_disabled_help:
+    en: Set `ssh-connection = true` under `[security]` in this machine's `preference.toml`
+    zh-CN: 请将本机 `preference.toml` 中 `[security]` 下的 `ssh-connection` 设为 `true`
+
+  err_preference_unreadable:
+    en: This machine's preferences could not be read
+    zh-CN: 无法读取本机的偏好设置
+
+  err_preference_unreadable_help:
+    en: Please fix or remove the file beside the namespace table; what was wrong with it was reported above
+    zh-CN: 请修复或删除命名空间表旁的那个文件；具体原因已在上方给出
+
+  err_session_failed:
+    en: The session failed before it was answered
+    zh-CN: 会话在给出答复前就失败了
+
+  err_session_failed_help:
+    en: What the daemon said about the failure was reported above; it goes to the standard error the caller sees
+    zh-CN: 守护进程关于该失败原因的说明已在上方给出；它写在调用方能看到的标准错误上
 
 error:
   no_data_dir:

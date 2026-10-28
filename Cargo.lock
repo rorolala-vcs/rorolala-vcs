@@ -3704,6 +3704,7 @@ dependencies = [
  "blake3",
  "ed25519-dalek",
  "just_template",
+ "libc",
  "rorolala-auth",
  "rorolala-errors",
  "rorolala-layout",
@@ -3722,6 +3723,7 @@ dependencies = [
  "serde_json",
  "syn 3.0.5",
  "tokio",
+ "toml 0.8.23",
  "uuid",
 ]
 

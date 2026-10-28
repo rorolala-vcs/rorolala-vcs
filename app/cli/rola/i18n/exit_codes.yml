@@ -225,6 +225,10 @@ exit_codes:
     en: A file the action needed could not be read or written
     zh-CN: 动作需要的文件无法读写
 
+  action_transport:
+    en: The Vault could not be reached over the transport the address named
+    zh-CN: 无法通过地址指定的传输方式抵达该保险库
+
   action_value_too_large:
     en: A value was too long to frame
     zh-CN: 值过长，无法装帧

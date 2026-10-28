@@ -1,0 +1,10 @@
+[package]
+name = "it-ssh-transport"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+librorolala = { path = "../.." }
+rorolala-utils-configure = { path = "../../utils/configure" }
+rorolala-utils-sandbox = { path = "../../utils/sandbox" }

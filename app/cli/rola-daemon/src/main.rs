@@ -37,6 +37,7 @@ mod cmd_check;
 mod cmd_list;
 mod cmd_register;
 mod cmd_remove;
+mod cmd_serve;
 mod cmd_start;
 mod errors;
 mod exit_codes;

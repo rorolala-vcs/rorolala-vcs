@@ -1,5 +1,5 @@
-//! The machine's daemon: it listens, proves who it is, and runs the action a
-//! Workspace asks for against one of the Vaults registered for this user.
+//! The machine's daemon: it listens, proves who it is, and runs the action a Workspace asks for
+//! against one of the Vaults it serves.
 //!
 //! A Vault does not reach out; it waits. Every connection is answered on its own, so one
 //! Workspace that fails to prove itself, or asks for something the machine does not serve,
@@ -7,46 +7,56 @@
 //! daemon's identity and the actions it serves — is resolved once, as the daemon starts, and
 //! shared from there.
 //!
-//! Which Vault a connection is *served as*, though, changes with every connection: an address
-//! names a namespace, and the registry says which Vault that namespace is. The table and the
-//! configurations a Vault is served with are read per connection rather than once, so a Vault
-//! registered or reconfigured while the daemon runs is served without it being restarted — and what
-//! was read is kept with the files it was read from, so a connection that names a Vault nothing has
-//! changed since pays a few stats rather than a table, two configurations and a walk to the root.
+//! # Two ways to be reached
+//!
+//! A daemon listens on a port, and a connection to it is a stream like any other. It may also be
+//! reached over a session whose standard streams *are* the connection — what `rola-daemon serve
+//! <path>` is — which needs no port at all and needs nothing of the network beyond `ssh` itself.
+//! The two share everything an ear and a mouth share: the identity, the actions, the order in
+//! which a caller is proved and admitted. What they do not share is where the Vault comes from.
+//!
+//! A listening daemon is told which Vault a request names, and looks that name up in the table of
+//! namespaces. A session was given a path on its command line, and serves that Vault and no other:
+//! the request it reads may not name one, since the address that started it already did. Nothing
+//! that arrives over the connection ever becomes a path in either case — a namespace is looked up
+//! in a table, and a path was decided before the connection existed.
 //!
 //! # Identity
 //!
-//! The listener proves itself before it reads which namespace a caller wants, so there is one
-//! identity for the machine rather than one per Vault: the account the user keeps in their own
-//! key directory. A registered Vault's members are still checked against that Vault's own
-//! configuration, which is what decides who may act on it.
+//! The daemon proves itself before it reads which Vault a caller wants, so there is one identity
+//! for the machine rather than one per Vault: the account the user keeps in their own key
+//! directory. A Vault's members are still checked against that Vault's own configuration, which is
+//! what decides who may act on it — and, for a session, what may be written into its keys when a
+//! name is there for the first time.
 
 use std::collections::HashMap;
 use std::fmt;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, PoisonError};
 use std::time::SystemTime;
 
 use rorolala_auth::{
-    KeyLocateRule, SecureStream, SigningKey, env_keys_dir, find_member, global_keys_dir,
-    is_valid_key_name, locate_accounts, user_keys_dir,
+    KeyLocateRule, Member, PublicKey, SecureStream, SigningKey, env_keys_dir, find_member,
+    global_keys_dir, is_valid_key_name, locate_accounts, user_keys_dir,
 };
 use rorolala_protocol::{ActionContext, ActionError, Socket};
 use rorolala_utils_cli_theme::{err_line, help_line, warn_line};
 use rorolala_utils_configure::Configure as _;
+use rorolala_utils_constants::{PUBLIC_KEY_EXTENSION, ROOT_SUB_VAULT};
 use rorolala_utils_location::Locate;
 use rorolala_vault::{
     CONFIG_PATH, KEYS_DIR, KeyDiscovery, RootVault, VAULT_DEFAULT_MAX_CONCURRENCY, VAULTS_DIR,
     Vault,
 };
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 
 use crate::{
     ActionEntry, CancelSignal, DaemonExit, Namespaces, build_action_registry, do_action_with, exit,
-    wire,
+    preference::Preference, preference_path, wire,
 };
 
 /// Input provided to the daemon for its operation.
@@ -65,9 +75,9 @@ pub(crate) struct DaemonInput<'a> {
 /// Runs the daemon until it is cancelled.
 ///
 /// What does not change while it runs is resolved once here: the identity the daemon proves
-/// itself with, and the table of Vaults it serves. A daemon that cannot resolve those cannot
-/// serve at all, so it says so and stops rather than listening and refusing every connection.
-/// Which Vault a namespace names is read from the table per connection.
+/// itself with, and the actions it serves. A daemon that cannot resolve those cannot serve at
+/// all, so it says so and stops rather than listening and refusing every connection. Which Vault
+/// a namespace names is read from the table per connection.
 ///
 /// # Standard Error
 ///
@@ -81,7 +91,7 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         signal,
     } = input;
 
-    let Some(signing) = daemon_identity() else {
+    let Some(host) = host(max_concurrency) else {
         return DaemonExit::with_code(exit::NO_IDENTITY);
     };
 
@@ -111,19 +121,208 @@ pub(crate) async fn daemon(input: DaemonInput<'_>) -> DaemonExit {
         }
     };
 
-    let host = Arc::new(Host {
-        signing,
-        registry: registry.to_path_buf(),
-        max_concurrency,
-        // Built once: the list a caller's id is read against is the one this daemon runs.
-        actions: build_action_registry(),
+    let registry = Arc::new(Registry {
+        path: registry.to_path_buf(),
         // Nothing has been asked for yet, so nothing has been resolved.
         served: StdMutex::new(HashMap::new()),
     });
 
-    listen(listener, host, signal.rx).await;
+    listen(listener, Arc::new(host), registry, signal.rx).await;
 
     DaemonExit::default()
+}
+
+/// Everything a connection needs that does not change with the Vault it is served for.
+///
+/// The identity it proves and the actions it serves are fixed for as long as it runs, and what a
+/// Vault is served under is fixed for as long as one connection is.
+pub(crate) struct Host {
+    /// The identity the daemon proves to every peer.
+    signing: SigningKey,
+    /// The run's own bound on how much is carried at once, applied over every Vault's file.
+    max_concurrency: Option<u16>,
+    /// Every action this daemon serves, laid out by id.
+    actions: Vec<Option<Box<dyn ActionEntry>>>,
+}
+
+/// The Vaults a listening daemon serves, and what a name was resolved to last time.
+///
+/// A session has no table: it was given one path and serves it. So the table and its cache live
+/// here rather than beside the identity, since what is read from them changes with every
+/// connection and what is read from the identity does not.
+struct Registry {
+    /// The file naming the Vaults this daemon serves.
+    path: PathBuf,
+    /// The Vaults requests have named, as they were resolved, so a table and two configurations are
+    /// not read again for every connection. A resolution whose sources have changed is made again
+    /// rather than served from here.
+    served: StdMutex<HashMap<String, KeptServed>>,
+}
+
+/// How a connection is served: where its Vault comes from, and what may be done for it.
+enum Resolution {
+    /// A connection to a listening daemon: the request names a namespace, and the table says
+    /// which Vault that is. Nothing is registered for one — a port is not a door that proves a
+    /// person, so it is not one that may name itself a member.
+    Namespaces(Arc<Registry>),
+    /// A connection over a session: the command named the Vault, and the machine's preferences
+    /// say what may be done for a caller that arrived through a shell.
+    Session {
+        /// The Vault the command named.
+        served: Arc<Served>,
+        /// What this machine allows a session to do.
+        preference: Arc<Preference>,
+    },
+}
+
+/// Builds what does not change with a connection, or says why it cannot.
+///
+/// # Standard Error
+///
+/// Writes an error log when no place holds an account, or its key cannot be read.
+fn host(max_concurrency: Option<u16>) -> Option<Host> {
+    Some(Host {
+        signing: daemon_identity()?,
+        max_concurrency,
+        // Built once: the list a caller's id is read against is the one this daemon runs.
+        actions: build_action_registry(),
+    })
+}
+
+/// Serves one connection over the standard streams of this process, until it ends.
+///
+/// What the far side of a session asked for is answered by a Vault named on the command line
+/// rather than by the table of namespaces, so the path is read once here and the connection is
+/// served for it alone. The process ends when its standard input does: a session serves one
+/// connection and no more, which is why there is nothing to wait for afterwards.
+///
+/// # Standard Error
+///
+/// Writes an error log when the machine's preferences cannot be read or refuse SSH sessions, when
+/// the path does not hold a Vault, and when the session fails.
+pub(crate) async fn serve_vault(path: &Path, max_concurrency: Option<u16>) -> DaemonExit {
+    let preference = match Preference::read() {
+        Ok(preference) => preference,
+        Err(error) => {
+            eprintln!("{}", err_line!("{error}"));
+            return DaemonExit::with_code(exit::PREFERENCE_UNREADABLE);
+        }
+    };
+
+    // What the switch is for is a machine that would rather not serve a session at all, and a
+    // refusal is said where whoever started the session can read it: this is the far side's
+    // standard error, which `ssh` forwards to the person who asked.
+    if !preference.security().ssh_connection() && in_ssh_session() {
+        eprintln!(
+            "{}",
+            err_line!("This machine does not allow its daemon to be reached over SSH.")
+        );
+        // Where the switch is, said as a place to go: a refusal a caller cannot act on is one
+        // that reads as a fault in this program.
+        let where_to_set = preference_path().map_or_else(
+            || "this machine's preference file".to_owned(),
+            |path| path.display().to_string(),
+        );
+        eprintln!(
+            "{}",
+            help_line!("Set `ssh-connection = true` under `[security]` in {where_to_set}")
+        );
+        return DaemonExit::with_code(exit::SSH_DISABLED);
+    }
+
+    let Some(host) = host(max_concurrency) else {
+        return DaemonExit::with_code(exit::NO_IDENTITY);
+    };
+
+    let Some(served) = Served::from_path(path, max_concurrency) else {
+        let named = path.display();
+        eprintln!(
+            "{}",
+            err_line!("{named} holds no Vault to serve: no {CONFIG_PATH} is there")
+        );
+        return DaemonExit::with_code(exit::NO_VAULT);
+    };
+
+    let resolution = Resolution::Session {
+        served: Arc::new(served),
+        preference: Arc::new(preference),
+    };
+
+    match serve(Stdio::new(), Arc::new(host), resolution).await {
+        Ok(()) => DaemonExit::default(),
+        Err(error) => {
+            eprintln!("{}", err_line!("The session failed: {error}"));
+            DaemonExit::with_code(exit::SESSION_FAILED)
+        }
+    }
+}
+
+/// Whether this process was started by an SSH session.
+///
+/// It asks the environment, which is a policy switch and not a security boundary: a program
+/// started on this machine can set the same words. What actually decides whether a session may be
+/// served is who may run this program as this user at all, and what is being switched here is
+/// whether this machine wants to offer that at all.
+fn in_ssh_session() -> bool {
+    ["SSH_CONNECTION", "SSH_USER_AUTH"]
+        .iter()
+        .any(|name| std::env::var_os(name).is_some())
+}
+
+/// The two streams this process was handed, as one connection.
+///
+/// A session is the same session the listening daemon serves a socket over — the two differ in
+/// where the stream comes from and in nothing else, which is why there is one `serve` and not a
+/// second implementation of the exchange for a shell.
+struct Stdio {
+    /// What a request is read from.
+    input: tokio::io::Stdin,
+    /// What an answer is written to.
+    output: tokio::io::Stdout,
+}
+
+impl Stdio {
+    /// This process's standard streams.
+    fn new() -> Self {
+        Self {
+            input: tokio::io::stdin(),
+            output: tokio::io::stdout(),
+        }
+    }
+}
+
+impl AsyncRead for Stdio {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.get_mut().input).poll_read(context, buffer)
+    }
+}
+
+impl AsyncWrite for Stdio {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+        buffer: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.get_mut().output).poll_write(context, buffer)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.get_mut().output).poll_flush(context)
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.get_mut().output).poll_shutdown(context)
+    }
 }
 
 /// The directories a member is looked for in, and the rule they are searched under.
@@ -222,33 +421,6 @@ fn identity_in(roots: &[PathBuf]) -> Option<SigningKey> {
     }
 }
 
-/// Everything the daemon needs to answer a connection.
-///
-/// The identity it proves and the table it reads are fixed for as long as it runs; which Vault
-/// a request names is resolved per connection, and what a resolution came to is kept here with what
-/// it was read from.
-struct Host {
-    /// The identity the daemon proves to every peer.
-    signing: SigningKey,
-    /// The file naming the Vaults this daemon serves.
-    registry: PathBuf,
-    /// The run's own bound on how much is carried at once, applied over every Vault's file.
-    max_concurrency: Option<u16>,
-    /// Every action this daemon serves, laid out by id.
-    actions: Vec<Option<Box<dyn ActionEntry>>>,
-    /// The Vaults requests have named, as they were resolved, so a table and two configurations are
-    /// not read again for every connection. A resolution whose sources have changed is made again
-    /// rather than served from here.
-    served: StdMutex<HashMap<String, KeptServed>>,
-}
-
-/// How many resolved Vaults the daemon keeps.
-///
-/// A request names a Vault and a daemon is made to serve the namespaces it was given, so what is kept
-/// is a handful. The bound is what keeps a peer that names a different Vault every time from growing
-/// the daemon's memory for as long as it is left running.
-const KEPT_SERVED: usize = 64;
-
 /// A Vault a request named, and what says the resolution still holds.
 struct KeptServed {
     /// The files the resolution was read from, as they looked when it read them.
@@ -300,7 +472,12 @@ impl Source {
 /// Each connection is a job of its own, so a slow or hostile peer holds up nothing but
 /// itself. The loop itself does no work beyond accepting, which is what lets cancellation
 /// take effect between two connections rather than after the current one.
-async fn listen(listener: TcpListener, host: Arc<Host>, mut cancel: watch::Receiver<bool>) {
+async fn listen(
+    listener: TcpListener,
+    host: Arc<Host>,
+    registry: Arc<Registry>,
+    mut cancel: watch::Receiver<bool>,
+) {
     // How many connections are served at once. A client asks for a number of lanes and each lane
     // is a connection, so this is what holds every caller together to what the machine is set to
     // serve: one run cannot spend the machine, and neither can many.
@@ -336,9 +513,12 @@ async fn listen(listener: TcpListener, host: Arc<Host>, mut cancel: watch::Recei
                         break;
                     };
                     let host = Arc::clone(&host);
+                    let registry = Arc::clone(&registry);
                     tokio::spawn(async move {
                         let _permit = permit;
-                        if let Err(error) = serve(stream, host).await {
+                        if let Err(error) =
+                            serve(stream, host, Resolution::Namespaces(registry)).await
+                        {
                             eprintln!(
                                 "{}",
                                 err_line!("A connection from {peer} failed: {error}")
@@ -365,11 +545,15 @@ async fn listen(listener: TcpListener, host: Arc<Host>, mut cancel: watch::Recei
 /// Serves one connection: handshakes, checks the caller, and runs the action.
 ///
 /// The order is what makes a name mean anything. The handshake proves a key; which Vault the
-/// request names is read after it, since that is what the connection is served for; and the
-/// name the Workspace sends is only a label, so the member that label finds must be the
-/// identity that was proved before the action runs. A request that is not confirmed never
-/// starts an action, so a Workspace that is refused finds out before it has anything to undo.
-async fn serve<Stream>(stream: Stream, host: Arc<Host>) -> Result<(), SessionError>
+/// connection is served for is read after it, since that is what the connection is for; and the
+/// name the Workspace sends is only a label, so the member that label finds must be the identity
+/// that was proved before the action runs. A request that is not confirmed never starts an action,
+/// so a Workspace that is refused finds out before it has anything to undo.
+async fn serve<Stream>(
+    stream: Stream,
+    host: Arc<Host>,
+    resolution: Resolution,
+) -> Result<(), SessionError>
 where
     Stream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -380,22 +564,30 @@ where
         .await
         .map_err(SessionError::Exchange)?;
 
-    // Which Vault the request names decides who is admitted to it, so it is resolved before the
-    // caller is looked for: the same name is a member of one Vault and of no other.
-    let Some(served) = host.serve_for(&request.sub).await else {
+    // Which Vault the connection is served for decides who is admitted to it, so it is resolved
+    // before the caller is looked for: the same name is a member of one Vault and of no other. A
+    // session serves the Vault it was started for and no other, so a request that names one is a
+    // request it cannot answer.
+    let served = match &resolution {
+        Resolution::Namespaces(registry) => registry.serve_for(&host, &request.sub).await,
+        Resolution::Session { served, .. } => {
+            (request.sub == ROOT_SUB_VAULT).then(|| Arc::clone(served))
+        }
+    };
+
+    let Some(served) = served else {
         return Err(SessionError::UnknownVault(request.sub));
     };
 
     // The name is joined onto a scope's directory to reach the member's key, so what could steer
     // that join is refused here as well as in the search: nothing off the wire ever reaches a
-    // path, and the search is never asked with a name that is not one.
+    // path, and a name that is not one is never a key file's name.
     if !is_valid_key_name(&request.account) {
         return Err(SessionError::UnknownMember(request.account));
     }
 
-    let Some(member) = find_member(&request.account, &served.roots, &served.rule) else {
-        return Err(SessionError::UnknownMember(request.account));
-    };
+    let member = member_for(&served, &request.account, channel.peer(), &resolution)?;
+
     if member.get_key().map_err(SessionError::Key)? != *channel.peer() {
         return Err(SessionError::IdentityMismatch(request.account));
     }
@@ -422,6 +614,172 @@ where
     Ok(())
 }
 
+/// The member `name` is served as, registering the key the peer proved where a session may.
+///
+/// A name that is known is answered from what the Vault admits, and nothing is written. A name
+/// that is not is the first connection of somebody the Vault has never seen, and what may be done
+/// about that is what the session resolution and the machine's preferences say: a listening daemon
+/// registers nothing at all, since a port proves no person.
+///
+/// Registering is safe because of what the handshake already did: the key is one the far side
+/// proved it holds, so a name cannot be claimed for a key nobody has. What it is *not* is
+/// revocation-aware — a deleted key is written again on the next connection — which is why the
+/// switch defaults to off and why the rules below are read before anything is written.
+fn member_for(
+    served: &Served,
+    name: &str,
+    peer: &PublicKey,
+    resolution: &Resolution,
+) -> Result<Member, SessionError> {
+    if let Some(member) = find_member(name, &served.roots, &served.rule) {
+        return Ok(member);
+    }
+
+    let Resolution::Session { preference, .. } = resolution else {
+        return Err(SessionError::UnknownMember(name.to_owned()));
+    };
+
+    if !preference.security().auto_register_by_ssh() {
+        return Err(SessionError::UnknownMember(name.to_owned()));
+    }
+
+    // An administrator's name may move any file in the Vault, so a name with no key yet is the
+    // last one a connection may claim: whoever can reach the port would otherwise become one by
+    // saying the word.
+    if served.config.auth_config().is_admin(name) {
+        return Err(SessionError::RegisterAdmin(name.to_owned()));
+    }
+
+    // A key written where nothing looks for it is not a registration, so saying one was made
+    // would be telling a caller something it can act on and should not.
+    if !served
+        .config
+        .daemon_config()
+        .key_discovery()
+        .contains(&KeyDiscovery::Vault)
+    {
+        return Err(SessionError::RegisterNotDiscovered(name.to_owned()));
+    }
+
+    register_member_key(&served.vault.get_root().join(KEYS_DIR), name, peer)?;
+
+    find_member(name, &served.roots, &served.rule)
+        .ok_or_else(|| SessionError::UnknownMember(name.to_owned()))
+}
+
+/// How many registrations this process has staged, which is what tells one staging file from the next.
+///
+/// A daemon serves one connection, but a test or an embedder may serve several at once through the
+/// same process, and two of them writing one scratch name would race over it.
+static STAGED: AtomicUsize = AtomicUsize::new(0);
+
+/// Writes `key` as the member `name` of the Vault whose keys are at `keys`.
+///
+/// What is written is never a file that is already there: a name registered to one key is not
+/// registered again to another, and a connection that arrives while another is registering the
+/// same name either finds the same key already written or is refused. That is what makes the
+/// first-come rule the only rule — nothing here overwrites.
+fn register_member_key(keys: &Path, name: &str, key: &PublicKey) -> Result<(), SessionError> {
+    let target = keys.join(format!("{name}.{PUBLIC_KEY_EXTENSION}"));
+
+    std::fs::create_dir_all(keys).map_err(|error| SessionError::register(&target, &error))?;
+
+    let pem = key.to_pem().map_err(|error| SessionError::Register {
+        path: target.clone(),
+        reason: error.to_string(),
+    })?;
+
+    // What is written is written beside the name and then given to it, so that the name is either
+    // absent or whole: a reader that arrives mid-write sees no file rather than half of one. The
+    // number is what keeps two registrations in one process — a daemon serves one connection, but a
+    // test or an embedder may serve several — from writing the same scratch name.
+    let staged = keys.join(format!(
+        ".{name}.{PUBLIC_KEY_EXTENSION}.{}.{}.tmp",
+        std::process::id(),
+        STAGED.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::write(&staged, pem.as_bytes())
+        .map_err(|error| SessionError::register(&target, &error))?;
+
+    let made = match std::fs::hard_link(&staged, &target) {
+        Ok(()) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
+        // A filesystem that cannot link two names to one file — FAT, and some network shares — is
+        // one that cannot make the name atomically either, so the fallback makes the name
+        // exclusively instead. It is the closest thing such a filesystem has, and its one known
+        // gap is recorded: what a concurrent reader could see in between is a name that exists and
+        // is still being written.
+        Err(_) => match exclusive_write(&target, pem.as_bytes()) {
+            Ok(made) => made,
+            Err(error) => {
+                let _ = std::fs::remove_file(&staged);
+                return Err(SessionError::register(&target, &error));
+            }
+        },
+    };
+
+    let _ = std::fs::remove_file(&staged);
+
+    // What the name holds now is what decides: a key that is the same is a registration another
+    // connection made a moment before this one, and a key that is not is a name that is taken.
+    let held = std::fs::read_to_string(&target)
+        .map_err(|error| SessionError::register(&target, &error))
+        .and_then(|pem| {
+            PublicKey::from_pem(&pem).map_err(|error| SessionError::Register {
+                path: target.clone(),
+                reason: error.to_string(),
+            })
+        })?;
+
+    if held != *key {
+        return Err(SessionError::IdentityMismatch(name.to_owned()));
+    }
+
+    if made {
+        announce(name, key);
+    }
+
+    Ok(())
+}
+
+/// Writes `bytes` to `target` only if nothing is there, answering whether it did.
+fn exclusive_write(target: &Path, bytes: &[u8]) -> std::io::Result<bool> {
+    use std::io::Write as _;
+
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(target)
+    {
+        Ok(mut file) => {
+            file.write_all(bytes)?;
+            file.flush()?;
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+/// Says, on the standard error the caller's session forwards, that a member was registered.
+///
+/// It goes where a person running the command can read it, because a registration is something
+/// that happened to their Vault and nothing else they run will say so.
+fn announce(name: &str, key: &PublicKey) {
+    let session = std::env::var("SSH_CONNECTION").map_or_else(
+        |_| "a local session".to_owned(),
+        |connection| format!("an SSH session from {connection}"),
+    );
+
+    let fingerprint = key.fingerprint();
+
+    // Plain rather than through one of the theme's lines: this is a record of something that
+    // happened, neither an error nor advice, and it is read in a log as much as on a terminal.
+    eprintln!(
+        "Registered `{name}` as a member of this Vault, by the key it proved ({fingerprint}), over {session}"
+    );
+}
+
 /// The Vault one connection is served for, with what it is served with.
 ///
 /// A request names a Vault, and what that comes to is this: the Vault itself, what its file is
@@ -444,17 +802,82 @@ struct Served {
     rule: KeyLocateRule,
 }
 
-impl Host {
+impl Served {
+    /// The Vault at `path`, if a Vault is what is there.
+    ///
+    /// The path names the root of a Vault exactly, the way registering one does: a directory that
+    /// merely lies inside a Vault is not one, so what is served is what was named rather than what
+    /// was nearest. Nothing here reads the table of namespaces — a session is told where its Vault
+    /// is — which is what lets a machine with nothing registered serve one.
+    fn from_path(path: &Path, max_concurrency: Option<u16>) -> Option<Self> {
+        let absolute = std::path::absolute(path).ok()?;
+
+        if !absolute.join(CONFIG_PATH).is_file() {
+            return None;
+        }
+
+        Some(Self::of(Vault::at(absolute), max_concurrency))
+    }
+
+    /// `vault`, read as a connection is served it.
+    ///
+    /// What the Vault is configured with, and who it admits, are read here rather than once at
+    /// startup: a Vault reconfigured while the daemon runs is served under the rules it has, and
+    /// a Vault under a root that keeps the group's keys admits them without either having to be
+    /// restarted.
+    fn of(vault: Vault, max_concurrency: Option<u16>) -> Self {
+        let root_vault =
+            RootVault::locate(vault.get_root()).unwrap_or_else(|| RootVault::from(vault.clone()));
+
+        let config = read_config(&vault.config_path());
+        let root_vault_config = read_config(&root_vault.config_path());
+        let (roots, rule) = member_scopes(&config, &vault, &root_vault);
+        let config = bound(&config, max_concurrency);
+
+        Self {
+            vault,
+            root_vault,
+            config,
+            root_vault_config,
+            roots,
+            rule,
+        }
+    }
+}
+
+/// The configuration at `path`, or what a Vault whose file will not read is served under.
+///
+/// # Standard Error
+///
+/// Writes a warning naming the file, since a Vault served under defaults is one whose callers
+/// meet rules nobody configured.
+fn read_config(path: &Path) -> rorolala_vault::Config {
+    match rorolala_vault::Config::read_from(path) {
+        Ok(read) => read,
+        Err(error) => {
+            eprintln!(
+                "{}",
+                warn_line!(
+                    "The configuration of the Vault at {} could not be read: {error}",
+                    (path.display())
+                )
+            );
+            rorolala_vault::Config::default()
+        }
+    }
+}
+
+impl Registry {
     /// The Vault a request naming `sub` is served for, if this daemon can serve one there.
     ///
     /// What it comes to is kept, so the next connection naming the same Vault reads a table, two
     /// configurations and a walk to the root only when one of them has changed since.
-    async fn serve_for(&self, sub: &str) -> Option<Arc<Served>> {
+    async fn serve_for(&self, host: &Host, sub: &str) -> Option<Arc<Served>> {
         if let Some(kept) = self.kept(sub) {
             return Some(kept);
         }
 
-        let served = Arc::new(self.resolve(sub).await?);
+        let served = Arc::new(self.resolve(host, sub).await?);
         self.keep(sub, Arc::clone(&served));
 
         Some(served)
@@ -482,7 +905,7 @@ impl Host {
     /// Keeps how `sub` was resolved, with what it was resolved from.
     fn keep(&self, sub: &str, served: Arc<Served>) {
         let sources = [
-            Source::of(&self.registry),
+            Source::of(&self.path),
             Source::of(served.vault.config_path()),
             Source::of(served.root_vault.config_path()),
         ];
@@ -505,19 +928,14 @@ impl Host {
     /// entry out of the namespace table, and what follows is resolved under the Vault that entry
     /// names — by the path it sits at or by the name it is held under. A namespace that is not
     /// registered, or a Vault that is no longer there, is a request this daemon cannot answer.
-    ///
-    /// What the Vault is configured with, and who it admits, are read here rather than once at
-    /// startup: a Vault reconfigured while the daemon runs is served under the rules it has, and
-    /// a Vault under a root that keeps the group's keys admits them without either having to be
-    /// restarted.
-    async fn resolve(&self, sub: &str) -> Option<Served> {
+    async fn resolve(&self, host: &Host, sub: &str) -> Option<Served> {
         let (namespace, under) = split_namespace(sub);
 
         if namespace.is_empty() {
             return None;
         }
 
-        let namespaces = match Namespaces::read_from(&self.registry) {
+        let namespaces = match Namespaces::read_from(&self.path) {
             Ok(namespaces) => namespaces,
             Err(error) => {
                 eprintln!(
@@ -548,50 +966,16 @@ impl Host {
             }
         };
 
-        let root_vault =
-            RootVault::locate(vault.get_root()).unwrap_or_else(|| RootVault::from(vault.clone()));
-
-        let config = match rorolala_vault::Config::read_from(&vault.config_path()) {
-            Ok(read) => read,
-            Err(error) => {
-                eprintln!(
-                    "{}",
-                    warn_line!(
-                        "The configuration of the Vault at {} could not be read: {error}",
-                        (vault.get_root().display())
-                    )
-                );
-                rorolala_vault::Config::default()
-            }
-        };
-
-        let root_vault_config = match rorolala_vault::Config::read_from(&root_vault.config_path()) {
-            Ok(read) => read,
-            Err(error) => {
-                eprintln!(
-                    "{}",
-                    warn_line!(
-                        "The configuration of the root Vault at {} could not be read: {error}",
-                        (root_vault.get_root().display())
-                    )
-                );
-                rorolala_vault::Config::default()
-            }
-        };
-
-        let (roots, rule) = member_scopes(&config, &vault, &root_vault);
-        let config = bound(&config, self.max_concurrency);
-
-        Some(Served {
-            vault,
-            root_vault,
-            config,
-            root_vault_config,
-            roots,
-            rule,
-        })
+        Some(Served::of(vault, host.max_concurrency))
     }
 }
+
+/// How many resolved Vaults the daemon keeps.
+///
+/// A request names a Vault and a daemon is made to serve the namespaces it was given, so what is kept
+/// is a handful. The bound is what keeps a peer that names a different Vault every time from growing
+/// the daemon's memory for as long as it is left running.
+const KEPT_SERVED: usize = 64;
 
 /// The configuration a Vault is served under: what its file says, with the run's own bound on
 /// how much is carried at once applied over it.
@@ -639,8 +1023,31 @@ enum SessionError {
     UnknownVault(String),
     /// The member the caller named is not the identity it proved.
     IdentityMismatch(String),
+    /// A registration could not be written.
+    Register {
+        /// The file that was to be written.
+        path: PathBuf,
+        /// What the filesystem said about it.
+        reason: String,
+    },
+    /// A registration was refused because the Vault does not look for members in its own keys.
+    RegisterNotDiscovered(String),
+    /// A registration was refused because the name is an administrator of the Vault.
+    RegisterAdmin(String),
     /// The action itself failed.
     Action(ActionError),
+}
+
+impl SessionError {
+    /// A registration at `path` that failed for `source`.
+    ///
+    /// What is kept of the failure is its words, so the error is borrowed rather than taken.
+    fn register(path: &Path, source: &std::io::Error) -> Self {
+        Self::Register {
+            path: path.to_path_buf(),
+            reason: source.to_string(),
+        }
+    }
 }
 
 impl fmt::Display for SessionError {
@@ -651,13 +1058,29 @@ impl fmt::Display for SessionError {
                 write!(formatter, "the request could not be answered: {source}")
             }
             Self::Key(source) => write!(formatter, "a member's key could not be read: {source}"),
-            Self::UnknownMember(name) => write!(formatter, "no member is named {name}"),
+            Self::UnknownMember(name) => write!(
+                formatter,
+                "no member is named {name}: the Vault's keys do not hold a key for it. Ask whoever                  runs the Vault to put your public key in its keys, or allow `auto-register-by-ssh`                  in its machine's preference file"
+            ),
             Self::UnknownVault(name) => {
                 write!(formatter, "no Vault is served under {name}")
             }
             Self::IdentityMismatch(name) => {
                 write!(formatter, "the peer is not the member it named ({name})")
             }
+            Self::Register { path, reason } => write!(
+                formatter,
+                "the member's key could not be written to {}: {reason}",
+                path.display()
+            ),
+            Self::RegisterNotDiscovered(name) => write!(
+                formatter,
+                "{name} is not a member and cannot be registered: the Vault does not look for                  members in its own keys (`key_discovery` has no `vault`)"
+            ),
+            Self::RegisterAdmin(name) => write!(
+                formatter,
+                "{name} is an administrator of the Vault and is not registered by a connection:                  an administrator has to be named by hand"
+            ),
             Self::Action(source) => write!(formatter, "the action failed: {source}"),
         }
     }
