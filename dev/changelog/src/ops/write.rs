@@ -1,8 +1,9 @@
 //! `write`: the draft, merged into the version the workspace is at.
 //!
-//! The merge is a rewrite of the whole file, so it is assembled beside the changelog and renamed
-//! over it. The draft is consumed on success: it is one pending entry, and a draft left behind
-//! would be written again by the next run.
+//! The merge is a rewrite of the whole details file, so it is assembled in a scratch file and
+//! renamed over it; the summary at the repository root is generated from the details in the same
+//! run. The draft is consumed on success: it is one pending entry, and a draft left behind would be
+//! written again by the next run.
 
 use mingling::{
     Grouped,
@@ -10,13 +11,13 @@ use mingling::{
     res::ResExitCode,
 };
 
-use super::{ensure_clean, read_text, replace_atomically};
+use super::{ensure_clean, read_text, write_changelog};
 use crate::document::Document;
 use crate::paths::Workspace;
 use crate::setup::ResAllowDirty;
 use crate::{Error, Next, draft, run_step};
 
-/// Merges the draft into the changelog.
+/// Merges the draft into the details.
 #[command(node = "write")]
 pub fn write() -> StateWrite {
     StateWrite
@@ -34,7 +35,7 @@ pub fn handle_write(_state: StateWrite, allow_dirty: &ResAllowDirty, ec: &mut Re
     empty_result!()
 }
 
-/// Merges the draft into the current version, or does nothing when there is no draft.
+/// Merges the draft into the current version's details, and regenerates the summary.
 fn write_draft(allow_dirty: bool) -> Result<(), Error> {
     let workspace = Workspace::discover()?;
     let draft_path = workspace.draft();
@@ -51,12 +52,12 @@ fn write_draft(allow_dirty: bool) -> Result<(), Error> {
 
     ensure_clean(&workspace, allow_dirty)?;
 
-    let original = read_text(&workspace.changelog())?;
+    let original = read_text(&workspace.details())?;
     let mut document = Document::parse(&original);
 
     document.add_entry(&version, category, entry)?;
 
-    replace_atomically(&workspace, &original, &document.render())?;
+    write_changelog(&workspace, &original, &document.render())?;
 
     std::fs::remove_file(&draft_path).map_err(|error| Error::Io {
         doing: "removing the draft the changelog was written from",

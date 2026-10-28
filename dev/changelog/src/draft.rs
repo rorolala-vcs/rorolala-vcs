@@ -73,6 +73,7 @@ pub fn read(path: &Path) -> Result<(Category, Entry), Error> {
                 .map(|line| line.trim_end().to_owned())
                 .collect(),
             heading_level: 0,
+            number: 0,
         },
     ))
 }

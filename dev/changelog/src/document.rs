@@ -20,8 +20,14 @@
 //! A version writes only the categories it has entries for. Within a category, the entries are
 //! rewritten in the order the README states: breaking first, then by the scope hierarchy, then by
 //! summary, with the numbers reassigned from one.
+//!
+//! What is written here is the details: the document a person edits. The root `CHANGELOG.md` is
+//! derived from it by [`summary`], which keeps the title, versions and categories and turns each
+//! entry into a list item linking to the paragraph it holds in the details.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::fmt::Write as _;
 
 use crate::Error;
 
@@ -89,6 +95,11 @@ pub struct Entry {
     pub body: Vec<String>,
     /// The heading level the entry was written at.
     pub heading_level: usize,
+    /// The number the title was written with.
+    ///
+    /// A summary links to the heading as the details spell it, so the number has to be carried
+    /// beside the title rather than recomputed from the entry's place in the category.
+    pub number: usize,
 }
 
 impl Entry {
@@ -101,6 +112,7 @@ impl Entry {
             return None;
         }
 
+        let number = text[..digits].parse().ok()?;
         let rest = text[digits..].strip_prefix('.')?;
         let rest = if rest.is_empty() {
             rest
@@ -118,26 +130,52 @@ impl Entry {
             summary: rest.trim().to_owned(),
             body: Vec::new(),
             heading_level,
+            number,
         })
     }
 
-    /// The entry as it is written, under `number`.
-    fn render(&self, number: usize) -> String {
-        let mut title = format!("{} {number}.", "#".repeat(self.heading_level));
+    /// The title after the number: the breaking marker, the scopes and the summary.
+    fn title(&self) -> String {
+        let mut title = String::new();
 
         if self.breaking {
-            title.push_str(" **\\[BREAKING!\\]**");
+            title.push_str("**\\[BREAKING!\\]**");
         }
 
         for scope in &self.scopes {
-            title.push_str(" [`");
+            if !title.is_empty() {
+                title.push(' ');
+            }
+
+            title.push_str("[`");
             title.push_str(scope);
             title.push_str("`]");
         }
 
         if !self.summary.is_empty() {
-            title.push(' ');
+            if !title.is_empty() {
+                title.push(' ');
+            }
+
             title.push_str(&self.summary);
+        }
+
+        title
+    }
+
+    /// The anchor of the heading this entry writes, as the details spell it.
+    fn anchor(&self) -> String {
+        slug(&format!("{}. {}", self.number, self.title()))
+    }
+
+    /// The entry as it is written, under `number`.
+    fn render(&self, number: usize) -> String {
+        let mut title = format!("{} {number}.", "#".repeat(self.heading_level));
+        let rest = self.title();
+
+        if !rest.is_empty() {
+            title.push(' ');
+            title.push_str(&rest);
         }
 
         let body = self.body.join("\n");
@@ -287,6 +325,41 @@ impl Document {
         }
     }
 
+    /// The document as the summary writes it.
+    ///
+    /// The title, the versions and the categories are the details'; each entry is a numbered list
+    /// item whose title links to the paragraph the entry holds in the details at `path`.
+    #[must_use]
+    pub fn render_summary(&self, path: &str) -> String {
+        let mut blocks = Vec::new();
+
+        let before = self.before.join("\n");
+        if !before.trim().is_empty() {
+            blocks.push(before.trim().to_owned());
+        }
+
+        let mut slugs = Slugs::default();
+
+        for version in &self.versions {
+            let mut block = version.heading();
+            let body =
+                VersionBody::parse(&version.body, version.level).render_summary(path, &mut slugs);
+
+            if !body.trim().is_empty() {
+                block.push_str("\n\n");
+                block.push_str(body.trim());
+            }
+
+            blocks.push(block);
+        }
+
+        if blocks.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", blocks.join("\n\n"))
+        }
+    }
+
     /// Adds `entry` under `category` to `version`, opening the version when it is not there.
     ///
     /// # Errors
@@ -373,6 +446,15 @@ impl Document {
 
         Ok(0)
     }
+}
+
+/// The summary of `details`, with each entry linking to the details at `path`.
+///
+/// The details are read back from their text rather than taken from an in-memory document, so the
+/// numbers and anchors a summary names are the ones the file actually spells.
+#[must_use]
+pub fn summary(details: &str, path: &str) -> String {
+    Document::parse(details).render_summary(path)
 }
 
 /// One version's body, split into the categories it recognizes and the text it does not.
@@ -525,6 +607,38 @@ impl VersionBody {
 
         blocks.join("\n\n")
     }
+
+    /// The body as the summary writes it: the same intro, categories and outro, with each entry a
+    /// link instead of a paragraph.
+    fn render_summary(&self, path: &str, slugs: &mut Slugs) -> String {
+        let mut blocks = Vec::new();
+
+        let intro = self.intro.join("\n");
+        if !intro.trim().is_empty() {
+            blocks.push(intro.trim().to_owned());
+        }
+
+        let mut categories: Vec<&CategorySection> = self.categories.iter().collect();
+        categories.sort_by_key(|section| section.category);
+
+        for section in categories {
+            let intro = section.intro.join("\n");
+            let outro = section.outro.join("\n");
+
+            if section.entries.is_empty() && intro.trim().is_empty() && outro.trim().is_empty() {
+                continue;
+            }
+
+            blocks.push(section.render_summary(path, slugs));
+        }
+
+        let outro = self.outro.join("\n");
+        if !outro.trim().is_empty() {
+            blocks.push(outro.trim().to_owned());
+        }
+
+        blocks.join("\n\n")
+    }
 }
 
 /// One category under a version.
@@ -585,6 +699,90 @@ impl CategorySection {
 
         blocks.join("\n\n")
     }
+
+    /// The section as the summary writes it: its entries as a numbered list, each linking to the
+    /// paragraph the details hold.
+    fn render_summary(&self, path: &str, slugs: &mut Slugs) -> String {
+        let mut blocks = vec![format!(
+            "{} {}",
+            "#".repeat(self.level),
+            self.category.heading()
+        )];
+
+        let intro = self.intro.join("\n");
+        if !intro.trim().is_empty() {
+            blocks.push(intro.trim().to_owned());
+        }
+
+        if !self.entries.is_empty() {
+            let mut list = String::new();
+
+            for entry in &self.entries {
+                let anchor = slugs.take(entry.anchor());
+
+                writeln!(
+                    list,
+                    "{}. {} — [See details]({path}#{anchor})",
+                    entry.number,
+                    entry.title()
+                )
+                .ok();
+            }
+
+            blocks.push(list.trim_end().to_owned());
+        }
+
+        let outro = self.outro.join("\n");
+        if !outro.trim().is_empty() {
+            blocks.push(outro.trim().to_owned());
+        }
+
+        blocks.join("\n\n")
+    }
+}
+
+/// The anchors a summary has handed out.
+///
+/// GitHub suffixes the second heading with the same anchor with `-1`, the third with `-2`, and so
+/// on. The same is done here so a link lands on the heading it names even when two entries are
+/// titled alike.
+#[derive(Debug, Default)]
+struct Slugs {
+    /// How many times each base anchor has been written.
+    seen: HashMap<String, usize>,
+}
+
+impl Slugs {
+    /// The anchor for `base`, suffixed when it is not the first of its name.
+    fn take(&mut self, base: String) -> String {
+        let seen = self.seen.entry(base.clone()).or_insert(0);
+        let anchor = if *seen == 0 {
+            base
+        } else {
+            format!("{base}-{seen}")
+        };
+
+        *seen += 1;
+
+        anchor
+    }
+}
+
+/// The anchor GitHub gives a heading with `text`.
+///
+/// GitHub lowercases the heading, drops everything that is not a letter, a number, `_`, `-` or a
+/// space, and turns each space into a hyphen. The rule is reproduced rather than approximated so a
+/// summary's link lands on the heading it was written from.
+fn slug(text: &str) -> String {
+    let mut slug = String::with_capacity(text.len());
+
+    for character in text.chars() {
+        if character.is_alphanumeric() || matches!(character, ' ' | '-' | '_') {
+            slug.extend(character.to_lowercase());
+        }
+    }
+
+    slug.replace(' ', "-")
 }
 
 /// The category `segment` is, read from its heading and the lines under it.
@@ -799,6 +997,7 @@ mod tests {
             summary: summary.to_owned(),
             body: body.lines().map(str::to_owned).collect(),
             heading_level: 0,
+            number: 0,
         }
     }
 
@@ -1030,6 +1229,79 @@ More.
             document
                 .render()
                 .starts_with("# Changelog\n\nAll notable changes.")
+        );
+    }
+
+    #[test]
+    fn a_summary_links_each_entry_to_its_paragraph_in_the_details() {
+        let text = "\
+# Changelog
+
+All notable changes.
+
+# 0.1.0 (Unreleased)
+
+## Bugfix
+
+### 1. **\\[BREAKING!\\]** [`cli`] [`rola`] Fix it
+
+The body.
+
+### 2. [`vault`] Summary
+
+More.
+";
+
+        assert_eq!(
+            super::summary(text, "dev/CHANGELOG-DETAILS.md"),
+            "\
+# Changelog
+
+All notable changes.
+
+# 0.1.0 (Unreleased)
+
+## Bugfix
+
+1. **\\[BREAKING!\\]** [`cli`] [`rola`] Fix it — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-cli-rola-fix-it)
+2. [`vault`] Summary — [See details](dev/CHANGELOG-DETAILS.md#2-vault-summary)
+"
+        );
+    }
+
+    #[test]
+    fn a_summary_leaves_out_the_bodies() {
+        let text = "# 0.1.0 (Unreleased)\n\n## Bugfix\n\n### 1. Summary\n\nA body.\n";
+        let summary = super::summary(text, "details.md");
+
+        assert!(summary.contains("1. Summary — [See details](details.md#1-summary)"));
+        assert!(!summary.contains("A body."));
+    }
+
+    #[test]
+    fn a_repeated_heading_gets_the_suffix_github_gives_it() {
+        let text = "\
+# 0.1.0 (Unreleased)
+
+## Bugfix
+
+### 1. Same
+
+## Feature
+
+### 1. Same
+";
+        let summary = super::summary(text, "details.md");
+
+        assert!(summary.contains("details.md#1-same)"));
+        assert!(summary.contains("details.md#1-same-1)"));
+    }
+
+    #[test]
+    fn an_anchor_drops_punctuation_and_lowercases() {
+        assert_eq!(
+            super::slug("1. **\\[BREAKING!\\]** [`app`] It's [done]."),
+            "1-breaking-app-its-done"
         );
     }
 }

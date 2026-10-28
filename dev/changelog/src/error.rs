@@ -85,6 +85,11 @@ pub enum Error {
         /// The version that is sealed.
         version: String,
     },
+    /// The details file is not there, so there is nothing to render a summary from.
+    DetailsMissing {
+        /// The path that was read.
+        path: PathBuf,
+    },
     /// The changelog is open for a version the workspace is no longer at.
     StaleUnreleased {
         /// The version still marked `(Unreleased)`.
@@ -128,6 +133,7 @@ impl Error {
             | Self::InvalidCategory { .. }
             | Self::InvalidScope { .. }
             | Self::Archived { .. }
+            | Self::DetailsMissing { .. }
             | Self::StaleUnreleased { .. }
             | Self::NoUnreleased
             | Self::VersionNotNamed
@@ -182,13 +188,22 @@ impl fmt::Display for Error {
                 "`{version}` is already archived and cannot be written to; set the next version \
                  with `cargo changelog set-version <VERSION>`"
             ),
+            Self::DetailsMissing { path } => write!(
+                f,
+                "{}: the changelog details are missing; restore the file before rendering the \
+                 summary",
+                path.display()
+            ),
             Self::StaleUnreleased { stale, current } => write!(
                 f,
-                "CHANGELOG.md still has `{stale}` unreleased, but the workspace is at `{current}`; \
-                 run `cargo changelog archive` to seal it, then write again"
+                "`dev/CHANGELOG-DETAILS.md` still has `{stale}` unreleased, but the workspace is at \
+                 `{current}`; run `cargo changelog archive` to seal it, then write again"
             ),
             Self::NoUnreleased => {
-                write!(f, "CHANGELOG.md has no `(Unreleased)` section to archive")
+                write!(
+                    f,
+                    "`dev/CHANGELOG-DETAILS.md` has no `(Unreleased)` section to archive"
+                )
             }
             Self::VersionNotNamed => write!(
                 f,

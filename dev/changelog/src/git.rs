@@ -63,7 +63,11 @@ fn is_own_scratch(line: &str) -> bool {
 
     matches!(
         path,
-        "__CHANGELOG_DRAFT.md" | "__CHANGELOG_BACKUP.md" | "__CHANGELOG_REWRITE.md"
+        "__CHANGELOG_DRAFT.md"
+            | "__CHANGELOG_BACKUP.md"
+            | "__CHANGELOG_REWRITE.md"
+            | "__CHANGELOG_DETAILS_BACKUP.md"
+            | "__CHANGELOG_DETAILS_REWRITE.md"
     )
 }
 
@@ -90,6 +94,9 @@ mod tests {
         assert!(!is_dirty("?? __CHANGELOG_DRAFT.md\n"));
         assert!(!is_dirty(
             " M __CHANGELOG_BACKUP.md\n M __CHANGELOG_REWRITE.md\n"
+        ));
+        assert!(!is_dirty(
+            "?? __CHANGELOG_DETAILS_BACKUP.md\n?? __CHANGELOG_DETAILS_REWRITE.md\n"
         ));
         // A file that merely starts the same way is still the tree's.
         assert!(is_dirty("?? __CHANGELOG_NOTE_BY_THE_USER.md\n"));

@@ -5,8 +5,9 @@ COMMANDS:
    set-version <VERSION>  Set workspace.package.version and refresh Cargo.lock
    get-version            Print the workspace version; exit 10 when it is absent
    write-reset            Reset the draft at __CHANGELOG_DRAFT.md
-   write                  Merge the draft into CHANGELOG.md
-   archive                Date the newest Unreleased section and seal it
+   write                  Merge the draft into dev/CHANGELOG-DETAILS.md and regenerate CHANGELOG.md
+   render-summary         Regenerate CHANGELOG.md from dev/CHANGELOG-DETAILS.md
+   archive                Date the newest Unreleased section, seal it and regenerate CHANGELOG.md
 
 GLOBAL FLAGS:
    --allow-dirty          Go on where a command would refuse a dirty tree

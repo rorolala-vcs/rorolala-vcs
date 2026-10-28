@@ -575,8 +575,10 @@ jobs:
         run: cat .cache/reports/result.md >> "$GITHUB_STEP_SUMMARY"
 
   # A tag is released only once both the checks and the packages succeeded, and what is released is
-  # the tag's own commit: its message is the body, its date and short hash are the heading, and the
-  # people whose commits made up the range since the previous tag are named below it.
+  # the tag's own commit: the version's own section of `CHANGELOG.md` is the body, its date and short
+  # hash are the heading, and the people whose commits made up the range since the previous tag are
+  # named below it. The section's links point at `dev/CHANGELOG-DETAILS.md` beside it; a release body
+  # has no repository to resolve a relative link against, so they are made absolute at the tag.
   release:
     name: Release
     needs:
@@ -608,9 +610,10 @@ jobs:
         shell: bash
         run: |
           tag="${GITHUB_REF_NAME}"
-          commit="$(git rev-parse --short=7 "$tag")"
-          date="$(git log -1 --format=%cd --date=format:%Y-%m-%d "$tag")"
-          message="$(git log -1 --format=%B "$tag")"
+          version="${tag#v}"
+          commit="$(git rev-parse "${tag}^{commit}")"
+          short="$(git rev-parse --short=7 "${tag}^{commit}")"
+          date="$(git log -1 --format=%cd --date=format:%Y-%m-%d "${tag}")"
 
           # The tag before this one, when there is one: that is what the range of commit authors is
           # taken over. An empty range is the tag itself, which is the first release.
@@ -621,10 +624,34 @@ jobs:
           fi
           co="$(git log "$range" --format=%an | sort -u | paste -sd ', ' -)"
 
+          # The version's own section of the summary, heading and all. A heading is the only thing
+          # at the document's first level, so the next one ends the section.
+          fragment="$(awk -v heading="# ${version} (" '
+            index($0, heading) == 1 { printing = 1 }
+            printing && /^# / && index($0, heading) != 1 { exit }
+            printing { print }
+          ' CHANGELOG.md)"
+
+          if [ -z "$fragment" ]; then
+            echo "CHANGELOG.md has no section for ${version}" >&2
+            exit 1
+          fi
+
+          if printf '%s\n' "$fragment" | head -n 1 | grep -q '(Unreleased)'; then
+            echo "the ${version} section of CHANGELOG.md is still Unreleased; archive it first" >&2
+            exit 1
+          fi
+
+          # The summary links each entry to its paragraph in the details, relative to the repository
+          # root. A release body is rendered away from the repository, so every such link is made
+          # absolute at the tagged commit before it is published.
+          base="https://github.com/rorolala-vcs/rorolala-vcs/blob/${commit}/"
+          fragment="$(printf '%s\n' "$fragment" | sed "s|](dev/CHANGELOG-DETAILS.md#|](${base}dev/CHANGELOG-DETAILS.md#|g")"
+
           {
-            echo "Release ${tag} - (${date}-${commit})"
+            echo "Release ${tag} - (${date}-${short})"
             echo
-            printf '%s\n' "$message"
+            printf '%s\n' "$fragment"
             echo
             echo "Co: ${co}"
           } > release.md

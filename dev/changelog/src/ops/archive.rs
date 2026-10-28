@@ -3,7 +3,7 @@
 //! What is sealed is the first version still marked `(Unreleased)` — the one a release is being made
 //! from — rather than a version looked up from the manifest. The two agree in the usual order, and
 //! sealing the section that is open is what makes a version bumped before its archive still
-//! releasable.
+//! releasable. The summary at the repository root is generated from the details in the same run.
 
 use mingling::{
     Grouped,
@@ -11,7 +11,7 @@ use mingling::{
     res::ResExitCode,
 };
 
-use super::{ensure_clean, read_text, replace_atomically};
+use super::{ensure_clean, read_text, write_changelog};
 use crate::document::Document;
 use crate::paths::Workspace;
 use crate::setup::ResAllowDirty;
@@ -39,18 +39,18 @@ pub fn handle_archive(
     empty_result!()
 }
 
-/// Replaces the newest `(Unreleased)` marker with today's UTC date.
+/// Dates the newest open version, seals it, and regenerates the summary.
 fn archive_current(allow_dirty: bool) -> Result<(), Error> {
     let workspace = Workspace::discover()?;
     ensure_clean(&workspace, allow_dirty)?;
 
     let date = date::today_utc()?;
-    let original = read_text(&workspace.changelog())?;
+    let original = read_text(&workspace.details())?;
     let mut document = Document::parse(&original);
 
     let version = document.archive_newest(&date)?;
 
-    replace_atomically(&workspace, &original, &document.render())?;
+    write_changelog(&workspace, &original, &document.render())?;
 
     eprintln!("archived {version} ({date})");
 

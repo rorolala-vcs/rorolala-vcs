@@ -1,6 +1,8 @@
 //! `rola-changelog`: the editor behind `cargo changelog`.
 //!
-//! A changelog is a file with one version at a time open for writing. A draft says what is about to
+//! The changelog is two files. `dev/CHANGELOG-DETAILS.md` is the details: the file a person writes,
+//! with one version at a time open for writing. `CHANGELOG.md` at the repository root is the
+//! summary generated from it in the same run that changes the details. A draft says what is about to
 //! be written; `write` merges it into the version the workspace is at, `archive` dates that version
 //! and seals it, and `set-version` moves the workspace on to the next one. The shapes they read are
 //! `document` and `draft`; where the files live is `paths`; the version in the manifest is
