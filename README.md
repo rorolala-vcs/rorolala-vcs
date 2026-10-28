@@ -46,7 +46,7 @@ Once the build is complete, the artifacts will be exported to the `build/` direc
 
 On Linux, `cargo dev publish` builds that export and packages it as `rorolala-vcs`, `rorolala-desktop`
 and `rorolala-dev` in deb, rpm and Arch form, plus a `rorolala-full` meta package, an all-in-one
-`rorolala` package and a launcher-only AppImage. The all-in-one holds what the three split packages
+`rorolala` package and a launcher-only `AppImage`. The all-in-one holds what the three split packages
 hold; the meta names them; the two are mutually exclusive. The package installs a **user**
 `rolad.service` but does not start or enable it:
 
