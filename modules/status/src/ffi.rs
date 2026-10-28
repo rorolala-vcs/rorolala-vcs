@@ -157,6 +157,29 @@ impl Status {
         at(&self.untagged, index)
     }
 
+    /// How many paths the tree gained that the ignore rules govern.
+    ///
+    /// They are not among [`untagged_count`](Self::untagged_count): the reading keeps what the
+    /// rules cover apart from what it reports as work, and this is the list a reader shows when it
+    /// is asked to show the ignored as well.
+    #[must_use]
+    #[lazyffi(export = rola_status_ignored_count)]
+    pub const fn ignored_count(&self) -> usize {
+        self.ignored.len()
+    }
+
+    /// The path at `index` among what the ignore rules govern.
+    ///
+    /// # FFI
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    #[must_use]
+    #[lazyffi(export = rola_status_ignored_at)]
+    pub fn ignored_at(&self, index: usize) -> String {
+        at(&self.ignored, index)
+    }
+
     /// How many paths changed where they were.
     ///
     /// What is counted is everything modified that did not move, and never a path another account

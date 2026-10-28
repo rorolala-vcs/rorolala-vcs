@@ -208,6 +208,14 @@ pub struct Status {
     /// Paths the tree holds that the Layout does not name.
     pub untagged: Vec<String>,
 
+    /// Paths the tree holds, the Layout does not name, and the ignore rules govern.
+    ///
+    /// They are held apart from [`untagged`](Self::untagged) rather than dropped, so that a reader
+    /// which wants to show what the rules cover — a window switching them on — has the list to
+    /// show. A rule is not written against a path the Layout names, and a move the reading found is
+    /// not the rules' to hide, so neither is here.
+    pub ignored: Vec<String>,
+
     /// Paths that changed where they were, including the destinations of moves that were also
     /// edited, and never the ones another account holds.
     pub modified: Vec<String>,
@@ -332,6 +340,12 @@ impl Status {
                 .untagged
                 .iter()
                 .filter(|path| !moved.contains(*path))
+                .map(LayoutPath::as_str)
+                .map(str::to_owned)
+                .collect(),
+            ignored: diff
+                .ignored
+                .iter()
                 .map(LayoutPath::as_str)
                 .map(str::to_owned)
                 .collect(),
@@ -747,6 +761,27 @@ mod tests {
         assert_eq!(status.lost, vec!["gone.txt".to_owned()], "{status:?}");
         assert_eq!(status.untagged, vec!["new.txt".to_owned()], "{status:?}");
         assert_eq!(status.modified, Vec::<String>::new(), "{status:?}");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// What the ignore rules govern is held apart from what the tree gained rather than shown as
+    /// work, and the reading still carries it for a reader that wants to show it.
+    #[test]
+    fn a_gain_the_ignore_rules_govern_is_held_apart() {
+        let (dir, workspace) = workspace("ignored");
+        let rules_dir = dir.join(".rola/info/ignore");
+        fs::create_dir_all(&rules_dir).unwrap();
+        fs::write(rules_dir.join("default"), "*.mb\n").unwrap();
+
+        fs::write(dir.join("scratch.mb"), b"scratch").unwrap();
+        fs::write(dir.join("new.txt"), b"new").unwrap();
+
+        let rules = IgnoreRuleSet::load(&rules_dir, &dir).unwrap();
+        let status = Status::read(&workspace, &working(&workspace), None, None, &rules).unwrap();
+
+        assert_eq!(status.untagged, vec!["new.txt".to_owned()], "{status:?}");
+        assert_eq!(status.ignored, vec!["scratch.mb".to_owned()], "{status:?}");
 
         let _ = fs::remove_dir_all(&dir);
     }

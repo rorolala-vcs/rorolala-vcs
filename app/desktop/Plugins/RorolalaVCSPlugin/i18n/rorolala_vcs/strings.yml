@@ -202,6 +202,17 @@ rorolala_vcs:
       en: Refresh
       zh-CN: 刷新
 
+    # The switch beside it, which decides whether what the ignore rules govern is among the rows. The
+    # words are what pressing it does, since a switch is read for its next state rather than its last:
+    # the rows it shows are drawn in the ink of what is not to be acted on, and the eye says which way
+    # the switch stands.
+    show_ignored:
+      en: Show the entries the ignore rules govern
+      zh-CN: 显示被忽略规则管辖的条目
+    hide_ignored:
+      en: Hide the entries the ignore rules govern
+      zh-CN: 隐藏被忽略规则管辖的条目
+
     # What the columns are called, which is the band over the rows. The first is what each path's state is —
     # the kind of change it is and what became of its content, one pill each — and the other two are the
     # paths a change is between, one of which is empty where the change has no such side.

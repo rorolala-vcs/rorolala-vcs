@@ -228,6 +228,7 @@ public sealed class RorolalaDockTests
         StatusFacts facts = new(
             Lost: ["gone.txt"],
             Untagged: [],
+            Ignored: [],
             Renamed: [],
             Modified: [],
             Unowned: [],
@@ -268,6 +269,7 @@ public sealed class RorolalaDockTests
         StatusFacts facts = new(
             Lost: ["gone.txt"],
             Untagged: ["new.txt"],
+            Ignored: [],
             Renamed: [new Rename("a.txt", "b.txt", Modified: false, Strong: true)],
             Modified: ["kept.txt", "stale.psd"],
             Unowned: ["theirs.psd"],
@@ -321,6 +323,54 @@ public sealed class RorolalaDockTests
         Assert.Equal(("kept.txt", string.Empty), (rows[6].From, rows[6].To));
     }
 
+    /// <summary>
+    /// What the ignore rules govern is left out of the table unless the switch asks for it, and what is
+    /// shown of it is drawn as what is not the work.
+    /// </summary>
+    /// <remarks>
+    /// The reading keeps the two apart — what the tree gained as work, and what the rules govern — so which
+    /// of them a table is built from is the view's answer. A row of the governed is read like an untagged one
+    /// and offers nothing to do with it: a recording refuses a path the rules govern, and a button that could
+    /// only refuse is a row pretending to be work.
+    /// </remarks>
+    [Fact]
+    public void WhatTheIgnoreRulesGovernIsDrawnOnlyWhenAskedFor()
+    {
+        _ = Host.Services();
+
+        StatusFacts facts = new(
+            Lost: [],
+            Untagged: ["new.txt"],
+            Ignored: ["scratch.mb"],
+            Renamed: [],
+            Modified: [],
+            Unowned: [],
+            WrongBase: [],
+            Merging: [],
+            Broken: [],
+            Sends: [],
+            Receives: [],
+            Apart: []
+        );
+
+        // Not asked for: the table is the work, and what the rules govern is not among it.
+        var quiet = OverviewView.Rows(facts);
+
+        var gain = Assert.Single(quiet);
+        Assert.False(gain.Ignored);
+        Assert.Equal(("new.txt", string.Empty), (gain.From, gain.To));
+
+        // Asked for: the governed path is a row of its own, last, marked as not the work's and with nothing
+        // to press — the ink it is drawn in is the row's flag, which the drawing reads.
+        var shown = OverviewView.Rows(facts, showIgnored: true);
+
+        Assert.Equal(2, shown.Count);
+        Assert.True(shown[1].Ignored);
+        Assert.Equal(("scratch.mb", string.Empty), (shown[1].From, shown[1].To));
+        Assert.Empty(shown[1].Operations);
+        Assert.Equal(["A"], shown[1].Pills.Select(pill => pill.Letters));
+    }
+
     /// <summary>A path a sync would move is a row of the last group, with no button of its own.</summary>
     /// <remarks>
     /// What is in step with nothing wrong about it is still a file a sync would carry, and the Overview is where it
@@ -337,6 +387,7 @@ public sealed class RorolalaDockTests
         StatusFacts facts = new(
             Lost: [],
             Untagged: [],
+            Ignored: [],
             Renamed: [],
             Modified: [],
             Unowned: [],
@@ -380,6 +431,7 @@ public sealed class RorolalaDockTests
         StatusFacts facts = new(
             Lost: [],
             Untagged: [],
+            Ignored: [],
             Renamed: [],
             Modified: [],
             Unowned: [],
@@ -439,6 +491,7 @@ public sealed class RorolalaDockTests
         StatusFacts facts = new(
             Lost: [],
             Untagged: [],
+            Ignored: [],
             Renamed:
             [
                 new Rename("c.txt", "d.txt", Modified: false, Strong: true),
@@ -475,6 +528,7 @@ public sealed class RorolalaDockTests
         StatusFacts facts = new(
             Lost: [],
             Untagged: [],
+            Ignored: [],
             Renamed: [new Rename("a.txt", "b.txt", Modified: true, Strong: false)],
             Modified: ["b.txt"],
             Unowned: [],
@@ -508,6 +562,7 @@ public sealed class RorolalaDockTests
         StatusFacts facts = new(
             Lost: [],
             Untagged: [],
+            Ignored: [],
             Renamed: [],
             Modified: [],
             Unowned: [],
@@ -574,6 +629,7 @@ public sealed class RorolalaDockTests
         StatusFacts facts = new(
             Lost: ["gone.txt"],
             Untagged: ["new.txt"],
+            Ignored: [],
             Renamed: [new Rename("a.txt", "b.txt", Modified: true, Strong: true)],
             Modified: ["a-b.txt", "kept.txt"],
             Unowned: ["theirs.psd"],

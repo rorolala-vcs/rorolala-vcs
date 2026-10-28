@@ -178,6 +178,16 @@ fn creation(
         &said(&ran),
     );
 
+    // And with the rules it ignores by, which is what keeps the platforms' own files out of the work
+    // a run is told to confirm.
+    let defaults = initme.join(".rola/info/ignore/default");
+    checked.wants(
+        "the Workspace is made with the rules it ignores by",
+        fs::read_to_string(&defaults)
+            .is_ok_and(|rules| rules.contains("nul") && rules.contains(".DS_Store")),
+        &said(&ran),
+    );
+
     let ran = rola.run(empty, &["--vault", "create", &text(vault)]);
     checked.exits("a Vault is made", &ran, 0);
     checked.wants(
@@ -188,6 +198,16 @@ fn creation(
     checked.wants(
         "the Vault holds its configuration",
         vault.join("vault.toml").is_file(),
+        &said(&ran),
+    );
+
+    // And the rules it hands down, which a Workspace fetching it begins by ignoring the platforms'
+    // own files with rather than by reading them as work.
+    let handed = vault.join("info/ignore/default-ignore-rule");
+    checked.wants(
+        "the Vault holds the rules it hands down",
+        fs::read_to_string(&handed)
+            .is_ok_and(|rules| rules.contains("nul") && rules.contains(".DS_Store")),
         &said(&ran),
     );
 
@@ -1042,6 +1062,18 @@ fn ignore_rules(rola: &Rola, dir: &Path, checked: &mut Checked) {
     fs::write(dir.join("scratch.mb"), "scratch\n").expect("a file the rules govern");
     fs::write(dir.join("loose.txt"), "loose\n").expect("a file no rule governs");
 
+    // The rules a Workspace is made with cover the platforms' own files, so one of them is never
+    // shown as work to confirm — even with a rule set of the run's own written beside it.
+    let made_with = rules.join("default");
+    checked.wants(
+        "the Workspace was made with the default rules",
+        fs::read_to_string(&made_with)
+            .is_ok_and(|written| written.contains("nul") && written.contains(".DS_Store")),
+        &said(&ran),
+    );
+
+    fs::write(dir.join(".DS_Store"), "finder\n").expect("a file the default rules govern");
+
     // What the rules govern is not a gain of the tree, so the two readings leave it out.
     let ran = rola.run(dir, &["status"]);
     checked.exits("a status is read with the rules", &ran, 0);
@@ -1053,6 +1085,11 @@ fn ignore_rules(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.wants(
         "a path the rules govern is not shown",
         !ran.stdout.contains("scratch.mb"),
+        &said(&ran),
+    );
+    checked.wants(
+        "a file the default rules govern is not shown either",
+        !ran.stdout.contains(".DS_Store"),
         &said(&ran),
     );
 

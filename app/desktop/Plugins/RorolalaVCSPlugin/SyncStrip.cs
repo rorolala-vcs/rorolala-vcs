@@ -71,6 +71,25 @@ internal sealed class SyncStrip : StackPanel
     /// <summary>Where the work is rooted, read when a button is pressed rather than when it is drawn.</summary>
     private readonly Func<string?> _at;
 
+    /// <summary>Whether the Overview is showing what the ignore rules govern, read as the mark is drawn.</summary>
+    private readonly Func<bool> _ignoredShown;
+
+    /// <summary>What turns showing the ignored on and off, which is the Overview's answer to draw.</summary>
+    private readonly Action _toggleIgnored;
+
+    /// <summary>
+    /// The switch that shows what the ignore rules govern: its mark, the two pictures it swaps between, and
+    /// the button it is on.
+    /// </summary>
+    /// <remarks>
+    /// An eye and an eye struck through, which is the browser's own pair for the same question and is drawn
+    /// again in this plugin's set so that each plugin's keys stay its own. The pictures are looked for once,
+    /// when the strip is made: the icon library is the host's and does not change under it.
+    /// </remarks>
+    private Border? _ignoredMark;
+    private (Bitmap? Shown, Bitmap? Hidden)? _ignoredEyes;
+    private Button? _ignored;
+
     /// <summary>Whether the key that changes what a run does is held.</summary>
     private bool _shifted;
 
@@ -78,22 +97,39 @@ internal sealed class SyncStrip : StackPanel
     /// <param name="host">The host.</param>
     /// <param name="sync">What the strip is drawn from.</param>
     /// <param name="at">Where the work is rooted, read when a button is pressed.</param>
-    /// <param name="refresh">What reading the work again is, which is the first button.</param>
-    public SyncStrip(IPluginHost host, SyncWatcher sync, Func<string?> at, Action refresh)
+    /// <param name="refresh">What reading the work again is, which the switch stands before.</param>
+    /// <param name="ignoredShown">Whether what the ignore rules govern is being shown.</param>
+    /// <param name="toggleIgnored">What shows it, or stops showing it.</param>
+    public SyncStrip(
+        IPluginHost host,
+        SyncWatcher sync,
+        Func<string?> at,
+        Action refresh,
+        Func<bool> ignoredShown,
+        Action toggleIgnored
+    )
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(sync);
         ArgumentNullException.ThrowIfNull(at);
         ArgumentNullException.ThrowIfNull(refresh);
+        ArgumentNullException.ThrowIfNull(ignoredShown);
+        ArgumentNullException.ThrowIfNull(toggleIgnored);
 
         _host = host;
         _sync = sync;
         _at = at;
+        _ignoredShown = ignoredShown;
+        _toggleIgnored = toggleIgnored;
 
         Orientation = Orientation.Horizontal;
         Spacing = 2;
         VerticalAlignment = VerticalAlignment.Center;
 
+        // The switch stands before reading the work again, which is where the strip's own row begins: it is
+        // about what the reading shows rather than about the work, and a reader reaches for it less often
+        // than for the refresh beside it.
+        Children.Add(Ignored());
         Children.Add(Button(Glyph(Icons.Refresh), "rorolala_vcs.status.refresh", refresh));
 
         _group = new Border
@@ -210,10 +246,81 @@ internal sealed class SyncStrip : StackPanel
         boxes.Children.Add(box);
     }
 
+    /// <summary>
+    /// The switch that shows what the ignore rules govern.
+    /// </summary>
+    /// <remarks>
+    /// Drawn as the eye the browser draws a hide rule with, struck through while the ignored are left out:
+    /// what is shown is the reading's, and what it shows is that the rules are not the whole of the tree. The
+    /// pictures are kept so that the switch can turn without the strip being made again.
+    /// </remarks>
+    /// <returns>The button.</returns>
+    private Button Ignored()
+    {
+        _ignoredEyes = (_host.Icons.Find(Icons.Visibility), _host.Icons.Find(Icons.VisibilityOff));
+        _ignoredMark = Glyph(Icons.VisibilityOff);
+
+        var button = Button(_ignoredMark, "rorolala_vcs.status.show_ignored", () =>
+        {
+            _toggleIgnored();
+
+            // The switch is drawn from what the Overview now says: the press changed it, and the strip's
+            // next drawing is the one after it rather than one that has to be asked for elsewhere.
+            Paint();
+        });
+
+        button.Classes.Set("on", _ignoredShown());
+        _ignored = button;
+
+        return button;
+    }
+
+    /// <summary>Draws the switch as whether the ignored are shown says it is.</summary>
+    /// <remarks>
+    /// The eye is the shown one while the ignored are being shown, and the struck-through one while they
+    /// are not; the mark is drawn in the accent while the switch is on, which is what the look does with a
+    /// tool that is turned on, and in the strip's own ink while it is off.
+    /// </remarks>
+    private void IgnoredMark()
+    {
+        if (_ignoredMark is not { } mark || _ignoredEyes is not { } eyes || _ignored is not { } button)
+        {
+            return;
+        }
+
+        var shown = _ignoredShown();
+
+        if ((shown ? eyes.Shown : eyes.Hidden) is { } picture)
+        {
+            mark.OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform };
+
+            // Read much larger than it is shown, so the mask is reducing the picture: the high filter is what
+            // keeps the eye's stroke whole on the way down.
+            Avalonia.Media.RenderOptions.SetBitmapInterpolationMode(
+                mark,
+                BitmapInterpolationMode.HighQuality
+            );
+        }
+
+        mark[!Border.BackgroundProperty] = new DynamicResourceExtension(
+            shown ? PaletteKeys.PrimaryText : Ink
+        );
+
+        button.Classes.Set("on", shown);
+        ToolTip.SetTip(
+            button,
+            RolaI18N.Get(
+                shown ? "rorolala_vcs.status.hide_ignored" : "rorolala_vcs.status.show_ignored"
+            )
+        );
+    }
+
     /// <summary>Draws the strip as the state and the key held say it is.</summary>
     private void Paint()
     {
         var said = _shifted ? RolaI18N.Get("rorolala_vcs.sync.forced") : null;
+
+        IgnoredMark();
 
         foreach (var (button, mark, label, way) in _ways)
         {

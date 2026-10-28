@@ -5,7 +5,9 @@ use rorolala_storage::RorolalaStorage;
 use rorolala_utils_configure::Config;
 use rorolala_utils_lazyffi::lazyffi;
 
-use crate::{CONFIG_PATH, CreationError, DATA_DIR, INDEX_DIR, STORAGE_DIR, Workspace};
+use crate::{
+    CONFIG_PATH, CreationError, DATA_DIR, IGNORE_RULES_DIR, INDEX_DIR, STORAGE_DIR, Workspace,
+};
 
 /// Marking the data directory hidden the way Windows says a directory is hidden.
 ///
@@ -96,6 +98,15 @@ impl Workspace {
         hidden::marked(&data);
 
         fs::create_dir_all(dir.join(INDEX_DIR)).map_err(|_| CreationError::DataDirCreateFailed)?;
+
+        // The rules a Workspace ignores by are part of what it is made with rather than something to
+        // be written later: a project that began with none would read the platform's own files as
+        // work on its first reading, which is the noise the file is there to leave out.
+        rorolala_ignore::write_default(
+            &dir.join(IGNORE_RULES_DIR),
+            rorolala_ignore::WORKSPACE_FILE,
+        )
+        .map_err(|_| CreationError::DataDirCreateFailed)?;
 
         let config = Config::<crate::config::Config>::new(dir.join(CONFIG_PATH)).map_err(
             |error| match error {
@@ -246,6 +257,27 @@ mod tests {
         // The index is part of a Workspace rather than something to be set up beside it: a
         // Workspace that exists has somewhere to write it the moment it does.
         assert!(dir.join(INDEX_DIR).is_dir(), "{:?}", dir.join(INDEX_DIR));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A Workspace is made with the rules it ignores by, so that its first reading leaves the
+    /// platforms' own files out rather than showing them as work to confirm.
+    #[test]
+    fn creating_a_workspace_writes_the_rules_it_ignores_by() {
+        let dir = scratch("ignore-rules");
+
+        Workspace::create(&dir).unwrap();
+
+        let file = dir
+            .join(crate::IGNORE_RULES_DIR)
+            .join(rorolala_ignore::WORKSPACE_FILE);
+
+        assert!(file.is_file(), "{file:?}");
+        assert_eq!(
+            fs::read_to_string(&file).unwrap(),
+            rorolala_ignore::DEFAULT_RULES
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }

@@ -224,6 +224,7 @@ public sealed class RolaStatus : IDisposable
 
         List<string> lost;
         List<string> untagged;
+        List<string> ignored;
         List<string> modified;
         List<string> unowned;
         List<string> wrongBase;
@@ -247,6 +248,11 @@ public sealed class RolaStatus : IDisposable
                 handle,
                 RorolalaBinding.rola_status_untagged_count,
                 RorolalaBinding.rola_status_untagged_at
+            );
+            ignored = Paths(
+                handle,
+                RorolalaBinding.rola_status_ignored_count,
+                RorolalaBinding.rola_status_ignored_at
             );
             modified = Paths(
                 handle,
@@ -307,6 +313,7 @@ public sealed class RolaStatus : IDisposable
         Root = root;
         Lost = lost;
         Untagged = untagged;
+        Ignored = ignored;
         Modified = modified;
         Unowned = unowned;
         WrongBase = wrongBase;
@@ -332,6 +339,14 @@ public sealed class RolaStatus : IDisposable
 
     /// <summary>Paths the tree holds that the Layout does not name.</summary>
     public IReadOnlyList<string> Untagged { get; }
+
+    /// <summary>Paths the tree holds, the Layout does not name, and the ignore rules govern.</summary>
+    /// <remarks>
+    /// They are not in <see cref="Untagged"/>: a reading reports the work, and what the rules cover
+    /// is not work. What they are is what a reader shows when it is asked to show the ignored as
+    /// well — a view switches them on rather than being read twice.
+    /// </remarks>
+    public IReadOnlyList<string> Ignored { get; }
 
     /// <summary>
     /// Paths that changed where they were, including the destinations of moves that were edited as

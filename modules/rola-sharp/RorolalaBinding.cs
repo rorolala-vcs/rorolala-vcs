@@ -2177,6 +2177,21 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_status_untagged_at(nint self, nuint index);
 
     /// <summary>
+    /// How many paths the tree gained that the ignore rules govern.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_status_ignored_count(nint self);
+
+    /// <summary>
+    /// The path at `index` among what the ignore rules govern.
+    ///
+    /// An empty string when there is no such entry. The caller owns the string and releases it with
+    /// `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_status_ignored_at(nint self, nuint index);
+
+    /// <summary>
     /// How many paths changed where they were.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

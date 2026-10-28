@@ -31,9 +31,9 @@ pub use root_vault::*;
 /// These are the layout [`rorolala_utils_constants`] states, re-exported so the Vault's
 /// own spelling of where it keeps things is still one name.
 pub use rorolala_utils_constants::{
-    VAULT_CONFIG_PATH as CONFIG_PATH, VAULT_INDEX_DIR as INDEX_DIR, VAULT_KEYS_DIR as KEYS_DIR,
-    VAULT_LAYOUT_DIR as LAYOUT_DIR, VAULT_STORAGE_DIR as STORAGE_DIR,
-    VAULT_VAULTS_DIR as VAULTS_DIR,
+    VAULT_CONFIG_PATH as CONFIG_PATH, VAULT_IGNORE_RULES_DIR as IGNORE_RULES_DIR,
+    VAULT_INDEX_DIR as INDEX_DIR, VAULT_KEYS_DIR as KEYS_DIR, VAULT_LAYOUT_DIR as LAYOUT_DIR,
+    VAULT_STORAGE_DIR as STORAGE_DIR, VAULT_VAULTS_DIR as VAULTS_DIR,
 };
 
 /// Rorolala remote resource vault

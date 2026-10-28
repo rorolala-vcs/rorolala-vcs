@@ -4013,6 +4013,7 @@ version = "0.1.2"
 dependencies = [
  "just_fmt 0.2.1",
  "rorolala-errors",
+ "rorolala-ignore",
  "rorolala-layout",
  "rorolala-storage",
  "rorolala-utils-configure",
@@ -4043,6 +4044,7 @@ name = "rorolala-workspace"
 version = "0.1.2"
 dependencies = [
  "rorolala-errors",
+ "rorolala-ignore",
  "rorolala-layout",
  "rorolala-storage",
  "rorolala-utils-configure",

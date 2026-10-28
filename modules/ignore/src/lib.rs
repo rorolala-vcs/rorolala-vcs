@@ -5,9 +5,11 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
 
+mod defaults;
 mod ffi;
 mod natural;
 mod rules;
 
+pub use defaults::*;
 pub use ffi::*;
 pub use rules::*;

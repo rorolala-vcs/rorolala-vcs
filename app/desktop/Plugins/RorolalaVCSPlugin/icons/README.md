@@ -1,6 +1,6 @@
 # The RorolalaVCSPlugin pictures
 
-The pictures the `RorolalaVCSPlugin` project draws: `lock`, `create`, `lock_open`, `error`, `warning`, `live_help`, `refresh`, `upload`, `download`, `call_split`, `merge`, `add`, `edit_note`, `arrow_right_alt`, `priority_high`, `cloud_upload`, `cloud_download`, `sync`, `more_vert`, `content_copy`.
+The pictures the `RorolalaVCSPlugin` project draws: `lock`, `create`, `lock_open`, `error`, `warning`, `live_help`, `refresh`, `visibility`, `visibility_off`, `upload`, `download`, `call_split`, `merge`, `add`, `edit_note`, `arrow_right_alt`, `priority_high`, `cloud_upload`, `cloud_download`, `sync`, `more_vert`, `content_copy`.
 
 They are Google's Material Design icons, taken from the maintained mirror of the set,
 [material-icons/material-icons](https://github.com/material-icons/material-icons) — the same artwork as

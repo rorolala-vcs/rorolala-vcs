@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use rorolala_storage::RorolalaStorage;
 
 use crate::{
-    CONFIG_PATH, CreationError, INDEX_DIR, KEYS_DIR, STORAGE_DIR, Vault, config::MetaConfig,
+    CONFIG_PATH, CreationError, IGNORE_RULES_DIR, INDEX_DIR, KEYS_DIR, STORAGE_DIR, Vault,
+    config::MetaConfig,
 };
 
 #[lazyffi(export = rola_vault_)]
@@ -37,6 +38,12 @@ impl Vault {
         fs::create_dir_all(dir).map_err(|_| CreationError::DirCreateFailed)?;
         fs::create_dir_all(dir.join(KEYS_DIR)).map_err(|_| CreationError::DirCreateFailed)?;
         fs::create_dir_all(dir.join(INDEX_DIR)).map_err(|_| CreationError::DirCreateFailed)?;
+
+        // The rules a new Vault hands down, written where a fetch reads them from: a Workspace that
+        // fetched a Vault with no rules would read the platform's own files as work, and the file
+        // arrives with the Layout that already tells a Workspace how the Vault is named.
+        rorolala_ignore::write_default(&dir.join(IGNORE_RULES_DIR), rorolala_ignore::VAULT_FILE)
+            .map_err(|_| CreationError::DirCreateFailed)?;
 
         let mut config = Config::<crate::config::Config>::new(dir.join(CONFIG_PATH)).map_err(
             |error| match error {
@@ -135,6 +142,28 @@ mod tests {
         // A Vault is not served without a key pair of its own, and the tool that makes one
         // writes into a directory that has to be there already: making the Vault makes it.
         assert!(dir.join(KEYS_DIR).is_dir(), "{:?}", dir.join(KEYS_DIR));
+
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    /// A Vault is made with the rules it hands down, so that a Workspace which fetches it begins
+    /// by leaving the platforms' own files out rather than reading them as work.
+    #[test]
+    fn creating_a_vault_writes_the_rules_it_hands_down() {
+        let parent = scratch("ignore-rules");
+        let dir = parent.join("vault");
+
+        Vault::create(&dir).unwrap();
+
+        let file = dir
+            .join(crate::IGNORE_RULES_DIR)
+            .join(rorolala_ignore::VAULT_FILE);
+
+        assert!(file.is_file(), "{file:?}");
+        assert_eq!(
+            fs::read_to_string(&file).unwrap(),
+            rorolala_ignore::DEFAULT_RULES
+        );
 
         let _ = fs::remove_dir_all(&parent);
     }

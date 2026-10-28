@@ -100,6 +100,7 @@ internal sealed record OverviewReading(StatusFacts? Facts, string? Said, RolaSta
 /// </remarks>
 /// <param name="Lost">Paths the Layout names that the tree does not hold.</param>
 /// <param name="Untagged">Paths the tree holds that the Layout does not name.</param>
+/// <param name="Ignored">Paths the tree holds that the Layout does not name and the ignore rules govern.</param>
 /// <param name="Renamed">Paths that moved.</param>
 /// <param name="Modified">Paths that changed where they were, move destinations included.</param>
 /// <param name="Unowned">Paths the fetched copy says another account holds.</param>
@@ -112,6 +113,7 @@ internal sealed record OverviewReading(StatusFacts? Facts, string? Said, RolaSta
 internal sealed record StatusFacts(
     IReadOnlyList<string> Lost,
     IReadOnlyList<string> Untagged,
+    IReadOnlyList<string> Ignored,
     IReadOnlyList<Rename> Renamed,
     IReadOnlyList<string> Modified,
     IReadOnlyList<string> Unowned,
@@ -133,6 +135,7 @@ internal sealed record StatusFacts(
         return new StatusFacts(
             status.Lost,
             status.Untagged,
+            [.. status.Ignored],
             status.Renamed,
             status.Modified,
             status.Unowned,
@@ -248,13 +251,19 @@ internal sealed record StatusPill(State State, string Letters, Color Fill, strin
 /// Which of the two paths the operations act on, where it is neither of the ones the rule picks — see
 /// <see cref="OverviewView.Path"/>. Nothing for every row whose operations act on where its file is now.
 /// </param>
+/// <param name="Ignored">
+/// Whether the row is a path the ignore rules govern rather than one the reading reports as work. Such a
+/// row is only drawn when the ignored are being shown, and its two path columns are drawn in the ink kept
+/// for what is not the work — which is what tells a reader at a glance that nothing is to be done with it.
+/// </param>
 internal sealed record TableRow(
     IReadOnlyList<StatusPill> Pills,
     IReadOnlyList<string> Notes,
     string From,
     string To,
     IReadOnlyList<Operation> Operations,
-    string? Act = null
+    string? Act = null,
+    bool Ignored = false
 );
 
 /// <summary>
@@ -325,6 +334,16 @@ internal sealed class OverviewView : UserControl
 
     /// <summary>The theme resource for what has nothing to say about itself, which a note is read in.</summary>
     private const string QuietFill = PaletteKeys.Faint;
+
+    /// <summary>
+    /// The theme resource a path the ignore rules govern is read in.
+    /// </summary>
+    /// <remarks>
+    /// The look's faint ink, which it spends on what is not to be acted on: the work's own paths are drawn
+    /// in the ink the rest of the table is, and these are read past. The same colour the notes use, because
+    /// it is the same statement — there is nothing here to act on.
+    /// </remarks>
+    private const string QuietInk = PaletteKeys.Faint;
 
     /// <summary>The theme resource a line told apart from the next is drawn in.</summary>
     private const string EdgeInk = PaletteKeys.Splitter;
@@ -423,6 +442,18 @@ internal sealed class OverviewView : UserControl
     /// <summary>What is on screen now, so that a reading saying the same thing is not drawn again.</summary>
     private Shown? _shown;
 
+    /// <summary>What the reading on screen came to, so that showing or hiding the ignored is one redraw.</summary>
+    /// <remarks>
+    /// Kept beside the rows rather than read from them: the switch changes which rows a reading comes to,
+    /// and asking the work to be read again for it would be a walk of the tree spent on what the reading
+    /// already holds. The facts are the reading's own lists, so what is drawn after a switch is the table
+    /// the last reading would have been read as.
+    /// </remarks>
+    private StatusFacts? _facts;
+
+    /// <summary>Whether the paths the ignore rules govern are among the rows.</summary>
+    private bool _showIgnored;
+
     /// <summary>
     /// The directory and the sync-relevant standings the last plan was asked over, so a reading that moves
     /// either asks again.
@@ -474,7 +505,14 @@ internal sealed class OverviewView : UserControl
         // The sync's own state, which the strip in the dock's header draws from; what the runs of every command
         // say is gathered in the hub, which the panel down the right draws from and which every place a command
         // may be run from — the strip, an entry's menu — writes to.
-        _strip = new SyncStrip(_host, _sync, () => BaseDirectory.Current, Refresh);
+        _strip = new SyncStrip(
+            _host,
+            _sync,
+            () => BaseDirectory.Current,
+            Refresh,
+            () => _showIgnored,
+            ToggleIgnored
+        );
         _panel = new ProgressPanel(hub);
 
         var root = new Grid();
@@ -678,6 +716,36 @@ internal sealed class OverviewView : UserControl
     }
 
     /// <summary>
+    /// Shows the paths the ignore rules govern, or stops showing them, from the table already read.
+    /// </summary>
+    /// <remarks>
+    /// It is a redraw of the reading on screen rather than a reading again: which rows a reading comes to
+    /// is the view's answer, and the reading holds both lists. A work no reading has been made of yet is
+    /// left as it is, since there is nothing to show either way until one is.
+    /// </remarks>
+    private void ToggleIgnored()
+    {
+        _showIgnored = !_showIgnored;
+
+        if (_facts is not { } facts)
+        {
+            return;
+        }
+
+        var rows = Rows(facts, _showIgnored);
+
+        // Only the ignored were on screen, and they are not any more: a table of nothing is a work with
+        // nothing to confirm, which is what the line says. A reading that failed still says why.
+        var said = rows.Count > 0
+            ? null
+            : _shown?.Said is { Length: > 0 } line
+                ? line
+                : RolaI18N.Get("rorolala_vcs.status.clean");
+
+        Show(said, rows, _reading);
+    }
+
+    /// <summary>
     /// What the Overview makes of a directory the tree is rooted at.
     /// </summary>
     /// <remarks>
@@ -753,10 +821,18 @@ internal sealed class OverviewView : UserControl
     /// content: one file that moved and was edited is one row, not two. What became of its content is said
     /// on the row it is already on.
     /// </para>
+    /// <para>
+    /// A path the ignore rules govern is not work — the reading keeps the two lists apart — so its row is
+    /// read last, after every group that is to be acted on, and only when the table is asked to show it.
+    /// </para>
     /// </remarks>
     /// <param name="facts">The reading.</param>
+    /// <param name="showIgnored">
+    /// Whether the paths the ignore rules govern are among the rows. They are left out unless asked for;
+    /// what is shown of them is marked as not the work's, so that it is read past rather than acted on.
+    /// </param>
     /// <returns>The rows to show.</returns>
-    internal static IReadOnlyList<TableRow> Rows(StatusFacts facts)
+    internal static IReadOnlyList<TableRow> Rows(StatusFacts facts, bool showIgnored = false)
     {
         ArgumentNullException.ThrowIfNull(facts);
 
@@ -771,6 +847,7 @@ internal sealed class OverviewView : UserControl
         List<TableRow> structural = [];
         List<TableRow> changes = [];
         List<TableRow> syncing = [];
+        List<TableRow> governed = [];
 
         var destinations = facts.Renamed.Select(rename => rename.To).ToHashSet(StringComparer.Ordinal);
         var behind = facts.WrongBase.ToHashSet(StringComparer.Ordinal);
@@ -900,7 +977,20 @@ internal sealed class OverviewView : UserControl
                 .Select(path => Sync(State.Diverged, path, behind))
         );
 
-        return [.. wrong, .. merges, .. structural, .. changes, .. syncing];
+        // What the ignore rules govern is what the tree gained and the reading kept apart from the
+        // work. It is drawn last, because it is not work: a reader scans past it rather than acting on
+        // it, and a row that stood among the changes would read as one of them. Nothing is offered to
+        // do with it — a recording refuses a path the rules govern — so the row carries no buttons.
+        if (showIgnored)
+        {
+            governed.AddRange(
+                facts.Ignored.Select(path =>
+                    new TableRow([Pill(State.Untagged)], [], path, string.Empty, [], Ignored: true)
+                )
+            );
+        }
+
+        return [.. wrong, .. merges, .. structural, .. changes, .. syncing, .. governed];
 
         // One path of what a sync would move, as a row of its own. It offers no button: what is to be done about it
         // is the sync the strip in the header runs, and a button here would be a second way to ask for the same
@@ -1509,7 +1599,8 @@ internal sealed class OverviewView : UserControl
         }
 
         var facts = reading.Facts;
-        var rows = facts is null ? [] : Rows(facts);
+        _facts = facts;
+        var rows = facts is null ? [] : Rows(facts, _showIgnored);
         var said = Line(reading, rows.Count);
 
         // What a sync would carry is asked whenever the reading says the standings it is about have moved — see
@@ -1671,6 +1762,7 @@ internal sealed class OverviewView : UserControl
     private static bool Same(TableRow left, TableRow right) =>
         left.From == right.From
         && left.To == right.To
+        && left.Ignored == right.Ignored
         && left.Pills.Count == right.Pills.Count
         && left.Pills.Zip(right.Pills).All(pair => pair.First == pair.Second)
         && left.Notes.SequenceEqual(right.Notes, StringComparer.Ordinal);
@@ -1761,8 +1853,8 @@ internal sealed class OverviewView : UserControl
         var cells = new Grid { ColumnDefinitions = Definitions() };
 
         Place(cells, States(row, at, view), 0);
-        Place(cells, Cell(row.From), 1);
-        Place(cells, Cell(row.To), 2);
+        Place(cells, Cell(row.From, row.Ignored), 1);
+        Place(cells, Cell(row.To, row.Ignored), 2);
         Place(cells, Cell(row, at, host, view), 3);
 
         var line = new Border
@@ -2024,9 +2116,14 @@ internal sealed class OverviewView : UserControl
 
     /// <summary>One cell of a row holding a path, or nothing where the path is not one.</summary>
     /// <param name="said">What it says, which may be nothing.</param>
+    /// <param name="quiet">
+    /// Whether the cell is one of a row that is not the work's, which is drawn in the ink kept for what
+    /// is not: the path is still there to be read, and it is read past rather than acted on.
+    /// </param>
     /// <returns>The cell to show.</returns>
-    private static TextBlock Cell(string said) =>
-        new()
+    private static TextBlock Cell(string said, bool quiet = false)
+    {
+        var cell = new TextBlock
         {
             // A path is one line however long it is: what the column cannot show is on the path itself, and a
             // cell that wrapped would put the row's own height out of step with the pills beside it.
@@ -2036,6 +2133,16 @@ internal sealed class OverviewView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Classes = { "caption", "mono" },
         };
+
+        if (quiet)
+        {
+            // The look's own faint ink rather than a colour of this plugin's, for the reason the rule and the
+            // band are: what is not the work is drawn in whatever the look spends on what is not read as work.
+            cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(QuietInk);
+        }
+
+        return cell;
+    }
 
     /// <summary>Where the variant file of a merge that cannot go on lies, when the reason names it.</summary>
     /// <param name="reason">The reason.</param>

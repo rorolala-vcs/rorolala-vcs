@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using RorolalaDesktop.Configuration;
@@ -27,28 +28,36 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class SyncStripTests
 {
-    /// <summary>The three sync buttons are one group beside the reading, and the dropdown is the last of them.</summary>
+    /// <summary>
+    /// The switch for the ignored is drawn first, then the reading, then the three as one group, and the
+    /// dropdown last.
+    /// </summary>
     /// <remarks>
     /// The group is what the reader asked for: three buttons that belong together are drawn inside one rule, so
     /// that what they are about is one thing rather than three, and the button that opens what a run leaves out
-    /// stands outside it, since what it is about is the run and not the work.
+    /// stands outside it, since what it is about is the run and not the work. The switch stands before the reading
+    /// because it is about what the reading shows rather than about the work, and a reader reaches for it less
+    /// often than for the reading beside it.
     /// </remarks>
     [Fact]
-    public void TheThreeAreDrawnAsOneGroupWithTheReadingBesideThem()
+    public void TheIgnoredSwitchStandsBeforeTheReadingAndTheThreeAsOneGroup()
     {
         var (strip, _, _) = Drawn();
 
-        Assert.Equal(3, strip.Children.Count);
-        Assert.IsType<Button>(strip.Children[0]);
+        Assert.Equal(4, strip.Children.Count);
 
-        var group = Assert.IsType<Border>(strip.Children[1]);
+        // The switch that shows what the ignore rules govern, then the reading.
+        Assert.IsType<Button>(strip.Children[0]);
+        Assert.IsType<Button>(strip.Children[1]);
+
+        var group = Assert.IsType<Border>(strip.Children[2]);
         var inside = Assert.IsType<StackPanel>(group.Child);
 
         Assert.Equal(3, inside.Children.Count);
         Assert.All(inside.Children, child => Assert.IsType<Button>(child));
 
         // The dropdown is the last button of the row, and it is the one with something to open.
-        var more = Assert.IsType<Button>(strip.Children[2]);
+        var more = Assert.IsType<Button>(strip.Children[3]);
 
         var flyout = Assert.IsType<Flyout>(more.Flyout);
         var boxes = Assert.IsType<StackPanel>(flyout.Content);
@@ -73,10 +82,37 @@ public sealed class SyncStripTests
         // unpressable rather than offering a run nobody has said there is work for.
         Assert.All(inside.Children, child => Assert.False(Assert.IsType<Button>(child).IsEnabled));
 
-        // The reading and the dropdown are pressable whatever the three are: they are about the work and about
-        // what a run is told, neither of which waits on there being something to carry.
+        // The switch, the reading and the dropdown are pressable whatever the three are: they are about the work
+        // and about what is shown of it, neither of which waits on there being something to carry.
         Assert.True(Assert.IsType<Button>(strip.Children[0]).IsEnabled);
+        Assert.True(Assert.IsType<Button>(strip.Children[1]).IsEnabled);
         Assert.True(more.IsEnabled);
+    }
+
+    /// <summary>
+    /// The switch for the ignored says which way it stands, and pressing it turns the eye and the words over.
+    /// </summary>
+    /// <remarks>
+    /// What it shows is the Overview's answer rather than the switch's: the strip reads it each time it draws,
+    /// so a state changed anywhere is drawn from that state. The pictures are the plugin's own pair — the eye
+    /// and the eye struck through — and what is checked is that pressing it asks and that the drawing follows
+    /// the answer, not the colours the look gives them.
+    /// </remarks>
+    [Fact]
+    public void TheIgnoredSwitchSaysWhichWayItStands()
+    {
+        var shown = false;
+        var (strip, _, _) = Drawn(ignoredShown: () => shown, toggleIgnored: () => shown = !shown);
+
+        var toggle = Assert.IsType<Button>(strip.Children[0]);
+
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.status.show_ignored"), ToolTip.GetTip(toggle));
+
+        // Pressing it asks the Overview to change, and the strip draws the answer it is given.
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        Assert.True(shown);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.status.hide_ignored"), ToolTip.GetTip(toggle));
     }
 
     /// <summary>
@@ -99,7 +135,7 @@ public sealed class SyncStripTests
 
         Assert.NotEqual(plain, held);
 
-        var around = Assert.IsType<Border>(strip.Children[1]);
+        var around = Assert.IsType<Border>(strip.Children[2]);
 
         foreach (var mark in Marks(strip))
         {
@@ -248,8 +284,13 @@ public sealed class SyncStripTests
     private const string Identity = "rorolala.vcs";
 
     /// <summary>The strip, drawn inside a window with the look over it, as the program draws it.</summary>
+    /// <param name="ignoredShown">Whether what the ignore rules govern is being shown, or nothing for not.</param>
+    /// <param name="toggleIgnored">What the switch asks for, or nothing for asking nothing.</param>
     /// <returns>The strip, its window, and the look's resources.</returns>
-    private static (SyncStrip Strip, Window Window, ResourceDictionary Resources) Drawn()
+    private static (SyncStrip Strip, Window Window, ResourceDictionary Resources) Drawn(
+        Func<bool>? ignoredShown = null,
+        Action? toggleIgnored = null
+    )
     {
         var services = Host.Services();
         var host = services.For(new PluginId(Identity), 0);
@@ -271,7 +312,9 @@ public sealed class SyncStripTests
             host,
             new SyncWatcher(host, host.Log, hub, new VaultFetch(host, hub)),
             () => null,
-            refresh: () => { }
+            refresh: () => { },
+            ignoredShown: ignoredShown ?? (() => false),
+            toggleIgnored: toggleIgnored ?? (() => { })
         );
 
         var window = new Window
@@ -294,7 +337,7 @@ public sealed class SyncStripTests
     /// <returns>The marks.</returns>
     private static IReadOnlyList<Border> Marks(SyncStrip strip)
     {
-        var group = Assert.IsType<Border>(strip.Children[1]);
+        var group = Assert.IsType<Border>(strip.Children[2]);
         var inside = Assert.IsType<StackPanel>(group.Child);
 
         return inside

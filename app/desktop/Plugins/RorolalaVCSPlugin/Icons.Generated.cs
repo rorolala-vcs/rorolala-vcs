@@ -29,6 +29,12 @@ internal static partial class Icons
     /// <summary>The key the `refresh` picture is held under.</summary>
     public const string Refresh = "rorolala_vcs.refresh";
 
+    /// <summary>The key the `visibility` picture is held under.</summary>
+    public const string Visibility = "rorolala_vcs.visibility";
+
+    /// <summary>The key the `visibility_off` picture is held under.</summary>
+    public const string VisibilityOff = "rorolala_vcs.visibility_off";
+
     /// <summary>The key the `upload` picture is held under.</summary>
     public const string Upload = "rorolala_vcs.upload";
 
@@ -78,6 +84,8 @@ internal static partial class Icons
         (Warning, "warning"),
         (LiveHelp, "live_help"),
         (Refresh, "refresh"),
+        (Visibility, "visibility"),
+        (VisibilityOff, "visibility_off"),
         (Upload, "upload"),
         (Download, "download"),
         (CallSplit, "call_split"),

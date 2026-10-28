@@ -85,6 +85,15 @@ pub struct TreeDiff {
     /// Paths the tree holds that the Layout does not name.
     pub untagged: Vec<LayoutPath>,
 
+    /// Paths the tree holds that the Layout does not name and the ignore rules govern.
+    ///
+    /// They are kept apart from [`untagged`](Self::untagged) rather than dropped, because a reader
+    /// that wants to show what the rules cover — a browser switching them on, a person asking why a
+    /// file is not there — needs to know which gains were left out and why. A path is only here when
+    /// the reading left it out for the rules; a move's destination the reading found is in
+    /// [`renamed`](Self::renamed) instead, whatever the rules say about where it went.
+    pub ignored: Vec<LayoutPath>,
+
     /// Paths that moved.
     pub renamed: Vec<PathRename>,
 
@@ -108,11 +117,12 @@ pub struct TreeDiff {
 /// changed and stayed changed is reported as changed until something records it.
 ///
 /// `rules` is the Workspace's ignore rule set, and it governs exactly one list: a path the tree
-/// holds and the Layout does not name is left out of [`TreeDiff::untagged`] when the rules say so.
-/// A path the Layout names is the work's already — however it was named — and a move the reading
-/// found is a fact about it, so neither `lost`, `modified` nor `renamed` is the rules' to touch.
-/// The filtering happens after the moves are paired, which is what keeps a file moved into an
-/// ignored place a move rather than a loss beside a hidden gain.
+/// holds and the Layout does not name is left out of [`TreeDiff::untagged`] when the rules say so,
+/// and kept in [`TreeDiff::ignored`] instead. A path the Layout names is the work's already —
+/// however it was named — and a move the reading found is a fact about it, so neither `lost`,
+/// `modified` nor `renamed` is the rules' to touch. The filtering happens after the moves are
+/// paired, which is what keeps a file moved into an ignored place a move rather than a loss beside
+/// a hidden gain.
 ///
 /// # Errors
 ///
@@ -295,12 +305,22 @@ pub fn tree_diff(
     // The ignore rules govern only what the tree gained, and only once the moves are known: a gain
     // that turned out to be where a tracked file went is a move, and a move is not the rules' to
     // hide. What is left is an addition nobody is answerable for, which is exactly what a rule is
-    // written against.
-    untagged.retain(|path| !rules.is_ignore(Path::new(path.as_str()), false));
+    // written against — and what the rules took is kept, so a reader can say what was left out.
+    let mut ignored: Vec<LayoutPath> = Vec::new();
+    untagged.retain(|path| {
+        if rules.is_ignore(Path::new(path.as_str()), false) {
+            ignored.push(path.clone());
+
+            return false;
+        }
+
+        true
+    });
 
     Ok(TreeDiff {
         lost,
         untagged,
+        ignored,
         renamed,
         modified,
         failed,
@@ -775,6 +795,7 @@ mod tests {
         let diff = tree_diff(&layout, &workspace, 0.5, &ignoring).unwrap();
 
         assert!(diff.untagged.is_empty(), "{diff:?}");
+        assert_eq!(diff.ignored, vec![path("scratch.mb")], "{diff:?}");
         assert_eq!(
             diff.renamed,
             vec![PathRename {
@@ -806,6 +827,7 @@ mod tests {
 
         assert_eq!(diff.lost, vec![path("gone.txt")], "{diff:?}");
         assert!(diff.untagged.is_empty(), "{diff:?}");
+        assert_eq!(diff.ignored, vec![path("scratch.mb")], "{diff:?}");
         assert!(diff.renamed.is_empty(), "{diff:?}");
     }
 
