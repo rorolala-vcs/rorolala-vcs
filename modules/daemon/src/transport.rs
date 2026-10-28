@@ -77,6 +77,13 @@ const UNKNOWN_COMMAND: u8 = 13;
 /// is still working.
 const ENDED_WITHIN: Duration = Duration::from_secs(2);
 
+/// How long a program that is being let go with its stream is given to end on its own.
+///
+/// Shorter than [`ENDED_WITHIN`], so that what it ends with is there for the caller waiting on
+/// it: the exchange has already failed by the time the stream goes, and the program's own code is
+/// the only diagnosis there is.
+const ENDED_ON_ITS_OWN: Duration = Duration::from_secs(1);
+
 /// Why the daemon an address names could not be reached.
 ///
 /// What it carries is the leg that failed rather than a name for it: a caller that reports this
@@ -458,11 +465,22 @@ impl Drop for SigpipeGuard {
 async fn watch(mut child: Child, stopped: Stopped, ended: watch::Sender<Option<Ended>>) {
     let status = tokio::select! {
         status = child.wait() => status,
-        // The other end went away: what is left is asking the program to stop, and waiting for it
-        // so that what it ends with is still reported rather than left to the reaper.
+        // The other end went away: the program is given the moment it needs to end on its own
+        // before it is asked to. A stream that went away is usually the program's own doing — it
+        // closed its output, which is what the exchange failed on — and a program that is killed
+        // reports the kill rather than the reason it gave. On Windows that is 1, which is the
+        // number `rola-daemon` uses to say it found no account, so a path that holds no Vault or a
+        // machine that refuses sessions would be read as an identity that is missing.
+        //
+        // Only a program that outlives the moment is stopped, and it is waited for so that what
+        // it ended with is still reported rather than left to the reaper.
         _ = stopped => {
-            let _ = child.start_kill();
-            child.wait().await
+            if let Ok(status) = tokio::time::timeout(ENDED_ON_ITS_OWN, child.wait()).await {
+                status
+            } else {
+                let _ = child.start_kill();
+                child.wait().await
+            }
         }
     };
 
