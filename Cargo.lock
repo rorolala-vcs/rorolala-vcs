@@ -1527,7 +1527,7 @@ dependencies = [
 
 [[package]]
 name = "git-rola"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "librorolala",
  "mingling",
@@ -2294,7 +2294,7 @@ dependencies = [
 
 [[package]]
 name = "librorolala"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rola-desktop-pty",
  "rorolala-auth",
@@ -3557,7 +3557,7 @@ checksum = "323c417e1d9665a65b263ec744ba09030cfb277e9daa0b018a4ab62e57bc8189"
 
 [[package]]
 name = "rola"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "annotate-snippets",
  "colored",
@@ -3588,7 +3588,7 @@ dependencies = [
 
 [[package]]
 name = "rola-daemon"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "colored",
  "embed-resource",
@@ -3611,21 +3611,21 @@ dependencies = [
 
 [[package]]
 name = "rola-define-format"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "unicode-normalization",
 ]
 
 [[package]]
 name = "rola-desktop-pty"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "portable-pty",
 ]
 
 [[package]]
 name = "rola-edit"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arg-picker",
  "crossterm",
@@ -3635,7 +3635,7 @@ dependencies = [
 
 [[package]]
 name = "rola-git-support"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "rola-define-format",
@@ -3646,7 +3646,7 @@ dependencies = [
 
 [[package]]
 name = "rola-jj"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "futures",
@@ -3657,7 +3657,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-auth"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chacha20poly1305",
  "ed25519-dalek",
@@ -3675,7 +3675,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-chunking"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "just_template",
  "syn 3.0.5",
@@ -3683,7 +3683,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-cli-setups"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "librorolala",
  "mingling",
@@ -3698,7 +3698,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-daemon"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "ed25519-dalek",
@@ -3726,7 +3726,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-dev-bindgen"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "annotate-snippets",
  "proc-macro2",
@@ -3738,7 +3738,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-dev-chunker-harness"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arg-picker",
  "blake3",
@@ -3750,7 +3750,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-dev-i18n-check"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "serde_yaml",
@@ -3759,7 +3759,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-dev-icons"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "resvg",
  "serde",
@@ -3768,11 +3768,11 @@ dependencies = [
 
 [[package]]
 name = "rorolala-dev-rsharp-bindgen"
-version = "0.1.1"
+version = "0.1.2"
 
 [[package]]
 name = "rorolala-dev-sync-harness"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "rorolala-auth",
@@ -3784,7 +3784,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-errors"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bincode2",
  "rorolala-utils-lazyffi",
@@ -3794,7 +3794,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-ffi"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "librorolala",
  "rorolala-utils-lazyffi",
@@ -3802,7 +3802,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-inverse-index"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "rorolala-errors",
@@ -3815,7 +3815,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-layout"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "just_fmt 0.2.1",
  "rorolala-errors",
@@ -3831,7 +3831,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-protocol"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "arg-picker",
  "bincode2",
@@ -3849,11 +3849,11 @@ dependencies = [
 
 [[package]]
 name = "rorolala-protocol-macros"
-version = "0.1.1"
+version = "0.1.2"
 
 [[package]]
 name = "rorolala-status"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rorolala-layout",
  "rorolala-storage",
@@ -3869,7 +3869,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-storage"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "futures",
@@ -3886,7 +3886,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-tree-analyze"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "rorolala-layout",
@@ -3898,7 +3898,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-cli-theme"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bat",
  "colored",
@@ -3910,7 +3910,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-configure"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rorolala-utils-configure-macros",
  "rorolala-utils-lazyffi",
@@ -3922,7 +3922,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-configure-macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3933,14 +3933,14 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-constants"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rorolala-utils-lazyffi",
 ]
 
 [[package]]
 name = "rorolala-utils-icons"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "image",
  "toml 0.8.23",
@@ -3948,7 +3948,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-lazyffi"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rorolala-utils-lazyffi-core",
  "rorolala-utils-lazyffi-macros",
@@ -3956,14 +3956,14 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-lazyffi-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "just_fmt 0.2.1",
 ]
 
 [[package]]
 name = "rorolala-utils-lazyffi-macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "just_fmt 0.2.1",
  "proc-macro2",
@@ -3975,7 +3975,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-location"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "dirs",
  "just_fmt 0.2.1",
@@ -3985,7 +3985,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-progress"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "tokio",
@@ -3993,11 +3993,11 @@ dependencies = [
 
 [[package]]
 name = "rorolala-utils-sandbox"
-version = "0.1.1"
+version = "0.1.2"
 
 [[package]]
 name = "rorolala-vault"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "just_fmt 0.2.1",
  "rorolala-errors",
@@ -4014,7 +4014,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-vcs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "rorolala-errors",
@@ -4028,7 +4028,7 @@ dependencies = [
 
 [[package]]
 name = "rorolala-workspace"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rorolala-errors",
  "rorolala-layout",
