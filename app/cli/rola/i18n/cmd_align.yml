@@ -49,6 +49,7 @@ align:
             --vault             Include this Vault as a Layout source during alignment
             --offline           Look for the content needed to restore only locally without asking the Vault
             --concurrency <N>   Carry the content N units at a time (default 4)
+            --include-ignored   Align an entry the ignore rules govern as well
     zh-CN: |
         让工作区下的文件结构与记录的保持一致
 
@@ -68,6 +69,7 @@ align:
             --vault             在校准时把该保险库作为布局来源一起纳入
             --offline           还原需要的内容只从本地查找，不向保险库请求
             --concurrency <N>   每次同时搬运 N 份内容（默认 4）
+            --include-ignored   连被忽略规则管辖的条目一并校准
 
   description:
     en: Bring the file structure under the Workspace into agreement with what is recorded
@@ -154,6 +156,16 @@ align:
         Run `rola layout tree-diff` to see the moves, or assert one with `--move`
     zh-CN: |
         运行 `rola layout tree-diff` 查看移动，或用 `--move` 断言一次移动
+
+  err_ignored:
+    en: "`%{path}` is governed by the ignore rules"
+    zh-CN: "`%{path}` 被忽略规则管辖"
+
+  err_ignored_help:
+    en: |
+        Leave it alone, or align it anyway with `rola align --include-ignored`
+    zh-CN: |
+        请略过该路径，或用 `rola align --include-ignored` 对其进行校准
 
   err_real_move:
     en: "`%{from}` and `%{to}` have exactly the same content, this is a real move and it cannot be taken back"

@@ -11,7 +11,9 @@
 
 use std::path::Path;
 
+use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::Layout;
+use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
@@ -41,11 +43,21 @@ pub fn locate_status(directory: &Path) -> Option<Status> {
     let layout = working_layout(&workspace)?;
     let index = VCSIndex::locate(directory);
 
+    // The rules the Workspace ignores by are its own, kept beside its data; a set that cannot be
+    // read is an empty one, since the reading is the thing being answered and the rules are a
+    // refinement of it.
+    let rules = IgnoreRuleSet::load(
+        &workspace.get_root().join(WORKSPACE_IGNORE_RULES_DIR),
+        workspace.get_root(),
+    )
+    .unwrap_or_else(|_| IgnoreRuleSet::empty());
+
     Status::read(
         &workspace,
         &layout,
         auth::current_account().as_deref(),
         index.as_ref(),
+        &rules,
     )
     .ok()
 }

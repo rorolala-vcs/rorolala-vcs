@@ -1,16 +1,27 @@
 _version: 2
 
 cmd_layout_fetch:
+  complete:
+    no_ignore_rules:
+      en: Fetch only the Layout, leaving the Vault's ignore rules unfetched
+      zh-CN: 只取回布局，不取保险库的忽略规则
   help:
     en: |
         Bring a Vault's Layout here as a read-only copy
 
         **Usage**: rola layout fetch [VAULT]
+        **Flags**:
+            --no-ignore-rules    Fetch only the Layout, leaving the Vault's ignore rules unfetched
+
+        The Vault's own ignore rules are fetched with the Layout: they land under `.rola/info/ignore/vaults/<NAME>/`, replacing whatever was there, so a rule the Vault gave up is gone from here too
     zh-CN: |
         取回保险库的布局只读副本
 
         **用法**：rola layout fetch <保险库>
+        **标识**：
+            --no-ignore-rules    只取回布局，不取保险库的忽略规则
 
+        保险库自己的忽略规则会随布局一起取回：落在 `.rola/info/ignore/vaults/<名称>/` 下，整体替换原有内容，保险库删除的规则这里也会一并消失
   description:
     en: Bring a Vault's Layout here as a read-only copy
     zh-CN: 取回保险库的布局只读副本

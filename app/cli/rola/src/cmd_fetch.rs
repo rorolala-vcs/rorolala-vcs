@@ -9,7 +9,7 @@ use mingling::{
     consts::UNMATCHED,
     macros::{arg, buffer, command, completion, help, metadata, r_eprintln, suggest},
     metadata::Description,
-    picker::EntryPicker,
+    picker::{EntryPicker, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResCurrentRemoteVault;
@@ -38,7 +38,16 @@ pub fn desc_fetch() -> Description {
 /// the name, so a name is the whole of what the command can take.
 #[completion(EntryFetch)]
 pub fn complete_fetch(ctx: ShellContext, remote: &mut LazyRes<ResCurrentRemoteVault>) -> Suggest {
-    if typing_flag(&ctx) || positional(&ctx, "fetch") != 0 {
+    if typing_flag(&ctx) {
+        return crate::complete::strip_written(
+            &ctx,
+            suggest! {
+                crate::layout::cmd_layout_fetch::ARG_NO_IGNORE_RULES: t!("cmd_layout_fetch.complete.no_ignore_rules"),
+            },
+        );
+    }
+
+    if positional(&ctx, "fetch") != 0 {
         return suggest!();
     }
 
@@ -63,14 +72,17 @@ pub fn complete_fetch(ctx: ShellContext, remote: &mut LazyRes<ResCurrentRemoteVa
 /// ([`ActionError`](librorolala::protocol::ActionError)).
 #[command(node = "fetch", entry = EntryFetch)]
 pub fn fetch(args: EntryFetch) -> Next {
-    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
-    // lets the Workspace's own choice be the one that is reached for.
-    let (named, unmatched): (Option<String>, _) =
-        args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
+    // UNWRAP: Picking cannot fail: a flag is a flag and a positional that is absent is `None`, and
+    // naming none is what lets the Workspace's own choice be the one that is reached for.
+    let (no_ignore_rules, named, unmatched): (Flag, Option<String>, _) = args
+        .pick(crate::layout::cmd_layout_fetch::ARG_NO_IGNORE_RULES)
+        .pick(arg![Option<String>])
+        .pick(&UNMATCHED)
+        .unwrap();
 
     if let Some(next) = crate::unmatched::refused(&unmatched, "fetch") {
         return next;
     }
 
-    StateLayoutFetch::from(named).into()
+    StateLayoutFetch::new(named, matches!(no_ignore_rules, Flag::Active)).into()
 }

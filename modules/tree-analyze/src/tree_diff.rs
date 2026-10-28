@@ -31,6 +31,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{Layout, LayoutPath};
 use rorolala_utils_constants::WORKSPACE_CACHE_DIR;
 use rorolala_utils_location::Locate as _;
@@ -106,6 +107,13 @@ pub struct TreeDiff {
 /// not that reading, though, but the digest the Layout was last known to agree with: a file that
 /// changed and stayed changed is reported as changed until something records it.
 ///
+/// `rules` is the Workspace's ignore rule set, and it governs exactly one list: a path the tree
+/// holds and the Layout does not name is left out of [`TreeDiff::untagged`] when the rules say so.
+/// A path the Layout names is the work's already — however it was named — and a move the reading
+/// found is a fact about it, so neither `lost`, `modified` nor `renamed` is the rules' to touch.
+/// The filtering happens after the moves are paired, which is what keeps a file moved into an
+/// ignored place a move rather than a loss beside a hidden gain.
+///
 /// # Errors
 ///
 /// Returns [`TreeDiffError::Layout`] if the Layout cannot be read back, and [`TreeDiffError::Io`]
@@ -118,6 +126,7 @@ pub fn tree_diff(
     layout: &Layout,
     workspace: &Workspace,
     alike: f32,
+    rules: &IgnoreRuleSet,
 ) -> Result<TreeDiff, TreeDiffError> {
     layout.refresh()?;
 
@@ -282,6 +291,12 @@ pub fn tree_diff(
     // two lists it would otherwise sit in.
     lost.retain(|path| !moved_from.contains(path));
     untagged.retain(|path| !moved_to.contains(path));
+
+    // The ignore rules govern only what the tree gained, and only once the moves are known: a gain
+    // that turned out to be where a tracked file went is a move, and a move is not the rules' to
+    // hide. What is left is an addition nobody is answerable for, which is exactly what a rule is
+    // written against.
+    untagged.retain(|path| !rules.is_ignore(Path::new(path.as_str()), false));
 
     Ok(TreeDiff {
         lost,
@@ -550,13 +565,14 @@ pub fn entry_of(disk: &Path) -> Result<Entry, std::io::Error> {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread::sleep;
     use std::time::Duration;
 
+    use rorolala_ignore::IgnoreRuleSet;
     use rorolala_layout::{LayoutPath, MutableData};
-    use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
+    use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, WORKSPACE_IGNORE_RULES_DIR};
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
@@ -630,7 +646,7 @@ mod tests {
         fs::write(dir.join("new.txt"), b"new").unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.lost, vec![path("gone.txt")], "{diff:?}");
         assert_eq!(diff.untagged, vec![path("new.txt")], "{diff:?}");
@@ -647,11 +663,11 @@ mod tests {
 
         let layout = working(&workspace);
         // A first reading writes down what the file holds, so the move can be told next time.
-        tree_diff(&layout, &workspace, 0.5).unwrap();
+        tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
 
-        let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(
             diff.renamed,
@@ -675,13 +691,13 @@ mod tests {
 
         let layout = working(&workspace);
         // A first reading writes down what the file holds, so the change can be told next time.
-        tree_diff(&layout, &workspace, 0.5).unwrap();
+        tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         // Long enough that the change is a change in time as well as in content.
         sleep(Duration::from_millis(20));
         fs::write(dir.join("a.txt"), b"after\n").unwrap();
 
-        let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.modified, vec![path("a.txt")], "{diff:?}");
         assert!(diff.renamed.is_empty(), "{diff:?}");
@@ -695,13 +711,13 @@ mod tests {
 
         let layout = working(&workspace);
         // A first reading writes down what the file holds, so the move can be told next time.
-        tree_diff(&layout, &workspace, 0.5).unwrap();
+        tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         // The same prose, moved, with a line added: alike enough to be the same file.
         fs::remove_file(dir.join("a.txt")).unwrap();
         fs::write(dir.join("b.txt"), b"one\ntwo\nthree\nfour\nfive\n").unwrap();
 
-        let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(
             diff.renamed,
@@ -727,9 +743,70 @@ mod tests {
         fs::write(dir.join("seen.txt"), b"here").unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.untagged, vec![path("seen.txt")], "{diff:?}");
+    }
+
+    /// The Workspace's own ignore rules, with `lines` written as the one rule file.
+    fn rules(dir: &Path, lines: &str) -> IgnoreRuleSet {
+        let held = dir.join(WORKSPACE_IGNORE_RULES_DIR);
+        fs::create_dir_all(&held).unwrap();
+        fs::write(held.join("default"), lines).unwrap();
+
+        IgnoreRuleSet::load(&held, dir).unwrap()
+    }
+
+    #[test]
+    fn an_ignored_gain_is_no_gain_but_a_move_found_is_still_a_move() {
+        let (dir, workspace) = workspace("ignored");
+        track(&workspace, 1, "kept.txt");
+        fs::write(dir.join("kept.txt"), b"the same content\n").unwrap();
+
+        let layout = working(&workspace);
+        // A first reading writes the cache the move is told by.
+        tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+
+        // A file the rules ignore, and a tracked file moved into a place the rules ignore.
+        fs::write(dir.join("scratch.mb"), b"scratch").unwrap();
+        fs::rename(dir.join("kept.txt"), dir.join("kept.mb")).unwrap();
+
+        let ignoring = rules(&dir, "*.mb\n");
+        let diff = tree_diff(&layout, &workspace, 0.5, &ignoring).unwrap();
+
+        assert!(diff.untagged.is_empty(), "{diff:?}");
+        assert_eq!(
+            diff.renamed,
+            vec![PathRename {
+                from: path("kept.txt"),
+                to: path("kept.mb"),
+                strong: true,
+            }],
+            "{diff:?}"
+        );
+
+        // The same reading without the rules sees the gain, since that is what the tree holds.
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        assert_eq!(diff.untagged, vec![path("scratch.mb")], "{diff:?}");
+    }
+
+    #[test]
+    fn an_addition_the_rules_ignore_is_hidden_even_when_its_twin_is_lost() {
+        let (dir, workspace) = workspace("ignored-lost");
+        track(&workspace, 1, "gone.txt");
+
+        // `gone.txt` is lost, and what turned up beside it matches a rule: the move nobody found
+        // reads as a loss alone, which is the ordinary shape of a file that went somewhere the
+        // rules govern.
+        fs::write(dir.join("scratch.mb"), b"scratch").unwrap();
+
+        let layout = working(&workspace);
+        let ignoring = rules(&dir, "*.mb\n");
+        let diff = tree_diff(&layout, &workspace, 0.5, &ignoring).unwrap();
+
+        assert_eq!(diff.lost, vec![path("gone.txt")], "{diff:?}");
+        assert!(diff.untagged.is_empty(), "{diff:?}");
+        assert!(diff.renamed.is_empty(), "{diff:?}");
     }
 
     #[test]
@@ -746,7 +823,7 @@ mod tests {
         expected.sort_unstable();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5).unwrap();
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.untagged, expected, "{diff:?}");
         assert!(diff.failed.is_empty(), "{diff:?}");

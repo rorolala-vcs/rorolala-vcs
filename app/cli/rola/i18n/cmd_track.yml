@@ -30,6 +30,7 @@ track:
           --no-editor                Record only what is already known, without opening an editor
           --replace                  Redo the version the file is at, like `git commit --amend`
           --force                    Record files that belong to another account
+          --include-ignored          Record files the ignore rules govern as well
     zh-CN: |
       将文件记录到当前布局
 
@@ -42,6 +43,7 @@ track:
           --no-editor              只记录已知信息，不打开编辑器
           --replace                重做文件当前所在的版本，如同 `git commit --amend`
           --force                  记录属于其他账户的文件
+          --include-ignored        连被忽略规则管辖的文件一并记录
 
   # What a recording says it is doing while it does it, one line each: the three parts of the run in the
   # order it goes through them. They are said both to a person watching — on a bar — and to a program
@@ -151,6 +153,16 @@ track:
       Record them anyway with `rola track --force`, or ask the holder to give ownership up with `rola layout giveup-ownership`
     zh-CN: |
       请用 `rola track --force` 强制记录，或请持有者用 `rola layout giveup-ownership` 让出所有权
+
+  err_ignored:
+    en: "%{count} files named are governed by the ignore rules: %{paths}"
+    zh-CN: "指定的 %{count} 个文件被忽略规则管辖：%{paths}"
+
+  err_ignored_help:
+    en: |
+      Leave them out, or record them anyway with `rola track --include-ignored`
+    zh-CN: |
+      请略过这些文件，或用 `rola track --include-ignored` 一并记录
 
   err_no_files_help:
     en: |

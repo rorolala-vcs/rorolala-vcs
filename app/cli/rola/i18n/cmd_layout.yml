@@ -452,16 +452,20 @@ cmd_layout_tree_diff:
         **Usage**: rola layout tree-diff [LAYOUT]
         **Flags**:
             --alike <0.0-1.0>    The similarity threshold for two text files to count as moved, `0.6` by default
+            --include-ignored    Show what the ignore rules govern as well
 
         Each line is a mode and a path: `lost`, `untagged`, `modified`, `rename <FROM> -> <TO>` or `failed`
+        What the tree gained is left out when the ignore rules govern it; a move the reading found is not
     zh-CN: |
         展示工作树相对于布局的内容
 
         **用法**：rola layout tree-diff [布局]
         **标识**：
             --alike <0.0-1.0>    两个文本文件算作移动的相似度门槛，默认为 0.6
+            --include-ignored    连被忽略规则管辖的条目一并显示
 
         每行是一个模式加一个路径：`lost`、`untagged`、`modified`、`rename <FROM> -> <TO>` 或 `failed`
+        工作树新增的条目被忽略规则管辖时不显示；已被识别为移动的条目不受影响
 
   description:
     en: Show what the working tree holds beside a Layout

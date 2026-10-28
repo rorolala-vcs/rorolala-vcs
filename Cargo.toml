@@ -21,6 +21,7 @@ members = [
     "modules/desktop-pty",
     "modules/errors",
     "modules/git-support",
+    "modules/ignore",
     "modules/inverse-index",
     "modules/layout",
     "modules/protocol",
@@ -90,6 +91,7 @@ rorolala-dev-rsharp-bindgen = { path = "dev/rsharp-bindgen" }
 rorolala-errors = { path = "modules/errors" }
 rorolala-ffi = { path = "app/ffi" }
 rola-git-support = { path = "modules/git-support" }
+rorolala-ignore = { path = "modules/ignore" }
 rorolala-inverse-index = { path = "modules/inverse-index" }
 rorolala-layout = { path = "modules/layout" }
 rorolala-protocol = { path = "modules/protocol" }
@@ -130,6 +132,12 @@ arg-picker = "0.4.0"
 # several entries at once. The full syntax is wanted rather than a bare `*`: a Vault's paths are a
 # tree, so `**` is what reaches into one.
 globset = "0.4.20"
+
+# gitignore matching for the managed ignore rules (`modules/ignore`): the syntax is gitignore's
+# whole surface — negation, directory-only, anchoring, `**` — and ripgrep's own matcher is the one
+# already proven against it. Only the matching is taken, not the crate's own directory walking:
+# which files hold rules, and in what order they apply, is this project's own answer.
+ignore = "0.4.23"
 
 # Serialization
 serde = { version = "1.0.229", features = ["derive"] }
@@ -246,6 +254,7 @@ authors.workspace = true
 rorolala-auth.workspace = true
 rorolala-daemon.workspace = true
 rorolala-errors.workspace = true
+rorolala-ignore.workspace = true
 rorolala-inverse-index.workspace = true
 rorolala-layout.workspace = true
 rorolala-tree-analyze.workspace = true

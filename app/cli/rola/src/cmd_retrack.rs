@@ -31,6 +31,7 @@ use std::str::FromStr as _;
 
 use librorolala::auth::Account;
 use librorolala::daemon::{Chain, action_bring_remote_index_async, action_fetch_layout};
+use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{tracked_vault, variant_moves};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
@@ -374,7 +375,9 @@ pub fn handle_retrack(
     // refused leaves the Layout, the tree and the merge exactly as they were.
     let mut merging = Merging::read(&root);
     let pending = merging.at(id).cloned();
-    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
+    // Retracking moves a version pointer of an entry the Layout names, which the ignore rules
+    // have no jurisdiction over, so the reading is taken unfiltered.
+    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
         Ok(diff) => diff,
         Err(error) => return failed(error.to_string()),
     };

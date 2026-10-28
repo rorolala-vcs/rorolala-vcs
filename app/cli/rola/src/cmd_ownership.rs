@@ -30,6 +30,7 @@ use librorolala::auth::Account;
 use librorolala::daemon::{
     Ownership, action_fetch_layout, action_giveup_ownership_async, action_request_ownership_async,
 };
+use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::protocol::VaultAddress;
 use librorolala::tree_analyze::{TreeDiff, tree_diff, walk};
@@ -477,7 +478,9 @@ fn change(
     let diff = if force {
         None
     } else {
-        match tree_diff(&layout, held, ALIKE) {
+        // Ownership is asked about entries the Layout names, which the ignore rules have no
+        // jurisdiction over, so the reading is taken unfiltered.
+        match tree_diff(&layout, held, ALIKE, &IgnoreRuleSet::empty()) {
             Ok(diff) => Some(diff),
             Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
         }

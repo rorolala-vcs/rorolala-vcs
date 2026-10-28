@@ -33,6 +33,7 @@ status:
           --no-graph                Do not draw that version chain
           --no-hint                 Do not show the two lines for origin and state
           --show-unjoined-variants  Show every unjoined variant of the named file
+          --include-ignored         Show what the ignore rules govern as well
 
       With no target named, the working tree's differences are shown line by line: a `>` beginning means a moved path, a `-` a path the Layout records and the working tree lacks, a `+` a path the working tree has and the Layout does not record, and the rest are paths with content changes in place, while `(*)` marks a line that also has a content change
 
@@ -50,6 +51,7 @@ status:
           --no-graph               不画出那条版本链
           --no-hint                不显示来源与状态两行
           --show-unjoined-variants 显示指定文件未合并的所有变体
+          --include-ignored        连被忽略规则管辖的条目一并显示
 
       不指定目标时，逐行展示工作区的差异：`>` 开头是移动的路径，`-` 是布局记录而工作区缺失的路径，`+` 是工作区有而布局未记录的路径，其余行是原地发生内容变化的路径，`(*)` 表示该行同时也有内容变化
 

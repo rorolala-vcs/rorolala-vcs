@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
+use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::storage::{Blake3Hash, Key};
 use librorolala::tree_analyze::tree_diff;
@@ -174,7 +175,10 @@ pub async fn plan(
     direction: Direction,
     forced: bool,
 ) -> Result<Plan, String> {
-    let diff = tree_diff(local, workspace, ALIKE).map_err(|error| error.to_string())?;
+    // A sync moves content between entries the Layouts name; what the tree gained and nobody
+    // recorded is not synced, so the ignore rules have nothing to govern here.
+    let diff = tree_diff(local, workspace, ALIKE, &IgnoreRuleSet::empty())
+        .map_err(|error| error.to_string())?;
     let modified: BTreeSet<LayoutPath> = diff.modified.into_iter().collect();
 
     let (mut entries, up_to_date) = local_entries(

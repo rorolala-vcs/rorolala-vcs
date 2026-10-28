@@ -4,16 +4,16 @@
 //! which `Uuid`, and who holds it. A Workspace cannot work in it — it is elsewhere — so what it
 //! fetches is a copy, kept under the name the Vault was bound by and read rather than worked in.
 
-use librorolala::daemon::action_fetch_layout;
+use librorolala::daemon::{action_fetch_ignore_rules, action_fetch_layout};
 use mingling::{
-    Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
+    Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
     macros::{
         arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         routeify, suggest,
     },
     metadata::Description,
-    picker::EntryPicker,
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResWorkspace};
@@ -43,18 +43,30 @@ pub fn desc_layout_fetch() -> Description {
 /// Completes what `rola layout fetch` can be given next.
 ///
 /// What is named is a Vault the Workspace has bound, and never an address: the copy is kept under
-/// the name, so a name is the whole of what the command can take.
+/// the name, so a name is the whole of what the command can take, beside the one flag it takes.
 #[completion(EntryLayoutFetch)]
 pub fn complete_layout_fetch(
     ctx: ShellContext,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
-    if typing_flag(&ctx) || positional(&ctx, "fetch") != 0 {
+    if typing_flag(&ctx) {
+        return crate::complete::strip_written(
+            &ctx,
+            suggest! {
+                ARG_NO_IGNORE_RULES: t!("cmd_layout_fetch.complete.no_ignore_rules"),
+            },
+        );
+    }
+
+    if positional(&ctx, "fetch") != 0 {
         return suggest!();
     }
 
     offer(&ctx, vault_names(remote.get_ref()))
 }
+
+/// Fetch only the Layout, leaving the Vault's ignore rules unfetched.
+pub const ARG_NO_IGNORE_RULES: PickerArg<'static, Flag> = arg![no_ignore_rules: Flag];
 
 /// Brings a Vault's Layout here as a read-only copy
 ///
@@ -81,26 +93,45 @@ pub fn complete_layout_fetch(
 /// [`ActionError`]: librorolala::protocol::ActionError
 #[command(node = "layout.fetch", entry = EntryLayoutFetch)]
 pub fn layout_fetch(args: EntryLayoutFetch) -> Next {
-    // UNWRAP: Picking cannot fail: a positional that is absent is `None`, and naming none is what
-    // lets the Workspace's own choice be the one that is reached for.
-    let (named, unmatched): (Option<String>, _) =
-        args.pick(arg![Option<String>]).pick(&UNMATCHED).unwrap();
+    // UNWRAP: Picking cannot fail: a flag is a flag and a positional that is absent is `None`, and
+    // naming none is what lets the Workspace's own choice be the one that is reached for.
+    let (no_ignore_rules, named, unmatched): (Flag, Option<String>, _) = args
+        .pick(ARG_NO_IGNORE_RULES)
+        .pick(arg![Option<String>])
+        .pick(&UNMATCHED)
+        .unwrap();
 
     if let Some(next) = crate::unmatched::refused(&unmatched, "layout fetch") {
         return next;
     }
 
-    StateLayoutFetch::from(named).into()
+    StateLayoutFetch::new(named, matches!(no_ignore_rules, Flag::Active)).into()
 }
 
 /// The state of fetching a Vault's Layout.
 ///
-/// Which Vault is reached is the whole of what is said: naming none reaches for the one the
-/// Workspace reaches for by default.
-#[derive(Grouped, Wrap)]
+/// Which Vault is reached and whether its ignore rules come with it is the whole of what is said:
+/// naming none reaches for the one the Workspace reaches for by default, and the rules are fetched
+/// unless the run said not to.
+#[derive(Grouped)]
 pub struct StateLayoutFetch {
     /// The Vault to reach, or nothing when the Workspace's own choice is reached for.
     vault: Option<String>,
+    /// Whether the Vault's ignore rules are left unfetched.
+    no_ignore_rules: bool,
+}
+
+impl StateLayoutFetch {
+    /// The state a fetch of `vault` starts in, with its rules left unfetched when the run said so.
+    ///
+    /// It is the one way the state is made: the two names share the command, so a field-by-field
+    /// construction written once per name would be two places for what a fetch is to disagree.
+    pub(crate) const fn new(vault: Option<String>, no_ignore_rules: bool) -> Self {
+        Self {
+            vault,
+            no_ignore_rules,
+        }
+    }
 }
 
 #[chain(routeify)]
@@ -136,6 +167,13 @@ pub fn handle_layout_fetch(
     let account = account_named(&account_name, Some(held), None)?;
 
     action_fetch_layout(held, &account, target.to_string(), name.clone())?;
+
+    // The rules the Vault manages come with the Layout: they are what the fetched copy means for
+    // the readings the Workspace makes, and a rule the Vault gave up is gone from here by the same
+    // fetch. A run that named `--no-ignore-rules` leaves whatever is here as it is.
+    if !state.no_ignore_rules {
+        action_fetch_ignore_rules(held, &account, target.to_string(), name.clone())?;
+    }
 
     ResultLayoutFetched {
         // What is named is the place the copy is kept rather than the generation this run wrote:

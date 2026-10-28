@@ -6,14 +6,20 @@ cmd_fetch:
         Bring back a read-only copy of the Vault's Layout
 
         **Usage**: rola fetch <VAULT>
+        **Flags**:
+            --no-ignore-rules    Fetch only the Layout, leaving the Vault's ignore rules unfetched
 
         By default, use the Workspace's default Vault
+        The Vault's own ignore rules are fetched with the Layout: they land under `.rola/info/ignore/vaults/<NAME>/`, replacing whatever was there
     zh-CN: |
         取回保险库的布局只读副本
 
         **用法**：rola fetch <保险库>
+        **标识**：
+            --no-ignore-rules    只取回布局，不取保险库的忽略规则
 
         默认使用工作区的默认保险库
+        保险库自己的忽略规则会随布局一起取回：落在 `.rola/info/ignore/vaults/<名称>/` 下，整体替换原有内容
 
   description:
     en: Bring back a read-only copy of the Vault's Layout

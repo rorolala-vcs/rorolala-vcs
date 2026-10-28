@@ -1220,6 +1220,18 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_WORKSPACE_READONLY_LAYOUTS_DIR();
 
     /// <summary>
+    /// Path, inside the Workspace's data directory, where the ignore rules it works by are kept
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_WORKSPACE_IGNORE_RULES_DIR();
+
+    /// <summary>
+    /// Path, inside the Vault's root, where the ignore rules it hands down are kept
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint ROLA_VAULT_IGNORE_RULES_DIR();
+
+    /// <summary>
     /// The file, inside a Layout's directory, naming the upstream Vault it tracks
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1392,6 +1404,9 @@ internal static partial class RorolalaBinding
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_addr_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_ignore_rules(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_inverse_edge(nint value);
@@ -1712,6 +1727,16 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult do_action_bring_remote_index(nint workspace, nint account, nint target, nint input);
 
     /// <summary>
+    /// Runs the [`ActionFetchIgnoreRules`](crate::ActionFetchIgnoreRules) action, blocking until it has.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult do_action_fetch_ignore_rules(nint workspace, nint account, nint target, nint input);
+
+    /// <summary>
     /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
     ///
     /// `daemon_begin_async` is not supported for use on the FFI side; only the
@@ -1721,6 +1746,18 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint rola_daemon_begin(nint registry, ushort port);
+
+    /// <summary>
+    /// Loads the rule set `rules` holds, matched against paths written from `root`.
+    ///
+    /// A `RolaIgnoreRules` the caller releases with `free_rola_ignore_rules`, or null when the
+    /// directory could not be listed. A directory that is not there at all is not a failure: the
+    /// set is empty and ignores nothing.
+    ///
+    /// Returns an owned `RolaIgnoreRules *`, or `NULL` when there is nothing; release it with `free_rola_ignore_rules`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint load_rola_ignore_rules(nint rules, nint root);
 
     /// <summary>
     /// The inverse index of the Vault or Workspace `dir` is inside, if it is inside one.
@@ -1931,6 +1968,15 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint rola_addr_error_addr_error_target(nint self);
+
+    /// <summary>
+    /// Whether `path` is ignored: the last rule that matches it says it is.
+    ///
+    /// `is_dir` is what a rule naming a directory only — one ending in `/` — is decided by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_ignore_rules_is_ignore(nint self, nint path, [MarshalAs(UnmanagedType.U1)] bool is_dir);
 
     /// <summary>
     /// Builds the records afresh from every object the index holds, and writes them.

@@ -9,7 +9,7 @@ use mingling::{
         renderer, suggest,
     },
     metadata::Description,
-    picker::{EntryPicker, PickerArg},
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResWorkspace;
@@ -57,6 +57,7 @@ pub fn complete_layout_tree_diff(
             &ctx,
             suggest! {
                 ARG_ALIKE: t!("cmd_layout_tree_diff.complete.alike"),
+                crate::ignore::ARG_INCLUDE_IGNORED: t!("ignore.complete.include_ignored"),
             },
         );
     }
@@ -93,10 +94,11 @@ pub fn complete_layout_tree_diff(
 pub fn layout_tree_diff(args: EntryLayoutTreeDiff) -> Next {
     let picked = args
         .pick(ARG_ALIKE)
+        .pick(crate::ignore::ARG_INCLUDE_IGNORED)
         .pick(arg![Option<String>])
         .pick(&UNMATCHED)
         .to_result();
-    let (alike, name, unmatched) = match picked {
+    let (alike, include_ignored, name, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -108,6 +110,7 @@ pub fn layout_tree_diff(args: EntryLayoutTreeDiff) -> Next {
     StateLayoutTreeDiff {
         name,
         alike: alike.unwrap_or(DEFAULT_ALIKE),
+        include_ignored: matches!(include_ignored, Flag::Active),
     }
     .into()
 }
@@ -119,6 +122,8 @@ pub struct StateLayoutTreeDiff {
     name: Option<String>,
     /// How alike two text files have to be to count as moved.
     alike: f32,
+    /// Whether what the ignore rules govern is read too rather than left out.
+    include_ignored: bool,
 }
 
 #[chain]
@@ -127,7 +132,11 @@ pub fn handle_layout_tree_diff(
     workspace: &mut LazyRes<ResWorkspace>,
     format: &mut ResFormat,
 ) -> Next {
-    let StateLayoutTreeDiff { name, alike } = state;
+    let StateLayoutTreeDiff {
+        name,
+        alike,
+        include_ignored,
+    } = state;
 
     let res = workspace.get_ref();
     let Some(held) = res.as_ref() else {
@@ -166,7 +175,8 @@ pub fn handle_layout_tree_diff(
         }
     };
 
-    let diff = match tree_diff(&layout, held, alike) {
+    let rules = crate::ignore::rules(held, include_ignored);
+    let diff = match tree_diff(&layout, held, alike, &rules) {
         Ok(diff) => diff,
         Err(error) => {
             return ErrorLayoutFailed {

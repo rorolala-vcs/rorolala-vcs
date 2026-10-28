@@ -65,6 +65,29 @@ pub const WORKSPACE_CACHE_DIR: &str = "./.rola/cache/";
 #[lazyffi(export = ROLA_WORKSPACE_READONLY_LAYOUTS_DIR)]
 pub const WORKSPACE_READONLY_LAYOUTS_DIR: &str = "./.rola/cache/readonly-layouts/";
 
+/// Path, inside the Workspace's data directory, where the ignore rules it works by are kept
+///
+/// The rules are managed rather than scattered through the tree the way a `.gitignore` is: one
+/// directory holds them all, a file per rule set, and a Workspace reads none of them from the
+/// work itself. What a Vault hands down lands under [`IGNORE_RULES_VAULTS_DIR`] inside it, so a
+/// rule of the Workspace's own always sits shallower — and therefore decides over — one that was
+/// fetched.
+#[lazyffi(export = ROLA_WORKSPACE_IGNORE_RULES_DIR)]
+pub const WORKSPACE_IGNORE_RULES_DIR: &str = "./.rola/info/ignore/";
+
+/// The directory, inside a Workspace's ignore rules, that a fetched Vault's rules are kept under
+///
+/// One directory per Vault, named by the name the Workspace bound it under. Being deeper than the
+/// Workspace's own files is what makes a Vault's rule yield to a Workspace's contradicting one.
+pub const IGNORE_RULES_VAULTS_DIR: &str = "vaults";
+
+/// Path, inside the Vault's root, where the ignore rules it hands down are kept
+///
+/// The same shape as a Workspace's — one directory, a file per rule set — read by a fetch rather
+/// than by the Vault itself: a Vault has no tree of work for the rules to be read against.
+#[lazyffi(export = ROLA_VAULT_IGNORE_RULES_DIR)]
+pub const VAULT_IGNORE_RULES_DIR: &str = "./info/ignore/";
+
 /// The file, inside a Layout's directory, naming the upstream Vault it tracks
 ///
 /// It holds the name of a Vault the Workspace has bound, or nothing when the Layout tracks

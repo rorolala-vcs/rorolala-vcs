@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+rorolala-ignore.workspace = true
 rorolala-layout.workspace = true
 rorolala-storage.workspace = true
 rorolala-tree-analyze.workspace = true

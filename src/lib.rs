@@ -30,6 +30,9 @@ pub use rorolala_daemon as daemon;
 /// Errors across the C ABI
 pub use rorolala_errors as errors;
 
+/// The ignore rules a Workspace or a Vault is managed by
+pub use rorolala_ignore as ignore;
+
 /// The reverse dependency index over a version control index
 pub use rorolala_inverse_index as inverse_index;
 

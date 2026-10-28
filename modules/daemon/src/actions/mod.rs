@@ -7,6 +7,9 @@ pub use bring_remote_index::*;
 mod create_remote_entry;
 pub use create_remote_entry::*;
 
+mod fetch_ignore_rules;
+pub use fetch_ignore_rules::*;
+
 mod fetch_layout;
 pub use fetch_layout::*;
 

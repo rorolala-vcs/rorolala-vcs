@@ -1,0 +1,9 @@
+[package]
+name = "rorolala-ignore"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ignore.workspace = true
+rorolala-utils-constants.workspace = true
+rorolala-utils-lazyffi.workspace = true

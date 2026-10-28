@@ -20,6 +20,7 @@ use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr as _;
 
+use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{Broken, Relation, Status, compare};
 use librorolala::storage::{Blake3Hash, Key};
@@ -102,6 +103,7 @@ pub fn complete_status(ctx: ShellContext) -> Suggest {
                 crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH: t!("status.complete.max_message_length"),
                 ARG_NO_GRAPH: t!("status.complete.no_graph"),
                 ARG_NO_HINT: t!("status.complete.no_hint"),
+                crate::ignore::ARG_INCLUDE_IGNORED: t!("ignore.complete.include_ignored"),
             },
         );
     }
@@ -145,6 +147,7 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
         .pick(ARG_NO_GRAPH)
         .pick(ARG_NO_HINT)
         .pick(ARG_SHOW_UNJOINED_VARIANTS)
+        .pick(crate::ignore::ARG_INCLUDE_IGNORED)
         .pick(arg![Option<String>])
         .pick(&UNMATCHED)
         .to_result();
@@ -156,6 +159,7 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
         no_graph,
         no_hint,
         show_unjoined_variants,
+        include_ignored,
         target,
         unmatched,
     ) = match picked {
@@ -173,6 +177,7 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
     StateStatus {
         target,
         show_unjoined_variants: matches!(show_unjoined_variants, Flag::Active),
+        include_ignored: matches!(include_ignored, Flag::Active),
     }
     .into()
 }
@@ -184,6 +189,8 @@ pub struct StateStatus {
     target: Option<String>,
     /// Whether the target's unjoined variants are to be listed rather than its chain drawn.
     show_unjoined_variants: bool,
+    /// Whether what the ignore rules govern is read too rather than left out.
+    include_ignored: bool,
 }
 
 #[chain(routeify)]
@@ -237,7 +244,14 @@ pub fn handle_status(
     }
 
     let me = account.get_ref().must_bind().ok();
-    let status = match Status::read(held, &layout, me.as_deref(), index.get_ref().as_ref()) {
+    let rules = crate::ignore::rules(held, state.include_ignored);
+    let status = match Status::read(
+        held,
+        &layout,
+        me.as_deref(),
+        index.get_ref().as_ref(),
+        &rules,
+    ) {
         Ok(status) => status,
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     };
@@ -706,7 +720,10 @@ fn found(
         // moved, since that is where it is now. What is on disk is asked before the reading is, so a
         // hash — which also reads as a path — does not walk the tree for nothing.
         if held.get_root().join(path.to_path_buf()).is_file() {
-            let diff = tree_diff(layout, held, DEFAULT_ALIKE).map_err(|error| error.to_string())?;
+            // What is asked here is whether the tree's gain is a tracked path's move, and the
+            // ignore rules have no say in that: the reading is taken unfiltered.
+            let diff = tree_diff(layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty())
+                .map_err(|error| error.to_string())?;
 
             if let Some(rename) = diff.renamed.iter().find(|rename| rename.to == path)
                 && let Some(id) = layout.id_of(&rename.from)
@@ -786,7 +803,9 @@ fn version_of(layout: &Layout, id: Uuid) -> Result<Blake3Hash, String> {
 /// A move whose file was edited is already among the modified: the tree reading counts a move's
 /// destination there as well, since what changed is the content at the path the file is at now.
 fn editing(held: &Workspace, layout: &Layout, path: &LayoutPath) -> Result<bool, String> {
-    let diff = tree_diff(layout, held, DEFAULT_ALIKE).map_err(|error| error.to_string())?;
+    // A path's being changed is answered from `modified`, which the ignore rules do not govern.
+    let diff = tree_diff(layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty())
+        .map_err(|error| error.to_string())?;
 
     Ok(diff.modified.contains(path))
 }

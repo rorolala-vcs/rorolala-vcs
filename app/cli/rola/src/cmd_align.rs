@@ -20,6 +20,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{VariantMove, tracked_vault, variant_moves};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
@@ -158,6 +159,7 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
                 ARG_RESTORE_DELETE: t!("align.complete.restore_delete"),
                 ARG_RESTORE: t!("align.complete.restore"),
                 ARG_COMPLETELY: t!("align.complete.completely"),
+                crate::ignore::ARG_INCLUDE_IGNORED: t!("ignore.complete.include_ignored"),
             },
         );
     }
@@ -202,6 +204,7 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 /// [`ErrorAlignNotLost`] or [`ErrorAlignNoRename`] when the path is not what the mode acts on,
 /// [`ErrorAlignNotModified`] or [`ErrorAlignNotRestorable`] when there is nothing to put back,
 /// [`ErrorAlignRestoreExists`] when putting a file back would land on one already there,
+/// [`ErrorAlignIgnored`] when the path named is one the ignore rules govern,
 /// [`ErrorAlignRealMove`] when `--break` names a move of identical files, [`ErrorAlignMove`] when
 /// `--move` names somewhere that is not a fresh file, and [`ErrorAlignFailed`] otherwise.
 #[command(node = "align", entry = EntryAlign)]
@@ -216,6 +219,7 @@ pub fn align(args: EntryAlign) -> Next {
         .pick(ARG_RESTORE_DELETE)
         .pick(ARG_RESTORE)
         .pick(ARG_COMPLETELY)
+        .pick(crate::ignore::ARG_INCLUDE_IGNORED)
         .pick(arg![Option<String>])
         .pick(&UNMATCHED)
         .to_result();
@@ -229,6 +233,7 @@ pub fn align(args: EntryAlign) -> Next {
         restore_delete,
         restore,
         completely,
+        include_ignored,
         path,
         unmatched,
     ) = match picked {
@@ -289,6 +294,7 @@ pub fn align(args: EntryAlign) -> Next {
         path,
         mode,
         completely,
+        include_ignored: matches!(include_ignored, Flag::Active),
     }
     .into()
 }
@@ -302,6 +308,8 @@ pub struct StateAlign {
     mode: Mode,
     /// Whether a move is to be put back as well as returned to where it was.
     completely: bool,
+    /// Whether an entry the ignore rules govern may be selected anyway.
+    include_ignored: bool,
 }
 
 #[chain]
@@ -320,6 +328,7 @@ pub fn handle_align(
         path,
         mode,
         completely,
+        include_ignored,
     } = state;
 
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
@@ -366,7 +375,10 @@ pub fn handle_align(
         Err(next) => return next,
     };
 
-    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
+    // The reading is taken unfiltered: a variant file the tree holds somewhere unexpected is found
+    // among the untagged, and the ignore rules filtering them would hide exactly the files a merge
+    // is waiting for. The rules' say over the run is made at the selection instead, below.
+    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
         Ok(diff) => diff,
         Err(error) => {
             return ErrorAlignFailed {
@@ -375,6 +387,32 @@ pub fn handle_align(
             .into();
         }
     };
+
+    // What the ignore rules govern cannot be selected for settling: an entry the rules cover is
+    // refused — unless the Layout already names it, since the rules have no jurisdiction over what
+    // is tracked, or the reading found it to be where a tracked file moved, which is the work's own
+    // and no rule's. `--include-ignored` is the run saying it means it.
+    if !include_ignored {
+        let rules = crate::ignore::rules(held, include_ignored);
+        let governed = match &selected {
+            Selector::One(path) => {
+                layout.id_of(path).is_none()
+                    && !crate::ignore::selectable(&rules, path, &diff.renamed)
+            }
+            Selector::Under(prefix) => {
+                !prefix.is_empty() && rules.is_ignore(Path::new(prefix), true)
+            }
+        };
+
+        if governed {
+            let path = match &selected {
+                Selector::One(path) => path.as_str().to_owned(),
+                Selector::Under(prefix) => prefix.clone(),
+            };
+
+            return ErrorAlignIgnored { path }.into();
+        }
+    }
 
     // A variant file is not a path the Layout names, so the ways a Layout path is settled do not
     // apply to it. It may be where the record says or somewhere a move put it, and what settles it
@@ -1382,6 +1420,32 @@ failure!(ErrorAlignNotLost);
 pub fn render_error_align_not_lost(error: ErrorAlignNotLost, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("align.err_not_lost_help").trim()));
+    ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
+}
+
+/// Error: the path named is one the ignore rules govern, so it cannot be selected.
+#[derive(Grouped)]
+pub struct ErrorAlignIgnored {
+    /// What was named.
+    path: String,
+}
+
+impl Failure for ErrorAlignIgnored {
+    fn name(&self) -> &'static str {
+        "error_align_ignored"
+    }
+
+    fn reason(&self) -> String {
+        t!("align.err_ignored", path = self.path).trim().to_string()
+    }
+}
+
+failure!(ErrorAlignIgnored);
+
+#[renderer(buffer)]
+pub fn render_error_align_ignored(error: ErrorAlignIgnored, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("align.err_ignored_help").trim()));
     ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
 }
 

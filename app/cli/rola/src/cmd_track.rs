@@ -35,6 +35,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
+use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Batch, Layout, LayoutPath, MutableData};
 use librorolala::status::{tracked_vault, unowned};
 use librorolala::storage::{
@@ -157,6 +158,7 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
                 ARG_NO_EDITOR: t!("track.complete.no_editor"),
                 ARG_REPLACE: t!("track.complete.replace"),
                 ARG_POLICY: t!("track.complete.policy"),
+                crate::ignore::ARG_INCLUDE_IGNORED: t!("ignore.complete.include_ignored"),
             },
         );
     }
@@ -221,7 +223,8 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 /// carry, [`ErrorTrackReplace`] when `--replace` names a file the Layout
 /// records no version for or one whose version is a merge, [`ErrorTrackMessage`] when the messages
 /// do not line up or are too long, [`ErrorTrackUnowned`] when a file named is one another account
-/// holds, [`ErrorNoEditor`](crate::editor::ErrorNoEditor) when an editor is needed and none is
+/// holds, [`ErrorTrackIgnored`] when a file named is one the ignore rules govern,
+/// [`ErrorNoEditor`](crate::editor::ErrorNoEditor) when an editor is needed and none is
 /// named, [`ErrorLayoutShouldInWorkspace`] when the run is not inside a Workspace, and
 /// [`ErrorTrackFailed`] when the store, the index or the Layout refuses.
 #[command(node = "track", entry = EntryTrack)]
@@ -232,13 +235,15 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
         .pick(ARG_NO_EDITOR)
         .pick(ARG_REPLACE)
         .pick(ARG_POLICY)
+        .pick(crate::ignore::ARG_INCLUDE_IGNORED)
         .pick_or_route(arg![Vec<String>], || ErrorTrackNoFiles.to_chain())
         .pick(&UNMATCHED)
         .to_result();
-    let (message, file_message, no_editor, replace, policy, files, unmatched) = match picked {
-        Ok(picked) => picked,
-        Err(next) => return next,
-    };
+    let (message, file_message, no_editor, replace, policy, include_ignored, files, unmatched) =
+        match picked {
+            Ok(picked) => picked,
+            Err(next) => return next,
+        };
 
     if let Some(next) = crate::unmatched::refused(&unmatched, "track") {
         return next;
@@ -271,11 +276,16 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
         replace: matches!(replace, Flag::Active),
         policy,
         force: **force,
+        include_ignored: matches!(include_ignored, Flag::Active),
     }
     .into()
 }
 
 /// The state a recording starts in.
+// What a run does to the tree is a handful of independent answers the caller gave — no editor, a
+// replaced version, another account's file, the ignore rules — and making each a two-variant enum
+// would say no more than the bool does while writing every use of it out twice.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Grouped)]
 pub struct StateTrack {
     /// The files named, as they were written.
@@ -292,6 +302,8 @@ pub struct StateTrack {
     policy: Option<&'static str>,
     /// Whether a file another account holds is recorded anyway.
     force: bool,
+    /// Whether a file the ignore rules govern may be named anyway.
+    include_ignored: bool,
 }
 
 #[chain]
@@ -343,6 +355,7 @@ fn record(
         replace,
         policy,
         force,
+        include_ignored,
     } = state;
 
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
@@ -361,10 +374,14 @@ fn record(
     let mut merging = Merging::read(&root);
     let ignored = merging.ignored(&layout);
 
+    // The rules the Workspace ignores by govern what the tree gained: what a rule covers is not
+    // this run's to record unless the run was told to include it.
+    let rules = crate::ignore::rules(held, include_ignored);
+
     // Recording works on a tree that is settled: a path the Layout names and the tree does not hold
     // is something to settle first, with `rola align`, rather than something to record around. A
     // move is not one of these — naming a path where it is now is how a move is confirmed.
-    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE) {
+    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE, &rules) {
         Ok(diff) => diff,
         Err(error) => return fail(error.to_string()),
     };
@@ -405,6 +422,8 @@ fn record(
         &files,
         &diff.renamed,
         &ignored,
+        &rules,
+        include_ignored,
         policy,
     ) {
         Ok(prepared) => prepared,
@@ -754,12 +773,17 @@ fn prepare(
     names: &[String],
     renames: &[PathRename],
     ignored: &BTreeSet<LayoutPath>,
+    rules: &IgnoreRuleSet,
+    include_ignored: bool,
     policy: Option<&'static str>,
 ) -> Result<Vec<Prepared>, Next> {
     let root = normalize(root);
 
     // What each name stands for: a file, or a directory whose files are taken in its place.
     let mut standing = Vec::with_capacity(names.len());
+
+    // What a name was refused for being the ignore rules' business, named as it was written.
+    let mut refused = Vec::new();
 
     for given in names {
         let disk = normalize(&resolve(cwd, given));
@@ -773,6 +797,13 @@ fn prepare(
         };
 
         if disk.is_dir() {
+            // A directory the rules ignore is not this run's to record either — what it holds is
+            // reached by the same walk the tree reading uses, and the rules govern what that gains.
+            if !include_ignored && rules.is_ignore(relative, true) {
+                refused.push(given.clone());
+                continue;
+            }
+
             // A directory is read where it is rather than by walking the whole Workspace and
             // filtering, so naming `src/` reads `src/` alone. What the walk leaves out is left out
             // just the same, since it is the same walk — see `reachable` for the one thing a walk
@@ -787,10 +818,21 @@ fn prepare(
                 continue;
             }
 
+            // An ignored file cannot be selected — but a move's destination is the work's own file
+            // wearing a new place, and a rule is not written against that.
+            if !include_ignored && !crate::ignore::selectable(rules, &path, renames) {
+                refused.push(given.clone());
+                continue;
+            }
+
             standing.push(Named::File(path, disk));
         } else {
             return Err(ErrorTrackFile::new(given, TrackFileError::NotAFile).into());
         }
+    }
+
+    if !refused.is_empty() {
+        return Err(ErrorTrackIgnored { paths: refused }.into());
     }
 
     // A directory is read through the same walk the tree reading uses, so what it leaves out — the
@@ -816,7 +858,17 @@ fn prepare(
                         let relative = found.disk.strip_prefix(&root).ok()?;
                         let path = LayoutPath::from_relative(relative).ok()?;
 
-                        (!ignored.contains(&path)).then_some((path, found.disk))
+                        if ignored.contains(&path) {
+                            return None;
+                        }
+
+                        // What the rules ignore is not selected by a directory's expansion either:
+                        // it was never named, so there is nothing to refuse — it is simply left out.
+                        if !include_ignored && !crate::ignore::selectable(rules, &path, renames) {
+                            return None;
+                        }
+
+                        Some((path, found.disk))
                     })
                     .collect();
                 under.sort_by(|left, right| left.0.cmp(&right.0));
@@ -1728,6 +1780,38 @@ pub fn render_error_track_unowned(error: ErrorTrackUnowned, ec: &mut ResExitCode
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("track.err_unowned_help").trim()));
     ec.exit_code = EC_ERR_TRACK_OWNERSHIP;
+}
+
+/// Error: the files named are ones the ignore rules govern, so they cannot be selected.
+#[derive(Grouped)]
+pub struct ErrorTrackIgnored {
+    /// What was named, as it was written.
+    paths: Vec<String>,
+}
+
+impl Failure for ErrorTrackIgnored {
+    fn name(&self) -> &'static str {
+        "error_track_ignored"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "track.err_ignored",
+            count = self.paths.len(),
+            paths = self.paths.join(", ")
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorTrackIgnored);
+
+#[renderer(buffer)]
+pub fn render_error_track_ignored(error: ErrorTrackIgnored, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("track.err_ignored_help").trim()));
+    ec.exit_code = EC_ERR_TRACK_ARGUMENT;
 }
 
 /// Error: a file named cannot be recorded.

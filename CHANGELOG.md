@@ -2,6 +2,74 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.1.2 (Unreleased)
+
+## Feature
+
+### 1. [`app`] [`rola`] Read, select and fetch the work by the managed ignore rules
+
+The commands that read the tree now read it by the Workspace's managed ignore rules. `rola status`
+and `rola layout tree-diff` leave out a path the rules govern, and `--include-ignored` shows it as
+well; what the Layout names is still read, so a recorded file a rule matches appears as the change
+it is, and a move the reading found keeps its place whatever the rules say about where it went.
+
+`rola track` and `rola align` refuse a path the rules govern — naming an ignored file or directory,
+or a directory selection that is itself ignored — with the argument code the command already has
+(201 and 221) and a line pointing at `--include-ignored`, which is the run saying it means it. A
+directory named for recording still expands over what it holds silently: a file under it that the
+rules govern is not selected, and there is nothing to refuse because it was never named.
+
+`rola fetch` brings the Vault's ignore rules down with its Layout, by default, into
+`.rola/info/ignore/vaults/<NAME>/` — replacing whatever was there, so a rule the Vault gave up is
+gone here too. `--no-ignore-rules` fetches the Layout alone and leaves the rules here as they are.
+The fetch is the one Vault's, named or default, and never another bound Vault's.
+
+What a rule set that cannot be read costs is a word on standard error and no rules for that run,
+rather than failing a reading that has an answer: the reading is the thing being answered, and the
+rules are a refinement of it.
+
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Hide what a Workspace's ignore rules govern in the browser
+
+The Rorolala plugin now contributes a hide rule to the File System plugin's catalogue, offered as
+`rola_ignored` and labelled with the plugin's own key. A directory under the root being read is
+looked up for the Workspace holding it, the Workspace's rule set is loaded once per Workspace
+through the C ABI — off the thread the rows are drawn on, the way the provider contract asks — and
+an entry the rules match is left out of a listing or a tree. Letting go of the answer when the files
+may have changed is what makes an edited or freshly fetched rule file seen.
+
+What the provider answers is the rules alone: an entry they match is hidden whether or not the
+Layout records it, where the reading `rola status` makes keeps a recorded path out of the rules'
+jurisdiction. That is the one place the browser and the reading can disagree, and it is the cost of
+answering about a row without walking the tree the reading walks.
+
+### 3. [`modules`] Manage ignore rules in one directory, and let a Vault hand rules down
+
+Rorolala now reads its ignore rules from one managed directory — `.rola/info/ignore/` in a
+Workspace, `./info/ignore/` in a Vault — instead of from the tree, and a fetch brings a Vault's
+rules down with its Layout. A rule file is held under the name its author gave it and holds
+gitignore's own syntax: negation, directory-only rules, anchoring and `**` all read as git reads
+them. A file that the rules govern is not the work's gain, so a tree reading leaves it out of what
+the tree gained; what a Layout already names is not the rules' to hide, and a move the reading
+found is a fact about the work rather than something a rule suppresses.
+
+The order the rules apply in is the managed directory's own answer: a deeper rule file is applied
+before a shallower one, and beside its siblings a file whose name sorts sooner (numbers by value)
+is applied before one that sorts later, so the last rule that matches a path is the one that
+decides. A Vault's rules land under `vaults/<name>/` — deeper than the Workspace's own — which is
+what lets a Workspace's `!*.mb` suppress a Vault's `*.mb`.
+
+The rules themselves are matched by ripgrep's `ignore` crate rather than by a second
+implementation of gitignore's language, and the set crosses the C ABI as an opaque handle
+(`load_rola_ignore_rules`, `rola_ignore_rules_is_ignore`, `free_rola_ignore_rules`) so a program
+outside Rust asks the same set the command line does.
+
+`modules/tree-analyze` takes the rule set as part of a reading and filters only what the tree
+gained, after the moves are paired. `modules/status` reads with it, so a status made of a Workspace
+carries the same answer. `modules/daemon` gains the `fetch-ignore-rules` action (id 18), which
+hands a Vault's whole rule directory over and replaces the Workspace's copy of it as one swap
+— a rule the Vault deleted is gone from here after the next fetch, without either side keeping a
+list of what used to be.
+
 # 0.1.1 (2026-10-28)
 
 ## Bugfix

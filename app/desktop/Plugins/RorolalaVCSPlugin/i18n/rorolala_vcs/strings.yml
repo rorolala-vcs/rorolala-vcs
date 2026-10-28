@@ -338,6 +338,14 @@ rorolala_vcs:
         en: "State: named elsewhere"
         zh-CN: 状态：被命名在别处
 
+  # What the hide provider is called where the File System plugin offers its hiding rules. The key is
+  # namespaced as this plugin's, since the option is the provider this plugin registers — the File
+  # System plugin offers it without knowing that Rorolala exists.
+  hides:
+    rola_ignored:
+      en: Rola ignore rules
+      zh-CN: Rola 忽略规则
+
   # What the Owner column is headed: who holds the entry, which is what the column says about one. The name
   # a held entry wears is a name rather than a phrase and so is not translated at all.
   column_ownership:

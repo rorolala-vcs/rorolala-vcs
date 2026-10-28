@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{Layout, LayoutPath};
 use rorolala_storage::Key;
 use rorolala_tree_analyze::tree_diff;
@@ -575,7 +576,10 @@ fn renamed(workspace: &Workspace, layout: &Layout, path: &LayoutPath) -> Option<
         return None;
     }
 
-    let diff = tree_diff(layout, workspace, DEFAULT_ALIKE).ok()?;
+    // The ignore rules govern what the tree gained, and what is asked here is where a path went:
+    // a move is found whether or not the place it moved to is ignored, so the empty set is the
+    // reading this wants.
+    let diff = tree_diff(layout, workspace, DEFAULT_ALIKE, &IgnoreRuleSet::empty()).ok()?;
     let rename = diff.renamed.iter().find(|rename| rename.to == *path)?;
 
     layout.id_of(&rename.from)

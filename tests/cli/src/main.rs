@@ -40,9 +40,11 @@ fn main() {
     let held = sandbox.join("held");
     let claimed = sandbox.join("claimed");
     let cached = sandbox.join("cached");
+    let ignoreme = sandbox.join("ignoreme");
 
     for dir in [
         &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed, &cached,
+        &ignoreme,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -67,6 +69,7 @@ fn main() {
     accounts(&rola, &plain, &ws, &mut checked);
     lookback(&rola, &ws, &mut checked);
     merging(&rola, &ws, &files, &mut checked);
+    ignore_rules(&rola, &ignoreme, &mut checked);
     vaults(&rola, &ws, &mut checked);
     explain(&rola, &ws, &mut checked);
     desktop(&rola, &ws, &mut checked);
@@ -1022,7 +1025,146 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     );
 }
 
-/// The Vaults a Workspace knows, and what a run that may not reach one does.
+/// The ignore rules a Workspace manages: what the readings leave out, and what a run may not select.
+fn ignore_rules(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to ignore in", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "new", "main"]);
+    checked.exits("a Layout is made to read the tree beside", &ran, 0);
+
+    // The rules are managed rather than scattered through the tree: one directory in the Workspace's
+    // data, a file per rule set, and what is written inside one is gitignore's own syntax.
+    let rules = dir.join(".rola/info/ignore");
+    fs::create_dir_all(&rules).expect("the rules directory");
+    fs::write(rules.join("maya"), "*.mb\n").expect("a rule file");
+
+    fs::write(dir.join("scratch.mb"), "scratch\n").expect("a file the rules govern");
+    fs::write(dir.join("loose.txt"), "loose\n").expect("a file no rule governs");
+
+    // What the rules govern is not a gain of the tree, so the two readings leave it out.
+    let ran = rola.run(dir, &["status"]);
+    checked.exits("a status is read with the rules", &ran, 0);
+    checked.stdout_has(
+        "a path no rule governs is shown as gained",
+        &ran,
+        "loose.txt",
+    );
+    checked.wants(
+        "a path the rules govern is not shown",
+        !ran.stdout.contains("scratch.mb"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["status", "--include-ignored"]);
+    checked.exits("a status that includes the ignored is read", &ran, 0);
+    checked.stdout_has(
+        "--include-ignored shows what the rules govern",
+        &ran,
+        "scratch.mb",
+    );
+
+    let ran = rola.run(dir, &["layout", "tree-diff"]);
+    checked.exits("a tree-diff is read with the rules", &ran, 0);
+    checked.stdout_has(
+        "a path no rule governs is untagged",
+        &ran,
+        "untagged loose.txt",
+    );
+    checked.wants(
+        "a path the rules govern is not untagged",
+        !ran.stdout.contains("scratch.mb"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["layout", "tree-diff", "--include-ignored"]);
+    checked.exits("a tree-diff that includes the ignored is read", &ran, 0);
+    checked.stdout_has(
+        "--include-ignored shows it untagged",
+        &ran,
+        "untagged scratch.mb",
+    );
+
+    // A file the rules govern cannot be selected by a recording...
+    let ran = rola.run(
+        dir,
+        &["track", "scratch.mb", "--message", "no", "--no-editor"],
+    );
+    checked.exits("recording a file the rules govern is refused", &ran, 201);
+    checked.stderr_has(
+        "the refusal names the way past it",
+        &ran,
+        "--include-ignored",
+    );
+
+    // ...unless the run says it means it.
+    let ran = rola.run(
+        dir,
+        &[
+            "track",
+            "scratch.mb",
+            "--include-ignored",
+            "--message",
+            "kept",
+            "--no-editor",
+        ],
+    );
+    checked.exits("--include-ignored records it", &ran, 0);
+
+    // What the Layout names is no longer the rules' business: a matching rule does not hide it, and
+    // an edit is an ordinary content change.
+    fs::write(dir.join("scratch.mb"), "edited\n").expect("an edit to a recorded file");
+
+    let ran = rola.run(dir, &["status"]);
+    checked.exits("a status of a recorded file is read", &ran, 0);
+    checked.stdout_has(
+        "a recorded file is shown though a rule matches it",
+        &ran,
+        "scratch.mb",
+    );
+
+    // A rename found by the reading is a fact about the work rather than a rule's to hide: the
+    // destination keeps its place in the drawing even when a rule matches it.
+    fs::write(dir.join("hero.psd"), "hero\n").expect("a file to record");
+    let ran = rola.run(
+        dir,
+        &[
+            "layout",
+            "entry",
+            "create",
+            "00000000-0000-0000-0000-000000000009",
+            "1111111111111111111111111111111111111111111111111111111111111111",
+        ],
+    );
+    checked.exits("an entry is written to move", &ran, 0);
+
+    let ran = rola.run(
+        dir,
+        &[
+            "layout",
+            "path",
+            "create",
+            "hero.psd",
+            "00000000-0000-0000-0000-000000000009",
+        ],
+    );
+    checked.exits("the entry is named at a path", &ran, 0);
+
+    // A first reading writes down what the file holds, so the move is told by the content next time.
+    let ran = rola.run(dir, &["layout", "tree-diff"]);
+    checked.exits("the tree is read before the move", &ran, 0);
+
+    fs::rename(dir.join("hero.psd"), dir.join("hero.mb")).expect("a move the rules match");
+
+    let ran = rola.run(dir, &["layout", "tree-diff"]);
+    checked.exits("a move is read with the rules", &ran, 0);
+    checked.stdout_has(
+        "a move whose destination matches a rule is still a move",
+        &ran,
+        "rename hero.psd -> hero.mb",
+    );
+}
+
 fn vaults(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["vault"]);
     checked.exits("the bound Vaults are listed", &ran, 0);
@@ -1402,7 +1544,8 @@ impl Rola {
         command
             .current_dir(dir)
             .env("HOME", &self.home)
-            .env("XDG_DATA_HOME", &self.data).env("ROLA_DATA_HOME", &self.data)
+            .env("XDG_DATA_HOME", &self.data)
+            .env("ROLA_DATA_HOME", &self.data)
             .env("ROLA_HOME", &self.rola_home)
             // The language is pinned, so that what a check reads back does not depend on the
             // machine it runs on. A check about the language names its own.
@@ -1432,7 +1575,8 @@ fn text(path: &Path) -> String {
 /// written the way the machine writes one, so the two are the same place spelled twice. A check
 /// that compared the spellings rather than the place would fail on Windows for that alone.
 fn names(said: &str, path: &Path) -> bool {
-    said.replace('\\', "/").contains(&text(path).replace('\\', "/"))
+    said.replace('\\', "/")
+        .contains(&text(path).replace('\\', "/"))
 }
 
 /// What a run printed, read as JSON, when it printed JSON at all.

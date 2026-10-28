@@ -59,6 +59,12 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         RorolalaLocks.Declare(host, statuses, ownership);
 
+        // And what the browser leaves out: the entries a Workspace's ignore rules govern. The rules are
+        // Rorolala's — kept in its data directory, fetched from the Vaults, matched by the native
+        // loader — so the provider is this plugin's contribution to the File System plugin's hiding
+        // rules rather than something that plugin decides by itself.
+        HideRegistry.Register(new RolaIgnored());
+
         // What every command this plugin runs reports itself to: a card per command down the Overview, drawn by
         // whoever reached for the command — the strip, an entry's menu — and read by the Overview's panel.
         var hub = new ProgressHub();

@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{Layout, LayoutError, LayoutPath};
 use rorolala_storage::Key;
 use rorolala_tree_analyze::{TreeDiffError, entry_of, tree_diff};
@@ -258,6 +259,10 @@ impl Status {
     /// that is ahead of upstream from one that is behind; without one the merge records are still
     /// read and say what they can, and no base is called wrong.
     ///
+    /// `rules` is the Workspace's ignore rule set: a path it ignores is one the tree did not gain,
+    /// as far as this reading says. What the Layout already names is not the rules' to hide — see
+    /// [`tree_diff`] for the exact jurisdiction.
+    ///
     /// # Errors
     ///
     /// Returns [`StatusError::Tree`] when the tree cannot be read against the Layout — a Layout
@@ -268,9 +273,10 @@ impl Status {
         layout: &Layout,
         me: Option<&str>,
         index: Option<&VCSIndex>,
+        rules: &IgnoreRuleSet,
     ) -> Result<Self, StatusError> {
         let root = workspace.get_root();
-        let diff = tree_diff(layout, workspace, DEFAULT_ALIKE)?;
+        let diff = tree_diff(layout, workspace, DEFAULT_ALIKE, rules)?;
 
         // What is not this account's to change is read before anything is said, and kept out of the
         // content changes: a reader that took them as its own work would be reading past the one
@@ -634,6 +640,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
 
+    use rorolala_ignore::IgnoreRuleSet;
     use rorolala_layout::{Layout, LayoutPath, MutableData};
     use rorolala_tree_analyze::remember_moved;
     use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, VAULT_LAYOUT_NAME};
@@ -696,7 +703,14 @@ mod tests {
 
     /// Reads a Workspace's work as a run with no account bound and no index.
     fn read(workspace: &Workspace) -> Status {
-        Status::read(workspace, &working(workspace), None, None).unwrap()
+        Status::read(
+            workspace,
+            &working(workspace),
+            None,
+            None,
+            &IgnoreRuleSet::empty(),
+        )
+        .unwrap()
     }
 
     /// What a reading says about a tree that holds what the Layout names.
@@ -867,7 +881,14 @@ mod tests {
         sleep(Duration::from_millis(20));
         fs::write(dir.join("hero.psd"), b"after\n").unwrap();
 
-        let status = Status::read(&workspace, &working(&workspace), Some("bob"), None).unwrap();
+        let status = Status::read(
+            &workspace,
+            &working(&workspace),
+            Some("bob"),
+            None,
+            &IgnoreRuleSet::empty(),
+        )
+        .unwrap();
 
         assert_eq!(status.unowned, vec!["hero.psd".to_owned()], "{status:?}");
         assert_eq!(status.modified, Vec::<String>::new(), "{status:?}");

@@ -70,6 +70,7 @@ pub fn build_action_registry() -> Vec<std::option::Option<std::boxed::Box<dyn Ac
         std::option::Option::Some(std::boxed::Box::new(ActionSetRemoteVersion)),
         std::option::Option::Some(std::boxed::Box::new(ActionWriteRemoteEntries)),
         std::option::Option::Some(std::boxed::Box::new(ActionBringRemoteIndex)),
+        std::option::Option::Some(std::boxed::Box::new(ActionFetchIgnoreRules)),
     ]
 }
 

@@ -2301,6 +2301,7 @@ dependencies = [
  "rorolala-daemon",
  "rorolala-dev-bindgen",
  "rorolala-errors",
+ "rorolala-ignore",
  "rorolala-inverse-index",
  "rorolala-layout",
  "rorolala-protocol",
@@ -3801,6 +3802,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-ignore"
+version = "0.1.2"
+dependencies = [
+ "ignore",
+ "rorolala-utils-constants",
+ "rorolala-utils-lazyffi",
+]
+
+[[package]]
 name = "rorolala-inverse-index"
 version = "0.1.2"
 dependencies = [
@@ -3855,6 +3865,7 @@ version = "0.1.2"
 name = "rorolala-status"
 version = "0.1.2"
 dependencies = [
+ "rorolala-ignore",
  "rorolala-layout",
  "rorolala-storage",
  "rorolala-tree-analyze",
@@ -3889,6 +3900,7 @@ name = "rorolala-tree-analyze"
 version = "0.1.2"
 dependencies = [
  "blake3",
+ "rorolala-ignore",
  "rorolala-layout",
  "rorolala-utils-constants",
  "rorolala-utils-location",

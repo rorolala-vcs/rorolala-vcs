@@ -1,0 +1,11 @@
+_version: 2
+
+ignore:
+  complete:
+    include_ignored:
+      en: Include what the ignore rules govern as well
+      zh-CN: 连被忽略规则管辖的条目一并纳入
+
+  err_rules:
+    en: The ignore rules could not be read, so nothing is ignored this run (%{reason})
+    zh-CN: 忽略规则读取失败，本次运行不忽略任何条目（%{reason}）
