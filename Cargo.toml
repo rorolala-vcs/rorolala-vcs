@@ -53,6 +53,8 @@ homepage = "https://github.com/rorolala-vcs/rorolala-vcs"
 authors = [
     "RorolalaVCS",
     "Weicao-CatilGrass <1992414357@qq.com>",
+    "SmallFox <2806143047@qq.com>",
+    "wzc35418 <3582877573@qq.com>",
 ]
 
 [workspace.dependencies]
