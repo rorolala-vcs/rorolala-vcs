@@ -479,8 +479,8 @@ jobs:
       - name: Install the pinned appimagetool
         shell: bash
         run: |
-          url='https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage'
-          expected='95cbe7cce9717fce90c484e34052ee7c7f1d7635b33c12525b4776826a7d29b6'
+          url='https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage'
+          expected='ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0'
           directory='.cache/toolchains/appimagetool'
           mkdir -p "$directory"
           curl -sSL -o "$directory/appimagetool-x86_64.AppImage" "$url"

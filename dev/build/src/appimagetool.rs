@@ -1,9 +1,11 @@
 //! The tool the `AppImage` is made with.
 //!
-//! `AppImageKit` publishes the tool as an `AppImage` under a release named `continuous`, so there is no
-//! version tag to pin. The hash is what pins it instead: the release may be rebuilt, and a build
-//! that found different bytes would stop rather than package something nobody reviewed. A machine
-//! that keeps its own `appimagetool` on the path is used as it is; nothing is fetched here.
+//! `AppImageKit` publishes the tool as an `AppImage` under both a version tag and a release named
+//! `continuous` that is rebuilt whenever the tool changes, so only the versioned one has bytes that
+//! hold still. The release and the hash pin it together: what a package is built with decides what
+//! is in it, and a build that found different bytes would stop rather than package something nobody
+//! reviewed. A machine that keeps its own `appimagetool` on the path is used as it is; nothing is
+//! fetched here.
 
 use std::path::PathBuf;
 
@@ -11,11 +13,15 @@ use crate::Error;
 use crate::paths::Workspace;
 use crate::toolchain::Tool;
 
-/// The hash the tool must have.
-const SHA256: &str = "95cbe7cce9717fce90c484e34052ee7c7f1d7635b33c12525b4776826a7d29b6";
+/// The appimagetool release this project packages with.
+const VERSION: &str = "1.9.1";
 
-/// Where the tool is fetched from.
-const URL: &str = "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage";
+/// The hash the release's `AppImage` must have.
+const SHA256: &str = "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0";
+
+/// Where the release's `AppImage` is fetched from.
+const URL: &str =
+    "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage";
 
 /// The directory under the project's own cache the toolchain lives in.
 const DIRECTORY: &str = "appimagetool";
@@ -28,8 +34,8 @@ const BINARY: &str = "appimagetool-x86_64.AppImage";
 ///
 /// # Errors
 ///
-/// Reports [`Error::Missing`] with the source, the hash and the commands that lay it down when
-/// neither is there.
+/// Reports [`Error::Missing`] with the version, the source, the hash and the commands that lay it
+/// down when neither is there.
 pub fn require(workspace: &Workspace) -> Result<PathBuf, Error> {
     let laid_out = workspace.toolchain_dir()?.join(DIRECTORY).join(BINARY);
     if laid_out.is_file() {
@@ -49,7 +55,7 @@ pub fn require(workspace: &Workspace) -> Result<PathBuf, Error> {
 
     Err(Error::Missing {
         summary: format!(
-            "appimagetool is neither laid out in {} nor on this machine's path, and the AppImage is made with it",
+            "appimagetool {VERSION} is neither laid out in {} nor on this machine's path, and the AppImage is made with it",
             laid_out.display()
         ),
         advice: vec![
