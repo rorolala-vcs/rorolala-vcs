@@ -40,6 +40,10 @@ const SCORE_FILE: &str = "SCORE.md";
 /// baselines over it would look like a measurement of something. A directory with no `policy.toml` is
 /// a chain set and nothing more — the synthetic one — and is measured against the baselines alone.
 ///
+/// A policy whose chains are not on this machine is passed over rather than measured: its directory
+/// is carried with its record, so writing a score from an empty chain set would overwrite the record
+/// of a measurement with a record of none.
+///
 /// # Errors
 ///
 /// Returns whatever reading a version, measuring it, or checking it against a store fails with.
@@ -50,6 +54,13 @@ pub async fn print(
     scoring: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for policy in &corpus.policies {
+        // The bytes are not carried by the repository, so a policy directory with no pattern
+        // directories is one whose chains this machine does not have. There is nothing to rank, and
+        // `write_score` below would read the lack as a cut that failed its gates.
+        if policy.patterns.is_empty() {
+            continue;
+        }
+
         let hash = corpus_hash(policy)?;
         let own = own_policy(policy)?;
 

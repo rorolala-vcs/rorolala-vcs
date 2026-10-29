@@ -197,9 +197,13 @@ async fn run(root: &std::path::Path, asked: &Asked<'_>) -> Result<(), Box<dyn st
         return Ok(());
     }
 
-    if corpus.policies.is_empty() {
+    // The policy directories are carried while their chains are not (see
+    // `modules/chunking/corpus/.gitignore`), so a checkout with no captured chains has policies and
+    // no patterns. Nothing can be measured over it, and `--score` must not replace a committed score
+    // with a record of no measurement.
+    if corpus.patterns() == 0 {
         println!(
-            "no corpus under {}: a policy's chains are put beside its corpus by whoever captured \
+            "no chains under {}: a policy's chains are put beside its corpus by whoever captured \
              them, or named with `--corpus <dir>`, and `--generate synthetic` writes a chain set for \
              the yardsticks alone",
             root.display()
