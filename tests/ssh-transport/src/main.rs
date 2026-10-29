@@ -86,10 +86,6 @@ fn checks() {
     publish(&auth, &root, CLIENT);
     pair(&data.join("rola").join("keys"), "daemon");
 
-    // A machine that allows sessions and registers nobody: the defaults, written down so that what
-    // each check turns on is the only thing that differs between them.
-    preference(&data, true, false);
-
     run(&mut client(
         &workspace,
         &data,
@@ -134,6 +130,23 @@ fn checks() {
         said.success() && said.stdout.contains("I'm Alpha"),
         &said.failed(),
     );
+
+    // Nothing had written this machine's preferences yet, and the session asked them what it may do:
+    // what a machine that has said nothing means is now the file it can be changed in.
+    let preferences = data.join("rola").join("daemon").join("preference.toml");
+    checked.wants(
+        "a machine that has said nothing has its preferences written down by the first session",
+        fs::read_to_string(&preferences).is_ok_and(|said| {
+            said.contains("[security]")
+                && said.contains("ssh-connection = true")
+                && said.contains("auto-register-by-ssh = false")
+        }),
+        &format!("{}", preferences.display()),
+    );
+
+    // From here on each check turns the switches it needs, so what differs between two of them is the
+    // switch rather than whatever happened to be on disk.
+    preference(&data, true, false);
 
     // Every action opens a session of its own, so the second one is a second program rather than a
     // channel being reused: what is checked is that it works at all, which is the whole of what

@@ -143,7 +143,12 @@ the session the address names, and lost `port()`, `authority()` and the `set_*` 
 described the daemon way of reaching one and not the other.
 
 `modules/daemon` reads `rola/daemon/preference.toml` beside the namespace table — two switches,
-both defaulting to the shape the feature was designed for:
+both defaulting to the shape the feature was designed for, and written down with those defaults the
+first time a session asks and finds no file there. A machine that has said nothing is a machine
+whose switches a person still has to be able to find: the first session writes them, so turning one
+off is editing a file rather than knowing where it would have been. A data directory that cannot be
+written does not refuse the session — the defaults are what a machine that says nothing means — and
+says on the standard error that the switches could not be kept.
 
 ```toml
 [security]

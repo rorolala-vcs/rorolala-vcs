@@ -79,7 +79,12 @@ ssh-connection = true
 auto-register-by-ssh = false
 ```
 
-A file that is not there is a machine that has said nothing, which is those two values.
+A file that is not there is a machine that has said nothing, which is those two values — and the
+first session to ask writes them down, so the switches are a file a person can find and change
+rather than something only this crate knows. A data directory that cannot be written is not a
+reason to refuse a session: the defaults are what a machine that says nothing means, so the session
+is served under them and the reason is said on the standard error. A file that is there and cannot
+be understood is refused rather than guessed at.
 
 - `ssh-connection` — whether a session is served at all. Off refuses it before any Vault is read.
 - `auto-register-by-ssh` — whether a connection may write the key it proved into the Vault's own
