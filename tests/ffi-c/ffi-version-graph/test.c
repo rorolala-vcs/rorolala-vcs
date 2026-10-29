@@ -36,7 +36,8 @@ int main(void) {
   want(made.tag == RorolalaResult_Ok,
        "create_workspace succeeds on a fresh directory");
 
-  char file[512];
+  /* `dir` may hold a full buffer, so the file name needs room for all of it and the suffix. */
+  char file[sizeof dir + sizeof "/nothing.psd"];
   snprintf(file, sizeof file, "%s/nothing.psd", dir);
 
   want(locate_rola_version_graph(dir, file) == NULL,

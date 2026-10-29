@@ -87,11 +87,11 @@ int main(void) {
     make_dir(later);
 
     char earlier[700];
-    snprintf(earlier, sizeof earlier, "%s/later/a", later);
+    snprintf(earlier, sizeof earlier, "%s/a", later);
     put(earlier, "*.mb\n");
 
     char sooner[800];
-    snprintf(sooner, sizeof sooner, "%s/later/b", later);
+    snprintf(sooner, sizeof sooner, "%s/b", later);
     put(sooner, "!*.mb\n");
 
     RolaIgnoreRules *set = load_rola_ignore_rules(rules, root);
