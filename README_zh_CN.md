@@ -1,10 +1,16 @@
 <p align="center">
   <!--<img src="res/icons/yizi.png" alt="Rorolala" width="240">-->
-  <img src="res/icons/rorolala-title.png" alt="Rorolala" width="240">
+  <img src="./res/icons/rorolala-title.png" alt="Rorolala" width="240">
 </p>
 
 <p align="center">
     <b>R</b>eality-<b>O</b>riented, <b>L</b>ayout-<b>A</b>gnostic 
+</p>
+
+<p align="center">
+  <a href="https://github.com/rorolala-vcs/rorolala-vcs/stargazers"><img src="https://img.shields.io/github/stars/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub stars"></a>
+  <a href="https://github.com/rorolala-vcs/rorolala-vcs/network/members"><img src="https://img.shields.io/github/forks/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub forks"></a>
+  <a href="https://github.com/rorolala-vcs/rorolala-vcs/releases/latest"><img src="https://img.shields.io/github/v/release/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub release"></a>
 </p>
 
 本文章提供了多种语言：[English](./README.md)|[中文](./README_zh_CN.md)
@@ -33,13 +39,11 @@
 
 ### 桌面端
 
-安装后，你可以找到 `ROLALauncher` 的启动条目，在里面你可以创建或打开工作区：
+安装完成后，你可以找到 `ROLALauncher` 启动入口，在这里你可以创建或打开工作区；进入工作区后，你可以签入素材、修改它们，并创建版本以同步给其他人：
 
-![](./res/screenshots/rola-launcher-preview.png)
-
-进入工作区后，你可以签入素材、修改素材并创建版本同步给他人：
-
-![](./res/screenshots/rola-desktop-preview.png)
+<p align="center">
+  <img src="./res/screenshots/rola-desktop-launcher-preview.png" style="width: 90%;" alt="ROLALauncher">
+</p>
 
 ### 命令行使用
 
@@ -85,11 +89,15 @@ systemctl --user enable --now rolad.service
 
 如果你使用的是 `Windows Server` 或其他 `Windows` 系统，也可以直接运行 `rola-daemon-gui.exe` 来快速管理和启动客户端：
 
-![](./res/screenshots/windows-daemon-gui.png)
+<p align="center">
+  <img src="./res/screenshots/windows-daemon-gui.png" style="width: 80%;" alt="Windows daemon GUI">
+</p>
 
 在 Linux 桌面上，你也可以使用由 `GTK4` 绘制的 `rola-daemon-gui` 启动：
 
-![](./res/screenshots/gtk-daemon-gui.png)
+<p align="center">
+  <img src="./res/screenshots/gtk-daemon-gui.png" style="width: 80%;" alt="GTK daemon GUI">
+</p>
 
 **之后**，其他用户便可以直接使用如下格式的链接来连接到 `rola://` 协议的仓库
 

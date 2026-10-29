@@ -1,10 +1,16 @@
 <p align="center">
   <!--<img src="res/icons/yizi.png" alt="Rorolala" width="240">-->
-  <img src="res/icons/rorolala-title.png" alt="Rorolala" width="240">
+  <img src="./res/icons/rorolala-title.png" alt="Rorolala" width="240">
 </p>
 
 <p align="center">
     <b>R</b>eality-<b>O</b>riented, <b>L</b>ayout-<b>A</b>gnostic 
+</p>
+
+<p align="center">
+  <a href="https://github.com/rorolala-vcs/rorolala-vcs/stargazers"><img src="https://img.shields.io/github/stars/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub stars"></a>
+  <a href="https://github.com/rorolala-vcs/rorolala-vcs/network/members"><img src="https://img.shields.io/github/forks/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub forks"></a>
+  <a href="https://github.com/rorolala-vcs/rorolala-vcs/releases/latest"><img src="https://img.shields.io/github/v/release/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub release"></a>
 </p>
 
 This article is available in multiple languages: [English](./README.md)|[中文](./README_zh_CN.md)
@@ -33,13 +39,11 @@ Alternatively, you can view [all versions](https://github.com/rorolala-vcs/rorol
 
 ### Desktop
 
-After installation, you can find the `ROLALauncher` launch entry, where you can create or open a workspace:
+After installation, you can find the `ROLALauncher` launch entry, where you can create or open a workspace; once inside a workspace, you can check-in assets, modify them, and create versions to sync to others:
 
-![](./res/screenshots/rola-launcher-preview.png)
-
-Once inside a workspace, you can check in assets, modify them, and create versions to sync to others:
-
-![](./res/screenshots/rola-desktop-preview.png)
+<p align="center">
+  <img src="./res/screenshots/rola-desktop-launcher-preview.png" style="width: 90%;" alt="ROLALauncher">
+</p>
 
 ### Command Line Usage
 
@@ -85,11 +89,15 @@ systemctl --user enable --now rolad.service
 
 If you are using `Windows Server` or another `Windows` system, you can also directly run `rola-daemon-gui.exe` to quickly manage and start the client:
 
-![](./res/screenshots/windows-daemon-gui.png)
+<p align="center">
+  <img src="./res/screenshots/windows-daemon-gui.png" style="width: 80%;" alt="Windows daemon GUI">
+</p>
 
 On the Linux desktop, you can also launch the `GTK4`-drawn `rola-daemon-gui`:
 
-![](./res/screenshots/gtk-daemon-gui.png)
+<p align="center">
+  <img src="./res/screenshots/gtk-daemon-gui.png" style="width: 80%;" alt="GTK daemon GUI">
+</p>
 
 **After that**, other users can directly connect to the `rola://` protocol vault using links in the following format:
 
