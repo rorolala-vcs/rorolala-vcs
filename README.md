@@ -7,78 +7,106 @@
     <b>R</b>eality-<b>O</b>riented, <b>L</b>ayout-<b>A</b>gnostic 
 </p>
 
-> [!WARNING]
->
-> This project is under active development and makes no attempt at version compatibility whatsoever, but you are very welcome to try it out!
+This article is available in multiple languages: [English](./README.md)|[中文](./README_zh_CN.md)
 
-<h2> <img src="res/icons/yi.png" height="40"/> Rorolala VCS </h2>
+## ⭐ Introduction ⭐
 
-Rorolala is a version control system for artists that treats "structure" and "content" separately:
+`Rorolala VCS` is a version control system designed for artistic creation and multi-person collaboration, built around the following design principles:
 
-- **The version history records only file content, not file structure.** How directories and filenames are organized does not enter the history; only the file content that carries the creative work is recorded, tracked, and restored. As a result, renaming, moving, or reorganizing assets does not affect the history, and artists do not have to conform to a particular directory structure just to preserve history.
+### Version Control & Collaboration Model
 
-- **On-demand pulling.** A repository can fetch only the part of the resources needed at the moment, without having to fully sync the entire project first. For drawing, modeling, or rendering projects that reach tens of GB in size, this can significantly reduce the overhead of collaboration and switching between scenes.
+- Private local file structure: the local file structure is **a description of the user's own working state**, not **a description of the repository state**.
 
-- **Immutable data in distributed storage, mutable data under centralized management.** Creative outputs that no longer change after being written (such as finished images, export results, and historical versions) are stored in a content-addressed manner in distributed storage, which allows natural deduplication and makes it easy to share among multiple people; whereas data that is still changing frequently and needs unified coordination (such as file owners, version pointers, and other mutable data) is managed centrally to ensure consistency among members.
+- Version granularity down to individual files: every file has its own version chain, which means you can operate locally without affecting the whole.
 
-<h2> <img src="res/icons/zi.png" height="40"/> Install & Deploy </h2>
+### Storage Model
 
-**Rola is under active development! So no prebuilt versions are available at the moment.**
+- **Indices**, **versions**, and **data** are stored via **content-addressed storage**.
+- **Ownership** and **public paths** are stored via **centralized storage**.
+- Indices are stored in full, while content is pulled on demand: versions and ownership can be obtained quickly locally, while **content is only requested and pulled when actually needed**.
 
-If you are interested, you can pull the source code and build it. The dependency requirements are as follows:
+## 🚀 Download & Install 🚀
 
-| Dependency            | Version                                                               |
-| --------------------- | --------------------------------------------------------------------- |
-| `cargo` + `rustc`     | `≥ 1.85`                                                              |
-| `cc`/`gcc`            | Any                                                                   |
-| .NET SDK              | `≥ 10.0.100`                                                          |
-| .NET 8 Targeting Pack | 8.0 SDK                                                               |
-|                       | or restore `Microsoft.NETCore.App.Ref 8.0.x` via `NuGet`              |
-| `NuGet` packages      | `Avalonia 12.1.3`, `Avalonia.Desktop`, `Avalonia.Themes.Simple`, etc. |
+`ROLA` provides complete prebuilt versions on [GitHub](https://github.com/rorolala-vcs/rorolala-vcs) — you can directly [download the latest](https://github.com/rorolala-vcs/rorolala-vcs/releases/latest).
 
-After pulling the project, you can build it with the following command:
+Alternatively, you can view [all versions](https://github.com/rorolala-vcs/rorolala-vcs/releases).
+
+### Desktop
+
+After installation, you can find the `ROLALauncher` launch entry, where you can create or open a workspace:
+
+![](./res/screenshots/rola-launcher-preview.png)
+
+Once inside a workspace, you can check in assets, modify them, and create versions to sync to others:
+
+![](./res/screenshots/rola-desktop-preview.png)
+
+### Command Line Usage
 
 ```bash
-cargo dev export
+# View help
+~> rola --help
+
+# Create a workspace
+~> mkdir my-workspace && cd my-workspace
+~/my-workspace> rola init
+
+# Connect to a vault within the workspace
+~/my-workspace> rola bind rola://your-vault.com/default
 ```
 
-Once the build is complete, the artifacts will be exported to the `build/` directory.
+## Server Deployment
 
-On Linux, `cargo dev publish` builds that export and packages it as `rorolala-vcs`, `rorolala-desktop`
-and `rorolala-dev` in deb, rpm and Arch form, plus a `rorolala-full` meta package, an all-in-one
-`rorolala` package and a launcher-only `AppImage`. The all-in-one holds what the three split packages
-hold; the meta names them; the two are mutually exclusive. The package installs a **user**
-`rolad.service` but does not start or enable it:
+To use `ROLA`, you need a server or another device that can be accessed, with `rola-daemon` installed.
+
+### 1. Create a Remote Vault
+
+`ROLA` requires an empty directory to create a `Vault` for storing data:
 
 ```bash
-systemctl --user daemon-reload
+# Create the my-vault/ directory and initialize a Rola Vault inside it
+rola create --vault my-vault
+
+# Register this Vault as `default` (required for the rola protocol)
+cd my-vault && rola-daemon register default
+```
+
+### 2. Start the Server
+
+To support the `rola` protocol, `rola-daemon` must stay running. You can manage it with `systemd`, or run the `rola-daemon` process on your own:
+
+```bash
+# 1. Run rola-daemon directly
+rola-daemon
+
+# 2. Start rolad.service via systemd
 systemctl --user enable --now rolad.service
 ```
 
-<h2> <img src="res/icons/yi.png" height="40"/> Server </h2>
+If you are using `Windows Server` or another `Windows` system, you can also directly run `rola-daemon-gui.exe` to quickly manage and start the client:
 
-Remote collaboration in Rorolala relies on the `rola-daemon` server for management. You need to deploy it somewhere reachable on the network, using the following commands:
+![](./res/screenshots/windows-daemon-gui.png)
 
-```bash
-# Create and register a remote Vault, and start the rola-daemon service listener
-rola create -v my-vault
-cd my-vault && rola-daemon register default
-rola-daemon
+On the Linux desktop, you can also launch the `GTK4`-drawn `rola-daemon-gui`:
+
+![](./res/screenshots/gtk-daemon-gui.png)
+
+**After that**, other users can directly connect to the `rola://` protocol vault using links in the following format:
+
+```text
+rola://your.domain:port/namespace
+
+# For example
+rola://my-rola-vault.com/default
+rola://my-rola-vault.com:7717/default
 ```
 
-If you are using `Windows Server` or another `Windows` system, you can also simply run `rola-daemon-gui.exe` to quickly manage and start clients:
-
-![](res\screenshots\windows-daemon-gui.png)
-
-On a Linux desktop the same window is `rola-daemon-gui`, drawn with GTK 4 and built beside the
-programs it drives by `cargo dev export`.
-
-<h2> <img src="res/icons/zi_love.png" height="40"/> Contributors <img src="res/icons/yi_love.png" height="40"/> </h2>
+## ❤ Contributors ❤
 
 <img src="https://contrib.rocks/image?repo=rorolala-vcs/rorolala-vcs" />
 
-<h2> <img src="res/icons/zi.png" height="40"/> License </h2>
+## 📖 License 📖
 
-This project is released under the **MIT License**. Anyone is free to use, copy, modify, merge, publish, distribute, sublicense, and even sell copies of this software, with the sole requirement that the original copyright notice and permission notice be retained in all copies or substantial portions of the software.
+This project is released under the **MIT License**. Anyone is free to use, copy, modify, merge, publish, distribute, sublicense, and even sell copies of this software; the only requirement is to retain the original copyright notice and license notice in all copies or substantial portions of the software.
 
-See [LICENSE](./LICENSE) for the full terms.
+For the full terms, see [LICENSE](./LICENSE).
