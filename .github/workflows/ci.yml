@@ -46,11 +46,9 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           # The action brings rust-cache, which covers the registry and the dependency artifacts. It
-          # has to be told where they are: cargo's output is `.cache/rs-target` rather than `target/`,
-          # and the integration suites under `tests/` are a workspace of their own.
+          # has to be told where they are: cargo's output is `.cache/rs-target` rather than `target/`.
           cache-workspaces: |
             . -> .cache/rs-target
-            tests -> .cache/rs-target
           cache-on-failure: true
 
       - name: Install the musl toolchain
@@ -103,6 +101,16 @@ jobs:
   # by building it, as `cargo ci integration-test` does, because a cargo artifact is tied to the
   # checkout it was built from (cargo compares source mtimes); the cache is worth what it is worth
   # for dependencies, which do not change from job to job.
+  #
+  # A run whose dependency cache is already there has nothing to compile here: the cache restores
+  # under its exact key, and the builds below are skipped. Only a run that has to make a new cache —
+  # a changed `Cargo.toml`/`Cargo.lock`, a new toolchain, or an evicted cache — builds. That is what
+  # keeps the warm path from serializing the matrix behind work whose output it never sees.
+  #
+  # The integration suites are a workspace of their own (`tests/`), so their dependencies are not in
+  # the root target directory the builds above write. Without a build there, the integration job
+  # compiles every suite's dependencies again on each run: the shared key is already taken, so what
+  # it builds cannot be added to the cache.
   prewarm-windows:
     name: Pre-Warm (windows)
     needs: [fast-check]
@@ -115,26 +123,41 @@ jobs:
         run: git config --global core.autocrlf false
 
       - uses: actions/checkout@v7
+      # The toolchain is set up without its own cache step, because that step does not say whether
+      # the cache it found was the exact key. rust-cache is run directly below so that its
+      # `cache-hit` can decide whether there is anything to warm; its inputs must stay the ones the
+      # other jobs' `setup-rust-toolchain` passes, or the two would agree on no key at all.
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        id: toolchain
+        with:
+          cache: false
+
+      - id: rustcache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           # Stable over every job of this platform, so the matrix and the packaging job restore what
           # this job built instead of each building it again.
-          cache-shared-key: rola-${{ runner.os }}
-          cache-workspaces: |
+          shared-key: rola-${{ runner.os }}
+          workspaces: |
             . -> .cache/rs-target
-            tests -> .cache/rs-target
           cache-on-failure: true
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
 
+      # The packages are what the .NET side needs, and restoring them does not need the SDK. The
+      # cache is asked first so that a warm run can skip the SDK install and the restore below; what
+      # those are for is filling the cache when it is not there.
       - name: Cache the NuGet packages
+        id: nuget
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
           restore-keys: |
             nuget-${{ runner.os }}-
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.nuget.outputs.cache-hit != 'true'
+        with:
+          dotnet-version: "10.0.x"
 
       - name: Install the musl toolchain
         if: env.MUSL == 'true'
@@ -151,18 +174,40 @@ jobs:
       # Debug is what the tests and the documentation checks compile; release is what the programs
       # and the integration suites need, and what an export lays down.
       - name: Build the dependencies in debug
+        if: steps.rustcache.outputs.cache-hit != 'true'
         run: cargo build --workspace --exclude rorolala-ffi --all-targets --all-features
 
       - name: Build what ships, in release
+        if: steps.rustcache.outputs.cache-hit != 'true'
         run: cargo dev build
 
       # The two build tools are workspaces of their own, and every later step runs one of them.
       - name: Build the build tools
+        if: steps.rustcache.outputs.cache-hit != 'true'
         run: |
           cargo build --manifest-path dev/build/Cargo.toml
           cargo build --manifest-path dev/ci/Cargo.toml
 
+      # The suites are their own workspace and write their own target directory. Their cache is
+      # kept apart from the root one: a change to a test manifest then invalidates only the suites,
+      # and the root dependencies stay where they are.
+      - name: Cache the integration suites' target
+        id: tests-cache
+        uses: actions/cache@v4
+        with:
+          path: tests/.cache/rs-target
+          key: it-target-${{ runner.os }}-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('tests/Cargo.lock', 'Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'tests/.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}
+          restore-keys: |
+            it-target-${{ runner.os }}-${{ steps.toolchain.outputs.cachekey }}-
+
+      # Debug is what `cargo ci integration-test` runs.
+      - name: Warm the integration suites
+        if: steps.tests-cache.outputs.cache-hit != 'true'
+        working-directory: tests
+        run: cargo build --workspace --all-targets
+
       - name: Restore the .NET side
+        if: steps.nuget.outputs.cache-hit != 'true'
         run: dotnet restore RorolalaSharp.sln
 
   prewarm-linux:
@@ -206,13 +251,13 @@ jobs:
 
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        id: toolchain
         with:
           # The key Pre-Warm saved under, so this job restores its dependencies rather than building
           # them again.
           cache-shared-key: rola-${{ runner.os }}
           cache-workspaces: |
             . -> .cache/rs-target
-            tests -> .cache/rs-target
           cache-on-failure: true
       - uses: actions/setup-dotnet@v4
         with:
@@ -226,6 +271,17 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
           restore-keys: |
             nuget-${{ runner.os }}-
+
+      # Only the integration job builds the suites, and their target is kept apart from the root
+      # one (see Pre-Warm).
+      - name: Restore the integration suites' target
+        if: matrix.item == 'integration'
+        uses: actions/cache@v4
+        with:
+          path: tests/.cache/rs-target
+          key: it-target-${{ runner.os }}-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('tests/Cargo.lock', 'Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'tests/.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}
+          restore-keys: |
+            it-target-${{ runner.os }}-${{ steps.toolchain.outputs.cachekey }}-
 
       - name: Install the musl toolchain
         if: env.MUSL == 'true'
@@ -322,7 +378,6 @@ jobs:
           cache-shared-key: rola-${{ runner.os }}
           cache-workspaces: |
             . -> .cache/rs-target
-            tests -> .cache/rs-target
           cache-on-failure: true
       - uses: actions/setup-dotnet@v4
         with:
@@ -391,7 +446,6 @@ jobs:
           cache-shared-key: rola-linux-glibc
           cache-workspaces: |
             . -> .cache/rs-target
-            tests -> .cache/rs-target
           cache-on-failure: true
       - uses: actions/setup-dotnet@v4
         with:
@@ -480,7 +534,6 @@ jobs:
           cache-shared-key: rola-linux-musl
           cache-workspaces: |
             . -> .cache/rs-target
-            tests -> .cache/rs-target
           cache-on-failure: true
       - uses: actions/setup-dotnet@v4
         with:
