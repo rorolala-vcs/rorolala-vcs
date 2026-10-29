@@ -35,6 +35,9 @@ pub struct Pair {
 
 /// A handshaken channel at each end, over a pair of buffers of `capacity` bytes.
 ///
+/// The buffer wants to be a few records wide: the two ends run in one task, so a record larger than
+/// what the buffers hold would have both waiting on the other.
+///
 /// # Panics
 ///
 /// Panics if the handshake does not complete. Two ends of one process always can handshake, so a

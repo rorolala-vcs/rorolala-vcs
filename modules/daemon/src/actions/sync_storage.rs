@@ -40,11 +40,14 @@
 //! crosses — a packet at a time, by the bytes it holds — while the run's own bar is counted in units,
 //! which both ends know before anything moves.
 
+use std::collections::{BTreeMap, BTreeSet};
+
+use rorolala_auth::MAX_PLAINTEXT;
 use rorolala_errors::BincodeError;
 use rorolala_protocol::{ActionContext, ActionError, Both, MAX_FRAME, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{
-    BLAKE3_HASH_LEN, Blake3Hash, Error as StoreError, Key, Manifest, Presence, RorolalaStorage,
-    StorageBackend as _,
+    BLAKE3_HASH_LEN, Blake3Hash, Chunk, Error as StoreError, Key, Manifest, ObjectBatch, Presence,
+    RorolalaStorage, StorageBackend as _,
 };
 use rorolala_utils_progress::{Direction, Task};
 
@@ -70,21 +73,33 @@ const FRAMING: usize = 1024;
 
 /// How many bytes of entries one packet holds.
 ///
-/// This is a balance rather than a limit: a packet crosses as one value and becomes a handful of
-/// records on the encrypted stream, so a larger packet is fewer of them — but a packet is also
-/// written out before the next is built, so a larger one is more of the content held in memory on
-/// both ends at once. A megabyte is many times the size of the entries this exists for.
-const PACKET_BYTES: usize = 1 << 20;
+/// A packet and the framing around it fit one record of the session: a record holds a plaintext of so
+/// many bytes, and the room a frame's length takes and the packet's own header are taken out of that
+/// first. One packet is then one record — one sealing, one write — rather than being cut across two.
+const PACKET_BYTES: usize = MAX_PLAINTEXT - size_of::<u32>() - PACKET_HEADER;
 
 /// How many entries one packet holds, whatever their size.
 ///
 /// A packet of many empty entries would still cost a record each to carry, and the count is what
 /// bounds the work of writing one packet out: a content of ten thousand empty chunks is ten
 /// thousand entries, and this is what keeps them from all being one value.
-const PACKET_ENTRIES: usize = 256;
+///
+/// The byte bound is what keeps a packet's memory in hand; this one only has to keep a packet of
+/// empty entries from being one enormous value. It is set well above what a packet of small chunks
+/// holds, so what stops a packet at four kilobytes an entry is its bytes and not its count.
+const PACKET_ENTRIES: usize = 1024;
 
 /// How much of one entry a packet does not spend on its bytes: its kind, its key and its length.
 const ENTRY_HEADER: usize = size_of::<u8>() + BLAKE3_HASH_LEN + size_of::<u32>();
+
+/// How much a packet spends before its entries: which unit the direction has reached, and how many
+/// entries follow.
+const PACKET_HEADER: usize = 2 * size_of::<u32>();
+
+// A packet has to be able to cross as one record of the session: its bytes, the frame's length and
+// its own header. The two constants are derived from each other, and this says so where a change to
+// either would break it.
+const _: () = assert!(PACKET_BYTES + size_of::<u32>() + PACKET_HEADER <= MAX_PLAINTEXT);
 
 /// How many reads of a content's chunks are kept in flight at once when a caller names no number.
 ///
@@ -214,21 +229,19 @@ pub(crate) async fn sync_units(
     // exchanged before anything moves, so both ends agree on which units cross and which way.
     let mine = presence(&local, &units).await?;
 
-    let handed: OnlyWorkspace<Vec<u8>> = ctx.only_workspace(|| mine.clone().into());
-    let from_vault = ctx.transfer(handed).await?;
-    let answered: OnlyVault<Vec<u8>> = ctx.only_vault(|| mine.clone().into());
-    let from_workspace = ctx.transfer(answered).await?;
+    // One byte per unit is already a run of bytes, so it crosses as one: what an answer says is a
+    // position per key, and putting that through serde would be a visit per position for a shape that
+    // is a `Vec<u8>` and nothing else. Each side sends the answer to the side that is not its own.
+    let on_workspace = ctx.is_workspace();
+    let to_vault = carry_frame(ctx, Side::Vault, on_workspace.then_some(&mine[..])).await?;
+    let to_workspace =
+        carry_frame(ctx, Side::Workspace, (!on_workspace).then_some(&mine[..])).await?;
 
-    let theirs = Presence::from(
-        from_vault
-            .into_inner()
-            .or_else(|| from_workspace.into_inner())
-            .ok_or(ActionError::MissingValue)?,
-    );
+    let theirs = Presence::from(to_vault.or(to_workspace).ok_or(ActionError::MissingValue)?);
 
     // Whose answer is whose, from this side: the same two answers read the same way on both ends,
     // which is what lets each side work out the same list of keys to move without being told.
-    let (workspace_holds, vault_holds) = if ctx.is_workspace() {
+    let (workspace_holds, vault_holds) = if on_workspace {
         (mine, theirs)
     } else {
         (theirs, mine)
@@ -357,54 +370,30 @@ async fn carry_direction(
 ) -> Result<(), ActionError> {
     let sender = sending(ctx, to);
 
-    let carried = if sender {
-        send_direction(ctx, local, units, to, everything, base, window).await
+    // Both ends reach the status, whatever came of the carrying: a side that returned early would
+    // leave the other waiting for a value that is never coming, which is a hang rather than a
+    // failure anybody is told about. What the side taking it says is a status byte and then, when it
+    // could not produce what it took, the digests of the units it could not.
+    let (carried, taken) = if sender {
+        (
+            send_direction(ctx, local, units, to, everything, base, window).await,
+            None,
+        )
     } else {
-        take_direction(ctx, local, to, everything, base).await
+        match take_direction(ctx, local, units, to, everything, base).await {
+            Ok(taken) => (Ok(()), Some(taken)),
+            Err(error) => (Err(error), Some(Taken::Failed)),
+        }
     };
 
-    // Both ends reach this, whatever came of the carrying: a side that returned early would leave
-    // the other waiting for a value that is never coming, which is a hang rather than a failure
-    // anybody is told about. What the side taking it says is a status byte and then, when it could
-    // not read what it took, the digests of the units it could not produce.
-    let mut broken = None;
-    let confirmed = if sender {
-        read_taken(ctx, opposite(to)).await
-    } else {
-        // What this side holds of what it was just handed, asked the same way the run opened: a
-        // content is held when its manifest and every chunk it names are, which is the question a
-        // lookup answers. Asking it as a read — putting every content back together and hashing it —
-        // is a second reading of everything that just arrived, and what it would find that a lookup
-        // does not is a chunk that crossed whole and arrived whole but was corrupted on its way to
-        // the disk.
-        let taken = if carried.is_ok() {
-            match presence(local, &held_of(units)).await {
-                Ok(shared) => Taken::Held(
-                    units
-                        .iter()
-                        .enumerate()
-                        .filter(|(at, _)| !shared.held(*at))
-                        .map(|(_, unit)| unit.key)
-                        .collect(),
-                ),
-                // A store that cannot be read at all is not a list of keys: the other side is told
-                // the direction failed, and this side fails with what the store said.
-                Err(error) => {
-                    broken = Some(error);
-
-                    Taken::Failed
-                }
-            }
-        } else {
-            Taken::Failed
-        };
-
-        // Said before anything is returned: the other side is waiting for it.
-        say_taken(ctx, opposite(to), taken).await
+    // Said before anything is returned: the other side is waiting for it.
+    let confirmed = match taken {
+        Some(taken) => say_taken(ctx, opposite(to), taken).await,
+        None => read_taken(ctx, opposite(to)).await,
     };
 
     carried?;
-    broken.map_or(confirmed, Err)
+    confirmed
 }
 
 /// What the side taking a direction came to.
@@ -440,6 +429,8 @@ impl Taken {
 /// It is said before anything is returned: the other side is waiting for it, and a side that
 /// returned early would leave it waiting for a value that is never coming.
 ///
+/// A status byte and the digests it names are one run of bytes, so the whole of it is one frame.
+///
 /// # Errors
 ///
 /// Returns whatever the exchange fails with.
@@ -448,7 +439,9 @@ pub(crate) async fn say_taken(
     to: Side,
     taken: Taken,
 ) -> Result<(), ActionError> {
-    carry_value(ctx, to, taken.said()).await.map(drop)
+    let said = taken.said();
+
+    carry_frame(ctx, to, Some(said.as_slice())).await.map(drop)
 }
 
 /// Reads what the side that took a direction said it came to.
@@ -462,7 +455,7 @@ pub(crate) async fn say_taken(
 /// Returns [`ActionError::NotConfirmed`] when the side taking it could not, and whatever the
 /// exchange fails with.
 pub(crate) async fn read_taken(ctx: &mut ActionContext<'_>, to: Side) -> Result<(), ActionError> {
-    let said = carry_value(ctx, to, Vec::new())
+    let said = carry_frame(ctx, to, None)
         .await?
         .ok_or(ActionError::MissingValue)?;
 
@@ -496,14 +489,6 @@ pub(crate) fn first_of(said: &[u8]) -> Option<Key> {
     let first = said.as_chunks::<{ size_of::<Blake3Hash>() }>().0.first()?;
 
     Some(Key::new(*first))
-}
-
-/// The units a direction is made of, as the list of units a presence answer is asked about.
-///
-/// A direction is a run of units borrowed from the run's own list, and asking about them is asking
-/// about the same units in the same order — which is what makes the answer line up with the direction.
-fn held_of(units: &[&Unit]) -> Vec<Unit> {
-    units.iter().map(|unit| **unit).collect()
 }
 
 /// Whether this side is the one that has the units, which is the side `to` does not name.
@@ -565,7 +550,7 @@ async fn send_direction(
 
     if failure.is_none()
         && !outgoing.carried.is_empty()
-        && let Err(error) = flush(ctx, to, &mut outgoing, &mut task).await
+        && let Err(error) = flush(ctx, &mut outgoing, &mut task).await
     {
         failure = Some(error);
     }
@@ -576,7 +561,8 @@ async fn send_direction(
     //
     // It is sent even when the carrying failed: the side taking it is looking for the end of the
     // direction, and a side that stops without saying it is one the other waits on for good.
-    let ended = carry_value(ctx, to, Packet::last(outgoing.completed).encode()).await;
+    let last = Outgoing::last_header(outgoing.completed);
+    let ended = ctx.write_frame(&[last.as_slice()]).await;
 
     failure.or_else(|| ended.err()).map_or(Ok(()), Err)
 }
@@ -588,26 +574,36 @@ async fn send_direction(
 /// indexes once the direction is over. A store taking a thousand small chunks that way writes two
 /// files rather than a thousand, at the cost of what it holds not being findable until the direction
 /// ends — which is exactly when the side that sent them is told it may return.
+///
+/// What it answers is what the sender is told: which units it now holds, read from what it wrote
+/// rather than from a second reading of the store — see [`holds`].
 async fn take_direction(
     ctx: &mut ActionContext<'_>,
     local: &RorolalaStorage,
+    units: &[&Unit],
     to: Side,
     everything: &mut Task,
     base: u64,
-) -> Result<(), ActionError> {
+) -> Result<Taken, ActionError> {
     // The bar this direction draws is drawn from what crosses: nothing said how long it would be, so
     // each packet moves it by the bytes it holds and the run's own bar is counted in units.
     let mut task = everything.spawn(direction(to), "", None);
 
     let mut batch = local.begin_batch().await;
+    // What this side wrote, which is what it will answer for. Objects and manifests are kept apart
+    // because a key can be either: a content kept as chunks is a manifest under its own key and its
+    // chunks are objects of their own, and "the object arrived" and "the manifest arrived" are two
+    // different answers about one key.
+    let mut objects: BTreeSet<Key> = BTreeSet::new();
+    let mut manifests: BTreeMap<Key, Vec<Key>> = BTreeMap::new();
     let mut failure = None;
 
     loop {
         // What this side holds is never looked at: the side taking a packet runs nothing of the other
-        // side's, so what it passes is a value nothing reads.
-        let Some(bytes) = carry_value(ctx, to, Vec::new()).await? else {
-            return Err(ActionError::MissingValue);
-        };
+        // side's, so it passes no bytes of its own.
+        let bytes = carry_frame(ctx, to, None)
+            .await?
+            .ok_or(ActionError::MissingValue)?;
         let Some(packet) = Packet::decode(&bytes) else {
             // A packet that does not read is not the end of the direction: the loop goes on to the
             // one that is, so the side sending them is never left with nobody reading.
@@ -639,39 +635,54 @@ async fn take_direction(
 
                 &followed
             } else {
-                &entry.bytes
+                entry.bytes
             };
 
             if failure.is_some() {
                 continue;
             }
 
-            let stored = if entry.lead.manifest() {
+            if entry.lead.manifest() {
                 match Manifest::decode(bytes) {
-                    Ok(manifest) => batch.add_manifest(&entry.key, &manifest).await,
+                    Ok(manifest) => match batch.add_manifest(&entry.key, &manifest).await {
+                        Ok(()) => {
+                            manifests.insert(
+                                entry.key,
+                                manifest
+                                    .chunks()
+                                    .iter()
+                                    .map(rorolala_storage::Chunk::key)
+                                    .collect(),
+                            );
+                        }
+                        Err(error) => failure = Some(store_failed(error)),
+                    },
                     Err(error) => {
                         failure = Some(ActionError::Codec(BincodeError::new(error.to_string())));
-
-                        continue;
                     }
                 }
-            } else if Key::new(*blake3::hash(bytes).as_bytes()) != entry.key {
-                // The key is the object's own hash, so bytes that do not hash to it are not the
-                // object that was asked for, whatever they say for themselves. It is checked here,
-                // once, as the bytes arrive: what is written into the store is then one entry the
-                // side taking it need not read back to believe.
+
+                continue;
+            }
+
+            // The key is the object's own hash, so bytes that do not hash to it are not the object
+            // that was asked for, whatever they say for themselves. It is checked here, once, as the
+            // bytes arrive: what is written into the store is then one entry the side taking it need
+            // not read back to believe.
+            if Key::new(*blake3::hash(bytes).as_bytes()) != entry.key {
                 failure = Some(ActionError::Store(format!(
                     "what arrived under `{}` is not that object",
                     entry.key.hex()
                 )));
 
                 continue;
-            } else {
-                batch.add(&entry.key, bytes).await
-            };
+            }
 
-            if let Err(error) = stored {
-                failure = Some(store_failed(error));
+            match batch.add(&entry.key, bytes).await {
+                Ok(()) => {
+                    objects.insert(entry.key);
+                }
+                Err(error) => failure = Some(store_failed(error)),
             }
         }
 
@@ -695,12 +706,140 @@ async fn take_direction(
         failure = Some(store_failed(error));
     }
 
-    failure.map_or(Ok(()), Err)
+    if let Some(error) = failure {
+        return Err(error);
+    }
+
+    // What this side holds is read from what it has just written rather than from a second reading of
+    // the store: every entry it accepted is an entry it wrote, and publishing made them its own.
+    let missing: Vec<Key> = units
+        .iter()
+        .filter(|unit| !holds(unit, &objects, &manifests))
+        .map(|unit| unit.key)
+        .collect();
+
+    Ok(Taken::Held(missing))
+}
+
+/// Whether this side holds everything `unit` names, read from what it has just written.
+///
+/// The presence a direction opens with says which side has a unit, and the side that has it sends the
+/// whole of it — the manifest and every chunk it names, or the object. So "every entry of this unit
+/// was written" is the same question as "this side holds it", and it is answered from the packets
+/// rather than by a second reading of the store.
+///
+/// What this rests on is that a batch writes what it is handed, even what the store already holds: a
+/// key a batch accepted is a key in the store. Should a batch ever start passing over what is already
+/// there, this has to count "was already there" as held as well, or it would report a unit missing
+/// that the store has.
+fn holds(unit: &Unit, objects: &BTreeSet<Key>, manifests: &BTreeMap<Key, Vec<Key>>) -> bool {
+    match unit.kind {
+        UnitKind::Manifest => manifests.contains_key(&unit.key),
+        UnitKind::Object => objects.contains(&unit.key),
+        // The whole of what the key names: the object itself, or the manifest and every chunk the
+        // manifest names. A caller that does not know which it is — `Discover` — asked for the same
+        // whole, so it is answered the same way.
+        UnitKind::Whole | UnitKind::Discover => {
+            objects.contains(&unit.key)
+                || manifests
+                    .get(&unit.key)
+                    .is_some_and(|chunks| chunks.iter().all(|chunk| objects.contains(chunk)))
+        }
+    }
 }
 
 /// What a packet that does not read is reported as.
 pub(crate) fn packet_unread() -> ActionError {
     ActionError::Codec(BincodeError::new("a packet does not read".to_owned()))
+}
+
+/// Reads a content's chunks with its window always full.
+///
+/// A packet is sent when it is full, which is a wait nothing about the disk asks for: the reads for
+/// the packet after it can already be in flight. A window filled once per content and taken in order
+/// does exactly that — one read is taken as each one is handed over, so the number in flight is the
+/// window rather than the window on average.
+/// One chunk being read: the key it is for, and the read itself.
+type Reading = (Key, tokio::task::JoinHandle<Result<Vec<u8>, StoreError>>);
+
+/// Reads a content's chunks with its window always full, out of one opened batch.
+///
+/// A packet is sent when it is full, which is a wait nothing about the disk asks for: the reads for
+/// the packet after it can already be in flight. A window filled as each read is handed over does
+/// exactly that, so the number of reads in flight is the window rather than the window on average.
+///
+/// The batch is what makes each of those reads cheap: the packs are opened once for the whole
+/// content, rather than opened, seeked into and read once per chunk — see
+/// [`RorolalaStorage::open_objects`].
+struct Prefetch {
+    /// The content's chunks, in the order the manifest names them, already planned and opened.
+    batch: std::sync::Arc<ObjectBatch>,
+    /// The keys in the order the manifest names them.
+    keys: Vec<Key>,
+    /// How many of them have been begun.
+    begun: usize,
+    /// The reads in flight, in the order they were begun.
+    reads: std::collections::VecDeque<Reading>,
+    /// How many reads are kept in flight at once.
+    window: usize,
+}
+
+impl Prefetch {
+    /// Opens a batch of `keys`, with `window` reads in flight.
+    async fn open(
+        store: RorolalaStorage,
+        keys: Vec<Key>,
+        window: usize,
+    ) -> Result<Self, ActionError> {
+        let batch = store.open_objects(&keys).await.map_err(store_failed)?;
+
+        Ok(Self {
+            batch: std::sync::Arc::new(batch),
+            keys,
+            begun: 0,
+            reads: std::collections::VecDeque::new(),
+            window: window.max(1),
+        })
+    }
+
+    /// Keeps the window full.
+    fn fill(&mut self) {
+        while self.reads.len() < self.window {
+            let Some(key) = self.keys.get(self.begun).copied() else {
+                return;
+            };
+            self.begun += 1;
+
+            let batch = std::sync::Arc::clone(&self.batch);
+
+            // The side taking what this sends checks every entry against the key it arrived under,
+            // so hashing it here as well is a second pass over the content for a check the other
+            // side is about to make.
+            self.reads.push_back((
+                key,
+                tokio::spawn(async move { batch.read_unchecked(&key).await }),
+            ));
+        }
+    }
+
+    /// The next chunk that has been read, in the order the manifest names them.
+    async fn next(&mut self) -> Result<Option<(Key, Vec<u8>)>, ActionError> {
+        self.fill();
+
+        let Some((key, read)) = self.reads.pop_front() else {
+            return Ok(None);
+        };
+        let bytes = read
+            .await
+            .map_err(|error| ActionError::Store(error.to_string()))?
+            .map_err(store_failed)?;
+
+        // Filled before this one is handed over, so the wait it takes is a wait the next read is
+        // already spending on the disk.
+        self.fill();
+
+        Ok(Some((key, bytes)))
+    }
 }
 
 /// Adds the entries of one unit to the packet being built, sending it when it is full.
@@ -735,43 +874,36 @@ async fn add_unit(
         // crosses.
         UnitKind::Whole => match manifest {
             None => {
-                let bytes = local.read_object(&unit.key).await.map_err(store_failed)?;
+                let bytes = local
+                    .read_object_unchecked(&unit.key)
+                    .await
+                    .map_err(store_failed)?;
 
                 push(ctx, outgoing, task, to, &unit.key, false, bytes).await
             }
             Some(manifest) => {
                 push(ctx, outgoing, task, to, &unit.key, true, manifest.encode()).await?;
 
-                // The chunks are read a few at a time, and each window is read while the one before
-                // it is still being packed and sent: a store read is a hand-over to a thread that
-                // blocks, and one of those after another is a sync that spends most of its time
-                // waiting for the next read to begin. What is sent is still in the manifest's order —
-                // the reads are taken in the order they were begun, not the order they finish.
-                for reading in manifest.chunks().chunks(window.max(1)) {
-                    let mut reads = Vec::with_capacity(reading.len());
-                    for chunk in reading {
-                        let store = local.clone();
-                        let key = chunk.key();
+                // The chunks are read with the window always full, and each read outlives the one
+                // in hand: a store read is a hand-over to a thread that blocks, and waiting for the
+                // whole of one window before beginning the next is a sync that spends the sending of
+                // a packet with the disk idle. What is sent is still in the manifest's order — the
+                // reads are taken in the order they were begun, not the order they finish.
+                let keys: Vec<Key> = manifest.chunks().iter().map(Chunk::key).collect();
+                let mut prefetch = Prefetch::open(local.clone(), keys, window).await?;
 
-                        reads.push(tokio::spawn(async move { store.read_object(&key).await }));
-                    }
-
-                    for (chunk, read) in reading.iter().zip(reads) {
-                        let key = chunk.key();
-                        let bytes = read
-                            .await
-                            .map_err(|error| ActionError::Store(error.to_string()))?
-                            .map_err(store_failed)?;
-
-                        push(ctx, outgoing, task, to, &key, false, bytes).await?;
-                    }
+                while let Some((key, bytes)) = prefetch.next().await? {
+                    push(ctx, outgoing, task, to, &key, false, bytes).await?;
                 }
 
                 Ok(())
             }
         },
         UnitKind::Object => {
-            let bytes = local.read_object(&unit.key).await.map_err(store_failed)?;
+            let bytes = local
+                .read_object_unchecked(&unit.key)
+                .await
+                .map_err(store_failed)?;
 
             push(ctx, outgoing, task, to, &unit.key, false, bytes).await
         }
@@ -782,7 +914,10 @@ async fn add_unit(
             if let Some(manifest) = manifest {
                 push(ctx, outgoing, task, to, &unit.key, true, manifest.encode()).await
             } else {
-                let bytes = local.read_object(&unit.key).await.map_err(store_failed)?;
+                let bytes = local
+                    .read_object_unchecked(&unit.key)
+                    .await
+                    .map_err(store_failed)?;
 
                 push(ctx, outgoing, task, to, &unit.key, false, bytes).await
             }
@@ -812,14 +947,10 @@ pub(crate) async fn push(
 
     let over = !outgoing.carried.is_empty() && !outgoing.room_for(bytes.len());
     if over {
-        flush(ctx, to, outgoing, task).await?;
+        flush(ctx, outgoing, task).await?;
     }
 
-    outgoing.add(Carried {
-        key: *key,
-        lead: Lead::of(manifest, false),
-        bytes,
-    });
+    outgoing.add(Carried::new(*key, Lead::of(manifest, false), bytes));
 
     Ok(())
 }
@@ -839,15 +970,11 @@ async fn push_large(
     bytes: Vec<u8>,
 ) -> Result<(), ActionError> {
     if !outgoing.carried.is_empty() {
-        flush(ctx, to, outgoing, task).await?;
+        flush(ctx, outgoing, task).await?;
     }
 
-    outgoing.add(Carried {
-        key: *key,
-        lead: Lead::of(manifest, true),
-        bytes: Vec::new(),
-    });
-    flush(ctx, to, outgoing, task).await?;
+    outgoing.add(Carried::new(*key, Lead::of(manifest, true), Vec::new()));
+    flush(ctx, outgoing, task).await?;
 
     carry_blob_moving(ctx, to, Some(bytes), Some(task)).await?;
 
@@ -855,16 +982,26 @@ async fn push_large(
 }
 
 /// Sends what the packet being built holds, and starts another.
+///
+/// The packet goes out as one frame made of the parts it already holds — its header, then each
+/// entry's header and bytes — so what crosses is not a buffer built to carry it. Only the side
+/// sending a direction builds packets, which is why this writes a frame where a value would be
+/// carried: there is no direction for the other end to read here.
 pub(crate) async fn flush(
     ctx: &mut ActionContext<'_>,
-    to: Side,
     outgoing: &mut Outgoing,
     task: &mut Task,
 ) -> Result<(), ActionError> {
-    let packet = outgoing.take();
+    let carried = u64::try_from(outgoing.bytes).unwrap_or(u64::MAX);
+    let (header, entries) = outgoing.parts();
 
-    carry_value(ctx, to, packet.encode()).await?;
-    task.advance_by(packet.bytes());
+    let mut parts = Vec::with_capacity(entries.len() + 1);
+    parts.push(header.as_slice());
+    parts.extend_from_slice(&entries);
+
+    ctx.write_frame(&parts).await?;
+    task.advance_by(carried);
+    outgoing.clear();
 
     Ok(())
 }
@@ -906,17 +1043,55 @@ impl Outgoing {
         self.carried.push(entry);
     }
 
-    /// Takes what has been built out, leaving another packet begun where this one was.
-    fn take(&mut self) -> Packet {
-        let packet = Packet {
-            finished: self.completed,
-            carried: std::mem::take(&mut self.carried),
-        };
+    /// The header this packet crosses under, and the parts of its entries in order.
+    ///
+    /// Only the sending side builds a packet, so what this hands out borrows what the packet already
+    /// holds: nothing is built to hold the packet whole on its way to a frame.
+    pub(crate) fn parts(&self) -> ([u8; PACKET_HEADER], Vec<&[u8]>) {
+        let mut entries = Vec::with_capacity(self.carried.len() * 2);
+        for entry in &self.carried {
+            entries.extend_from_slice(&entry.parts());
+        }
 
-        self.bytes = 0;
-
-        packet
+        (
+            packet_header(
+                self.completed,
+                u32::try_from(self.carried.len()).unwrap_or(u32::MAX),
+            ),
+            entries,
+        )
     }
+
+    /// The header of the packet that says a direction is over, with `finished` units behind it.
+    pub(crate) const fn last_header(finished: u32) -> [u8; PACKET_HEADER] {
+        packet_header(finished, 0)
+    }
+
+    /// Starts another packet where this one was, once what it held has gone.
+    fn clear(&mut self) {
+        self.carried.clear();
+        self.bytes = 0;
+    }
+}
+
+/// The header a packet crosses under: how many units of the direction are behind it, and how many
+/// entries it holds.
+///
+/// The count is what tells a packet of no entries — the one that says a direction is over — from one
+/// nothing was added to, and it is also what a packet says before the bytes a corrupt one would aim
+/// at are trusted.
+const fn packet_header(finished: u32, count: u32) -> [u8; PACKET_HEADER] {
+    let units = finished.to_be_bytes();
+    let entries = count.to_be_bytes();
+    let mut header = [0_u8; PACKET_HEADER];
+    let mut at = 0;
+    while at < size_of::<u32>() {
+        header[at] = units[at];
+        header[at + size_of::<u32>()] = entries[at];
+        at += 1;
+    }
+
+    header
 }
 
 /// What one entry carries, as the byte that leads it says.
@@ -958,39 +1133,69 @@ impl Lead {
 }
 
 /// One thing a packet carries: a key, what kind of bytes they are, and the bytes themselves.
+///
+/// This is the side that has the bytes, so it owns them: what a packet hands to a frame is a slice of
+/// what was read, and the header that goes with it is built here rather than when the packet is sent.
 pub(crate) struct Carried {
-    /// The key the bytes belong to.
-    pub(crate) key: Key,
-    /// Whether what is carried is a manifest or content, and whether it is in the packet.
-    pub(crate) lead: Lead,
+    /// The entry's header as it goes on the wire: its kind, its key and the length of its bytes.
+    ///
+    /// The key and the kind are in here rather than beside it: a packet is what a frame is made of,
+    /// and a frame of the parts a packet holds is one the packet does not have to be copied into.
+    header: [u8; ENTRY_HEADER],
     /// The bytes themselves: a manifest's encoding, or an object's content — and nothing at all for
     /// an entry whose bytes are too many for one value and follow it as a blob.
     pub(crate) bytes: Vec<u8>,
 }
 
-/// What crosses in one value: as many entries as one packet holds.
+impl Carried {
+    /// One entry of a packet being built.
+    pub(crate) fn new(key: Key, lead: Lead, bytes: Vec<u8>) -> Self {
+        let mut header = [0_u8; ENTRY_HEADER];
+        header[0] = lead.0;
+        header[1..=BLAKE3_HASH_LEN].copy_from_slice(key.digest());
+        // A packet never holds more than one frame's worth of entries, so an entry's length cannot
+        // reach what a `u32` will not hold.
+        header[1 + BLAKE3_HASH_LEN..]
+            .copy_from_slice(&u32::try_from(bytes.len()).unwrap_or(u32::MAX).to_be_bytes());
+
+        Self { header, bytes }
+    }
+
+    /// The two runs of bytes this entry is on the wire: its header, and its bytes.
+    fn parts(&self) -> [&[u8]; 2] {
+        [&self.header, &self.bytes]
+    }
+}
+
+/// One thing a packet carried, read back out of the bytes it arrived in.
+///
+/// The bytes are borrowed rather than copied: what the side taking it does with them is write them
+/// into its own store, which is the one copy they need, and a packet of a thousand entries was a
+/// thousand copies for nothing.
+pub(crate) struct Received<'a> {
+    /// The key the bytes belong to.
+    pub(crate) key: Key,
+    /// Whether what arrived is a manifest or content, and whether it was in the packet.
+    pub(crate) lead: Lead,
+    /// The bytes themselves, borrowed from the frame they arrived in.
+    pub(crate) bytes: &'a [u8],
+}
+
+/// What arrived in one value: as many entries as one packet held.
 ///
 /// The shape is written down here rather than derived, because what it is for is the number of
 /// entries: a format that states a length per entry in a fixed number of bytes is a few bytes per
 /// entry, and one that repeats itself in every entry is not. What a packet holds is read from the
 /// packet itself, so the two ends do not have to agree on how it was cut — only on the order, which
 /// both read from the same two presence answers.
-pub(crate) struct Packet {
+pub(crate) struct Packet<'a> {
     /// How many units of the direction its sender had carried whole when it filled this packet.
     pub(crate) finished: u32,
     /// The entries, in the order the store reads them.
-    pub(crate) carried: Vec<Carried>,
+    pub(crate) carried: Vec<Received<'a>>,
 }
 
-impl Packet {
-    /// The packet that says a direction is over, with `finished` units of it behind it.
-    pub(crate) const fn last(finished: u32) -> Self {
-        Self {
-            finished,
-            carried: Vec::new(),
-        }
-    }
-
+impl<'a> Packet<'a> {
     /// How many bytes of entries it holds.
     pub(crate) fn bytes(&self) -> u64 {
         self.carried.iter().fold(0_u64, |total, entry| {
@@ -998,43 +1203,13 @@ impl Packet {
         })
     }
 
-    /// Writes the packet down, so it can be read back by [`decode`](Self::decode).
-    pub(crate) fn encode(&self) -> Vec<u8> {
-        let held: usize = self.carried.iter().map(|entry| entry.bytes.len()).sum();
-        let mut bytes = Vec::with_capacity(
-            size_of::<u32>() * 2 + self.carried.len() * ENTRY_HEADER + held.min(PACKET_BYTES),
-        );
-
-        // A packet never holds more than `PACKET_ENTRIES` entries and never crosses as more than one
-        // frame, so neither count can reach what a `u32` will not hold.
-        bytes.extend_from_slice(&self.finished.to_be_bytes());
-        bytes.extend_from_slice(
-            &u32::try_from(self.carried.len())
-                .unwrap_or(u32::MAX)
-                .to_be_bytes(),
-        );
-
-        for entry in &self.carried {
-            bytes.push(entry.lead.0);
-            bytes.extend_from_slice(entry.key.digest());
-            bytes.extend_from_slice(
-                &u32::try_from(entry.bytes.len())
-                    .unwrap_or(u32::MAX)
-                    .to_be_bytes(),
-            );
-            bytes.extend_from_slice(&entry.bytes);
-        }
-
-        bytes
-    }
-
-    /// Reads a packet written by [`encode`](Self::encode).
+    /// Reads a packet out of the bytes it crossed in, borrowing its entries' bytes.
     ///
     /// `None` is bytes that are not a packet this build reads: a count the bytes left could not hold,
-    /// a record cut short, or bytes left over at the end. Nothing is reserved from a count the bytes
-    /// do not back — the frame the bytes came in is what bounds them, and a count is what a corrupt
+    /// a frame cut short, or bytes left over at the end. Nothing is reserved from a count the bytes do
+    /// not back — the frame the bytes came in is what bounds them, and a count is what a corrupt
     /// packet would aim at.
-    pub(crate) fn decode(bytes: &[u8]) -> Option<Self> {
+    pub(crate) fn decode(bytes: &'a [u8]) -> Option<Self> {
         let (finished, rest) = split_u32(bytes)?;
         let (count, mut rest) = split_u32(rest)?;
         let count = usize::try_from(count).ok()?;
@@ -1056,10 +1231,10 @@ impl Packet {
             let digest: Blake3Hash = digest.try_into().ok()?;
             let lead = Lead::read(*lead)?;
 
-            carried.push(Carried {
+            carried.push(Received {
                 key: Key::new(digest),
                 lead,
-                bytes: entry.to_vec(),
+                bytes: entry,
             });
             rest = after;
         }
@@ -1078,6 +1253,44 @@ fn split_u32(bytes: &[u8]) -> Option<(u32, &[u8])> {
     let head: [u8; size_of::<u32>()] = head.try_into().ok()?;
 
     Some((u32::from_be_bytes(head), rest))
+}
+
+/// Carries one run of bytes in the direction `to` names, and answers what arrived here.
+///
+/// `bytes` is what *this* side holds: [`Some`] on the side that has it and [`None`] on the side taking
+/// it, which is [`carry_blob`]'s convention and for the same reason — both ends call this at the same
+/// place and each decides from what it holds whether it is sending or reading.
+///
+/// `to` is not on the wire and does not pick the direction: the `Option` does. It is here to check
+/// that the two agree. [`carry_value`] cannot get this wrong, because a value that is not this side's
+/// is an empty wrapper and the wrapper says so; a run of bytes has no wrapper to say it, so a side
+/// that passed the wrong thing would write where it should read and both ends would wait for good. A
+/// disagreement is [`ActionError::MissingValue`] instead.
+///
+/// What crosses is one frame: a length and then the bytes. Nothing about them is encoded, which is
+/// what a run of bytes is for.
+///
+/// # Errors
+///
+/// Returns [`ActionError::MissingValue`] if the side holding the bytes is not the side that sends to
+/// `to`, and what the exchange fails with — see [`ActionError`].
+pub(crate) async fn carry_frame(
+    ctx: &mut ActionContext<'_>,
+    to: Side,
+    bytes: Option<&[u8]>,
+) -> Result<Option<Vec<u8>>, ActionError> {
+    if bytes.is_some() != sending(ctx, to) {
+        return Err(ActionError::MissingValue);
+    }
+
+    match bytes {
+        Some(bytes) => {
+            ctx.write_frame(&[bytes]).await?;
+
+            Ok(None)
+        }
+        None => Ok(Some(ctx.read_frame().await?)),
+    }
 }
 
 /// Carries one blob in the direction `to` names, and answers what arrived here.
@@ -1115,24 +1328,45 @@ pub(crate) async fn carry_blob_moving(
     let sending = blob.is_some();
 
     // How many bytes to expect comes first, and the pieces that follow are counted from it, so the
-    // two ends agree on how many values cross without either being told a second time.
+    // two ends agree on how many values cross without either being told a second time. The number is
+    // eight bytes big-endian rather than a serde `usize`: what crosses here is a number and a run of
+    // bytes, and the width a build's `usize` happens to have is not part of either.
     let announced = blob.as_ref().map_or(0, Vec::len);
-    let header = carry_value(ctx, to, announced).await?;
-    let announced = header.unwrap_or(announced);
+    let said = blob.as_ref().map(|_| {
+        u64::try_from(announced)
+            .unwrap_or(u64::MAX)
+            .to_be_bytes()
+            .to_vec()
+    });
+    let header = carry_frame(ctx, to, said.as_deref()).await?;
+    let announced = match header {
+        Some(said) => {
+            let said = said
+                .as_chunks::<{ size_of::<u64>() }>()
+                .0
+                .first()
+                .ok_or(ActionError::MissingValue)?;
+
+            usize::try_from(u64::from_be_bytes(*said)).unwrap_or(usize::MAX)
+        }
+        None => announced,
+    };
 
     // What the peer says it is sending is what is reserved for, not what is trusted: the pieces
     // themselves are what the bytes are put together from.
     let mut arrived = Vec::with_capacity(announced.min(PIECE));
     for at in 0..announced.div_ceil(PIECE) {
         let start = at * PIECE;
+        // Handed out as what it is rather than copied into a buffer of its own: the piece is a run of
+        // the blob this side already holds, and the frame under this writes it where it lies.
         let outgoing = blob
             .as_ref()
-            .map(|bytes| bytes[start..bytes.len().min(start + PIECE)].to_vec());
+            .map(|bytes| &bytes[start..bytes.len().min(start + PIECE)]);
 
         // What this piece is long: the side sending cut it, so it knows; the side taking is handed
         // what the other side cut, so it learns it here. The two are the same number of bytes.
-        let mut crossed = outgoing.as_ref().map_or(0, Vec::len);
-        if let Some(piece) = carry_value(ctx, to, outgoing.unwrap_or_default()).await? {
+        let mut crossed = outgoing.map_or(0, <[u8]>::len);
+        if let Some(piece) = carry_frame(ctx, to, outgoing).await? {
             crossed = piece.len();
             arrived.extend_from_slice(&piece);
         }
@@ -1202,5 +1436,127 @@ fn store_failed(error: StoreError) -> ActionError {
         // having found neither side holding it.
         StoreError::NotFound(_) => ActionError::MissingObject,
         error => ActionError::Store(error.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use rorolala_storage::Key;
+
+    use super::{Unit, UnitKind, holds};
+
+    /// A key that is only itself, so a test says which one it means.
+    fn key(seed: u8) -> Key {
+        Key::new([seed; 32])
+    }
+
+    /// A unit naming `kind` of `key`.
+    fn unit(key: Key, kind: UnitKind) -> Unit {
+        Unit { key, kind }
+    }
+
+    #[test]
+    fn a_manifest_unit_is_held_when_its_manifest_arrived() {
+        let named = key(1);
+        let objects = BTreeSet::new();
+        let mut manifests = BTreeMap::new();
+
+        assert!(!holds(
+            &unit(named, UnitKind::Manifest),
+            &objects,
+            &manifests
+        ));
+
+        manifests.insert(named, Vec::new());
+        assert!(holds(
+            &unit(named, UnitKind::Manifest),
+            &objects,
+            &manifests
+        ));
+    }
+
+    #[test]
+    fn an_object_unit_is_held_when_the_object_arrived() {
+        let named = key(2);
+        let manifests = BTreeMap::new();
+        let mut objects = BTreeSet::new();
+
+        assert!(!holds(&unit(named, UnitKind::Object), &objects, &manifests));
+
+        objects.insert(named);
+        assert!(holds(&unit(named, UnitKind::Object), &objects, &manifests));
+    }
+
+    #[test]
+    fn a_whole_unit_is_held_when_it_arrived_whole() {
+        let named = key(3);
+        // An object kept whole: the content is the object, and there is no manifest.
+        let mut objects = BTreeSet::new();
+        let manifests = BTreeMap::new();
+
+        assert!(!holds(&unit(named, UnitKind::Whole), &objects, &manifests));
+
+        objects.insert(named);
+        assert!(holds(&unit(named, UnitKind::Whole), &objects, &manifests));
+    }
+
+    #[test]
+    fn a_whole_unit_is_held_when_its_chunks_all_arrived() {
+        let named = key(4);
+        let first = key(5);
+        let second = key(6);
+
+        // A content kept as chunks: the manifest and the two chunks it names are three entries.
+        let mut objects = BTreeSet::new();
+        let mut manifests = BTreeMap::new();
+        manifests.insert(named, vec![first, second]);
+
+        assert!(!holds(&unit(named, UnitKind::Whole), &objects, &manifests));
+
+        objects.insert(first);
+        assert!(!holds(&unit(named, UnitKind::Whole), &objects, &manifests));
+
+        objects.insert(second);
+        assert!(holds(&unit(named, UnitKind::Whole), &objects, &manifests));
+    }
+
+    #[test]
+    fn a_discover_unit_is_held_whichever_way_the_content_came() {
+        let named = key(7);
+        let chunk = key(8);
+
+        // The caller did not know how the content is kept, so either shape answers for it.
+        let mut objects = BTreeSet::new();
+        let manifests = BTreeMap::new();
+        assert!(!holds(
+            &unit(named, UnitKind::Discover),
+            &objects,
+            &manifests
+        ));
+
+        objects.insert(named);
+        assert!(holds(
+            &unit(named, UnitKind::Discover),
+            &objects,
+            &manifests
+        ));
+
+        let mut objects = BTreeSet::new();
+        let mut manifests = BTreeMap::new();
+        manifests.insert(named, vec![chunk]);
+        assert!(!holds(
+            &unit(named, UnitKind::Discover),
+            &objects,
+            &manifests
+        ));
+
+        objects.insert(chunk);
+        assert!(holds(
+            &unit(named, UnitKind::Discover),
+            &objects,
+            &manifests
+        ));
     }
 }

@@ -78,6 +78,28 @@ impl Codec {
         }
     }
 
+    /// Decodes `encoded` back to the `plain_len` bytes it was encoded from, keeping the buffer it
+    /// came in when the payload is not compressed.
+    ///
+    /// A payload stored as it is *is* the content, so the buffer it arrived in is handed back rather
+    /// than copied: a store of many small chunks made one allocation and one copy of every one of
+    /// them for the sake of a frame already behind it.
+    ///
+    /// # Errors
+    ///
+    /// As [`decode`](Self::decode).
+    pub fn decode_moving(self, encoded: Vec<u8>, plain_len: usize) -> Result<Vec<u8>, Error> {
+        if self == Self::Raw {
+            return if encoded.len() == plain_len {
+                Ok(encoded)
+            } else {
+                Err(Error::Malformed)
+            };
+        }
+
+        self.decode(&encoded, plain_len)
+    }
+
     /// Decodes `encoded` back to the `plain_len` bytes it was encoded from.
     ///
     /// What the frame said the content was long is passed down rather than guessed at: `lz4`

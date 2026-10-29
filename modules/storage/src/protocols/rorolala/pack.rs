@@ -824,21 +824,6 @@ impl RorolalaStorage {
         write_whole_durably(&index_path, &kept.encode()).await
     }
 
-    /// The framed entry stored under `key`, read loose where it is loose and out of a pack where it was
-    /// packed.
-    ///
-    /// Nothing above this has to know which of the two it is: what a key promises is the content, and
-    /// where storage keeps it is storage's own business.
-    pub(super) async fn object_entry(&self, key: &Key) -> Result<Option<Vec<u8>>, Error> {
-        match tokio::fs::read(self.object_path(key)).await {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                self.packed_entry(PackKind::Object, key).await
-            }
-            Err(error) => Err(error.into()),
-        }
-    }
-
     /// The framed manifest stored under `key`, read loose where it is loose and out of a manifest pack
     /// where it was packed.
     ///

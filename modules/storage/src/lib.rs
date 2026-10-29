@@ -71,3 +71,9 @@ pub(crate) fn split_u64(bytes: &[u8]) -> Option<(u64, &[u8])> {
 /// a Workspace or a Vault hands back is one name rather than a path through the module it is
 /// implemented in.
 pub use protocols::RorolalaStorage;
+
+/// A run of entries being written into packs, and a run of entries being read out of them.
+///
+/// Both are named here for the same reason [`RorolalaStorage`] is: a caller keeps one in a field
+/// or hands it to a function, and a type it cannot write down it cannot do either with.
+pub use protocols::{Batch, ObjectBatch};

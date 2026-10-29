@@ -4,6 +4,59 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 # 0.1.2 (Unreleased)
 
+## Optimized
+
+### 1. **\[BREAKING!\]** [`modules`] Carry a sync's bytes as bytes all the way down, from the packet to the pack
+
+A sync of a Workspace and a Vault is now about twice as fast for a store of large chunks and some half
+again as fast for one of small entries, and it asks the allocator for a third to a quarter of the
+memory it used to: measured over the same runs of `dev/sync-harness`, a store of 500 three hundred
+kilobyte chunks went from 934 ms to 456 ms, one of 2000 four kilobyte entries from 266 ms to 163 ms,
+and the bytes asked for from 1 878 MiB to 447 MiB and from 154 MiB to 67 MiB.
+
+The path a sync takes was bytes the whole way down and serde the whole way, and each layer copied what
+the one above it had already copied. It now carries what it is handed:
+
+- **A frame of its own.** A packet of entries, a blob and its pieces, an answer that is one byte per
+  key, a confirmation: each of those is bytes already, and each was put through `bincode2` first — a
+  copy into an encoded buffer and a visit per element. They cross as a length and their bytes now, in
+  as many parts as the caller holds, and a packet's entry headers are built where the entry is added
+  rather than when the packet is sent. What a value that really is a number or a struct pays is
+  unchanged; it goes through the same frame.
+- **Where they arrive.** The side taking a packet reads its entries out of the frame it received
+  instead of copying each one out, and writes them into the store from where they lie.
+- **Records sealed where they lie.** A record is read into the buffer it will be opened in, opened in
+  place, and handed out of that buffer; the plaintext of a record going out is appended straight into
+  the buffer that will carry its ciphertext and sealed there. What was four copies and a queue on the
+  way in, and several on the way out, is one each way.
+- **A packet is one record.** A record carries a megabyte, and a packet is sized to fit one: one
+  sealing and one write per packet rather than sixty-four. A content of three hundred kilobyte chunks,
+  which is what a cut PSD looks like, can now read its chunks with the window always full — the reads
+  for the next packet are begun while this one is being sent.
+- **Confirmed by what was written.** The side taking a direction answers "I have it" from the objects
+  its batch accepted and the manifests it wrote, rather than reading the store back once the direction
+  was over: on a store of many small chunks that pass cost about as much as carrying them did. What it
+  gives up is one thing, and it is deliberate: a chunk written and corrupted before it is read again is
+  no longer noticed at the end of a sync. Every entry is still checked against the key it arrived under
+  as it arrives, and every read checks what it produces, so what is lost is the window between writing
+  a pack and reading it in the same run.
+- **Read and written through one opened batch.** The chunks of a content are read through one batch:
+  each pack is opened once and its entries read where they lie, where a read used to open the pack,
+  seek into it and read. The side sending a content no longer hashes each chunk before it goes — the
+  side taking it checks every entry against the key it arrived under, which is the boundary that
+  decides what a store holds. A payload stored as it is *is* the content, so it is moved down inside
+  the buffer it arrived in rather than copied into another.
+
+**Breaking:** two things on the wire changed, so a Vault and a client have to be of the same version.
+What a value's bytes are is stated by the new build for everything that was already bytes — a packet, a
+blob and its pieces, a presence answer, a confirmation — and a record's plaintext is a megabyte where it
+was sixteen kilobytes, which a reader of the old version refuses. A session also holds about three to
+four megabytes now, between the buffer it reads into, the buffer it writes out of and the packet being
+built, so the Vault's default of sixteen sessions at once is some tens of megabytes.
+
+`dev/sync-harness` gained `--allocs`, which is where the memory figures above come from: the numbers
+this work was measured and ordered by, rather than counted from the code.
+
 ## Feature
 
 ### 1. [`app`] [`rola`] Read, select and fetch the work by the managed ignore rules

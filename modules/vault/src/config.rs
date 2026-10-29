@@ -300,7 +300,10 @@ const DEFAULT_KEY_DISCOVERY: &[KeyDiscovery] = &[
 /// The most a daemon carries at once when its configuration names none.
 ///
 /// The default is deliberately larger than the `--concurrency` a run asks for on its own: a daemon
-/// serves several clients, and a cap is what keeps one caller from spending the whole machine.
+/// serves several clients, and a cap is what keeps one caller from spending the whole machine. What
+/// it bounds in memory is a few megabytes a session — a stream holds about a record being read and
+/// one being written, and the side sending a direction holds the packet it is building — so sixteen
+/// at once is some tens of megabytes rather than some.
 pub const VAULT_DEFAULT_MAX_CONCURRENCY: u16 = 16;
 
 /// Configuration for the Vault daemon.

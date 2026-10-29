@@ -5,14 +5,16 @@
 //! [`choice`](super::choice) and carried in as an [`AlgorithmChoice`], so what is here is the laying
 //! down of content that has already been decided about.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use super::RorolalaStorage;
 use super::consts::{HOLDS_AT_ONCE, MANIFEST_DIR, PackKind};
 use super::entry::{collect, exists, key_of, plain_len_of, read_range, verify};
 use crate::{
     AlgorithmChoice, Chunk, Chunker as _, Codec, Error, FRAME_HEADER_LEN, FRAME_VERSION, Frame,
-    Key, Layout, Manifest,
+    Key, Layout, Manifest, PackIndex,
 };
 
 impl RorolalaStorage {
@@ -56,6 +58,62 @@ impl RorolalaStorage {
         Ok(key)
     }
 
+    /// Plans a run of object reads as one batch: where each key is, and every pack opened once.
+    ///
+    /// A read of a packed entry used to open the pack, seek to the entry and read it — three
+    /// hand-overs to a thread that blocks for every chunk of a content. A batch opens each pack it
+    /// needs once and reads its entries where they lie, so a content of fifty thousand chunks is a
+    /// handful of files opened and a read apiece.
+    ///
+    /// The plan is made up front rather than as each read arrives because the part that costs
+    /// anything is asking the pack indexes: one lookup per key, once, rather than a search per read.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if an index or a pack cannot be read.
+    pub async fn open_objects(&self, keys: &[Key]) -> Result<ObjectBatch, Error> {
+        let state = self.root_state();
+        let mut open: BTreeMap<PathBuf, Arc<std::fs::File>> = BTreeMap::new();
+        let mut indexes: Vec<(PathBuf, Arc<PackIndex>)> = Vec::new();
+
+        for index in self.packs_of(&state, PackKind::Object).await? {
+            let Some(directory) = self.pack_index(&state, PackKind::Object, index).await? else {
+                continue;
+            };
+            let path = self.pack_path(index);
+
+            // The index was read and the pack taken away before it could be opened — what dropping a
+            // pack's last entry does. A pack that is not there holds nothing, which is the same answer
+            // as an index that is not there.
+            let file = match tokio::fs::File::open(&path).await {
+                Ok(file) => file.into_std().await,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+
+            open.insert(path.clone(), Arc::new(file));
+            indexes.push((path, directory));
+        }
+
+        let mut plan = BTreeMap::new();
+        for key in keys {
+            let packed = indexes.iter().find_map(|(path, directory)| {
+                directory
+                    .find(key)
+                    .map(|entry| (path.clone(), entry.offset(), entry.len()))
+            });
+
+            let source = match packed {
+                Some((pack, offset, len)) => Source::Packed { pack, offset, len },
+                None => Source::Loose(self.object_path(key)),
+            };
+
+            plan.insert(*key, source);
+        }
+
+        Ok(ObjectBatch { plan, open })
+    }
+
     /// Reads the object stored under `key`, loose or in a pack, as it was written in.
     ///
     /// # Errors
@@ -64,22 +122,26 @@ impl RorolalaStorage {
     /// what is stored is not framed as this build can read, and [`Error::Corrupt`] if what comes
     /// back does not hash to `key`.
     pub async fn read_object(&self, key: &Key) -> Result<Vec<u8>, Error> {
-        let Some(bytes) = self.object_entry(key).await? else {
-            return Err(Error::NotFound(*key));
-        };
-        let (frame, header) = Frame::decode(&bytes)?;
+        self.open_objects(std::slice::from_ref(key))
+            .await?
+            .read(key)
+            .await
+    }
 
-        // An object is the content itself; a manifest is how content was put together, and it is
-        // not stored where an object is.
-        if frame.layout != Layout::Single {
-            return Err(Error::Malformed);
-        }
-
-        let payload = bytes.get(header..).ok_or(Error::Malformed)?;
-        let content = frame.codec.decode(payload, plain_len_of(&frame)?)?;
-        verify(key, &content)?;
-
-        Ok(content)
+    /// Reads the object stored under `key` for a transfer, without checking it against its key.
+    ///
+    /// The side taking a transfer checks every entry against the key it arrived under, so what is
+    /// saved here is a second pass over every byte that crosses. A local read is
+    /// [`read_object`](Self::read_object), which checks.
+    ///
+    /// # Errors
+    ///
+    /// Returns what [`read_object`](Self::read_object) does, except [`Error::Corrupt`].
+    pub async fn read_object_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        self.open_objects(std::slice::from_ref(key))
+            .await?
+            .read_unchecked(key)
+            .await
     }
 
     /// Writes the manifest of the content stored under `key`, framed as a chunked entry.
@@ -496,5 +558,167 @@ impl RorolalaStorage {
         }
 
         Ok(keys.into_iter().collect())
+    }
+}
+
+/// Where one object's bytes are, as [`RorolalaStorage::open_objects`] planned them.
+enum Source {
+    /// A file of its own, under the store's loose layout.
+    Loose(PathBuf),
+    /// A run of a pack, at `offset` and `len` bytes long.
+    Packed {
+        /// The pack the entry is in.
+        pack: PathBuf,
+        /// Where the entry starts in it.
+        offset: u64,
+        /// How long the entry is, frame and payload together.
+        len: u64,
+    },
+}
+
+/// A run of object reads planned as one batch, with every pack they need opened once.
+///
+/// This is what a content of many chunks is read through: the packs are opened here rather than per
+/// chunk, and each read is a `pread` of the handle the batch holds. See
+/// [`RorolalaStorage::open_objects`].
+pub struct ObjectBatch {
+    /// Where each key's bytes are.
+    plan: BTreeMap<Key, Source>,
+    /// The packs the plan names, opened.
+    open: BTreeMap<PathBuf, Arc<std::fs::File>>,
+}
+
+impl ObjectBatch {
+    /// The content stored under `key`, read where the plan says it is.
+    ///
+    /// A key the batch was not planned for is [`Error::NotFound`], as is one planned for that turns
+    /// out to have nothing under it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotFound`] if nothing is stored under `key`, [`Error::Malformed`] if what is
+    /// stored is not framed as this build can read, [`Error::Corrupt`] if it does not hash to `key`,
+    /// and [`Error::Io`] if a read failed.
+    pub async fn read(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        self.read_where(key, true).await
+    }
+
+    /// Reads `key`, checking it against its key when `verify` says to.
+    async fn read_where(&self, key: &Key, check: bool) -> Result<Vec<u8>, Error> {
+        let Some(source) = self.plan.get(key) else {
+            return Err(Error::NotFound(*key));
+        };
+
+        let bytes = match source {
+            Source::Loose(path) => match tokio::fs::read(path).await {
+                Ok(bytes) => bytes,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(Error::NotFound(*key));
+                }
+                Err(error) => return Err(error.into()),
+            },
+            Source::Packed { pack, offset, len } => {
+                let file = Arc::clone(self.open.get(pack).ok_or(Error::NotFound(*key))?);
+                let (offset, len) = (*offset, *len);
+
+                // A `pread` blocks the thread it runs on, so it is handed to one that may block: the
+                // point of the batch is that the reads overlap, and awaiting a blocking read would put
+                // them one behind another.
+                let read = tokio::task::spawn_blocking(move || {
+                    let len = usize::try_from(len).map_err(|_| Error::Malformed)?;
+                    let mut bytes = vec![0_u8; len];
+
+                    read_exact_at(&file, &mut bytes, offset)?;
+
+                    Ok::<_, Error>(bytes)
+                })
+                .await
+                .map_err(|error| Error::Io(std::io::Error::other(error)))?;
+
+                match read {
+                    Ok(bytes) => bytes,
+                    // The pack was taken away after the plan was made — what dropping a pack's last
+                    // entry does. A key whose pack is gone has nothing under it, which is the same
+                    // answer as a key the store never had.
+                    Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Err(Error::NotFound(*key));
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+        };
+
+        let (frame, header) = Frame::decode(&bytes)?;
+
+        // An object is the content itself; a manifest is how content was put together, and it is
+        // not stored where an object is.
+        if frame.layout != Layout::Single {
+            return Err(Error::Malformed);
+        }
+
+        // The payload is moved down inside the buffer it arrived in rather than copied out of it: a
+        // payload stored as it is *is* the content, and the frame in front of it is a few dozen bytes.
+        let mut content = bytes;
+        content.drain(..header);
+        let content = frame.codec.decode_moving(content, plain_len_of(&frame)?)?;
+
+        if check {
+            verify(key, &content)?;
+        }
+
+        Ok(content)
+    }
+
+    /// As [`read`](Self::read), without checking the content against its key.
+    ///
+    /// What this is for is the side sending a transfer: the side taking it checks every entry against
+    /// the key it arrived under, which is the boundary that matters, and hashing it again here is a
+    /// second pass over every byte that crosses. What a corrupt local entry costs is that the other
+    /// side refuses it, which is the same answer this side's own check would give, one call later.
+    ///
+    /// # Errors
+    ///
+    /// As [`read`](Self::read), except [`Corrupt`](Error::Corrupt).
+    pub async fn read_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        self.read_where(key, false).await
+    }
+}
+
+/// Reads exactly `buffer.len()` bytes of `file` starting at `offset`, leaving its cursor where it was.
+fn read_exact_at(file: &std::fs::File, buffer: &mut [u8], offset: u64) -> Result<(), Error> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt as _;
+
+        file.read_exact_at(buffer, offset)?;
+
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileExt as _;
+
+        let mut read = 0;
+        while read < buffer.len() {
+            let got = file.seek_read(&mut buffer[read..], offset + read as u64)?;
+            if got == 0 {
+                return Err(std::io::ErrorKind::UnexpectedEof.into());
+            }
+            read += got;
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        use std::io::{Read as _, Seek as _};
+
+        let mut handle = file.try_clone()?;
+        handle.seek(std::io::SeekFrom::Start(offset))?;
+        handle.read_exact(buffer)?;
+
+        Ok(())
     }
 }

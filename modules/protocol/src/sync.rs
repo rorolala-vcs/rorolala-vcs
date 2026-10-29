@@ -1,8 +1,4 @@
 use std::future::Future;
-use std::mem::size_of;
-
-use rorolala_auth::MAX_PLAINTEXT;
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use crate::{ActionContext, ActionError, Both, Channel, Encodable, OnlyVault, OnlyWorkspace};
 
@@ -253,27 +249,12 @@ where
     }
 }
 
-/// The longest value one frame will carry.
+/// Encodes `value` and writes it to `channel` as one frame.
 ///
-/// A value states its length in four bytes, so a peer could otherwise ask for four gigabytes to be
-/// allocated before sending any of it. This is what a value is held to, on the way out as well as the
-/// way in, so what is too large to cross is refused where it is known rather than by a peer that then
-/// reads a frame it will not take.
-///
-/// What it bounds is a value *once framed*, which is why a caller carrying something larger than
-/// this — a content, or a batch — carries it in pieces rather than in one value.
-pub const MAX_FRAME: usize = 16 * 1024 * 1024;
-
-/// Frames `value` and writes it to `channel`.
-///
-/// A value is its length and then its bytes, and a small one — the length and the bytes together
-/// fitting one record of the channel — is written as one buffer rather than two. That is one record
-/// instead of two for every outcome, count and packet a run exchanges, where the two-write shape was
-/// a sealed record apiece: the channel seals what a write hands it, so a length written on its own is
-/// a record of its own.
-///
-/// A value too long for one record is left as the two writes it was: joining it would copy it for the
-/// sake of a boundary the channel is going to make anyway.
+/// A value that is really a run of bytes does not come through here: being serde costs it a copy into
+/// an encoded buffer and a visit per element of it, so a packet or a blob is handed to
+/// [`write_frame`](crate::write_frame) as it lies. This is for the values that are numbers and
+/// structs.
 pub(crate) async fn send_value<Inner>(
     channel: &mut Channel,
     value: &Inner,
@@ -282,27 +263,8 @@ where
     Inner: Encodable + Sync,
 {
     let bytes = value.encode()?;
-    if bytes.len() > MAX_FRAME {
-        return Err(ActionError::ValueTooLarge);
-    }
-    let length = u32::try_from(bytes.len()).map_err(|_| ActionError::ValueTooLarge)?;
 
-    if size_of::<u32>() + bytes.len() <= MAX_PLAINTEXT {
-        let mut framed = Vec::with_capacity(size_of::<u32>() + bytes.len());
-        framed.extend_from_slice(&length.to_be_bytes());
-        framed.extend_from_slice(&bytes);
-
-        channel.write_all(&framed).await?;
-        channel.flush().await?;
-
-        return Ok(());
-    }
-
-    channel.write_all(&length.to_be_bytes()).await?;
-    channel.write_all(&bytes).await?;
-    channel.flush().await?;
-
-    Ok(())
+    crate::write_frame(channel, &[bytes.as_slice()]).await
 }
 
 /// Reads one frame from `channel` and decodes it.
@@ -310,28 +272,14 @@ pub(crate) async fn receive_value<Inner>(channel: &mut Channel) -> Result<Inner,
 where
     Inner: Encodable,
 {
-    let mut header = [0_u8; 4];
-    channel.read_exact(&mut header).await?;
-
-    let length =
-        usize::try_from(u32::from_be_bytes(header)).map_err(|_| ActionError::ValueTooLarge)?;
-    if length > MAX_FRAME {
-        return Err(ActionError::ValueTooLarge);
-    }
-
-    let mut bytes = vec![0_u8; length];
-    channel.read_exact(&mut bytes).await?;
-
-    Ok(Inner::decode(bytes)?)
+    Ok(Inner::decode(crate::read_frame(channel).await?)?)
 }
 
 #[cfg(test)]
 mod tests {
     use rorolala_auth::{Account, KeyAlgorithm, Member, SecureStream, SigningKey};
-    use tokio::io::AsyncWriteExt as _;
     use tokio::io::duplex;
 
-    use super::{MAX_FRAME, receive_value, send_value};
     use crate::{ActionContext, ActionError, Both, Channel, OnlyVault, OnlyWorkspace, Socket};
 
     /// A signing key from a fixed seed, so a test names the same identity twice.
@@ -734,27 +682,6 @@ mod tests {
                 .unwrap_err(),
             ActionError::MissingValue
         ));
-    }
-
-    #[tokio::test]
-    async fn a_value_past_the_frame_bound_will_not_be_sent() {
-        let (mut client, _server) = session_pair().await;
-
-        let oversized = vec![0_u8; MAX_FRAME + 1];
-        let error = send_value(&mut client, &oversized).await.unwrap_err();
-        assert!(matches!(error, ActionError::ValueTooLarge));
-    }
-
-    #[tokio::test]
-    async fn a_frame_that_claims_more_than_the_bound_is_refused() {
-        let (mut client, mut server) = session_pair().await;
-
-        // A peer can frame any four bytes it likes; the header must not be trusted.
-        client.write_all(&u32::MAX.to_be_bytes()).await.unwrap();
-        client.flush().await.unwrap();
-
-        let error = receive_value::<u32>(&mut server).await.unwrap_err();
-        assert!(matches!(error, ActionError::ValueTooLarge));
     }
 
     #[test]

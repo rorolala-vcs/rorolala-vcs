@@ -38,6 +38,9 @@ pub use encode::*;
 mod error;
 pub use error::*;
 
+mod frame;
+pub use frame::*;
+
 mod sync;
 pub use sync::*;
 

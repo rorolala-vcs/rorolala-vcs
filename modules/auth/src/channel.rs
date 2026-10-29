@@ -21,13 +21,14 @@
 //! forward secrecy against a key that is only recovered *later* — the "store now, decrypt
 //! later" that a session recorded today would otherwise be open to.
 
-use std::collections::VecDeque;
 use std::io;
+use std::mem::size_of;
+use std::ops::Range;
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 
-use chacha20poly1305::aead::{Aead as _, KeyInit as _};
-use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use chacha20poly1305::aead::{Aead as _, AeadInPlace as _, KeyInit as _};
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce, Tag};
 use hkdf::Hkdf;
 use ml_kem::{
     Decapsulate as _, Encapsulate as _, EncapsulationKey768, Kem as _, Key as KemKey,
@@ -41,10 +42,32 @@ use crate::Error;
 use crate::key::{KeyAlgorithm, PublicKey, Signature, SigningKey};
 
 /// The largest plaintext a single record carries.
-pub const MAX_PLAINTEXT: usize = 16 * 1024;
+///
+/// This is what turns a transfer into records: a megabyte is one record, one sealing and one write,
+/// where sixteen kilobytes was sixty-four of each. It is also what a session holds per stream —
+/// about this much being read and this much being written — so it is the number a machine's memory
+/// pays for the sessions it serves.
+pub const MAX_PLAINTEXT: usize = 1 << 20;
 
 /// The bytes an authentication tag adds to a record.
 const TAG_LEN: usize = 16;
+
+/// The bytes a record's length takes in front of it.
+const LENGTH: usize = size_of::<u32>();
+
+/// How much sealed output is joined into one write before the stream is drained.
+///
+/// A record is sealed into the buffer whether or not the stream is ready to take it, so the buffer
+/// would grow by a record for every record if it were never drained; draining after every one would
+/// spend a wake-up per record. Sixty-four kilobytes is the balance the buffer is held to when records
+/// are small, and a record is a wake-up of its own when they are large: enough that a large value
+/// crosses in a few writes, small enough that a peer which is not reading is felt as backpressure
+/// rather than as memory.
+const DRAIN_AT: usize = if MAX_PLAINTEXT > 64 * 1024 {
+    MAX_PLAINTEXT
+} else {
+    64 * 1024
+};
 
 /// The largest record a session will read: a full plaintext and its tag.
 const MAX_CIPHERTEXT: usize = MAX_PLAINTEXT + TAG_LEN;
@@ -92,10 +115,19 @@ pub struct SecureStream<S> {
     opening_counter: u64,
     /// The identity the peer proved during the handshake.
     peer: PublicKey,
-    /// Plaintext decrypted but not yet read out.
-    plain: VecDeque<u8>,
-    /// Ciphertext read but not yet a whole record.
+    /// What has been read: ciphertext, and the plaintext opened out of it in place.
+    ///
+    /// One buffer rather than two, because opening a record does not move its bytes: the ciphertext
+    /// a record arrived as is the plaintext it is handed out as, once the tag at its end is checked.
     incoming: Vec<u8>,
+    /// Where in [`Self::incoming`] the two ends of that are.
+    cursor: Cursor,
+    /// Where the record being filled starts in [`Self::outgoing`], if one is.
+    ///
+    /// A record is opened, filled from as many parts as it takes, and sealed: between the two, its
+    /// plaintext is in `outgoing` with its length's room in front of it. Nothing else is ever in
+    /// `outgoing` unsealed, so what is drained is always whole records.
+    filling: Option<usize>,
     /// Ciphertext produced but not yet written out.
     outgoing: Vec<u8>,
     /// How much of [`Self::outgoing`] has reached the stream.
@@ -116,8 +148,9 @@ impl<S> SecureStream<S> {
             opening_key,
             opening_counter: 0,
             peer,
-            plain: VecDeque::new(),
             incoming: Vec::new(),
+            cursor: Cursor::default(),
+            filling: None,
             outgoing: Vec::new(),
             outgoing_len: 0,
             rekey_every: REKEY_EVERY,
@@ -151,36 +184,244 @@ impl<S> SecureStream<S> {
         self
     }
 
-    /// Takes a whole record out of what has been read, once there is one.
-    fn take_record(&mut self) -> io::Result<Option<Vec<u8>>> {
-        if self.incoming.len() < 4 {
+    /// Opens the record at [`Cursor::next`](Cursor::next) where it lies, once all of it is here.
+    ///
+    /// `None` is a record that is not all here yet: nothing is opened until the tag at its end can be
+    /// checked, so what is handed out is never a record that half arrived. The plaintext stays where
+    /// the ciphertext was, which is what makes [`Cursor::plain`](Cursor::plain) a range of the same
+    /// buffer rather than a second buffer.
+    fn open_record(&mut self) -> io::Result<Option<()>> {
+        let Some(end) = self.record_end()? else {
+            return Ok(None);
+        };
+        if self.incoming.len() < end {
             return Ok(None);
         }
 
-        let header: [u8; 4] = self.incoming[..4]
+        let at = self.cursor.next;
+        let body = at + LENGTH;
+        let split = end - TAG_LEN - body;
+        let record = &mut self.incoming[body..end];
+        let (ciphertext, tag) = record.split_at_mut(split);
+
+        // PANIC: `split_at_mut` was given exactly `TAG_LEN` bytes from the end, and a tag is
+        // `TAG_LEN` bytes wide, so nothing a peer sent can make this the wrong length.
+        let tag = Tag::from_slice(tag);
+        self.opening
+            .decrypt_in_place_detached(&nonce(self.opening_counter), b"", ciphertext, tag)
+            .map_err(|_| record_error("a record did not open"))?;
+
+        self.opening_counter += 1;
+        if self.opening_counter.is_multiple_of(self.rekey_every) {
+            self.opening_key = ratchet(&self.opening_key);
+            self.opening = cipher(&self.opening_key);
+        }
+
+        self.cursor.plain = body..body + split;
+        self.cursor.next = end;
+
+        Ok(Some(()))
+    }
+
+    /// Where the record at [`Cursor::next`](Cursor::next) ends, once its header is here.
+    ///
+    /// The length is checked here rather than where the body is opened, so a header that says
+    /// something no session writes is refused as soon as it is read: a peer that names a gigabyte
+    /// must not make one be waited for, let alone allocated.
+    fn record_end(&self) -> io::Result<Option<usize>> {
+        let at = self.cursor.next;
+        let Some(header) = self.incoming.get(at..at + LENGTH) else {
+            return Ok(None);
+        };
+        let header: [u8; LENGTH] = header
             .try_into()
             .map_err(|_| record_error("a record header was short"))?;
         let length = usize::try_from(u32::from_be_bytes(header))
             .map_err(|_| record_error("a record was longer than a session reads"))?;
 
-        // A record shorter than a tag can never be one, and one longer than a plaintext
-        // cannot have been written by a session. A peer that says "a gigabyte" must not
-        // make one be allocated, either.
+        // A record shorter than a tag can never be one, and one longer than a plaintext cannot have
+        // been written by a session.
         if !(TAG_LEN..=MAX_CIPHERTEXT).contains(&length) {
             return Err(record_error("a record was not a length a session writes"));
         }
-        if self.incoming.len() < 4 + length {
-            return Ok(None);
+
+        Ok(Some(at + LENGTH + length))
+    }
+
+    /// Drops the bytes before the next record once they are worth moving.
+    ///
+    /// Nothing before [`Cursor::next`](Cursor::next) is read again, so the buffer would grow by a
+    /// record's worth per record without this. Moving is one `memcpy` of what is left — at most a
+    /// record and a bit — and it is done only when at least one whole record is behind, so it is
+    /// paid once per that many bytes rather than once per record.
+    fn compact(&mut self) {
+        if self.cursor.next < MAX_CIPHERTEXT {
+            return;
         }
 
-        let record = self.incoming[4..4 + length].to_vec();
-        self.incoming.drain(..4 + length);
-
-        Ok(Some(record))
+        let dropped = self.cursor.next;
+        self.incoming.copy_within(dropped.., 0);
+        self.incoming.truncate(self.incoming.len() - dropped);
+        self.cursor.next = 0;
+        // Only called with no plaintext to hand out, so both ends of the range are the same place.
+        self.cursor.plain = 0..0;
     }
 }
 
+impl<S: AsyncRead + Unpin> SecureStream<S> {
+    /// Reads more of the stream into [`Self::incoming`], up to `through` bytes of it.
+    ///
+    /// `false` is the peer having closed. It is said apart from "no bytes this time" rather than as a
+    /// count of zero, because a caller that cannot tell the two apart would call a peer that closed
+    /// mid-record a clean end.
+    ///
+    /// The bytes are read into the buffer's own tail rather than into a scratch buffer and then
+    /// copied, so a record crosses from the kernel once and the copy this layer used to make of it is
+    /// gone. The tail is zero-filled first, which is what [`Vec::resize`] costs to make it readable
+    /// without `unsafe`: it is memset the length of what is about to be overwritten anyway.
+    fn read_more(&mut self, cx: &mut Context<'_>, through: usize) -> Poll<io::Result<bool>> {
+        let had = self.incoming.len();
+        if had >= through {
+            return Poll::Ready(Ok(true));
+        }
+
+        self.incoming.resize(through, 0);
+        let outcome = {
+            let mut read = ReadBuf::new(&mut self.incoming[had..]);
+            let polled = Pin::new(&mut self.inner).poll_read(cx, &mut read);
+
+            (polled, read.filled().len())
+        };
+
+        match outcome {
+            (Poll::Ready(Ok(())), got) => {
+                self.incoming.truncate(had + got);
+
+                Poll::Ready(Ok(got > 0))
+            }
+            (Poll::Ready(Err(error)), _) => {
+                self.incoming.truncate(had);
+
+                Poll::Ready(Err(error))
+            }
+            (Poll::Pending, _) => {
+                self.incoming.truncate(had);
+
+                Poll::Pending
+            }
+        }
+    }
+}
+
+/// Where in a [`SecureStream`]'s read buffer the two ends of what is unread are.
+///
+/// The two do not overlap: `next` only moves past a whole record once that record has been opened,
+/// so `next..` is ciphertext that is not a record yet — possibly half of one.
+#[derive(Default)]
+struct Cursor {
+    /// The plaintext opened and not yet handed out.
+    plain: Range<usize>,
+    /// The next record's length header, which starts here.
+    next: usize,
+}
+
 impl<S: AsyncWrite + Unpin> SecureStream<S> {
+    /// Writes `parts` as records, filling each record from as many parts as it takes.
+    ///
+    /// A part boundary is not a record boundary: what a caller holds is a value made of parts — a
+    /// frame's length, and then the value — and the records under it are cut by size. A part smaller
+    /// than a record is therefore joined with what follows it, and one larger is split, which is what
+    /// lets a caller hand over what it already has rather than build one buffer of it first.
+    ///
+    /// # Errors
+    ///
+    /// Returns what the stream fails with. What has been sealed is put out before this returns, so a
+    /// failure is one the caller hears about rather than a tail that quietly never went.
+    pub async fn write_parts(&mut self, parts: &[&[u8]]) -> io::Result<()> {
+        for part in parts {
+            let mut rest = *part;
+            while !rest.is_empty() {
+                let took = self.fill(rest)?;
+                rest = &rest[took..];
+
+                if self.filling.is_none() && self.outgoing.len() >= DRAIN_AT {
+                    self.drain().await?;
+                }
+            }
+        }
+
+        // A tail shorter than a record is a record of its own: leaving it open would hand a `flush`
+        // bytes that are neither sealed nor framed, and the peer would read them as a record.
+        self.close_record()
+    }
+
+    /// Puts as much of `bytes` as fits into the record being filled, closing it once it is full.
+    ///
+    /// Answers how many bytes it took, so the caller loops until nothing is left. A record is opened
+    /// here with the room its length takes already in front of it, and closed by
+    /// [`close_record`](Self::close_record): between those two, everything in [`Self::outgoing`] is a
+    /// sealed record, which is what makes draining it from anywhere safe.
+    fn fill(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let start = if let Some(start) = self.filling {
+            start
+        } else {
+            let start = self.outgoing.len();
+            self.outgoing.extend_from_slice(&[0_u8; LENGTH]);
+            self.filling = Some(start);
+
+            start
+        };
+
+        let filled = self.outgoing.len() - start - LENGTH;
+        let take = (MAX_PLAINTEXT - filled).min(bytes.len());
+        self.outgoing.extend_from_slice(&bytes[..take]);
+
+        if self.outgoing.len() - start - LENGTH == MAX_PLAINTEXT {
+            self.close_record()?;
+        }
+
+        Ok(take)
+    }
+
+    /// Seals the record being filled, if one is, and puts its length in front of it.
+    ///
+    /// The plaintext is sealed where it lies: the whole-message `encrypt` returns a buffer of its own,
+    /// which for a record is the whole of it copied a second time for nothing.
+    fn close_record(&mut self) -> io::Result<()> {
+        let Some(start) = self.filling.take() else {
+            return Ok(());
+        };
+
+        let tag = self
+            .sealing
+            .encrypt_in_place_detached(
+                &nonce(self.sealing_counter),
+                b"",
+                &mut self.outgoing[start + LENGTH..],
+            )
+            .map_err(|_| io::Error::other("a record could not be sealed"))?;
+        self.outgoing.extend_from_slice(&tag);
+
+        // A record is a plaintext of at most `MAX_PLAINTEXT` and a tag, so what it says it is fits
+        // what a record's length is written in.
+        let length = u32::try_from(self.outgoing.len() - start - LENGTH)
+            .map_err(|_| io::Error::other("a record was longer than a session writes"))?;
+        self.outgoing[start..start + LENGTH].copy_from_slice(&length.to_be_bytes());
+
+        self.sealing_counter += 1;
+        if self.sealing_counter.is_multiple_of(self.rekey_every) {
+            self.sealing_key = ratchet(&self.sealing_key);
+            self.sealing = cipher(&self.sealing_key);
+        }
+
+        Ok(())
+    }
+
+    /// Puts out whatever is sealed and not yet written.
+    async fn drain(&mut self) -> io::Result<()> {
+        std::future::poll_fn(|cx| self.poll_drain(cx)).await
+    }
+
     /// Writes out whatever sealed bytes are still waiting.
     fn poll_drain(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         while self.outgoing_len < self.outgoing.len() {
@@ -391,46 +632,41 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for SecureStream<S> {
         }
 
         loop {
-            // Plaintext already opened and not yet handed out.
-            if !me.plain.is_empty() {
-                let take = buf.remaining().min(me.plain.len());
-                let chunk: Vec<u8> = me.plain.drain(..take).collect();
-                buf.put_slice(&chunk);
+            // Plaintext already opened and not yet handed out: this is the one copy the read side
+            // makes, into the caller's own buffer, and the trait leaves no way to avoid it.
+            if !me.cursor.plain.is_empty() {
+                let plain = me.cursor.plain.clone();
+                let take = buf.remaining().min(plain.len());
+                buf.put_slice(&me.incoming[plain.start..plain.start + take]);
+                me.cursor.plain.start += take;
 
                 return Poll::Ready(Ok(()));
             }
 
-            // A whole record, opened into more plaintext.
-            if let Some(record) = me.take_record()? {
-                let plaintext = me
-                    .opening
-                    .decrypt(&nonce(me.opening_counter), record.as_slice())
-                    .map_err(|_| record_error("a record did not open"))?;
+            me.compact();
 
-                me.opening_counter += 1;
-                if me.opening_counter.is_multiple_of(me.rekey_every) {
-                    me.opening_key = ratchet(&me.opening_key);
-                    me.opening = cipher(&me.opening_key);
-                }
-
-                me.plain.extend(plaintext);
+            // A whole record, opened where it lies.
+            if me.open_record()?.is_some() {
                 continue;
             }
 
-            // Neither, so more has to come off the stream.
-            let mut scratch = [0u8; MAX_PLAINTEXT];
-            let mut read = ReadBuf::new(&mut scratch);
-            match Pin::new(&mut me.inner).poll_read(cx, &mut read) {
-                // Nothing read and nothing left is the end of the stream — unless half a
-                // record is already behind it, which is a stream that was cut short.
-                Poll::Ready(Ok(())) if read.filled().is_empty() => {
-                    return if me.incoming.is_empty() {
+            // Not all of the next record is here, so more has to come off the stream: its header
+            // first, then its body, since the body is as long as the header says.
+            let want = match me.record_end()? {
+                Some(end) => end,
+                None => me.cursor.next + LENGTH,
+            };
+            match me.read_more(cx, want) {
+                Poll::Ready(Ok(false)) => {
+                    // Nothing read and nothing left is the end of the stream — unless half a record
+                    // is already behind it, which is a stream that was cut short.
+                    return if me.incoming.len() == me.cursor.next {
                         Poll::Ready(Ok(()))
                     } else {
                         Poll::Ready(Err(io::ErrorKind::UnexpectedEof.into()))
                     };
                 }
-                Poll::Ready(Ok(())) => me.incoming.extend_from_slice(read.filled()),
+                Poll::Ready(Ok(true)) => {}
                 Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
                 Poll::Pending => return Poll::Pending,
             }
@@ -458,20 +694,12 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for SecureStream<S> {
         }
 
         let take = data.len().min(MAX_PLAINTEXT);
-        let sealed = me
-            .sealing
-            .encrypt(&nonce(me.sealing_counter), &data[..take])
-            .map_err(|_| io::Error::other("a record could not be sealed"))?;
-        let length = u32::try_from(sealed.len())
-            .map_err(|_| io::Error::other("a record was longer than a session writes"))?;
-
-        me.outgoing.extend_from_slice(&length.to_be_bytes());
-        me.outgoing.extend_from_slice(&sealed);
-        me.sealing_counter += 1;
-        if me.sealing_counter.is_multiple_of(me.rekey_every) {
-            me.sealing_key = ratchet(&me.sealing_key);
-            me.sealing = cipher(&me.sealing_key);
+        let mut rest = &data[..take];
+        while !rest.is_empty() {
+            let took = me.fill(rest)?;
+            rest = &rest[took..];
         }
+        me.close_record()?;
 
         // A `Pending` here is fine — the bytes are buffered, and a later write, flush or
         // read will drain them. A hard error is not: reporting it as a successful write
@@ -949,7 +1177,7 @@ mod tests {
         SecureStream<tokio::io::DuplexStream>,
         SecureStream<tokio::io::DuplexStream>,
     ) {
-        let (client_io, server_io) = duplex(64 * 1024);
+        let (client_io, server_io) = duplex(4 * MAX_PLAINTEXT);
         let expected = server.public_key();
         let running = server.clone();
 
@@ -1008,6 +1236,158 @@ mod tests {
         let _client = writer.await.unwrap();
 
         assert_eq!(read, payload);
+    }
+
+    /// Counts the records a writer produced and how many plaintext bytes they carried.
+    ///
+    /// The bytes are counted rather than opened: this is the framing under the encryption, and how a
+    /// value is cut into records is a question about the framing.
+    async fn recorded(wire: &mut tokio::io::DuplexStream) -> (usize, usize) {
+        let mut records = 0;
+        let mut plaintext = 0;
+
+        loop {
+            let mut header = [0u8; 4];
+            // A write that reached the stream is a record's worth at least, so the end of the
+            // stream is where the writer stopped rather than a record that did not arrive.
+            if wire.read_exact(&mut header).await.is_err() {
+                break;
+            }
+
+            let length = usize::try_from(u32::from_be_bytes(header)).unwrap();
+            let mut body = vec![0u8; length];
+            wire.read_exact(&mut body).await.unwrap();
+            records += 1;
+            plaintext += length - super::TAG_LEN;
+        }
+
+        (records, plaintext)
+    }
+
+    #[tokio::test]
+    async fn a_part_boundary_is_not_a_record_boundary() {
+        let (one, mut other) = duplex(2 * MAX_PLAINTEXT);
+        let peer = key(23).public_key();
+        let mut writer = SecureStream::new(one, [1; 32], [2; 32], peer);
+
+        // Three parts of half a record each: what crosses is a record and a half, cut where a record
+        // ends rather than where a part does, so the middle part is split across two records.
+        let parts: Vec<Vec<u8>> = (0..3).map(|_| vec![7_u8; MAX_PLAINTEXT / 2]).collect();
+        let handed: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+        writer.write_parts(&handed).await.unwrap();
+        writer.flush().await.unwrap();
+        drop(writer);
+
+        let (records, plaintext) = recorded(&mut other).await;
+        assert_eq!(plaintext, 3 * (MAX_PLAINTEXT / 2));
+        assert_eq!(records, 2);
+    }
+
+    #[tokio::test]
+    async fn a_payload_of_whole_records_is_that_many_records() {
+        let (one, mut other) = duplex(6 * MAX_PLAINTEXT);
+        let peer = key(24).public_key();
+        let mut writer = SecureStream::new(one, [1; 32], [2; 32], peer);
+
+        let payload = vec![9_u8; MAX_PLAINTEXT * 4];
+        writer.write_parts(&[payload.as_slice()]).await.unwrap();
+        writer.flush().await.unwrap();
+        drop(writer);
+
+        let (records, plaintext) = recorded(&mut other).await;
+        assert_eq!(plaintext, payload.len());
+        assert_eq!(records, 4);
+    }
+
+    #[tokio::test]
+    async fn a_payload_comes_back_whole_however_the_reader_slices_it() {
+        let client_key = key(25);
+        let server_key = key(26);
+
+        let (mut client, mut server) = session(&client_key, &server_key).await;
+
+        // Three records' worth, handed over as parts of their own, so what is opened is records that
+        // the read side has to hand out in whatever pieces the caller asks for.
+        let parts: Vec<Vec<u8>> = (0..3).map(|at| vec![8_u8; MAX_PLAINTEXT - at]).collect();
+        let handed: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+        let expected: Vec<u8> = parts.concat();
+        client.write_parts(&handed).await.unwrap();
+        client.flush().await.unwrap();
+
+        let mut one = [0u8; 1];
+        server.read_exact(&mut one).await.unwrap();
+        assert_eq!(one[0], 8);
+
+        let mut seven = [0u8; 7];
+        server.read_exact(&mut seven).await.unwrap();
+        assert_eq!(seven, [8_u8; 7]);
+
+        let mut rest = vec![0u8; expected.len() - 8];
+        server.read_exact(&mut rest).await.unwrap();
+
+        let mut whole = vec![one[0]];
+        whole.extend_from_slice(&seven);
+        whole.extend_from_slice(&rest);
+        assert_eq!(whole, expected);
+    }
+
+    #[tokio::test]
+    async fn reading_past_what_the_buffer_has_dropped_is_still_right() {
+        let client_key = key(27);
+        let server_key = key(28);
+
+        let (mut client, mut server) = session(&client_key, &server_key).await;
+
+        // Records small enough that the read buffer is compacted more than once on the way through
+        // it, which is the one place the book-keeping of what has been dropped could be wrong: what
+        // is carried is more than two records' worth of whole records.
+        let each = MAX_PLAINTEXT / 64;
+        let parts: Vec<Vec<u8>> = (0..192)
+            .map(|at| vec![u8::try_from(at % 251).unwrap_or(0); each])
+            .collect();
+        let sent: Vec<u8> = parts.concat();
+
+        let writer = tokio::spawn(async move {
+            let handed: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+            client.write_parts(&handed).await.unwrap();
+            client.flush().await.unwrap();
+            client
+        });
+
+        let mut read = vec![0u8; sent.len()];
+        server.read_exact(&mut read).await.unwrap();
+        let _client = writer.await.unwrap();
+
+        assert_eq!(read, sent);
+    }
+
+    #[tokio::test]
+    async fn a_plaintext_one_byte_past_a_record_is_two_records() {
+        let peer = key(29).public_key();
+
+        // Exactly a record: one sealing and one write.
+        let (one, mut other) = duplex(2 * MAX_PLAINTEXT);
+        let mut writer = SecureStream::new(one, [1; 32], [2; 32], peer.clone());
+        writer
+            .write_parts(&[vec![4_u8; MAX_PLAINTEXT].as_slice()])
+            .await
+            .unwrap();
+        writer.flush().await.unwrap();
+        drop(writer);
+
+        assert_eq!(recorded(&mut other).await, (1, MAX_PLAINTEXT));
+
+        // One byte more than a record: the byte is a record of its own.
+        let (one, mut other) = duplex(2 * MAX_PLAINTEXT);
+        let mut writer = SecureStream::new(one, [1; 32], [2; 32], peer);
+        writer
+            .write_parts(&[vec![4_u8; MAX_PLAINTEXT + 1].as_slice()])
+            .await
+            .unwrap();
+        writer.flush().await.unwrap();
+        drop(writer);
+
+        assert_eq!(recorded(&mut other).await, (2, MAX_PLAINTEXT + 1));
     }
 
     #[tokio::test]

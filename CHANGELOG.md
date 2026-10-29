@@ -4,6 +4,10 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 # 0.1.2 (Unreleased)
 
+## Optimized
+
+1. **\[BREAKING!\]** [`modules`] Carry a sync's bytes as bytes all the way down, from the packet to the pack — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-modules-carry-a-syncs-bytes-as-bytes-all-the-way-down-from-the-packet-to-the-pack)
+
 ## Feature
 
 1. [`app`] [`rola`] Read, select and fetch the work by the managed ignore rules — [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-read-select-and-fetch-the-work-by-the-managed-ignore-rules)

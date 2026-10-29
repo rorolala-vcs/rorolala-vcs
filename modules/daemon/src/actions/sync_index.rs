@@ -6,6 +6,8 @@
 //! is none of the manifest-and-chunks a store's content may need — a key crosses as its bytes, and
 //! the other side accepts them under the key they hash to.
 
+use std::collections::BTreeSet;
+
 use rorolala_errors::BincodeError;
 use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{Blake3Hash, Key, Presence, StorageBackend as _, TransferableBackend as _};
@@ -15,7 +17,7 @@ use rorolala_utils_progress::Task;
 use rorolala_vcs::{VCSIndex, VCSIndexError};
 
 use super::sync_storage::{
-    Outgoing, Packet, Side, Taken, carry_blob, carry_blob_moving, carry_value, direction, flush,
+    Outgoing, Packet, Side, Taken, carry_blob, carry_blob_moving, carry_frame, direction, flush,
     opposite, packet_unread, push, reach_the_other_end, read_taken, say_taken, sending,
 };
 
@@ -157,21 +159,17 @@ async fn sync_index(
     // exchanged before anything moves, so both ends agree on which keys cross and which way.
     let mine = local.contains_keys(&keys).await.map_err(index_failed)?;
 
-    let handed: OnlyWorkspace<Vec<u8>> = ctx.only_workspace(|| mine.clone().into());
-    let from_vault = ctx.transfer(handed).await?;
-    let answered: OnlyVault<Vec<u8>> = ctx.only_vault(|| mine.clone().into());
-    let from_workspace = ctx.transfer(answered).await?;
+    // One byte per key is already a run of bytes, so it crosses as one rather than through serde.
+    let on_workspace = ctx.is_workspace();
+    let to_vault = carry_frame(ctx, Side::Vault, on_workspace.then_some(&mine[..])).await?;
+    let to_workspace =
+        carry_frame(ctx, Side::Workspace, (!on_workspace).then_some(&mine[..])).await?;
 
-    let theirs = Presence::from(
-        from_vault
-            .into_inner()
-            .or_else(|| from_workspace.into_inner())
-            .ok_or(ActionError::MissingValue)?,
-    );
+    let theirs = Presence::from(to_vault.or(to_workspace).ok_or(ActionError::MissingValue)?);
 
     // Whose answer is whose, from this side: the same two answers read the same way on both ends,
     // which is what lets each side work out the same list of keys to move without being told.
-    let (workspace_holds, vault_holds) = if ctx.is_workspace() {
+    let (workspace_holds, vault_holds) = if on_workspace {
         (mine, theirs)
     } else {
         (theirs, mine)
@@ -236,47 +234,28 @@ async fn carry_keys(
 ) -> Result<(), ActionError> {
     let sender = sending(ctx, to);
 
-    let carried = if sender {
-        send_keys(ctx, local, keys, to, everything, base).await
+    // Both ends reach the status, whatever came of the carrying: a side that returned early would
+    // leave the other waiting for a value that is never coming.
+    let (carried, taken) = if sender {
+        (
+            send_keys(ctx, local, keys, to, everything, base).await,
+            None,
+        )
     } else {
-        take_keys(ctx, local, to, everything, base).await
+        match take_keys(ctx, local, keys, to, everything, base).await {
+            Ok(taken) => (Ok(()), Some(taken)),
+            Err(error) => (Err(error), Some(Taken::Failed)),
+        }
     };
 
-    let mut broken = None;
-    let confirmed = if sender {
-        read_taken(ctx, opposite(to)).await
-    } else {
-        // What this side holds of what it was just handed, asked by lookup: a direction that wrote
-        // its objects into one pack is confirmed by finding them there, not by reading every one
-        // back to say it is there.
-        let taken = if carried.is_ok() {
-            let asked: Vec<Key> = keys.iter().map(|key| **key).collect();
-
-            match local.contains_keys(&asked).await {
-                Ok(held) => Taken::Held(
-                    asked
-                        .iter()
-                        .enumerate()
-                        .filter(|(at, _)| !held.held(*at))
-                        .map(|(_, key)| *key)
-                        .collect(),
-                ),
-                Err(error) => {
-                    broken = Some(index_failed(error));
-
-                    Taken::Failed
-                }
-            }
-        } else {
-            Taken::Failed
-        };
-
-        // Said before anything is returned: the other side is waiting for it.
-        say_taken(ctx, opposite(to), taken).await
+    // Said before anything is returned: the other side is waiting for it.
+    let confirmed = match taken {
+        Some(taken) => say_taken(ctx, opposite(to), taken).await,
+        None => read_taken(ctx, opposite(to)).await,
     };
 
     carried?;
-    broken.map_or(confirmed, Err)
+    confirmed
 }
 
 /// Sends `keys` to `to`, a packet of objects at a time.
@@ -318,14 +297,14 @@ async fn send_keys(
     }
 
     if !outgoing.carried.is_empty() {
-        flush(ctx, to, &mut outgoing, &mut task).await?;
+        flush(ctx, &mut outgoing, &mut task).await?;
     }
 
     // A direction ends where its sender says it does. An empty packet is the one thing the two ends
     // cannot mistake for entries, so it is what says there is no more.
-    carry_value(ctx, to, Packet::last(outgoing.completed).encode())
-        .await
-        .map(drop)
+    let last = Outgoing::last_header(outgoing.completed);
+
+    ctx.write_frame(&[last.as_slice()]).await
 }
 
 /// Takes the packets of one direction and writes what they hold into `local` as one pack.
@@ -334,23 +313,30 @@ async fn send_keys(
 /// a whole direction become one pack with one index rather than a file apiece. That is also what
 /// makes a direction one commit — a reader finds the objects of a sync when the pack naming them is
 /// there, and not one at a time as they arrive.
+///
+/// What it answers is what the sender is told: which of the keys it now holds, read from what the
+/// batch accepted rather than by asking the index again.
 async fn take_keys(
     ctx: &mut ActionContext<'_>,
     local: &VCSIndex,
+    keys: &[&Key],
     to: Side,
     everything: &mut Task,
     base: u64,
-) -> Result<(), ActionError> {
+) -> Result<Taken, ActionError> {
     let mut task = everything.spawn(direction(to), "", None);
     let mut batch = local.batch();
+    // What this side wrote, which is what it answers for: a batch writes what it is handed, so an
+    // object it accepted is an object the index holds once the batch is published.
+    let mut accepted: BTreeSet<Key> = BTreeSet::new();
     let mut failure = None;
 
     loop {
         // What this side holds is never looked at: the side taking a packet runs nothing of the
-        // other side's, so what it passes is a value nothing reads.
-        let Some(bytes) = carry_value(ctx, to, Vec::new()).await? else {
-            return Err(ActionError::MissingValue);
-        };
+        // other side's, so it passes no bytes of its own.
+        let bytes = carry_frame(ctx, to, None)
+            .await?
+            .ok_or(ActionError::MissingValue)?;
         let Some(packet) = Packet::decode(&bytes) else {
             // A packet that does not read is not the end of the direction: the loop goes on to the
             // one that is, so the side sending them is never left with nobody reading.
@@ -381,7 +367,7 @@ async fn take_keys(
 
                 &followed
             } else {
-                &entry.bytes
+                entry.bytes
             };
 
             if failure.is_some() {
@@ -398,8 +384,11 @@ async fn take_keys(
                 continue;
             }
 
-            if let Err(error) = batch.accept(&entry.key, bytes) {
-                failure = Some(index_failed(error));
+            match batch.accept(&entry.key, bytes) {
+                Ok(()) => {
+                    accepted.insert(entry.key);
+                }
+                Err(error) => failure = Some(index_failed(error)),
             }
         }
 
@@ -422,7 +411,19 @@ async fn take_keys(
         failure = Some(index_failed(error));
     }
 
-    failure.map_or(Ok(()), Err)
+    if let Some(error) = failure {
+        return Err(error);
+    }
+
+    // What this side holds is read from what it has just written rather than by asking the index
+    // again: an object the batch accepted is an object the pack now names.
+    let missing: Vec<Key> = keys
+        .iter()
+        .map(|key| **key)
+        .filter(|key| !accepted.contains(key))
+        .collect();
+
+    Ok(Taken::Held(missing))
 }
 
 /// What an index failure means to an action.
