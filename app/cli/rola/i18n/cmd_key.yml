@@ -7,19 +7,19 @@ key:
 
         **Usage**: rola key <COMMAND>
         **Flags**:
-            --pem           List private keys instead of public ones
-            --vault, -v     Also list the keys of the Vault currently in
+            --pem              List private keys instead of public ones
+            --vault, -v        Also list the keys of the Vault currently in
         **Commands**:
-            generate <NAME>     Generate an Ed25519 key pair under a name
+            generate <NAME>    Generate an Ed25519 key pair under a name
     zh-CN: |
         列出本机可用的密钥
 
         **用法**：rola key <子命令>
         **标识**：
-            --pem           列出私钥而不是公钥
-            --vault, -v     同时列出当前所在保险库的密钥
+            --pem              列出私钥而不是公钥
+            --vault, -v        同时列出当前所在保险库的密钥
         **命令**：
-            generate <名字>     按名字生成一对 Ed25519 密钥
+            generate <名字>    按名字生成一对 Ed25519 密钥
 
   cmd_key_description:
     en: List the keys available on this machine

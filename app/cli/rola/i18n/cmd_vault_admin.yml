@@ -7,8 +7,8 @@ vault_admin:
 
         **Usage**: rola vault admin [add <MEMBER> | rm <MEMBER>]
         **Commands**:
-            add <MEMBER>   Name a member an administrator of this Vault
-            rm <MEMBER>    Stop a member being an administrator of this Vault
+            add <MEMBER>    Name a member an administrator of this Vault
+            rm <MEMBER>     Stop a member being an administrator of this Vault
 
         An administrator may change any file in the Vault's Layout, and an ordinary member only the files it holds
         With no subcommand the administrators are listed

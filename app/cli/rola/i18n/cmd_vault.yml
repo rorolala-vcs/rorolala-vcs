@@ -7,12 +7,12 @@ vault:
 
         **Usage**: rola vault <COMMAND>
         **Commands**:
-            bind <NAME> <ADDR>   Bind a name to a Vault address, or change what it means
-            unbind <NAME>        Let a name go
-            set-default <NAME>   Choose the Vault the Workspace reaches for
-            handshake [VAULT]    Speak the handshake action to a Vault daemon
-            ls                   List the Vaults the current Workspace knows
-            default              Print the Vault the Workspace reaches for
+            bind <NAME> <ADDR>    Bind a name to a Vault address, or change what it means
+            unbind <NAME>         Let a name go
+            set-default <NAME>    Choose the Vault the Workspace reaches for
+            handshake [VAULT]     Speak the handshake action to a Vault daemon
+            ls                    List the Vaults the current Workspace knows
+            default               Print the Vault the Workspace reaches for
 
         List the bound Vaults and their addresses in name order
         The one reached for by default is marked `(current)`

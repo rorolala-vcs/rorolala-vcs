@@ -7,8 +7,8 @@ storage_ls_remote_storaged:
 
         **Usage**: `rola storage ls-remote-storaged [VAULT]`
         **Flags**:
-            --json        Output in JSON format
-            --offline     This command needs to reach the Vault, and does not run when offline
+            --json       Output in JSON format
+            --offline    This command needs to reach the Vault, and does not run when offline
 
         Connect to the Vault and list the objects the other end's store holds, one hash per line
         The Vault argument points to the Vault to connect to, and the Workspace default is used when not given
@@ -34,8 +34,8 @@ storage_ls_remote_manifests:
 
         **Usage**: `rola storage ls-remote-manifests [VAULT]`
         **Flags**:
-            --json        Output in JSON format
-            --offline     This command needs to reach the Vault, and does not run when offline
+            --json       Output in JSON format
+            --offline    This command needs to reach the Vault, and does not run when offline
 
         Connect to the Vault and list the content the other end's store keeps in chunks, each line named `manifest:<digest>`
         The Vault argument points to the Vault to connect to, and the Workspace default is used when not given
@@ -61,8 +61,8 @@ storage_sync_hashes:
 
         **Usage**: `rola storage sync-hashes <HASH>... [VAULT]`
         **Flags**:
-            --json        Output in JSON format
-            --offline     This command needs to reach the Vault, and does not run when offline
+            --json       Output in JSON format
+            --offline    This command needs to reach the Vault, and does not run when offline
 
         Make the stores at both ends hold the given hashes, carrying only objects one end holds, in whichever direction the holder is
         A hash can be written as hex, or with a `blake3:` or `manifest:` prefix

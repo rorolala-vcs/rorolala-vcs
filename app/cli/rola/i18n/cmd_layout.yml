@@ -7,21 +7,21 @@ cmd_layout:
 
         **Usage**: rola layout <COMMAND>
         **Flags**:
-            --vault, -v      Work on the Vault's Layout, rather than the Workspace's
+            --vault, -v     Work on the Vault's Layout, rather than the Workspace's
         **Commands**:
-            ls               List this run's Layouts
-            new              Make an empty Layout
-            cp               Copy a Layout to a new name
-            force-switch     Work in another Layout
-            set-track        Name the Vault upstream a Layout tracks
-            un-track         Make a Layout track no Vault
-            rm               Take a Layout away, or empty the Vault's Layout
-            tree-diff        Show what the working tree holds beside a Layout
-            shot             Write a Layout down as a `.rolayout` file
-            import           Make a Layout from a `.rolayout` file
-            entry            Work with the entries in a Layout
-            path             Work with the paths in a Layout
-            entries          List what a Layout's entries hold
+            ls              List this run's Layouts
+            new             Make an empty Layout
+            cp              Copy a Layout to a new name
+            force-switch    Work in another Layout
+            set-track       Name the Vault upstream a Layout tracks
+            un-track        Make a Layout track no Vault
+            rm              Take a Layout away, or empty the Vault's Layout
+            tree-diff       Show what the working tree holds beside a Layout
+            shot            Write a Layout down as a `.rolayout` file
+            import          Make a Layout from a `.rolayout` file
+            entry           Work with the entries in a Layout
+            path            Work with the paths in a Layout
+            entries         List what a Layout's entries hold
 
         A Workspace may hold many Layouts and uses only one of them at a time
         A Vault holds only one Layout
@@ -31,21 +31,21 @@ cmd_layout:
 
         **用法**：rola layout <子命令>
         **标识**：
-            --vault, -v      在保险库的布局上操作，而非工作区的布局
+            --vault, -v     在保险库的布局上操作，而非工作区的布局
         **命令**：
-            ls               列出本运行的布局
-            new              新建一个空布局
-            cp               复制布局为新名字
-            force-switch     切换到另一个布局
-            set-track        指定布局追踪的上游保险库
-            un-track         让布局不再追踪任何保险库
-            rm               移除布局，或清空保险库的布局
-            tree-diff        展示工作树相对于布局的内容
-            shot             把布局写成 `.rolayout` 文件
-            import           从 `.rolayout` 文件建立布局
-            entry            操作布局中的条目
-            path             操作布局中的路径
-            entries          列出布局中各条目所持有的内容
+            ls              列出本运行的布局
+            new             新建一个空布局
+            cp              复制布局为新名字
+            force-switch    切换到另一个布局
+            set-track       指定布局追踪的上游保险库
+            un-track        让布局不再追踪任何保险库
+            rm              移除布局，或清空保险库的布局
+            tree-diff       展示工作树相对于布局的内容
+            shot            把布局写成 `.rolayout` 文件
+            import          从 `.rolayout` 文件建立布局
+            entry           操作布局中的条目
+            path            操作布局中的路径
+            entries         列出布局中各条目所持有的内容
 
         工作区可持有多个布局，一次只使用其中一个布局
         保险库只持有一个布局
@@ -216,7 +216,7 @@ cmd_layout_ls:
 
         **Usage**: rola layout ls
         **Flags**:
-            --vault, -v      List the Vault's Layout, rather than the Workspace's
+            --vault, -v    List the Vault's Layout, rather than the Workspace's
 
         List each Layout's name and the Vault it tracks
         A Vault's Layout is listed as `truth`, and the one checked out is marked
@@ -225,7 +225,7 @@ cmd_layout_ls:
 
         **用法**：rola layout ls
         **标识**：
-            --vault, -v      列出保险库的布局，而非工作区的布局
+            --vault, -v    列出保险库的布局，而非工作区的布局
 
         列出每个布局的名字与所追踪的保险库
         保险库的布局列为 `truth`，当前签出的布局会被标记
@@ -252,8 +252,8 @@ cmd_layout_new:
 
         **Usage**: rola layout new <NAME>
         **Flags**:
-            --track <VAULT>     Name the Vault upstream the new Layout tracks
-            --no-set-layout     Do not set the Layout automatically when there is none
+            --track <VAULT>    Name the Vault upstream the new Layout tracks
+            --no-set-layout    Do not set the Layout automatically when there is none
 
         The name is the directory name, words of letters and digits joined by `-`
         `--track` names a bound Vault the new Layout is to track
@@ -294,8 +294,8 @@ cmd_layout_cp:
 
         **Usage**: rola layout cp <LAYOUT> <NAME>
         **Flags**:
-            --track <VAULT>     Name the Vault upstream the copy tracks
-            --no-set-layout     Do not set the Layout automatically when there is none
+            --track <VAULT>    Name the Vault upstream the copy tracks
+            --no-set-layout    Do not set the Layout automatically when there is none
 
         The Vault the original Layout tracked is not copied, and the copy tracks only the Vault `--track` names
 
@@ -392,7 +392,7 @@ cmd_layout_rm:
 
         **Usage**: rola layout rm [NAME]
         **Flags**:
-            --vault, -v      Remove or empty the Vault's Layout, rather than the Workspace's
+            --vault, -v    Remove or empty the Vault's Layout, rather than the Workspace's
 
         In a Workspace the named Layout is removed, and the one being worked in cannot be removed
         In a Vault `NAME` is left empty or written `truth`, and the Layout is emptied rather than removed
@@ -401,7 +401,7 @@ cmd_layout_rm:
 
         **用法**：rola layout rm [名字]
         **标识**：
-            --vault, -v      移除或清空保险库的布局，而非工作区的布局
+            --vault, -v    移除或清空保险库的布局，而非工作区的布局
 
         在工作区中移除指定布局，正在使用的布局不可移除
         在保险库中 `名字` 留空或写 `truth`，布局被清空而非移除
@@ -478,7 +478,7 @@ cmd_layout_shot:
 
         **Usage**: rola layout shot <OUTPUT> [LAYOUT]
         **Flags**:
-            --vault, -v      Write out the Vault's Layout, rather than the Workspace's
+            --vault, -v    Write out the Vault's Layout, rather than the Workspace's
 
         The Layout is the one being worked in or the one named, written out together with the index and the store, recording every object key a checkout needs
         A Layout that cannot be checked out whole is not written out
@@ -487,7 +487,7 @@ cmd_layout_shot:
 
         **用法**：rola layout shot <输出路径> [布局]
         **标识**：
-            --vault, -v      写出保险库的布局，而非工作区的布局
+            --vault, -v    写出保险库的布局，而非工作区的布局
 
         布局取当前使用的布局或指定的布局，连同索引与仓库写出，记下签出所需的全部对象键
         无法整体签出的布局不会被写出
@@ -524,10 +524,10 @@ cmd_layout_import:
 
         **Usage**: rola layout import <FILE>
         **Flags**:
-            --name <NAME>       The name to give the Layout, the file's own name when none is given
-            --track <VAULT>     Name the Vault upstream the imported Layout tracks
-            --no-check          Import without checking whether the content the file references exists
-            --no-set-layout     Do not set the Layout automatically when there is none
+            --name <NAME>      The name to give the Layout, the file's own name when none is given
+            --track <VAULT>    Name the Vault upstream the imported Layout tracks
+            --no-check         Import without checking whether the content the file references exists
+            --no-set-layout    Do not set the Layout automatically when there is none
 
         The name is taken from the file itself when none is given
         The tracked Vault recorded in the file is tracked again, unless `--track` names another
@@ -602,9 +602,9 @@ cmd_layout_entry:
 
         **用法**：rola layout entry create <UUID> <版本>
         **标识**：
-            --vault, -v               编辑保险库的布局，而非工作区的布局
-            --owner <账户>            指定持有该条目的账户
-            --description <文本>      给该条目写一段说明
+            --vault, -v             编辑保险库的布局，而非工作区的布局
+            --owner <账户>          指定持有该条目的账户
+            --description <文本>    给该条目写一段说明
 
         `版本` 为 `blake3:<hex>` 或裸摘要
         除布局自身的检查外不做别的检查
@@ -629,9 +629,9 @@ cmd_layout_entry:
 
         **用法**：rola layout entry update <UUID> <版本>
         **标识**：
-            --vault, -v               编辑保险库的布局，而非工作区的布局
-            --owner <账户>            指定持有该条目的账户
-            --description <文本>      给该条目写一段说明
+            --vault, -v             编辑保险库的布局，而非工作区的布局
+            --owner <账户>          指定持有该条目的账户
+            --description <文本>    给该条目写一段说明
 
         数据被整体替换：省略选项即表示该条目没有账户、也没有说明
 
@@ -645,13 +645,13 @@ cmd_layout_entry:
 
         **Usage**: rola layout entry remove <UUID>
         **Flags**:
-            --vault, -v             Edit the Vault's Layout, rather than the Workspace's
+            --vault, -v    Edit the Vault's Layout, rather than the Workspace's
     zh-CN: |
         删除条目，以及命名它的路径
 
         **用法**：rola layout entry remove <UUID>
         **标识**：
-            --vault, -v               编辑保险库的布局，而非工作区的布局
+            --vault, -v    编辑保险库的布局，而非工作区的布局
 
   remove_description:
     en: Drop an entry, and the path that named it
@@ -680,7 +680,7 @@ cmd_layout_path:
 
         **Usage**: rola layout path create <PATH> <UUID>
         **Flags**:
-            --vault, -v      Edit the Vault's Layout, rather than the Workspace's
+            --vault, -v    Edit the Vault's Layout, rather than the Workspace's
 
         An entry is at only one path, and naming it elsewhere is moving it
         The entry may not yet hold data
@@ -689,7 +689,7 @@ cmd_layout_path:
 
         **用法**：rola layout path create <路径> <UUID>
         **标识**：
-            --vault, -v      编辑保险库的布局，而非工作区的布局
+            --vault, -v    编辑保险库的布局，而非工作区的布局
 
         一个条目只位于一个路径，在别处命名它等于移动它
         该条目可以尚未持有数据
@@ -704,13 +704,13 @@ cmd_layout_path:
 
         **Usage**: rola layout path remove <PATH>
         **Flags**:
-            --vault, -v      Edit the Vault's Layout, rather than the Workspace's
+            --vault, -v    Edit the Vault's Layout, rather than the Workspace's
     zh-CN: |
         让路径不再指向任何条目
 
         **用法**：rola layout path remove <路径>
         **标识**：
-            --vault, -v      编辑保险库的布局，而非工作区的布局
+            --vault, -v    编辑保险库的布局，而非工作区的布局
 
   remove_description:
     en: Make a path name nothing
@@ -722,8 +722,8 @@ cmd_layout_path:
 
         **Usage**: rola layout path move <FROM> <TO>
         **Flags**:
-            --layout <NAME[@VAULT]>   Move the path in that Layout, the Vault's own when written `truth@VAULT`
-            --offline                 Do not reach the Vault when moving, using only what was fetched locally
+            --layout <NAME[@VAULT]>    Move the path in that Layout, the Vault's own when written `truth@VAULT`
+            --offline                  Do not reach the Vault when moving, using only what was fetched locally
 
         Locating a file is moving it out of `@/new/`, and deprecating one is moving it under `@/removed/`
         Only the entry's holder, or an administrator of the Vault, may move it
@@ -732,8 +732,8 @@ cmd_layout_path:
 
         **用法**：rola layout path move <源路径> <目标路径>
         **标识**：
-            --layout <布局名[@保险库]>   在该布局中移动路径，写成 `truth@保险库` 时移动保险库自身的布局
-            --offline                    移动时不连接保险库，仅使用本地已取回的内容
+            --layout <布局名[@保险库]>    在该布局中移动路径，写成 `truth@保险库` 时移动保险库自身的布局
+            --offline                     移动时不连接保险库，仅使用本地已取回的内容
 
         定位文件就是把它移出 `@/new/`，废弃文件就是把它移到 `@/removed/` 之下
         只有条目的持有人，或保险库的管理员，可以移动它

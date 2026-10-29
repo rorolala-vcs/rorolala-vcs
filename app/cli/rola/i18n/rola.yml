@@ -22,37 +22,37 @@ rola:
             [-V | --version] [-h | --help]
 
         **Initialization**
-            init                        Create a Workspace or Vault in the current directory
-            create <PATH>               Create a Workspace at PATH, or a Vault with `--vault`
+            init                         Create a Workspace or Vault in the current directory
+            create <PATH>                Create a Workspace at PATH, or a Vault with `--vault`
 
         **Identity**
-            account <ACCOUNT>           Query or switch the accounts available on this machine
-            key [--pem]                 List the keys Rorolala can use, or generate a pair
+            account <ACCOUNT>            Query or switch the accounts available on this machine
+            key [--pem]                  List the keys Rorolala can use, or generate a pair
 
         **Everyday**
-            status                      Show the difference between the Workspace's file structure and the record
-            bind <LINK> [NAME]          Bind a Vault address as NAME and start a Layout on it
-            align <PATH>                Keep the Workspace's file structure and the record in agreement
-            fetch [VAULT]               Bring a Vault's Layout here as a read-only copy
-            checkin <UPSTREAM> [PATH]   Add the upstream Layout's entries into the local Layout
-            track <FILE>                Record the file into the current Layout
-            retrack <FILE>              Move a file's recorded version back
-            sync                        Bring this Layout and the Vault it tracks into agreement
-            pack                        Organize the objects in the store and the index into packs
+            status                       Show the difference between the Workspace's file structure and the record
+            bind <LINK> [NAME]           Bind a Vault address as NAME and start a Layout on it
+            align <PATH>                 Keep the Workspace's file structure and the record in agreement
+            fetch [VAULT]                Bring a Vault's Layout here as a read-only copy
+            checkin <UPSTREAM> [PATH]    Add the upstream Layout's entries into the local Layout
+            track <FILE>                 Record the file into the current Layout
+            retrack <FILE>               Move a file's recorded version back
+            sync                         Bring this Layout and the Vault it tracks into agreement
+            pack                         Organize the objects in the store and the index into packs
 
         **Help**
-            explain                     Explain what a number or a name the program left behind means
+            explain                      Explain what a number or a name the program left behind means
 
         **Low-level**
-            storage                     Read and write the content a store holds
-            vcs-index                   Read and write the version control index
-            inv-idx                     Build and query the inverse index
-            layout                      Work with the Layouts a run keeps
+            storage                      Read and write the content a store holds
+            vcs-index                    Read and write the version control index
+            inv-idx                      Build and query the inverse index
+            layout                       Work with the Layouts a run keeps
 
         **Other**
-            vault                       Query and work with the Vaults this Workspace knows
-            desktop                     Open `rola`'s desktop program
-            fs-ops                      Move, copy or remove a path
+            vault                        Query and work with the Vaults this Workspace knows
+            desktop                      Open `rola`'s desktop program
+            fs-ops                       Move, copy or remove a path
     zh-CN: |
         **用法**：rola <命令> [参数]
 

@@ -7,24 +7,24 @@ vcs_index:
 
         **Usage**: rola vcs-index <COMMAND>
         **Commands**:
-            create-rootver              Write the root version
-            print-rootver               Print the root version's hash
-            my-creator-hash             Print the Creator hash of the current account
-            ls-str                      List the text objects in the index
-            ls-variants                 List the variants in the index
-            ls-versions                 List the versions in the index
-            ls-remote-str [VAULT]       List the text objects in the other end's index
-            ls-remote-variants [VAULT]  List the variants in the other end's index
-            ls-remote-versions [VAULT]  List the versions in the other end's index
-            read <HASH>                 Read one index object
-            read-remote <HASH> [VAULT]  Read one index object from the other end's index
-            lookback <HASH>             Draw the version chain with an object on top
-            write-creator <NAME>        Write a Creator
-            write-msg <MESSAGE>         Write a Message
+            create-rootver                Write the root version
+            print-rootver                 Print the root version's hash
+            my-creator-hash               Print the Creator hash of the current account
+            ls-str                        List the text objects in the index
+            ls-variants                   List the variants in the index
+            ls-versions                   List the versions in the index
+            ls-remote-str [VAULT]         List the text objects in the other end's index
+            ls-remote-variants [VAULT]    List the variants in the other end's index
+            ls-remote-versions [VAULT]    List the versions in the other end's index
+            read <HASH>                   Read one index object
+            read-remote <HASH> [VAULT]    Read one index object from the other end's index
+            lookback <HASH>               Draw the version chain with an object on top
+            write-creator <NAME>          Write a Creator
+            write-msg <MESSAGE>           Write a Message
             write-variant <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH> [--join <JOIN>]
                                         Write a Variant
-            write-version <VARIANT>     Write a Version
-            sync-all [VAULT]            Make the indexes at both ends hold the same objects
+            write-version <VARIANT>       Write a Version
+            sync-all [VAULT]              Make the indexes at both ends hold the same objects
 
         The index holds variants, versions, Creators and Messages, and the commands hand data over by hash
     zh-CN: |
@@ -32,24 +32,24 @@ vcs_index:
 
         **用法**：rola vcs-index <子命令>
         **命令**：
-            create-rootver              写入根版本
-            print-rootver               输出根版本的哈希
-            my-creator-hash             输出当前账户对应的 Creator 哈希
-            ls-str                      列出索引中的文本对象
-            ls-variants                 列出索引中的变体
-            ls-versions                 列出索引中的版本
-            ls-remote-str [保险库]       列出对端索引中的文本对象
-            ls-remote-variants [保险库]  列出对端索引中的变体
-            ls-remote-versions [保险库]  列出对端索引中的版本
-            read <哈希>                 读取一个索引对象
-            read-remote <哈希> [保险库]  从对端索引读取一个索引对象
-            lookback <哈希>             画出以某对象为顶的版本链
-            write-creator <名称>        写入 Creator
-            write-msg <消息>            写入 Message
+            create-rootver                 写入根版本
+            print-rootver                  输出根版本的哈希
+            my-creator-hash                输出当前账户对应的 Creator 哈希
+            ls-str                         列出索引中的文本对象
+            ls-variants                    列出索引中的变体
+            ls-versions                    列出索引中的版本
+            ls-remote-str [保险库]         列出对端索引中的文本对象
+            ls-remote-variants [保险库]    列出对端索引中的变体
+            ls-remote-versions [保险库]    列出对端索引中的版本
+            read <哈希>                    读取一个索引对象
+            read-remote <哈希> [保险库]    从对端索引读取一个索引对象
+            lookback <哈希>                画出以某对象为顶的版本链
+            write-creator <名称>           写入 Creator
+            write-msg <消息>               写入 Message
             write-variant <基础版本> <存储条目> <Creator 哈希> <Message 哈希> [--join <变体>]
                                         写入变体
-            write-version <变体>        写入版本
-            sync-all [保险库]            让两端索引持有相同的对象
+            write-version <变体>           写入版本
+            sync-all [保险库]              让两端索引持有相同的对象
 
         索引保存变体、版本、Creator 与 Message，各命令之间以哈希交接数据
 
@@ -285,11 +285,11 @@ vcs_index_lookback:
 
         **Usage**: rola vcs-index lookback <HASH>
         **Flags**:
-            --compact                 Draw the versions alone, without the variants between them
-            --no-creator              Do not show the creator of each version
-            --no-message              Do not show what each version says
+            --compact       Draw the versions alone, without the variants between them
+            --no-creator    Do not show the creator of each version
+            --no-message    Do not show what each version says
             --max-message-length <N> How many characters of a message are shown before it is cut short, 64 by default
-            --json                    Output as JSON
+            --json          Output as JSON
 
         Draw the version chain with the given object on top back to the first version, without drawing the root version
         An object that is a version is the top of the chain, and one that is a variant is drawn over the version it is based on
@@ -299,11 +299,11 @@ vcs_index_lookback:
 
         **用法**：rola vcs-index lookback <哈希>
         **标识**：
-            --compact                只画版本，不画中间的变体
-            --no-creator             不显示每个版本的创建者
-            --no-message             不显示每个版本的说明
+            --compact       只画版本，不画中间的变体
+            --no-creator    不显示每个版本的创建者
+            --no-message    不显示每个版本的说明
             --max-message-length <N> 说明截断前显示多少字符，默认为 64
-            --json                   以 JSON 输出
+            --json          以 JSON 输出
 
         画出以给定对象为顶、回溯到第一个版本的版本链，根版本不画
         对象是版本时作为链顶，是变体时画在其所基于的版本之上

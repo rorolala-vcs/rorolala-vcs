@@ -23,14 +23,14 @@ track:
 
       **Usage**: rola track <FILE>...
       **Flags**:
-          --message <MESSAGE>        Give the whole group one commit message
-          --file-message <MESSAGE>   Give each file its own commit message, one per file
+          --message <MESSAGE>         Give the whole group one commit message
+          --file-message <MESSAGE>    Give each file its own commit message, one per file
 
-          --policy <NAME>            Cut these files with the named chunking policy, and prefer it from now on
-          --no-editor                Record only what is already known, without opening an editor
-          --replace                  Redo the version the file is at, like `git commit --amend`
-          --force                    Record files that belong to another account
-          --include-ignored          Record files the ignore rules govern as well
+          --policy <NAME>             Cut these files with the named chunking policy, and prefer it from now on
+          --no-editor                 Record only what is already known, without opening an editor
+          --replace                   Redo the version the file is at, like `git commit --amend`
+          --force                     Record files that belong to another account
+          --include-ignored           Record files the ignore rules govern as well
     zh-CN: |
       将文件记录到当前布局
 

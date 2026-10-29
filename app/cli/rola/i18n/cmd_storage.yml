@@ -7,14 +7,14 @@ storage:
 
         **Usage**: `rola storage <COMMAND>`
         **Commands**:
-            write-file <FILE>              Store the file's content, and print the hash it is kept under
-            extract-file <HASH> [DIR]      Write the stored content out by its hash
-            ls-storaged                    List every object the store holds
-            ls-manifests                   List every content the store keeps in chunks
-            ls-remote-storaged [VAULT]     List every object the other end's store holds
-            ls-remote-manifests [VAULT]    List every content the other end keeps in chunks
-            sync-all [VAULT]               Make the stores at both ends hold the same keys
-            sync-hashes <HASH>... [VAULT]  Make the stores at both ends hold the hashes named
+            write-file <FILE>                Store the file's content, and print the hash it is kept under
+            extract-file <HASH> [DIR]        Write the stored content out by its hash
+            ls-storaged                      List every object the store holds
+            ls-manifests                     List every content the store keeps in chunks
+            ls-remote-storaged [VAULT]       List every object the other end's store holds
+            ls-remote-manifests [VAULT]      List every content the other end keeps in chunks
+            sync-all [VAULT]                 Make the stores at both ends hold the same keys
+            sync-hashes <HASH>... [VAULT]    Make the stores at both ends hold the hashes named
 
         Each subcommand does one thing, for looking at what the store holds, or for tidying it by hand
         Using `rola` does not need these commands
@@ -23,14 +23,14 @@ storage:
 
         **用法**：rola storage <子命令>
         **命令**：
-            write-file <文件>               存储文件内容，并打印它所用的哈希
-            extract-file <哈希> [目录]       按哈希将存储的内容写出
-            ls-storaged                      列出仓库持有的全部对象
-            ls-manifests                     列出仓库中分块保存的全部内容
-            ls-remote-storaged [保险库]      列出对端仓库持有的全部对象
-            ls-remote-manifests [保险库]     列出对端仓库中分块保存的全部内容
-            sync-all [保险库]                让两端的仓库持有相同的密钥
-            sync-hashes <哈希>... [保险库]   让两端的仓库持有指定的哈希
+            write-file <文件>                 存储文件内容，并打印它所用的哈希
+            extract-file <哈希> [目录]        按哈希将存储的内容写出
+            ls-storaged                       列出仓库持有的全部对象
+            ls-manifests                      列出仓库中分块保存的全部内容
+            ls-remote-storaged [保险库]       列出对端仓库持有的全部对象
+            ls-remote-manifests [保险库]      列出对端仓库中分块保存的全部内容
+            sync-all [保险库]                 让两端的仓库持有相同的密钥
+            sync-hashes <哈希>... [保险库]    让两端的仓库持有指定的哈希
 
         每条子命令只做一件事，用于检视仓库里有什么，或手工整理它
         使用 `rola` 并不需要这些命令

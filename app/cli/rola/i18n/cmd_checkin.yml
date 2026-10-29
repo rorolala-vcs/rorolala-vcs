@@ -9,11 +9,11 @@ checkin:
             rola checkin <REF> [TO]
             rola checkin <VARIANT_HASH> --join <FILE>
         **Flags**:
-            --join <FILE>    Name the file a checked-in variant is to be merged into
-            --by-name       Land each reference under the destination by its own name
-            --offline        Build the file only from content already stored locally
-            --force          Skip the chain consistency check for a variant checkin
-            --concurrency <N>  Carry the content N units at a time (default 4)
+            --join <FILE>        Name the file a checked-in variant is to be merged into
+            --by-name            Land each reference under the destination by its own name
+            --offline            Build the file only from content already stored locally
+            --force              Skip the chain consistency check for a variant checkin
+            --concurrency <N>    Carry the content N units at a time (default 4)
 
         **About landing**:
             A destination that is a directory is a prefix: a reference keeps its whole Vault path under it

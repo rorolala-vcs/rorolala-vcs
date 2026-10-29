@@ -7,13 +7,13 @@ inv_idx:
 
         **Usage**: rola inv-idx <COMMAND>
         **Commands**:
-            rebuild                  Build the inverse index from the index's objects
-            store-dep <STORE>        List the variants made from a stored entry
-            variant-dep <HASH>       List the versions that fix a variant
-            version-dep <HASH>       List the variants based on a version
-            creator-dep <HASH>       List the variants made by a creator
-            msg-dep <HASH>           List the variants that carry a message
-            version-num <HASH>       Print a version's number
+            rebuild               Build the inverse index from the index's objects
+            store-dep <STORE>     List the variants made from a stored entry
+            variant-dep <HASH>    List the versions that fix a variant
+            version-dep <HASH>    List the variants based on a version
+            creator-dep <HASH>    List the variants made by a creator
+            msg-dep <HASH>        List the variants that carry a message
+            version-num <HASH>    Print a version's number
 
         The inverse index is made by the `rebuild` command
         A stale index falls back to ordinary queries, and does not affect correctness
@@ -22,13 +22,13 @@ inv_idx:
 
         **用法**：rola inv-idx <子命令>
         **命令**：
-            rebuild              由索引中的对象建立反向索引
-            store-dep <存储条目>  列出基于某存储条目建立的变体
-            variant-dep <哈希>    列出固定某变体的版本
-            version-dep <哈希>    列出基于某版本的变体
-            creator-dep <哈希>    列出某 Creator 创建的变体
-            msg-dep <哈希>        列出携带某 Message 的变体
-            version-num <哈希>    输出某版本的号
+            rebuild                 由索引中的对象建立反向索引
+            store-dep <存储条目>    列出基于某存储条目建立的变体
+            variant-dep <哈希>      列出固定某变体的版本
+            version-dep <哈希>      列出基于某版本的变体
+            creator-dep <哈希>      列出某 Creator 创建的变体
+            msg-dep <哈希>          列出携带某 Message 的变体
+            version-num <哈希>      输出某版本的号
 
         反向索引由 `rebuild` 子命令建立
         索引过期会回退到普通的查询，不影响正确性

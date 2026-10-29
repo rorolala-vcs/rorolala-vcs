@@ -7,7 +7,7 @@ explain:
 
         **Usage**: rola explain <COMMAND>
         **Commands**:
-            exit-code [N]   Explain exit code N, or the last failing exit code when N is omitted
+            exit-code [N]    Explain exit code N, or the last failing exit code when N is omitted
 
         What can be explained is decided by the subcommand
 
@@ -17,7 +17,7 @@ explain:
 
         **用法**：rola explain <命令>
         **命令**：
-            exit-code [N]   解释退出码 N，省略 N 时解释上次失败的退出码
+            exit-code [N]    解释退出码 N，省略 N 时解释上次失败的退出码
 
         能解释什么由子命令决定
 

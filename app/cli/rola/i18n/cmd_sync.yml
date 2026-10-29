@@ -29,16 +29,16 @@ sync:
 
         **Usage**: rola sync
         **Flags**:
-            --up-only           Only what the local Layout holds goes up; cannot be used with --no-layout
-            --down-only         Only what the Vault holds comes down; cannot be used with --no-layout
-            --both              Sync in both directions, the default when no direction is given
+            --up-only            Only what the local Layout holds goes up; cannot be used with --no-layout
+            --down-only          Only what the Vault holds comes down; cannot be used with --no-layout
+            --both               Sync in both directions, the default when no direction is given
 
-            --dry-run           Show the plan and change nothing
-            --no-index          Leave the index alone; only the Layout and the store move
-            --no-storage        Leave the store alone; only the Layout and the index move
-            --no-layout         Do not read or write the Vault's Layout; exchange the index both ways and upload storage
-            --force             Go on uploading when the version chain has moved apart
-            --concurrency <N>   Carry the content N units at a time (default 4)
+            --dry-run            Show the plan and change nothing
+            --no-index           Leave the index alone; only the Layout and the store move
+            --no-storage         Leave the store alone; only the Layout and the index move
+            --no-layout          Do not read or write the Vault's Layout; exchange the index both ways and upload storage
+            --force              Go on uploading when the version chain has moved apart
+            --concurrency <N>    Carry the content N units at a time (default 4)
 
         Bring the local Layout and the Vault it tracks into agreement
         The Vault is named by the Layout's `TRACK`, and the Workspace binds it first
@@ -50,16 +50,16 @@ sync:
 
         **用法**：rola sync
         **标识**：
-            --up-only           只上传本地布局持有的内容；不能与 --no-layout 同用
-            --down-only         只下拉保险库持有的内容；不能与 --no-layout 同用
-            --both              双向同步，未指定方向时即此
+            --up-only            只上传本地布局持有的内容；不能与 --no-layout 同用
+            --down-only          只下拉保险库持有的内容；不能与 --no-layout 同用
+            --both               双向同步，未指定方向时即此
 
-            --dry-run           只显示计划，不做任何改动
-            --no-index          不动索引，只移动布局和仓库
-            --no-storage        不动仓库，只移动布局和索引
-            --no-layout         不读写保险库布局；索引双向交换，存储只上传
-            --force             版本链已分叉时仍然上传
-            --concurrency <N>   每次同时搬运 N 份内容（默认 4）
+            --dry-run            只显示计划，不做任何改动
+            --no-index           不动索引，只移动布局和仓库
+            --no-storage         不动仓库，只移动布局和索引
+            --no-layout          不读写保险库布局；索引双向交换，存储只上传
+            --force              版本链已分叉时仍然上传
+            --concurrency <N>    每次同时搬运 N 份内容（默认 4）
 
         让本地布局与它所追踪的保险库保持一致
         保险库由布局的 `TRACK` 指定，须先由工作区绑定

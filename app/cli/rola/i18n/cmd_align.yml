@@ -35,41 +35,41 @@ align:
 
         **Usage**: rola align <PATH>
         **Flags**:
-            --delete            Confirm the **lost entry** is gone
-            --rename            Confirm the **move**, and update the record to the new position
-            --break             For a **non-deterministic move**, break it into a **lost entry** and an **untracked entry**
-            --move <FILE>       Assert that PATH moved to FILE, forming a **non-deterministic move**
+            --delete             Confirm the **lost entry** is gone
+            --rename             Confirm the **move**, and update the record to the new position
+            --break              For a **non-deterministic move**, break it into a **lost entry** and an **untracked entry**
+            --move <FILE>        Assert that PATH moved to FILE, forming a **non-deterministic move**
 
-            --restore-move      Confirm the **move**, and restore it to its original position
-            --restore-modify    Restore the file's content change
-            --restore-delete    Rebuild a **lost entry**'s file
-            --restore           Do one of the three above, as PATH needs
-            --completely        Restore the content as well as the position, meaningful only for restoring a move
+            --restore-move       Confirm the **move**, and restore it to its original position
+            --restore-modify     Restore the file's content change
+            --restore-delete     Rebuild a **lost entry**'s file
+            --restore            Do one of the three above, as PATH needs
+            --completely         Restore the content as well as the position, meaningful only for restoring a move
 
-            --vault             Include this Vault as a Layout source during alignment
-            --offline           Look for the content needed to restore only locally without asking the Vault
-            --concurrency <N>   Carry the content N units at a time (default 4)
-            --include-ignored   Align an entry the ignore rules govern as well
+            --vault              Include this Vault as a Layout source during alignment
+            --offline            Look for the content needed to restore only locally without asking the Vault
+            --concurrency <N>    Carry the content N units at a time (default 4)
+            --include-ignored    Align an entry the ignore rules govern as well
     zh-CN: |
         让工作区下的文件结构与记录的保持一致
 
         **用法**：rola align <路径>
         **标识**：
-            --delete            确认该 **丢失项** 已丢失
-            --rename            确认该 **移动项**，并更新记录至到新位置
-            --break             对于 **非确定性移动**，可以断开为 **丢失项** 和 **未标记项**
-            --move <FILE>       断言 PATH 移动到了 FILE，形成一个 **非确定性移动**
+            --delete             确认该 **丢失项** 已丢失
+            --rename             确认该 **移动项**，并更新记录至到新位置
+            --break              对于 **非确定性移动**，可以断开为 **丢失项** 和 **未标记项**
+            --move <FILE>        断言 PATH 移动到了 FILE，形成一个 **非确定性移动**
 
-            --restore-move      确认该 **移动项**，并还原至原来的位置
-            --restore-modify    还原该文件的内容变更
-            --restore-delete    重建某条 **丢失项** 的文件
-            --restore           按 PATH 需要，执行上面三者中的一个
-            --completely        在还原位置的同时还原内容，只对还原移动有意义
+            --restore-move       确认该 **移动项**，并还原至原来的位置
+            --restore-modify     还原该文件的内容变更
+            --restore-delete     重建某条 **丢失项** 的文件
+            --restore            按 PATH 需要，执行上面三者中的一个
+            --completely         在还原位置的同时还原内容，只对还原移动有意义
 
-            --vault             在校准时把该保险库作为布局来源一起纳入
-            --offline           还原需要的内容只从本地查找，不向保险库请求
-            --concurrency <N>   每次同时搬运 N 份内容（默认 4）
-            --include-ignored   连被忽略规则管辖的条目一并校准
+            --vault              在校准时把该保险库作为布局来源一起纳入
+            --offline            还原需要的内容只从本地查找，不向保险库请求
+            --concurrency <N>    每次同时搬运 N 份内容（默认 4）
+            --include-ignored    连被忽略规则管辖的条目一并校准
 
   description:
     en: Bring the file structure under the Workspace into agreement with what is recorded
