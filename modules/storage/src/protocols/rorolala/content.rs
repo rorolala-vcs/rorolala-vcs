@@ -703,7 +703,7 @@ fn read_exact_at(file: &std::fs::File, buffer: &mut [u8], offset: u64) -> Result
         while read < buffer.len() {
             let got = file.seek_read(&mut buffer[read..], offset + read as u64)?;
             if got == 0 {
-                return Err(std::io::ErrorKind::UnexpectedEof.into());
+                return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
             }
             read += got;
         }
