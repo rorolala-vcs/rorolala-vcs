@@ -46,9 +46,13 @@ const TRANSPORT_FAILED: i32 = 152;
 
 fn main() -> ExitCode {
     // The same program stands in for `ssh`, so it is what `ssh` is started with that says which
-    // of its two lives it is living: only a session is started with `-T`.
-    if std::env::args().nth(1).as_deref() == Some("-T") {
-        return stand_in_ssh();
+    // of its two lives it is living: only a session is started with `-T`. A Windows machine starts
+    // no session of its own, so the stand-in has no second life to live there and is not compiled.
+    #[cfg(unix)]
+    {
+        if std::env::args().nth(1).as_deref() == Some("-T") {
+            return stand_in_ssh();
+        }
     }
 
     // The far side of a session is a login shell, which is what a Windows machine running this
