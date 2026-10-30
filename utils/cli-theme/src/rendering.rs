@@ -231,12 +231,13 @@ fn content_width(lines: &[Line]) -> usize {
 
 /// Whether `line` asks for a rule across the document.
 ///
-/// More than three `-` and nothing else: three are a table's separator row and one or
-/// two are ordinary text, so the threshold is what keeps a rule from being drawn
-/// where nobody asked for one.
+/// Three or more `-` and nothing else. A table's separator row is a rule under a header line, but
+/// [`table::starts`] has already taken that row by the time this is asked, so what is left at three
+/// is the Markdown thematic break a message writes between two paragraphs. One or two are ordinary
+/// text.
 fn is_rule(line: &str) -> bool {
     let trimmed = line.trim();
-    trimmed.len() > 3 && trimmed.bytes().all(|byte| byte == b'-')
+    trimmed.len() >= 3 && trimmed.bytes().all(|byte| byte == b'-')
 }
 
 /// The level and text of the heading `line` is, if it is one.
@@ -749,6 +750,11 @@ mod tests {
     #[test]
     fn a_rule_is_as_wide_as_the_message() {
         assert_eq!(drawn("Hello\n----\nWorld"), "Hello\n-----\nWorld");
+    }
+
+    #[test]
+    fn three_dashes_are_a_rule_too() {
+        assert_eq!(drawn("Hello\n---\nWorld"), "Hello\n-----\nWorld");
     }
 
     #[test]

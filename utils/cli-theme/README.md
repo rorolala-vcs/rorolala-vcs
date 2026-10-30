@@ -42,9 +42,17 @@ assert_eq!(theme_choice(), ThemeChoice::Pretty);
 ```
 
 `ThemeChoice::auto_select` is what the choice is until a program states one: the
-terminal's own answer, which is as much as anything can know. It never returns `Pretty`,
-because nothing can ask a terminal whether its font carries the glyphs or its color is
-24-bit deep — asking for `Pretty` stays a decision a person makes.
+terminal's own answer, which is as much as anything can know. A run that is not being
+written to a terminal gets `Text`. A terminal gets `Pretty` where it names itself one of
+the modern terminals a `NerdFont` is commonly installed for — Windows Terminal, Zed,
+`WezTerm`, kitty, Ghostty, iTerm, VS Code's terminal and the rest of the list — and
+`Simple` everywhere else.
+
+That is an approximation on purpose: a terminal carries no answer about its font, so the
+name it gives itself is the nearest thing there is. A terminal missing from the list is
+still answerable with `--theme-choice pretty`, and one on the list whose font has no
+glyphs after all with `--theme-choice simple`; the same is how
+`set_theme_choice(ThemeChoice::Simple)` puts it back.
 
 ## Styles
 
@@ -74,7 +82,7 @@ The blocks are the ones a person already knows from Markdown:
 | `# Title`           | a title, in bold up to the third level, with a blank line either side |
 | `> quoted`          | `\| quoted`, grey                                                     |
 | `> [!Warning]`      | an alert, headed by its name                                          |
-| `----`              | a rule, see below                                                     |
+| `---` or more       | a rule, see below                                                     |
 | `\| a \| b \|`      | a table                                                               |
 | a ` ```rust ` fence | code, highlighted by [`bat`](https://github.com/sharkdp/bat)          |
 

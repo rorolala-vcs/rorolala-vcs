@@ -4,11 +4,17 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 # 0.1.3 (Unreleased)
 
+## Bugfix
+
+1. [`app`] [`rola`] [`pager`] Never page a run that is not talking to a terminal — [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-pager-never-page-a-run-that-is-not-talking-to-a-terminal)
+2. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule — [See details](dev/CHANGELOG-DETAILS.md#2-utils-cli-theme-rendering-draw-a-three-dash-markdown-rule-as-a-rule)
+
 ## Feature
 
 1. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line — [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-docs-read-and-search-the-built-in-book-from-the-command-line)
 2. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments — [See details](dev/CHANGELOG-DETAILS.md#2-modules-book-search-search-the-built-in-book-by-word-with-the-matched-fragments)
 3. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line — [See details](dev/CHANGELOG-DETAILS.md#3-utils-cli-theme-table-a-full-width-listing-table-for-the-command-line)
+4. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected — [See details](dev/CHANGELOG-DETAILS.md#4-utils-cli-theme-theme-choose-the-pretty-theme-where-the-terminal-can-be-detected)
 
 # 0.1.2 (2026-10-29)
 

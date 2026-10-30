@@ -1,3 +1,4 @@
+use std::env;
 use std::io::{self, IsTerminal};
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -28,8 +29,11 @@ pub enum ThemeChoice {
     Simple = 1,
     /// `NerdFont` glyphs in true color
     ///
-    /// Asks for a font whose glyphs are not ASCII, and for 24-bit color. Neither can be
-    /// asked of a terminal, so this is only ever chosen by hand.
+    /// Asks for a font whose glyphs are not ASCII, and for 24-bit color. A font cannot be
+    /// asked of a terminal, so [`auto_select`](Self::auto_select) approximates the answer:
+    /// it picks this only where the environment says the color depth is there and the
+    /// terminal is one of the modern ones, and every run can still be told otherwise with
+    /// `--theme-choice simple`.
     Pretty = 2,
     /// Marked lines for a program to read rather than a terminal to draw
     ///
@@ -47,16 +51,28 @@ pub enum ThemeChoice {
 impl ThemeChoice {
     /// The most a terminal is known to carry here
     ///
-    /// [`Pretty`](Self::Pretty) is never returned: nothing can tell whether a font has
-    /// the glyphs or a terminal the depth, so asking for it stays a person's decision.
-    /// What is left is between the two that only use ASCII — and a terminal that is not
-    /// being written to gets the one that assumes least of it.
+    /// A terminal that is not being written to gets [`Text`](Self::Text). A terminal that
+    /// is, and whose environment names one of the modern terminals — Windows Terminal,
+    /// Zed, `WezTerm`, kitty, Ghostty, iTerm and the rest of the list — gets
+    /// [`Pretty`](Self::Pretty); every other terminal gets [`Simple`](Self::Simple).
+    ///
+    /// The `Pretty` test is an approximation on purpose: a terminal carries no answer
+    /// about its font, so this reads what the environment does say. A listed terminal is
+    /// trusted for the color depth as well as the glyphs, since the list is made of
+    /// 24-bit terminals; `COLORTERM` and `TERM` are read for a terminal that names itself
+    /// some other way, which can only lower the choice, never raise it. A terminal that
+    /// is not on the list, or a run that asks for another theme, is answered as it always
+    /// was.
     #[must_use]
     pub fn auto_select() -> Self {
-        if io::stdout().is_terminal() {
-            Self::Simple
+        if !io::stdout().is_terminal() {
+            return Self::Text;
+        }
+
+        if draws_pretty() {
+            Self::Pretty
         } else {
-            Self::Text
+            Self::Simple
         }
     }
 
@@ -82,6 +98,93 @@ impl ThemeChoice {
     }
 }
 
+/// Whether the terminal this program writes to is known to carry what [`Pretty`](ThemeChoice::Pretty) asks for.
+///
+/// It reads the environment rather than the terminal because a terminal carries no answer about its
+/// font: `COLORTERM` and `TERM` are asked for the color depth, and the variables a modern terminal
+/// is known to set are asked for which one it is. A terminal that names neither is left at
+/// [`Simple`](ThemeChoice::Simple), where the glyphs are ASCII and the colors are the sixteen every
+/// terminal has.
+fn draws_pretty() -> bool {
+    let colorterm = env::var("COLORTERM").ok();
+    let term = env::var("TERM").ok();
+    let program = env::var("TERM_PROGRAM").ok();
+    let markers = [
+        env::var_os("WT_SESSION").is_some(),
+        env::var_os("KITTY_WINDOW_ID").is_some(),
+        env::var_os("WEZTERM_EXECUTABLE").is_some(),
+        env::var_os("GHOSTTY_RESOURCES_DIR").is_some(),
+        env::var_os("ZED_TERM").is_some(),
+    ];
+
+    draws_pretty_for(
+        colorterm.as_deref(),
+        term.as_deref(),
+        program.as_deref(),
+        &markers,
+    )
+}
+
+/// The answer [`draws_pretty`] reads the process's environment for.
+fn draws_pretty_for(
+    colorterm: Option<&str>,
+    term: Option<&str>,
+    program: Option<&str>,
+    markers: &[bool],
+) -> bool {
+    let modern = modern_terminal(program, term, markers);
+
+    modern && has_true_color(colorterm, term, modern)
+}
+
+/// Whether the terminal draws 24-bit color, or is one of the terminals known to.
+///
+/// A listed terminal is trusted for the depth as well as the glyphs: Windows Terminal, Zed and the
+/// others are 24-bit terminals, and requiring `COLORTERM` from them would be asking them to repeat
+/// what their own name already says. `COLORTERM` and `TERM` are still read for the terminals that
+/// name themselves some other way.
+fn has_true_color(colorterm: Option<&str>, term: Option<&str>, modern: bool) -> bool {
+    modern || true_color(colorterm, term)
+}
+
+/// Whether the environment says the terminal draws 24-bit color.
+fn true_color(colorterm: Option<&str>, term: Option<&str>) -> bool {
+    let colorterm = colorterm.unwrap_or_default().to_ascii_lowercase();
+    let term = term.unwrap_or_default().to_ascii_lowercase();
+
+    colorterm.contains("truecolor") || colorterm.contains("24bit") || term.contains("direct")
+}
+
+/// Whether the environment names one of the terminals `Pretty` is drawn for.
+///
+/// The list is the terminals whose users have a `NerdFont` often enough to be worth guessing, not
+/// every terminal that could ever show one: a terminal missing from it is still answerable with
+/// `--theme-choice pretty`.
+fn modern_terminal(program: Option<&str>, term: Option<&str>, markers: &[bool]) -> bool {
+    if markers.iter().any(|set| *set) {
+        return true;
+    }
+
+    let program = program.unwrap_or_default().to_ascii_lowercase();
+    if matches!(
+        program.as_str(),
+        "wezterm" | "iterm.app" | "kitty" | "ghostty" | "vscode" | "hyper" | "zed"
+    ) {
+        return true;
+    }
+
+    let term = term.unwrap_or_default().to_ascii_lowercase();
+
+    ["xterm-kitty", "wezterm", "ghostty", "alacritty", "foot"]
+        .iter()
+        .any(|name| {
+            term == *name
+                || term
+                    .strip_prefix(name)
+                    .is_some_and(|rest| rest.starts_with('-'))
+        })
+}
+
 /// Which theme Rorolala's output is drawn in
 ///
 /// Starts as the terminal's answer — see [`theme_choice`] — and is replaced the moment
@@ -89,7 +192,6 @@ impl ThemeChoice {
 /// number from the start: the initial value is not knowable until the terminal is asked.
 static CHOICE: LazyLock<AtomicU8> =
     LazyLock::new(|| AtomicU8::new(ThemeChoice::auto_select() as u8));
-
 /// States which theme the program is drawn in, for the whole program
 pub fn set_theme_choice(choice: ThemeChoice) {
     CHOICE.store(choice.as_u8(), Ordering::Relaxed);
@@ -101,4 +203,76 @@ pub fn set_theme_choice(choice: ThemeChoice) {
 #[must_use]
 pub fn theme_choice() -> ThemeChoice {
     ThemeChoice::from_u8(CHOICE.load(Ordering::Relaxed))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{draws_pretty_for, modern_terminal, true_color};
+
+    #[test]
+    fn a_color_depth_is_read_from_the_environment() {
+        assert!(true_color(Some("truecolor"), None));
+        assert!(true_color(Some("24bit"), None));
+        assert!(true_color(None, Some("xterm-direct")));
+        assert!(!true_color(Some("256"), None));
+        assert!(!true_color(None, None));
+    }
+
+    #[test]
+    fn a_modern_terminal_is_read_from_what_it_says_about_itself() {
+        assert!(modern_terminal(Some("WezTerm"), None, &[]));
+        assert!(modern_terminal(Some("iTerm.app"), None, &[]));
+        assert!(modern_terminal(Some("vscode"), None, &[]));
+        assert!(modern_terminal(Some("zed"), None, &[]));
+        assert!(modern_terminal(None, Some("xterm-kitty"), &[]));
+        assert!(modern_terminal(
+            None,
+            Some("xterm-256color"),
+            &[false, false, false, false, true]
+        ));
+        assert!(!modern_terminal(
+            Some("Apple_Terminal"),
+            Some("xterm-256color"),
+            &[]
+        ));
+        assert!(!modern_terminal(None, Some("xterm-256color"), &[]));
+    }
+
+    #[test]
+    fn pretty_needs_a_terminal_it_is_drawn_for_and_a_depth_it_carries() {
+        assert!(draws_pretty_for(
+            Some("truecolor"),
+            Some("xterm-kitty"),
+            None,
+            &[]
+        ));
+        assert!(draws_pretty_for(
+            Some("truecolor"),
+            Some("xterm-256color"),
+            Some("WezTerm"),
+            &[]
+        ));
+        // A listed terminal is trusted for the depth as well as the glyphs: Windows
+        // Terminal and Zed need not set `COLORTERM` to be known to draw 24-bit color.
+        assert!(draws_pretty_for(None, Some("xterm-kitty"), None, &[]));
+        assert!(draws_pretty_for(
+            None,
+            Some("xterm-256color"),
+            Some("zed"),
+            &[]
+        ));
+        assert!(draws_pretty_for(
+            None,
+            Some("xterm-256color"),
+            None,
+            &[true]
+        ));
+        assert!(!draws_pretty_for(
+            Some("truecolor"),
+            Some("xterm-256color"),
+            Some("Apple_Terminal"),
+            &[]
+        ));
+        assert!(!draws_pretty_for(None, Some("xterm-256color"), None, &[]));
+    }
 }

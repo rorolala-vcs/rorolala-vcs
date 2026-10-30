@@ -197,7 +197,7 @@ fn docs(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     let ran = rola.run(dir, &["docs", "--search", "install"]);
     checked.exits("`docs --search` searches", &ran, 0);
-    checked.stdout_has("the search's table names its columns", &ran, "Article Name");
+    checked.stdout_has("the search's table names its columns", &ran, "ARTICLE");
     checked.stdout_has("the table names the article", &ran, "install");
     checked.stdout_has(
         "the table holds the fragment that matched",

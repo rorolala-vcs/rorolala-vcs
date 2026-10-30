@@ -1,3 +1,5 @@
+use std::io::IsTerminal as _;
+
 use mingling::{
     ProgramCollect, Wrap,
     consts::REMAINS,
@@ -21,6 +23,12 @@ const ARG_NO_PAGER: PickerArg<'static, Flag> = arg![no_pager: Flag];
 /// the whole run is written out, not what any one command does: the pager is registered by the
 /// programs that have one, and reads this the way a command reads [`ResUsingVault`](super::ResUsingVault).
 /// A command-level declaration would be dead code, since this pick eats the token first.
+///
+/// A run that is not talking to a terminal is answered as if it asked for no pager, whether or not
+/// it did. The pager is for a person reading a screen, and a run whose output is a pipe or a file is
+/// another program reading; a run whose input is not a terminal is one nobody is typing at, so a
+/// pager waiting for a key would be waiting forever. That matters most for an agent driving the
+/// command line: it reads the output through a pipe, and a pager there is a hang rather than a page.
 pub struct NoPagerFlagSetup;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for NoPagerFlagSetup
@@ -37,8 +45,10 @@ where
             .unwrap();
         program.replace_args(args.into());
 
+        let pageable = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
+
         program.with_resource(ResNoPager {
-            no_pager: matches!(no_pager, Flag::Active),
+            no_pager: matches!(no_pager, Flag::Active) || !pageable,
         });
     }
 }

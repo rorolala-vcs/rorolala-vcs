@@ -4,6 +4,28 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 # 0.1.3 (Unreleased)
 
+## Bugfix
+
+### 1. [`app`] [`rola`] [`pager`] Never page a run that is not talking to a terminal
+
+A run whose output or input is not a terminal now reaches no pager at all, whether or not it asked
+for `--no-pager`. The pager already refused to start when its own stream was not a terminal, but
+`ResNoPager` now says the same thing up front: a run read through a pipe is another program reading,
+and a run whose input nobody types at would wait for a key forever. That is the difference between
+an agent driving the command line and one that hangs on it.
+
+`--no-pager` still works, and a run in a terminal pages as it did before.
+
+### 2. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
+
+A message that marked a section break with `---` now draws a rule there, as Markdown says it should,
+instead of printing the three dashes as ordinary text. The test that recognized one required more
+than three dashes, so only `----` and longer were drawn; three is also the length a table's
+separator row uses, but the table is taken before the rule is looked for, so the two do not meet.
+
+A fenced code block still keeps its `---` as the text it is, and one or two dashes are still
+ordinary text.
+
 ## Feature
 
 ### 1. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line
@@ -85,6 +107,21 @@ A cell holds runs (`Cell`, `Run`, `RunStyle`), so a caller can draw part of one 
 red and bold a search puts on a matched word — without handing the table a colour language to
 parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
 the matched fragments in a filled one.
+
+### 4. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
+
+`ThemeChoice::auto_select` now answers `Pretty` on a terminal that names itself one of the modern
+terminals, instead of leaving `Pretty` to an explicit `--theme-choice pretty`. The list is Windows
+Terminal, Zed, WezTerm, kitty, Ghostty, iTerm, VS Code's terminal, Hyper, Alacritty and foot; it is
+read from `WT_SESSION`, `ZED_TERM`, `TERM_PROGRAM` and the other variables those terminals set about
+themselves. A listed terminal is trusted for its 24-bit color as well as its glyphs, so Windows
+Terminal and Zed do not have to set `COLORTERM` to be recognized; `COLORTERM` and `TERM` are still
+read for a terminal that names itself some other way.
+
+A terminal carries no answer about its font, so this is an approximation: a terminal outside the
+list gets `Simple`, and one whose font turns out to have no glyphs is still answerable with
+`--theme-choice simple`. A run whose output is not a terminal still gets `Text`, and an explicit
+`--theme-choice` still overrides the detection.
 
 # 0.1.2 (2026-10-29)
 
