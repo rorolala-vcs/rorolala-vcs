@@ -313,6 +313,8 @@ pub(super) struct StyleState<'a> {
     pub(super) underline: bool,
     /// Whether the text is struck through.
     pub(super) strike: bool,
+    /// Whether the text is drawn in reverse video.
+    pub(super) reverse: bool,
     /// The address the text opens, if it opens one.
     pub(super) link: Option<&'a str>,
 }
@@ -328,6 +330,7 @@ impl StyleState<'_> {
             italic: false,
             underline: false,
             strike: false,
+            reverse: false,
             link: None,
         }
     }
@@ -351,6 +354,13 @@ impl StyleState<'_> {
     pub(super) const fn grey() -> Self {
         Self::plain().foreground(Color::Named(NamedColor::BrightBlack))
     }
+
+    /// The same style, in reverse video.
+    #[must_use]
+    pub(super) const fn reversed(mut self) -> Self {
+        self.reverse = true;
+        self
+    }
 }
 
 /// The decisions a rendering pass is made with.
@@ -372,6 +382,12 @@ pub(super) struct RenderOptions {
     /// and drawing a rule to the eighty columns it might have had is worse than drawing
     /// it to the message itself.
     pub(super) terminal: Option<usize>,
+    /// Whether the source is a document to lay out rather than a line to draw.
+    ///
+    /// A document gets the reading layout — indented headings and body, wrapped prose, and
+    /// tables that fold a long cell instead of running off the side. A line is drawn where it
+    /// is written, so a message or a status line keeps the shape its caller chose.
+    pub(super) document: bool,
 }
 
 impl RenderOptions {
@@ -382,6 +398,15 @@ impl RenderOptions {
             color: is_enabled(),
             hyperlinks: true,
             terminal: terminal_width(),
+            document: false,
+        }
+    }
+
+    /// The same decisions, for a document rather than a line.
+    pub(super) fn current_document() -> Self {
+        Self {
+            document: true,
+            ..Self::current()
         }
     }
 
@@ -442,6 +467,9 @@ pub(super) fn paint(text: &str, style: &StyleState<'_>, options: RenderOptions) 
     }
     if style.strike {
         painted = painted.strikethrough();
+    }
+    if style.reverse {
+        painted = painted.reversed();
     }
     let mut painted = painted.to_string();
     if exact && let Some(foreground) = style.foreground {

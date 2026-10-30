@@ -92,7 +92,20 @@ string is released with its `free_*`, and `tests/ffi-c/ffi-book` checks the nest
 program. `modules/rola-sharp` gains `RolaBookSearch`, whose `BookSnippet` splits its text into
 ordinary and matched runs, so a renderer draws the highlight without converting the ranges itself.
 
-### 3. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
+### 3. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
+
+`TextRendering::render_document` draws a document rather than a line: a heading is set in two
+columns from the left with its `#` marker kept and its title bold on the terminal's reverse-video
+ground, one blank line above and below; prose is set in four columns and wrapped at eighty-six
+columns of content; a quotation keeps its `|` gutter on every wrapped line; and a table is set in
+with the prose, a long cell folding inside its column so the table fits the document instead of
+running off the side. The `rola docs` reader draws articles through it, so a book page now reads as
+a page rather than as the Markdown the index carries.
+
+`trd!` and `TextRendering::render` still draw a line where it was written, so messages, status
+lines and help keep the shape their callers chose.
+
+### 4. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
 
 The command-line theme now carries a `Table` for the listings a `gh issue list`-style table is made
 of: columns with titles and rows of cells, drawn across the terminal instead of only as wide as
@@ -111,7 +124,7 @@ red and bold a search puts on a matched word — without handing the table a col
 parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
 the matched fragments in a filled one.
 
-### 4. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
+### 5. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
 
 `ThemeChoice::auto_select` now answers `Pretty` on a terminal that names itself one of the modern
 terminals, instead of leaving `Pretty` to an explicit `--theme-choice pretty`. The list is Windows

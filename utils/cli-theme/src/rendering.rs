@@ -25,6 +25,21 @@ use crate::ThemeChoice;
 use self::ansi::display_width;
 use self::palette::{Color, NamedColor, RenderOptions, StyleState, paint};
 
+/// How wide the content of a document line is drawn.
+///
+/// The left indent is added to this, so the longest line a document draws is ninety columns: four
+/// of indent and eighty-six of prose.
+const DOCUMENT_WIDTH: usize = 86;
+
+/// How far the prose of a document is set in from the left edge.
+const DOCUMENT_INDENT: usize = 4;
+
+/// How far a heading is set in from the left edge.
+const HEADING_INDENT: usize = 2;
+
+/// How wide the `|` gutter of a quotation is, with the space after it.
+const QUOTE_GUTTER: usize = 2;
+
 /// Draws the color language.
 ///
 /// The only entry point a caller needs: hand it the message, and it comes back with
@@ -44,6 +59,17 @@ impl TextRendering {
     #[must_use]
     pub fn render(source: &str) -> String {
         render_with(source, RenderOptions::current())
+    }
+
+    /// Renders `source` as a document: headings, prose, quotations and tables laid out for reading.
+    ///
+    /// This is [`render`](Self::render) with the reading layout — a heading stands on its own line
+    /// in reverse video, prose is indented and wrapped, a quotation keeps its gutter when it wraps,
+    /// and a long table cell folds instead of running off the side. A message that is one line is
+    /// still drawn by [`render`](Self::render); the layout here is for a document.
+    #[must_use]
+    pub fn render_document(source: &str) -> String {
+        render_with(source, RenderOptions::current_document())
     }
 }
 
@@ -74,10 +100,8 @@ fn render_with(source: &str, options: RenderOptions) -> String {
         if let Some(fence) = Fence::opening(line) {
             settled(&mut output, &mut owed_blank);
             let (block, next) = fence.take(&lines, index + 1);
-            push_text(
-                &mut output,
-                &code::highlight(&block, fence.language.as_deref(), options),
-            );
+            let drawn = code::highlight(&block, fence.language.as_deref(), options);
+            push_text_indented(&mut output, &drawn, options.document);
             index = next;
             continue;
         }
@@ -86,7 +110,11 @@ fn render_with(source: &str, options: RenderOptions) -> String {
             settled(&mut output, &mut owed_blank);
             let (rows, next) = table::render(&lines, index, options);
             for row in rows {
-                output.push(Line::Text(row));
+                output.push(Line::Text(if options.document {
+                    indented(&row, DOCUMENT_INDENT)
+                } else {
+                    row
+                }));
             }
             index = next;
             continue;
@@ -102,12 +130,16 @@ fn render_with(source: &str, options: RenderOptions) -> String {
         if let Some((level, text)) = heading(line) {
             settled(&mut output, &mut owed_blank);
             blank(&mut output);
-            let style = if level <= 3 {
-                StyleState::plain().bolded()
+            if options.document {
+                output.push(Line::Text(drawn_heading(level, text, options)));
             } else {
-                StyleState::plain()
-            };
-            output.push(Line::Text(inline::render(text, style, options)));
+                let style = if level <= 3 {
+                    StyleState::plain().bolded()
+                } else {
+                    StyleState::plain()
+                };
+                output.push(Line::Text(inline::render(text, style, options)));
+            }
             owed_blank = true;
             index += 1;
             continue;
@@ -122,11 +154,16 @@ fn render_with(source: &str, options: RenderOptions) -> String {
         }
 
         settled(&mut output, &mut owed_blank);
-        output.push(Line::Text(inline::render(
-            line,
-            StyleState::plain(),
-            options,
-        )));
+        let drawn = inline::render(line, StyleState::plain(), options);
+
+        if options.document {
+            for wrapped in ansi::wrap(&drawn, DOCUMENT_WIDTH) {
+                output.push(Line::Text(indented(&wrapped, DOCUMENT_INDENT)));
+            }
+        } else {
+            output.push(Line::Text(drawn));
+        }
+
         index += 1;
     }
 
@@ -166,6 +203,39 @@ fn push_text(output: &mut Vec<Line>, text: &str) {
     for line in text.lines() {
         output.push(Line::Text(line.to_owned()));
     }
+}
+
+/// Adds `text` one line at a time, set in from the left where `options` was document-shaped.
+fn push_text_indented(output: &mut Vec<Line>, text: &str, document: bool) {
+    for line in text.lines() {
+        if document {
+            output.push(Line::Text(indented(line, DOCUMENT_INDENT)));
+        } else {
+            output.push(Line::Text(line.to_owned()));
+        }
+    }
+}
+
+/// `text` set in by `indent` columns, which is where a document's prose and fenced code sit.
+fn indented(text: &str, indent: usize) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+
+    format!("{}{}", " ".repeat(indent), text.trim_end())
+}
+
+/// A heading line: its `#` marker, then its title, on a reverse-video ground.
+///
+/// The marker is written before the ground rather than on it: it says the level without being
+/// bold, and the title is the part that stands out. The ground is the terminal's reverse video
+/// rather than a fixed white: a light terminal draws it black and a dark one white, which is what
+/// a heading that stands out should look like on either.
+fn drawn_heading(level: usize, text: &str, options: RenderOptions) -> String {
+    let marker = format!("{} ", "#".repeat(level.min(6)));
+    let content = inline::render(text, StyleState::plain().reversed().bolded(), options);
+
+    format!("{}{}{}", " ".repeat(HEADING_INDENT), marker, content)
 }
 
 /// Draws the rules, trims what is drawn, and drops the blank lines around it.
@@ -273,6 +343,10 @@ fn quote<'a>(lines: &'a [&'a str], index: usize) -> (Vec<&'a str>, usize) {
 
 /// Draws a quoted block, which is an alert when its first line declares one.
 fn drawn_quote(body: &[&str], options: RenderOptions) -> String {
+    if options.document {
+        return drawn_document_quote(body, options);
+    }
+
     body.first().copied().and_then(alert).map_or_else(
         || {
             let style = StyleState::grey();
@@ -286,6 +360,57 @@ fn drawn_quote(body: &[&str], options: RenderOptions) -> String {
             drawn_alert(kind, &body[1..], style, options)
         },
     )
+}
+
+/// Draws a quotation in a document: set in, and wrapped so every line keeps the gutter.
+fn drawn_document_quote(body: &[&str], options: RenderOptions) -> String {
+    body.first().copied().and_then(alert).map_or_else(
+        || {
+            let style = StyleState::grey();
+            body.iter()
+                .flat_map(|line| document_quoted(line, style, options))
+                .collect::<Vec<_>>()
+                .join("\n")
+        },
+        |kind| {
+            let style = StyleState::plain().foreground(Color::Named(kind.color()));
+            let mut lines = vec![format!(
+                "{}{}",
+                " ".repeat(DOCUMENT_INDENT),
+                quoted(&alert_title(kind, options), style.bolded(), options)
+            )];
+
+            for line in &body[1..] {
+                lines.extend(document_quoted(line, style, options));
+            }
+
+            lines.join("\n")
+        },
+    )
+}
+
+/// One line of a quoted block laid out as a document, wrapped with its gutter on every line.
+fn document_quoted(line: &str, style: StyleState<'_>, options: RenderOptions) -> Vec<String> {
+    let indent = " ".repeat(DOCUMENT_INDENT);
+    let gutter = paint("|", &style, options);
+
+    if line.is_empty() {
+        return vec![format!("{indent}{gutter}")];
+    }
+
+    let content = inline::render(line, style, options);
+    let width = DOCUMENT_WIDTH - QUOTE_GUTTER;
+
+    ansi::wrap(&content, width)
+        .into_iter()
+        .map(|wrapped| {
+            format!(
+                "{indent}{}{}",
+                paint("| ", &style, options),
+                wrapped.trim_end()
+            )
+        })
+        .collect()
 }
 
 /// Draws an alert: a named header, then the warning itself.
@@ -519,6 +644,7 @@ mod tests {
             color: false,
             hyperlinks: false,
             terminal: None,
+            document: false,
         }
     }
 
@@ -533,6 +659,19 @@ mod tests {
             color: true,
             ..options(theme)
         }
+    }
+
+    /// The options a document is drawn with.
+    fn document(theme: ThemeChoice) -> RenderOptions {
+        RenderOptions {
+            document: true,
+            ..options(theme)
+        }
+    }
+
+    /// A document drawn the way a headed article is, with its layout but no colour.
+    fn laid_out(source: &str) -> String {
+        render_with(source, document(ThemeChoice::Simple))
     }
 
     #[test]
@@ -750,6 +889,73 @@ mod tests {
     #[test]
     fn a_rule_is_as_wide_as_the_message() {
         assert_eq!(drawn("Hello\n----\nWorld"), "Hello\n-----\nWorld");
+    }
+
+    #[test]
+    fn a_document_heading_is_set_in_and_framed() {
+        assert_eq!(laid_out("# Title\n\nBody."), "  # Title\n\n    Body.");
+        assert_eq!(laid_out("## Second\n\nBody."), "  ## Second\n\n    Body.");
+    }
+
+    #[test]
+    fn a_document_heading_is_drawn_in_reverse_video() {
+        let options = RenderOptions {
+            document: true,
+            ..colored(ThemeChoice::Simple)
+        };
+        let drawn = with_color(|| render_with("# Title", options));
+
+        assert!(drawn.starts_with("  # "), "{drawn:?}");
+        assert!(drawn.contains("7m"), "{drawn:?}");
+        assert!(drawn.contains("Title"), "{drawn:?}");
+    }
+
+    #[test]
+    fn a_document_wraps_its_prose_and_sets_it_in() {
+        let drawn = laid_out(&format!("{}.", "word ".repeat(40)));
+        let lines: Vec<&str> = drawn.lines().collect();
+
+        assert!(lines.len() > 1, "{drawn:?}");
+        for line in lines {
+            assert!(line.starts_with("    "), "{line:?}");
+            assert!(
+                super::ansi::display_width(line) <= 90,
+                "{line:?} is {} wide",
+                super::ansi::display_width(line)
+            );
+        }
+    }
+
+    #[test]
+    fn a_document_quotation_keeps_its_gutter_when_it_wraps() {
+        let drawn = laid_out(&format!("> {}.", "quoted ".repeat(30)));
+        let lines: Vec<&str> = drawn.lines().collect();
+
+        assert!(lines.len() > 1, "{drawn:?}");
+        for line in lines {
+            assert!(line.starts_with("    | "), "{line:?}");
+            assert!(super::ansi::display_width(line) <= 90, "{line:?}");
+        }
+    }
+
+    #[test]
+    fn a_document_table_folds_a_long_cell() {
+        let source = "\
+            | Name | Note |\n\
+            | --- | --- |\n\
+            | a | This cell holds enough words that no table wide enough to keep it on one line would fit a document. |";
+        let drawn = laid_out(source);
+        let lines: Vec<&str> = drawn.lines().collect();
+
+        assert!(lines.len() > 4, "{drawn:?}");
+        for line in &lines {
+            assert!(line.starts_with("    "), "{line:?}");
+            assert!(
+                super::ansi::display_width(line) <= 90,
+                "{line:?} is {} wide",
+                super::ansi::display_width(line)
+            );
+        }
     }
 
     #[test]

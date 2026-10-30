@@ -1,7 +1,7 @@
 //! Escape sequences: what a terminal reads instead of printing, and how wide what it
 //! does print comes out.
 
-use unicode_width::UnicodeWidthStr as _;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr as _};
 
 use super::palette::{NamedColor, Rgb, nearest};
 
@@ -83,6 +83,60 @@ fn sequence_end(text: &str, start: usize) -> usize {
         Some(_) => (start + 2).min(bytes.len()),
         None => bytes.len(),
     }
+}
+
+/// `text` wrapped into lines of at most `width` columns, with its styles kept.
+///
+/// The text a terminal prints is what is measured and what the breaks fall between; the escape
+/// sequences stay where they were and take no columns. A break is made at the last space that
+/// still leaves the line inside `width`, and a word that is wider than a whole line is cut at the
+/// width instead. A style that opens before a break is left open: a newline does not reset what a
+/// terminal draws, so the next line goes on in the style the break fell in.
+#[must_use]
+pub(super) fn wrap(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    let mut used: usize = 0;
+    let mut last_space: Option<(usize, usize)> = None;
+
+    for segment in segments(text) {
+        match segment {
+            Segment::Sgr(sequence) | Segment::Other(sequence) => current.push_str(sequence),
+            Segment::Text(plain) => {
+                for character in plain.chars() {
+                    let character_width = UnicodeWidthChar::width(character).unwrap_or(0);
+
+                    if used.saturating_add(character_width) > width && used > 0 {
+                        if let Some((at, _)) = last_space.take() {
+                            let tail = current[at + 1..].to_owned();
+
+                            current.truncate(at);
+                            lines.push(std::mem::take(&mut current));
+                            current = tail;
+                            used = display_width(&current);
+                        } else {
+                            lines.push(std::mem::take(&mut current));
+                            used = 0;
+                        }
+                    }
+
+                    current.push(character);
+                    used = used.saturating_add(character_width);
+
+                    if character == ' ' {
+                        last_space = Some((current.len() - 1, used - character_width));
+                    }
+                }
+            }
+        }
+    }
+
+    if !current.is_empty() || lines.is_empty() {
+        lines.push(current);
+    }
+
+    lines
 }
 
 /// The width `text` takes up on screen.

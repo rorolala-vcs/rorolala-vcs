@@ -7,9 +7,12 @@ use prettytable::{Cell, Row, Table};
 
 use crate::ThemeChoice;
 
-use super::ansi::{display_width, escape_count};
+use super::ansi::{display_width, escape_count, wrap};
 use super::inline;
 use super::palette::{RenderOptions, StyleState};
+
+/// How wide a document's table is allowed to be before a cell is folded.
+const DOCUMENT_TABLE_WIDTH: usize = 86;
 
 /// How few `-` a separator cell may hold and still separate anything.
 const RULE: usize = 3;
@@ -60,6 +63,11 @@ pub(super) fn render(lines: &[&str], index: usize, options: RenderOptions) -> (V
         rows.push(drawn_row(&split(lines[next]), &alignments, options));
         next += 1;
     }
+
+    if options.document {
+        return (document(&rows, &alignments, options), next);
+    }
+
     even_out(&mut rows);
     let widths = column_widths(&rows);
 
@@ -109,6 +117,121 @@ fn column_widths(rows: &[Vec<Drawn>]) -> Vec<usize> {
     (0..columns)
         .map(|column| rows.iter().map(|row| row[column].width).max().unwrap_or(0))
         .collect()
+}
+
+/// Draws a table as a document: held to [`DOCUMENT_TABLE_WIDTH`], with the cells that no longer
+/// fit folded over as many lines as they need.
+///
+/// `prettytable` lays a row out from its widest cell, so a single long cell makes the whole table
+/// run off the side and no row can be readable. Here the columns are given a width that fits the
+/// document, each cell is wrapped to its column, and the rows are drawn from those lines.
+fn document(rows: &[Vec<Drawn>], alignments: &[Alignment], options: RenderOptions) -> Vec<String> {
+    let columns = alignments.len();
+    let mut widths = column_widths(rows);
+    let available = DOCUMENT_TABLE_WIDTH
+        .saturating_sub(columns.saturating_add(1))
+        .saturating_sub(PADDING.saturating_mul(2).saturating_mul(columns));
+
+    while widths.iter().sum::<usize>() > available {
+        let Some(widest) = widths
+            .iter()
+            .enumerate()
+            .filter(|(_, width)| **width > 1)
+            .max_by_key(|(_, width)| **width)
+            .map(|(at, _)| at)
+        else {
+            break;
+        };
+
+        widths[widest] -= 1;
+    }
+
+    let wrapped: Vec<Vec<Vec<String>>> = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .enumerate()
+                .map(|(column, cell)| {
+                    let width = widths.get(column).copied().unwrap_or(1);
+                    let lines = wrap(&cell.content, width);
+
+                    if lines.is_empty() {
+                        vec![String::new()]
+                    } else {
+                        lines
+                            .into_iter()
+                            .map(|line| line.trim_end().to_owned())
+                            .collect()
+                    }
+                })
+                .collect()
+        })
+        .collect();
+
+    let frame = frame(options.theme);
+    let mut drawn = vec![rule(&widths, frame, frame.above)];
+
+    if let Some(header) = wrapped.first() {
+        drawn.extend(block(header, &widths, alignments, frame));
+    }
+    drawn.push(rule(&widths, frame, frame.between));
+
+    for row in wrapped.iter().skip(1) {
+        drawn.extend(block(row, &widths, alignments, frame));
+    }
+    drawn.push(rule(&widths, frame, frame.below));
+
+    drawn
+}
+
+/// Draws one row of a document table, one line of it at a time.
+fn block(
+    cells: &[Vec<String>],
+    widths: &[usize],
+    alignments: &[Alignment],
+    frame: Frame,
+) -> Vec<String> {
+    let height = cells.iter().map(Vec::len).max().unwrap_or(1);
+
+    (0..height)
+        .map(|line| {
+            let mut drawn = String::from(frame.column);
+
+            for (column, width) in widths.iter().enumerate() {
+                let content = cells
+                    .get(column)
+                    .and_then(|lines| lines.get(line))
+                    .map_or("", String::as_str);
+                let alignment = alignments.get(column).copied().unwrap_or(Alignment::LEFT);
+
+                drawn.push(' ');
+                drawn.push_str(&aligned(content, *width, alignment));
+                drawn.push(' ');
+                drawn.push(frame.column);
+            }
+
+            drawn
+        })
+        .collect()
+}
+
+/// `content` in a `width`-wide cell, set where `alignment` asks.
+fn aligned(content: &str, width: usize, alignment: Alignment) -> String {
+    let used = display_width(content);
+    let padding = width.saturating_sub(used);
+
+    match alignment {
+        Alignment::RIGHT => format!("{}{content}", " ".repeat(padding)),
+        Alignment::CENTER => {
+            let left = padding / 2;
+            format!(
+                "{}{content}{}",
+                " ".repeat(left),
+                " ".repeat(padding - left)
+            )
+        }
+        Alignment::LEFT => format!("{content}{}", " ".repeat(padding)),
+    }
 }
 
 /// Gives every cell in a column the same number of escape sequences.

@@ -33,7 +33,9 @@ use mingling::{
 };
 use rorolala_cli_setups::ResNoPager;
 use rorolala_errors::Failure;
-use rorolala_utils_cli_theme::{Cell, Column, Run, RunStyle, Table, err_line, help_line, trd};
+use rorolala_utils_cli_theme::{
+    Cell, Column, Run, RunStyle, Table, TextRendering, err_line, help_line, trd,
+};
 use rust_i18n::t;
 use serde::Serialize;
 
@@ -326,7 +328,7 @@ pub fn render_result_docs_article(result: ResultDocsArticle) {
     if result.raw {
         r_println!("{}", result.content);
     } else {
-        r_println!("{}", trd!(result.content));
+        r_println!("{}", TextRendering::render_document(&result.content));
     }
 }
 
@@ -466,7 +468,7 @@ pub fn render_result_docs_search(result: ResultDocsSearch) {
         if result.raw {
             r_println!("{}", entry.content);
         } else {
-            r_println!("{}", trd!(entry.content));
+            r_println!("{}", TextRendering::render_document(&entry.content));
         }
     } else {
         let mut table = Table::new([

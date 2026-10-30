@@ -13,8 +13,9 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 1. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line — [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-docs-read-and-search-the-built-in-book-from-the-command-line)
 2. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments — [See details](dev/CHANGELOG-DETAILS.md#2-modules-book-search-search-the-built-in-book-by-word-with-the-matched-fragments)
-3. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line — [See details](dev/CHANGELOG-DETAILS.md#3-utils-cli-theme-table-a-full-width-listing-table-for-the-command-line)
-4. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected — [See details](dev/CHANGELOG-DETAILS.md#4-utils-cli-theme-theme-choose-the-pretty-theme-where-the-terminal-can-be-detected)
+3. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading — [See details](dev/CHANGELOG-DETAILS.md#3-utils-cli-theme-rendering-lay-out-a-markdown-document-for-reading)
+4. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line — [See details](dev/CHANGELOG-DETAILS.md#4-utils-cli-theme-table-a-full-width-listing-table-for-the-command-line)
+5. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected — [See details](dev/CHANGELOG-DETAILS.md#5-utils-cli-theme-theme-choose-the-pretty-theme-where-the-terminal-can-be-detected)
 
 ## Refactor
 

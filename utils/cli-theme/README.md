@@ -54,6 +54,18 @@ still answerable with `--theme-choice pretty`, and one on the list whose font ha
 glyphs after all with `--theme-choice simple`; the same is how
 `set_theme_choice(ThemeChoice::Simple)` puts it back.
 
+## Documents
+
+A Markdown document is drawn by `TextRendering::render_document`, which lays it out for reading
+rather than drawing one line as written. A heading is set in two columns from the left, its `#`
+marker kept but not bold, and its title bold on the terminal's reverse-video ground, with a blank
+line above and below. Prose is set in four columns and wrapped at eighty-six columns of content,
+so a line is at most ninety columns wide. A quotation keeps its `|` gutter on every wrapped line.
+A table is set in with the prose and held to eighty-six columns, so with the four-column indent it
+lines up with the text; a cell too wide for its column folds inside it instead of making the table
+run off the page. `trd!` and `TextRendering::render` still draw a line where it was written, which
+is what a message or a status line wants.
+
 ## Styles
 
 A message is written the way it should read and drawn once, by the `trd!` macro — or,
