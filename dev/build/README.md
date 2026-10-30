@@ -33,7 +33,7 @@ for the same reason.
 - `src/linux.rs` — what Linux is handed: the three split packages, the `rorolala-full` meta
   package, the all-in-one `rorolala` package, and the AppImage.
 - `src/fs.rs` — copying and removing, naming the file in a failure.
-- `src/ops/` — one module per command: `lib`, `bin`, `build`, `icons`, `chunker`, `cargo-clean`,
-  `desktop`, `export`, `publish`, `clean`.
+- `src/ops/` — one module per command: `lib`, `bin`, `build`, `book` (under both `book` and
+  `refresh-book`), `icons`, `chunker`, `cargo-clean`, `desktop`, `export`, `publish`, `clean`.
 - `../packaging/linux/` — the `.desktop` files, the user unit, the AppImage's `AppRun`, and the
   scripts a package runs; the templates say `@COMMENT@` where the workspace's description goes.

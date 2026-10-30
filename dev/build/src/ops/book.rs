@@ -4,6 +4,10 @@
 //! written to, and it reads `BUILD_DIR` for the second so that the file lands in the export this
 //! run laid out. What this step does is run it, which is also what an export does — a person who
 //! runs `cargo dev book` and a package that carries the result are made by the same command.
+//!
+//! `refresh-book` is the same step under the name a person is more likely to reach for when what
+//! they want is the book under `build/docs` brought up to date: both write the same file the same
+//! way, and neither touches anything else in the export.
 
 use mingling::{
     Grouped,
@@ -19,6 +23,16 @@ use crate::toolchain::Tool;
 /// Writes the built-in book's search file.
 #[command(node = "book")]
 pub fn book() -> StateBook {
+    StateBook
+}
+
+/// Writes the built-in book's search file again, into the export under `build/`.
+///
+/// The name says what the step is for: bringing the file the programs read up to date after an
+/// article changed. It is `book` under a second name rather than a second implementation, so the
+/// two cannot disagree about where the file goes or what is in it.
+#[command(node = "refresh-book")]
+pub fn refresh_book() -> StateBook {
     StateBook
 }
 
