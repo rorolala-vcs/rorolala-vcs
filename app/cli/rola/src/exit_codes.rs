@@ -368,3 +368,15 @@ pub const EC_ERR_RETRACK_DIRTY: i32 = 253;
 
 /// `exit_codes.offline`
 pub const EC_ERR_OFFLINE: i32 = 252;
+
+// Docs — the built-in book, read or searched
+
+// The subject after offline would have had a block of its own, but the byte an exit status is has
+// two numbers left and no more: 254 is the book or the article, and 255 the words a run wrote that
+// cannot be used together.
+
+/// `exit_codes.docs`
+pub const EC_ERR_DOCS: i32 = 254;
+
+/// `exit_codes.docs_argument`
+pub const EC_ERR_DOCS_ARGUMENT: i32 = 255;

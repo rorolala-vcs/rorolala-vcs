@@ -19,7 +19,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use rorolala_book_search::{SourceArticle, encode};
 use rorolala_utils_sandbox::{Guard, Ran, command, run};
+use serde_json::Value as JsonValue;
 
 /// The language every run is made in, so what is read back is a known text.
 const EN: &str = "en";
@@ -55,9 +57,14 @@ fn main() {
         rola_home,
     };
 
+    // The built-in book `rola docs` reads, laid where an install lays it: under the sandbox root,
+    // which every run's directory is below.
+    book(sandbox.dir());
+
     let mut checked = Checked::default();
 
     identity(&rola, &empty, &mut checked);
+    docs(&rola, &empty, &mut checked);
     creation(&rola, &empty, &initme, &ws, &vault, &mut checked);
     placement(&rola, &empty, &vault, &ws, &mut checked);
     binding(&rola, &empty, &bindme, &mut checked);
@@ -128,6 +135,137 @@ fn identity(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.exits("a word that names no command is refused", &ran, 12);
     checked.stderr_has("the refusal names what was typed", &ran, "bogus");
     checked.stdout_empty("the refusal is not a result", &ran);
+}
+
+/// The book `rola docs` reads, written into the sandbox's own `docs/`.
+///
+/// The sandbox root is above every directory a run here is made in, so the program finds the book
+/// by walking up from where it was run, the same way an installed program finds the one beside it.
+fn book(sandbox: &Path) {
+    let docs = sandbox.join("docs");
+    fs::create_dir_all(&docs).expect("the book's directory");
+
+    let articles = vec![
+        SourceArticle {
+            name: "install".to_owned(),
+            title: "Installing Rorolala".to_owned(),
+            description: "How to put the program on a machine".to_owned(),
+            keywords: vec!["install".to_owned(), "setup".to_owned()],
+            markdown: "# Installing\n\nInstall it from the release page, then bind a vault."
+                .to_owned(),
+            plain: "Installing Install it from the release page, then bind a vault.".to_owned(),
+        },
+        SourceArticle {
+            name: "workspace".to_owned(),
+            title: "The Workspace".to_owned(),
+            description: "What a workspace is".to_owned(),
+            keywords: Vec::new(),
+            markdown: "# The Workspace\n\nA workspace is the local copy of the layout you work in."
+                .to_owned(),
+            plain: "The Workspace A workspace is the local copy of the layout you work in."
+                .to_owned(),
+        },
+    ];
+
+    fs::write(
+        docs.join("builtin.book"),
+        encode(&articles).expect("the fixture book encodes"),
+    )
+    .expect("the fixture book is written");
+}
+
+/// The built-in book: an article read, a query searched, and both as JSON.
+fn docs(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["docs", "install"]);
+    checked.exits("`docs` reads the article named", &ran, 0);
+    checked.stdout_has("the article is printed", &ran, "Install it from the release page");
+    checked.stdout_has("the article's heading is drawn", &ran, "Installing");
+
+    let ran = rola.run(dir, &["--json", "docs", "install"]);
+    checked.exits("`--json docs` reads the article named", &ran, 0);
+    checked.wants(
+        "the article's JSON is its title, description, keywords and content",
+        json(&ran).as_ref().is_some_and(|value| {
+            value.get("title").and_then(JsonValue::as_str) == Some("Installing Rorolala")
+                && value.get("description").and_then(JsonValue::as_str).is_some()
+                && value.get("keywords").and_then(JsonValue::as_array).is_some()
+                && value.get("content").and_then(JsonValue::as_str).is_some()
+                && value.get("name").is_none()
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["docs", "--search", "install"]);
+    checked.exits("`docs --search` searches", &ran, 0);
+    checked.stdout_has("the search's table names its columns", &ran, "Article Name");
+    checked.stdout_has("the table names the article", &ran, "install");
+    checked.stdout_has(
+        "the table holds the fragment that matched",
+        &ran,
+        "Install it from the release page",
+    );
+
+    let ran = rola.run(dir, &["--json", "docs", "--search", "install"]);
+    checked.exits("`--json docs --search` searches", &ran, 0);
+    checked.wants(
+        "the search's JSON is an entry list with marked fragments",
+        json(&ran).as_ref().is_some_and(|value| {
+            value
+                .get("entries")
+                .and_then(JsonValue::as_array)
+                .is_some_and(|entries| {
+                    entries.iter().any(|entry| {
+                        entry.get("name").and_then(JsonValue::as_str) == Some("install")
+                            && entry
+                                .get("snippets")
+                                .and_then(JsonValue::as_array)
+                                .is_some_and(|snippets| {
+                                    snippets.iter().any(|snippet| {
+                                        snippet
+                                            .get("ranges")
+                                            .and_then(JsonValue::as_array)
+                                            .is_some_and(|ranges| !ranges.is_empty())
+                                    })
+                                })
+                    })
+                })
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(
+        dir,
+        &["--json", "docs", "--search", "install", "--limit", "1"],
+    );
+    checked.exits("`--limit` caps the answers", &ran, 0);
+    checked.wants(
+        "the answers are the ones the limit asked for",
+        json(&ran).as_ref().is_some_and(|value| {
+            value
+                .get("entries")
+                .and_then(JsonValue::as_array)
+                .is_some_and(|entries| entries.len() == 1)
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["docs", "--search"]);
+    checked.exits("`--search` with no text is refused", &ran, 255);
+    checked.stderr_has("the refusal says a query is needed", &ran, "search");
+
+    let ran = rola.run(dir, &["docs", "--limit", "2", "install"]);
+    checked.exits("`--limit` without `--search` is refused", &ran, 255);
+
+    let ran = rola.run(dir, &["docs", "nowhere"]);
+    checked.exits("a name that matches no article is refused", &ran, 254);
+    checked.stderr_has("the refusal names the article", &ran, "nowhere");
+
+    let ran = rola.run(dir, &["docs"]);
+    checked.exits("`docs` with no text shows the help", &ran, 2);
+    checked.stderr_has("the help states the usage", &ran, "rola docs");
+
+    let ran = rola.run(dir, &["--no-pager", "docs", "install"]);
+    checked.exits("`--no-pager` is honoured", &ran, 0);
 }
 
 /// Making a place to work: a Workspace, a Vault, and the refusals of both.

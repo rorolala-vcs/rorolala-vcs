@@ -5,5 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+# The book `docs` reads is written here rather than committed as bytes, so what a run searches is
+# what the book crate writes.
+rorolala-book-search = { path = "../../modules/book-search" }
 rorolala-utils-sandbox = { path = "../../utils/sandbox" }
 serde_json = "1.0.151"

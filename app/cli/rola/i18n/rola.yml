@@ -41,6 +41,7 @@ rola:
             pack                         Organize the objects in the store and the index into packs
 
         **Help**
+            docs <TEXT> [--search]       Read or search an article
             explain                      Explain what a number or a name the program left behind means
 
         **Low-level**
@@ -64,37 +65,38 @@ rola:
             [-V | --version] [-h | --help]
 
         **初始化**
-            init                     在当前目录创建工作区或保险库
-            create <路径>            在指定路径创建工作区，加 `--vault` 则创建保险库
+            init                      在当前目录创建工作区或保险库
+            create <路径>             在指定路径创建工作区，加 `--vault` 则创建保险库
 
         **身份**
-            account <账户名>         查询或切换本机的可用账户
-            key [--pem]              列出 Rorolala 可用的密钥，或生成一对
+            account <账户名>          查询或切换本机的可用账户
+            key [--pem]               列出 Rorolala 可用的密钥，或生成一对
 
         **日常使用**
-            status                   展示工作区文件结构与记录之间的差异
-            bind <链接> [名字]       将保险库地址绑定为名字，并在其上建立布局
-            align <路径>             让工作区下的文件结构与记录的保持一致
-            fetch [保险库名]         将保险库的布局取回为只读副本
-            checkin <上游> [路径]    将上游布局的条目加入到本地布局中
-            track <文件>             将文件记入当前布局
-            retrack <文件>           回退文件已记录的版本
-            sync                     让当前布局与它追踪的保险库重新一致
-            pack                     将仓库与索引中的对象整理进 pack
+            status                    展示工作区文件结构与记录之间的差异
+            bind <链接> [名字]        将保险库地址绑定为名字，并在其上建立布局
+            align <路径>              让工作区下的文件结构与记录的保持一致
+            fetch [保险库名]          将保险库的布局取回为只读副本
+            checkin <上游> [路径]     将上游布局的条目加入到本地布局中
+            track <文件>              将文件记入当前布局
+            retrack <文件>            回退文件已记录的版本
+            sync                      让当前布局与它追踪的保险库重新一致
+            pack                      将仓库与索引中的对象整理进 pack
 
         **帮助**
-            explain                  解释程序留下的数字或名字的含义
+            docs <文本> [--search]    阅读或搜索一篇文章
+            explain                   解释程序留下的数字或名字的含义
 
         **底层操作**
-            storage                  读写仓库持有的内容
-            vcs-index                读写版本控制索引
-            inv-idx                  建立并查询反向索引
-            layout                   操作本次运行所持有的布局
+            storage                   读写仓库持有的内容
+            vcs-index                 读写版本控制索引
+            inv-idx                   建立并查询反向索引
+            layout                    操作本次运行所持有的布局
 
         **其他**
-            vault                    查询和操作当前工作区已知的保险库
-            desktop                  打开 `rola` 的桌面端程序
-            fs-ops                   移动、复制或删除一个路径
+            vault                     查询和操作当前工作区已知的保险库
+            desktop                   打开 `rola` 的桌面端程序
+            fs-ops                    移动、复制或删除一个路径
   err_unknown_command:
     en: Unknown command `%{command}`
     zh-CN: 未知命令 `%{command}`

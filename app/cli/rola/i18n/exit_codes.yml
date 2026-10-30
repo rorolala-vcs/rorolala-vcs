@@ -380,3 +380,11 @@ exit_codes:
   offline:
     en: The run was asked to reach no Vault, and what it asked for needs one
     zh-CN: 本次运行被要求不连接保险库，而它请求的操作需要保险库
+
+  docs:
+    en: A document could not be read, or there is no document under the name given
+    zh-CN: 无法读取文章，或没有所命名的文章
+
+  docs_argument:
+    en: "`rola docs` was given arguments it cannot use"
+    zh-CN: "`rola docs` 收到了无法使用的参数"

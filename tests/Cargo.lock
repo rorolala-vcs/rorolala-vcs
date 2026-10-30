@@ -1043,6 +1043,7 @@ dependencies = [
 name = "it-cli"
 version = "0.1.0"
 dependencies = [
+ "rorolala-book-search",
  "rorolala-utils-sandbox",
  "serde_json",
 ]

@@ -6,7 +6,27 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Feature
 
-### 1. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
+### 1. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line
+
+`rola docs <TEXT>` reads one article of the built-in book by its exact name and prints it as it
+was written, through the program's own Markdown rendering. `rola docs --search <TEXT>` searches
+the book instead: an article is found when every term of the query is in it, and the answer is a
+table of the article's name and the fragments that matched, the matched words drawn in red and
+bold, the header bold and underlined, the columns separated by `|` and divided 3:7 between the
+name and the fragment.
+
+`--limit <N>` caps how many search answers are shown, twelve by default and only meaningful with
+`--search`. A `--json` run is answered with the same result as fields: an article is its `title`,
+`description`, `keywords` and `content`, and a search is its `entries`, each with the article's
+name, title, description, score and fragments, and each fragment with its field, its text and the
+ranges that matched. The global `--no-pager` is honoured like it is everywhere else, and a run
+that names neither an article nor a query is shown the command's help.
+
+The book is found beside the program an export or an install puts it beside, or — for a run made
+from a checkout — above the directory it was run in, under `build/`; a checkout that has not run
+`cargo dev book` is told the book is missing rather than answered with nothing.
+
+### 2. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
 
 A book written as Markdown with a YAML front matter block is now compiled into one searchable
 file, and opened by a crate that answers a query with the articles it found, their descriptions,

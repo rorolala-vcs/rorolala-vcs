@@ -164,7 +164,9 @@ fn article(book: &Path, relative: &Path) -> Result<SourceArticle, Error> {
         .description
         .map_or_else(String::new, |description| description.trim().to_owned());
     let keywords = front.keywords.map_or_else(Vec::new, Keywords::into_list);
-    let markdown = body.to_owned();
+    // The body is taken without the blank lines that only separate it from the front matter, so
+    // that the content a JSON reader is handed starts where the article does.
+    let markdown = body.trim_matches('\n').to_owned();
     let plain = markdown::plain(body);
     let title = front
         .title
