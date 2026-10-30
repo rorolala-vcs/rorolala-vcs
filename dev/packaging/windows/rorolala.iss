@@ -198,6 +198,11 @@ Source: "{#SourceDir}\lib\*"; DestDir: "{app}\lib"; Components: lib; Flags: igno
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
+; The built-in book's search file: the articles and the index over them, laid beside the programs
+; because both the command line program and the Desktop program walk up to it from where they are.
+; It carries no component because there is no program that does not read it.
+Source: "{#SourceDir}\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 ; The daemon and Jujutsu are programs of their own rather than parts of the command line: what a reader
 ; installs is what they use. The daemon's window is laid down beside the daemon it starts, since that is
 ; where it looks for it — the two are one component because a window without the daemon it starts is a

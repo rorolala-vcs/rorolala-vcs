@@ -2,6 +2,43 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.1.3 (Unreleased)
+
+## Feature
+
+### 1. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
+
+A book written as Markdown with a YAML front matter block is now compiled into one searchable
+file, and opened by a crate that answers a query with the articles it found, their descriptions,
+and the fragments the query matched in them.
+
+**The file.** `cargo dev book` (the `rorolala-dev-book-index` tool) walks `book/**/*.md` and writes
+`build/docs/builtin.book`, one file holding the articles and the index over them. An article's name
+is its path under `book/` with the extension taken off; its title, description and keywords come
+from the front matter, and the title falls back to the first heading, then to the file name. Both
+the article as written and its plain text are kept: the index is built from the plain text, and the
+Markdown is there for a reader that draws it. The header carries a BLAKE3 digest of the body, so a
+file cut short or written by a format this build does not know is refused rather than searched.
+`cargo dev export` and `cargo dev desktop` write the file themselves, and the Windows installer,
+the Linux packages, the AppImage and the Unix archive all carry it beside the programs, under
+`docs/`, where `BookSearch::locate` walks up to it from `bin/rola` and from `bin/desktop/…` alike.
+
+**The search.** Text separated by spaces is cut into lowercased words; Chinese-style text — Han,
+kana, hangul — is cut into every character and every adjacent pair, so a one-character query finds
+its line and a longer query asks for its phrase. An article is a hit only when every term of the
+query is in it, in any of its five fields — name, title, description, keywords, content — and the
+hits are ranked by BM25 with a title match worth more than a body match and the name breaking a
+tie, so the same query over the same book answers in the same order. Each hit is at most three
+fragments, cut from the field that matched with `…` where they were cut, and each fragment's ranges
+count characters rather than bytes and are already merged where two ranges overlapped.
+
+**The surfaces.** The crate is re-exported as `librorolala::book_search`. The C ABI exposes a book
+handle opened from a path or located beside the programs, a search that answers with a hit list,
+and accessors for a hit's name, title, description, score and fragments; every handle and every
+string is released with its `free_*`, and `tests/ffi-c/ffi-book` checks the nesting as a C11
+program. `modules/rola-sharp` gains `RolaBookSearch`, whose `BookSnippet` splits its text into
+ordinary and matched runs, so a renderer draws the highlight without converting the ranges itself.
+
 # 0.1.2 (2026-10-29)
 
 ## Optimized

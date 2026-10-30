@@ -1,0 +1,14 @@
+[package]
+name = "rorolala-book-search"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# What the monolithic file is signed by: a book that does not hash to the digest it carries is a
+# book this build does not trust, so the bytes are never read past the header.
+blake3.workspace = true
+rorolala-errors.workspace = true
+rorolala-utils-lazyffi.workspace = true
+# The one normalization the tokenizer applies. It is used on a token rather than on a position, so
+# a character that expands under it still names the characters it was taken from.
+unicode-normalization.workspace = true

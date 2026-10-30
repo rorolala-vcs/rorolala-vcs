@@ -1,0 +1,14 @@
+[package]
+name = "rorolala-dev-book-index"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The format, the tokenizer and the search the written file is read back with: the build tool does
+# not describe the file a second time, it hands the articles to the crate that does.
+rorolala-book-search.workspace = true
+
+# The front matter of an article is YAML, which is parsed rather than read by hand so that a value
+# that moves within the block is still found.
+serde.workspace = true
+serde_yaml.workspace = true

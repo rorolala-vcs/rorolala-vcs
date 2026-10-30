@@ -16,9 +16,10 @@
 
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use rorolala_book_search::{SourceArticle, encode};
 use rorolala_utils_sandbox::bin_dir;
 
 /// The file a module holds its own C11 program in.
@@ -62,19 +63,66 @@ fn main() {
     let _ = fs::remove_dir_all(&scratch);
     fs::create_dir_all(&scratch).expect("a scratch directory");
 
+    // The book the `ffi-book` program searches. It is made here rather than committed, so what a
+    // caller searches is what the crate writes, and a format change cannot leave a fixture behind
+    // that no longer means what it said.
+    let fixture = fixture(&scratch);
+
     for module in modules(suite) {
         let source = suite.join(&module).join(MODULE_SOURCE);
         let executable = scratch.join(&module);
 
         checked.wants(
             &format!("the `{module}` C11 program compiles and answers"),
-            answers(&header, suite, &bin, &source, &executable),
+            answers(&header, suite, &bin, &source, &executable, &fixture),
             "",
         );
     }
 
     let _ = fs::remove_dir_all(&scratch);
     checked.report();
+}
+
+/// The book a C program searches, and the directory the walk it is located by starts in.
+struct Fixture {
+    /// The book file itself, which is opened directly.
+    book: PathBuf,
+    /// A directory beside the book's, as a program's own directory would be.
+    beside: PathBuf,
+}
+
+/// Writes the fixture book and the directory it is located from.
+fn fixture(scratch: &Path) -> Fixture {
+    let docs = scratch.join("docs");
+    fs::create_dir_all(&docs).expect("the book's directory");
+
+    let articles = vec![
+        SourceArticle {
+            name: "needle".to_owned(),
+            title: "The Needle Article".to_owned(),
+            description: "A haystack with a needle in it".to_owned(),
+            keywords: vec!["needle".to_owned()],
+            markdown: "A haystack with a needle buried somewhere in the straw".to_owned(),
+            plain: "A haystack with a needle buried somewhere in the straw".to_owned(),
+        },
+        SourceArticle {
+            name: "haystack".to_owned(),
+            title: "A Haystack".to_owned(),
+            description: "Some straw".to_owned(),
+            keywords: Vec::new(),
+            markdown: "A haystack with no metal in it at all".to_owned(),
+            plain: "A haystack with no metal in it at all".to_owned(),
+        },
+    ];
+
+    let book = docs.join("builtin.book");
+    let bytes = encode(&articles).expect("the fixture book encodes");
+    fs::write(&book, bytes).expect("the fixture book is written");
+
+    let beside = scratch.join("bin");
+    fs::create_dir_all(&beside).expect("a directory beside the book's");
+
+    Fixture { book, beside }
 }
 
 /// The modules of this suite, in name order.
@@ -128,13 +176,27 @@ fn builds(root: &Path, checked: &mut Checked) -> bool {
     }
 }
 
+/// The environment variable a module is handed the fixture book's path in.
+const BOOK_VARIABLE: &str = "ROLA_BOOK";
+
+/// The environment variable a module is handed the directory to locate the book from in.
+const LOCATE_VARIABLE: &str = "ROLA_BOOK_LOCATE";
+
 /// Compiles one module against the header and runs it, answering whether it was happy.
 ///
 /// The standard is C11 and every warning is an error, which is what makes the header's own
 /// declarations part of what is checked: a prototype that will not compile as C fails before
 /// anything runs. The module's own `test.c` says on stderr what it found wanting, and that is what
-/// is shown when it is not happy.
-fn answers(header: &Path, suite: &Path, bin: &Path, source: &Path, executable: &Path) -> bool {
+/// is shown when it is not happy. The fixture book is named to the program in the environment
+/// rather than compiled into it, so the same source works from a checkout in any directory.
+fn answers(
+    header: &Path,
+    suite: &Path,
+    bin: &Path,
+    source: &Path,
+    executable: &Path,
+    fixture: &Fixture,
+) -> bool {
     let bindings = header.parent().expect("the header has a directory");
 
     let compiled = Command::new(cc())
@@ -168,6 +230,8 @@ fn answers(header: &Path, suite: &Path, bin: &Path, source: &Path, executable: &
     }
 
     let ran = Command::new(executable)
+        .env(BOOK_VARIABLE, &fixture.book)
+        .env(LOCATE_VARIABLE, &fixture.beside)
         .output()
         .unwrap_or_else(|error| panic!("running {}: {error}", executable.display()));
 

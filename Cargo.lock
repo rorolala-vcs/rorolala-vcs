@@ -2298,6 +2298,7 @@ version = "0.1.3"
 dependencies = [
  "rola-desktop-pty",
  "rorolala-auth",
+ "rorolala-book-search",
  "rorolala-daemon",
  "rorolala-dev-bindgen",
  "rorolala-errors",
@@ -3675,6 +3676,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-book-search"
+version = "0.1.3"
+dependencies = [
+ "blake3",
+ "rorolala-errors",
+ "rorolala-utils-lazyffi",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "rorolala-chunking"
 version = "0.1.3"
 dependencies = [
@@ -3737,6 +3748,15 @@ dependencies = [
  "rorolala-utils-lazyffi",
  "rorolala-utils-lazyffi-core",
  "syn 3.0.5",
+]
+
+[[package]]
+name = "rorolala-dev-book-index"
+version = "0.1.3"
+dependencies = [
+ "rorolala-book-search",
+ "serde",
+ "serde_yaml",
 ]
 
 [[package]]

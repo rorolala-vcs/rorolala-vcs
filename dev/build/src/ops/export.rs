@@ -32,6 +32,7 @@ use mingling::{
 use crate::Next;
 use crate::dotnet;
 use crate::fs;
+use crate::ops::book::build_book;
 use crate::paths::{COMPLETION_SHELLS, PROGRAMS, PROGRAMS_WITHOUT_COMPLETIONS, Workspace};
 use crate::platform::Platform;
 use crate::run_step;
@@ -72,6 +73,10 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
     let programs = build.join("bin");
     fs::create_directory(&library)?;
     fs::create_directory(&programs)?;
+
+    // The book is written into the directory the export was just cleared for, so a run that fails
+    // before this point cannot leave a stale book in a layout that packages it.
+    build_book(&workspace)?;
 
     let release = workspace.release_dir()?;
 

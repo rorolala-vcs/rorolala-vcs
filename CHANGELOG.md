@@ -2,6 +2,12 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.1.3 (Unreleased)
+
+## Feature
+
+1. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments — [See details](dev/CHANGELOG-DETAILS.md#1-modules-book-search-search-the-built-in-book-by-word-with-the-matched-fragments)
+
 # 0.1.2 (2026-10-29)
 
 ## Optimized

@@ -1065,6 +1065,7 @@ dependencies = [
 name = "it-ffi-c"
 version = "0.1.0"
 dependencies = [
+ "rorolala-book-search",
  "rorolala-utils-sandbox",
 ]
 
@@ -1309,6 +1310,7 @@ version = "0.1.3"
 dependencies = [
  "rola-desktop-pty",
  "rorolala-auth",
+ "rorolala-book-search",
  "rorolala-daemon",
  "rorolala-dev-bindgen",
  "rorolala-errors",
@@ -1839,6 +1841,16 @@ dependencies = [
  "sha2",
  "tokio",
  "x25519-dalek",
+]
+
+[[package]]
+name = "rorolala-book-search"
+version = "0.1.3"
+dependencies = [
+ "blake3",
+ "rorolala-errors",
+ "rorolala-utils-lazyffi",
+ "unicode-normalization",
 ]
 
 [[package]]

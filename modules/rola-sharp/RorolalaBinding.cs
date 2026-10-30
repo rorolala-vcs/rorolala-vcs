@@ -92,6 +92,110 @@ internal struct RolaAuthError
     public RolaAuthErrorPayload payload;
 }
 
+internal enum RolaBookErrorTag : int
+{
+    /// <summary>
+    /// The file could not be read, or the built book could not be written.
+    /// </summary>
+    RolaBookError_Io = 0,
+    /// <summary>
+    /// What is there does not read as a book this build knows.
+    /// </summary>
+    RolaBookError_Malformed = 1,
+    /// <summary>
+    /// The format version is one this build does not read.
+    /// </summary>
+    RolaBookError_Unsupported = 2,
+    /// <summary>
+    /// Two articles were given the same name, so neither could be found by it.
+    /// </summary>
+    RolaBookError_Duplicate = 3,
+    /// <summary>
+    /// A book with no articles was asked to be written.
+    /// </summary>
+    RolaBookError_Empty = 4,
+    /// <summary>
+    /// The book is larger than the format's counts and offsets can name.
+    /// </summary>
+    RolaBookError_Oversized = 5,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaBookErrorMalformed
+{
+    /// <summary>
+    /// What about it could not be read, in one sentence.
+    /// </summary>
+    public nint detail;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaBookErrorUnsupported
+{
+    /// <summary>
+    /// The version the file names.
+    /// </summary>
+    public uint version;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaBookErrorDuplicate
+{
+    /// <summary>
+    /// The name that appeared more than once.
+    /// </summary>
+    public nint name;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaBookErrorOversized
+{
+    /// <summary>
+    /// What could not be named.
+    /// </summary>
+    public nint detail;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaBookErrorPayload
+{
+    /// <summary>
+    /// The file could not be read, or the built book could not be written.
+    /// </summary>
+    [FieldOffset(0)]
+    public nint Io;
+    /// <summary>
+    /// What is there does not read as a book this build knows.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaBookErrorMalformed Malformed;
+    /// <summary>
+    /// The format version is one this build does not read.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaBookErrorUnsupported Unsupported;
+    /// <summary>
+    /// Two articles were given the same name, so neither could be found by it.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaBookErrorDuplicate Duplicate;
+    /// <summary>
+    /// The book is larger than the format's counts and offsets can name.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaBookErrorOversized Oversized;
+}
+
+/// <summary>
+/// What a book could not be, or could not be made.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaBookError
+{
+    public RolaBookErrorTag tag;
+    public RolaBookErrorPayload payload;
+}
+
 /// <summary>
 /// What an I/O failure was, in `std`'s spelling.
 /// </summary>
@@ -1406,6 +1510,21 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_key_locate_rule(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_book_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_book_results(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_book_hit(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_book_snippet(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_book_search(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_daemon_exit(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1590,6 +1709,30 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint locate_rola_status(nint directory);
+
+    /// <summary>
+    /// Opens the book at `path`.
+    ///
+    /// Answers with a `RolaBookSearch` the caller releases with `free_rola_book_search`, or with a
+    /// `RolaBookError` released with `free_rola_book_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaBookSearch *`, owned; release it with `free_rola_book_search`
+    /// - `Err`: `RolaBookError *`, owned; release it with `free_rola_book_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult open_rola_book_search(nint path);
+
+    /// <summary>
+    /// The book laid beside the programs under `start`, if there is one.
+    ///
+    /// Answers with a `RolaBookSearch` the caller releases with `free_rola_book_search`, or with null
+    /// when there is no book to open.
+    ///
+    /// Returns an owned `RolaBookSearch *`, or `NULL` when there is nothing; release it with `free_rola_book_search`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint locate_rola_book_search(nint start);
 
     /// <summary>
     /// Runs the [`ActionHandshake`](crate::ActionHandshake) action, blocking until it has.
@@ -1941,6 +2084,124 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void rola_key_locate_rule_key_locate_rule_set_find_env(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
+
+    /// <summary>
+    /// The articles `query` finds, best first, at most `limit` of them.
+    ///
+    /// Answers with a `RolaBookResults` the caller releases with `free_rola_book_results`. Nothing
+    /// matched is an empty list rather than a failure.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint search_rola_book(nint self, nint query, nuint limit);
+
+    /// <summary>
+    /// How many articles the book holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint count_rola_book_articles(nint self);
+
+    /// <summary>
+    /// How many articles the search found.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_book_results_count(nint self);
+
+    /// <summary>
+    /// The hit at `index`, if the search found that many.
+    ///
+    /// Answers with a `RolaBookHit` the caller releases with `free_rola_book_hit`, or with null
+    /// past the end.
+    ///
+    /// Returns an owned `RolaBookHit *`, or `NULL` when there is nothing; release it with `free_rola_book_hit`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_book_results_hit(nint self, nuint index);
+
+    /// <summary>
+    /// The article's name, which finds it again through the book.
+    ///
+    /// Answers with a string the caller releases with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_book_hit_name(nint self);
+
+    /// <summary>
+    /// The article's title.
+    ///
+    /// Answers with a string the caller releases with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_book_hit_title(nint self);
+
+    /// <summary>
+    /// The article's description.
+    ///
+    /// Answers with a string the caller releases with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_book_hit_description(nint self);
+
+    /// <summary>
+    /// How well the query matched the article, relative to the other hits of the same search.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern double rola_book_hit_score(nint self);
+
+    /// <summary>
+    /// How many fragments the query matched in the article.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_book_hit_snippet_count(nint self);
+
+    /// <summary>
+    /// The fragment at `index`, if the query matched that many.
+    ///
+    /// Answers with a `RolaBookSnippet` the caller releases with `free_rola_book_snippet`, or with
+    /// null past the end.
+    ///
+    /// Returns an owned `RolaBookSnippet *`, or `NULL` when there is nothing; release it with `free_rola_book_snippet`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_book_hit_snippet(nint self, nuint index);
+
+    /// <summary>
+    /// The field the fragment was cut from: `content`, `description`, `keywords`, `title` or
+    ///
+    /// Answers with a string the caller releases with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_book_snippet_field(nint self);
+
+    /// <summary>
+    /// The fragment's text, with `…` where it was cut.
+    ///
+    /// Answers with a string the caller releases with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_book_snippet_text(nint self);
+
+    /// <summary>
+    /// How many matched ranges the fragment carries.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_book_snippet_range_count(nint self);
+
+    /// <summary>
+    /// Where the range at `index` starts, counted in characters of the fragment.
+    ///
+    /// Answers zero past the end; a caller that asks a range at all asks within
+    /// [`Self::range_count`].
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_book_snippet_range_start(nint self, nuint index);
+
+    /// <summary>
+    /// How many characters the range at `index` covers.
+    ///
+    /// Answers zero past the end, as [`Self::range_start`] does.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_book_snippet_range_length(nint self, nuint index);
 
     /// <summary>
     /// The kind of failure this was.

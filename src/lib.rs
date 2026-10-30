@@ -24,6 +24,9 @@ pub use status::*;
 /// Authentication
 pub use rorolala_auth as auth;
 
+/// Searching the built-in book: the articles, their descriptions and the fragments a query matched
+pub use rorolala_book_search as book_search;
+
 /// Background daemon
 pub use rorolala_daemon as daemon;
 

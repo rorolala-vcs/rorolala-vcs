@@ -5,4 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+# The suite writes one small book of its own for the C program to search: the file is data the
+# checks are made against, and it is made by the crate that reads it rather than committed as bytes.
+rorolala-book-search = { path = "../../modules/book-search" }
 rorolala-utils-sandbox = { path = "../../utils/sandbox" }

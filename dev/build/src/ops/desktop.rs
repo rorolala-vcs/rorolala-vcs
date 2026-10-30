@@ -12,6 +12,7 @@ use mingling::{
 };
 
 use crate::dotnet;
+use crate::ops::book::build_book;
 use crate::paths::Workspace;
 use crate::run_step;
 use crate::{Next, ops::library::build_library};
@@ -41,6 +42,10 @@ pub fn lay_out_desktop() -> Result<(), crate::Error> {
     dotnet::publish_desktop(&workspace, &directory, false)?;
     dotnet::publish_launcher(&workspace, &directory, false)?;
     dotnet::publish_plugins(&workspace, &directory)?;
+
+    // The Desktop program searches the book laid beside the programs, so a layout a person runs
+    // by hand carries it too; without it the program opens with nothing to search.
+    build_book(&workspace)?;
 
     Ok(())
 }

@@ -319,10 +319,12 @@ fn vcs_package(
     )?;
     copy_icons(workspace, &root)?;
     copy_completions(build, &root)?;
+    copy_book(build, &root)?;
     copy_docs(workspace, &root, VCS)?;
 
     let mut contents = Vec::new();
     tree(&root, "usr/lib/rorolala/bin", &mut contents);
+    tree(&root, "usr/lib/rorolala/docs", &mut contents);
     tree(&root, "usr/lib/systemd/user", &mut contents);
     tree(&root, "usr/share/applications", &mut contents);
     tree(&root, "usr/share/icons", &mut contents);
@@ -777,6 +779,19 @@ fn copy_docs(workspace: &Workspace, root: &Path, package: &str) -> Result<(), Er
     Ok(())
 }
 
+/// Lays the built-in book where the programs look for it.
+///
+/// It is under the root both the command line program (`bin/rola`) and the Desktop program
+/// (`bin/desktop/…`) sit, one directory beside `bin/`, which is the walk `BookSearch::locate`
+/// makes. The package that carries the programs carries it, and the Desktop package depends on
+/// that one rather than carrying a second copy of the same file.
+fn copy_book(build: &Path, root: &Path) -> Result<(), Error> {
+    fs::copy_file(
+        &build.join("docs/builtin.book"),
+        &root.join("usr/lib/rorolala/docs/builtin.book"),
+    )
+}
+
 fn write_configuration(
     path: &Path,
     package: &PackageSpec,
@@ -870,6 +885,11 @@ fn appimage_package(
 
     fs::copy_file(&build.join("bin/rola"), &appdir.join("usr/bin/rola"))?;
     fs::copy_directory(&build.join("bin/desktop"), &appdir.join("usr/bin/desktop"))?;
+    // The AppImage carries both programs, so it carries the book both of them walk up to.
+    fs::copy_file(
+        &build.join("docs/builtin.book"),
+        &appdir.join("usr/docs/builtin.book"),
+    )?;
 
     write_file(&appdir.join("AppRun"), APP_RUN, 0o755)?;
     write_desktop(
