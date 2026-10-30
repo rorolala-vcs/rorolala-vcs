@@ -125,10 +125,11 @@ set_theme_choice(ThemeChoice::Simple);
 assert_eq!(err_line("Error", "Fail to load vault!"), "Error: Fail to load vault!");
 ```
 
-The same call on a theme that carries the glyphs puts the mark and the name on a
-background instead. The name is always the caller's and everything drawn around it is
-fixed; the content is drawn in italics, and is written in the color language like
-anything else, so a style or a character it names is drawn too.
+The same call on a theme that carries true color writes the same `Error:` prefix in a
+brighter version of the level's colour, rather than dressing it as a badge. The name is
+always the caller's and everything drawn around it is fixed; the content is drawn in
+italics, and is written in the color language like anything else, so a style or a
+character it names is drawn too.
 
 A line is usually written where it is used, with the message as a [`format!`] string
 and a color-language one at once. The name goes before a `=>` where it is not the usual

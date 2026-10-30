@@ -16,6 +16,10 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 3. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line — [See details](dev/CHANGELOG-DETAILS.md#3-utils-cli-theme-table-a-full-width-listing-table-for-the-command-line)
 4. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected — [See details](dev/CHANGELOG-DETAILS.md#4-utils-cli-theme-theme-choose-the-pretty-theme-where-the-terminal-can-be-detected)
 
+## Refactor
+
+1. [`utils`] [`cli-theme`] [`style`] Keep the Pretty line prefixes the same as the Simple ones — [See details](dev/CHANGELOG-DETAILS.md#1-utils-cli-theme-style-keep-the-pretty-line-prefixes-the-same-as-the-simple-ones)
+
 # 0.1.2 (2026-10-29)
 
 ## Optimized

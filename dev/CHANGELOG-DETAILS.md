@@ -123,6 +123,17 @@ list gets `Simple`, and one whose font turns out to have no glyphs is still answ
 `--theme-choice simple`. A run whose output is not a terminal still gets `Text`, and an explicit
 `--theme-choice` still overrides the detection.
 
+## Refactor
+
+### 1. [`utils`] [`cli-theme`] [`style`] Keep the Pretty line prefixes the same as the Simple ones
+
+`err_line`, `warn_line` and `help_line` now write the same `Error:`, `Warning:` and `Help:`
+prefixes on every terminal theme. The theme that carries true color used to replace the prefix with
+a `NerdFont` mark and a coloured badge, so the same line read as two different shapes depending on
+the terminal; it now keeps the name where a reader already knows it and gives it a brighter version
+of the level's colour instead — red, amber and green, still apart in hue. The message is still
+italic, and an alert, a rule and a table still use the glyphs where the theme has them.
+
 # 0.1.2 (2026-10-29)
 
 ## Optimized

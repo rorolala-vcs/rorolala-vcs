@@ -15,9 +15,10 @@ use crate::{TextRendering, ThemeChoice, theme_choice};
 /// The line an error is reported on.
 ///
 /// `prefix` is what the line is called — `Error`, in Rorolala's own messages — and
-/// everything drawn around it is fixed: the `:` after the name, in the level's colour,
-/// where the glyphs are missing, and the mark, the background and the bold where they
-/// are there.
+/// everything drawn around it is fixed: the `:` after the name, and the colour of both.
+/// A theme that carries true color draws the prefix in a brighter version of that colour,
+/// but writes the same name in the same place: a reader who knows `Error:` from one theme
+/// knows it in the other.
 ///
 /// The content is drawn in italics, and is written in the color language like anything
 /// else, so a style or a character it names is drawn too.
@@ -138,7 +139,7 @@ enum Level {
 }
 
 impl Level {
-    /// The colour the line is written in where the glyphs are missing.
+    /// The colour the line is written in where the theme carries only the sixteen colours.
     const fn colour(self) -> &'static str {
         match self {
             Self::Error => "RED",
@@ -147,20 +148,16 @@ impl Level {
         }
     }
 
-    /// The colour behind the badge, and the colour the badge is written in.
-    const fn badge(self) -> (&'static str, &'static str) {
+    /// The colour the line is written in where the theme carries true color.
+    ///
+    /// The prefix is the same `Name:` it is everywhere; only the colour is the brighter one a
+    /// true-color terminal can show. The three stay apart in hue rather than all becoming white or
+    /// bold, so a line still reads as which of the three it is at a glance.
+    const fn vivid_colour(self) -> &'static str {
         match self {
-            Self::Error => ("~RED", "#ffffff"),
-            Self::Warning => ("~YELLOW", "black"),
-            Self::Help => ("~green", "#ffffff"),
-        }
-    }
-
-    /// The mark the badge is headed with.
-    const fn mark(self) -> char {
-        match self {
-            Self::Error | Self::Warning => '\u{f071}',
-            Self::Help => '\u{f02fc}',
+            Self::Error => "#ff4d4d",
+            Self::Warning => "#ffd93d",
+            Self::Help => "#4dff88",
         }
     }
 
@@ -185,9 +182,9 @@ fn drawn(level: Level, prefix: &str, content: &str) -> String {
 
 /// The color language a line of `level` is written in, for `theme`.
 ///
-/// The two are not one line drawn in two ways: where the glyphs are missing the marking
-/// is made out of letters, and where they are there it is made out of a mark on a
-/// background. So the shape is chosen here, and how it is drawn is left to the engine.
+/// A program reads the level as a word, and a person reads the same `Name:` in either terminal
+/// theme, with the colour the theme can carry. So the shape is chosen here, and how it is drawn is
+/// left to the engine.
 fn source(level: Level, prefix: &str, content: &str, theme: ThemeChoice) -> String {
     // What a program reads: the level as a word, and the message as it was written. Nothing is marked
     // and nothing is trimmed away, because the other end reads the same language — a message trimmed
@@ -198,15 +195,13 @@ fn source(level: Level, prefix: &str, content: &str, theme: ThemeChoice) -> Stri
     }
 
     let content = marked(content);
-
-    if theme == ThemeChoice::Pretty {
-        let (background, foreground) = level.badge();
-        let mark = level.mark();
-        format!("[[{background}]][[{foreground}]]** {mark} {prefix} **[[/]][[/]] {content}")
+    let colour = if theme == ThemeChoice::Pretty {
+        level.vivid_colour()
     } else {
-        let colour = level.colour();
-        format!("[[{colour}]]{prefix}:[[/]] {content}")
-    }
+        level.colour()
+    };
+
+    format!("[[{colour}]]{prefix}:[[/]] {content}")
 }
 
 /// The message, marked so that it reads as what the line says rather than as part of
@@ -300,18 +295,18 @@ mod tests {
     }
 
     #[test]
-    fn a_line_with_the_glyphs_is_a_badge() {
+    fn a_line_with_the_glyphs_is_the_same_prefix_in_a_brighter_colour() {
         assert_eq!(
             source(Level::Error, PREFIX, CONTENT, ThemeChoice::Pretty),
-            "[[~RED]][[#ffffff]]** \u{f071} Error **[[/]][[/]] *Fail to load vault!*"
+            "[[#ff4d4d]]Error:[[/]] *Fail to load vault!*"
         );
         assert_eq!(
             source(Level::Warning, "Warning", CONTENT, ThemeChoice::Pretty),
-            "[[~YELLOW]][[black]]** \u{f071} Warning **[[/]][[/]] *Fail to load vault!*"
+            "[[#ffd93d]]Warning:[[/]] *Fail to load vault!*"
         );
         assert_eq!(
             source(Level::Help, "Help", CONTENT, ThemeChoice::Pretty),
-            "[[~green]][[#ffffff]]** \u{f02fc} Help **[[/]][[/]] *Fail to load vault!*"
+            "[[#4dff88]]Help:[[/]] *Fail to load vault!*"
         );
     }
 
