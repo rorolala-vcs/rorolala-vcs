@@ -31,6 +31,7 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
+use rorolala_cli_setups::ResNoPager;
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{Cell, Column, Run, RunStyle, Table, err_line, help_line, trd};
 use rust_i18n::t;
@@ -49,6 +50,9 @@ const DEFAULT_LIMIT: usize = 12;
 
 /// How many search answers are shown at most.
 const ARG_LIMIT: PickerArg<'static, Option<usize>> = arg![limit: Option<usize>];
+
+/// Print the article as it was written rather than as rendered Markdown.
+const ARG_RAW: PickerArg<'static, Flag> = arg![raw: Flag];
 
 #[help(buffer)]
 pub fn help_docs(_: EntryDocs, ec: &mut ResExitCode) {
@@ -105,14 +109,15 @@ pub fn complete_docs(ctx: ShellContext) -> Suggest {
 /// `--search` is written with no text, and [`ErrorDocsLimitWithoutSearch`] when `--limit` is
 /// written without `--search`.
 #[command(node = "docs", entry = EntryDocs)]
-pub fn docs(args: EntryDocs) -> Next {
+pub fn docs(args: EntryDocs, no_pager: &mut ResNoPager) -> Next {
     let picked = args
         .pick(ARG_SEARCH)
         .pick(ARG_LIMIT)
+        .pick(ARG_RAW)
         .pick(arg![Option<String>])
         .pick(&UNMATCHED)
         .to_result();
-    let (search, limit, text, unmatched) = match picked {
+    let (search, limit, raw, text, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -122,6 +127,14 @@ pub fn docs(args: EntryDocs) -> Next {
     }
 
     let searching = matches!(search, Flag::Active);
+    let raw = matches!(raw, Flag::Active);
+
+    // `--raw` writes the article as it was written, so there is nothing for a pager to add: the
+    // output is the text itself, not a rendering of it. Settling the resource here covers every
+    // answer the run can end with, a refusal or the help included.
+    if raw {
+        **no_pager = true;
+    }
 
     let Some(text) = text else {
         if searching {
@@ -136,10 +149,10 @@ pub fn docs(args: EntryDocs) -> Next {
             return ErrorDocsLimitWithoutSearch.into();
         }
 
-        return StateDocs::article(text).into();
+        return StateDocs::article(text, raw).into();
     }
 
-    StateDocs::search(text, limit.unwrap_or(DEFAULT_LIMIT)).into()
+    StateDocs::search(text, limit.unwrap_or(DEFAULT_LIMIT), raw).into()
 }
 
 /// The state a `docs` run starts in: which of the two readings it is.
@@ -147,6 +160,8 @@ pub fn docs(args: EntryDocs) -> Next {
 pub struct StateDocs {
     /// What was asked for.
     mode: Mode,
+    /// Whether the article is to be written as it was written rather than as rendered Markdown.
+    raw: bool,
 }
 
 /// What `rola docs` was asked to do with its text.
@@ -164,16 +179,18 @@ enum Mode {
 
 impl StateDocs {
     /// A run that names one article.
-    fn article(name: String) -> Self {
+    fn article(name: String, raw: bool) -> Self {
         Self {
             mode: Mode::Article(name),
+            raw,
         }
     }
 
     /// A run that searches the book.
-    fn search(query: String, limit: usize) -> Self {
+    fn search(query: String, limit: usize, raw: bool) -> Self {
         Self {
             mode: Mode::Search { query, limit },
+            raw,
         }
     }
 }
@@ -185,6 +202,8 @@ pub fn handle_docs(state: StateDocs) -> Next {
         return ErrorDocsNoBook.into();
     };
 
+    let raw = state.raw;
+
     match state.mode {
         Mode::Article(name) => book.article(&name).map_or_else(
             || ErrorDocsUnknownArticle { name }.into(),
@@ -194,11 +213,16 @@ pub fn handle_docs(state: StateDocs) -> Next {
                     description: article.description().to_owned(),
                     keywords: article.keywords().to_vec(),
                     content: article.markdown().to_owned(),
+                    raw,
                 }
                 .into()
             },
         ),
-        Mode::Search { query, limit } => ResultDocsSearch::of(&book.search(&query, limit)).into(),
+        Mode::Search { query, limit } => {
+            let hits = book.search(&query, limit);
+
+            ResultDocsSearch::of(&book, &hits, raw).into()
+        }
     }
 }
 
@@ -248,11 +272,21 @@ pub struct ResultDocsArticle {
     keywords: Vec<String>,
     /// The article as it was written, Markdown and all.
     content: String,
+    /// Whether the article is to be written as it was written rather than as rendered Markdown.
+    ///
+    /// It is a fact about the run rather than about the article, so `--json` leaves it out: the
+    /// `content` it writes is already the article's own text.
+    #[serde(skip)]
+    raw: bool,
 }
 
 #[renderer(buffer)]
 pub fn render_result_docs_article(result: ResultDocsArticle) {
-    r_println!("{}", trd!(result.content));
+    if result.raw {
+        r_println!("{}", result.content);
+    } else {
+        r_println!("{}", trd!(result.content));
+    }
 }
 
 /// Result: what `rola docs` can do was named.
@@ -273,13 +307,35 @@ pub fn render_result_docs_help(_: ResultDocsHelp, ec: &mut ResExitCode) {
 pub struct ResultDocsSearch {
     /// The articles the query found, best first.
     entries: Vec<ResultDocsEntry>,
+    /// Whether a one-article answer is to be written as it was written rather than as rendered
+    /// Markdown.
+    ///
+    /// It is a fact about the run rather than about the search, so `--json` leaves it out.
+    #[serde(skip)]
+    raw: bool,
 }
 
 impl ResultDocsSearch {
     /// The result the hits are drawn from.
-    fn of(hits: &[Hit]) -> Self {
+    fn of(book: &BookSearch, hits: &[Hit], raw: bool) -> Self {
         Self {
-            entries: hits.iter().map(ResultDocsEntry::of).collect(),
+            entries: hits
+                .iter()
+                .map(|hit| ResultDocsEntry::of(book, hit))
+                .collect(),
+            raw,
+        }
+    }
+
+    /// The one article the answer is, when the run is to be given the article itself.
+    ///
+    /// A search that found one article, and a search the run limited to one, are the same answer:
+    /// one article. The table is for the case there is a choice to make between several.
+    fn only(&self) -> Option<&ResultDocsEntry> {
+        if self.entries.len() == 1 {
+            self.entries.first()
+        } else {
+            None
         }
     }
 }
@@ -297,17 +353,28 @@ pub struct ResultDocsEntry {
     score: f64,
     /// The fragments the query matched.
     snippets: Vec<ResultDocsSnippet>,
+    /// The article as it was written, Markdown and all, for the run that is given the article
+    /// itself rather than the table.
+    ///
+    /// The search already answered with the article's name, so this is what the book can look up
+    /// rather than another thing the query found; `--json` leaves it out because it is not one of
+    /// the entry's fields.
+    #[serde(skip)]
+    content: String,
 }
 
 impl ResultDocsEntry {
     /// One hit, as the fields a reader is answered with.
-    fn of(hit: &Hit) -> Self {
+    fn of(book: &BookSearch, hit: &Hit) -> Self {
         Self {
             name: hit.name.clone(),
             title: hit.title.clone(),
             description: hit.description.clone(),
             score: hit.score,
             snippets: hit.snippets.iter().map(ResultDocsSnippet::of).collect(),
+            content: book
+                .article(&hit.name)
+                .map_or_else(String::new, |article| article.markdown().to_owned()),
         }
     }
 }
@@ -354,6 +421,12 @@ pub struct ResultDocsRange {
 pub fn render_result_docs_search(result: ResultDocsSearch) {
     if result.entries.is_empty() {
         r_println!("{}", t!("docs.no_match").trim());
+    } else if let Some(entry) = result.only() {
+        if result.raw {
+            r_println!("{}", entry.content);
+        } else {
+            r_println!("{}", trd!(entry.content));
+        }
     } else {
         let mut table = Table::new([
             Column::auto(t!("docs.table_name").to_string()),

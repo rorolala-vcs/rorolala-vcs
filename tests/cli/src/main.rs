@@ -197,16 +197,44 @@ fn docs(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     let ran = rola.run(dir, &["docs", "--search", "install"]);
     checked.exits("`docs --search` searches", &ran, 0);
+    checked.wants(
+        "a search with one answer is given the article rather than a table",
+        !ran.stdout.contains("ARTICLE") && ran.stdout.contains("Installing"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["docs", "--raw", "install"]);
+    checked.exits("`--raw` reads the article", &ran, 0);
+    checked.wants(
+        "`--raw` writes the article as it was written",
+        ran.stdout.contains("# Installing"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["docs", "--raw", "--search", "install"]);
+    checked.exits("`--raw --search` reads the one article", &ran, 0);
+    checked.wants(
+        "the one article is written as it was written",
+        ran.stdout.contains("# Installing") && !ran.stdout.contains("ARTICLE"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["docs", "--search", "the"]);
+    checked.exits("a search with several answers still tabulates them", &ran, 0);
     checked.stdout_has("the search's table names its columns", &ran, "ARTICLE");
     checked.stdout_has("the table names the article", &ran, "install");
-    checked.stdout_has(
-        "the table holds the fragment that matched",
-        &ran,
-        "Install it from the release page",
-    );
+    checked.stdout_has("the table names the other article", &ran, "workspace");
     checked.wants(
         "the table fills the width it was drawn at",
         ran.stdout.lines().all(|line| line.chars().count() == 100),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["docs", "--search", "the", "--limit", "1"]);
+    checked.exits("a search limited to one answer is answered", &ran, 0);
+    checked.wants(
+        "a search limited to one article is given the article rather than a table",
+        !ran.stdout.contains("ARTICLE") && !ran.stdout.trim().is_empty(),
         &said(&ran),
     );
 

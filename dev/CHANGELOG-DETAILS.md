@@ -39,7 +39,10 @@ of the width, the matched words red and bold — and a Latin query is also found
 substring of a word, which the book's build indexes every word for.
 
 `--limit <N>` caps how many search answers are shown, twelve by default and only meaningful with
-`--search`. A `--json` run is answered with the same result as fields: an article is its `title`,
+`--search`. A search that finds one article, or one a run limited to a single answer, is answered
+with that article rather than the table. `--raw` prints the article as it was written — Markdown
+markers and all — rather than drawing it, and a `--raw` run is never handed to a pager. A `--json`
+run is answered with the same result as fields: an article is its `title`,
 `description`, `keywords` and `content`, and a search is its `entries`, each with the article's
 name, title, description, score and fragments, and each fragment with its field, its text and the
 ranges that matched. The global `--no-pager` is honoured like it is everywhere else, and a run

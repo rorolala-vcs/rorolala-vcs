@@ -9,6 +9,9 @@ docs:
           --search       Search the articles
           --limit <N>    Show at most N results
           --no-pager     Do not use a pager; write the results out directly
+          --raw          Output the raw article content
+
+      **When searching, if only one entry matches, its content is printed directly**
 
     zh-CN: |
       **用法**：rola docs [--search] [--limit <N>] <文本>
@@ -17,6 +20,9 @@ docs:
           --search       搜索文章
           --limit <N>    显示最多 N 条结果
           --no-pager     不使用分页器，直接写出结果
+          --raw          输出原始文章内容
+
+      **搜索时，若只命中一个条目，将直接打印文章内容**
 
   cmd_docs_description:
     en: Read or search an article
