@@ -19,40 +19,40 @@ docs:
           --no-pager     不使用分页器，直接写出结果
 
   cmd_docs_description:
-    en: Read an article of the built-in book, or search it
-    zh-CN: 阅读内置书的一篇文章，或搜索内置书
+    en: Read or search an article
+    zh-CN: 阅读或搜索一篇文章
 
   table_name:
-    en: Article Name
-    zh-CN: 文章名
+    en: ARTICLE
+    zh-CN: 文章
 
   table_snippet:
-    en: Snippet
-    zh-CN: 匹配片段
+    en: MATCHED
+    zh-CN: 匹配
 
   no_match:
-    en: No article of the built-in book matched
-    zh-CN: 内置书中没有匹配的文章
+    en: No article matched
+    zh-CN: 没有匹配的文章
 
   err_no_book:
-    en: The built-in book could not be found
-    zh-CN: 找不到内置书
+    en: The articles could not be found
+    zh-CN: 找不到文章
 
   err_no_book_help:
     en: |-
-      The book is `docs/builtin.book`, beside the programs an export or an install lays down;
+      The articles are kept in `docs/builtin.book`, beside the programs an export or an install lays down;
       in a checkout it is made by `cargo dev book`
     zh-CN: |-
-      内置书是 `docs/builtin.book`，与导出或安装的程序放在一起；
+      文章保存在 `docs/builtin.book`，与导出或安装的程序放在一起；
       在源码树中可用 `cargo dev book` 生成
 
   err_unknown_article:
-    en: "The built-in book holds no article named `%{name}`"
-    zh-CN: "内置书中没有名为 `%{name}` 的文章"
+    en: "There is no article named `%{name}`"
+    zh-CN: "没有名为 `%{name}` 的文章"
 
   err_unknown_article_help:
-    en: Run the command with `--search` to search the book instead of naming one article
-    zh-CN: 加上 `--search` 可按查询搜索内置书，而不是指定一篇文章
+    en: Run the command with `--search` to search the articles instead of naming one article
+    zh-CN: 加上 `--search` 可按查询搜索文章，而不是指定一篇文章
 
   err_missing_text:
     en: "`--search` needs the words to search for"
@@ -67,13 +67,13 @@ docs:
     zh-CN: "`--limit` 只在带 `--search` 时有意义"
 
   err_limit_without_search_help:
-    en: Add `--search` to search the book, or leave `--limit` out to name one article
-    zh-CN: 加上 `--search` 来搜索内置书，或去掉 `--limit` 来指定一篇文章
+    en: Add `--search` to search the articles, or leave `--limit` out to name one article
+    zh-CN: 加上 `--search` 来搜索文章，或去掉 `--limit` 来指定一篇文章
 
   complete:
     search:
-      en: Search the book instead of naming one article
-      zh-CN: 搜索内置书，而不是指定一篇文章
+      en: Search the articles instead of naming one article
+      zh-CN: 搜索文章，而不是指定一篇文章
     limit:
       en: How many search answers to show at most
       zh-CN: 最多显示多少条搜索结果

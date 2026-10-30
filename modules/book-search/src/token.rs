@@ -120,9 +120,42 @@ fn normalized(text: &str) -> String {
     text.to_lowercase().nfkc().collect()
 }
 
+/// Whether the term is a word of a script written with spaces: letters and digits, no CJK.
+///
+/// Only such a word has fragments built for it: Chinese-style text is already cut into characters
+/// and pairs, which is the same job for a script that does not separate words.
+#[must_use]
+pub fn is_latin(text: &str) -> bool {
+    !text.is_empty()
+        && text
+            .chars()
+            .all(|character| character.is_alphanumeric() && !is_cjk(character))
+}
+
+/// The character n-grams of a word: every run of two and of three characters.
+///
+/// These are what a query is looked up by when it is not a whole word — a prefix or a substring of
+/// a word holds all of its own n-grams, so an article whose word holds all of them is a candidate.
+/// Two characters is the shortest query a fragment is made for, which is what makes `in` a prefix
+/// of `install` rather than a query with nothing to look it up by.
+#[must_use]
+pub fn shingles(word: &str) -> Vec<String> {
+    let characters: Vec<char> = word.chars().collect();
+    let mut shingles = Vec::new();
+
+    for size in [2, 3] {
+        for window in characters.windows(size) {
+            let text: String = window.iter().collect();
+            shingles.push(normalized(&text));
+        }
+    }
+
+    shingles
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Term, terms};
+    use super::{Term, is_latin, shingles, terms};
 
     fn texts(text: &str) -> Vec<String> {
         terms(text).into_iter().map(|term| term.text).collect()
@@ -182,5 +215,31 @@ mod tests {
         assert_eq!(cut.len(), 1);
         assert_eq!(cut[0].text, "file");
         assert_eq!((cut[0].start, cut[0].end), (0, 3));
+    }
+
+    #[test]
+    fn only_a_word_of_a_spaced_script_is_latin() {
+        assert!(is_latin("install"));
+        assert!(is_latin("psd2"));
+        assert!(!is_latin("安装"));
+        assert!(!is_latin("install安装"));
+        assert!(!is_latin(""));
+    }
+
+    #[test]
+    fn a_word_is_cut_into_two_and_three_character_fragments() {
+        let fragments = shingles("install");
+
+        assert!(fragments.iter().any(|fragment| fragment == "in"));
+        assert!(fragments.iter().any(|fragment| fragment == "ins"));
+        assert!(!fragments.iter().any(|fragment| fragment == "i"));
+        assert!(!fragments.iter().any(|fragment| fragment == "nstall"));
+        assert_eq!(shingles("in"), ["in"]);
+        assert_eq!(shingles("a").len(), 0);
+    }
+
+    #[test]
+    fn a_fragment_is_normalized_like_a_term() {
+        assert_eq!(shingles("ＲＯ"), ["ro"]);
     }
 }

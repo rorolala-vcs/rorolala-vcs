@@ -9,10 +9,10 @@
 //!   the left, the fragments the query matched on the right, with the matched words drawn in red
 //!   and bold. A run that asked for `--json` is answered with the same entries as fields.
 //!
-//! The table is the program's own rather than the colour language's pipe table, for two reasons: a
-//! fragment is styled run by run out of the ranges the search hands back, which a cell of text
-//! cannot carry, and the columns are 3:7 rather than as wide as their content, so a long snippet
-//! wraps where the reader expects instead of pushing the name out of the way.
+//! The table is drawn by this workspace's reusable table component: the article's name is as wide
+//! as the names that matched, the fragments take the rest of the terminal, and a matched word is a
+//! run drawn red and bold. A run that asked for `--json` is answered with the same entries as
+//! fields.
 //!
 //! `--no-pager` is a global flag and is honoured here like anywhere else: the pager is the program's
 //! post-render hook, and this command knows nothing about it.
@@ -32,7 +32,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_errors::Failure;
-use rorolala_utils_cli_theme::{Colorize as _, err_line, help_line, trd};
+use rorolala_utils_cli_theme::{Cell, Column, Run, RunStyle, Table, err_line, help_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
 
@@ -49,27 +49,6 @@ const DEFAULT_LIMIT: usize = 12;
 
 /// How many search answers are shown at most.
 const ARG_LIMIT: PickerArg<'static, Option<usize>> = arg![limit: Option<usize>];
-
-/// What separates the two columns of the search table.
-const SEPARATOR: &str = " | ";
-
-/// How many parts of the table the article's name takes.
-const NAME_SHARE: usize = 3;
-
-/// How many parts the table is divided into.
-const TOTAL_SHARE: usize = 10;
-
-/// How narrow the name column is allowed to become.
-const MIN_NAME_WIDTH: usize = 12;
-
-/// How narrow the snippet column is allowed to become.
-const MIN_SNIPPET_WIDTH: usize = 24;
-
-/// How wide the table is drawn when there is no terminal to ask.
-const FALLBACK_COLUMNS: usize = 100;
-
-/// How many columns a terminal is assumed to have when it says it has fewer.
-const MIN_COLUMNS: usize = 40;
 
 #[help(buffer)]
 pub fn help_docs(_: EntryDocs, ec: &mut ResExitCode) {
@@ -376,210 +355,67 @@ pub fn render_result_docs_search(result: ResultDocsSearch) {
     if result.entries.is_empty() {
         r_println!("{}", t!("docs.no_match").trim());
     } else {
-        let (name_width, snippet_width) = columns();
-        let header = format!(
-            "{}{}{}",
-            pad_to(t!("docs.table_name").trim(), name_width),
-            SEPARATOR,
-            t!("docs.table_snippet").trim(),
-        );
-        r_println!("{}", header.bold().underline());
+        let mut table = Table::new([
+            Column::auto(t!("docs.table_name").to_string()),
+            Column::fill(t!("docs.table_snippet").to_string()),
+        ]);
 
         for entry in &result.entries {
-            let name = wrapped(&plain(&entry.name), name_width);
-            let snippets = snippet_lines(entry, snippet_width);
-            let height = name.len().max(snippets.len());
-
-            for line in 0..height {
-                let left = name.get(line).map_or("", String::as_str);
-                let right = snippets.get(line).map_or("", String::as_str);
-
-                r_println!("{}{}{}", pad_to(left, name_width), SEPARATOR, right);
-            }
+            table.row([Cell::text(entry.name.clone()), snippet_cell(entry)]);
         }
+
+        r_println!("{}", table.render());
     }
 }
 
-/// How wide the two columns are drawn, in characters.
-///
-/// The two columns divide what is left of the terminal after the separator 3:7, which is what puts
-/// the name and the fragment at the widths the table is meant to have rather than at whatever the
-/// content happens to be. A terminal too narrow for both minimums is drawn at the minimums anyway:
-/// squeezing a column is worse than wrapping the terminal.
-fn columns() -> (usize, usize) {
-    let width = console::Term::stdout()
-        .size_checked()
-        .map_or(FALLBACK_COLUMNS, |(_, columns)| usize::from(columns))
-        .max(MIN_COLUMNS);
-    let usable = width.saturating_sub(SEPARATOR.len());
+/// The matched fragments of `entry` as one cell: every fragment on its own line, the ranges the
+/// search marked drawn red and bold.
+fn snippet_cell(entry: &ResultDocsEntry) -> Cell {
+    let mut runs = Vec::new();
 
-    let name = (usable * NAME_SHARE / TOTAL_SHARE).max(MIN_NAME_WIDTH);
-    let snippet = usable.saturating_sub(name).max(MIN_SNIPPET_WIDTH);
-
-    (name, snippet)
-}
-
-/// `text` followed by as many spaces as `width` needs to hold it.
-fn pad_to(text: &str, width: usize) -> String {
-    let used = console::measure_text_width(text);
-    let mut padded = String::with_capacity(text.len() + width.saturating_sub(used));
-
-    padded.push_str(text);
-    padded.extend(std::iter::repeat_n(' ', width.saturating_sub(used)));
-
-    padded
-}
-
-/// The fragments of an entry, wrapped to the width of the column.
-fn snippet_lines(entry: &ResultDocsEntry, width: usize) -> Vec<String> {
-    let mut lines = Vec::new();
-
-    for snippet in &entry.snippets {
-        lines.extend(wrapped(&emphasised(snippet), width));
-    }
-
-    lines
-}
-
-/// The text of `snippet` with the characters a range covers marked as matched.
-fn emphasised(snippet: &ResultDocsSnippet) -> Vec<(char, bool)> {
-    let characters: Vec<char> = snippet.text.chars().collect();
-    let mut matched = vec![false; characters.len()];
-
-    for range in &snippet.ranges {
-        let start = range.start.min(characters.len());
-        let end = range
-            .start
-            .saturating_add(range.length)
-            .min(characters.len());
-
-        if let Some(window) = matched.get_mut(start..end) {
-            window.fill(true);
+    for (at, snippet) in entry.snippets.iter().enumerate() {
+        if at > 0 {
+            runs.push(Run::new("\n", RunStyle::Plain));
         }
-    }
 
-    characters.into_iter().zip(matched).collect()
-}
-
-/// `text` as ordinary characters, which is what a name is drawn as.
-fn plain(text: &str) -> Vec<(char, bool)> {
-    text.chars().map(|character| (character, false)).collect()
-}
-
-/// `characters` wrapped into lines of at most `width` characters on screen.
-///
-/// Words are kept together where they fit, and a word too long for a line is cut at the width: a
-/// fragment has no obligation to a word's spelling, and a line that overflows its column would
-/// push the table out of shape. The widening characters of Chinese text are counted as two, so a
-/// column of them is as wide as the terminal says rather than twice as wide.
-#[must_use]
-fn wrapped(characters: &[(char, bool)], width: usize) -> Vec<String> {
-    let width = width.max(1);
-    let mut lines = Vec::new();
-    let mut line: Vec<(char, bool)> = Vec::new();
-    let mut used = 0;
-
-    for word in words(characters) {
-        let word_width: usize = word
-            .iter()
-            .map(|(character, _)| display_width(*character))
-            .sum();
-
-        if word_width <= width {
-            let space = usize::from(!line.is_empty());
-
-            if used + space + word_width > width && !line.is_empty() {
-                lines.push(drawn_line(&line));
-                line = Vec::new();
-                used = 0;
+        let mut from = 0;
+        for range in &snippet.ranges {
+            if range.start > from {
+                runs.push(Run::new(
+                    slice(&snippet.text, from, range.start),
+                    RunStyle::Plain,
+                ));
             }
 
-            if !line.is_empty() {
-                line.push((' ', false));
-                used += 1;
-            }
-
-            line.extend(word);
-            used += word_width;
-            continue;
+            let end = range.start.saturating_add(range.length);
+            runs.push(Run::new(
+                slice(&snippet.text, range.start, end),
+                RunStyle::Highlight,
+            ));
+            from = end;
         }
 
-        // A word wider than a line is cut into pieces; what is left of the line is filled first.
-        for (character, matched) in word {
-            let character_width = display_width(character);
-
-            if used + character_width > width && !line.is_empty() {
-                lines.push(drawn_line(&line));
-                line = Vec::new();
-                used = 0;
-            }
-
-            line.push((character, matched));
-            used += character_width;
+        if from < snippet.text.chars().count() {
+            runs.push(Run::new(
+                slice(&snippet.text, from, usize::MAX),
+                RunStyle::Plain,
+            ));
         }
     }
 
-    if !line.is_empty() {
-        lines.push(drawn_line(&line));
+    if runs.is_empty() {
+        return Cell::text(String::new());
     }
 
-    lines
+    Cell::runs(runs)
 }
 
-/// The words of `characters`: runs of non-space characters, each with its own marks.
-fn words(characters: &[(char, bool)]) -> Vec<Vec<(char, bool)>> {
-    let mut words = Vec::new();
-    let mut word = Vec::new();
-
-    for (character, matched) in characters {
-        if character.is_whitespace() {
-            if !word.is_empty() {
-                words.push(std::mem::take(&mut word));
-            }
-            continue;
-        }
-
-        word.push((*character, *matched));
-    }
-
-    if !word.is_empty() {
-        words.push(word);
-    }
-
-    words
-}
-
-/// One line of a fragment, with the matched runs drawn in red and bold.
-fn drawn_line(characters: &[(char, bool)]) -> String {
-    let mut drawn = String::new();
-    let mut at = 0;
-
-    while at < characters.len() {
-        let matched = characters[at].1;
-        let start = at;
-
-        while at < characters.len() && characters[at].1 == matched {
-            at += 1;
-        }
-
-        let run: String = characters[start..at]
-            .iter()
-            .map(|(character, _)| *character)
-            .collect();
-
-        if matched {
-            drawn.push_str(&run.red().bold().to_string());
-        } else {
-            drawn.push_str(&run);
-        }
-    }
-
-    drawn
-}
-
-/// How many terminal columns a character takes.
-fn display_width(character: char) -> usize {
-    console::measure_text_width(&character.to_string())
+/// The characters of `text` from `start` up to `end`, counted in characters.
+fn slice(text: &str, start: usize, end: usize) -> String {
+    text.chars()
+        .skip(start)
+        .take(end.saturating_sub(start))
+        .collect()
 }
 
 /// Error: no book could be found for this run to read.
@@ -687,66 +523,11 @@ pub fn render_error_docs_limit_without_search(
 
 #[cfg(test)]
 mod tests {
-    use super::{ResultDocsRange, ResultDocsSnippet, drawn_line, emphasised, wrapped};
-
-    fn text(pieces: &[(&str, bool)]) -> Vec<(char, bool)> {
-        pieces
-            .iter()
-            .flat_map(|(piece, matched)| {
-                piece
-                    .chars()
-                    .map(|character| (character, *matched))
-                    .collect::<Vec<_>>()
-            })
-            .collect()
-    }
+    use super::slice;
 
     #[test]
-    fn a_word_the_query_matched_is_marked() {
-        let snippet = ResultDocsSnippet {
-            field: "content".to_owned(),
-            text: "the needle is here".to_owned(),
-            ranges: vec![ResultDocsRange {
-                start: 4,
-                length: 6,
-            }],
-        };
-
-        let marked = emphasised(&snippet);
-        let matched: String = marked
-            .iter()
-            .filter(|(_, matched)| *matched)
-            .map(|(character, _)| *character)
-            .collect();
-
-        assert_eq!(matched, "needle");
-    }
-
-    #[test]
-    fn a_marked_run_is_drawn_and_the_rest_is_not_changed() {
-        let drawn = drawn_line(&text(&[("the ", false), ("needle", true)]));
-
-        assert_eq!(drawn, "the needle");
-    }
-
-    #[test]
-    fn wrapping_keeps_words_whole_where_they_fit() {
-        let lines = wrapped(&text(&[("one two three", false)]), 7);
-
-        assert_eq!(lines, ["one two", "three"]);
-    }
-
-    #[test]
-    fn a_word_wider_than_the_column_is_cut() {
-        let lines = wrapped(&text(&[("abcdef", false)]), 4);
-
-        assert_eq!(lines, ["abcd", "ef"]);
-    }
-
-    #[test]
-    fn wrapping_counts_a_chinese_character_as_two_columns() {
-        let lines = wrapped(&text(&[("安装说明", false)]), 5);
-
-        assert_eq!(lines, ["安装", "说明"]);
+    fn a_range_is_cut_on_characters_rather_than_bytes() {
+        assert_eq!(slice("安装说明", 1, 3), "装说");
+        assert_eq!(slice("install", 3, 8), "tall");
     }
 }

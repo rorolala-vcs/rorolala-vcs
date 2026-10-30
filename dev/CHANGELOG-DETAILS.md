@@ -10,10 +10,11 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 `rola docs <TEXT>` reads one article of the built-in book by its exact name and prints it as it
 was written, through the program's own Markdown rendering. `rola docs --search <TEXT>` searches
-the book instead: an article is found when every term of the query is in it, and the answer is a
-table of the article's name and the fragments that matched, the matched words drawn in red and
-bold, the header bold and underlined, the columns separated by `|` and divided 3:7 between the
-name and the fragment.
+the book instead: an article is found when every term of the query is in it, the answer is drawn
+across the terminal the way `gh issue list` draws a listing — no borders, the header bold and
+underlined, the article's name as wide as the names that matched and the fragments filling the rest
+of the width, the matched words red and bold — and a Latin query is also found as a prefix or a
+substring of a word, which the book's build indexes every word for.
 
 `--limit <N>` caps how many search answers are shown, twelve by default and only meaningful with
 `--search`. A `--json` run is answered with the same result as fields: an article is its `title`,
@@ -52,12 +53,38 @@ tie, so the same query over the same book answers in the same order. Each hit is
 fragments, cut from the field that matched with `…` where they were cut, and each fragment's ranges
 count characters rather than bytes and are already merged where two ranges overlapped.
 
+**The fragments.** The build also cuts every word of a spaced script into runs of two and three
+characters and writes them as a second index, so a query that is a prefix or a substring of a word —
+`inst` or `stall` of `install` — finds the word without the book being read. A term found whole
+ranks above one found through its fragments, and a fragment candidate is checked against the
+article's own words before the article is answered, so fragments that landed in two different words
+are not answered as one. The file is larger for it; the search is not.
+
 **The surfaces.** The crate is re-exported as `librorolala::book_search`. The C ABI exposes a book
 handle opened from a path or located beside the programs, a search that answers with a hit list,
 and accessors for a hit's name, title, description, score and fragments; every handle and every
 string is released with its `free_*`, and `tests/ffi-c/ffi-book` checks the nesting as a C11
 program. `modules/rola-sharp` gains `RolaBookSearch`, whose `BookSnippet` splits its text into
 ordinary and matched runs, so a renderer draws the highlight without converting the ranges itself.
+
+### 3. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
+
+The command-line theme now carries a `Table` for the listings a `gh issue list`-style table is made
+of: columns with titles and rows of cells, drawn across the terminal instead of only as wide as
+their content.
+
+A column is as wide as it needs (`Column::auto`), exactly as wide as it is told
+(`Column::fixed`), or filled with what the others leave (`Column::fill`), which is what makes a
+table reach the terminal's right edge; every line is padded to that whole width. There are no
+borders: the header is bold and underlined, the columns are separated by two spaces, and a cell's
+`\n` starts another line of the same row. Widths are terminal columns rather than characters, so a
+table of Chinese text lines up with one of Latin text, and words wrap inside their column rather
+than pushing it out of shape.
+
+A cell holds runs (`Cell`, `Run`, `RunStyle`), so a caller can draw part of one another way — the
+red and bold a search puts on a matched word — without handing the table a colour language to
+parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
+the matched fragments in a filled one.
 
 # 0.1.2 (2026-10-29)
 

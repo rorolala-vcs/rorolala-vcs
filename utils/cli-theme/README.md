@@ -176,3 +176,38 @@ Plane, as the two code units UTF-16 spells it with: `\udb82\udce3` is the one gl
 
 A delimiter opens only where the same one closes later on the line, so that `2 * 3`
 stays arithmetic.
+
+## Tables
+
+A listing table — the shape `gh issue list` draws — is [`Table`]: columns with titles and
+rows of cells. A column is as wide as it needs, exactly as wide as it is told, or filled
+with whatever the others leave; one filled column is what makes a table reach the terminal's
+right edge. There are no borders: the header is bold and underlined, the columns are
+separated by two spaces, and every line is padded out to the table's whole width. A cell
+holds runs, so a word can be drawn another way — the highlight a search puts on a match —
+without the table having to read a colour language:
+
+```rust
+use rorolala_utils_cli_theme::{Cell, Column, Run, RunStyle, Table, set_enabled};
+
+set_enabled(false);
+
+let mut table = Table::new([Column::auto("Name"), Column::fill("Snippet")]);
+table.row([
+    Cell::text("install"),
+    Cell::runs([
+        Run::new("the ", RunStyle::Plain),
+        Run::new("install", RunStyle::Highlight),
+    ]),
+]);
+
+let drawn = table.render_with_width(40);
+
+assert!(drawn.starts_with("Name"));
+assert!(drawn.contains("install"));
+assert!(drawn.lines().all(|line| line.chars().count() == 40));
+```
+
+Widths are terminal columns, not characters: a Chinese character takes two, so a table of
+Chinese text lines up with one of Latin text. A cell's `\n` starts another line of the same
+row, which is how one article's several matched fragments are drawn one under another.

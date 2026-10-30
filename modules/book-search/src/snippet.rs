@@ -5,8 +5,6 @@
 //! came from, the cut ends are marked with `…`, and the ranges are counted from the marked text so
 //! a caller never has to know where the marks were put.
 
-use std::collections::BTreeSet;
-
 use crate::article::{Article, Field, Range, Snippet};
 use crate::token;
 
@@ -33,11 +31,9 @@ const WINDOW_GAP: usize = 24;
 /// because a fragment of body text is what a hit is usually shown with; the other fields follow so
 /// that a metadata-only match is not a hit with nothing beside it.
 pub fn snippets(article: &Article, query: &[String]) -> Vec<Snippet> {
-    let wanted: BTreeSet<&str> = query.iter().map(String::as_str).collect();
-
     for field in Field::SNIPPET_ORDER {
         let text = article.text(field);
-        let found = matched(&text, &wanted);
+        let found = matched(&text, query);
 
         if found.is_empty() {
             continue;
@@ -57,21 +53,40 @@ pub fn snippets(article: &Article, query: &[String]) -> Vec<Snippet> {
     Vec::new()
 }
 
-/// The ranges of `text` whose terms are in `wanted`, without the ones another range already covers.
+/// The ranges of `text` that `query` matched, without the ones another range already covers.
 ///
-/// A Chinese query is cut into characters and pairs, so a phrase yield ranges that overlap: the
+/// A Chinese query is cut into characters and pairs, so a phrase yields ranges that overlap: the
 /// pair covers the two characters, and each character covers one. The pair is the range worth
 /// showing, since it is the one that says where the phrase is, so a range that lies inside another
 /// is dropped rather than drawn twice.
-fn matched(text: &str, wanted: &BTreeSet<&str>) -> Vec<Range> {
-    let mut found: Vec<Range> = token::terms(text)
-        .into_iter()
-        .filter(|term| wanted.contains(term.text.as_str()))
-        .map(|term| Range {
-            start: term.start,
-            end: term.end,
-        })
-        .collect();
+///
+/// A Latin query is also matched inside a word: `inst` is marked where it stands in `install`, which
+/// is the same place the fragment index found the word by.
+fn matched(text: &str, query: &[String]) -> Vec<Range> {
+    let mut found: Vec<Range> = Vec::new();
+
+    for term in token::terms(text) {
+        for wanted in query {
+            if term.text == *wanted {
+                found.push(Range {
+                    start: term.start,
+                    end: term.end,
+                });
+            } else if wanted.chars().count() >= 2
+                && token::is_latin(wanted)
+                && token::is_latin(&term.text)
+            {
+                found.extend(
+                    inside(&term.text, wanted)
+                        .into_iter()
+                        .map(|(start, end)| Range {
+                            start: term.start + start,
+                            end: term.start + end,
+                        }),
+                );
+            }
+        }
+    }
 
     found.sort_by(|left, right| {
         left.start
@@ -91,6 +106,29 @@ fn matched(text: &str, wanted: &BTreeSet<&str>) -> Vec<Range> {
     }
 
     kept
+}
+
+/// Every place `wanted` appears inside `word`, as character positions in the word.
+fn inside(word: &str, wanted: &str) -> Vec<(usize, usize)> {
+    let mut found = Vec::new();
+    let mut from = 0;
+
+    while let Some(at) = word.get(from..).and_then(|rest| rest.find(wanted)) {
+        let start_byte = from + at;
+        let start = word
+            .get(..start_byte)
+            .map_or(0, |before| before.chars().count());
+        let end = start + wanted.chars().count();
+
+        found.push((start, end));
+        from = start_byte + wanted.len();
+
+        if from >= word.len() {
+            break;
+        }
+    }
+
+    found
 }
 
 /// The windows to cut, each around one match, with the ones that are close enough merged.
@@ -222,6 +260,25 @@ mod tests {
                 .collect();
 
             assert_eq!(got, "brown");
+        }
+    }
+
+    #[test]
+    fn a_prefix_is_marked_where_it_stands_in_its_word() {
+        let snippets = snippets(&article(), &query(&["inst"]));
+
+        assert_eq!(snippets.len(), 1);
+        assert!(snippets[0].text.contains("inst"));
+
+        for range in &snippets[0].ranges {
+            let got: String = snippets[0]
+                .text
+                .chars()
+                .skip(range.start)
+                .take(range.length())
+                .collect();
+
+            assert_eq!(got, "inst");
         }
     }
 

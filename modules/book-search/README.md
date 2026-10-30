@@ -23,9 +23,17 @@ title, description, keywords or content. A query whose terms are not all there f
 which is what makes `版本控制` ask for the phrase rather than for its four characters in four
 places. A query that is all punctuation has no terms and finds nothing.
 
+A Latin term is also looked up by the fragments of the words it could be part of: every word of a
+spaced script is indexed, at build time, as its runs of two and three characters, so a query that
+is a prefix or a substring of a word — `inst` or `stall` of `install` — finds the word too. The
+build pays for the extra index; a query pays only for the fragments it asks about. A term found
+whole ranks above one found through its fragments, and the fragments are verified against the
+article's own text before the article is answered, so a query whose fragments landed in two
+different words is not answered as if it were one.
+
 The hits are ranked by BM25 over the fields, with a hit in the title worth more than one in the
-body (see `Field::weight`). The name breaks a tie, so the same query over the same book answers in
-the same order every time.
+body (see `Field::weight`), and a fragment match scaled below a whole-word one. The name breaks a
+tie, so the same query over the same book answers in the same order every time.
 
 ## What a hit carries
 
@@ -52,6 +60,8 @@ for hit in &hits {
 Ranges are counted in characters and include the start but not the end, so a caller can split the
 text into styled and unstyled runs whatever encoding it holds the text in. A fragment cut shorter
 than its field carries `…` at the ends it was cut from, and the ranges count from the marked text.
+A range may cover part of a word rather than all of it, which is what a prefix or a substring
+query is marked by.
 
 ## Opening a book
 
@@ -79,12 +89,21 @@ body:
                term                       length-prefixed UTF-8
                per field in `Field::ALL`  u32 count, then postings:
                                             article index u32, term count u32
+  fragments  u32 count, then per fragment, sorted:
+               fragment                   length-prefixed UTF-8
+               per field in `Field::ALL`  u32 count, then postings:
+                                            article index u32, term count u32
 ```
 
 Both article text streams are kept: `markdown` is the article as it was written, for a reader that
 draws it as Markdown, and `plain` is the same article with the syntax taken away, which is what the
 index is built from and what fragments are cut out of. Counts and offsets are big endian, and the
-terms are written in sorted order, so the same articles produce the same bytes on every machine.
+terms and fragments are written in sorted order, so the same articles produce the same bytes on
+every machine.
+
+The second index is the fragments: every word of a spaced script cut into runs of two and three
+characters, so a prefix or a substring of a word is found without the book being read. It is larger
+than the term index — the build pays for that, once, and every search then answers from memory.
 
 ## The C ABI
 

@@ -18,6 +18,23 @@ const K1: f64 = 1.2;
 /// The BM25 term that says how much a longer field is worth less than a short one.
 const B: f64 = 0.75;
 
+/// How much a match found through a word's fragments is worth, against the same word found whole.
+///
+/// A fragment match is divided by how many fragments made it, so a long word does not out-score a
+/// whole-word match merely by having more of them, and the whole is scaled below a whole word.
+const FUZZY_WEIGHT: f64 = 0.25;
+
+/// The shortest Latin query that is looked up through the fragment index.
+const SHORTEST_FRAGMENT: usize = 2;
+
+/// Whether `term` may be looked up through the fragment index.
+///
+/// Only a Latin word of at least two characters is: a Chinese-style term is already a character or
+/// a pair, and a one-character Latin query has no fragment to be found by.
+fn has_fragments(term: &str) -> bool {
+    token::is_latin(term) && term.chars().count() >= SHORTEST_FRAGMENT
+}
+
 /// How many directories above the one it is given [`BookSearch::locate`] looks.
 ///
 /// The programs are laid in `bin/` and the Desktop program one directory deeper, so the book is
@@ -43,6 +60,8 @@ pub struct BookSearch {
     averages: [f64; FIELD_COUNT],
     /// The postings of each term, by field.
     terms: BTreeMap<String, crate::format::TermFields>,
+    /// The postings of each fragment of a Latin word, by field.
+    fragments: BTreeMap<String, crate::format::TermFields>,
     /// How many articles there are, in the number the ranking is worked out in.
     documents: f64,
 }
@@ -113,9 +132,11 @@ impl BookSearch {
     ///
     /// The query is cut into terms the same way the book was, and an article is a hit only when
     /// every one of them is in it: `rola 安装` asks for both, and `版本控制` asks for the phrase
-    /// rather than the four characters anywhere. A query with no terms in it — one that is all
-    /// punctuation, or empty — finds nothing. `limit` of zero finds nothing too, which is what a
-    /// caller asking for no lines means.
+    /// rather than the four characters anywhere. A Latin term is also looked up by the fragments
+    /// its word was built with, so a query that is a prefix or a substring of a word — `inst` of
+    /// `install`, `stall` of `install` — finds the word too; a whole-word match ranks above one
+    /// found that way. A query with no terms in it — one that is all punctuation, or empty — finds
+    /// nothing. `limit` of zero finds nothing too, which is what a caller asking for no lines means.
     ///
     /// Each hit carries the fragments the query matched in it, taken from the first field that has
     /// a match: the body if it is the body that named the word, and the description or title when
@@ -164,7 +185,11 @@ impl BookSearch {
 
     /// Works the book out from what the file said.
     fn from_decoded(decoded: Decoded) -> Self {
-        let Decoded { articles, terms } = decoded;
+        let Decoded {
+            articles,
+            terms,
+            fragments,
+        } = decoded;
         let mut lengths = vec![[0_u32; FIELD_COUNT]; articles.len()];
         let mut totals = [0.0_f64; FIELD_COUNT];
 
@@ -198,6 +223,7 @@ impl BookSearch {
             lengths,
             averages,
             terms,
+            fragments,
             documents,
         }
     }
@@ -207,12 +233,10 @@ impl BookSearch {
         let mut candidates: Option<BTreeSet<usize>> = None;
 
         for term in query_terms {
-            let fields = self.terms.get(term)?;
-            let mut found: BTreeSet<usize> = BTreeSet::new();
-            for postings in fields {
-                for posting in postings {
-                    found.insert(posting.article);
-                }
+            let found = self.posted(term);
+
+            if found.is_empty() {
+                return None;
             }
 
             candidates = Some(match candidates {
@@ -224,16 +248,152 @@ impl BookSearch {
         candidates
     }
 
+    /// The articles that hold `term`, whole or inside one of their words.
+    fn posted(&self, term: &str) -> BTreeSet<usize> {
+        let mut found = BTreeSet::new();
+
+        if let Some(fields) = self.terms.get(term) {
+            for postings in fields {
+                for posting in postings {
+                    found.insert(posting.article);
+                }
+            }
+        }
+
+        if has_fragments(term) {
+            found.extend(self.fragment_candidates(term));
+        }
+
+        found
+    }
+
+    /// The articles whose words hold every fragment of `term`, and the word that holds them.
+    fn fragment_candidates(&self, term: &str) -> BTreeSet<usize> {
+        let fragments: BTreeSet<String> = token::shingles(term).into_iter().collect();
+        let mut candidates: Option<BTreeSet<usize>> = None;
+
+        for fragment in fragments {
+            let Some(fields) = self.fragments.get(&fragment) else {
+                return BTreeSet::new();
+            };
+
+            let mut found = BTreeSet::new();
+            for postings in fields {
+                for posting in postings {
+                    found.insert(posting.article);
+                }
+            }
+
+            candidates = Some(match candidates {
+                None => found,
+                Some(current) => current.intersection(&found).copied().collect(),
+            });
+
+            if candidates.as_ref().is_some_and(BTreeSet::is_empty) {
+                return BTreeSet::new();
+            }
+        }
+
+        candidates
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|article| self.article_holds(*article, term))
+            .collect()
+    }
+
+    /// Whether any field of `article` has a word that holds `term`.
+    ///
+    /// The fragments say an article is a candidate; this says the query is really there, so a
+    /// fragment that landed in one word and another fragment in the next is not answered as if
+    /// the query were one word.
+    fn article_holds(&self, article: usize, term: &str) -> bool {
+        let Some(article) = self.articles.get(article) else {
+            return false;
+        };
+
+        Field::ALL.into_iter().any(|field| {
+            let text = article.text(field);
+
+            token::terms(&text)
+                .iter()
+                .any(|token| token.text.contains(term))
+        })
+    }
+
     /// How well `article` matches `query_terms`: BM25 over every field, each field weighted.
     fn score(&self, article: usize, query_terms: &[String]) -> f64 {
+        query_terms
+            .iter()
+            .map(|term| self.term_score(article, term))
+            .sum()
+    }
+
+    /// How well `article` matches one term: whole if it holds the word, otherwise by its fragments.
+    fn term_score(&self, article: usize, term: &str) -> f64 {
+        let exact = self.exact_score(article, term);
+
+        if exact > 0.0 {
+            return exact;
+        }
+
+        if has_fragments(term) {
+            return self.fragment_score(article, term);
+        }
+
+        0.0
+    }
+
+    /// The BM25 score of `article` for `term` found whole, or zero when it is not there.
+    fn exact_score(&self, article: usize, term: &str) -> f64 {
         let Some(lengths) = self.lengths.get(article) else {
+            return 0.0;
+        };
+        let Some(fields) = self.terms.get(term) else {
             return 0.0;
         };
 
         let mut score = 0.0;
 
-        for term in query_terms {
-            let Some(fields) = self.terms.get(term) else {
+        for field in Field::ALL {
+            let postings = &fields[field.index()];
+            let Ok(at) = postings.binary_search_by_key(&article, |posting| posting.article) else {
+                continue;
+            };
+            let Some(posting) = postings.get(at) else {
+                continue;
+            };
+
+            let Some(average) = self.averages.get(field.index()).copied() else {
+                continue;
+            };
+            if average <= 0.0 {
+                continue;
+            }
+
+            let documents_found = f64::from(u32::try_from(postings.len()).unwrap_or(u32::MAX));
+            let idf = ((self.documents - documents_found + 0.5) / (documents_found + 0.5)).ln_1p();
+            let length = f64::from(lengths.get(field.index()).copied().unwrap_or(0));
+            let frequency = f64::from(posting.tf);
+            let denominator = K1.mul_add(1.0 - B + B * length / average, frequency);
+
+            score += field.weight() * idf * frequency * (K1 + 1.0) / denominator;
+        }
+
+        score
+    }
+
+    /// The score of `article` for `term` found through the fragments of a word that holds it.
+    ///
+    /// The fragments are scored by how often they appear and how few articles have them, weighted
+    /// by the field they were found in, and the whole is scaled below a whole-word match: a word a
+    /// reader actually typed ranks above one a prefix happened to reach.
+    fn fragment_score(&self, article: usize, term: &str) -> f64 {
+        let fragments: BTreeSet<String> = token::shingles(term).into_iter().collect();
+        let count = u32::try_from(fragments.len()).unwrap_or(u32::MAX);
+        let mut score = 0.0;
+
+        for fragment in fragments {
+            let Some(fields) = self.fragments.get(&fragment) else {
                 continue;
             };
 
@@ -247,25 +407,15 @@ impl BookSearch {
                     continue;
                 };
 
-                let Some(average) = self.averages.get(field.index()).copied() else {
-                    continue;
-                };
-                if average <= 0.0 {
-                    continue;
-                }
-
                 let documents_found = f64::from(u32::try_from(postings.len()).unwrap_or(u32::MAX));
                 let idf =
                     ((self.documents - documents_found + 0.5) / (documents_found + 0.5)).ln_1p();
-                let length = f64::from(lengths.get(field.index()).copied().unwrap_or(0));
-                let frequency = f64::from(posting.tf);
-                let denominator = K1.mul_add(1.0 - B + B * length / average, frequency);
 
-                score += field.weight() * idf * frequency * (K1 + 1.0) / denominator;
+                score = (field.weight() * idf).mul_add(f64::from(posting.tf), score);
             }
         }
 
-        score
+        score / f64::from(count.max(1)) * FUZZY_WEIGHT
     }
 
     /// One hit, with the fragments its article matched.
@@ -351,6 +501,28 @@ mod tests {
         assert_eq!(book.search("安装", 10)[0].name, "cn");
         assert_eq!(book.search("仓库", 10)[0].name, "cn");
         assert_eq!(book.search("库", 10)[0].name, "cn");
+    }
+
+    #[test]
+    fn a_prefix_or_a_substring_finds_the_word_that_holds_it() {
+        let book = book();
+
+        assert_eq!(names(&book.search("instal", 10)), ["install"]);
+        assert_eq!(names(&book.search("stall", 10)), ["install"]);
+        assert_eq!(names(&book.search("nstall", 10)), ["install"]);
+        assert_eq!(names(&book.search("INSTAL", 10)), ["install"]);
+    }
+
+    #[test]
+    fn a_whole_word_ranks_above_a_word_that_only_holds_it() {
+        let articles = vec![
+            article("exact", "Exact", "", "Install it from the page"),
+            article("inside", "Inside", "", "Installation instructions"),
+        ];
+        let book = BookSearch::from_bytes(&encode(&articles).expect("the test book encodes"))
+            .expect("the test book opens");
+
+        assert_eq!(names(&book.search("install", 10)), ["exact", "inside"]);
     }
 
     #[test]

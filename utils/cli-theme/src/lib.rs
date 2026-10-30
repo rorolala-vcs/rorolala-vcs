@@ -10,9 +10,11 @@ mod rendering;
 mod style;
 #[cfg(test)]
 mod support;
+mod table;
 mod theme;
 
 pub use colorize::*;
 pub use rendering::TextRendering;
 pub use style::*;
+pub use table::*;
 pub use theme::*;

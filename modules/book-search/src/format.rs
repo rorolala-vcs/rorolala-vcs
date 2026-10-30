@@ -17,7 +17,16 @@
 //!                term                       length-prefixed UTF-8
 //!                per field in `Field::ALL`  u32 count, then postings:
 //!                                             article index u32, term count u32
+//!   fragments  u32 count, then per fragment, sorted:
+//!                fragment                   length-prefixed UTF-8
+//!                per field in `Field::ALL`  u32 count, then postings:
+//!                                             article index u32, term count u32
 //! ```
+//!
+//! The fragment index is the second half of the search: every word of a spaced script is cut into
+//! runs of two and of three characters when the book is built, so a query that is a prefix or a
+//! substring of a word has every fragment it needs to find the words that hold it. The build pays
+//! for that; a search does not.
 //!
 //! Every count and every offset is big endian and the terms are written in sorted order, so the
 //! same articles produce the same bytes on every machine: the file can be compared between two
@@ -36,7 +45,7 @@ use crate::{BookError, Field, SourceArticle, token};
 pub const MAGIC: [u8; 8] = *b"ROLABOOK";
 
 /// The format this build writes and the only one it reads.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 /// The number of fields a term keeps postings for.
 pub const FIELD_COUNT: usize = 5;
@@ -73,6 +82,8 @@ pub struct Decoded {
     pub articles: Vec<crate::Article>,
     /// The postings, keyed by term.
     pub terms: BTreeMap<String, TermFields>,
+    /// The character fragments of words, keyed by fragment.
+    pub fragments: BTreeMap<String, TermFields>,
 }
 
 /// Writes `articles` as one book file.
@@ -101,7 +112,7 @@ pub fn encode(articles: &[SourceArticle]) -> Result<Vec<u8>, BookError> {
         }
     }
 
-    let terms = collect_terms(&ordered);
+    let (terms, fragments) = collect_index(&ordered);
     let mut body = Encoder::default();
 
     body.u32(narrow(ordered.len(), "the number of articles")?);
@@ -117,18 +128,8 @@ pub fn encode(articles: &[SourceArticle]) -> Result<Vec<u8>, BookError> {
         body.string(&article.plain)?;
     }
 
-    body.u32(narrow(terms.len(), "the number of terms")?);
-    for (term, postings) in &terms {
-        body.string(term)?;
-        for field in Field::ALL {
-            let postings = postings[field.index()].as_slice();
-            body.u32(narrow(postings.len(), "a term's postings")?);
-            for posting in postings {
-                body.u32(narrow(posting.article, "an article's position")?);
-                body.u32(posting.tf);
-            }
-        }
-    }
+    write_index(&mut body, &terms, "the number of terms")?;
+    write_index(&mut body, &fragments, "the number of fragments")?;
 
     let body = body.finish();
     let mut file = Vec::with_capacity(HEADER_LEN + body.len());
@@ -195,33 +196,53 @@ pub fn decode(bytes: &[u8]) -> Result<Decoded, BookError> {
         articles.push(read_article(&mut reader)?);
     }
 
-    let term_count = usize::try_from(reader.u32()?)
-        .map_err(|_| malformed("the term count does not fit this machine"))?;
+    let terms = read_index(&mut reader, article_count, "term")?;
+    let fragments = read_index(&mut reader, article_count, "fragment")?;
 
-    if term_count > reader.remaining() {
-        return Err(malformed("the term count is larger than the file"));
+    if reader.remaining() != 0 {
+        return Err(malformed("the file holds bytes after its index"));
     }
 
-    let mut terms: BTreeMap<String, TermFields> = BTreeMap::new();
-    for _ in 0..term_count {
+    Ok(Decoded {
+        articles,
+        terms,
+        fragments,
+    })
+}
+
+/// Reads one of the book's two indexes out of the reader.
+fn read_index(
+    reader: &mut Reader<'_>,
+    article_count: usize,
+    what: &str,
+) -> Result<BTreeMap<String, TermFields>, BookError> {
+    let count = usize::try_from(reader.u32()?)
+        .map_err(|_| malformed("an index's count does not fit this machine"))?;
+
+    if count > reader.remaining() {
+        return Err(malformed("an index's count is larger than the file"));
+    }
+
+    let mut index: BTreeMap<String, TermFields> = BTreeMap::new();
+    for _ in 0..count {
         let term = reader.string()?;
         if term.is_empty() {
-            return Err(malformed("a term is empty"));
+            return Err(malformed(&format!("a {what} is empty")));
         }
 
         let mut term_fields = fields();
         for field in Field::ALL {
             let postings = &mut term_fields[field.index()];
-            let count = usize::try_from(reader.u32()?)
+            let postings_count = usize::try_from(reader.u32()?)
                 .map_err(|_| malformed("a posting count does not fit this machine"))?;
 
-            if count > reader.remaining() {
+            if postings_count > reader.remaining() {
                 return Err(malformed("a posting count is larger than the file"));
             }
 
-            postings.reserve(count);
+            postings.reserve(postings_count);
             let mut previous = None;
-            for _ in 0..count {
+            for _ in 0..postings_count {
                 let article = usize::try_from(reader.u32()?)
                     .map_err(|_| malformed("an article index does not fit this machine"))?;
 
@@ -232,7 +253,9 @@ pub fn decode(bytes: &[u8]) -> Result<Decoded, BookError> {
                 }
 
                 if previous.is_some_and(|previous| article <= previous) {
-                    return Err(malformed("a term's postings are not in article order"));
+                    return Err(malformed(
+                        "an index entry's postings are not in article order",
+                    ));
                 }
                 previous = Some(article);
 
@@ -245,16 +268,12 @@ pub fn decode(bytes: &[u8]) -> Result<Decoded, BookError> {
             }
         }
 
-        if terms.insert(term, term_fields).is_some() {
-            return Err(malformed("a term appears twice in the index"));
+        if index.insert(term, term_fields).is_some() {
+            return Err(malformed(&format!("a {what} appears twice in an index")));
         }
     }
 
-    if reader.remaining() != 0 {
-        return Err(malformed("the file holds bytes after its index"));
-    }
-
-    Ok(Decoded { articles, terms })
+    Ok(index)
 }
 
 /// Reads one article, in the order the format writes one.
@@ -287,9 +306,15 @@ fn read_article(reader: &mut Reader<'_>) -> Result<crate::Article, BookError> {
     ))
 }
 
-/// Every term of every field of every article, with the postings it appears in.
-fn collect_terms(ordered: &[&SourceArticle]) -> BTreeMap<String, TermFields> {
+/// Every term and every fragment of every field of every article, with the postings each appears in.
+///
+/// A term is cut from the field text as the search cuts a query; a fragment is cut from a Latin
+/// word only, since a Chinese-style word is already a character and a pair.
+fn collect_index(
+    ordered: &[&SourceArticle],
+) -> (BTreeMap<String, TermFields>, BTreeMap<String, TermFields>) {
     let mut terms: BTreeMap<String, TermFields> = BTreeMap::new();
+    let mut fragments: BTreeMap<String, TermFields> = BTreeMap::new();
 
     for (index, article) in ordered.iter().enumerate() {
         for field in Field::ALL {
@@ -301,20 +326,34 @@ fn collect_terms(ordered: &[&SourceArticle]) -> BTreeMap<String, TermFields> {
                 &article.plain,
             );
 
-            let mut counts: BTreeMap<String, u32> = BTreeMap::new();
+            let mut term_counts: BTreeMap<String, u32> = BTreeMap::new();
+            let mut fragment_counts: BTreeMap<String, u32> = BTreeMap::new();
+
             for term in token::terms(&text) {
-                let count = counts.entry(term.text).or_default();
+                if token::is_latin(&term.text) {
+                    for fragment in token::shingles(&term.text) {
+                        let count = fragment_counts.entry(fragment).or_default();
+                        *count = count.saturating_add(1);
+                    }
+                }
+
+                let count = term_counts.entry(term.text).or_default();
                 *count = count.saturating_add(1);
             }
 
-            for (term, tf) in counts {
+            for (term, tf) in term_counts {
                 let postings = terms.entry(term).or_insert_with(fields);
+                postings[field.index()].push(Posting { article: index, tf });
+            }
+
+            for (fragment, tf) in fragment_counts {
+                let postings = fragments.entry(fragment).or_insert_with(fields);
                 postings[field.index()].push(Posting { article: index, tf });
             }
         }
     }
 
-    terms
+    (terms, fragments)
 }
 
 /// Narrows a count to the format's own number type, naming what could not be named.
@@ -322,6 +361,31 @@ fn narrow(value: usize, what: &str) -> Result<u32, BookError> {
     u32::try_from(value).map_err(|_| BookError::Oversized {
         detail: format!("{what} does not fit in four bytes"),
     })
+}
+
+/// Writes one of the book's two indexes, in the order the decoder reads it.
+fn write_index(
+    body: &mut Encoder,
+    index: &BTreeMap<String, TermFields>,
+    what: &str,
+) -> Result<(), BookError> {
+    body.u32(narrow(index.len(), what)?);
+
+    for (term, postings) in index {
+        body.string(term)?;
+
+        for field in Field::ALL {
+            let postings = postings[field.index()].as_slice();
+            body.u32(narrow(postings.len(), "a posting list")?);
+
+            for posting in postings {
+                body.u32(narrow(posting.article, "an article's position")?);
+                body.u32(posting.tf);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// What a book that cannot be decoded says about itself.
@@ -528,5 +592,18 @@ mod tests {
                 field.label()
             );
         }
+    }
+
+    #[test]
+    fn a_latin_word_keeps_its_fragments() {
+        let bytes = encode(&[article("alpha")]).expect("the book encodes");
+        let decoded = decode(&bytes).expect("the book decodes");
+
+        assert!(decoded.fragments.contains_key("al"));
+        assert!(decoded.fragments.contains_key("alp"));
+        assert!(
+            !decoded.fragments.contains_key("安装"),
+            "a Chinese word is already a character and a pair"
+        );
     }
 }

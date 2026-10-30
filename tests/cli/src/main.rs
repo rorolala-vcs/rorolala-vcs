@@ -204,6 +204,67 @@ fn docs(rola: &Rola, dir: &Path, checked: &mut Checked) {
         &ran,
         "Install it from the release page",
     );
+    checked.wants(
+        "the table fills the width it was drawn at",
+        ran.stdout.lines().all(|line| line.chars().count() == 100),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["--json", "docs", "--search", "stall"]);
+    checked.exits("a substring of a word finds it", &ran, 0);
+    checked.wants(
+        "the substring is marked inside the word it was found in",
+        json(&ran).as_ref().is_some_and(|value| {
+            value
+                .get("entries")
+                .and_then(JsonValue::as_array)
+                .is_some_and(|entries| {
+                    entries.iter().any(|entry| {
+                        entry.get("name").and_then(JsonValue::as_str) == Some("install")
+                            && entry
+                                .get("snippets")
+                                .and_then(JsonValue::as_array)
+                                .is_some_and(|snippets| {
+                                    snippets.iter().any(|snippet| {
+                                        snippet
+                                            .get("text")
+                                            .and_then(JsonValue::as_str)
+                                            .is_some_and(|text| text.contains("stall"))
+                                            && snippet
+                                                .get("ranges")
+                                                .and_then(JsonValue::as_array)
+                                                .is_some_and(|ranges| {
+                                                    ranges.iter().any(|range| {
+                                                        range
+                                                            .get("length")
+                                                            .and_then(JsonValue::as_u64)
+                                                            == Some(5)
+                                                    })
+                                                })
+                                    })
+                                })
+                    })
+                })
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["--json", "docs", "--search", "INSTAL"]);
+    checked.exits("a query ignores case", &ran, 0);
+    checked.wants(
+        "the case-insensitive query finds the word",
+        json(&ran).as_ref().is_some_and(|value| {
+            value
+                .get("entries")
+                .and_then(JsonValue::as_array)
+                .is_some_and(|entries| {
+                    entries
+                        .iter()
+                        .any(|entry| entry.get("name").and_then(JsonValue::as_str) == Some("install"))
+                })
+        }),
+        &said(&ran),
+    );
 
     let ran = rola.run(dir, &["--json", "docs", "--search", "install"]);
     checked.exits("`--json docs --search` searches", &ran, 0);
