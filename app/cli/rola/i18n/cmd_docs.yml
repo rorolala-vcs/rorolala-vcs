@@ -6,7 +6,7 @@ docs:
       **Usage**: rola docs [--search] [--limit <N>] <text>
 
       **Flags**:
-          --search       Search the articles
+          --search       Search the articles; support multi keywords
           --limit <N>    Show at most N results
           --no-pager     Do not use a pager; write the results out directly
           --raw          Output the raw article content
@@ -17,7 +17,7 @@ docs:
       **用法**：rola docs [--search] [--limit <N>] <文本>
 
       **标识**：
-          --search       搜索文章
+          --search       搜索文章，支持多个关键词缩小范围
           --limit <N>    显示最多 N 条结果
           --no-pager     不使用分页器，直接写出结果
           --raw          输出原始文章内容
@@ -67,6 +67,14 @@ docs:
   err_missing_text_help:
     en: Write the query after the command, as in `rola docs --search install`
     zh-CN: 把查询写在命令后面，例如 `rola docs --search 安装`
+
+  err_unexpected_argument:
+    en: "`%{word}` is not an option `rola docs` accepts"
+    zh-CN: "`%{word}` 不是 `rola docs` 接受的选项"
+
+  err_unexpected_argument_help:
+    en: Run `rola docs --help` to see what it accepts
+    zh-CN: 运行 `rola docs --help` 看看它能接受什么
 
   err_limit_without_search:
     en: "`--limit` is only meaningful with `--search`"

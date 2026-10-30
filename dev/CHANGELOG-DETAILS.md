@@ -31,12 +31,12 @@ ordinary text.
 ### 1. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line
 
 `rola docs <TEXT>` reads one article of the built-in book by its exact name and prints it as it
-was written, through the program's own Markdown rendering. `rola docs --search <TEXT>` searches
-the book instead: an article is found when every term of the query is in it, the answer is drawn
-across the terminal the way `gh issue list` draws a listing — no borders, the header bold and
-underlined, the article's name as wide as the names that matched and the fragments filling the rest
-of the width, the matched words red and bold — and a Latin query is also found as a prefix or a
-substring of a word, which the book's build indexes every word for.
+was written, through the program's own Markdown rendering. `rola docs --search <TEXT>...` searches
+the book instead: the words are read as one query and an article is found when every term of it is
+in it, the answer is drawn across the terminal the way `gh issue list` draws a listing — no
+borders, the header bold and underlined, the article's name as wide as the names that matched and
+the fragments filling the rest of the width, the matched words red and bold — and a Latin query is
+also found as a prefix or a substring of a word, which the book's build indexes every word for.
 
 `--limit <N>` caps how many search answers are shown, twelve by default and only meaningful with
 `--search`. A search that finds one article, or one a run limited to a single answer, is answered

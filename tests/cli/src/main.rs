@@ -238,6 +238,36 @@ fn docs(rola: &Rola, dir: &Path, checked: &mut Checked) {
         &said(&ran),
     );
 
+    let ran = rola.run(dir, &["docs", "--search", "install", "release"]);
+    checked.exits("several search words are searched together", &ran, 0);
+    checked.wants(
+        "all search words have to be in the one article",
+        !ran.stdout.contains("ARTICLE") && ran.stdout.contains("Installing"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["--json", "docs", "--search", "install", "release"]);
+    checked.exits("several search words answer as a search", &ran, 0);
+    checked.wants(
+        "the words are one query, and only the article holding both answers",
+        json(&ran).as_ref().is_some_and(|value| {
+            value
+                .get("entries")
+                .and_then(JsonValue::as_array)
+                .is_some_and(|entries| {
+                    entries.len() == 1
+                        && entries[0].get("name").and_then(JsonValue::as_str) == Some("install")
+                })
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["docs", "install", "workspace"]);
+    checked.exits("a second article name is refused", &ran, 14);
+
+    let ran = rola.run(dir, &["docs", "--search", "install", "--bogus"]);
+    checked.exits("an unknown search option is refused", &ran, 255);
+
     let ran = rola.run(dir, &["--json", "docs", "--search", "stall"]);
     checked.exits("a substring of a word finds it", &ran, 0);
     checked.wants(

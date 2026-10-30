@@ -91,9 +91,10 @@ pub fn complete_docs(ctx: ShellContext) -> Suggest {
 /// Read an article of the built-in book, or search it
 ///
 /// `TEXT` names one article exactly, and the article is printed as it was written, through the
-/// program's Markdown rendering. `--search` makes `TEXT` a query instead: every word of it has to
-/// be in an article for it to be found, and what is drawn is a table of the names and the matched
-/// fragments, the matched words in red and bold.
+/// program's Markdown rendering. `--search` makes the words after it a query instead: every one of
+/// them has to be in an article for it to be found, and what is drawn is a table of the names and
+/// the matched fragments, the matched words in red and bold. A search that finds one article, or
+/// one a run limited to one, is answered with that article instead of the table.
 ///
 /// A query in Chinese is cut into characters and adjacent pairs, so a one-character query finds
 /// its line and a longer one asks for its phrase. `--limit` caps how many answers are drawn; it is
@@ -106,27 +107,67 @@ pub fn complete_docs(ctx: ShellContext) -> Suggest {
 ///
 /// Renders [`ErrorDocsNoBook`] when no book is beside the program or above the directory it was run
 /// in, [`ErrorDocsUnknownArticle`] when the name matches no article, [`ErrorDocsMissingText`] when
-/// `--search` is written with no text, and [`ErrorDocsLimitWithoutSearch`] when `--limit` is
-/// written without `--search`.
+/// `--search` is written with no text, [`ErrorDocsUnexpectedArgument`] when a search is given an
+/// option the command does not know, and [`ErrorDocsLimitWithoutSearch`] when `--limit` is written
+/// without `--search`.
 #[command(node = "docs", entry = EntryDocs)]
 pub fn docs(args: EntryDocs, no_pager: &mut ResNoPager) -> Next {
-    let picked = args
-        .pick(ARG_SEARCH)
-        .pick(ARG_LIMIT)
-        .pick(ARG_RAW)
-        .pick(arg![Option<String>])
-        .pick(&UNMATCHED)
-        .to_result();
-    let (search, limit, raw, text, unmatched) = match picked {
-        Ok(picked) => picked,
-        Err(next) => return next,
+    // `--search` is the one option that changes what the positional words mean: with it they are a
+    // list of terms, without it only the first is an article name and the rest are words the run has
+    // no use for. The list is read for the option first so each reading can pick its own shape.
+    let asks_to_search = args
+        .0
+        .iter()
+        .take_while(|word| word.as_str() != "--")
+        .any(|word| word == "--search");
+
+    let (limit, raw, texts, unmatched, searching) = if asks_to_search {
+        let picked = args
+            .pick(ARG_SEARCH)
+            .pick(ARG_LIMIT)
+            .pick(ARG_RAW)
+            .pick(arg![Vec<String>])
+            .pick(&UNMATCHED)
+            .to_result();
+        let (search, limit, raw, texts, unmatched) = match picked {
+            Ok(picked) => picked,
+            Err(next) => return next,
+        };
+
+        (limit, raw, texts, unmatched, matches!(search, Flag::Active))
+    } else {
+        let picked = args
+            .pick(ARG_LIMIT)
+            .pick(ARG_RAW)
+            .pick(arg![Option<String>])
+            .pick(&UNMATCHED)
+            .to_result();
+        let (limit, raw, text, unmatched) = match picked {
+            Ok(picked) => picked,
+            Err(next) => return next,
+        };
+
+        (
+            limit,
+            raw,
+            text.into_iter().collect::<Vec<_>>(),
+            unmatched,
+            false,
+        )
     };
 
     if let Some(next) = crate::unmatched::refused(&unmatched, "docs") {
         return next;
     }
 
-    let searching = matches!(search, Flag::Active);
+    if searching
+        && let Some(word) = texts
+            .iter()
+            .find(|word| word.starts_with('-') && word.as_str() != "-")
+    {
+        return ErrorDocsUnexpectedArgument { word: word.clone() }.into();
+    }
+
     let raw = matches!(raw, Flag::Active);
 
     // `--raw` writes the article as it was written, so there is nothing for a pager to add: the
@@ -136,7 +177,7 @@ pub fn docs(args: EntryDocs, no_pager: &mut ResNoPager) -> Next {
         **no_pager = true;
     }
 
-    let Some(text) = text else {
+    let Some(first) = texts.first() else {
         if searching {
             return ErrorDocsMissingText.into();
         }
@@ -149,10 +190,10 @@ pub fn docs(args: EntryDocs, no_pager: &mut ResNoPager) -> Next {
             return ErrorDocsLimitWithoutSearch.into();
         }
 
-        return StateDocs::article(text, raw).into();
+        return StateDocs::article(first.clone(), raw).into();
     }
 
-    StateDocs::search(text, limit.unwrap_or(DEFAULT_LIMIT), raw).into()
+    StateDocs::search(texts.join(" "), limit.unwrap_or(DEFAULT_LIMIT), raw).into()
 }
 
 /// The state a `docs` run starts in: which of the two readings it is.
@@ -562,6 +603,40 @@ failure!(ErrorDocsMissingText);
 pub fn render_error_docs_missing_text(error: ErrorDocsMissingText, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("docs.err_missing_text_help").trim()));
+    ec.exit_code = EC_ERR_DOCS_ARGUMENT;
+}
+
+/// Error: a search was given an option `rola docs` does not know.
+#[derive(Grouped)]
+pub struct ErrorDocsUnexpectedArgument {
+    /// The option as it was written.
+    word: String,
+}
+
+impl Failure for ErrorDocsUnexpectedArgument {
+    fn name(&self) -> &'static str {
+        "error_docs_unexpected_argument"
+    }
+
+    fn reason(&self) -> String {
+        t!("docs.err_unexpected_argument", word = self.word)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorDocsUnexpectedArgument);
+
+#[renderer(buffer)]
+pub fn render_error_docs_unexpected_argument(
+    error: ErrorDocsUnexpectedArgument,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("docs.err_unexpected_argument_help").trim())
+    );
     ec.exit_code = EC_ERR_DOCS_ARGUMENT;
 }
 
