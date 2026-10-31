@@ -20,6 +20,15 @@ internal static partial class Icons
     /// <summary>The key the `close` picture is held under.</summary>
     public const string Close = "rorolala.close";
 
+    /// <summary>The key the `extension` picture is held under.</summary>
+    public const string Extension = "rorolala.extension";
+
+    /// <summary>The key the `list_alt` picture is held under.</summary>
+    public const string ListAlt = "rorolala.list_alt";
+
+    /// <summary>The key the `settings` picture is held under.</summary>
+    public const string Settings = "rorolala.settings";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -27,5 +36,8 @@ internal static partial class Icons
         (CropSquare, "crop_square"),
         (FilterNone, "filter_none"),
         (Close, "close"),
+        (Extension, "extension"),
+        (ListAlt, "list_alt"),
+        (Settings, "settings"),
     ];
 }

@@ -74,6 +74,18 @@ internal static partial class Icons
     /// <summary>The key the `content_copy` picture is held under.</summary>
     public const string ContentCopy = "rorolala_vcs.content_copy";
 
+    /// <summary>The key the `task_alt` picture is held under.</summary>
+    public const string TaskAlt = "rorolala_vcs.task_alt";
+
+    /// <summary>The key the `work` picture is held under.</summary>
+    public const string Work = "rorolala_vcs.work";
+
+    /// <summary>The key the `alt_route` picture is held under.</summary>
+    public const string AltRoute = "rorolala_vcs.alt_route";
+
+    /// <summary>The key the `manage_accounts` picture is held under.</summary>
+    public const string ManageAccounts = "rorolala_vcs.manage_accounts";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -99,5 +111,9 @@ internal static partial class Icons
         (Sync, "sync"),
         (MoreVert, "more_vert"),
         (ContentCopy, "content_copy"),
+        (TaskAlt, "task_alt"),
+        (Work, "work"),
+        (AltRoute, "alt_route"),
+        (ManageAccounts, "manage_accounts"),
     ];
 }

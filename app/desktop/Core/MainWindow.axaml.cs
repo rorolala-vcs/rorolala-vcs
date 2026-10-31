@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -613,6 +614,71 @@ public partial class MainWindow : Window
         _loading.Finish();
     }
 
+    /// <summary>
+    /// The room between the picture of a dock and the dock's word, in the item that opens it.
+    /// </summary>
+    private const double DockMarkGap = 6.0;
+
+    /// <summary>
+    /// The height of the line a menu item's word stands on, in pixels, at the size a menu's words are set at.
+    /// </summary>
+    /// <remarks>
+    /// A dock's picture is sixteen pixels tall, and a menu's line is shorter than that: it is centred on the line and
+    /// the pixel it takes past it above and below is drawn into the item's own padding, so that an item with a picture
+    /// is the height of an item without one. What the height itself is, is the look's — a menu's word is not set at the
+    /// size the program's words are, and this is that size's line.
+    /// </remarks>
+    private const double MenuLine = 14.0;
+
+    /// <summary>
+    /// The header of the item that opens a dock in the Window menu: the dock's word, and the picture of the dock before it.
+    /// </summary>
+    /// <remarks>
+    /// The picture is part of the item's own header rather than its <c>Icon</c>, because the look's base theme draws an
+    /// item's check and its icon in one column: the tick of a dock that is open would be drawn over the picture that says
+    /// which dock it is. After the check there is a column for the word and room beside it, and the row keeps the height
+    /// every other item of a menu has, since the picture is fitted to the line the word stands on.
+    /// <para>
+    /// The word is an <see cref="AccessText"/>, which is what the base theme draws a menu's own header as: it is set at
+    /// the size a menu's words are set at, and a plain text block would be set at the program's size instead — larger
+    /// than every other item of a menu, which is what makes a row of those look as if it belonged in another program.
+    /// </para>
+    /// </remarks>
+    /// <param name="registration">The registration the item is made from.</param>
+    /// <returns>What the item says.</returns>
+    private Control DockHeader(DockRegistration registration)
+    {
+        var words = new AccessText
+        {
+            Text = _services.Docks.Text(registration.DisplayNameKey),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        if (
+            registration.IconKey is not { Length: > 0 } key
+            || _services.Icons.Find(key) is not { } picture
+        )
+        {
+            return words;
+        }
+
+        var fitted = new Panel
+        {
+            Width = Marks.MenuSize,
+            Height = MenuLine,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { Marks.Menu(picture) },
+        };
+
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = DockMarkGap,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { fitted, words },
+        };
+    }
+
     /// <summary>Builds the menu bar from what was registered, for the window this is.</summary>
     /// <remarks>
     /// The dock's own header commands are added under the Window menu rather than as menus of their own:
@@ -733,10 +799,7 @@ public partial class MainWindow : Window
 
         foreach (var registration in registrations)
         {
-            var entry = new MenuItem
-            {
-                Header = _services.Docks.Text(registration.DisplayNameKey),
-            };
+            var entry = new MenuItem { Header = DockHeader(registration) };
 
             if (registration.OpenMode == DockOpenMode.Toggle)
             {

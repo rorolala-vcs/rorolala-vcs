@@ -60,6 +60,16 @@ internal sealed class DockArea : UserControl
     public const string TitleClass = "dock-title";
 
     /// <summary>
+    /// The class the picture of the dock a tab names carries, where the dock registered one.
+    /// </summary>
+    /// <remarks>
+    /// A mark rather than a word, and marked for a theme to address it by for the same reason a tab is: what a dock
+    /// is is drawn in a strip, and what says it is the picture the plugin registered rather than one this file chose.
+    /// A dock with no picture registers none, and its tab carries nothing here.
+    /// </remarks>
+    public const string IconClass = "dock-title-icon";
+
+    /// <summary>
     /// The class the first header a region is showing carries.
     /// </summary>
     /// <remarks>
@@ -179,13 +189,6 @@ internal sealed class DockArea : UserControl
     /// </para>
     /// </remarks>
     private const double DockPointEdge = 120;
-
-    /// <summary>How many pixels wide and tall a contributed mark is drawn in a menu item.</summary>
-    /// <remarks>
-    /// The size a menu item reserves for a mark of its own, so that an item with a picture and one without keep
-    /// their words in the same column rather than stepping sideways when a picture appears.
-    /// </remarks>
-    private const double MenuMark = 16.0;
 
     /// <summary>How large a command's picture is in a strip, which is the size of the words beside it.</summary>
     private const double CommandMark = 14.0;
@@ -961,13 +964,21 @@ internal sealed class DockArea : UserControl
     /// <returns>What the area placed.</returns>
     private Placed Make(DockInstance instance, Region region)
     {
-        // The room the tab keeps either side of its name, which is the width the close is given at its end as
-        // well: one number, because the close is a strip of the tab's own right side — that room wide and as
-        // tall as the tab — and the name keeps as much again on its left so that it stays in the middle of the
-        // tab rather than in the middle of what the close left of it. It has to be room enough for the cross and
-        // the room the cross keeps from the tab's end both, or the cross is pressed against the name it is drawn
-        // beside.
+        // The room the tab keeps either side of its name: one number, because the close is a strip of the tab's own
+        // right side — that room wide and as tall as the tab — and the name keeps as much again on its right so that it
+        // stays in the middle of the tab rather than in the middle of what the close left of it. It has to be room
+        // enough for the cross and the room the cross keeps from the tab's end both, or the cross is pressed against
+        // the name it is drawn beside.
         const double Room = 26.0;
+
+        // What the left of a tab is made of where it carries the dock's picture: the room between the tab's edge and the
+        // picture, the picture, and the room between the picture and the word. Only the first is the room widened for the
+        // picture — the word keeps as much from the picture as it kept from the tab's edge before there was one — and the
+        // whole is kept whether or not the dock has a picture so that two tabs side by side begin their words in the same
+        // place.
+        const double PictureRoom = 18.0;
+        const double PictureGap = 6.0;
+        const double LeadingRoom = PictureRoom + Marks.TabSize + PictureGap;
 
         var name = new TextBlock
         {
@@ -1002,17 +1013,33 @@ internal sealed class DockArea : UserControl
             _manager.Close(instance);
         };
 
-        // Three columns: the room the close takes, the name, and the close itself. The first holds nothing and
-        // is there for the name's sake — a box of two would centre the name in what is left of the close instead
-        // of in the tab, which moves the title every time the pointer crosses it.
+        // The dock's own picture, where the dock registered one: read from the library the Window menu reads its marks
+        // from, and stamped in the ink of the tab it sits in rather than in a colour of its own.
+        var picture = instance.Registration.IconKey is { Length: > 0 } key
+            ? _windows.Pictures.Find(key)
+            : null;
+
+        // Three columns: the room on the left, the name, and the close itself. The first holds the dock's picture where
+        // it has one and is empty where it has not — a box of two would centre the name in what is left of the close
+        // instead of in the tab, which moves the title every time the pointer crosses it — and the picture stands at the
+        // tab's own edge in that room's first part, with only a little between it and the word that follows.
         var box = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions($"{Room},*,{Room}"),
+            ColumnDefinitions = new ColumnDefinitions($"{LeadingRoom},*,{Room}"),
             RowDefinitions = new RowDefinitions("*"),
         };
 
         Grid.SetColumn(name, 1);
         Grid.SetColumn(close, 2);
+
+        if (picture is not null)
+        {
+            var mark = Marks.Tab(picture, IconClass);
+            mark.HorizontalAlignment = HorizontalAlignment.Left;
+            mark.Margin = new Thickness(PictureRoom, 0, 0, 0);
+
+            box.Children.Add(mark);
+        }
 
         box.Children.Add(name);
         box.Children.Add(close);
@@ -1127,7 +1154,7 @@ internal sealed class DockArea : UserControl
 
             if (item.IconKey is { } key && _windows.Pictures.Find(key) is { } picture)
             {
-                entry.Icon = MenuPicture(picture);
+                entry.Icon = Marks.Menu(picture);
             }
 
             entry.Click += (_, _) => item.Command(was);
@@ -1163,44 +1190,6 @@ internal sealed class DockArea : UserControl
         }
 
         return (menu, heading);
-    }
-
-    /// <summary>
-    /// A contributed picture, drawn as a menu item's own mark.
-    /// </summary>
-    /// <remarks>
-    /// A border whose fill is the picture rather than the picture itself, so that the mark takes the ink of the
-    /// item it sits in: what a menu item is filled with is the look's answer, and a picture that carried its own
-    /// colours would be a mark that vanished into the fill the day the look changed.
-    /// </remarks>
-    /// <param name="picture">The picture to stamp.</param>
-    /// <returns>What to put in the item.</returns>
-    private static Control MenuPicture(Bitmap picture)
-    {
-        var mark = new Border
-        {
-            Width = MenuMark,
-            Height = MenuMark,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
-        };
-
-        // What states the ink is the item, and what is between the two — the presenter an item puts its content
-        // in — states nothing of its own, so the nearest item is named rather than guessed at.
-        mark.Bind(
-            Border.BackgroundProperty,
-            new Binding("Foreground")
-            {
-                RelativeSource = new RelativeSource
-                {
-                    Mode = RelativeSourceMode.FindAncestor,
-                    AncestorType = typeof(MenuItem),
-                },
-            }
-        );
-
-        return mark;
     }
 
     /// <summary>Whether a press landed on the close a header carries.</summary>

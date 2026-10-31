@@ -58,6 +58,11 @@ icons = [
     "delete",
     "local_offer",
     "create_new_folder",
+    # The pictures the two docks this plugin registers are drawn as: the directory browser's folder and the
+    # tree's nodes. What a registration names is worn by the item that opens the dock in the Window menu and at
+    # the left of the dock's tab.
+    "folder",
+    "account_tree",
 ]
 
 [[set]]
@@ -127,6 +132,15 @@ icons = [
     "sync",
     "more_vert",
     "content_copy",
+    # The pictures the docks this plugin registers are drawn as, which is what the Window menu lists each of
+    # them by and what the left of its tab wears: the Overview is a checklist with its last line ticked — a
+    # reading of the work that is done rather than a task — the Workspace is the work as a case, the Version
+    # Graph is the way a change comes round again through one file rather than a chart, and the Accounts are the
+    # person the work acts as.
+    "task_alt",
+    "work",
+    "alt_route",
+    "manage_accounts",
 ]
 
 [[set]]
@@ -141,7 +155,28 @@ key = "rorolala"
 # while it is not maximized, and `filter_none` the two squares — one behind the other — that say pressing
 # it puts the window back the size it was. Nothing here is `fullscreen` or `open_in_full`: this window
 # has no full-screen button, and a picture for one would be a picture nothing wears.
-icons = ["minimize", "crop_square", "filter_none", "close"]
+#
+# The last three are the kernel's own docks, the ones the program itself registers rather than a plugin: the
+# Plugin Manager is a puzzle piece, the Log is a list of lines, and the Preferences are a machine's own cog. They
+# are the program's pictures for the same reason the buttons above are — the docks are the kernel's — and each is
+# worn by the item that opens its dock in the Window menu and at the left of the dock's tab.
+icons = [
+    "minimize",
+    "crop_square",
+    "filter_none",
+    "close",
+    "extension",
+    "list_alt",
+    "settings",
+]
+
+[[set]]
+plugin = "TerminalPlugin"
+key = "rorolala_terminal"
+
+# The picture of this plugin's one dock, which is what the Window menu lists it by and what its tab wears: the
+# set draws a window with a prompt in it, which is the shell's own mark rather than a picture of this program's.
+icons = ["terminal"]
 
 [[set]]
 plugin = "RorolalaLauncher"

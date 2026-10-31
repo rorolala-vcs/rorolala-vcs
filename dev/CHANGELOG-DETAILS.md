@@ -134,7 +134,7 @@ instance of it — and is raised as it moves. That is what a dock's own keys are
 folded into the focus rather than bound over the whole program; the folding itself is not in this change.
 
 **Breaking:** the plugin contract is 0.14.0. It gained the focus a plugin reads, the reveal a view asks the browser
-with, and the name a dock may answer for itself — each described in its own entry.
+with, the name a dock may answer for itself, and the picture a dock may be drawn by — each described in its own entry.
 
 ### 2. [`app`] [`rola`] [`desktop`] Ask the Desktop window to say when it is up
 
@@ -173,7 +173,32 @@ The book is found beside the program an export or an install puts it beside, or 
 from a checkout — above the directory it was run in, under `build/`; a checkout that has not run
 `cargo dev book` is told the book is missing rather than answered with nothing.
 
-### 4. [`app`] [`RorolalaDesktop`] [`docking`] Name a dock by the place it is looking at
+### 4. [`app`] [`RorolalaDesktop`] [`docking`] Mark a dock by its picture in the Window menu and in its tab
+
+A dock now says what it is with a picture as well as a name. The item that opens it in the Window menu draws that
+picture in its own header, after the check that says whether the dock is open — the base theme keeps an item's check and
+its picture in one slot, so the picture would otherwise be drawn over the tick — and its word is set the way a menu's
+other words are, so that its row is the height of every other item of the menu. The left of the dock's tab wears the
+picture too, in the ink of whatever it is drawn in: a strip of tabs says what is in a window by shape before it is read,
+and a menu that lists a program's docks beside a file manager's is one a picture makes a row of rather than a list of.
+
+The docks that ship are drawn by the pinned Material Design set: the Plugin Manager is a puzzle piece, the Log is a
+list of lines, the Preferences are a cog, Directories is a folder, the Folder Tree is a tree of nodes, the Overview is
+a checklist whose last line is ticked, the Workspace is the work as a case, the Version Graph is the way a change comes
+round again through one file, the Accounts are the person the work acts as, and the Terminal is a window with a prompt
+in it. A dock that names no picture has none, and its tab is the tab it was before.
+
+A tab's picture is drawn at a whole share of the size the set draws it at, so its strokes land on pixels rather than
+between them, and the room the tab keeps for it is on the picture's left: the word follows the picture as closely as it
+followed the tab's own edge before there was one. The word in a tab is set at the weight the program's words are set at,
+and the tab being read is not set heavier than the rest: the strip is a row of labels rather than of actions, and the one
+being read is told apart by the ground it is drawn on.
+
+A plugin says what its docks look like through the contract's newest field, a key into the icon library — the same
+library a menu item's mark and an entry's badge are read from — so a registration carries a key and the picture travels
+with the plugin that draws it.
+
+### 5. [`app`] [`RorolalaDesktop`] [`docking`] Name a dock by the place it is looking at
 
 A dock's tab now says where the dock is looking rather than only what kind of dock it is: a browser is one dock made
 again for every place, so a strip of tabs all called "Directories" was a strip nobody could tell apart. What the tab
@@ -193,7 +218,7 @@ about it: browsing the drives with the Git plugin loaded used to fail where a re
 all. A dock says what it is called through the contract's newest answer, which can say both the name a tab carries and
 the whole place it may be only part of.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu
 
 Right-clicking a cell of a directory listing now offers to copy the words shown in it — a name,
 a size, a date, the owner a column says — as the first entry of the menu the row already had. The
@@ -202,7 +227,7 @@ the size column copies the size, the owner column copies the owner. What is copi
 whole text rather than the part the column had room to show, and it works in both arrangements the
 dock reads entries in, the rows and the tiles.
 
-### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show a path from an Overview row in its folder, with the version graph following it
+### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show a path from an Overview row in its folder, with the version graph following it
 
 The path a change is read by in the Overview is now a way into the work: pressing the From or To cell of a row asks the
 browser to show the place the path names. A path of the work's is joined to the Workspace root the reading was made over
@@ -218,7 +243,7 @@ path whose directory is not there either is said rather than stepped to, so the 
 dock is told what to show with the same request it is opened with, so a browser opened onto a place and one shown a place
 answer the same shape.
 
-### 7. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
+### 8. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
 
 A book written as Markdown with a YAML front matter block is now compiled into one searchable
 file, and opened by a crate that answers a query with the articles it found, their descriptions,
@@ -258,7 +283,7 @@ string is released with its `free_*`, and `tests/ffi-c/ffi-book` checks the nest
 program. `modules/rola-sharp` gains `RolaBookSearch`, whose `BookSnippet` splits its text into
 ordinary and matched runs, so a renderer draws the highlight without converting the ranges itself.
 
-### 8. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
+### 9. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
 
 `TextRendering::render_document` draws a document rather than a line: a heading is set in two
 columns from the left with its `#` marker kept and its title bold on the terminal's reverse-video
@@ -271,7 +296,7 @@ a page rather than as the Markdown the index carries.
 `trd!` and `TextRendering::render` still draw a line where it was written, so messages, status
 lines and help keep the shape their callers chose.
 
-### 9. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
+### 10. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
 
 The command-line theme now carries a `Table` for the listings a `gh issue list`-style table is made
 of: columns with titles and rows of cells, drawn across the terminal instead of only as wide as
@@ -290,7 +315,7 @@ red and bold a search puts on a matched word — without handing the table a col
 parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
 the matched fragments in a filled one.
 
-### 10. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
+### 11. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
 
 `ThemeChoice::auto_select` now answers `Pretty` on a terminal that names itself one of the modern
 terminals, instead of leaving `Pretty` to an explicit `--theme-choice pretty`. The list is Windows

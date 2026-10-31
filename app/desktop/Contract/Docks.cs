@@ -176,13 +176,20 @@ public interface IDockView
 /// The factory making a view. It is told nothing about where the dock will be, because where it ends up is
 /// the layout tree's answer and is not known when the view is made: a dock moved by hand is the same dock.
 /// </param>
+/// <param name="IconKey">
+/// A picture in the icon library naming what the dock is, or nothing for a dock with no picture. It is what the
+/// item that opens the dock in the <c>Window</c> menu wears and what the left of the dock's tab wears, and it is a
+/// key rather than a picture for the reason every other mark is: the library holds one picture per key, and a
+/// registration only says which.
+/// </param>
 public sealed record DockRegistration(
     PluginId Owner,
     string DockNameId,
     string DisplayNameKey,
     DockOpenMode OpenMode,
     DockSide DefaultSide,
-    Func<IDockView> Create
+    Func<IDockView> Create,
+    string? IconKey = null
 );
 
 /// <summary>Where a plugin registers docks.</summary>

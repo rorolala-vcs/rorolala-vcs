@@ -73,6 +73,11 @@ public sealed class FileSystemPlugin : IRolaPlugin
 
         host.I18n.RegisterDirectory(Translations());
 
+        // The pictures this plugin draws are contributed before anything reads one: the docks this registers name the
+        // one their tab and their Window menu item wear, so the library has to hold them by the time a dock is made.
+        // What was read here is the library's for the run, which is why it is not let go of (see `Icons.Declare`).
+        Icons.Declare(host.Icons);
+
         // The commands the file operations are carried out with, and the reading of them. They are
         // settings rather than constants because the tool that does the work is another program's, and a
         // system may keep it elsewhere — or a user may prefer another. What they are until they are changed
@@ -231,7 +236,8 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.directories",
                 DockOpenMode.New,
                 DockSide.Center,
-                () => new DirectoryDock(host, shared, browser, clip, logical)
+                () => new DirectoryDock(host, shared, browser, clip, logical),
+                Icons.Folder
             )
         );
 
@@ -242,7 +248,8 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 "rorolala_file_system.tree",
                 DockOpenMode.Toggle,
                 DockSide.Left,
-                () => new TreeDock(host, browser, clip, logical)
+                () => new TreeDock(host, browser, clip, logical),
+                Icons.AccountTree
             )
         );
     }

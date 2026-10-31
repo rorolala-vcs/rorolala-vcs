@@ -38,6 +38,9 @@
     <!-- And the one that shows docks of its own, which are read against where the File System plugin
          is rooted: the two are one plugin depending on another, which is what this checks. -->
     <ProjectReference Include="../../app/desktop/Plugins/RorolalaVCSPlugin/RorolalaVCSPlugin.csproj" />
+    <!-- The Terminal, whose one dock names a picture the host's library holds: what is checked is that a
+         plugin's mark reaches the library at all, which its own start-up is what does. -->
+    <ProjectReference Include="../../app/desktop/Plugins/TerminalPlugin/TerminalPlugin.csproj" />
   </ItemGroup>
 
   <ItemGroup>

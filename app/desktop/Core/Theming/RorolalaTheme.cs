@@ -1551,6 +1551,11 @@ internal sealed class RorolalaTheme
             // because that is the edge between the tabs and the room the strip keeps beside them — and the
             // tab that is both ends of a strip of one is closed on its right and open on its left, where the
             // strip's own edge already is. Nothing is drawn on the top or the bottom, which are the strip's.
+            //
+            // A tab's name is set at the weight the program's words are set at, and the tab being read is no
+            // heavier than the rest: a strip of names is a strip of labels rather than of actions, and the one
+            // being read is told apart by the ground it is drawn on. A lighter weight was tried and reads thinner
+            // than a label of the program's should at this size — the thin strokes go first at the size a tab is.
             On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass),
                 Brushed(TemplatedControl.BackgroundProperty, TabClear),
@@ -1558,6 +1563,7 @@ internal sealed class RorolalaTheme
                 Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
                 new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
                 Brushed(TemplatedControl.ForegroundProperty, Muted),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.Normal),
                 new Setter(TemplatedControl.TransitionsProperty, Fading())
             ),
             On(
@@ -1588,7 +1594,6 @@ internal sealed class RorolalaTheme
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(DockArea.SelectedClass),
                 Brushed(TemplatedControl.BackgroundProperty, Elevated),
                 Brushed(TemplatedControl.ForegroundProperty, Foreground),
-                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold),
                 // Down by the line the strip draws along its foot, so that this tab is drawn over it: a tab
                 // that is read is joined to what it is a tab of, and the line is the row's rather than the
                 // tab's, so covering it is what leaves the join (see the strip's own rule). One pixel of

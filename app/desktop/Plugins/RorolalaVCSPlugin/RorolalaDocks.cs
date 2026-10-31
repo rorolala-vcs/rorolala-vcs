@@ -92,17 +92,19 @@ internal static class RorolalaDocks
             owner,
             OverviewNameId,
             OverviewKey,
+            Icons.TaskAlt,
             () => new OverviewDock(host, host.Log, host.Files, host.Refocus, hub, sync, fetch)
         );
-        Add(host, owner, WorkspaceNameId, WorkspaceKey, () => new RorolalaDock(host.Log));
+        Add(host, owner, WorkspaceNameId, WorkspaceKey, Icons.Work, () => new RorolalaDock(host.Log));
         Add(
             host,
             owner,
             VersionGraphNameId,
             VersionGraphKey,
+            Icons.AltRoute,
             () => new VersionGraphDock(host, statuses, sync, fetch, hub)
         );
-        Add(host, owner, AccountsNameId, AccountsKey, () => new AccountsDock(host));
+        Add(host, owner, AccountsNameId, AccountsKey, Icons.ManageAccounts, () => new AccountsDock(host));
     }
 
     /// <summary>
@@ -117,16 +119,18 @@ internal static class RorolalaDocks
     /// <param name="owner">This plugin, which is what the registration is attributed to.</param>
     /// <param name="nameId">The dock's stable name id.</param>
     /// <param name="labelKey">An i18n key for the dock's title.</param>
+    /// <param name="iconKey">The picture the dock is drawn by, in the Window menu and at the left of its tab.</param>
     /// <param name="make">What the dock shows, made once per request for it.</param>
     private static void Add(
         IPluginHost host,
         PluginId owner,
         string nameId,
         string labelKey,
+        string iconKey,
         Func<IDockView> make
     ) =>
         host.Docks.Register(
-            new DockRegistration(owner, nameId, labelKey, DockOpenMode.Toggle, DockSide.Center, make)
+            new DockRegistration(owner, nameId, labelKey, DockOpenMode.Toggle, DockSide.Center, make, iconKey)
         );
 }
 

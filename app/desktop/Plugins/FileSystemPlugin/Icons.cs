@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Styling;
@@ -508,6 +509,34 @@ internal static partial class Icons
             Background = new SolidColorBrush(directory ? Directory : File),
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+    /// <summary>
+    /// Contributes this plugin's own pictures to the library the host draws marks from.
+    /// </summary>
+    /// <remarks>
+    /// The toolbar's marks and what an entry's menu wears are read from this plugin's own assembly (see
+    /// <see cref="Picture(string)"/>), because they are this plugin's furniture. A dock's registration is different: the host
+    /// draws what it names, in the Window menu and at the left of the dock's tab, so a key it names has to be in the
+    /// host's library rather than only here — and that library is the one place a registration's picture can be read
+    /// from.
+    /// </remarks>
+    /// <param name="library">The library to add them to.</param>
+    // The pictures are handed to the library, which holds them for as long as the program runs: they are not lost at
+    // the end of this scope, so there is nothing here to dispose.
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "the icon library holds each picture for the life of the program, so handing one over is not losing it"
+    )]
+    public static void Declare(IIconLibrary library)
+    {
+        ArgumentNullException.ThrowIfNull(library);
+
+        foreach (var (key, _) in Pictures)
+        {
+            library.Add(key, Picture(key));
+        }
+    }
 
     /// <summary>Every picture read so far, so that one asked for twice is read once.</summary>
     private static readonly Dictionary<string, Bitmap> Read = new(StringComparer.Ordinal);

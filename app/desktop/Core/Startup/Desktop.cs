@@ -368,7 +368,8 @@ internal sealed class Desktop
                         plugins,
                         services.I18n,
                         plugins.Configuration
-                    )
+                    ),
+                Icons.Extension
             )
         );
 
@@ -379,7 +380,8 @@ internal sealed class Desktop
                 "dock.log",
                 DockOpenMode.Toggle,
                 DockSide.Bottom,
-                () => new LogDock(services.Log)
+                () => new LogDock(services.Log),
+                Icons.ListAlt
             )
         );
 
@@ -396,7 +398,8 @@ internal sealed class Desktop
                         plugins,
                         services.I18n,
                         services.Theme
-                    )
+                    ),
+                Icons.Settings
             )
         );
 

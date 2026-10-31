@@ -43,6 +43,10 @@ public sealed class TerminalPlugin : IRolaPlugin
 
         host.I18n.RegisterDirectory(Translations());
 
+        // The picture of the one dock this plugin registers is contributed before the dock is made, since the host is
+        // what draws it: the Window menu item that opens a terminal, and the left of the dock's tab.
+        Icons.Declare(host.Icons);
+
         // The program, its arguments and the face it is drawn in are the user's answers rather than this
         // plugin's: a machine may name a shell this program would not guess, and a user may want one started
         // with a flag. They are declared here, so that the preference panel shows them and keeps what is
@@ -59,7 +63,8 @@ public sealed class TerminalPlugin : IRolaPlugin
                 "rorolala_terminal.name",
                 DockOpenMode.New,
                 DockSide.Bottom,
-                () => new TerminalDock(host.Log)
+                () => new TerminalDock(host.Log),
+                Icons.Terminal
             )
         );
     }
