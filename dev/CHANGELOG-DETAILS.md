@@ -118,7 +118,16 @@ The book is found beside the program an export or an install puts it beside, or 
 from a checkout — above the directory it was run in, under `build/`; a checkout that has not run
 `cargo dev book` is told the book is missing rather than answered with nothing.
 
-### 3. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu
+
+Right-clicking a cell of a directory listing now offers to copy the words shown in it — a name,
+a size, a date, the owner a column says — as the first entry of the menu the row already had. The
+words are written on the entry, so a menu opened over a row says which of its cells it would copy:
+the size column copies the size, the owner column copies the owner. What is copied is the cell's
+whole text rather than the part the column had room to show, and it works in both arrangements the
+dock reads entries in, the rows and the tiles.
+
+### 4. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
 
 A book written as Markdown with a YAML front matter block is now compiled into one searchable
 file, and opened by a crate that answers a query with the articles it found, their descriptions,
@@ -158,7 +167,7 @@ string is released with its `free_*`, and `tests/ffi-c/ffi-book` checks the nest
 program. `modules/rola-sharp` gains `RolaBookSearch`, whose `BookSnippet` splits its text into
 ordinary and matched runs, so a renderer draws the highlight without converting the ranges itself.
 
-### 4. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
+### 5. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
 
 `TextRendering::render_document` draws a document rather than a line: a heading is set in two
 columns from the left with its `#` marker kept and its title bold on the terminal's reverse-video
@@ -171,7 +180,7 @@ a page rather than as the Markdown the index carries.
 `trd!` and `TextRendering::render` still draw a line where it was written, so messages, status
 lines and help keep the shape their callers chose.
 
-### 5. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
+### 6. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
 
 The command-line theme now carries a `Table` for the listings a `gh issue list`-style table is made
 of: columns with titles and rows of cells, drawn across the terminal instead of only as wide as
@@ -190,7 +199,7 @@ red and bold a search puts on a matched word — without handing the table a col
 parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
 the matched fragments in a filled one.
 
-### 6. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
+### 7. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
 
 `ThemeChoice::auto_select` now answers `Pretty` on a terminal that names itself one of the modern
 terminals, instead of leaving `Pretty` to an explicit `--theme-choice pretty`. The list is Windows

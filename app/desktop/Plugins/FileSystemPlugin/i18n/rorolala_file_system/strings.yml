@@ -113,6 +113,11 @@ rorolala_file_system:
   copy:
     en: Copy
     zh-CN: 复制
+  # The menu entry that copies the words of the cell the pointer is on. The words are written on it, because a
+  # menu opened on a row is opened over one cell of it and a plain "Copy" would not say which cell's text it is.
+  copy_text:
+    en: "Copy “%{text}”"
+    zh-CN: "复制「%{text}」"
   cut:
     en: Cut
     zh-CN: 剪切

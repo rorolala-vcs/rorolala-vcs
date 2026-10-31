@@ -572,6 +572,9 @@ internal abstract class EntryView<TItem> : EntryView
     /// <summary>How tall a row is where nothing on screen says, which is only ever a first guess.</summary>
     private const double RowGuess = 28.0;
 
+    /// <summary>How wide the words in a copy entry are shown before they are cut, since a name may be long.</summary>
+    private const double WidestCopy = 360;
+
     /// <summary>Every row on screen, so that a faded cut and a moved column reach all of them.</summary>
     private readonly List<(TItem Item, Control Row)> _rows = [];
 
@@ -673,6 +676,17 @@ internal abstract class EntryView<TItem> : EntryView
 
     /// <summary>The press a drag would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _from;
+
+    /// <summary>
+    /// The words a right press landed on, which the menu opened there copies.
+    /// </summary>
+    /// <remarks>
+    /// Read when the press lands rather than when the menu opens, because the menu is laid out before it is shown
+    /// and the press is over by then. It is one cell of one row — what the reader pointed at — so it is cleared
+    /// when it has been read: a menu opened from the keyboard is one no press landed on, and it must not offer to
+    /// copy what some earlier press was on.
+    /// </remarks>
+    private string? _pointed;
 
     /// <summary>The row wearing the drop mark, so that it can be taken off again.</summary>
     private Control? _marked;
@@ -892,7 +906,31 @@ internal abstract class EntryView<TItem> : EntryView
     protected Control Prepared(TItem item, Control row)
     {
         var menu = new ContextMenu();
-        menu.Opening += (_, _) => Source.Fill(menu, this, Chosen(item), force: Held);
+
+        menu.Opening += (_, _) =>
+        {
+            Source.Fill(menu, this, Chosen(item), force: Held);
+
+            // The words the menu was opened on come first, above what the listing offers about the entry: what a
+            // reader pointed at is the thing whose text they meant to take, and the actions about the entry as a
+            // whole read after it. A menu opened from the keyboard was pointed at nothing.
+            var words = _pointed;
+
+            _pointed = null;
+
+            if (words is not { Length: > 0 })
+            {
+                return;
+            }
+
+            if (menu.Items.Count > 0)
+            {
+                menu.Items.Insert(0, new Separator());
+            }
+
+            menu.Items.Insert(0, Copied(words));
+        };
+
         row.ContextMenu = menu;
 
         // What the pointer held is read when it is pressed, because the menu that opens next is laid out before
@@ -923,6 +961,54 @@ internal abstract class EntryView<TItem> : EntryView
 
     /// <summary>Whether Shift was held when the pointer was last pressed, which a menu opens with.</summary>
     protected bool Held { get; private set; }
+
+    /// <summary>
+    /// The words a press landed on, or nothing where it landed on a picture or on the room between two columns.
+    /// </summary>
+    /// <remarks>
+    /// The nearest words under the pointer rather than the cell they are in: a cell may be a pill or a mark with
+    /// the words inside it, and what is shown there is what a reader would say they pointed at.
+    /// </remarks>
+    /// <param name="source">What the pointer was over.</param>
+    /// <returns>The words, or nothing.</returns>
+    private static string? Words(object? source)
+    {
+        for (Visual? at = source as Visual; at is not null; at = at.GetVisualParent())
+        {
+            if (at is TextBlock { Text: { Length: > 0 } words })
+            {
+                return words;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The menu entry that copies the words a press landed on.
+    /// </summary>
+    /// <remarks>
+    /// What it would copy is written on it, because a menu on a row is opened over one cell of it and a word such
+    /// as "Copy" would not say which cell's text — the size, the owner and the name are all cells of one row.
+    /// </remarks>
+    /// <param name="words">What would be copied.</param>
+    /// <returns>The entry.</returns>
+    private MenuItem Copied(string words)
+    {
+        var entry = new MenuItem
+        {
+            Header = new TextBlock
+            {
+                Text = RolaI18N.Get("rorolala_file_system.copy_text", words),
+                MaxWidth = WidestCopy,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            },
+        };
+
+        entry.Click += (_, _) => Openers.Copy(this, words, Host.Log.Error);
+
+        return entry;
+    }
 
     /// <summary>Shows the forced actions while Shift is held, and hides them when it is let go.</summary>
     /// <param name="menu">The menu being read.</param>
@@ -1535,6 +1621,10 @@ internal abstract class EntryView<TItem> : EntryView
 
         _mayFrame = false;
 
+        // A press is a new thing to be about, and what the last one landed on is not it: what the menu opened on
+        // this press copies is settled below, and a menu opened from the keyboard copies nothing.
+        _pointed = null;
+
         // A column edge is taken before the choice and the frame, and taken away from whatever is under
         // it: a press there resizes the column, and marked handled here it never reaches the grip the
         // look draws, whose own drag would then be a second answer to the same press.
@@ -1556,6 +1646,10 @@ internal abstract class EntryView<TItem> : EntryView
             {
                 _lead = at;
             }
+
+            // What a right press landed on is the cell the menu is about: the words a reader is pointing at, read
+            // now because the menu that opens next is laid out before the press can be asked about again.
+            _pointed = Words(e.Source);
 
             return;
         }
