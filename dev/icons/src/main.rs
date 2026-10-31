@@ -6,12 +6,17 @@
 //! how to draw it again — and the C# keys the project reads them by. Adding a picture is therefore a line
 //! in the manifest rather than an edit in four places.
 //!
+//! A page written beside the clone lets the whole set be looked through, which is how a picture is chosen
+//! before it is named in the manifest.
+//!
 //! This is a development tool: it is crude on purpose, and it is what runs, not the interface.
 
 #![deny(warnings)]
 #![deny(rust_2018_idioms)]
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
+
+mod preview;
 
 use std::fmt::Write as _;
 use std::fs;
@@ -127,6 +132,9 @@ fn draw(root: &Path) -> Result<(), String> {
 
     println!("==> icons at {}", manifest.material.commit);
     ensure_set(root, &manifest.material)?;
+
+    let page = preview::write(root, &root.join(CLONE))?;
+    println!("==> {}", page.display());
 
     let license = fs::read_to_string(root.join(CLONE).join("LICENSE"))
         .map_err(|error| format!("the set's license could not be read: {error}"))?;

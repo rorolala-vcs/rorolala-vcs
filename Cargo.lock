@@ -3786,6 +3786,7 @@ version = "0.1.3"
 dependencies = [
  "resvg",
  "serde",
+ "serde_json",
  "toml 0.8.23",
 ]
 

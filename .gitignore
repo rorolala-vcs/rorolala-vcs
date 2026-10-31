@@ -51,8 +51,10 @@ nul
 __*
 
 # Third-party sources the build draws from rather than carries: cloned where a script needs them, and
-# ignored because what is drawn from them is what is committed. See `cargo dev icons`.
+# ignored because what is drawn from them is what is committed. See `cargo dev icons`. The preview page
+# is written beside the clone rather than into it, so that the clone stays exactly what the pin holds.
 /THIRD-PARTY/material-icons/
+/THIRD-PARTY/material-icon-preview/
 
 # Corpora are not carried: a format's own files are megabytes each, several per pattern, and a
 # repository that carried one set per format would be a repository nobody clones. What is carried is
