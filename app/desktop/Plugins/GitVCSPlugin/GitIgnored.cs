@@ -405,6 +405,14 @@ public static class GitIgnores
     /// <returns>The repository's own directory, or nothing when it belongs to none.</returns>
     private static string? Repository(string root)
     {
+        // The computer is a place with no path at all, and no repository either: what is looked for here is where to
+        // start looking, and nothing is not a place to start from. Asked for by every listing staged for the computer —
+        // the drives — since a rule that runs a program is read for the root of whatever is being read.
+        if (root.Length == 0)
+        {
+            return null;
+        }
+
         if (Repositories.TryGetValue(root, out var known))
         {
             return known;

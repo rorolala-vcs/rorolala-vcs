@@ -170,6 +170,17 @@ internal sealed class DockManager
     /// <summary>The tree of the main window: which groups there are, where, and which docks they hold.</summary>
     public DockLayout Layout { get; } = new();
 
+    /// <summary>
+    /// Raised when a dock says it is looking at something else, which is a change to what it is called.
+    /// </summary>
+    /// <remarks>
+    /// Told apart from <see cref="Changed"/> and <see cref="StateChanged"/> because the three are answered by different
+    /// work: a change to the docks rebuilds the area, and what a dock keeps about itself or which tab is chosen is
+    /// only written down — while a dock's name is a word in the tab, the window it is in and the top of its menu, and
+    /// what has to happen is those three being said again. A rebuild for it would be a window rearranged for a word.
+    /// </remarks>
+    public event Action<DockInstance>? Renamed;
+
     /// <summary>Every live instance, in the order they were made.</summary>
     public IReadOnlyList<DockInstance> Instances => _instances;
 
@@ -350,6 +361,7 @@ internal sealed class DockManager
             View = view,
             Ordinal = NextOrdinal(registration.DockNameId),
             Title = _i18n.Get(registration.DisplayNameKey),
+            Detail = _i18n.Get(registration.DisplayNameKey),
             Request = request,
             Window = window,
             // A dock made in a window was made for it, and one made with no window is the main window's.
@@ -364,6 +376,15 @@ internal sealed class DockManager
         }
 
         _instances.Add(instance);
+
+        // A dock that names itself by where it is says so as the place it is opened onto arrives, which is why the
+        // listening is put on before it is told what it was opened with: what a dock says is said by what it does.
+        var titled = view as IDockTitle;
+
+        if (titled is not null)
+        {
+            titled.TitleChanged += () => Retitled(instance, titled);
+        }
 
         // Told after it exists and before it is drawn, so that a view which reads what it kept has read it by
         // the time the area draws it, and a view which kept nothing is none the wiser. A view that throws here
@@ -400,7 +421,45 @@ internal sealed class DockManager
             }
         }
 
+        if (titled is not null)
+        {
+            // What it says once it has been restored and told where to look: a dock that took a place of its own as it
+            // was opened has said nothing about it until then.
+            Retitled(instance, titled);
+        }
+
         return instance;
+    }
+
+    /// <summary>
+    /// Takes what a dock says it is looking at, where it says anything, and says the dock's name changed.
+    /// </summary>
+    /// <remarks>
+    /// The registered name is what a dock that says nothing is called, which is every dock with one instance: a name
+    /// that is a kind and not a place is the whole of what such a dock has to say. What a dock does say is kept here
+    /// rather than asked of it each time something draws it, because a tab is drawn again for reasons the dock knows
+    /// nothing about — a window resize, a splitter, a group rearranged — and asking a view for its name on each of
+    /// those would be asking it on every layout pass.
+    /// </remarks>
+    /// <param name="instance">The dock.</param>
+    /// <param name="titled">What the dock says about itself.</param>
+    private void Retitled(DockInstance instance, IDockTitle titled)
+    {
+        var name = _i18n.Get(instance.Registration.DisplayNameKey);
+        var title = titled.Title is { Length: > 0 } said ? said : name;
+        var detail = titled.Detail is { Length: > 0 } where ? where : title;
+
+        if (
+            string.Equals(instance.Title, title, StringComparison.Ordinal)
+            && string.Equals(instance.Detail, detail, StringComparison.Ordinal)
+        )
+        {
+            return;
+        }
+
+        instance.Title = title;
+        instance.Detail = detail;
+        Renamed?.Invoke(instance);
     }
 
     /// <summary>

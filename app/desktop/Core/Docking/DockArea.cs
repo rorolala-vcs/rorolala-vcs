@@ -133,6 +133,17 @@ internal sealed class DockArea : UserControl
     /// </remarks>
     public const string FocusClass = "dock-focus";
 
+    /// <summary>How many characters of a dock's name a tab says before its front is left out.</summary>
+    /// <remarks>
+    /// A dock named by where it is — a browser, whose name is a path — would otherwise make a tab as long as the path
+    /// and take the strip from every dock beside it. What is kept is the tail, because a path's last segments are the
+    /// place and its first are only the drive it begins on.
+    /// </remarks>
+    internal const int TabWordLength = 42;
+
+    /// <summary>How wide a tab's word may grow, which is the strip's safeguard where characters and pixels differ.</summary>
+    internal const double TabWordWidth = 240;
+
     /// <summary>The class the area of a window that is one dock carries.</summary>
     /// <remarks>
     /// What a window of one dock is drawn as: the dock's own content under the window's row, with none of the
@@ -435,6 +446,7 @@ internal sealed class DockArea : UserControl
         _listening = false;
         _manager.Changed -= Rebuild;
         _manager.Focus.Changed -= Ring;
+        _manager.Renamed -= Retitled;
         _windows.DragEnded -= Clear;
 
         // A window of one dock places nothing: what it draws is the one dock it was made for, put straight into
@@ -465,6 +477,7 @@ internal sealed class DockArea : UserControl
         _listening = true;
         _manager.Changed += Rebuild;
         _manager.Focus.Changed += Ring;
+        _manager.Renamed += Retitled;
 
         // A drag that ends by being called off — Esc, or a release nowhere — leaves this area with the points it
         // drew and no event left to take them down, since a cancelled drag has no drop to be told about.
@@ -496,6 +509,18 @@ internal sealed class DockArea : UserControl
 
         /// <summary>The header that selects it, and that a drag is taken from.</summary>
         public required Button Title { get; init; }
+
+        /// <summary>The word in the header, which is what a dock's name is drawn as.</summary>
+        public required TextBlock Name { get; init; }
+
+        /// <summary>
+        /// The heading at the top of the tab's menu, which says which dock the menu is about.
+        /// </summary>
+        /// <remarks>
+        /// One entry and not the menu, because the rest of it does not change with the dock's name: a menu of actions
+        /// is about whatever the dock is, and only the line naming it goes stale when the dock is renamed.
+        /// </remarks>
+        public required MenuItem Heading { get; init; }
     }
 
     /// <summary>One region: a strip of headers over the docks themselves.</summary>
@@ -739,6 +764,26 @@ internal sealed class DockArea : UserControl
     }
 
     /// <summary>
+    /// Says a dock's name again, in its tab and at the top of the tab's menu.
+    /// </summary>
+    /// <remarks>
+    /// What a dock that names itself by where it is asks for when it goes somewhere else. Nothing is rebuilt: the dock
+    /// is the same dock, and what changed is a word, a tip and the line a menu opens with.
+    /// </remarks>
+    /// <param name="instance">The dock whose name changed.</param>
+    private void Retitled(DockInstance instance)
+    {
+        if (!_placed.TryGetValue(instance, out var placed))
+        {
+            return;
+        }
+
+        placed.Name.Text = TabTitle(instance.Title);
+        ToolTip.SetTip(placed.Title, instance.Detail);
+        placed.Heading.Header = instance.Detail;
+    }
+
+    /// <summary>
     /// Puts the ring around the dock the user is working in, or takes it down when this window holds none.
     /// </summary>
     /// <remarks>
@@ -926,9 +971,13 @@ internal sealed class DockArea : UserControl
 
         var name = new TextBlock
         {
-            Text = instance.Title,
+            Text = TabTitle(instance.Title),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            // The front is what gives way, for the reason `TabTitle` gives: a name that is a path ends at the place.
+            TextTrimming = TextTrimming.LeadingCharacterEllipsis,
+            MaxWidth = TabWordWidth,
         };
 
         var close = new Button
@@ -983,10 +1032,15 @@ internal sealed class DockArea : UserControl
         title.Classes.Add(TitleClass);
         title.Click += (_, _) => Select(instance);
 
+        // The whole of what the tab is showing where the pointer rests on it: a tab's word is shortened to keep the
+        // strip, and what it was shortened from is the one thing a reader who has stopped at it wants.
+        ToolTip.SetTip(title, instance.Detail);
+
         // The menu a tab opens, made once here rather than per right-click: what a dock's tab offers is about
         // the dock rather than about what the pointer happens to be over, so nothing about it is stale when the
         // menu is opened again.
-        title.ContextMenu = TabMenu(instance);
+        var (tabMenu, heading) = TabMenu(instance);
+        title.ContextMenu = tabMenu;
 
         // Taken on the way down. A button answers for its own press, and marks it handled while doing so, so an
         // ordinary handler here would never be called: the press is over before it reaches one. A tunnelling
@@ -1010,6 +1064,8 @@ internal sealed class DockArea : UserControl
             Region = region,
             View = instance.View.View,
             Title = title,
+            Name = name,
+            Heading = heading,
         };
 
         // A dock that the keyboard comes to is the dock being worked in, which is what says where the next dock
@@ -1042,6 +1098,12 @@ internal sealed class DockArea : UserControl
     /// being shown rather than about the dock as a container, and the two read as one list only if the seam
     /// between them is drawn.
     /// <para>
+    /// Above them all is the dock's name, which is what says which dock the rest of the menu is about: a tab's word
+    /// is shortened to keep the strip, and a menu is where the whole of where the dock is can be read. It is a word
+    /// rather than a command, so it is drawn unable to be pressed, and it is returned so that a dock renamed while its
+    /// menu is made can have it said again.
+    /// </para>
+    /// <para>
     /// A registered item is handed the one contextual shape the program has, with the dock's stable name id
     /// standing where a directory stands for a file menu and no entries at all: a tab is a dock, and stating the
     /// dock in the shape an item already takes is what lets one registration serve both without a second
@@ -1049,11 +1111,15 @@ internal sealed class DockArea : UserControl
     /// </para>
     /// </remarks>
     /// <param name="instance">The dock whose tab this is.</param>
-    /// <returns>The menu, which a tab always has: a close of the dock is always offered.</returns>
-    private ContextMenu TabMenu(DockInstance instance)
+    /// <returns>The menu, which a tab always has, and the line in it that names the dock.</returns>
+    private (ContextMenu Menu, MenuItem Heading) TabMenu(DockInstance instance)
     {
         var menu = new ContextMenu();
+        var heading = new MenuItem { Header = instance.Detail, IsEnabled = false };
         var was = new ContextTarget(instance.DockNameId, []);
+
+        menu.Items.Add(heading);
+        menu.Items.Add(new Separator());
 
         foreach (var item in _windows.DockMenuItems(DockMenuTarget.Tab, instance.DockNameId))
         {
@@ -1096,7 +1162,7 @@ internal sealed class DockArea : UserControl
             menu.Items.Add(entry);
         }
 
-        return menu;
+        return (menu, heading);
     }
 
     /// <summary>
@@ -2139,6 +2205,28 @@ internal sealed class DockArea : UserControl
 
     /// <summary>The main window's tree, which is what this area draws.</summary>
     private DockLayout Layout => _manager.Layout;
+
+    /// <summary>
+    /// The word a tab says for a dock's title: all of it while it fits, and only the end of it when it does not.
+    /// </summary>
+    /// <remarks>
+    /// The front is what goes, because where a dock is is what its tail says: a browser's name is a path, and the last
+    /// segments are the place rather than the drive it begins on. What was left out is on the tab's tip and at the top
+    /// of its menu, so shortening the word loses nothing.
+    /// </remarks>
+    /// <param name="title">The dock's title.</param>
+    /// <returns>The word.</returns>
+    internal static string TabTitle(string title)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+
+        if (title.Length <= TabWordLength)
+        {
+            return title;
+        }
+
+        return string.Concat("…".AsSpan(), title.AsSpan(title.Length - (TabWordLength - 1)));
+    }
 
     /// <summary>A header: a small button that names, commands, or closes a dock.</summary>
     /// <remarks>

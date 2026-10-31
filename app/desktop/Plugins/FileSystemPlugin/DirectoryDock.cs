@@ -16,7 +16,7 @@ using RorolalaDesktop.I18n;
 namespace FileSystemPlugin;
 
 /// <summary>The Directory dock: one directory's entries, read at a zoom.</summary>
-internal sealed class DirectoryDock : IDockView, IDockOpened
+internal sealed class DirectoryDock : IDockView, IDockOpened, IDockTitle
 {
     /// <summary>The control the dock shows.</summary>
     private readonly DirectoryControl _view;
@@ -35,6 +35,24 @@ internal sealed class DirectoryDock : IDockView, IDockOpened
 
     /// <inheritdoc />
     public IReadOnlyList<DockHeaderItem> Header => [];
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A browser is one dock looked at in several windows, so the name it was registered under says what kind of dock
+    /// it is and nothing about which place it is showing: two of them are two tabs called "Directories". What the
+    /// control answers is where it is, which is what a tab can say one dock apart from another by.
+    /// </remarks>
+    public string? Title => _view.Title;
+
+    /// <inheritdoc />
+    public string? Detail => _view.Detail;
+
+    /// <inheritdoc />
+    public event Action? TitleChanged
+    {
+        add => _view.TitleChanged += value;
+        remove => _view.TitleChanged -= value;
+    }
 
     /// <inheritdoc />
     public void Restored(IDockState state) => _view.Restored(state);
@@ -286,6 +304,24 @@ internal sealed class DirectoryControl : UserControl
 
     /// <summary>The place this dock last drew, so that a reread of the same one can be told from a step.</summary>
     private LogicalPlace? _drawnPlace;
+
+    /// <summary>
+    /// What this dock is looking at, which is what its tab and its window are called.
+    /// </summary>
+    /// <remarks>
+    /// The registered name — "Directories" — says what kind of dock this is and not which place it is showing, so two
+    /// of them are two tabs called the same. What is said here is the place itself: the real path of the directory, the
+    /// address of a place a plugin answers for, and "This PC" where there is no path at all. The whole of it is kept
+    /// beside as the detail, which is what a tab's tip and the top of its menu carry — and it is the same string, since
+    /// a path is already the whole answer and a shorter name would be a second name to keep in step.
+    /// </remarks>
+    public string? Title { get; private set; }
+
+    /// <summary>Where this dock is, in full, for the tip of its tab and the top of its menu.</summary>
+    public string? Detail { get; private set; }
+
+    /// <summary>Raised when <see cref="Title"/> or <see cref="Detail"/> says something else.</summary>
+    public event Action? TitleChanged;
 
     /// <summary>
     /// Whether a listing was asked to be drawn while a row's name was being typed, so it is drawn once the box goes.
@@ -1113,6 +1149,7 @@ internal sealed class DirectoryControl : UserControl
             _drawn = null;
             _drawnAt = null;
 
+            Retitled();
             KeepLocation();
 
             return;
@@ -1174,6 +1211,7 @@ internal sealed class DirectoryControl : UserControl
         _drawn = Location.Shown;
         _drawnAt = Location.Current;
 
+        Retitled();
         KeepLocation();
     }
 
@@ -1242,6 +1280,64 @@ internal sealed class DirectoryControl : UserControl
                     }
             )
         );
+    }
+
+    /// <summary>Takes the name of where this dock is looking, and says it when it has changed.</summary>
+    /// <remarks>
+    /// Taken as the listing is drawn rather than as the location changes, because the drawing is when the place is read:
+    /// a place's title is the provider's answer for the address being read, and a dock told where to look is drawn
+    /// again for it. Nothing is said when nothing changed — a dock drawn again for a file change is the same dock in
+    /// the same place, and a tab said again for it would be a tab redrawn in the middle of a file operation.
+    /// </remarks>
+    private void Retitled()
+    {
+        var (title, detail) = Where();
+
+        if (
+            string.Equals(Title, title, StringComparison.Ordinal)
+            && string.Equals(Detail, detail, StringComparison.Ordinal)
+        )
+        {
+            return;
+        }
+
+        Title = title;
+        Detail = detail;
+        TitleChanged?.Invoke();
+    }
+
+    /// <summary>What this dock is called, and where that is in full.</summary>
+    /// <remarks>
+    /// The place itself in both views: the real path of a directory, and the address of a place a plugin answers for. A
+    /// name that is shorter than that would be a name the reader has to translate back into where the dock is — a part
+    /// below a base, or a provider's own words — and a tab is read to know where it goes.
+    /// </remarks>
+    /// <returns>The title and the detail.</returns>
+    private (string Title, string Detail) Where()
+    {
+        // A place is named by its address, which is the whole of where it is: what kind of place it is and which place
+        // of that kind. What the provider calls it is a reading of the address rather than another place, and the real
+        // path is the address.
+        if (Location.Place is { } place)
+        {
+            var address = place.Address.ToString();
+
+            return (address, address);
+        }
+
+        var at = Location.Current;
+
+        // The computer is the place that is no path at all, so it is named rather than read out of one.
+        if (at.Length == 0)
+        {
+            var computer = RolaI18N.Get("rorolala_file_system.computer");
+
+            return (computer, computer);
+        }
+
+        // The real path is what a reader of a browser wants: not a part of it relative to something else, which is the
+        // address bar's answer rather than the dock's name.
+        return (at, at);
     }
 
     /// <summary>

@@ -1964,8 +1964,9 @@ internal sealed class RorolalaTheme
 
             // Cut off rather than drawn over the menu it shares the row with: a dock with a long name is a
             // name that would otherwise reach the menus, and what a name is worth is less than what a menu
-            // is.
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            // is. The front is what goes, because the name a window of one dock carries is where that dock
+            // is, and a path ends at the place rather than at the drive it begins on.
+            TextTrimming = TextTrimming.LeadingCharacterEllipsis,
         };
     }
 

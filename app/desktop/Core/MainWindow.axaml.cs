@@ -103,6 +103,15 @@ public partial class MainWindow : Window
     private readonly Docking.DockInstance? _dock;
 
     /// <summary>
+    /// The dock's name in the row, for a window that is one dock, so that a dock that goes somewhere else can say so.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than rebuilt: the name is a word in a row, and making the row again for a word would lose the drag
+    /// the row is also the handle of.
+    /// </remarks>
+    private TextBlock? _caption;
+
+    /// <summary>
     /// This window's frame, which is what draws its own buttons.
     /// </summary>
     /// <remarks>
@@ -250,6 +259,14 @@ public partial class MainWindow : Window
 
         BuildMenu();
         Caption();
+
+        // A window of one dock is named by that dock, and a dock that names itself by where it is names the window
+        // again whenever it goes somewhere else. Subscribed after the row is drawn, since what it says is the row's.
+        if (_dock is not null)
+        {
+            _services.Docks.Renamed += Renamed;
+        }
+
         DockAreaHost.Content = new DockArea(
             _services.Docks,
             _services.I18n,
@@ -316,6 +333,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _services.Docks.Changed -= DocksChanged;
+            _services.Docks.Renamed -= Renamed;
             _services.Popups.Raised -= PopupsRaised;
 
             if (_key is null)
@@ -323,6 +341,30 @@ public partial class MainWindow : Window
                 _services.Notifications.Posted -= NotificationsPosted;
             }
         };
+    }
+
+    /// <summary>
+    /// Says the window's name again where the dock it holds has gone somewhere else.
+    /// </summary>
+    /// <remarks>
+    /// A window of one dock is that dock, and a dock named by where it is says the window's name too: both the name the
+    /// desktop is given and the word in the row are the dock's, which is what keeps a row of such windows readable.
+    /// </remarks>
+    /// <param name="instance">The dock whose name says something else.</param>
+    private void Renamed(Docking.DockInstance instance)
+    {
+        if (!ReferenceEquals(_dock, instance))
+        {
+            return;
+        }
+
+        Title = _services.I18n.Get("window.titled", instance.Title);
+
+        if (_caption is { } caption)
+        {
+            caption.Text = instance.Title;
+            ToolTip.SetTip(caption, instance.Detail);
+        }
     }
 
     /// <summary>
@@ -349,6 +391,11 @@ public partial class MainWindow : Window
         }
 
         var caption = RorolalaTheme.Caption(Program.WindowStyle, instance.Title);
+
+        // Kept and tipped, because a window of a dock that names itself by where it is says where that is in full
+        // where the row has room for it, and the row cuts the name off where there is not.
+        _caption = caption;
+        ToolTip.SetTip(caption, instance.Detail);
 
         caption.PointerPressed += (_, press) =>
         {

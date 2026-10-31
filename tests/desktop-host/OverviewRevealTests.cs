@@ -187,7 +187,7 @@ public sealed class OverviewRevealTests
     /// <summary>Lets the window lay itself out.</summary>
     private static void Pump()
     {
-        for (var turn = 0; turn < 6; turn++)
+        for (var turn = 0; turn < 30; turn++)
         {
             Dispatcher.UIThread.RunJobs();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();

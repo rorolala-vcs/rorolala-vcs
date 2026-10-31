@@ -21,8 +21,26 @@ internal sealed class DockInstance
     /// <summary>Which instance of this name this is, counting from zero.</summary>
     public required int Ordinal { get; init; }
 
-    /// <summary>The dock's title, resolved from its display-name key.</summary>
-    public required string Title { get; init; }
+    /// <summary>
+    /// The dock's title: its display name until it says what it is looking at, and what it says after.
+    /// </summary>
+    /// <remarks>
+    /// A dock that answers <see cref="IDockTitle"/> names itself by where it is, and what it says is kept here so that
+    /// everything which draws a dock's name — its tab, the window it is in, the top of its tab's menu — reads one
+    /// answer rather than asking the view each time. What is written down is the dock's arrangement and not its name,
+    /// which is why this is set rather than persisted.
+    /// </remarks>
+    public required string Title { get; set; }
+
+    /// <summary>
+    /// Where the dock is in full, for a hover, which is its title where it says nothing more.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the title rather than asked for separately, because the two are one answer from one view: what a
+    /// dock says about itself changes in the same telling, and a reader that had to ask twice could read a title from
+    /// one place and a detail from another.
+    /// </remarks>
+    public required string Detail { get; set; }
 
     /// <summary>
     /// What the dock was opened with.

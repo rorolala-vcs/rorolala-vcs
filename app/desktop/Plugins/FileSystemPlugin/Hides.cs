@@ -291,6 +291,14 @@ public sealed class HideRegistry
     {
         ArgumentNullException.ThrowIfNull(root);
 
+        // The computer is not a directory, and holds nothing a rule can govern: it is the drives, and a rule about a
+        // file is read from the directory holding it. Asked of a provider, the same question would be asking it to walk
+        // up from a root that is no path at all.
+        if (root.Length == 0)
+        {
+            return [];
+        }
+
         var chosen = Selection();
 
         return Catalogue
@@ -340,6 +348,13 @@ public sealed class HideRegistry
     {
         ArgumentNullException.ThrowIfNull(root);
 
+        // The computer is no directory, so there is nothing about it to read first: every provider is ready, and one
+        // that walks up from the root it is given would be walking up from nothing.
+        if (root.Length == 0)
+        {
+            return true;
+        }
+
         return Catalogue.All(provider => provider.Ready(root));
     }
 
@@ -360,6 +375,13 @@ public sealed class HideRegistry
     public static void Prepare(string root)
     {
         ArgumentNullException.ThrowIfNull(root);
+
+        // Nothing to read for the computer, for the reason `Ready` gives: it is not a directory any rule can be read
+        // from, and a provider asked to prepare for it would be asked to run from a root that is no path.
+        if (root.Length == 0)
+        {
+            return;
+        }
 
         foreach (var provider in Catalogue)
         {

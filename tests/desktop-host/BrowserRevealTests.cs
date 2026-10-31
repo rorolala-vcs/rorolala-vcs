@@ -184,7 +184,7 @@ public sealed class BrowserRevealTests
     /// <summary>Lets the window run a few turns of its loop, which is what lays a dock out and draws it.</summary>
     private static void Pump()
     {
-        for (var turn = 0; turn < 6; turn++)
+        for (var turn = 0; turn < 30; turn++)
         {
             Dispatcher.UIThread.RunJobs();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();

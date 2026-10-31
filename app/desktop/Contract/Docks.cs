@@ -196,6 +196,39 @@ public interface IDockRegistry
 }
 
 /// <summary>
+/// A dock that names itself by what it is looking at rather than by the name it was registered under.
+/// </summary>
+/// <remarks>
+/// A browser is one dock looked at in several windows: registered under one name and made again for another place, so
+/// a tab named by the registration says only what kind of dock it is, and two of them read the same. A dock that
+/// answers this says what it is looking at now — a directory, an address, a drive — and says when that has changed,
+/// which is what the host draws in the dock's tab, in the window a dock of its own is shown in, and at the top of the
+/// menu its tab opens.
+/// <para>
+/// Nothing is required of a dock that does not answer it: the registered name is the name, which is what a dock with
+/// one instance needs and all it has to say.
+/// </para>
+/// </remarks>
+public interface IDockTitle
+{
+    /// <summary>What the dock is called now, or nothing for the name it was registered under.</summary>
+    string? Title { get; }
+
+    /// <summary>
+    /// Where that is in full, for a hover, or nothing when the title is all there is to say.
+    /// </summary>
+    /// <remarks>
+    /// A title is what fits a tab and says which dock it is; a place has more of a name than that — the whole path, the
+    /// whole address — and what it is is worth having where there is room to read it. It is never required: a dock
+    /// whose title is its whole name states nothing here.
+    /// </remarks>
+    string? Detail { get; }
+
+    /// <summary>Raised when <see cref="Title"/> or <see cref="Detail"/> says something else.</summary>
+    event Action? TitleChanged;
+}
+
+/// <summary>
 /// One dock, named the way the program names it: the stable name it was registered under and which of its
 /// instances it is.
 /// </summary>

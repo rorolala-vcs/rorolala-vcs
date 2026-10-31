@@ -25,6 +25,44 @@ internal sealed class FakeDockView : IDockView
 }
 
 /// <summary>
+/// A dock like a browser: one that may be made again, and that names itself by what it is looking at.
+/// </summary>
+/// <remarks>
+/// What a test of a dock's name needs: a view whose title can be made to say something else, so that what the host
+/// draws in a tab — and in the window a dock of its own is shown in — can be read from the outside.
+/// </remarks>
+internal sealed class TitledDockView : IDockView, IDockTitle
+{
+    /// <summary>The control this view is.</summary>
+    public Control Control { get; } = new Border { Background = Avalonia.Media.Brushes.Gray };
+
+    /// <inheritdoc />
+    public Control View => Control;
+
+    /// <inheritdoc />
+    public IReadOnlyList<DockHeaderItem> Header => [];
+
+    /// <inheritdoc />
+    public string? Title { get; private set; }
+
+    /// <inheritdoc />
+    public string? Detail { get; private set; }
+
+    /// <inheritdoc />
+    public event Action? TitleChanged;
+
+    /// <summary>Makes the dock say it is looking at something else.</summary>
+    /// <param name="title">What it is called now.</param>
+    /// <param name="detail">Where that is in full, or nothing for the title itself.</param>
+    public void Name(string? title, string? detail = null)
+    {
+        Title = title;
+        Detail = detail;
+        TitleChanged?.Invoke();
+    }
+}
+
+/// <summary>
 /// A dock view that keeps what it was asked to show, which is how a test reads what a reveal came to.
 /// </summary>
 /// <remarks>

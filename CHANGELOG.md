@@ -23,12 +23,13 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`docking`] Show which dock the user is working in — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rorolaladesktop-docking-show-which-dock-the-user-is-working-in)
 2. [`app`] [`rola`] [`desktop`] Ask the Desktop window to say when it is up — [See details](dev/CHANGELOG-DETAILS.md#2-app-rola-desktop-ask-the-desktop-window-to-say-when-it-is-up)
 3. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line — [See details](dev/CHANGELOG-DETAILS.md#3-app-rola-docs-read-and-search-the-built-in-book-from-the-command-line)
-4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu — [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-copy-a-cells-words-from-a-directory-listings-menu)
-5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show a path from an Overview row in its folder, with the version graph following it — [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-rorolala-vcs-show-a-path-from-an-overview-row-in-its-folder-with-the-version-graph-following-it)
-6. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments — [See details](dev/CHANGELOG-DETAILS.md#6-modules-book-search-search-the-built-in-book-by-word-with-the-matched-fragments)
-7. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading — [See details](dev/CHANGELOG-DETAILS.md#7-utils-cli-theme-rendering-lay-out-a-markdown-document-for-reading)
-8. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line — [See details](dev/CHANGELOG-DETAILS.md#8-utils-cli-theme-table-a-full-width-listing-table-for-the-command-line)
-9. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected — [See details](dev/CHANGELOG-DETAILS.md#9-utils-cli-theme-theme-choose-the-pretty-theme-where-the-terminal-can-be-detected)
+4. [`app`] [`RorolalaDesktop`] [`docking`] Name a dock by the place it is looking at — [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-docking-name-a-dock-by-the-place-it-is-looking-at)
+5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu — [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-copy-a-cells-words-from-a-directory-listings-menu)
+6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show a path from an Overview row in its folder, with the version graph following it — [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-rorolala-vcs-show-a-path-from-an-overview-row-in-its-folder-with-the-version-graph-following-it)
+7. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments — [See details](dev/CHANGELOG-DETAILS.md#7-modules-book-search-search-the-built-in-book-by-word-with-the-matched-fragments)
+8. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading — [See details](dev/CHANGELOG-DETAILS.md#8-utils-cli-theme-rendering-lay-out-a-markdown-document-for-reading)
+9. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line — [See details](dev/CHANGELOG-DETAILS.md#9-utils-cli-theme-table-a-full-width-listing-table-for-the-command-line)
+10. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected — [See details](dev/CHANGELOG-DETAILS.md#10-utils-cli-theme-theme-choose-the-pretty-theme-where-the-terminal-can-be-detected)
 
 ## Refactor
 

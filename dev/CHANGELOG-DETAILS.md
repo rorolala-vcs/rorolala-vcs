@@ -133,8 +133,8 @@ A plugin reads the same answer: `IDockFocus` says which dock is being worked in 
 instance of it — and is raised as it moves. That is what a dock's own keys are meant to be read against as they are
 folded into the focus rather than bound over the whole program; the folding itself is not in this change.
 
-**Breaking:** the plugin contract is 0.14.0. It gained the focus a plugin reads, and the reveal a view asks the browser
-with, which is described in its own entry.
+**Breaking:** the plugin contract is 0.14.0. It gained the focus a plugin reads, the reveal a view asks the browser
+with, and the name a dock may answer for itself — each described in its own entry.
 
 ### 2. [`app`] [`rola`] [`desktop`] Ask the Desktop window to say when it is up
 
@@ -173,7 +173,27 @@ The book is found beside the program an export or an install puts it beside, or 
 from a checkout — above the directory it was run in, under `build/`; a checkout that has not run
 `cargo dev book` is told the book is missing rather than answered with nothing.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu
+### 4. [`app`] [`RorolalaDesktop`] [`docking`] Name a dock by the place it is looking at
+
+A dock's tab now says where the dock is looking rather than only what kind of dock it is: a browser is one dock made
+again for every place, so a strip of tabs all called "Directories" was a strip nobody could tell apart. What the tab
+says is the real path of the place — the whole path of a directory, the whole address of a place a plugin answers for,
+the drive where there is no name, and "This PC" where there is no path at all. The name is said again as the browser
+steps, goes back or forward, is sent to an address, or has its base moved.
+
+A name too long for the strip keeps its end and leaves its front out, since the last of a path is the place and its
+first is only the drive it begins on; the whole of it is on the tab's tip and at the top of the tab's menu, and the
+tab's width is capped besides, so one dock cannot take the strip from the docks beside it. A window that is one dock is
+that dock: it is named by the same title, renamed with it as it goes, cuts it off at the front for the same reason, and
+carries the whole place on its tip. The Window menu still names the kind, since its item asks for another dock of that
+kind rather than for the one a tab holds.
+
+The computer is a place a browser can be in, so it is named too — and a rule that runs a program is no longer asked
+about it: browsing the drives with the Git plugin loaded used to fail where a repository was looked for from no path at
+all. A dock says what it is called through the contract's newest answer, which can say both the name a tab carries and
+the whole place it may be only part of.
+
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu
 
 Right-clicking a cell of a directory listing now offers to copy the words shown in it — a name,
 a size, a date, the owner a column says — as the first entry of the menu the row already had. The
@@ -182,7 +202,7 @@ the size column copies the size, the owner column copies the owner. What is copi
 whole text rather than the part the column had room to show, and it works in both arrangements the
 dock reads entries in, the rows and the tiles.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show a path from an Overview row in its folder, with the version graph following it
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show a path from an Overview row in its folder, with the version graph following it
 
 The path a change is read by in the Overview is now a way into the work: pressing the From or To cell of a row asks the
 browser to show the place the path names. A path of the work's is joined to the Workspace root the reading was made over
@@ -198,7 +218,7 @@ path whose directory is not there either is said rather than stepped to, so the 
 dock is told what to show with the same request it is opened with, so a browser opened onto a place and one shown a place
 answer the same shape.
 
-### 6. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
+### 7. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
 
 A book written as Markdown with a YAML front matter block is now compiled into one searchable
 file, and opened by a crate that answers a query with the articles it found, their descriptions,
@@ -238,7 +258,7 @@ string is released with its `free_*`, and `tests/ffi-c/ffi-book` checks the nest
 program. `modules/rola-sharp` gains `RolaBookSearch`, whose `BookSnippet` splits its text into
 ordinary and matched runs, so a renderer draws the highlight without converting the ranges itself.
 
-### 7. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
+### 8. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
 
 `TextRendering::render_document` draws a document rather than a line: a heading is set in two
 columns from the left with its `#` marker kept and its title bold on the terminal's reverse-video
@@ -251,7 +271,7 @@ a page rather than as the Markdown the index carries.
 `trd!` and `TextRendering::render` still draw a line where it was written, so messages, status
 lines and help keep the shape their callers chose.
 
-### 8. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
+### 9. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
 
 The command-line theme now carries a `Table` for the listings a `gh issue list`-style table is made
 of: columns with titles and rows of cells, drawn across the terminal instead of only as wide as
@@ -270,7 +290,7 @@ red and bold a search puts on a matched word — without handing the table a col
 parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
 the matched fragments in a filled one.
 
-### 9. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
+### 10. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
 
 `ThemeChoice::auto_select` now answers `Pretty` on a terminal that names itself one of the modern
 terminals, instead of leaving `Pretty` to an explicit `--theme-choice pretty`. The list is Windows
