@@ -7,9 +7,11 @@ namespace RorolalaDesktop.Contract;
 /// </summary>
 /// <param name="DockNameId">The stable name id of the dock to open.</param>
 /// <param name="StartAt">
-/// The directory the dock is to look at, or nothing for the one it opens at by itself: what a window was
+/// The place the dock is to look at, or nothing for the one it opens at by itself: what a window was
 /// opened onto is not the same as where a dock it holds happens to start, and a browser told where to look
-/// is the whole point of opening one from a directory's own menu.
+/// is the whole point of opening one from a directory's own menu. A path inside such a place — a file, which
+/// a browser shows by going to its directory and choosing it — is what a <see cref="IWindows.Reveal"/> is
+/// asked with, so what a dock accepts here is its own answer.
 /// </param>
 /// <param name="OpenMode">
 /// Whether an existing instance is to be shown instead of a new one being made, or nothing for what the
@@ -66,6 +68,24 @@ public interface IWindows
     /// <param name="dockNameId">The stable name id of the dock to show.</param>
     /// <param name="startAt">What the dock is to look at, or nothing.</param>
     void Show(string dockNameId, string? startAt);
+
+    /// <summary>
+    /// Shows a place in a dock the user is already working in, or in one made for it when there is none.
+    /// </summary>
+    /// <remarks>
+    /// What a view that names a path asks for — the Overview's rows naming where a change comes from or goes to
+    /// — and what <see cref="Show"/> is not: the dock the user last worked in of that name is brought forward,
+    /// its tab chosen and its window activated, and it is told what to look at. No second instance is made beside
+    /// a dock the user already has, because what is asked for is a place to look at rather than another window of
+    /// the same kind; a dock that is not open at all is made.
+    /// <para>
+    /// What the dock does with the place is the dock's own answer: a browser goes to the directory the path is in
+    /// and chooses the file where it is one of its entries, and one whose name nothing answers to is a place to be
+    /// at rather than a step that failed.
+    /// </para>
+    /// </remarks>
+    /// <param name="request">The dock, and the place it is to show.</param>
+    void Reveal(DockRequest request);
 
     /// <summary>Opens the main window, or brings it forward where it is already up.</summary>
     /// <remarks>

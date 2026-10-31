@@ -41,19 +41,40 @@ internal sealed class DirectoryDock : IDockView, IDockOpened
 
     /// <inheritdoc />
     /// <remarks>
-    /// A dock opened onto a directory is one that was asked for by name — from a directory's own menu, or by
-    /// a run that called the one already going — so it is drawn at that directory rather than at wherever the
-    /// one location in the plugin happens to be. What it means is this dock looking at a place of its own, and
-    /// so out of step: the dock beside it goes on following the whole, which is the same judgement every dock
-    /// out of step is met with.
+    /// A dock is told what to show at most a second time: once when it is made, where a place of the caller's choosing
+    /// is this window's own place and the dock is taken out of step to be there, and again whenever a view asks for a
+    /// place to be shown in the dock the user is working in — which is a step inside the dock's own work, and so moves
+    /// the whole where the dock follows it rather than making a place of its own. The two answers are
+    /// <see cref="DirectoryControl.OpenAt"/> and <see cref="DirectoryControl.Reveal"/>.
     /// </remarks>
     public void Opened(DockRequest request)
     {
-        if (request.StartAt is { Length: > 0 } at)
+        var again = _told;
+        _told = true;
+
+        if (request.StartAt is not { Length: > 0 } at)
+        {
+            return;
+        }
+
+        if (again)
+        {
+            _view.Reveal(at);
+        }
+        else
         {
             _view.OpenAt(at);
         }
     }
+
+    /// <summary>
+    /// Whether this dock has already been told what to show, which tells an opening from a showing.
+    /// </summary>
+    /// <remarks>
+    /// A dock opened with nothing in particular — restored from the layout, or asked for from the Window menu — is
+    /// told once and about nothing, and what follows it is a showing rather than an opening: this is what says so.
+    /// </remarks>
+    private bool _told;
 }
 
 /// <summary>
@@ -296,6 +317,15 @@ internal sealed class DirectoryControl : UserControl
     /// </remarks>
     private string? _drawnAt;
 
+    /// <summary>The file this dock was told to show, until the drawing that goes to its directory has used it.</summary>
+    /// <remarks>
+    /// A showing is delivered as a navigation of the whole location and a choice in the listing that navigation
+    /// draws, and the two cannot be said in one call: the listing is what knows its rows, and it is made by the
+    /// navigation. What is said here is the path, and the drawing that finds it chooses it once (see
+    /// <see cref="Showing"/>).
+    /// </remarks>
+    private string? _revealing;
+
     /// <summary>
     /// What this dock is looking at now.
     /// </summary>
@@ -447,6 +477,62 @@ internal sealed class DirectoryControl : UserControl
         // The switch says what this dock is rather than leading it, which is the same rule its click follows.
         Follows(false);
         Draw();
+    }
+
+    /// <summary>
+    /// Shows a place in this dock: the directory holding a path, and the path itself where it is a file of it.
+    /// </summary>
+    /// <remarks>
+    /// The dock navigates as the user's own steps do — the whole where it follows the whole, and itself where it is
+    /// out of step — rather than taking a place of its own as being opened onto a directory does (see
+    /// <see cref="OpenAt"/>). A path shown from elsewhere is a step inside the dock's own work, and a showing that
+    /// made the dock stop following the work would be a navigation that changed what the dock is.
+    /// <para>
+    /// A file is shown by its directory with its row chosen, which is what puts the version graph on it. One whose
+    /// file is gone, or which the hide rules leave out of the listing, is shown by its directory alone; one whose
+    /// directory is not there either is said rather than stepped to, so the dock stays where the user left it.
+    /// </para>
+    /// </remarks>
+    /// <param name="at">The path to show: a directory, a file in one, or an address.</param>
+    public void Reveal(string at)
+    {
+        // An address is a place like any other, and the browser knows how to go to one: what a place holds is the
+        // answerer's business, and a showing has nothing to choose in it (see `Browser.Go`).
+        if (LogicalAddress.TryRead(at, out _))
+        {
+            if (!Location.Go(at))
+            {
+                _host.Log.Warn($"`{at}` cannot be shown, so the dock stayed where it is looking");
+            }
+
+            return;
+        }
+
+        var full = Path.GetFullPath(Browser.Expand(at));
+
+        if (System.IO.Directory.Exists(full))
+        {
+            _ = Location.Go(full);
+
+            return;
+        }
+
+        var holding = Path.GetDirectoryName(full);
+
+        if (holding is not { Length: > 0 } || !System.IO.Directory.Exists(holding))
+        {
+            Refused(full);
+
+            return;
+        }
+
+        _revealing = System.IO.File.Exists(full) ? full : null;
+
+        if (!Location.Go(holding))
+        {
+            _revealing = null;
+            Refused(full);
+        }
     }
 
     /// <summary>
@@ -1056,12 +1142,17 @@ internal sealed class DirectoryControl : UserControl
         _content.Content = drawn;
         drawn.Choose(chosen);
 
+        // A place this dock was told to show is shown by its directory with the row chosen: what asked for it wanted
+        // the file, and a dock that stopped at the directory would leave the user to find it again among the rows.
+        var showed = Showing(drawn);
+
         // A listing rebuilt on another directory starts with nothing chosen, and no selection event
         // says so because nothing changed in the view that was just made: said here, but only when the
         // keyboard was in the view being replaced or the dock itself walked elsewhere, so that a dock
         // refreshing behind another one does not take the choice away from the listing being worked in.
         if (
             seating
+            || showed
             || chosen.Count > 0
             || (_drawn is not null && _drawnAt != Location.Current)
         )
@@ -1073,7 +1164,9 @@ internal sealed class DirectoryControl : UserControl
         // "did a change reach this dock", and a report of one that did not cannot tell the two halves apart.
         _host.Log.Info($"drew the listing of `{Location.Current}`: {drawn.Shown} entries");
 
-        if (seating)
+        // A showing puts the keyboard in the listing it chose a row of: the dock was brought forward to be worked in,
+        // and a choice that the keyboard cannot act on is a row the user has to find again.
+        if (seating || showed)
         {
             Seated();
         }
@@ -1082,6 +1175,73 @@ internal sealed class DirectoryControl : UserControl
         _drawnAt = Location.Current;
 
         KeepLocation();
+    }
+
+    /// <summary>
+    /// Chooses the file this dock was last told to show, where this drawing is the one that has it.
+    /// </summary>
+    /// <remarks>
+    /// Read and let go of here rather than kept: a showing is one navigation and one choice, and a path left over would
+    /// be chosen again in the next drawing of the same directory — a step back to where the user was, say, silently
+    /// moving their choice.
+    /// </remarks>
+    /// <param name="drawn">The listing that was just drawn.</param>
+    /// <returns>Whether a row was chosen for a showing.</returns>
+    private bool Showing(EntryView<Entry> drawn)
+    {
+        var showing = _revealing;
+
+        _revealing = null;
+
+        if (
+            showing is not { } path
+            || !string.Equals(Path.GetDirectoryName(path), Location.Current, StringComparison.Ordinal)
+        )
+        {
+            return false;
+        }
+
+        var entry = Location.Shown.FirstOrDefault(item =>
+            string.Equals(item.Path, path, StringComparison.Ordinal)
+        );
+
+        // A path whose file is gone, or which a hide rule leaves out of the listing, is shown by its directory alone:
+        // what the user asked for is where it is, and a dock that refused to move over a row it cannot draw would be
+        // refusing the half of the showing it can do.
+        if (entry is not { Kind: EntryKind.File })
+        {
+            return false;
+        }
+
+        drawn.Reveal(entry);
+
+        // The one answer a view of a file's history follows: a row chosen from elsewhere is the file the program is
+        // about in exactly the way a click is, and a second notion of "the file last went to" would be a second one
+        // to keep in step.
+        ChosenEntry.Publish(entry);
+
+        return true;
+    }
+
+    /// <summary>Says that a path asked to be shown is nowhere, and leaves the dock where the user left it.</summary>
+    /// <param name="path">The path.</param>
+    private void Refused(string path)
+    {
+        _host.Log.Warn($"`{path}` cannot be shown: neither it nor the directory holding it is there");
+
+        _host.Dialogs.Notify(
+            new Notification(
+                NotificationLevel.Warning,
+                RolaI18N.Get("rorolala_file_system.not_there_title"),
+                () =>
+                    new TextBlock
+                    {
+                        Text = RolaI18N.Get("rorolala_file_system.not_there", path),
+                        TextWrapping = TextWrapping.Wrap,
+                        MaxWidth = 420,
+                    }
+            )
+        );
     }
 
     /// <summary>

@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -1858,8 +1860,8 @@ internal sealed class OverviewView : UserControl
         var cells = new Grid { ColumnDefinitions = Definitions() };
 
         Place(cells, States(row, at, view), 0);
-        Place(cells, Cell(row.From, row.Ignored), 1);
-        Place(cells, Cell(row.To, row.Ignored), 2);
+        Place(cells, Cell(row.From, row.Ignored, at, host), 1);
+        Place(cells, Cell(row.To, row.Ignored, at, host), 2);
         Place(cells, Cell(row, at, host, view), 3);
 
         var line = new Border
@@ -2120,13 +2122,21 @@ internal sealed class OverviewView : UserControl
         };
 
     /// <summary>One cell of a row holding a path, or nothing where the path is not one.</summary>
+    /// <remarks>
+    /// A path is a way into the work: pressing one asks the browser to show the place it names, which is what makes a
+    /// row read in the Overview something the user can act on where it is — the file's own directory, the file chosen,
+    /// and the version graph following it. A row has one side or two, and the side a change is not on is a cell of
+    /// nothing that does nothing.
+    /// </remarks>
     /// <param name="said">What it says, which may be nothing.</param>
     /// <param name="quiet">
     /// Whether the cell is one of a row that is not the work's, which is drawn in the ink kept for what
     /// is not: the path is still there to be read, and it is read past rather than acted on.
     /// </param>
+    /// <param name="at">Where the reading was made, which a path of the work's is relative to.</param>
+    /// <param name="host">The host, whose windows the browser is reached through.</param>
     /// <returns>The cell to show.</returns>
-    private static TextBlock Cell(string said, bool quiet = false)
+    internal static TextBlock Cell(string said, bool quiet, string at, IPluginHost host)
     {
         var cell = new TextBlock
         {
@@ -2145,6 +2155,42 @@ internal sealed class OverviewView : UserControl
             // band are: what is not the work is drawn in whatever the look spends on what is not read as work.
             cell[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(QuietInk);
         }
+
+        if (OverviewPaths.Place(said, at) is not { } place)
+        {
+            return cell;
+        }
+
+        // A path that can be gone to says so with the pointer: what the row is offering is a step into the work, and
+        // a path drawn like the words beside it would be read as text rather than as a way there. The ground is a
+        // transparent brush rather than none, because a control with nothing to fill is not under the pointer at all —
+        // and the cells around it are where a press would land instead.
+        cell.Cursor = new Cursor(StandardCursorType.Hand);
+        cell.Background = Brushes.Transparent;
+        ToolTip.SetTip(cell, RolaI18N.Get("rorolala_vcs.status.show_path"));
+
+        // Let go of rather than pressed: a press on a row is what chooses it, and a press begun in the cell and
+        // carried away is a drag of the entry rather than a request to go and look at it.
+        cell.AddHandler(
+            InputElement.PointerReleasedEvent,
+            (_, released) =>
+            {
+                if (released.InitialPressMouseButton != MouseButton.Left)
+                {
+                    return;
+                }
+
+                released.Handled = true;
+
+                host.Windows.Reveal(
+                    new DockRequest(
+                        global::FileSystemPlugin.FileSystemPlugin.DirectoryDockNameId,
+                        place
+                    )
+                );
+            },
+            RoutingStrategies.Bubble
+        );
 
         return cell;
     }
@@ -2191,4 +2237,56 @@ internal sealed class OverviewView : UserControl
     /// <param name="Said">The line said in place of a reading, or nothing when there is one.</param>
     /// <param name="Rows">The rows the reading came to, which are none when it says a work is clean.</param>
     private sealed record Shown(string? Said, IReadOnlyList<TableRow> Rows);
+}
+
+/// <summary>
+/// Where a column's path is in the program's own terms: a place the browser can be asked to show.
+/// </summary>
+/// <remarks>
+/// A reading names its paths relative to the Workspace it was made over, so what a browser is asked for is the path
+/// joined to that place and spelled as the system spells it, which is also how the table reads a path when it asks the
+/// version chain how far it is from upstream. An address is a place already and is left as it stands, since a payload
+/// has no grammar here and only the plugin that answered it knows what is inside; a column with no path on one side of
+/// a row has nothing to show.
+/// </remarks>
+internal static class OverviewPaths
+{
+    /// <summary>The place a column's path names, or nothing when it names none a browser can be asked for.</summary>
+    /// <param name="said">What the cell says.</param>
+    /// <param name="at">Where the reading was made, which the path is relative to.</param>
+    /// <returns>The place, in the words the browser takes.</returns>
+    public static string? Place(string said, string at)
+    {
+        ArgumentNullException.ThrowIfNull(said);
+        ArgumentNullException.ThrowIfNull(at);
+
+        if (said.Length == 0)
+        {
+            return null;
+        }
+
+        if (LogicalAddress.TryRead(said, out _))
+        {
+            return said;
+        }
+
+        if (at.Length == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Path.GetFullPath(
+                Path.Combine(at, said.Replace('/', Path.DirectorySeparatorChar))
+            );
+        }
+        catch (Exception error)
+            when (error is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A path the system will not read as one is not a place anything can be shown at, and the row is still
+            // worth reading: what is left out is the step into it, not the row.
+            return null;
+        }
+    }
 }

@@ -48,6 +48,17 @@ internal sealed class DockManager
     /// <summary>Every live instance, in the order they were made.</summary>
     private readonly List<DockInstance> _instances = [];
 
+    /// <summary>
+    /// Which dock of each name the user worked in last, which is what a caller asking for a kind of dock gets.
+    /// </summary>
+    /// <remarks>
+    /// The focus says where the user is now; this says where they were in a dock of a kind. A press inside a dock
+    /// moves the focus to it, so a plugin that acts from another dock — the Overview asking for a file to be shown
+    /// in a browser — needs the browser the user left behind rather than the one that asked. One entry per name,
+    /// because that is the question a caller asks: a browser, a tree, a graph.
+    /// </remarks>
+    private readonly Dictionary<string, DockInstance> _recent = new(StringComparer.Ordinal);
+
     /// <summary>Makes a manager over the registrations and the services it reports through.</summary>
     /// <param name="registry">The registrations.</param>
     /// <param name="i18n">The host's translations.</param>
@@ -64,6 +75,82 @@ internal sealed class DockManager
         _i18n = i18n;
         _log = log;
         _popups = popups;
+    }
+
+    /// <summary>Which dock the user is working in.</summary>
+    /// <remarks>
+    /// The record is the docks' own rather than a service beside them, because it is the docks that move it: a
+    /// dock closing is a dock that has to hand it on, and the manager is what knows which docks are there.
+    /// </remarks>
+    public DockFocus Focus { get; } = new();
+
+    /// <summary>The dock of a name the user worked in last, if it is still open.</summary>
+    /// <param name="dockNameId">The dock's stable name id.</param>
+    /// <returns>The dock, or nothing when no instance of that name has been worked in or it is gone.</returns>
+    public DockInstance? Recent(string dockNameId)
+    {
+        ArgumentNullException.ThrowIfNull(dockNameId);
+
+        return _recent.TryGetValue(dockNameId, out var dock)
+            && _instances.Contains(dock)
+            && dock.IsOpen
+                ? dock
+                : null;
+    }
+
+    /// <summary>Makes a dock the one the user is working in.</summary>
+    /// <remarks>
+    /// What an area says when a press lands in a dock, when the keyboard goes into one, and when its tab is
+    /// chosen; and what the windows say when one of them comes forward. Saying it for a dock that is not open is
+    /// the caller's mistake rather than something to correct here: the manager is what passes the focus on when
+    /// the dock it named goes.
+    /// </remarks>
+    /// <param name="instance">The dock being worked in.</param>
+    public void WorkedIn(DockInstance instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        Remember(instance);
+    }
+
+    /// <summary>
+    /// Says that one of the host's windows has come forward, so the dock it is for is the one being worked in.
+    /// </summary>
+    /// <remarks>
+    /// A window of its own holds one dock, and it is that dock. The main window holds many, so what it answers is
+    /// the dock it was already working in where that one is still open, and otherwise the one its active group is
+    /// showing: a window coming back is not a reason to move the work to another dock of it, and it is a reason to
+    /// name one when nothing was named or the named one is elsewhere.
+    /// </remarks>
+    /// <param name="sole">
+    /// The dock a window of one dock holds, or nothing for the main window.
+    /// </param>
+    public void ActivateWindow(DockInstance? sole)
+    {
+        if (sole is not null)
+        {
+            if (sole.IsOpen)
+            {
+                Remember(sole);
+            }
+
+            return;
+        }
+
+        if (
+            Focus.Instance is { } current
+            && current.Window is null
+            && current.IsOpen
+            && _instances.Contains(current)
+        )
+        {
+            return;
+        }
+
+        if (MainWindowDock() is { } dock)
+        {
+            Remember(dock);
+        }
     }
 
     /// <summary>Raised whenever the set of open docks or the shape of the main window's tree changes.</summary>
@@ -132,6 +219,15 @@ internal sealed class DockManager
             existing.IsOpen = !existing.IsOpen;
             Raise();
 
+            if (existing.IsOpen)
+            {
+                Remember(existing);
+            }
+            else
+            {
+                Replaced(existing);
+            }
+
             return existing;
         }
 
@@ -170,6 +266,7 @@ internal sealed class DockManager
         made.GroupId = DockTree.Insert(Layout, target, Record(made));
         Layout.ActiveGroup = made.GroupId;
         Raise();
+        Remember(made);
 
         return made;
     }
@@ -205,6 +302,7 @@ internal sealed class DockManager
         }
 
         Raise();
+        Remember(made);
 
         return made;
     }
@@ -348,6 +446,7 @@ internal sealed class DockManager
         {
             instance.IsOpen = false;
             LetGo(instance);
+            Replaced(instance);
 
             return;
         }
@@ -375,8 +474,11 @@ internal sealed class DockManager
             return;
         }
 
+        var home = DockTree.GroupOf(Layout, instance.DockNameId, instance.Ordinal);
+
         DockTree.Remove(Layout, instance.DockNameId, instance.Ordinal);
         LetGo(instance);
+        Replaced(instance, home?.Id);
     }
 
     /// <summary>
@@ -446,6 +548,54 @@ internal sealed class DockManager
     }
 
     /// <summary>
+    /// Brings a dock forward where it is: its tab chosen in the main window, or it named as the one worked in.
+    /// </summary>
+    /// <remarks>
+    /// The chosen tab is written into the arrangement and the area rebuilt, because that is what the area settles a
+    /// region from: saying it anywhere else would leave two answers to which tab is shown. A dock in a window of its
+    /// own has no tab to choose — the window that holds it is what is brought forward, and the caller is what knows
+    /// which of the host's windows that is — so what is done here is naming it.
+    /// </remarks>
+    /// <param name="instance">The dock to bring forward.</param>
+    public void Bring(DockInstance instance)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        if (!_instances.Contains(instance))
+        {
+            return;
+        }
+
+        if (instance.Window is not null)
+        {
+            Remember(instance);
+
+            return;
+        }
+
+        if (DockTree.GroupOf(Layout, instance.DockNameId, instance.Ordinal) is not { } group)
+        {
+            return;
+        }
+
+        var at = group.Docks.FindIndex(dock =>
+            dock.Ordinal == instance.Ordinal
+            && string.Equals(dock.DockNameId, instance.DockNameId, StringComparison.Ordinal)
+        );
+
+        if (at < 0)
+        {
+            return;
+        }
+
+        group.Active = at;
+        Layout.ActiveGroup = group.Id;
+        Remember(instance);
+        Raise();
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>
     /// Shows a dock that was hidden.
     /// </summary>
     /// <remarks>
@@ -465,6 +615,7 @@ internal sealed class DockManager
 
         instance.IsOpen = true;
         Raise();
+        Remember(instance);
     }
 
     /// <summary>
@@ -579,6 +730,11 @@ internal sealed class DockManager
 
         Layout.ActiveGroup = groupId;
         StateChanged?.Invoke();
+
+        if (DockTree.Find(Layout, groupId) is { } group && GroupDock(group) is { } dock)
+        {
+            Remember(dock);
+        }
     }
 
     /// <summary>
@@ -615,6 +771,11 @@ internal sealed class DockManager
         group.Active = active;
         Layout.ActiveGroup = group.Id;
         StateChanged?.Invoke();
+
+        if (DockAt(group, active) is { } dock)
+        {
+            Remember(dock);
+        }
     }
 
     /// <summary>
@@ -852,6 +1013,115 @@ internal sealed class DockManager
 
         return DockTree.Groups(Layout).FirstOrDefault();
     }
+
+    /// <summary>Names a dock as the one being worked in, and remembers it as the last of its kind.</summary>
+    /// <param name="instance">The dock.</param>
+    private void Remember(DockInstance instance)
+    {
+        _recent[instance.DockNameId] = instance;
+        Focus.Set(instance);
+    }
+
+    /// <summary>
+    /// Passes the focus on when the dock that had it is gone, and lets go of it where nothing is left.
+    /// </summary>
+    /// <remarks>
+    /// The dock that takes its place is the one beside it first — the sibling tab of its group, or the dock its
+    /// group was split with — and otherwise any dock still open in the window it was in. The remembered dock of a
+    /// kind is moved the same way, because a caller asking for a browser is asking for one that is there rather than
+    /// a name whose only instance has just been closed.
+    /// </remarks>
+    /// <param name="gone">The dock that is gone.</param>
+    /// <param name="groupId">The group it was in, when the caller knows it; otherwise it is read from the tree.</param>
+    private void Replaced(DockInstance gone, string? groupId = null)
+    {
+        var home = groupId ?? DockTree.GroupOf(Layout, gone.DockNameId, gone.Ordinal)?.Id;
+        var replacement = Neighbour(home, gone);
+
+        if (ReferenceEquals(Focus.Instance, gone))
+        {
+            Focus.Set(replacement);
+        }
+
+        foreach (var (name, dock) in _recent.ToArray())
+        {
+            if (!ReferenceEquals(dock, gone))
+            {
+                continue;
+            }
+
+            var next =
+                replacement is not null
+                && string.Equals(replacement.DockNameId, name, StringComparison.Ordinal)
+                    ? replacement
+                    : _instances.LastOrDefault(one =>
+                        one.IsOpen && string.Equals(one.DockNameId, name, StringComparison.Ordinal)
+                    );
+
+            if (next is null)
+            {
+                _ = _recent.Remove(name);
+            }
+            else
+            {
+                _recent[name] = next;
+            }
+        }
+    }
+
+    /// <summary>The dock that takes the focus when another goes: one beside it first, then one in its window.</summary>
+    /// <param name="groupId">The group the dock was in, or nothing.</param>
+    /// <param name="gone">The dock that is gone.</param>
+    /// <returns>The dock, or nothing when none is left.</returns>
+    private DockInstance? Neighbour(string? groupId, DockInstance gone)
+    {
+        if (groupId is { } id && DockTree.Find(Layout, id) is { } group)
+        {
+            if (GroupDock(group) is { } beside)
+            {
+                return beside;
+            }
+
+            foreach (var recorded in group.Docks)
+            {
+                if (InstanceOf(recorded.DockNameId, recorded.Ordinal) is { IsOpen: true } dock)
+                {
+                    return dock;
+                }
+            }
+        }
+
+        return _instances.FirstOrDefault(one =>
+            one.IsOpen && string.Equals(one.Window, gone.Window, StringComparison.Ordinal)
+        );
+    }
+
+    /// <summary>The dock a group is showing, or the first of its docks that is open.</summary>
+    /// <param name="group">The group.</param>
+    /// <returns>The dock, or nothing when none of its docks is open.</returns>
+    private DockInstance? GroupDock(LayoutGroup group) =>
+        DockAt(group, group.Active)
+        ?? group
+            .Docks.Select(recorded => InstanceOf(recorded.DockNameId, recorded.Ordinal))
+            .OfType<DockInstance>()
+            .FirstOrDefault(one => one.IsOpen);
+
+    /// <summary>One of a group's docks, by its place in the group's tabs.</summary>
+    /// <param name="group">The group.</param>
+    /// <param name="index">The place.</param>
+    /// <returns>The dock, or nothing when it is not open.</returns>
+    private DockInstance? DockAt(LayoutGroup group, int index) =>
+        index >= 0
+        && index < group.Docks.Count
+        && InstanceOf(group.Docks[index].DockNameId, group.Docks[index].Ordinal) is { IsOpen: true } dock
+            ? dock
+            : null;
+
+    /// <summary>The dock the main window is working in, or the first one it has.</summary>
+    /// <returns>The dock, or nothing when it holds none.</returns>
+    private DockInstance? MainWindowDock() =>
+        (ActiveOrFirst() is { } group ? GroupDock(group) : null)
+        ?? _instances.FirstOrDefault(one => one.IsOpen && one.Window is null);
 
     /// <summary>The next instance number for a dock name.</summary>
     /// <param name="nameId">The dock's stable name id.</param>

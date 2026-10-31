@@ -157,6 +157,16 @@ rorolala_file_system:
     en: The command did not finish
     zh-CN: 命令未能完成
 
+  # Said when something outside this dock names a path to be shown and neither the path nor the directory
+  # holding it is there: the dock stays where the user left it rather than walking to a place invented for
+  # a path nobody can see.
+  not_there_title:
+    en: That path is not there
+    zh-CN: 该路径不存在
+  not_there:
+    en: "`%{path}` is not there, so the dock stayed where it was"
+    zh-CN: "`%{path}` 不存在，Dock 仍停留在原处"
+
   # What the file operations are carried out with. The commands are the system's tools rather than this
   # program's, which is why they are settings: a system that keeps them elsewhere, or a user who prefers
   # another, says so here. The four are filled together by choosing a preset, or each by hand.

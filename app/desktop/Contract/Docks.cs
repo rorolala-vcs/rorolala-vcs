@@ -194,3 +194,40 @@ public interface IDockRegistry
     /// <param name="registration">What the plugin says about the dock.</param>
     void Register(DockRegistration registration);
 }
+
+/// <summary>
+/// One dock, named the way the program names it: the stable name it was registered under and which of its
+/// instances it is.
+/// </summary>
+/// <remarks>
+/// The two are needed together because a dock may be made again: a browser is one dock looked at in several
+/// windows, and which of them is being worked in is part of the answer. The ordinal is the one the layout
+/// writes beside the name, so a plugin that keeps a dock's identity has a value it can compare rather than a
+/// control it would have to hold.
+/// </remarks>
+/// <param name="DockNameId">The dock's stable name id, as it was registered.</param>
+/// <param name="Ordinal">Which instance of that name.</param>
+public sealed record FocusedDock(string DockNameId, int Ordinal);
+
+/// <summary>
+/// Which dock the user is working in, as a plugin reads it.
+/// </summary>
+/// <remarks>
+/// One dock at a time for the whole program, and it is what the host draws its mark around: the dock a press
+/// landed in, the dock the keyboard went into, the tab that was chosen, or the dock of the window that came
+/// forward. A dock that is closed passes it on to the one that takes its place, and a dock that is moved into
+/// another group or window keeps it, so what is named is a dock that is actually open.
+/// <para>
+/// Nothing is named before the user has worked in a dock, and nothing again once the last dock that had it is
+/// gone: an answer here is always something the user can act from, and there is nothing to act from in a
+/// window that holds no dock.
+/// </para>
+/// </remarks>
+public interface IDockFocus
+{
+    /// <summary>The dock the user is working in, or nothing before one has been worked in.</summary>
+    FocusedDock? Current { get; }
+
+    /// <summary>Raised when <see cref="Current"/> says something else.</summary>
+    event Action? Changed;
+}

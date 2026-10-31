@@ -1361,6 +1361,21 @@ internal abstract class EntryView<TItem> : EntryView
     }
 
     /// <summary>
+    /// Chooses one entry and brings its row into view, which is what a dock told to show a path does.
+    /// </summary>
+    /// <remarks>
+    /// The choice is the same one a press makes, so what follows a choice — the version graph, the commands that act
+    /// on it — reads it the same way; what is added here is the scroll, because a row chosen off screen is a choice
+    /// the user cannot see, and the whole point of being shown a path is to see it.
+    /// </remarks>
+    /// <param name="item">The entry to choose.</param>
+    public void Reveal(TItem item)
+    {
+        Choose([item]);
+        List.ScrollIntoView(item);
+    }
+
+    /// <summary>
     /// Puts the choice back on what it was on before the listing was built again.
     /// </summary>
     /// <remarks>

@@ -652,6 +652,101 @@ internal sealed class DockWindows : IWindows
     }
 
     /// <summary>
+    /// Shows a place in a dock the user is already working in, or in one made for it when there is none.
+    /// </summary>
+    /// <remarks>
+    /// The dock is the one the user worked in last of that name — a browser over another dock, say — rather than the
+    /// first one the manager happens to hold: a dock that may be made again is a dock with several instances, and the
+    /// one the user was working in is the one a place shown from elsewhere belongs in. No second instance is made
+    /// beside it, since what was asked for is a place to look at; a dock that is not open at all is made, in the main
+    /// window, which is where a dock asked for without a window goes.
+    /// <para>
+    /// What is delivered is the request the dock is told about — the same one an opening delivers, since a dock that
+    /// is shown a place is being asked to open onto it again — and the dock's own answer is what decides whether a
+    /// path is a step, a choice, or a place nobody answers.
+    /// </para>
+    /// </remarks>
+    /// <param name="request">The dock, and the place it is to show.</param>
+    public void Reveal(DockRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (Registration(request.DockNameId) is not { } registration)
+        {
+            return;
+        }
+
+        Recover();
+        OpenMain();
+
+        var target = _docks.Recent(request.DockNameId) ?? _docks.InstanceOf(request.DockNameId);
+
+        if (target is null)
+        {
+            // Nothing of that dock is open, so one is made where a dock asked for without a window goes, and the
+            // request reaches its view as it is made (see `DockManager.Make`).
+            var made = _docks.Create(registration, registration.DefaultSide, request);
+
+            if (made is not null)
+            {
+                if (made.Window is { } key && _windows.TryGetValue(key, out var own))
+                {
+                    Bring(own);
+                }
+                else if (_main is { } main)
+                {
+                    Bring(main);
+                }
+            }
+
+            return;
+        }
+
+        _docks.Show(target);
+        _docks.Bring(target);
+
+        if (target.Window is { } into && _windows.TryGetValue(into, out var window))
+        {
+            Bring(window);
+        }
+        else if (_main is { } main)
+        {
+            Bring(main);
+        }
+
+        Told(target, request);
+    }
+
+    /// <summary>Tells a dock that is already open what it is to show now.</summary>
+    /// <remarks>
+    /// A dock that does not implement <see cref="IDockOpened"/> has nothing to do about being asked where to look, which
+    /// is what the interface is for; one that throws is a showing that failed rather than a window that breaks, so the
+    /// failure is recorded and nothing else is disturbed.
+    /// </remarks>
+    /// <param name="instance">The dock.</param>
+    /// <param name="request">What it is being asked to show.</param>
+    private void Told(DockInstance instance, DockRequest request)
+    {
+        if (instance.View is not IDockOpened told)
+        {
+            return;
+        }
+
+        try
+        {
+            told.Opened(request);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _log.Record(
+                LogLevel.Error,
+                Core.Source,
+                $"`{instance.DockNameId}` could not show what it was asked for: {error.Message}"
+            );
+        }
+    }
+
+    /// <summary>
     /// Brings back the docks that are in a window which is no longer there.
     /// </summary>
     /// <remarks>
@@ -827,9 +922,22 @@ internal sealed class DockWindows : IWindows
         // is put: a window that is made is one that is up, and one the user comes back to is the one they
         // are working in. A window going away is heard about below, so the name never outlives it.
         _shell.Window = window;
-        window.Activated += (_, _) => _shell.Window = window;
+        window.Activated += (_, _) =>
+        {
+            _shell.Window = window;
+
+            // A window coming forward is the work coming back to the dock it holds: a window of one dock is
+            // that dock, and the main window answers with the dock it was already working in where that one is
+            // still open. Said here because a click that only activates a window never reaches the dock's own
+            // controls, and the focus record is what says which dock is being worked in.
+            _docks.ActivateWindow(instance);
+        };
 
         window.Show();
+
+        // Said once more after the window is up, since a window that is shown is not always one that is heard
+        // being activated — and a window of a dock's own is made for that dock.
+        _docks.ActivateWindow(instance);
 
         return window;
     }

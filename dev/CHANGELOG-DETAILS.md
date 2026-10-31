@@ -117,7 +117,26 @@ a window opened again after the assembly has finished is made without a covering
 
 ## Feature
 
-### 1. [`app`] [`rola`] [`desktop`] Ask the Desktop window to say when it is up
+### 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`docking`] Show which dock the user is working in
+
+The dock the user is working in is marked: a one-pixel ring in the look's primary is drawn around the whole of its area
+— the strip its tab stands in and the view under it — over the docks rather than laid around one, so the ring takes no
+room from what it outlines and cannot be pressed by mistake. The ring follows the work: a press anywhere in a dock, the
+keyboard going into one, a tab being chosen and a dock being opened all name that dock as the one being worked in, a
+window coming forward names the dock it holds, and a dock moved into another group or window keeps the mark. When the
+dock that had it closes, the mark passes to the one beside it — the other tab of its group, or a dock still open in the
+window — and is let go when the last one that had it is gone, so it is never left around a dock that is not there. The
+mark is drawn from the primary the look publishes rather than from a colour read when it was made, so a primary the
+user changes reaches it with nothing further.
+
+A plugin reads the same answer: `IDockFocus` says which dock is being worked in — the dock's stable name and which
+instance of it — and is raised as it moves. That is what a dock's own keys are meant to be read against as they are
+folded into the focus rather than bound over the whole program; the folding itself is not in this change.
+
+**Breaking:** the plugin contract is 0.14.0. It gained the focus a plugin reads, and the reveal a view asks the browser
+with, which is described in its own entry.
+
+### 2. [`app`] [`rola`] [`desktop`] Ask the Desktop window to say when it is up
 
 `rola desktop --ready` asks the window to write one line on standard output, `rola-desktop-ready`,
 once it is on the screen. It changes nothing else about the run: the command still waits for the
@@ -129,7 +148,7 @@ its own to watch — the launcher — which otherwise has to guess when there is
 two are refused together: the refusal is `ErrorDesktopQueryWithReady`, printed with its help line,
 and exit code 176. The flag is offered by completion.
 
-### 2. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line
+### 3. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line
 
 `rola docs <TEXT>` reads one article of the built-in book by its exact name and prints it as it
 was written, through the program's own Markdown rendering. `rola docs --search <TEXT>...` searches
@@ -154,7 +173,7 @@ The book is found beside the program an export or an install puts it beside, or 
 from a checkout — above the directory it was run in, under `build/`; a checkout that has not run
 `cargo dev book` is told the book is missing rather than answered with nothing.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu
 
 Right-clicking a cell of a directory listing now offers to copy the words shown in it — a name,
 a size, a date, the owner a column says — as the first entry of the menu the row already had. The
@@ -163,7 +182,23 @@ the size column copies the size, the owner column copies the owner. What is copi
 whole text rather than the part the column had room to show, and it works in both arrangements the
 dock reads entries in, the rows and the tiles.
 
-### 4. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show a path from an Overview row in its folder, with the version graph following it
+
+The path a change is read by in the Overview is now a way into the work: pressing the From or To cell of a row asks the
+browser to show the place the path names. A path of the work's is joined to the Workspace root the reading was made over
+and shown in the folder holding it, with the file chosen — the same choice a click makes, so the Version Graph follows
+it and the row can be looked at, and confirmed, from where it is shown. A cell that names an address is shown as the
+address it is, since only the plugin that answers one knows its shape, and a side of a row with no path on it is a cell
+that does nothing, marked with the pointer only where there is somewhere to go.
+
+The place is shown in the dock the user last worked in — the browser the Overview was read from, rather than a second
+one made beside it; one that is not open is made — and showing it brings that dock's tab forward and puts the keyboard
+in its listing. A file that is gone, or which a hide rule leaves out of the listing, is shown by its directory alone; a
+path whose directory is not there either is said rather than stepped to, so the dock stays where the user left it. A
+dock is told what to show with the same request it is opened with, so a browser opened onto a place and one shown a place
+answer the same shape.
+
+### 6. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
 
 A book written as Markdown with a YAML front matter block is now compiled into one searchable
 file, and opened by a crate that answers a query with the articles it found, their descriptions,
@@ -203,7 +238,7 @@ string is released with its `free_*`, and `tests/ffi-c/ffi-book` checks the nest
 program. `modules/rola-sharp` gains `RolaBookSearch`, whose `BookSnippet` splits its text into
 ordinary and matched runs, so a renderer draws the highlight without converting the ranges itself.
 
-### 5. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
+### 7. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
 
 `TextRendering::render_document` draws a document rather than a line: a heading is set in two
 columns from the left with its `#` marker kept and its title bold on the terminal's reverse-video
@@ -216,7 +251,7 @@ a page rather than as the Markdown the index carries.
 `trd!` and `TextRendering::render` still draw a line where it was written, so messages, status
 lines and help keep the shape their callers chose.
 
-### 6. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
+### 8. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
 
 The command-line theme now carries a `Table` for the listings a `gh issue list`-style table is made
 of: columns with titles and rows of cells, drawn across the terminal instead of only as wide as
@@ -235,7 +270,7 @@ red and bold a search puts on a matched word — without handing the table a col
 parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
 the matched fragments in a filled one.
 
-### 7. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
+### 9. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
 
 `ThemeChoice::auto_select` now answers `Pretty` on a terminal that names itself one of the modern
 terminals, instead of leaving `Pretty` to an explicit `--theme-choice pretty`. The list is Windows

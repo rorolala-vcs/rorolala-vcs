@@ -5,6 +5,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using RorolalaDesktop.Contract;
@@ -124,6 +125,13 @@ internal sealed class DockArea : UserControl
 
     /// <summary>The class the button that closes the dock a region is showing carries.</summary>
     public const string CloseClass = "dock-close";
+
+    /// <summary>The class the ring drawn around the dock being worked in carries.</summary>
+    /// <remarks>
+    /// Published for the look and for whatever reads what is on screen: the ring is the host's own drawing, and its
+    /// colour is the primary the look publishes, but what it <em>is</em> is a fact about the program worth naming.
+    /// </remarks>
+    public const string FocusClass = "dock-focus";
 
     /// <summary>The class the area of a window that is one dock carries.</summary>
     /// <remarks>
@@ -255,6 +263,38 @@ internal sealed class DockArea : UserControl
     /// <summary>The outlines of the points drawn, which is what hit tests the pointer against.</summary>
     private readonly List<(DockSide Side, Point[] Outline)> _shapes = [];
 
+    /// <summary>
+    /// The ring drawn around the dock the user is working in.
+    /// </summary>
+    /// <remarks>
+    /// Drawn over the docks rather than laid around one, because a border that took part in the layout would take a
+    /// pixel from what it outlines every time the focus moved. It marks the whole of the dock's area — the strip its
+    /// tab stands in and the view under it — since that is the room the work goes into, and a ring around the view
+    /// alone would sit a few pixels inside the strip's own edge.
+    /// </remarks>
+    private readonly Border _ring = new()
+    {
+        IsVisible = false,
+        IsHitTestVisible = false,
+        BorderThickness = new Thickness(1),
+    };
+
+    /// <summary>The layer the ring is drawn in, over everything the area draws.</summary>
+    private readonly Canvas _ringLayer = new() { IsHitTestVisible = false };
+
+    /// <summary>Where the ring was put, so a layout pass that did not move the dock sets nothing.</summary>
+    private Rect? _ringAt;
+
+    /// <summary>
+    /// The dock a window of one dock has already had the pointer and keyboard handlers put on.
+    /// </summary>
+    /// <remarks>
+    /// A window of its own does not put its dock through a region, so the wiring a region's docks get in
+    /// <see cref="Make"/> is done for it here — once, since the handlers would otherwise be added again on every
+    /// rebuild of a window that draws the same dock.
+    /// </remarks>
+    private DockInstance? _wired;
+
     /// <summary>What each dock that is placed in a region was given, by the dock.</summary>
     private readonly Dictionary<DockInstance, Placed> _placed = [];
 
@@ -327,6 +367,12 @@ internal sealed class DockArea : UserControl
         );
         AddHandler(InputElement.PointerCaptureLostEvent, (_, _) => Cancel());
 
+        // The ring is the look's primary rather than a colour of the host's, so a theme — or a primary the user
+        // chose — is what the ring is drawn in, and changing it reaches the ring without the ring being told.
+        _ring[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Primary);
+        _ring.Classes.Add(FocusClass);
+        _ringLayer.Children.Add(_ring);
+
         // A dock lands in a group, so a window that has groups takes a drag of one — and a window that is one
         // dock does not: what it draws is the one dock it was made for, and there is no group in it to put
         // another. Nothing is read here beyond where the drag is: what it carries, and whether the dock it
@@ -343,6 +389,11 @@ internal sealed class DockArea : UserControl
             // is only known from the room the layout pass gave it.
             LayoutUpdated += (_, _) => Constrain();
         }
+
+        // The ring is put again on every layout pass as well as when the focus moves: what it surrounds moves
+        // when a splitter is dragged, a window is resized, a tab changes or a group is rearranged, and a ring left
+        // where the dock used to be is worse than no ring at all.
+        LayoutUpdated += (_, _) => Ring();
     }
 
     /// <summary>
@@ -383,6 +434,7 @@ internal sealed class DockArea : UserControl
 
         _listening = false;
         _manager.Changed -= Rebuild;
+        _manager.Focus.Changed -= Ring;
         _windows.DragEnded -= Clear;
 
         // A window of one dock places nothing: what it draws is the one dock it was made for, put straight into
@@ -412,6 +464,7 @@ internal sealed class DockArea : UserControl
 
         _listening = true;
         _manager.Changed += Rebuild;
+        _manager.Focus.Changed += Ring;
 
         // A drag that ends by being called off — Esc, or a release nowhere — leaves this area with the points it
         // drew and no event left to take them down, since a cancelled drag has no drop to be told about.
@@ -602,7 +655,10 @@ internal sealed class DockArea : UserControl
         if (Alone)
         {
             Classes.Add(AloneClass);
-            Content = _alone;
+
+            // The dock and the ring over it: a window of one dock has nothing else to draw, so what the ring
+            // surrounds is the whole of the room the dock was given.
+            Content = new Grid { Children = { _alone, _ringLayer } };
 
             return;
         }
@@ -613,6 +669,10 @@ internal sealed class DockArea : UserControl
         _surface.Children.Add(_structure);
         _surface.Children.Add(_zones);
 
+        // The ring is drawn over the docks and over the drop points: a drag is a gesture about where a dock may
+        // go, and the dock being worked in is still the dock being worked in under it.
+        _surface.Children.Add(_ringLayer);
+
         Content = _surface;
     }
 
@@ -622,6 +682,7 @@ internal sealed class DockArea : UserControl
         if (Alone)
         {
             Only();
+            Ring();
 
             return;
         }
@@ -633,6 +694,7 @@ internal sealed class DockArea : UserControl
         Order();
         Settle();
         Show();
+        Ring();
     }
 
     /// <summary>
@@ -651,12 +713,88 @@ internal sealed class DockArea : UserControl
         if (!ReferenceEquals(_alone.Child, shown?.View.View))
         {
             _alone.Child = shown?.View.View;
+            _wired = null;
         }
 
         if (shown is not null)
         {
             shown.View.View.IsVisible = shown.IsOpen;
+
+            // The one dock of a window of its own is worked in on the same two moments as any dock — a press
+            // landing in it and the keyboard reaching it — and there is no region here to have done it (see
+            // `Make`). Wired once: a rebuild of the same window draws the same dock, and a handler added again
+            // would say the same thing twice for the life of the window.
+            if (!ReferenceEquals(_wired, shown))
+            {
+                _wired = shown;
+
+                shown.View.View.GotFocus += (_, _) => _manager.WorkedIn(shown);
+                shown.View.View.AddHandler(
+                    InputElement.PointerPressedEvent,
+                    (_, _) => _manager.WorkedIn(shown),
+                    RoutingStrategies.Tunnel
+                );
+            }
         }
+    }
+
+    /// <summary>
+    /// Puts the ring around the dock the user is working in, or takes it down when this window holds none.
+    /// </summary>
+    /// <remarks>
+    /// Asked on every focus change and every layout pass, and it writes nothing when the ring has not moved: a
+    /// layout pass runs while a splitter is being dragged, and a property set on each of those would be a window
+    /// that lays itself out again for every pixel of the drag.
+    /// </remarks>
+    private void Ring()
+    {
+        if (Band() is not { } around || around.Width <= 0 || around.Height <= 0)
+        {
+            _ringAt = null;
+            _ring.IsVisible = false;
+
+            return;
+        }
+
+        _ring.IsVisible = true;
+
+        if (_ringAt == around)
+        {
+            return;
+        }
+
+        _ringAt = around;
+        Canvas.SetLeft(_ring, around.X);
+        Canvas.SetTop(_ring, around.Y);
+        _ring.Width = around.Width;
+        _ring.Height = around.Height;
+    }
+
+    /// <summary>
+    /// The room the dock being worked in takes in this area, or nothing when this window does not hold it.
+    /// </summary>
+    /// <remarks>
+    /// The whole of the dock's area, which for a dock in a region is that region — its strip and the view under
+    /// it — rather than the view alone. A dock in a window of its own has the whole of the window's room below
+    /// the row, and the question of which dock it is has one answer there.
+    /// </remarks>
+    /// <returns>The rectangle, in the area's own coordinates, or nothing.</returns>
+    private Rect? Band()
+    {
+        if (_manager.Focus.Instance is not { } dock || !Mine(dock) || !dock.IsOpen)
+        {
+            return null;
+        }
+
+        if (Alone)
+        {
+            return Box(_alone);
+        }
+
+        return _placed.TryGetValue(dock, out var placed)
+            && ReferenceEquals(placed.Region.Selected, dock)
+            ? Box(placed.Region.Panel)
+            : null;
     }
 
     /// <summary>Takes away the docks that are no longer open at all.</summary>
@@ -875,9 +1013,22 @@ internal sealed class DockArea : UserControl
         };
 
         // A dock that the keyboard comes to is the dock being worked in, which is what says where the next dock
-        // opened without a place of its own goes. Told to the manager rather than kept here, because it is part
-        // of the arrangement and is written down with it.
-        placed.View.GotFocus += (_, _) => _manager.ActivateGroup(placed.Region.Id);
+        // opened without a place of its own goes — and it is the dock the ring is drawn around. Told to the manager
+        // rather than kept here, because it is part of the arrangement and is written down with it.
+        placed.View.GotFocus += (_, _) =>
+        {
+            _manager.ActivateGroup(placed.Region.Id);
+            _manager.WorkedIn(placed.Instance);
+        };
+
+        // A press anywhere in the dock is the user working in it, whether or not what was pressed is something that
+        // takes the keyboard: a view of a plugin's that is not focusable is still a dock being read, and a ring that
+        // only followed the keyboard would not say which one that is.
+        placed.View.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, _) => _manager.WorkedIn(placed.Instance),
+            RoutingStrategies.Tunnel
+        );
 
         return placed;
     }
@@ -1466,6 +1617,11 @@ internal sealed class DockArea : UserControl
 
         placed.Region.Selected = instance;
         Show();
+
+        // Choosing a tab is working in that dock, which is what the ring is drawn from; the ring is put again here
+        // because the tab may have been chosen from a menu or a test rather than by a press the dock itself heard.
+        _manager.WorkedIn(instance);
+        Ring();
 
         // Choosing a dock gives it the keyboard: the keyboard was on the tab that was clicked, and that tab
         // belongs to this strip rather than to the dock — while a dock answers its own keys inside itself, so

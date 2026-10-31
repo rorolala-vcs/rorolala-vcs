@@ -39,6 +39,9 @@ public interface IPluginHost
     /// <summary>Where the plugin registers docks.</summary>
     IDockRegistry Docks { get; }
 
+    /// <summary>Which dock the user is working in, which is what a dock's own keys are read against.</summary>
+    IDockFocus Focus { get; }
+
     /// <summary>Where the plugin adds items to the menus a dock's own chrome opens.</summary>
     IDockMenuRegistry DockMenus { get; }
 

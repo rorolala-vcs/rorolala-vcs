@@ -225,6 +225,11 @@ rorolala_vcs:
     column_to:
       en: To
       zh-CN: 至
+    # What a path in the From and To columns says about itself when the pointer rests on it: the path is a way into
+    # the work, and what it does is what a reader who has stopped at one wants to know.
+    show_path:
+      en: Show it in the folder, with the version graph following it
+      zh-CN: 在目录中显示该文件，并让版本图跟随它
     # What the column of buttons is called. Every row has it and most rows have something in it, so the band
     # names it rather than leaving it to be guessed at from the buttons below it.
     column_operations:

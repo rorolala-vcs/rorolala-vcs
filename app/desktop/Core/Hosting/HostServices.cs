@@ -202,6 +202,9 @@ internal sealed class PluginHost
     public IDockRegistry Docks => this;
 
     /// <inheritdoc />
+    public IDockFocus Focus => _services.Docks.Focus;
+
+    /// <inheritdoc />
     public IDockMenuRegistry DockMenus => this;
 
     /// <inheritdoc />
