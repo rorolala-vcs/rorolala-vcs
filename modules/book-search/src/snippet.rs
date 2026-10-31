@@ -10,19 +10,19 @@ use crate::token;
 
 /// How many fragments one hit is shown with at most.
 ///
-/// Three is what a list of hits has room for: a hit that matched in more places than that is
-/// usually a short article or a very common word, and the fourth fragment would say nothing the
-/// first three did not.
-pub const MAX_SNIPPETS_PER_HIT: usize = 3;
+/// One is what a list of hits has room for: the description beside it says what the article is,
+/// and the first place the query matched says why it is in the list. A second fragment would take
+/// the room the description needs without adding another reason to open the article.
+pub const MAX_SNIPPETS_PER_HIT: usize = 1;
 
 /// How many characters before a match the window starts, when the field is longer.
-const CONTEXT_BEFORE: usize = 48;
+const CONTEXT_BEFORE: usize = 16;
 
 /// How many characters after a match the window reaches.
-const CONTEXT_AFTER: usize = 96;
+const CONTEXT_AFTER: usize = 32;
 
 /// How close two matches have to be to be shown as one fragment.
-const WINDOW_GAP: usize = 24;
+const WINDOW_GAP: usize = 8;
 
 /// The fragments of `article` that `query` matched, the field that reads best first.
 ///
@@ -132,10 +132,18 @@ fn inside(word: &str, wanted: &str) -> Vec<(usize, usize)> {
 }
 
 /// The windows to cut, each around one match, with the ones that are close enough merged.
+///
+/// The count is settled before a merge is considered, so a fragment that is already the last one
+/// is not stretched over a later match: with one fragment the window is the first match's own
+/// context and nothing more.
 fn windows(length: usize, found: &[Range]) -> Vec<(usize, usize)> {
     let mut windows: Vec<(usize, usize)> = Vec::new();
 
     for range in found {
+        if windows.len() >= MAX_SNIPPETS_PER_HIT {
+            break;
+        }
+
         let start = range.start.saturating_sub(CONTEXT_BEFORE);
         let end = range.end.saturating_add(CONTEXT_AFTER).min(length);
 
@@ -144,10 +152,6 @@ fn windows(length: usize, found: &[Range]) -> Vec<(usize, usize)> {
         {
             last.1 = last.1.max(end);
             continue;
-        }
-
-        if windows.len() >= MAX_SNIPPETS_PER_HIT {
-            break;
         }
 
         windows.push((start, end));

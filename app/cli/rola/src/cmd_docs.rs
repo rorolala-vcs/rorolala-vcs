@@ -473,11 +473,16 @@ pub fn render_result_docs_search(result: ResultDocsSearch) {
     } else {
         let mut table = Table::new([
             Column::auto(t!("docs.table_name").to_string()),
+            Column::fixed(t!("docs.table_description").to_string(), 34),
             Column::fill(t!("docs.table_snippet").to_string()),
         ]);
 
         for entry in &result.entries {
-            table.row([Cell::text(entry.name.clone()), snippet_cell(entry)]);
+            table.row([
+                Cell::text(entry.name.clone()),
+                Cell::text(entry.description.clone()),
+                snippet_cell(entry),
+            ]);
         }
 
         r_println!("{}", table.render());

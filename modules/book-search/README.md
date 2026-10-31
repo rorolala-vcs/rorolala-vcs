@@ -38,7 +38,7 @@ tie, so the same query over the same book answers in the same order every time.
 ## What a hit carries
 
 Each hit is the article's name, title and description, a score, and at most
-[`MAX_SNIPPETS_PER_HIT`] fragments. A fragment is cut from the first field that matched — the
+[`MAX_SNIPPETS_PER_HIT`] fragment. A fragment is cut from the first field that matched — the
 content if the word is in the body, and the description or title when the word is only there — and
 ranges say which characters of the fragment matched:
 

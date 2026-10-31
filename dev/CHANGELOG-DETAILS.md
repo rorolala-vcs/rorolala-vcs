@@ -34,9 +34,10 @@ ordinary text.
 was written, through the program's own Markdown rendering. `rola docs --search <TEXT>...` searches
 the book instead: the words are read as one query and an article is found when every term of it is
 in it, the answer is drawn across the terminal the way `gh issue list` draws a listing — no
-borders, the header bold and underlined, the article's name as wide as the names that matched and
-the fragments filling the rest of the width, the matched words red and bold — and a Latin query is
-also found as a prefix or a substring of a word, which the book's build indexes every word for.
+borders, the header bold and underlined, the article's name as wide as the names that matched, its
+description in a fixed column, and the matched fragment filling the rest of the width, the matched
+words red and bold — and a Latin query is also found as a prefix or a substring of a word, which
+the book's build indexes every word for.
 
 `--limit <N>` caps how many search answers are shown, twelve by default and only meaningful with
 `--search`. A search that finds one article, or one a run limited to a single answer, is answered
@@ -74,8 +75,8 @@ kana, hangul — is cut into every character and every adjacent pair, so a one-c
 its line and a longer query asks for its phrase. An article is a hit only when every term of the
 query is in it, in any of its five fields — name, title, description, keywords, content — and the
 hits are ranked by BM25 with a title match worth more than a body match and the name breaking a
-tie, so the same query over the same book answers in the same order. Each hit is at most three
-fragments, cut from the field that matched with `…` where they were cut, and each fragment's ranges
+tie, so the same query over the same book answers in the same order. Each hit is one short
+fragment, cut from the field that matched with `…` where it was cut, and the fragment's ranges
 count characters rather than bytes and are already merged where two ranges overlapped.
 
 **The fragments.** The build also cuts every word of a spaced script into runs of two and three

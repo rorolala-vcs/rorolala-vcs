@@ -32,6 +32,10 @@ docs:
     en: ARTICLE
     zh-CN: 文章
 
+  table_description:
+    en: DESCRIPTION
+    zh-CN: 描述
+
   table_snippet:
     en: MATCHED
     zh-CN: 匹配

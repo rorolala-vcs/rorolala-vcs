@@ -222,8 +222,14 @@ fn docs(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["docs", "--search", "the"]);
     checked.exits("a search with several answers still tabulates them", &ran, 0);
     checked.stdout_has("the search's table names its columns", &ran, "ARTICLE");
+    checked.stdout_has("the table also names the description", &ran, "DESCRIPTION");
     checked.stdout_has("the table names the article", &ran, "install");
     checked.stdout_has("the table names the other article", &ran, "workspace");
+    checked.stdout_has(
+        "the table holds the article's description",
+        &ran,
+        "How to put the program",
+    );
     checked.wants(
         "the table fills the width it was drawn at",
         ran.stdout.lines().all(|line| line.chars().count() == 100),
