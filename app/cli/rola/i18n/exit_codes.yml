@@ -289,6 +289,10 @@ exit_codes:
     en: A run both asked how a frame is drawn and chose how one is drawn
     zh-CN: 本次运行既询问了边框的样式，又选择了边框的样式
 
+  desktop_query_ready:
+    en: A run both asked how a frame is drawn and asked for a window to say when it is up
+    zh-CN: 本次运行既询问了边框的样式，又要求窗口在出现时报到
+
   fs_ops_argument:
     en: A file operation was named without the paths it works on
     zh-CN: 文件操作缺少它所作用的路径

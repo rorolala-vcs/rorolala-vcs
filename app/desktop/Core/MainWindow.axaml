@@ -27,7 +27,10 @@
          decorations are told to reserve, which the window says in code rather than here — one number for
          every window, so that the row of a window that is one dock is the row of the main window — and the
          look is what draws the row and the buttons. -->
-    <Grid>
+    <!-- Named because the covering the window is made with is laid over everything it holds, and there is
+         nowhere but the top of this one for it to go: it is added in code, and only for a window that is
+         opened while the host is still being assembled. -->
+    <Grid x:Name="Root">
         <DockPanel>
             <!-- The row's own surface, and what the row is made of: the look fills it with the elevated ground and
                  draws the one line along its foot that separates the row from the dock area below. It

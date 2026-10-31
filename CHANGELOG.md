@@ -7,15 +7,22 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 ## Bugfix
 
 1. [`app`] [`rola`] [`pager`] Never page a run that is not talking to a terminal — [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-pager-never-page-a-run-that-is-not-talking-to-a-terminal)
-2. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule — [See details](dev/CHANGELOG-DETAILS.md#2-utils-cli-theme-rendering-draw-a-three-dash-markdown-rule-as-a-rule)
+2. [`app`] [`ROLALauncher`] Wait for the Desktop window before leaving the launcher — [See details](dev/CHANGELOG-DETAILS.md#2-app-rolalauncher-wait-for-the-desktop-window-before-leaving-the-launcher)
+3. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule — [See details](dev/CHANGELOG-DETAILS.md#3-utils-cli-theme-rendering-draw-a-three-dash-markdown-rule-as-a-rule)
+
+## Optimized
+
+1. [`app`] [`ROLALauncher`] Open the launcher before reading what it shows — [See details](dev/CHANGELOG-DETAILS.md#1-app-rolalauncher-open-the-launcher-before-reading-what-it-shows)
+2. [`app`] [`RorolalaDesktop`] Show the Desktop window before its plugins are assembled — [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-show-the-desktop-window-before-its-plugins-are-assembled)
 
 ## Feature
 
-1. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line — [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-docs-read-and-search-the-built-in-book-from-the-command-line)
-2. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments — [See details](dev/CHANGELOG-DETAILS.md#2-modules-book-search-search-the-built-in-book-by-word-with-the-matched-fragments)
-3. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading — [See details](dev/CHANGELOG-DETAILS.md#3-utils-cli-theme-rendering-lay-out-a-markdown-document-for-reading)
-4. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line — [See details](dev/CHANGELOG-DETAILS.md#4-utils-cli-theme-table-a-full-width-listing-table-for-the-command-line)
-5. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected — [See details](dev/CHANGELOG-DETAILS.md#5-utils-cli-theme-theme-choose-the-pretty-theme-where-the-terminal-can-be-detected)
+1. [`app`] [`rola`] [`desktop`] Ask the Desktop window to say when it is up — [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-desktop-ask-the-desktop-window-to-say-when-it-is-up)
+2. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line — [See details](dev/CHANGELOG-DETAILS.md#2-app-rola-docs-read-and-search-the-built-in-book-from-the-command-line)
+3. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments — [See details](dev/CHANGELOG-DETAILS.md#3-modules-book-search-search-the-built-in-book-by-word-with-the-matched-fragments)
+4. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading — [See details](dev/CHANGELOG-DETAILS.md#4-utils-cli-theme-rendering-lay-out-a-markdown-document-for-reading)
+5. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line — [See details](dev/CHANGELOG-DETAILS.md#5-utils-cli-theme-table-a-full-width-listing-table-for-the-command-line)
+6. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected — [See details](dev/CHANGELOG-DETAILS.md#6-utils-cli-theme-theme-choose-the-pretty-theme-where-the-terminal-can-be-detected)
 
 ## Refactor
 

@@ -16,7 +16,23 @@ an agent driving the command line and one that hangs on it.
 
 `--no-pager` still works, and a run in a terminal pages as it did before.
 
-### 2. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
+### 2. [`app`] [`ROLALauncher`] Wait for the Desktop window before leaving the launcher
+
+Opening a Workspace no longer closes the launcher as soon as the Desktop program is started. The
+chosen card turns a mark and the rest of the window — the other cards, the buttons and the language
+menu — is put out of reach while `rola desktop --ready` is waited for, and the launcher closes only
+once the window has said it is up, so the two programs read as one. A launcher that is waiting also
+refuses to leave: Escape and its own close button do nothing until the wait is over, which keeps the
+start it made from being a process nobody is waiting on.
+
+A start that ends before its window opens is reported with its exit code, and one that has said
+nothing after thirty seconds is reported as a timeout. The launcher then comes back rather than
+ending a start that may still arrive, and the Desktop process is left going, because a process
+ended for being slow is a window lost. A start that found the Desktop program already running —
+exit code 174 — is answered as a window, since the run that was already up was asked to come
+forward.
+
+### 3. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
 
 A message that marked a section break with `---` now draws a rule there, as Markdown says it should,
 instead of printing the three dashes as ordinary text. The test that recognized one required more
@@ -26,9 +42,49 @@ separator row uses, but the table is taken before the rule is looked for, so the
 A fenced code block still keeps its `---` as the text it is, and one or two dashes are still
 ordinary text.
 
+## Optimized
+
+### 1. [`app`] [`ROLALauncher`] Open the launcher before reading what it shows
+
+The launcher window is shown at once, holding a turning mark, and what it shows — the Workspaces
+list, the account, how the machine draws a frame, and the welcome's lines — is read after it is up.
+How a frame is drawn and what accounts exist are both answered by running the command line program,
+and the window used to wait for those answers before it appeared. Now it appears first and is built
+when the answers arrive, so that a launcher is something to look at while it finds out what to show.
+
+A Workspaces file that cannot be read is an empty list rather than a window that refuses to open,
+and a look or language change that arrives before the window has been read is held until the read
+has drawn it.
+
+### 2. [`app`] [`RorolalaDesktop`] Show the Desktop window before its plugins are assembled
+
+The main window is now made and shown once the kernel's docks and menus, the look and the saved
+layout are ready, and before the plugins are initialized. What is left of the host — the plugins and
+the menus they register, the single-instance listener, the dock-state subscription and the layout
+restore, and the report — runs afterwards, one step per turn of the window's thread, under a black
+covering with a turning mark. The covering fades once the last step has returned, so the first frame
+is the window rather than a half-made shell, and a slow plugin no longer holds the window back.
+
+A step that throws is written to the log and the remaining steps go on: a plugin that will not start
+is no longer a program that will not open. The menu bar is rebuilt once the plugins have registered,
+a window opened again after the assembly has finished is made without a covering, and a
+`rola desktop --ready` run is answered with one line on standard output as the window opens.
+
 ## Feature
 
-### 1. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line
+### 1. [`app`] [`rola`] [`desktop`] Ask the Desktop window to say when it is up
+
+`rola desktop --ready` asks the window to write one line on standard output, `rola-desktop-ready`,
+once it is on the screen. It changes nothing else about the run: the command still waits for the
+window to close and still ends with the window's own exit code, and a run that did not write the
+flag keeps the silence it had. It is meant for a caller that starts the command and has no window of
+its own to watch — the launcher — which otherwise has to guess when there is something to look at.
+
+`--ready` asks for a window, and `--query-window-style` asks how one is drawn and opens none, so the
+two are refused together: the refusal is `ErrorDesktopQueryWithReady`, printed with its help line,
+and exit code 176. The flag is offered by completion.
+
+### 2. [`app`] [`rola`] [`docs`] Read and search the built-in book from the command line
 
 `rola docs <TEXT>` reads one article of the built-in book by its exact name and prints it as it
 was written, through the program's own Markdown rendering. `rola docs --search <TEXT>...` searches
@@ -53,7 +109,7 @@ The book is found beside the program an export or an install puts it beside, or 
 from a checkout — above the directory it was run in, under `build/`; a checkout that has not run
 `cargo dev book` is told the book is missing rather than answered with nothing.
 
-### 2. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
+### 3. [`modules`] [`book-search`] Search the built-in book by word, with the matched fragments
 
 A book written as Markdown with a YAML front matter block is now compiled into one searchable
 file, and opened by a crate that answers a query with the articles it found, their descriptions,
@@ -93,7 +149,7 @@ string is released with its `free_*`, and `tests/ffi-c/ffi-book` checks the nest
 program. `modules/rola-sharp` gains `RolaBookSearch`, whose `BookSnippet` splits its text into
 ordinary and matched runs, so a renderer draws the highlight without converting the ranges itself.
 
-### 3. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
+### 4. [`utils`] [`cli-theme`] [`rendering`] Lay out a Markdown document for reading
 
 `TextRendering::render_document` draws a document rather than a line: a heading is set in two
 columns from the left with its `#` marker kept and its title bold on the terminal's reverse-video
@@ -106,7 +162,7 @@ a page rather than as the Markdown the index carries.
 `trd!` and `TextRendering::render` still draw a line where it was written, so messages, status
 lines and help keep the shape their callers chose.
 
-### 4. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
+### 5. [`utils`] [`cli-theme`] [`table`] A full-width listing table for the command line
 
 The command-line theme now carries a `Table` for the listings a `gh issue list`-style table is made
 of: columns with titles and rows of cells, drawn across the terminal instead of only as wide as
@@ -125,7 +181,7 @@ red and bold a search puts on a matched word — without handing the table a col
 parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
 the matched fragments in a filled one.
 
-### 5. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
+### 6. [`utils`] [`cli-theme`] [`theme`] Choose the Pretty theme where the terminal can be detected
 
 `ThemeChoice::auto_select` now answers `Pretty` on a terminal that names itself one of the modern
 terminals, instead of leaving `Pretty` to an explicit `--theme-choice pretty`. The list is Windows

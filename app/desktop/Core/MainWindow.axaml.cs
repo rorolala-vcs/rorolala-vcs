@@ -135,6 +135,9 @@ public partial class MainWindow : Window
     /// </remarks>
     private DockDrag? _drag;
 
+    /// <summary>The covering the window was made with, or nothing for a window with nothing to cover.</summary>
+    private readonly LoadingOverlay? _loading;
+
 
     /// <summary>Makes the window over what was registered.</summary>
     /// <param name="services">Everything the host holds.</param>
@@ -148,7 +151,12 @@ public partial class MainWindow : Window
     /// heard from when it closes and the one thing it has to say is which window it was.
     /// </param>
     /// <param name="dock">The dock this window is for, or nothing for the main one.</param>
-    internal MainWindow(HostServices services, string? key, Docking.DockInstance? dock)
+    /// <param name="loading">
+    /// Whether the window is drawn under a covering until the host says its work is done. True for the main
+    /// window made while the host is still assembling, and false for one opened over a host that is assembled:
+    /// a covering there would be covering work that has already been done.
+    /// </param>
+    internal MainWindow(HostServices services, string? key, Docking.DockInstance? dock, bool loading = false)
     {
         InitializeComponent();
 
@@ -253,6 +261,18 @@ public partial class MainWindow : Window
         {
             _notifications = new NotificationStack();
             NotificationLayer.Children.Add(_notifications);
+
+            // A window made while the host is still assembling is drawn under a black covering, so that the
+            // first frame is the window rather than what a host with nothing in it looks like. The ground is
+            // black as well, because the window's own buttons are the frame's: they are drawn over the client
+            // area rather than in it, and the covering is not what paints under them.
+            if (loading)
+            {
+                Background = Brushes.Black;
+
+                _loading = new LoadingOverlay();
+                Root.Children.Add(_loading);
+            }
         }
 
         // A dock can be closed, opened, or dragged to another region by hand as well as from the
@@ -515,8 +535,38 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Builds the menu bar from what was registered, for the window this is.
+    /// Builds the menu bar again from what is registered.
     /// </summary>
+    /// <remarks>
+    /// The bar was built when the window was made, which is before the plugins have registered the menus they
+    /// contribute; this puts theirs in once there are any. It is safe to call again because the bar is built
+    /// from the registries rather than added to — see <see cref="BuildMenu"/>, which takes the old one down
+    /// first — and it is what a main window made before the plugins were initialized needs.
+    /// </remarks>
+    internal void RebuildMenu() => BuildMenu();
+
+    /// <summary>
+    /// Ends the covering this window was made with, once the work behind it is done.
+    /// </summary>
+    /// <remarks>
+    /// A window made without one — a dock's own, or the main window opened again over a host that is already
+    /// assembled — has nothing to end. A second call is answered by the covering itself, which goes once.
+    /// </remarks>
+    internal void CompleteLoading()
+    {
+        if (_loading is null)
+        {
+            return;
+        }
+
+        // The ground goes back to what the look says, now that the covering is the only thing that was black:
+        // what it fades away to reveal is the window the covering stood in for, rather than a black one.
+        ClearValue(BackgroundProperty);
+
+        _loading.Finish();
+    }
+
+    /// <summary>Builds the menu bar from what was registered, for the window this is.</summary>
     /// <remarks>
     /// The dock's own header commands are added under the Window menu rather than as menus of their own:
     /// they are what the dock says about the thing it is showing, and there is no other place in a window
@@ -525,6 +575,11 @@ public partial class MainWindow : Window
     private void BuildMenu()
     {
         MainMenu.Items.Clear();
+
+        // The entries the last bar was built with are gone with it, and a bar built again would add the
+        // registrations to the ones it no longer shows: what is kept is the entries this bar holds, so it
+        // starts with none of them.
+        _docks.Clear();
 
         foreach (var top in Visible(_services.Menu, _scope))
         {

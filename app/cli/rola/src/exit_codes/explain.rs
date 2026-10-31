@@ -88,6 +88,7 @@ pub const CODES: &[i32] = &[
     173,
     174,
     175,
+    176,
     180,
     190,
     191,
@@ -129,6 +130,9 @@ pub fn has_ec(code: i32) -> bool {
 ///
 /// An empty string when the program states no such code; ask [`has_ec`] to tell that apart
 /// from a code whose words are still to be written.
+// One arm per code the program states, which is a list the program's own size and not a shape
+// that could be shorter: the length is the answer's, so it is allowed to be what the list makes it.
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn explain_ec(code: i32) -> String {
     match code {
@@ -206,6 +210,7 @@ pub fn explain_ec(code: i32) -> String {
         173 => t!("exit_codes.desktop_window_style").to_string(),
         174 => t!("exit_codes.desktop_called").to_string(),
         175 => t!("exit_codes.desktop_query_style").to_string(),
+        176 => t!("exit_codes.desktop_query_ready").to_string(),
         180 => t!("exit_codes.format").to_string(),
         190 => t!("exit_codes.layout").to_string(),
         191 => t!("exit_codes.layout_argument").to_string(),

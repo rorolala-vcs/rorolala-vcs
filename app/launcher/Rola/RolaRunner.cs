@@ -154,39 +154,52 @@ internal sealed class RolaRunner(string program, string language)
     }
 
     /// <summary>
-    /// Starts the Desktop program at a directory, and does not wait for it.
+    /// Starts the Desktop program at a Workspace, and answers the start that is being waited for.
     /// </summary>
     /// <remarks>
-    /// The launcher closes as the window opens, so what is started is started to be left behind: what a
-    /// reader is looking at from then on is the window, and this program has nothing left to do. It is
-    /// reached through the command line rather than run by name, because opening a window onto a
-    /// Workspace is what that command is, and the two programs agree about what a Workspace is only there.
+    /// The launcher closes as the window opens, so what is started is left behind: what a reader is looking at
+    /// from then on is the window, and this program has nothing left to do. It is reached through the command
+    /// line rather than run by name, because opening a window onto a Workspace is what that command is, and the
+    /// two programs agree about what a Workspace is only there.
+    /// <para>
+    /// `--ready` is what makes the window say it is up. The line arrives on this start's own output because the
+    /// command line program passes that stream through untouched, which is why the output is read and the error
+    /// is only drained: the one thing this program looks for on a stream is the line, and a reason it does not
+    /// act on is a reason not worth a pipe of its own.
+    /// </para>
     /// </remarks>
     /// <param name="workspace">The Workspace to open the window onto.</param>
     /// <param name="style">How the window's own frame is to be drawn.</param>
-    /// <returns>Whether a window was asked for.</returns>
-    public bool Launch(string workspace, WindowStyle style)
+    /// <returns>The start being waited for, or nothing when there was nothing to start.</returns>
+    public LaunchAttempt? Launch(string workspace, WindowStyle style)
     {
         var start = new ProcessStartInfo
         {
             FileName = program,
             WorkingDirectory = workspace,
             UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
             CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
 
         start.ArgumentList.Add("--lang");
         start.ArgumentList.Add(Language);
         start.ArgumentList.Add("desktop");
         start.ArgumentList.Add("--window-style=" + Written(style));
+        start.ArgumentList.Add("--ready");
 
         try
         {
-            return Process.Start(start) is not null;
+            var process = Process.Start(start);
+
+            return process is null ? null : new LaunchAttempt(process);
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            return false;
+            return null;
         }
     }
 

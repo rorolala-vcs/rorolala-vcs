@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia;
+using RorolalaDesktop;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Theming;
@@ -45,15 +46,6 @@ internal static class Program
 
     /// <summary>What the user chose about how the programs look, which the Desktop program reads too.</summary>
     public static ThemeConfiguration Theme { get; private set; } = null!;
-
-    /// <summary>How this machine draws a window's own frame, as the command line probed it.</summary>
-    public static WindowStyle MachineFrame { get; private set; }
-
-    /// <summary>How this window's frame is drawn: the user's choice, or the machine's own answer.</summary>
-    public static WindowStyle Frame { get; private set; }
-
-    /// <summary>The lines this run says about itself, read from beside the program.</summary>
-    public static IReadOnlyList<string> SloganLines { get; private set; } = [];
 
     /// <summary>
     /// Switches the language the program speaks, and keeps the choice where the Desktop program reads it.
@@ -107,14 +99,10 @@ internal static class Program
         Rola = new RolaRunner(Files.Rola, RolaI18N.Locale ?? "en");
         Accounts = new Accounts(Rola);
         Connection = new Connection(Rola, Accounts, Files.Probe);
-        MachineFrame = Rola.ProbeWindowStyle(Files.Beside) ?? WindowStyle.Windows;
-        Frame = Settings.Frame ?? MachineFrame;
 
-        // Read once for the run: the welcome is drawn again whenever the look or the language changes, and a
-        // rotation that started from a different line because the window was redrawn would not be one
-        // rotation but several.
-        SloganLines = Slogans.Read(Files.Slogans);
-
+        // Everything the window can be made before is made here, and everything it shows is read by the window
+        // once it is on the screen: how this machine draws a frame and what accounts it holds are both the
+        // command line's answers, and waiting for them here would be a launcher that appeared late.
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

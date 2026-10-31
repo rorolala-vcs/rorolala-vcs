@@ -35,6 +35,14 @@ class Program
     /// and its look are both built from it.
     public static WindowStyle WindowStyle { get; private set; } = WindowStyles.Here();
 
+    /// Whether a caller asked to be told when the window is up.
+    ///
+    /// What `rola desktop --ready` asks and what `ReadySignal` answers once the window is on the screen.
+    /// Recorded with the rest of what the run handed over rather than read where it is answered: what a
+    /// caller asked for is state of the run, and the window's side of the program asks for it rather than
+    /// being handed it.
+    public static bool ReadyAsked { get; private set; }
+
     /// <summary>
     /// Raised when a later start of the program asks this one to come forward.
     /// </summary>
@@ -153,6 +161,12 @@ class Program
                     WindowStyle = asked;
                 }
             }
+            else if (string.Equals(arg, ReadyArg, StringComparison.Ordinal))
+            {
+                // A flag rather than a name and a value: what it asks for is one thing, and there is nothing
+                // to tell it to.
+                ReadyAsked = true;
+            }
         }
     }
 
@@ -164,4 +178,7 @@ class Program
 
     /// What the window style is handed over as, matching `rola desktop`.
     private const string StylePrefix = "-WindowStyle:";
+
+    /// What the window's readiness is asked for as, matching `rola desktop`.
+    private const string ReadyArg = "-Ready";
 }

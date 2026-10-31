@@ -64,8 +64,7 @@ public sealed class App : Application
                 Program.Accounts,
                 Program.Connection,
                 theme,
-                Program.Settings,
-                Program.Frame
+                Program.Settings
             );
 
             owner.Show();
@@ -73,6 +72,10 @@ public sealed class App : Application
             desktop.MainWindow = owner;
 
             window.Closed += (_, _) => desktop.Shutdown();
+
+            // What the window shows is read once it is up rather than before it is shown: the launcher is then
+            // something to look at while it finds out what it has to show, which is the mark it holds until then.
+            window.Opened += (_, _) => _ = window.Load();
 
             _ = window.ShowDialog(owner);
         }

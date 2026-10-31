@@ -285,6 +285,12 @@ pub const EC_DESKTOP_CALLED: i32 = 174;
 /// `exit_codes.desktop_query_style`
 pub const EC_ERR_DESKTOP_QUERY_STYLE: i32 = 175;
 
+// `--ready` asks the window to say when it is up, so a run that wrote it asked for a window; asking how a
+// frame is drawn opens none. The same judgement as the number above, one step further: two runs written
+// as one are refused rather than one of them being dropped.
+/// `exit_codes.desktop_query_ready`
+pub const EC_ERR_DESKTOP_QUERY_READY: i32 = 176;
+
 // Output — how a result is drawn when it is written
 
 /// `exit_codes.format`

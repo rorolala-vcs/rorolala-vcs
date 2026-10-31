@@ -43,7 +43,8 @@ use crate::Next;
 use crate::complete::{filling_flag, offer, strip_written, typing_flag};
 use crate::exit_codes::{
     EC_DESKTOP_CALLED, EC_ERR_DESKTOP_ENDED, EC_ERR_DESKTOP_LAUNCH_FAILED,
-    EC_ERR_DESKTOP_NOT_FOUND, EC_ERR_DESKTOP_QUERY_STYLE, EC_ERR_DESKTOP_WINDOW_STYLE, EC_HELP,
+    EC_ERR_DESKTOP_NOT_FOUND, EC_ERR_DESKTOP_QUERY_READY, EC_ERR_DESKTOP_QUERY_STYLE,
+    EC_ERR_DESKTOP_WINDOW_STYLE, EC_HELP,
 };
 use crate::failure::failure;
 
@@ -81,6 +82,14 @@ const EXE_ENV: &str = "ROLA_EXE";
 /// one of the three lower-case ones: what a person types and what two programs agree on need not be spelled
 /// the same way, and the one that is handed over is the one the program's own code names.
 const STYLE_ARG: &str = "-WindowStyle:";
+
+/// What the window's readiness is asked for under.
+///
+/// A flag rather than a name and a value, because what it says is one thing: the run is to be told when
+/// the window is up. The Desktop program says it on the standard output it shares with this program, which
+/// is why nothing here reads or writes that line — the two programs are one statement of the rule, and this
+/// one only passes the request along.
+const READY_ARG: &str = "-Ready";
 
 /// How the Desktop program is to draw a window's own frame.
 ///
@@ -208,6 +217,15 @@ const ARG_WINDOW_STYLE: PickerArg<'static, Option<String>> = arg![window_style: 
 /// person types — `windows`, `mac` or `tillingwm` — and nothing is opened.
 const ARG_QUERY_WINDOW_STYLE: PickerArg<'static, Flag> = arg![query_window_style: Flag];
 
+/// The flag that asks the window to say when it is up.
+///
+/// What it is for is a caller that has no window of its own to watch — a launcher — and would otherwise
+/// have to guess when the program it started has something on the screen: the window says so once, on the
+/// standard output it shares with this run, and a caller that reads that stream knows to let go. It changes
+/// nothing else: the run still waits for the window to close, and a run that wrote nothing gets the same
+/// silence it always did.
+const ARG_READY: PickerArg<'static, Flag> = arg![ready: Flag];
+
 #[help(buffer)]
 pub fn help_desktop(_: EntryDesktop, ec: &mut ResExitCode) {
     r_eprintln!("{}", trd!(t!("desktop.help")).trim());
@@ -235,6 +253,7 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
             suggest! {
                 ARG_WINDOW_STYLE: t!("desktop.complete.window_style"),
                 ARG_QUERY_WINDOW_STYLE: t!("desktop.complete.query_window_style"),
+                ARG_READY: t!("desktop.complete.ready"),
             },
         );
     }
@@ -267,19 +286,28 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
 /// the environment probe the Desktop program makes for itself, offered to everything that has no window to
 /// ask — a launcher, a script, a test. The two flags say two different things and are refused together.
 ///
+/// `--ready` asks the window to say when it is up: one line on standard output, once, and nothing more. It
+/// is offered for a caller that starts this command and has no window of its own to watch, so that it can
+/// let go the moment there is something on the screen rather than waiting for the window to close. What the
+/// line is and when it is written are the Desktop program's to decide, and this run only asks for it. A run
+/// that wrote nothing is answered with the same silence it always was.
+///
 /// # Errors
 ///
 /// Renders [`ErrorDesktopWindowStyle`] when `--window-style` names none of the three,
-/// [`ErrorDesktopQueryWithStyle`] when both flags are written, [`ErrorDesktopNotFound`] when there is no
-/// Desktop program beside this one, and [`ErrorDesktopFailed`] when there is one but it would not start.
+/// [`ErrorDesktopQueryWithStyle`] when `--query-window-style` and `--window-style` are both written,
+/// [`ErrorDesktopQueryWithReady`] when `--query-window-style` and `--ready` are both written,
+/// [`ErrorDesktopNotFound`] when there is no Desktop program beside this one, and [`ErrorDesktopFailed`]
+/// when there is one but it would not start.
 #[command(node = "desktop", entry = EntryDesktop)]
 pub fn desktop(args: EntryDesktop) -> Next {
     let picked = args
         .pick(ARG_QUERY_WINDOW_STYLE)
         .pick(ARG_WINDOW_STYLE)
+        .pick(ARG_READY)
         .pick(&UNMATCHED)
         .to_result();
-    let (query, written, unmatched) = match picked {
+    let (query, written, ready, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -296,6 +324,12 @@ pub fn desktop(args: EntryDesktop) -> Next {
             return ErrorDesktopQueryWithStyle.into();
         }
 
+        // The same judgement about the other half of a window: asking the window to say when it is up is
+        // asking for one, and a run that asked how a frame is drawn opens none.
+        if matches!(ready, Flag::Active) {
+            return ErrorDesktopQueryWithReady.into();
+        }
+
         return StateQueryWindowStyle.into();
     }
 
@@ -310,18 +344,26 @@ pub fn desktop(args: EntryDesktop) -> Next {
         },
     };
 
-    StateDesktop { style }.into()
+    StateDesktop {
+        style,
+        ready: matches!(ready, Flag::Active),
+    }
+    .into()
 }
 
 /// The state a run that opens the Desktop program starts in.
 ///
 /// It names nothing of where the program is: that is where this one was run from, so the whole of what is
 /// told of the place is already in where that is. What is left is how the window is to be drawn, which is
-/// the machine's own answer until a run says otherwise.
+/// the machine's own answer until a run says otherwise, and whether the run is to be told when the window
+/// is up.
 #[derive(Grouped, Clone, Copy)]
 pub struct StateDesktop {
     /// The style the frame is to be drawn in, or nothing for the machine's own.
     style: Option<WindowStyle>,
+
+    /// Whether the window is to say on standard output that it is up.
+    ready: bool,
 }
 
 #[chain(routeify)]
@@ -357,6 +399,13 @@ pub fn handle_desktop(state: StateDesktop, language: &ResLanguage, cwd: &ResCurr
 
     if let Some(style) = state.style {
         told.push(style_arg(style));
+    }
+
+    // Asked for rather than worked out here: when a window is up is the window's own answer, and what this
+    // run does with it is carry the question. The line the window writes comes out of the standard output
+    // this run shares with it, so nothing is read or repeated here.
+    if state.ready {
+        told.push(READY_ARG.to_string());
     }
 
     match Command::new(&program)
@@ -527,6 +576,35 @@ pub fn render_error_desktop_query_with_style(
         help_line!(t!("desktop.err_query_with_style_help").trim())
     );
     ec.exit_code = EC_ERR_DESKTOP_QUERY_STYLE;
+}
+
+/// Error: a run asked how a frame is drawn and asked a window to say when it is up.
+#[derive(Grouped)]
+pub struct ErrorDesktopQueryWithReady;
+
+impl Failure for ErrorDesktopQueryWithReady {
+    fn name(&self) -> &'static str {
+        "error_desktop_query_with_ready"
+    }
+
+    fn reason(&self) -> String {
+        t!("desktop.err_query_with_ready").trim().to_string()
+    }
+}
+
+failure!(ErrorDesktopQueryWithReady);
+
+#[renderer(buffer)]
+pub fn render_error_desktop_query_with_ready(
+    error: ErrorDesktopQueryWithReady,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("desktop.err_query_with_ready_help").trim())
+    );
+    ec.exit_code = EC_ERR_DESKTOP_QUERY_READY;
 }
 
 /// Error: there is no Desktop program beside this one.

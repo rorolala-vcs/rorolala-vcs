@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using RorolalaDesktop.Configuration;
 
 namespace RorolalaDesktop;
@@ -47,25 +48,37 @@ public partial class App : Application
 
                 host.Host.Windows.End = () => desktop.Shutdown();
 
-                desktop.MainWindow = host.Start();
-
                 // The one dock a called run opens is the file browser, which is what a directory is looked
                 // at in: the host does not know that, and the plugin that owns the dock does not hear about a
                 // call until it is asked — so what is asked for is stated here, by the name the run that
                 // opened the window over it would have opened it by.
                 // A caller is answered with a window being opened or brought forward, which only the
-                // window's thread may do; `SingleInstance` hands it over there.
+                // window's thread may do; `SingleInstance` hands it over there. Subscribed before the window
+                // is shown, because a window that is up is not one a listener can be added to afterwards.
                 Program.Called += directory => host.Host.Windows.Show(BrowserDock, directory);
 
-                // And a later start of the program is heard from here on, which is where the host that
-                // answers it exists: what a caller is answered with is a dock opened in a window, and a
-                // window is not something that can be made before Avalonia has started.
-                SingleInstance.Listen(Program.CalledFrom, host.Host.Log);
+                // What is left of the shell is done once the window is on the screen, and a caller that asked
+                // to be told the window is up is told at the same moment. Neither is done here: both are put
+                // in at a priority below the drawing of the window, so that the frame it was just given is
+                // drawn before the work that would hold the thread starts. The line goes first, because what
+                // it says is that there is a window to look at rather than that the work behind it is done.
+                host.ShellOpened += () =>
+                {
+                    Dispatcher.UIThread.Post(ReadySignal.Send, DispatcherPriority.Loaded);
+                    Dispatcher.UIThread.Post(
+                        () => host.Assemble(host.FinishLoading),
+                        DispatcherPriority.Background
+                    );
+                };
+
+                desktop.MainWindow = host.StartShell();
             }
             catch (ConfigurationFailure failure)
             {
-                // A theme no provider supplies is only known once plugins have registered theirs,
-                // which is after Avalonia has started but still before the window exists.
+                // A configuration the host cannot honour while the shell is being made is still a reason on
+                // standard error and an exit code, because there is no window to put it in yet. What the work
+                // after the window fails at is recorded and drawn over instead, so that a plugin that will not
+                // start is not a program that will not open.
                 Console.Error.WriteLine(failure.Message);
                 Environment.Exit((int)failure.Code);
             }

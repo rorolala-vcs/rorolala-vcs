@@ -1,8 +1,10 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaLauncher.Theming;
 
@@ -32,6 +34,12 @@ internal sealed class WorkspaceCard : Border
     /// <summary>What the card says it is.</summary>
     private readonly TextBlock _state;
 
+    /// <summary>The mark that turns while the window it is about is being opened.</summary>
+    private readonly TurningMark _busyMark;
+
+    /// <summary>What takes the card off the list, which is not offered while the window is being opened.</summary>
+    private readonly FlatButton _close;
+
     /// <summary>What the card is called.</summary>
     private readonly TextBlock _name;
 
@@ -40,6 +48,9 @@ internal sealed class WorkspaceCard : Border
 
     /// <summary>Whether a press is being made.</summary>
     private bool _pressed;
+
+    /// <summary>Whether the window this card is about is being opened, which is not a card to press again.</summary>
+    private bool _busy;
 
     /// <summary>The colours the card was last drawn in.</summary>
     private Skin _skin = null!;
@@ -80,14 +91,31 @@ internal sealed class WorkspaceCard : Border
         {
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        _busyMark = new TurningMark(new SolidColorBrush(skin.Palette.Primary), 14)
+        {
+            IsVisible = false,
+        };
+
+        AutomationProperties.SetName(_busyMark, RolaI18N.Get("launcher.workspace.opening"));
+
+        // The state and the mark share one cell: a card is either saying what its directory is or saying that its
+        // window is being opened, and the two are never true at once.
+        var state = new Panel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 8, 0),
         };
+
+        state.Children.Add(_state);
+        state.Children.Add(_busyMark);
 
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(_name);
         text.Children.Add(_place);
 
-        var close = new FlatButton(LauncherIcons.Glyph(LauncherIcons.Close, 12, skin.Muted), skin)
+        _close = new FlatButton(LauncherIcons.Glyph(LauncherIcons.Close, 12, skin.Muted), skin)
         {
             Width = 28,
             Height = 28,
@@ -95,9 +123,9 @@ internal sealed class WorkspaceCard : Border
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        ToolTip.SetTip(close, RolaI18N.Get("launcher.workspace.remove"));
+        ToolTip.SetTip(_close, RolaI18N.Get("launcher.workspace.remove"));
 
-        close.Clicked += (_, _) => _removed(_path);
+        _close.Clicked += (_, _) => _removed(_path);
 
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto") };
 
@@ -106,11 +134,11 @@ internal sealed class WorkspaceCard : Border
         Grid.SetColumn(text, 1);
         row.Children.Add(text);
 
-        Grid.SetColumn(_state, 2);
-        row.Children.Add(_state);
+        Grid.SetColumn(state, 2);
+        row.Children.Add(state);
 
-        Grid.SetColumn(close, 3);
-        row.Children.Add(close);
+        Grid.SetColumn(_close, 3);
+        row.Children.Add(_close);
 
         Child = row;
         Padding = new Thickness(12, 10, 12, 10);
@@ -151,10 +179,30 @@ internal sealed class WorkspaceCard : Border
         _state.Foreground = State == WorkspaceState.Workspace ? skin.Muted : skin.Alarm;
     }
 
+    /// <summary>
+    /// Says that the window this card is about is being opened, or that it is not any more.
+    /// </summary>
+    /// <remarks>
+    /// Only the card whose window is being opened turns the mark; the rest are put out of reach by the window
+    /// rather than by themselves, which is why they are disabled there and this is not asked of them. What this
+    /// card does with it is stop being a place to press: the one thing it is for is already happening.
+    /// </remarks>
+    /// <param name="busy">Whether this is the card whose window is being opened.</param>
+    public void SetBusy(bool busy)
+    {
+        _busy = busy;
+
+        _busyMark.IsVisible = busy;
+        _state.IsVisible = !busy;
+        _close.IsVisible = !busy;
+
+        Cursor = new Cursor(busy ? StandardCursorType.Arrow : StandardCursorType.Hand);
+    }
+
     /// <inheritdoc />
     protected override void OnPointerEntered(PointerEventArgs e)
     {
-        if (_skin is not null)
+        if (_skin is not null && !_busy)
         {
             Background = new SolidColorBrush(_skin.Palette.Dark);
         }
@@ -167,6 +215,11 @@ internal sealed class WorkspaceCard : Border
     {
         ArgumentNullException.ThrowIfNull(e);
 
+        if (_busy)
+        {
+            return;
+        }
+
         _pressed = e.GetCurrentPoint(this).Properties.IsLeftButtonPressed;
         e.Handled = _pressed;
 
@@ -178,7 +231,7 @@ internal sealed class WorkspaceCard : Border
     {
         ArgumentNullException.ThrowIfNull(e);
 
-        var pressed = _pressed && e.InitialPressMouseButton == MouseButton.Left;
+        var pressed = !_busy && _pressed && e.InitialPressMouseButton == MouseButton.Left;
 
         _pressed = false;
 

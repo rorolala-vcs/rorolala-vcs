@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using RorolalaDesktop.Configuration;
+using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Theming;
 using RorolalaLauncher.Banner;
@@ -80,14 +81,33 @@ internal sealed class LauncherWindow : Window
     /// <summary>What this program was told.</summary>
     private readonly LauncherSettings _settings;
 
-    /// <summary>What this machine draws a frame in, which is what an unchosen frame is.</summary>
-    private readonly WindowStyle _machine;
+    /// <summary>
+    /// What this machine draws a frame in, which is what an unchosen frame is.
+    /// </summary>
+    /// <remarks>
+    /// Asked for with the rest of what the window shows, once it is on the screen: what a frame is drawn from is
+    /// not known before the command line has answered, and a window that waited for the answer before appearing
+    /// would be a window that appeared late.
+    /// </remarks>
+    private WindowStyle _machine = WindowStyle.Windows;
 
     /// <summary>The Workspaces this machine has opened.</summary>
     private WorkspacesFile _opened = null!;
 
     /// <summary>The account the work acts as, or nothing when none has been chosen.</summary>
     private string? _account;
+
+    /// <summary>The lines the welcome says about the program, read with the rest of what the window shows.</summary>
+    private IReadOnlyList<string> _slogans = [];
+
+    /// <summary>
+    /// Whether the window's own work has been read and drawn.
+    /// </summary>
+    /// <remarks>
+    /// Nothing that redraws the window runs before it is true: a window that draws itself again is one whose
+    /// list, picture and account have been read, and a redraw before they have is one over nothing.
+    /// </remarks>
+    private bool _ready;
 
     /// <summary>How this window's frame is drawn.</summary>
     private WindowStyle _frame;
@@ -116,22 +136,47 @@ internal sealed class LauncherWindow : Window
     /// <summary>The welcome's own button for the same thing, while the welcome is what is shown.</summary>
     private FlatButton? _welcomeCreate;
 
-    /// <summary>Makes the window.</summary>
+    /// <summary>Whether a Desktop window is being opened, which is what makes the rest of this one unavailable.</summary>
+    private bool _busy;
+
+    /// <summary>The start this window is waiting on, or nothing when it is not waiting.</summary>
+    private LaunchAttempt? _launch;
+
+    /// <summary>The cards the list was last drawn as, which is what being busy is said to.</summary>
+    private readonly List<WorkspaceCard> _cards = [];
+
+    /// <summary>The toolbar's own buttons, which are out of reach while a window is being opened.</summary>
+    private readonly List<FlatButton> _buttons = [];
+
+    /// <summary>The language button and the menu it opens, out of reach for the same reason.</summary>
+    private Control? _language;
+
+    /// <summary>How long a window is waited for before this window takes the wait back.</summary>
+    private static readonly TimeSpan WaitForWindow = TimeSpan.FromSeconds(30);
+
+    /// <summary>How wide the mark the window waits under is drawn, which is as wide as a wait this short wants.</summary>
+    private const double LoadingMarkDiameter = 26;
+
+    /// <summary>Makes the window, holding only the mark it waits under.</summary>
     /// <param name="files">Where this program keeps its own files.</param>
     /// <param name="rola">The command line program.</param>
     /// <param name="accounts">The accounts on this machine.</param>
     /// <param name="connection">What a connection is checked through.</param>
     /// <param name="theme">The look.</param>
     /// <param name="settings">What this program was told.</param>
-    /// <param name="machine">How this machine draws a frame.</param>
+    /// <remarks>
+    /// The window is made with nothing in it but the mark, and what it shows is read once it is on the screen.
+    /// How this machine draws a frame and what accounts it holds are both questions answered by starting the
+    /// command line program, and a launcher that appeared only once those had answered would be a launcher that
+    /// appeared late. What is read is read by <see cref="Load"/>, which the window is asked for when it is up.
+    /// </remarks>
     public LauncherWindow(
         LauncherFiles files,
         RolaRunner rola,
         Accounts accounts,
         Connection connection,
         LauncherTheme theme,
-        LauncherSettings settings,
-        WindowStyle machine
+        LauncherSettings settings
     )
     {
         ArgumentNullException.ThrowIfNull(files);
@@ -147,8 +192,12 @@ internal sealed class LauncherWindow : Window
         _connection = connection;
         _theme = theme;
         _settings = settings;
-        _machine = machine;
-        _frame = settings.Frame ?? machine;
+
+        // What the machine draws is not known yet and is not waited for before the window. Until it has been
+        // asked, the frame a choice does not name is drawn the way an unchosen frame would be if the machine
+        // said nothing — which is what the window is rebuilt with once its work has been read.
+        _machine = WindowStyle.Windows;
+        _frame = settings.Frame ?? _machine;
         _skin = theme.Skin;
 
         Title = "Rola Launcher";
@@ -161,24 +210,107 @@ internal sealed class LauncherWindow : Window
 
         KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Escape)
+            // A window that is being opened is not one to leave: what it started is being waited for, and the
+            // wait is the way out rather than a key that ends the window over it.
+            if (e.Key == Key.Escape && !_busy)
             {
                 Close();
             }
+        };
+
+        // The same judgement for the window's own way out, and for the desktop's: a closing window would leave
+        // the start it made unreported and the process it started nobody's. What ends the wait is the wait.
+        Closing += (_, leave) =>
+        {
+            if (_busy)
+            {
+                leave.Cancel = true;
+
+                return;
+            }
+
+            _launch?.Dispose();
+            _launch = null;
         };
 
         _theme.Changed += (_, _) =>
         {
             _skin = _theme.Skin;
 
+            // A window that has not been read yet is one with nothing to draw again: what it is drawn from is
+            // read once, by `Load`, and the skin it wears when that runs is the one this has just set.
+            if (!_ready)
+            {
+                return;
+            }
+
             Build();
         };
 
-        _opened = WorkspacesFile.Read(_files.Workspaces);
-        _account = _accounts.List(_files.Root).Current;
+        ShowLoading();
+    }
+
+    /// <summary>
+    /// Reads what the window shows, once the window is on the screen, and draws it.
+    /// </summary>
+    /// <remarks>
+    /// The two questions that cost a process each are asked where the window's thread does not have to wait for
+    /// them: what a thread waiting on a program does is nothing the window can draw while it waits. Everything
+    /// else here is a file, and what comes out of it is what the window is drawn from, so it is read on the
+    /// window's own thread.
+    /// </remarks>
+    /// <returns>A task that ends when the window has been built.</returns>
+    internal async Task Load()
+    {
+        if (_ready)
+        {
+            return;
+        }
+
+        var machine = Task.Run(() => _rola.ProbeWindowStyle(_files.Beside));
+        var account = Task.Run(() => _accounts.List(_files.Root).Current);
+
+        _machine = (await machine) ?? WindowStyle.Windows;
+        _frame = _settings.Frame ?? _machine;
+        _slogans = Slogans.Read(_files.Slogans);
+
+        try
+        {
+            _opened = WorkspacesFile.Read(_files.Workspaces);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // A list that could not be read is a list with nothing on it: the file is a convenience, and a
+            // window that refused to open over it would be refusing over the wrong thing.
+            _opened = new WorkspacesFile();
+        }
+
+        _account = await account;
+
+        // The window may have been left while its work was being read: there is nothing to draw in then, and a
+        // window that is gone is not one to build a list for.
+        if (!IsVisible)
+        {
+            return;
+        }
 
         LoadBanner();
+
         Build();
+
+        _ready = true;
+    }
+
+    /// <summary>
+    /// Puts up the mark the window waits under, which is all it holds before there is something in it.
+    /// </summary>
+    private void ShowLoading()
+    {
+        Content = new Grid
+        {
+            Background = _skin.Mid,
+            Children = { new TurningMark(new SolidColorBrush(_skin.Palette.Primary), LoadingMarkDiameter) },
+        };
     }
 
     /// <summary>
@@ -186,6 +318,14 @@ internal sealed class LauncherWindow : Window
     /// </summary>
     private void Build()
     {
+        // A window drawn again is one whose words or look changed, and neither can happen while a Desktop window
+        // is being opened: the rebuild would replace the card that is turning its mark, and the wait would be
+        // waiting over a list that no longer says so.
+        if (_busy)
+        {
+            return;
+        }
+
         _banner = new BannerView();
 
         _banner.Play(_animation);
@@ -288,6 +428,17 @@ internal sealed class LauncherWindow : Window
             () => _ = Import()
         );
 
+        var language = LanguageMenu();
+
+        // The row is what the window offers while nothing is being opened: what is kept is the same controls, so
+        // that opening a window can put all of them out of reach at once rather than one at a time.
+        _buttons.Clear();
+        _buttons.Add(account);
+        _buttons.Add(_create);
+        _buttons.Add(import);
+
+        _language = language;
+
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -306,7 +457,7 @@ internal sealed class LauncherWindow : Window
             Margin = new Thickness(20, 0, 20, 0),
         };
 
-        row.Children.Add(LanguageMenu());
+        row.Children.Add(language);
 
         Grid.SetColumn(buttons, 1);
         row.Children.Add(buttons);
@@ -462,8 +613,16 @@ internal sealed class LauncherWindow : Window
     /// </summary>
     private void Fill()
     {
+        // The list is not redrawn while a window is being opened, for the reason the whole window is not: the card
+        // that is turning its mark is in this list, and a list drawn again would be a list without it.
+        if (_busy)
+        {
+            return;
+        }
+
         _content.Children.Clear();
         _welcomeCreate = null;
+        _cards.Clear();
 
         if (_create is not null)
         {
@@ -487,9 +646,11 @@ internal sealed class LauncherWindow : Window
 
         foreach (var path in _opened.Paths)
         {
-            var card = new WorkspaceCard(path, _skin, Open, Remove);
+            var card = new WorkspaceCard(path, _skin, chosen => _ = Open(chosen), Remove);
 
             card.Margin = new Thickness(0, 0, 0, 0);
+
+            _cards.Add(card);
             _content.Children.Add(card);
         }
     }
@@ -534,7 +695,7 @@ internal sealed class LauncherWindow : Window
 
         header.Children.Add(slogan);
 
-        slogan.Say(Program.SloganLines);
+        slogan.Say(_slogans);
 
         if (_account is null)
         {
@@ -809,16 +970,27 @@ internal sealed class LauncherWindow : Window
     }
 
     /// <summary>
-    /// Opens the Desktop program onto a Workspace, and closes this one.
+    /// Opens the Desktop program onto a Workspace, and closes this one once its window is up.
     /// </summary>
     /// <remarks>
-    /// The window is asked for through the command line rather than started by name, because opening a
-    /// window onto a Workspace is what that command is. What this program draws a frame in is handed over, so
-    /// the window that opens is drawn the way this one is.
+    /// Closing as the window opens is what makes the two programs read as one: the launcher has nothing left to do
+    /// once there is a window, and a launcher standing beside an open window is two programs to one person. What
+    /// is waited for is the window rather than the process that opens it, because the process lasts as long as the
+    /// window does.
+    /// <para>
+    /// A window that does not come in time gives this window back rather than ending the start: the window may
+    /// still arrive, and a process ended for being slow is a window lost. The state is put back before the closing
+    /// rather than after it, because a busy window is one whose closing is refused.
+    /// </para>
     /// </remarks>
     /// <param name="path">The Workspace.</param>
-    private void Open(string path)
+    private async Task Open(string path)
     {
+        if (_busy)
+        {
+            return;
+        }
+
         if (Workspaces.Of(path) != WorkspaceState.Workspace)
         {
             _ = Notice(RolaI18N.Get("launcher.workspace.title"), RolaI18N.Get("launcher.workspace.gone", path));
@@ -826,7 +998,29 @@ internal sealed class LauncherWindow : Window
             return;
         }
 
-        if (_rola.Launch(path, _frame))
+        // Given to the window rather than kept here: the attempt outlives this method, because the wait may be
+        // given up on while the window it asked for is still coming, and the window holds it for as long as it
+        // is open.
+        _launch?.Dispose();
+        _launch = _rola.Launch(path, _frame);
+
+        if (_launch is null)
+        {
+            _ = Notice(
+                RolaI18N.Get("launcher.workspace.title"),
+                RolaI18N.Get("launcher.workspace.launch_failed", _rola.Program)
+            );
+
+            return;
+        }
+
+        SetBusy(path);
+
+        var outcome = await _launch.WaitAsync(WaitForWindow);
+
+        SetIdle();
+
+        if (outcome.Ready)
         {
             Close();
 
@@ -835,8 +1029,77 @@ internal sealed class LauncherWindow : Window
 
         _ = Notice(
             RolaI18N.Get("launcher.workspace.title"),
-            RolaI18N.Get("launcher.workspace.launch_failed", _rola.Program)
+            outcome.Ended is { } ended
+                ? RolaI18N.Get("launcher.workspace.launch_ended", ended)
+                : RolaI18N.Get("launcher.workspace.launch_timeout")
         );
+    }
+
+    /// <summary>
+    /// Puts all of the window but the wait out of reach: the card that was chosen turns its mark, and everything
+    /// that would start something else is unavailable.
+    /// </summary>
+    /// <param name="path">The Workspace whose window is being opened.</param>
+    private void SetBusy(string path)
+    {
+        _busy = true;
+
+        foreach (var card in _cards)
+        {
+            var chosen = string.Equals(card.Path, path, StringComparison.Ordinal);
+
+            card.SetBusy(chosen);
+
+            // A card other than the chosen one is not out of reach because of itself but because of the one
+            // window being opened: what it would do is start a second one.
+            if (!chosen)
+            {
+                card.IsEnabled = false;
+            }
+        }
+
+        foreach (var button in _buttons)
+        {
+            button.Enabled = false;
+        }
+
+        if (_language is not null)
+        {
+            _language.IsEnabled = false;
+        }
+
+        _chrome.IsEnabled = false;
+    }
+
+    /// <summary>Puts the window back the way it was, once there is nothing left to wait for.</summary>
+    private void SetIdle()
+    {
+        _busy = false;
+
+        foreach (var card in _cards)
+        {
+            card.SetBusy(false);
+            card.IsEnabled = true;
+        }
+
+        foreach (var button in _buttons)
+        {
+            button.Enabled = true;
+        }
+
+        // The one button that is not simply made available again: making a Workspace needs an account, which is
+        // not this window's busy state to decide. It is put back the way the list puts it.
+        if (_create is not null)
+        {
+            _create.Enabled = _account is not null;
+        }
+
+        if (_language is not null)
+        {
+            _language.IsEnabled = true;
+        }
+
+        _chrome.IsEnabled = true;
     }
 
     /// <summary>

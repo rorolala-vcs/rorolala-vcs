@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Threading;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.CoreDocks;
@@ -16,10 +17,17 @@ namespace RorolalaDesktop;
 /// program is drawn.
 /// </summary>
 /// <remarks>
-/// The order here is the order the steps must run in. The kernel's docks and menus are registered
-/// first, then the plugins are initialized and register theirs, and then the look is applied — the run
-/// is assembled in one direction, and how it is drawn comes after what it is made of. The window is
-/// made last, because the look has to be applied before anything is drawn.
+/// The work is in two parts, because a window that is on the screen is worth more than a window that is
+/// assembled: what the window can be drawn over is made first, the window is shown, and only then is the rest
+/// of the host made — each step of it on the window's own thread, one turn of it at a time, so that the
+/// covering the window puts up is drawn while the work goes on.
+/// <para>
+/// The order inside each part is still the order the steps must run in. The kernel's docks and menus are
+/// registered first, then the look is applied, and then the window is made — the look before the window
+/// because a style added to the application after a window exists stops applying to what is already on the
+/// screen, without saying so. The plugins are initialized after the window, because everything they register
+/// is drawn over a window that is already there.
+/// </para>
 /// <para>
 /// The services outlive the window, and are made once for the whole run: the main window can be closed and
 /// opened again while the program goes on, and what it is built over is the same host either way. What is
@@ -40,8 +48,17 @@ internal sealed class Desktop
     /// <summary>Everything the host holds, made once and kept.</summary>
     private readonly HostServices _services;
 
-    /// <summary>Whether the one-time half of the assembly has been done.</summary>
+    /// <summary>Whether the first half of the assembly has been done: the kernel, the look, and the window.</summary>
+    private bool _shellMade;
+
+    /// <summary>Whether the second half — everything the window is drawn over — has been started.</summary>
+    private bool _assembling;
+
+    /// <summary>Whether the second half has finished, so that a window opened now is one with nothing to cover.</summary>
     private bool _assembled;
+
+    /// <summary>The arrangement of docks the window's work is restored from, read before the window was made.</summary>
+    private DockLayout? _layout;
 
     /// <summary>Makes the host over what the run worked out.</summary>
     /// <param name="state">What the run worked out before Avalonia started.</param>
@@ -55,44 +72,181 @@ internal sealed class Desktop
     public HostServices Host => _services;
 
     /// <summary>
-    /// Starts the plugins, applies the look, and opens the main window.
+    /// Raised when the main window has been made and is on the screen.
+    /// </summary>
+    /// <remarks>
+    /// Said while the window is being shown rather than after it: the toolkit announces an opening once, and a
+    /// listener added afterwards is a listener that has already missed it. What waits for it is the work the
+    /// window is drawn over, and the caller that asked to be told the window is up.
+    /// </remarks>
+    public event Action? ShellOpened;
+
+    /// <summary>
+    /// Makes what a window can be opened over — the kernel's own docks and menus, the look, and the
+    /// arrangement the docks are to be given — and opens the main window.
     /// </summary>
     /// <returns>The main window.</returns>
-    public MainWindow Start()
+    /// <remarks>
+    /// Only what may not wait for the window's work is here. The look is the one such thing: it is added to
+    /// the application's styles, and a style added after a window exists stops applying to what is already on
+    /// the screen without saying so — see <see cref="ThemeService"/>. Everything else the host is made of is
+    /// work a window is shown over; see <see cref="Assemble"/>.
+    /// </remarks>
+    public MainWindow StartShell()
     {
-        if (_assembled)
+        if (_shellMade)
         {
-            // A second Start is not assembling anything: what the run is made of was decided the first time
-            // and every window is made over the same host, so what is left is opening the window.
+            // A second opening of the window is not a second shell: what the run is made of was decided the
+            // first time and every window is made over the same host, so what is left is opening the window.
             _services.Windows.OpenMain();
 
             return _services.Windows.Main;
         }
 
-        _assembled = true;
+        _shellMade = true;
 
         RegisterKernel(_services);
-        _state.Plugins.InitializeAll(_services);
 
-        // What a dock keeps about itself is written down as soon as it is kept, so that a run that
-        // ends badly is not the thing that loses it. Subscribed here rather than on the window, and
-        // before the restore rather than after it, because restoring a dock is itself a dock keeping
-        // something: a dock that keeps anything while it is being restored would be keeping it before
-        // there was a window to hear about it.
-        _services.Docks.StateChanged += () =>
-            LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
-
-        // The layout is restored once every dock is registered, since a saved layout addresses docks
-        // by name and a name nothing answers to is dropped. On a first run there is no layout and no
-        // dock is opened: which docks should start open is not something this program decides yet.
-        _services.Docks.Restore(LayoutStore.Load(_services.Log));
-
-        Report(_services);
-
+        // Before the window, rather than after the plugins where it used to sit: nothing may be added to the
+        // application's styles once a window exists, and the window is what this method goes on to make. It
+        // reads nothing of the plugins — the variant and the colours are the file's and the application's —
+        // which is what lets it be applied this early.
         _services.Theme.Apply();
+
+        // Read here rather than in the assembly, because it is a file and nothing else: it says where the
+        // docks go, not the docks themselves. Read on this thread rather than one of its own, because the log
+        // a file that will not read is reported to is the window's own collection, and a file this small is
+        // not worth a thread to lose that.
+        _layout = LayoutStore.Load(_services.Log);
+
         _services.Windows.OpenMain();
 
         return _services.Windows.Main;
+    }
+
+    /// <summary>
+    /// Does the work the window is drawn over: the plugins, the docks they register, and what there is to
+    /// report.
+    /// </summary>
+    /// <param name="done">What to do once every step has returned, which is the window letting its covering go.</param>
+    /// <remarks>
+    /// One step per turn of the window's thread, so that what is drawn between them is drawn: the covering
+    /// writes itself while the work goes on. A step that throws is written down and the rest go on — one
+    /// plugin that could not be started is not a reason to leave the user under a black window.
+    /// <para>
+    /// Steps do not need the main window to be up: it may have been closed while this ran, and what is left of
+    /// the work is still the work. A window opened afterwards is made over the same host, and is one with
+    /// nothing to cover.
+    /// </para>
+    /// </remarks>
+    public void Assemble(Action done)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (_assembling)
+        {
+            return;
+        }
+
+        _assembling = true;
+
+        Run(done, 0);
+    }
+
+    /// <summary>
+    /// Ends the covering the main window was made with, which is what the work being done looks like.
+    /// </summary>
+    /// <remarks>
+    /// A window that is gone has no covering to end, and that is not a failure: the entire shell may be closed
+    /// while the work goes on, and what is left of it is over a window nothing can be drawn in.
+    /// </remarks>
+    public void FinishLoading()
+    {
+        if (_services.Windows.MainIsUp)
+        {
+            _services.Windows.Main.CompleteLoading();
+        }
+    }
+
+    /// <summary>The number of steps the work is: the cases of <see cref="Step"/>.</summary>
+    private const int Steps = 5;
+
+    /// <summary>Does one step and puts the next turn of the window's thread in.</summary>
+    /// <param name="done">What to do once there are no steps left.</param>
+    /// <param name="step">Which step this turn is.</param>
+    private void Run(Action done, int step)
+    {
+        try
+        {
+            Step(step);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _services.Log.Record(
+                LogLevel.Error,
+                Core.Source,
+                $"the window's work did not finish a step: {error.Message}"
+            );
+        }
+
+        if (step + 1 < Steps)
+        {
+            Dispatcher.UIThread.Post(() => Run(done, step + 1), DispatcherPriority.Background);
+
+            return;
+        }
+
+        _assembled = true;
+
+        done();
+    }
+
+    /// <summary>Does one step of the work, in the order the steps must run.</summary>
+    /// <param name="step">Which step this is.</param>
+    private void Step(int step)
+    {
+        switch (step)
+        {
+            case 0:
+                _state.Plugins.InitializeAll(_services);
+
+                // The menu was built when the window was made, which was before there were plugin menus to
+                // put in it: it is built again now that there are. A window that is gone has nothing to build,
+                // and asking for it would be asking the set of windows for one it does not have.
+                if (_services.Windows.MainIsUp)
+                {
+                    _services.Windows.Main.RebuildMenu();
+                }
+
+                break;
+
+            case 1:
+                // A later start of the program is answered from here on: what a call is answered with is a
+                // dock in a window, and every dock was registered by the step above.
+                SingleInstance.Listen(Program.CalledFrom, _services.Log);
+                break;
+
+            case 2:
+                // What a dock keeps about itself is written down as soon as it is kept, so that a run that
+                // ends badly is not the thing that loses it. Subscribed before the restore rather than after
+                // it, because restoring a dock is itself a dock keeping something.
+                _services.Docks.StateChanged += () =>
+                    LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
+                break;
+
+            case 3:
+                // The layout is restored once every dock is registered, since a saved layout addresses docks
+                // by name and a name nothing answers to is dropped. On a first run there is no layout and no
+                // dock is opened: which docks should start open is not something this program decides yet.
+                _services.Docks.Restore(_layout ?? DockLayout.Starting());
+                break;
+
+            default:
+                // What went wrong with the plugins is said last, because it is what the user may want to act
+                // on: the popups it raises belong to the window, and the covering is still over it.
+                Report(_services);
+                break;
+        }
     }
 
     /// <summary>Makes the shared services, all over one deduplication service.</summary>
@@ -167,12 +321,23 @@ internal sealed class Desktop
 
         services.Windows.Make = (key, dock) =>
         {
-            var window = new MainWindow(services, key, dock);
+            // The window is given the covering only while the shell's work is still to be done: one opened
+            // after it — the main window closed and asked for again from the Window menu — is a window over a
+            // host that is already assembled, and covering it would be covering work that has been done.
+            var window = new MainWindow(services, key, dock, loading: key is null && !_assembled);
 
             // Every window of the host's, and not only the main one: a dock in a window of its own is come
             // back to as much as the main window is, and a plugin's reading of the world outside is the same
             // question either way.
             window.Activated += (_, _) => refocus.Regain();
+
+            // Told before the window is shown, because the showing is what is being told about: a listener
+            // added after it has already missed it. Only the main window is spoken of, since opening a window
+            // for a dock is a thing a user asked for rather than the shell being up.
+            if (key is null)
+            {
+                window.Opened += (_, _) => ShellOpened?.Invoke();
+            }
 
             return window;
         };

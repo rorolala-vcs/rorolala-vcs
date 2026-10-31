@@ -41,6 +41,10 @@
     <Compile Include="../desktop/Core/Configuration/ConfigurationLoader.cs" Link="Shared/ConfigurationLoader.cs" />
     <Compile Include="../desktop/Core/Configuration/Failure.cs" Link="Shared/Failure.cs" />
     <Compile Include="../desktop/Core/Theming/WindowStyle.cs" Link="Shared/WindowStyle.cs" />
+    <!-- The mark that turns while something is waited for is the same mark in both programs: this window shows
+         one over a Workspace whose window is being opened, and the Desktop program shows one over itself while
+         it assembles. One drawing, then, rather than two that could turn differently. -->
+    <Compile Include="../desktop/Core/Hosting/TurningMark.cs" Link="Shared/TurningMark.cs" />
   </ItemGroup>
 
   <ItemGroup>

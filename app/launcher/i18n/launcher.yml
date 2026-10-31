@@ -121,6 +121,15 @@ launcher:
     launch_failed:
       en: "The Desktop program could not be started from %{program}"
       zh-CN: "无法从 %{program} 启动桌面程序"
+    opening:
+      en: Opening…
+      zh-CN: 正在打开…
+    launch_timeout:
+      en: The Desktop program is taking longer than expected to open
+      zh-CN: 桌面程序打开得比预期更久
+    launch_ended:
+      en: "The Desktop program ended before its window opened (%{code})"
+      zh-CN: "桌面程序在窗口出现之前就结束了（%{code}）"
 
   import:
     title:

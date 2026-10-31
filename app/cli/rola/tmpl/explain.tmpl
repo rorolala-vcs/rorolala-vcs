@@ -33,6 +33,9 @@ pub fn has_ec(code: i32) -> bool {
 ///
 /// An empty string when the program states no such code; ask [`has_ec`] to tell that apart
 /// from a code whose words are still to be written.
+// One arm per code the program states, which is a list the program's own size and not a shape
+// that could be shorter: the length is the answer's, so it is allowed to be what the list makes it.
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn explain_ec(code: i32) -> String {
     match code {
