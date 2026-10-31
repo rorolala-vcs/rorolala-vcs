@@ -659,9 +659,6 @@ rorolala_vcs:
     draft_folder:
       en: "It has nothing in it: unless something is put in it, it is gone when this Dock or the program is opened again"
       zh-CN: "它里面没有内容：如果不往里放东西，下次打开这个 Dock 或程序时它就会消失"
-    draft_remove:
-      en: Remove this empty folder
-      zh-CN: 删除这个空文件夹
     column_uuid:
       en: Uuid
       zh-CN: UUID

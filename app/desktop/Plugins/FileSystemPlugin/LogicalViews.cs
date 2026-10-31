@@ -37,8 +37,14 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <summary>The columns the provider states, mapped onto the table's own placements.</summary>
     private readonly IReadOnlyList<Column<LogicalEntry>> _columns;
 
-    /// <summary>A folder the place just made, waiting for its row to be named.</summary>
-    private string? _made;
+    /// <summary>Whether this listing made the folder that is waiting for a name.</summary>
+    /// <remarks>
+    /// The box is put on the row of the listing built after the folder was made, because making one reads the place
+    /// again: that listing's entries are the place's answer as the folder is in it, and this listing's are the answer
+    /// from before it. This is what says so — the listing that made the folder does not claim the name (see
+    /// <see cref="NewFolder"/>).
+    /// </remarks>
+    private bool _made;
 
     /// <summary>Makes the listing of a place.</summary>
     /// <param name="host">The host, for the library an entry's picture is read from.</param>
@@ -89,6 +95,10 @@ internal sealed class Places : Listing<LogicalEntry>
     private ILogicalFolderEditor? Editor() => _place.Provider as ILogicalFolderEditor;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// What the place made is not named here: making a folder reads the place again, and the listing that reading
+    /// builds is the one whose rows the name box goes in (see <see cref="Pending"/>).
+    /// </remarks>
     public override void NewFolder()
     {
         if (Editor() is not { } editor || !editor.NewFolder(_place.Address))
@@ -96,26 +106,32 @@ internal sealed class Places : Listing<LogicalEntry>
             return;
         }
 
-        // What was made is asked for at once, because the place answers once: the row it is, out of what the place now
-        // lists, is what the box is put on — and the view asks for it as the folder is made, one turn before a row can
-        // hold a cell.
-        _made = editor.Pending(_place.Address);
+        _made = true;
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Asked as a listing is built, which is the moment the place's rows are its own answer as the new folder is in
+    /// them. The listing that made the folder answers nothing: asking the place here would take the hand-off with
+    /// entries that are from before the making, where the row is not.
+    /// </remarks>
     public override LogicalEntry? Pending()
     {
-        var made = _made;
-        _made = null;
+        if (_made)
+        {
+            _made = false;
+
+            return null;
+        }
+
+        if (Editor() is not { } editor || editor.Pending(_place.Address) is not { } made)
+        {
+            return null;
+        }
 
         // The name is the place's own — `@/new/Photos` names a folder `Photos` — and the row is one of the place's
         // entries, which is the same record instance the listing draws, so it is found rather than made again.
-        return made is null
-            ? null
-            : Named(
-                _place.Entries,
-                made[(made.LastIndexOf('/') + 1)..]
-            );
+        return Named(_place.Entries, made[(made.LastIndexOf('/') + 1)..]);
     }
 
     /// <inheritdoc />
@@ -136,6 +152,16 @@ internal sealed class Places : Listing<LogicalEntry>
         item.Data is { } data && Editor() is { } editor && editor.Removable(data);
 
     /// <inheritdoc />
+    /// <remarks>
+    /// What may be removed is the place's to say, so the rows it would not remove are left out before the question is
+    /// put: the question names what is about to go, and a question that listed a row the place keeps would be one whose
+    /// answer could not be trusted.
+    /// <para>
+    /// Removing a row is said to the user first unless they said not to be told, which is what a <c>Delete</c> in the
+    /// listing does and what <c>Shift+Delete</c> says by being shifted: the same rule the file system's own delete
+    /// follows, so one gesture means one thing in both views.
+    /// </para>
+    /// </remarks>
     public override void Delete(IReadOnlyList<LogicalEntry> chosen, bool ask)
     {
         ArgumentNullException.ThrowIfNull(chosen);
@@ -145,6 +171,36 @@ internal sealed class Places : Listing<LogicalEntry>
             return;
         }
 
+        var going = chosen.Where(item => item.Data is { } data && editor.Removable(data)).ToArray();
+
+        if (going.Length == 0)
+        {
+            return;
+        }
+
+        if (!ask)
+        {
+            Removed(editor, going);
+
+            return;
+        }
+
+        Host.Dialogs.Show(
+            new Dialog(
+                RolaI18N.Get("rorolala_file_system.delete"),
+                going.Length == 1
+                    ? RolaI18N.Get("rorolala_file_system.delete_one", going[0].Name)
+                    : RolaI18N.Get("rorolala_file_system.delete_many", going.Length),
+                () => Removed(editor, going)
+            )
+        );
+    }
+
+    /// <summary>Removes rows the place agreed were its own to remove.</summary>
+    /// <param name="editor">What answers for the folders of the place.</param>
+    /// <param name="chosen">What the user confirmed.</param>
+    private void Removed(ILogicalFolderEditor editor, IReadOnlyList<LogicalEntry> chosen)
+    {
         foreach (var item in chosen)
         {
             if (item.Data is { } data)
@@ -200,7 +256,7 @@ internal sealed class Places : Listing<LogicalEntry>
     }
 
     /// <summary>
-    /// Fills the menu opened on an entry with what the provider stated.
+    /// Fills the menu opened on an entry with what the provider stated, and with the edits a place lets this side make.
     /// </summary>
     /// <remarks>
     /// The items are the provider's own, so they are put in as they are: what an entry may have done to it is the
@@ -209,6 +265,11 @@ internal sealed class Places : Listing<LogicalEntry>
     /// The action is handed the address the menu was opened at and no entries, because a logical entry is not a
     /// file: a provider that needs to know which entry its item is about built the item around that entry, which
     /// is what <see cref="LogicalEntry.Data"/> is for.
+    /// </para>
+    /// <para>
+    /// Naming and removing are the browser's own items wherever the place answers that the row is its to name or
+    /// remove, because a name is edited where the entry is drawn and a menu is the way to it that does not depend on a
+    /// key: the two items read as the ones a directory's menu carries, and what each does is the place's answer.
     /// </para>
     /// </remarks>
     /// <param name="menu">The menu to fill.</param>
@@ -226,14 +287,31 @@ internal sealed class Places : Listing<LogicalEntry>
         // appended to itself would grow an item per right-click, and the same entry would be offered twice.
         menu.Items.Clear();
 
-        if (chosen.Count == 0 || chosen[0].Menu is not { Count: > 0 } items)
+        if (chosen.Count == 0)
         {
             return;
         }
 
-        foreach (var item in items.OrderBy(item => item.Order))
+        if (chosen[0].Menu is { Count: > 0 } items)
         {
-            menu.Items.Add(Item(item));
+            foreach (var item in items.OrderBy(item => item.Order))
+            {
+                menu.Items.Add(Item(item));
+            }
+        }
+
+        if (from is EntryView<LogicalEntry> view && chosen.Count == 1 && Renamable(chosen[0]))
+        {
+            menu.Items.Add(
+                BrowserActions.Item("rorolala_file_system.rename", () => view.Rename(chosen[0]))
+            );
+        }
+
+        if (chosen.Any(Removable))
+        {
+            menu.Items.Add(
+                BrowserActions.Item("rorolala_file_system.delete", () => Delete(chosen, ask: true))
+            );
         }
     }
 

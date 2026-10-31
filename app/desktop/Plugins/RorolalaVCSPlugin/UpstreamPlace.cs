@@ -411,14 +411,17 @@ internal sealed class UpstreamPlace
         };
     }
 
-    /// <summary>
-    /// The empty folders this place holds, which are the work's drafts rather than anything read.
-    /// </summary>
+    /// <summary>A path is all a folder is, and a suggestion the work has named has been used up.</summary>
     /// <remarks>
     /// A path is all a folder is: one that has children has them because their paths begin with its own, which is what
     /// makes a folder made inside another, and a folder moved to another place, carry what it holds. Nothing here is
     /// written down: the place reads a copy of the Vault's Layout, so a folder this side made is a suggestion about what
     /// to put in it, and a suggestion that outlived the window would be a claim the Vault never made.
+    /// <para>
+    /// A suggestion the copy names is one that has been used, and it is let go of rather than kept hidden: a suggestion
+    /// kept at a path the work has finished with would come back as an empty folder the user never asked for, at a name
+    /// where the work used to be.
+    /// </para>
     /// </remarks>
     private readonly HashSet<string> _drafts = new(StringComparer.Ordinal);
 
@@ -432,18 +435,43 @@ internal sealed class UpstreamPlace
     /// <summary>The folder this place just made, which is the one its listing puts a name box on.</summary>
     private string? _made;
 
+    /// <summary>The place the folder was made in, which is the only place that may name it.</summary>
+    private string? _madeIn;
+
     /// <summary>Whether a folder was made, and the path of the one to name.</summary>
+    /// <remarks>
+    /// Answered only for the place the folder was made in: a view of another place asks as it is built, and a hand-off
+    /// read by it would be a name box put on a row in a dock the user is not looking at. A folder the work has named in
+    /// the meantime is not answered either — the copy has overtaken it, so the row is the work's and a box on it would
+    /// rename the work itself.
+    /// </remarks>
     /// <param name="address">The place it was made in.</param>
-    /// <returns>The path, or nothing when nothing was just made.</returns>
+    /// <returns>The path, or nothing when nothing was just made or it is not this place's to name.</returns>
     public string? Pending(LogicalAddress address)
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        var made = _made;
-        _made = null;
+        if (
+            _made is not { } made
+            || !string.Equals(_madeIn, address.ToString(), StringComparison.Ordinal)
+        )
+        {
+            return null;
+        }
 
-        return made;
+        _made = null;
+        _madeIn = null;
+
+        return Overtaken(address, made) ? null : made;
     }
+
+    /// <summary>Whether the work has come to name a folder this side suggested, which is what takes the suggestion away.</summary>
+    /// <param name="address">The place the folder was made in.</param>
+    /// <param name="path">The path of the folder.</param>
+    /// <returns>Whether the copy names it now.</returns>
+    private bool Overtaken(LogicalAddress address, string path) =>
+        Target(address) is { } target && Tree(target.Source) is { } tree
+        && UpstreamDrafts.Covered(tree, path);
 
     /// <inheritdoc />
     /// <remarks>
@@ -473,6 +501,7 @@ internal sealed class UpstreamPlace
         var (source, prefix) = target;
 
         _made = Join(prefix, Free(source, prefix));
+        _madeIn = address.ToString();
         _drafts.Add(_made);
 
         // Said as a warning because it is what it is: a folder with nothing in it is a plan, and a plan is gone when the
@@ -488,11 +517,23 @@ internal sealed class UpstreamPlace
         return true;
     }
 
-    /// <summary>Whether a carry is a folder this side made, which is one no entry of the work stands at.</summary>
+    /// <summary>
+    /// Whether a carry is a folder this side made, which is one no entry of the work stands at.
+    /// </summary>
+    /// <remarks>
+    /// Only a Vault's copy holds suggestions of this side's, and only while the copy does not name the path: a path the
+    /// work names is the work's, however long ago it was suggested, and a row of it must be moved rather than rewritten.
+    /// <para>
+    /// A folder carries no entry of its own — a folder is the paths under it — so what tells a suggestion from a folder
+    /// of the work's cannot be the entry alone: it is the copy naming the path.
+    /// </para>
+    /// </remarks>
     /// <param name="carry">What a drag carried, or what a row stands for.</param>
     /// <returns>Whether it is one.</returns>
     private bool Draft(UpstreamCarry carry) =>
-        carry.Entry is null && _drafts.Contains(carry.Path);
+        string.Equals(carry.Source.Domain, Vaults, StringComparison.Ordinal)
+        && carry.Entry is null
+        && UpstreamDrafts.Ours(Tree(carry.Source), _drafts, carry.Path);
 
     /// <inheritdoc />
     /// <remarks>
@@ -747,7 +788,7 @@ internal sealed class UpstreamPlace
 
         // A folder this side made is its own reason to be refused or taken, and none of the copy's reasons apply: it is
         // not in the copy at all.
-        if (carrying is [{ Entry: null } draft] && _drafts.Contains(draft.Path))
+        if (carrying is [var draft] && Draft(draft))
         {
             var to = Join(prefix, Name(draft.Path));
 
@@ -824,7 +865,7 @@ internal sealed class UpstreamPlace
 
         // A folder this side made is moved by rewriting its path, and what is under it comes with it: nothing is run,
         // because there is nothing of the work to run it against.
-        if (carrying is [{ Entry: null } draft] && _drafts.Contains(draft.Path))
+        if (carrying is [var draft] && Draft(draft))
         {
             var to = Join(prefix, Name(draft.Path));
 
@@ -1378,6 +1419,10 @@ internal sealed class UpstreamPlace
             rows.Add(Up(Of(source.Domain)));
         }
 
+        // A suggestion the copy has named is one the work has come to use, and it is let go of before the rows are read:
+        // a suggestion left standing at a path the work used to be at would come back as an empty folder of its own.
+        Settle(tree);
+
         rows.AddRange(UpstreamSpots.Of(tree, prefix).Select(spot => Spot(source, spot)));
         rows.AddRange(Drafts(source, prefix, tree));
 
@@ -1390,11 +1435,21 @@ internal sealed class UpstreamPlace
         ];
     }
 
+    /// <summary>Lets go of the suggestions the copy has named, which are folders the work has come to use.</summary>
+    /// <param name="tree">The copy.</param>
+    private void Settle(UpstreamEntriesTree tree)
+    {
+        foreach (var used in UpstreamDrafts.Used(tree, _drafts))
+        {
+            _ = _drafts.Remove(used);
+        }
+    }
+
     /// <summary>The empty folders this place holds at one level, which nothing read from the Vault has.</summary>
     /// <remarks>
-    /// A folder this side made is let go of as soon as the copy names it: a checkin or a move into its path is the work
-    /// arriving, and what was a suggestion is then a folder of the Vault's own. It comes back if the work leaves again,
-    /// because nothing was ever written down about it.
+    /// A folder this side made is no longer a row as soon as the copy names it: a checkin or a move into its path is the
+    /// work arriving, and what was a suggestion is then a folder of the Vault's own. The suggestion itself has been used
+    /// up by then and is let go of (see <see cref="Settle"/>), so a path the work later leaves does not bring it back.
     /// </remarks>
     /// <param name="source">The Layout the level is of.</param>
     /// <param name="prefix">The prefix the level is at.</param>
@@ -1415,7 +1470,7 @@ internal sealed class UpstreamPlace
         {
             if (
                 !string.Equals(Above(path), prefix, StringComparison.Ordinal)
-                || Covered(tree, path)
+                || UpstreamDrafts.Covered(tree, path)
             )
             {
                 continue;
@@ -1425,33 +1480,11 @@ internal sealed class UpstreamPlace
                 Name(path),
                 Draggable: true,
                 Opens: Of(source.Domain, source.Name, path),
-                Menu: DraftMenu(source, path),
                 Data: new UpstreamCarry(source, path),
                 Picture: size => EntryIcons.For(path, EntryKind.Directory, size)
             );
         }
     }
-
-    /// <summary>Whether the work already names a path, which is what a folder this side made gives way to.</summary>
-    /// <param name="tree">The copy.</param>
-    /// <param name="path">The path.</param>
-    /// <returns>Whether something is there.</returns>
-    private static bool Covered(UpstreamEntriesTree tree, string path) =>
-        tree.Find(path) is { Entry: not null } or { HasChildren: true };
-
-    /// <summary>What a folder this side made offers, which is what may be done to it.</summary>
-    /// <param name="source">The Layout it is of.</param>
-    /// <param name="path">The folder's path.</param>
-    /// <returns>The items.</returns>
-    private IReadOnlyList<ContextMenuItem> DraftMenu(UpstreamSource source, string path) =>
-    [
-        new ContextMenuItem(
-            "rorolala_vcs.place.draft_remove",
-            10,
-            _ => Remove(Of(source.Domain, source.Name, path), new UpstreamCarry(source, path)),
-            Icons.Error
-        ),
-    ];
 
     /// <summary>Makes a folder, naming it so that no name is taken and none is empty.</summary>
     /// <param name="source">The Layout it is made in.</param>
@@ -1471,11 +1504,18 @@ internal sealed class UpstreamPlace
     }
 
     /// <summary>Whether a path is already something here, either the work's or this side's.</summary>
+    /// <remarks>
+    /// A copy that has not been read cannot say whether the work names the path, so a name that would be free in the
+    /// copy as it stands may still be one the work has come to use. That folder is not lost — the copy covers the
+    /// suggestion as soon as it is read (see <see cref="UpstreamDrafts"/>) — but this is why the work's answer is the
+    /// one that has to be consulted wherever it is here at all.
+    /// </remarks>
     /// <param name="source">The Layout the path is in.</param>
     /// <param name="path">The path.</param>
     /// <returns>Whether it is taken.</returns>
     private bool Occupied(UpstreamSource source, string path) =>
-        _drafts.Contains(path) || Tree(source)?.Find(path) is not null;
+        _drafts.Contains(path)
+        || (Tree(source) is { } tree && UpstreamDrafts.Covered(tree, path));
 
     /// <summary>Moves a folder this side made, and everything under it, to another path.</summary>
     /// <remarks>

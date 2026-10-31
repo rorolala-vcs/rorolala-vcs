@@ -267,6 +267,25 @@ internal sealed class DirectoryControl : UserControl
     private LogicalPlace? _drawnPlace;
 
     /// <summary>
+    /// Whether a listing was asked to be drawn while a row's name was being typed, so it is drawn once the box goes.
+    /// </summary>
+    /// <remarks>
+    /// A name is edited in a row of the view, so drawing the listing again would replace the view, the row and the box
+    /// with everything typed in it. The ask is owed rather than dropped: what was read while the name was being typed
+    /// is what the listing has to show once the name is settled.
+    /// </remarks>
+    private bool _deferred;
+
+    /// <summary>
+    /// Whether a name is being typed in the listing being read, which is the one state a redraw cannot interrupt.
+    /// </summary>
+    /// <remarks>
+    /// One answer rather than two, because which of the two views is drawn follows from what the location is looking
+    /// at: a dock that kept the two apart would have to say which of them is the one being typed in.
+    /// </remarks>
+    private bool Editing => _view?.Editing == true || _logical?.Editing == true;
+
+    /// <summary>
     /// The directory the dock last drew, so that a choice is only carried across a rebuild of the same one.
     /// </summary>
     /// <remarks>
@@ -766,6 +785,16 @@ internal sealed class DirectoryControl : UserControl
 
             _zoom = zoom;
             _state?.Write(ZoomKey, _zoom.ToString(CultureInfo.InvariantCulture));
+
+            // A name being typed is the view's own edit, and drawing again would take the box with it: the zoom is
+            // kept, and the listing is drawn at it once the name is settled.
+            if (Editing)
+            {
+                _deferred = true;
+
+                return;
+            }
+
             Draw();
         }
     }
@@ -798,11 +827,22 @@ internal sealed class DirectoryControl : UserControl
     /// Read again on <c>F5</c>, which is the dock's own key, and the three the clipboard answers, which are
     /// taken here rather than by the listing so that they are answered wherever the keyboard is in the dock —
     /// after the zoom was turned as much as after an entry was clicked.
+    /// <para>
+    /// Nothing is answered while a row's name is being typed, whether or not the box has the keyboard: the box is
+    /// this dock's own edit, and a key meant for the name — <c>Delete</c>, <c>F2</c>, the next folder — answered by
+    /// the listing because the box lost the keyboard is a row deleted, a second box or a second folder, and none of
+    /// them is what the hand reaching for the name meant.
+    /// </para>
     /// </remarks>
     /// <param name="sender">The dock.</param>
     /// <param name="e">The key.</param>
     private void Keyed(object? sender, KeyEventArgs e)
     {
+        if (Editing)
+        {
+            return;
+        }
+
         if (Keys.Again(e, _whole, _host.Log))
         {
             return;
@@ -888,6 +928,15 @@ internal sealed class DirectoryControl : UserControl
         // than its own last word on it.
         RefreshHidden();
 
+        // A name being typed is the view's own edit, and the box is a child of the view drawing it: what was read
+        // while the name is being typed is owed to the listing that follows the edit (see `_deferred`).
+        if (Editing)
+        {
+            _deferred = true;
+
+            return;
+        }
+
         if (Location.Place is not null)
         {
             Draw();
@@ -914,9 +963,36 @@ internal sealed class DirectoryControl : UserControl
         Draw();
     }
 
+    /// <summary>Draws what was owed while a row's name was being typed, once the row is no longer an edit.</summary>
+    /// <remarks>
+    /// Asked of the dock rather than drawn by the view: what was read while the name was being typed is the dock's to
+    /// read, and drawing it is the dock's to do — the view that told this one has no idea what the location is worth
+    /// now, and one view cannot put another in the dock.
+    /// <para>
+    /// Drawn rather than read again and compared, because what was owed need not be a change of what the location
+    /// holds: a zoom turned or a hiding switched while the name was being typed is the same entries drawn another
+    /// way, and a comparison of the lists would find nothing to draw.
+    /// </para>
+    /// </remarks>
+    private void Resumed()
+    {
+        if (!_deferred)
+        {
+            return;
+        }
+
+        _deferred = false;
+
+        RefreshHidden();
+        Draw();
+    }
+
     /// <summary>Draws what is there, at the zoom this dock reads it.</summary>
     private void Draw()
     {
+        // A drawing supersedes one that was owed while a name was being typed: what this draws is read now.
+        _deferred = false;
+
         // Whether the keyboard is inside the view about to be replaced. It matters because replacing the view is
         // what a step and a zoom change both do, and the control that had the keyboard is then no longer in the
         // tree — so every key after walking into another directory would go unanswered, with nothing anywhere
@@ -935,6 +1011,7 @@ internal sealed class DirectoryControl : UserControl
                 ? new GridBrowser<LogicalEntry>(_host, source, Icons.SizeAt(Zoom))
                 : new ListBrowser<LogicalEntry>(_host, source);
 
+            listing.EditEnded += Resumed;
             _logical = listing;
             _view = null;
             _content.Content = listing;
@@ -973,6 +1050,7 @@ internal sealed class DirectoryControl : UserControl
                 _host,
                 new Files(_host, Location, _actions, _clip, _logicalClip)
             );
+        drawn.EditEnded += Resumed;
         _view = drawn;
 
         _content.Content = drawn;

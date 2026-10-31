@@ -144,6 +144,68 @@ public sealed class DraftFolderTests
 
     }
 
+    /// <summary>
+    /// A suggestion gives way to a path the work names, which is what keeps a rewrite of the work's own rows from
+    /// being taken for a rewrite of a suggestion.
+    /// </summary>
+    /// <remarks>
+    /// A folder is only the paths under it, so the copy naming one of them names the folder: a suggestion at that path
+    /// has been used up and must not be answered for again. That is the whole of the bug where renaming a folder of the
+    /// work's put an empty folder at the new name and left the work's paths where they were.
+    /// </remarks>
+    [Fact]
+    public void ASuggestionGivesWayToAPathTheWorkNames()
+    {
+        var tree = UpstreamEntriesTree.Build([Entry("new/Photos/hero.psd", "a")], []);
+        var drafts = new HashSet<string>(StringComparer.Ordinal) { "new/Photos", "new/Shots" };
+
+        // The copy names `new/Photos` by what stands under it, so the row there is the work's rather than a suggestion.
+        Assert.True(UpstreamDrafts.Covered(tree, "new/Photos"));
+        Assert.False(UpstreamDrafts.Ours(tree, drafts, "new/Photos"));
+
+        // A suggestion the copy does not name is still this side's, and is the one still drawn.
+        Assert.False(UpstreamDrafts.Covered(tree, "new/Shots"));
+        Assert.True(UpstreamDrafts.Ours(tree, drafts, "new/Shots"));
+
+        // The suggestions the copy has used up are the ones let go of when the level is read.
+        Assert.Equal(["new/Photos"], UpstreamDrafts.Used(tree, drafts));
+    }
+
+    /// <summary>A copy that was never read takes nothing away: with nothing said, the suggestion still holds.</summary>
+    [Fact]
+    public void ASuggestionHoldsUntilACopyNamesIt()
+    {
+        var drafts = new HashSet<string>(StringComparer.Ordinal) { "new/Photos" };
+
+        Assert.True(UpstreamDrafts.Ours(null, drafts, "new/Photos"));
+
+        var elsewhere = UpstreamEntriesTree.Build([Entry("Assets/hero.psd", "a")], []);
+
+        Assert.True(UpstreamDrafts.Ours(elsewhere, drafts, "new/Photos"));
+    }
+
+    /// <summary>The folder just made is named in the place it was made in, and only there.</summary>
+    [Fact]
+    public void AFolderIsNamedOnlyInThePlaceItWasMadeIn()
+    {
+        var place = Place();
+        var inNew = UpstreamPlace.Of(UpstreamPlace.Vaults, "origin", "new");
+        var elsewhere = UpstreamPlace.Of(UpstreamPlace.Vaults, "origin", "other");
+
+        Assert.True(place.NewFolder(inNew));
+
+        // A view of another place asks as it is built, and the hand-off is not its to take.
+        Assert.Null(place.Pending(elsewhere));
+
+        var made = place.Pending(inNew);
+
+        Assert.NotNull(made);
+        Assert.StartsWith("new/", made, StringComparison.Ordinal);
+
+        // Answered once: a second view of the same place does not open a name box on the same folder again.
+        Assert.Null(place.Pending(inNew));
+    }
+
     /// <summary>An entry as the copy names it, with a path and the `Uuid` it is known by.</summary>
     /// <param name="path">The path.</param>
     /// <param name="uuid">The `Uuid`.</param>

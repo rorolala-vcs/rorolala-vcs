@@ -531,6 +531,28 @@ internal abstract class EntryView : UserControl
     public abstract void Repaint();
 
     /// <summary>
+    /// Whether a row's name is being typed in this view, which the dock around it has to know.
+    /// </summary>
+    /// <remarks>
+    /// A name is edited in the row it belongs to, so the box is a child of this view and goes when the view does: a
+    /// dock told to draw the listing again while a name is being typed would take the row, the box and everything
+    /// typed in it away. The dock asks this before it draws, and draws again once the edit is over.
+    /// </remarks>
+    public abstract bool Editing { get; }
+
+    /// <summary>Raised when a row's name is no longer being typed, whether it was taken or left as it was.</summary>
+    public event Action? EditEnded;
+
+    /// <summary>
+    /// Says that a row's name is no longer being typed.
+    /// </summary>
+    /// <remarks>
+    /// Raised by this view rather than by the dock, because this view is what knows when its box has gone; what the
+    /// dock does with it is draw what it was asked to draw while the box was up (see <see cref="Editing"/>).
+    /// </remarks>
+    protected void Ended() => EditEnded?.Invoke();
+
+    /// <summary>
     /// Puts the keyboard in the listing, so that the dock's own keys reach it again.
     /// </summary>
     /// <remarks>
@@ -778,10 +800,30 @@ internal abstract class EntryView<TItem> : EntryView
         // later rather than at a row that does not exist. The listing is what knows whether the name is for what
         // it reads, since a view is handed a listing and not a directory (see `Listing.Pending`), and a view that
         // is already up hears about one through the actions' own `Naming` (see `TreeBrowser`).
-        if (Source.Pending() is { } naming)
+        //
+        // Claimed when this view is on screen rather than when it is made: a dock behind another tab is drawn again on
+        // every read too, and a name claimed there would be a box in a dock nobody is looking at, and none where the
+        // user is. A view that is already up when the name is made is drawn again for it, so the claim falls to the
+        // view the drawing after the making builds — the first of them the user can actually see.
+        AttachedToVisualTree += (_, _) => Naming();
+    }
+
+    /// <summary>
+    /// Takes a name the listing is waiting to have typed, if one is waiting and this view is the one being looked at.
+    /// </summary>
+    /// <remarks>
+    /// A view that is not effectively visible asks nothing and so takes nothing: the handed-over name stays with the
+    /// listing for the next view built over it, which is the one on screen. That is what keeps a name out of a dock
+    /// nobody is looking at when two docks are reading the same place.
+    /// </remarks>
+    private void Naming()
+    {
+        if (!IsEffectivelyVisible || Source.Pending() is not { } naming)
         {
-            Dispatcher.UIThread.Post(() => Rename(naming), DispatcherPriority.Background);
+            return;
         }
+
+        Dispatcher.UIThread.Post(() => Rename(naming), DispatcherPriority.Background);
     }
 
     /// <summary>The host, for what cannot be done.</summary>
@@ -1070,17 +1112,12 @@ internal abstract class EntryView<TItem> : EntryView
     public void Delete(bool ask) => Source.Delete([.. Offered().Where(Source.Removable)], ask);
 
     /// <summary>Makes a directory in the listing, which is then named where it is drawn.</summary>
-    public void NewFolder()
-    {
-        Source.NewFolder();
-
-        // A folder made by a key is a folder with no name yet: its row is this view's, and the box goes in a turn later,
-        // which is what the same wait at the top of this file is for.
-        if (Source.Pending() is { } naming)
-        {
-            Dispatcher.UIThread.Post(() => Rename(naming), DispatcherPriority.Background);
-        }
-    }
+    /// <remarks>
+    /// The name is not asked for here: making one reads the listing again, and the view that reading builds is the one
+    /// whose row the box goes in (see <see cref="Naming"/>). Asking here would take the hand-off on this view, whose
+    /// rows are from before the making, where the new one is not.
+    /// </remarks>
+    public void NewFolder() => Source.NewFolder();
 
     /// <summary>The box a name is being edited in, and the entry it is about, while one is.</summary>
     /// <remarks>
@@ -1089,6 +1126,19 @@ internal abstract class EntryView<TItem> : EntryView
     /// </remarks>
     private TextBox? _editor;
     private TItem? _editing;
+
+    /// <summary>
+    /// The name a box replaced, and where, so the row reads as a row again once the edit is over.
+    /// </summary>
+    /// <remarks>
+    /// The box is put in the name's place rather than the row being built again around it, which is what keeps the
+    /// name where the layout put it — and it is why the name has to be carried back: a listing that is not read again
+    /// after an edit, because nothing about it changed, would otherwise leave a field standing in the row.
+    /// </remarks>
+    private (Panel Parent, int At, Control Name)? _named;
+
+    /// <inheritdoc />
+    public override bool Editing => _editor is not null;
 
     /// <summary>Renames what is chosen, or the entry the pointer last landed on.</summary>
     public void Rename()
@@ -1159,6 +1209,7 @@ internal abstract class EntryView<TItem> : EntryView
         Grid.SetRow(box, Grid.GetRow(label));
         Grid.SetColumnSpan(box, Grid.GetColumnSpan(label));
 
+        _named = (parent, at, label);
         parent.Children[at] = box;
 
         _editor = box;
@@ -1212,18 +1263,20 @@ internal abstract class EntryView<TItem> : EntryView
         _editor = null;
         _editing = null;
 
+        Restore(box);
         Source.Rename(item, box.Text ?? string.Empty);
 
         // The box belongs to a row, and the reading is what puts the name back: a rename that had nothing to
         // do would otherwise leave the field standing. The keyboard goes back to the listing with it.
         Source.Touch();
         Listen();
+        Ended();
     }
 
     /// <summary>Leaves the name as it was, and reads the listing again so the box goes away.</summary>
     private void Cancelled()
     {
-        if (_editor is null)
+        if (_editor is not { } box)
         {
             return;
         }
@@ -1231,8 +1284,39 @@ internal abstract class EntryView<TItem> : EntryView
         _editor = null;
         _editing = null;
 
+        Restore(box);
         Source.Touch();
         Listen();
+        Ended();
+    }
+
+    /// <summary>
+    /// Puts the name back where the box was, so the row is a row again.
+    /// </summary>
+    /// <remarks>
+    /// What a listing that is not read again after the edit needs: a place names a row without the files changing, so
+    /// nothing in the file system draws the listing again — and a box that stayed there would be a field nothing
+    /// answers in, in a row that is no longer being edited. A rename the place refused is the case that needs it most:
+    /// the name was not taken, and the row has to show the one it has.
+    /// </remarks>
+    /// <param name="box">The box that was in the name's place.</param>
+    private void Restore(TextBox box)
+    {
+        if (_named is not { } named)
+        {
+            return;
+        }
+
+        _named = null;
+
+        if (
+            named.At >= 0
+            && named.At < named.Parent.Children.Count
+            && ReferenceEquals(named.Parent.Children[named.At], box)
+        )
+        {
+            named.Parent.Children[named.At] = named.Name;
+        }
     }
 
     /// <summary>

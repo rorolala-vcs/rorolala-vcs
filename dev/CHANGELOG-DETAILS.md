@@ -32,7 +32,30 @@ ended for being slow is a window lost. A start that found the Desktop program al
 exit code 174 — is answered as a window, since the run that was already up was asked to come
 forward.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Squeeze the directory dock's columns instead of cutting them off
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] Fix renaming a row in the desktop's upstream view
+
+Renaming a folder in the upstream view — a place the Rorolala plugin answers for, `rola@…` — now renames the work's
+paths. A folder that the copy of the Vault's Layout names is the work's, however long ago this side suggested it, so the
+rename moves its entries to the new prefix instead of rewriting a suggestion and leaving the work where it was; the
+empty folder at the new name, which was the suggestion left behind, no longer appears. A suggestion the copy has used
+up is let go of rather than kept hidden, so a path the work has finished with does not bring one back, and a suggestion
+the copy does not name is still moved by rewriting it.
+
+The row a new folder makes is named the moment it is drawn. The hand-off is claimed by the listing built after the
+place is read again, from the entries that have the folder in them, rather than by the view that asked for it, whose
+rows are from before the making — and only by a view the user can see, so two docks over one place put the box in the
+one on screen and not in a dock behind a tab.
+
+A name being typed is no longer taken out from under the user: a read that lands while the box is up is drawn after
+the edit rather than through it, the dock's own keys answer nothing while a row is an edit, and the name is put back
+where the box was when the edit ends — a rename the place refuses therefore leaves the row showing the name it has
+rather than a field nothing answers in. Removing a row from a place asks first unless Shift says not to, and the menu
+on a row a place lets this side edit offers naming and removing it, so neither depends on a key.
+
+The same hand-off is what names a new directory in the file system's own listing again: it too was being claimed by
+the view that asked for it, which is not the view its row is drawn in.
+
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Squeeze the directory dock's columns instead of cutting them off
 
 The directory dock's table kept every column at the width it was given, so a dock narrowed
 below the table's own width put the right-hand columns past its edge — scrollable to, at best,
@@ -45,7 +68,7 @@ one place all the way down the table and the band's headings sit over the cells 
 horizontal scrollbar is taken off the list for the same reason: a list that can scroll sideways
 measures its rows at the width they ask for, which is the width the squeeze would never reach.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Fill the Overview's table to the dock rather than to its last row
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Fill the Overview's table to the dock rather than to its last row
 
 The Overview's table stopped at its last row: the band and the rows were as tall as the rows came
 to, and the rest of the dock under them was empty ground. The table now takes the whole of the
@@ -54,7 +77,7 @@ scroll inside the table when there are more of them than there is room for, rath
 reading scrolling as one. What stands in the table's place when there is nothing to show is
 unchanged.
 
-### 5. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
+### 6. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
 
 A message that marked a section break with `---` now draws a rule there, as Markdown says it should,
 instead of printing the three dashes as ordinary text. The test that recognized one required more
