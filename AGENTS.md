@@ -127,6 +127,8 @@ A command is a file, a node and a shape. What it carries before it is done:
   clear.
 - **Restate** the plan in your own words before touching anything, listing every decision — types,
   names, placement, what breaks, who calls what. **Restate! Restate! Restate!**
+- **Rebuild the artifacts at the end of every round** with `cargo dev export`, so the user can test
+  them directly. Do it unless the user explicitly says not to.
 
 ## Mechanics
 
