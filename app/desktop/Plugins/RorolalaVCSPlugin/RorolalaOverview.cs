@@ -364,8 +364,15 @@ internal sealed class OverviewView : UserControl
     /// <summary>The line said when there is no reading to draw.</summary>
     private readonly TextBlock _notice;
 
-    /// <summary>Where the table of a reading goes.</summary>
-    private readonly StackPanel _blocks;
+    /// <summary>
+    /// Where the table of a reading goes.
+    /// </summary>
+    /// <remarks>
+    /// One cell rather than a stack, and a cell the table fills: the reading is the view rather than a block of
+    /// it, and what is under its last row is the table's own room rather than the window's ground showing
+    /// through a table that stopped where its rows did.
+    /// </remarks>
+    private readonly Grid _tableCell;
 
     /// <summary>Where a reading that could not be made is said.</summary>
     private readonly ILog _log;
@@ -500,7 +507,7 @@ internal sealed class OverviewView : UserControl
             Classes = { "muted" },
         };
 
-        _blocks = new StackPanel();
+        _tableCell = new Grid();
 
         // The sync's own state, which the strip in the dock's header draws from; what the runs of every command
         // say is gathered in the hub, which the panel down the right draws from and which every place a command
@@ -523,15 +530,13 @@ internal sealed class OverviewView : UserControl
         root.ColumnDefinitions.Add(_tableColumn);
         root.ColumnDefinitions.Add(_panelColumn);
 
-        var body = new ScrollViewer
-        {
-            Content = _blocks,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        };
-
         // The reading and the words that stand in for one share the left column, one at a time: a work with
         // changes is the table, and one without them is the words.
-        var reading = new Grid { Children = { body, _notice } };
+        //
+        // Nothing scrolls the whole of the reading: the list of rows scrolls inside itself — see `Table` — and a
+        // table that fills the dock and is then put in a scroller would be measured with no end to fill and so
+        // would fill nothing, which is the height this view had before the table was one of its own.
+        var reading = new Grid { Children = { _tableCell, _notice } };
 
         Grid.SetColumn(_panel, 1);
         root.Children.Add(reading);
@@ -1705,14 +1710,14 @@ internal sealed class OverviewView : UserControl
             _connecting = null;
         }
 
-        _blocks.Children.Clear();
+        _tableCell.Children.Clear();
 
         _notice.Text = said;
         _notice.IsVisible = said is { Length: > 0 };
 
         if (rows.Count > 0)
         {
-            _blocks.Children.Add(Table(rows, BaseDirectory.Current ?? string.Empty, _host, this));
+            _tableCell.Children.Add(Table(rows, BaseDirectory.Current ?? string.Empty, _host, this));
         }
     }
 

@@ -32,7 +32,16 @@ ended for being slow is a window lost. A start that found the Desktop program al
 exit code 174 — is answered as a window, since the run that was already up was asked to come
 forward.
 
-### 3. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Fill the Overview's table to the dock rather than to its last row
+
+The Overview's table stopped at its last row: the band and the rows were as tall as the rows came
+to, and the rest of the dock under them was empty ground. The table now takes the whole of the
+column the reading is drawn in — the band at its top and the rows filling the rest — and the rows
+scroll inside the table when there are more of them than there is room for, rather than the whole
+reading scrolling as one. What stands in the table's place when there is nothing to show is
+unchanged.
+
+### 4. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
 
 A message that marked a section break with `---` now draws a rule there, as Markdown says it should,
 instead of printing the three dashes as ordinary text. The test that recognized one required more

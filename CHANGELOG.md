@@ -8,7 +8,8 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 1. [`app`] [`rola`] [`pager`] Never page a run that is not talking to a terminal — [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-pager-never-page-a-run-that-is-not-talking-to-a-terminal)
 2. [`app`] [`ROLALauncher`] Wait for the Desktop window before leaving the launcher — [See details](dev/CHANGELOG-DETAILS.md#2-app-rolalauncher-wait-for-the-desktop-window-before-leaving-the-launcher)
-3. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule — [See details](dev/CHANGELOG-DETAILS.md#3-utils-cli-theme-rendering-draw-a-three-dash-markdown-rule-as-a-rule)
+3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Fill the Overview's table to the dock rather than to its last row — [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-rorolala-vcs-fill-the-overviews-table-to-the-dock-rather-than-to-its-last-row)
+4. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule — [See details](dev/CHANGELOG-DETAILS.md#4-utils-cli-theme-rendering-draw-a-three-dash-markdown-rule-as-a-rule)
 
 ## Optimized
 
