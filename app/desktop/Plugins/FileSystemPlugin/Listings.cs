@@ -2176,6 +2176,15 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     private const double MinColumn = 56;
 
     /// <summary>
+    /// How far a row and the band of headings are inset from the table's edges.
+    /// </summary>
+    /// <remarks>
+    /// One number for the two, because they share one edge: a row inset by one amount and the band by another is a
+    /// row whose cells stand away from the headings over them.
+    /// </remarks>
+    private const double Inset = 12;
+
+    /// <summary>
     /// How wide the column of names starts.
     /// </summary>
     /// <remarks>
@@ -2192,8 +2201,29 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
     private readonly IReadOnlyList<Column<TItem>> _values;
 
-    /// <summary>How wide every column is, the grabs between them included.</summary>
+    /// <summary>
+    /// How wide every column wants to be, the grabs between them included.
+    /// </summary>
+    /// <remarks>
+    /// What is wanted rather than what is drawn, and the two differ only by the squeeze a dock narrower than the
+    /// table puts every column under — see <see cref="Squeezed"/>. A drag of a column edge writes here, because
+    /// what a hand moved is what the column is to be when there is room for it.
+    /// </remarks>
     private readonly GridLength[] _widths;
+
+    /// <summary>
+    /// How wide every column is drawn, which every sheet of the table is given.
+    /// </summary>
+    /// <remarks>
+    /// Computed once for the table and written to the band of headings and to every row alike: a sheet that worked
+    /// its own share out — a star column, say — would put a row's cells at widths its own contents asked for, and
+    /// two rows that hold different words would then disagree about where a column begins. The written widths are
+    /// pixels, so what a cell stands at is the same in the band and in every row, whatever the dock's width is.
+    /// </remarks>
+    private GridLength[] _shown;
+
+    /// <summary>How wide the table itself was when it was last squeezed, or nothing while it has not been laid.</summary>
+    private double _laid = -1;
 
     /// <summary>Which of the table's columns is the one that takes what is left over, and holds nothing.</summary>
     private readonly int _star;
@@ -2251,10 +2281,20 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         _star = star;
         _grabs = grabs;
 
+        // What is drawn is what is wanted until the table has been laid out once, which is when there is a width
+        // to fit the columns into — see `Fit`.
+        _shown = [.. widths];
+
         // The list's own border and inset are taken off: what draws the table is the view, and a border and a
         // padding of the list's own would be a second edge and a second inset inside it.
         List.Padding = new Thickness(0);
         List.BorderThickness = new Thickness(0);
+
+        // The table is drawn at the width the list has rather than wider than it. With a horizontal scrollbar the
+        // rows keep the width the columns ask for, however narrow the dock is, so the columns at the right are
+        // reachable only by scrolling — which is the hiding the squeeze exists to avoid, and they would also be
+        // wider than the band above them. A row is then as wide as the viewport, which is the width `Fit` reads.
+        ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
 
         // The item keeps the design's row height, and its own inset is taken off so that the header and the
         // rows share one edge. The four pixels left between two rows are the line's room and the frame's: the
@@ -2291,7 +2331,108 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     }
 
     /// <inheritdoc />
-    protected override Control Item(TItem item) => Prepared(item, Row(item));
+    protected override Control Item(TItem item)
+    {
+        var row = Prepared(item, Row(item));
+
+        // The band of headings follows the width of the rows as they are made and as they change: the rows are as
+        // wide as the list's viewport, the band is above the list rather than in it, and the two differ by whatever
+        // the toolkit takes for a scrollbar. See `Fit`.
+        row.SizeChanged += (_, _) => Fit(row);
+
+        return row;
+    }
+
+    /// <summary>
+    /// Works the columns out for the width the table has, and writes them into the band and every row.
+    /// </summary>
+    /// <remarks>
+    /// The width comes from a row rather than from the dock, because a row is what the columns are read in: the
+    /// list's viewport is the dock less whatever its scrollbar takes, and a table measured against the dock would
+    /// draw its last columns under the scrollbar. Every sheet — the band and each row — is then given the same
+    /// pixels, which is what makes a column stand at one place down the whole table rather than each row working
+    /// out a share of its own.
+    /// <para>
+    /// Done as the rows are laid out rather than in a measure pass of the view, because the width is only known
+    /// once the toolkit has arranged the list: the work is one write of the widths, and a row whose width is the
+    /// one the table was already drawn at is one that writes nothing at all.
+    /// </para>
+    /// </remarks>
+    /// <param name="row">A row that is on screen, which is the width every row is drawn at.</param>
+    private void Fit(Control row)
+    {
+        var table = row.Bounds.Width - (Inset * 2);
+
+        if (table <= 0 || Math.Abs(table - _laid) < 0.5)
+        {
+            return;
+        }
+
+        _laid = table;
+        _shown = Squeezed();
+
+        Apply();
+    }
+
+    /// <summary>
+    /// Every column's width for the width the table is being read at, as pixels.
+    /// </summary>
+    /// <remarks>
+    /// The wanted widths are kept whole while there is room for them, and squeezed in proportion when there is not:
+    /// the table is then still the dock's width, and no column of it is past the edge where it cannot be read. The
+    /// room column takes what is left over while there is room, and nothing at all while there is not — it is a
+    /// width with nothing in it, and taking any of a squeezed table would be taking it from a column that is read.
+    /// </remarks>
+    /// <returns>The widths to draw the columns at.</returns>
+    private GridLength[] Squeezed()
+    {
+        if (_laid <= 0)
+        {
+            return [.. _widths];
+        }
+
+        var wanted = Wanted;
+        var squeeze = wanted <= _laid || wanted <= 0 ? 1 : _laid / wanted;
+        var shown = new GridLength[_widths.Length];
+        var used = 0.0;
+
+        for (var at = 0; at < _widths.Length; at++)
+        {
+            if (at == _star)
+            {
+                continue;
+            }
+
+            var width = _widths[at].Value * squeeze;
+
+            shown[at] = new GridLength(width);
+            used += width;
+        }
+
+        shown[_star] = new GridLength(Math.Max(0, _laid - used));
+
+        return shown;
+    }
+
+    /// <summary>How wide every column wants to be, the room column's own width not counted.</summary>
+    private double Wanted =>
+        _widths.Where((width, at) => at != _star).Sum(width => width.Value);
+
+    /// <summary>
+    /// How much of its width the table is getting, as a fraction, which is one while there is room for it.
+    /// </summary>
+    /// <remarks>
+    /// A drag of a column edge is a move of the edge a reader sees, so it is taken as a move in the widths the
+    /// columns want: a table squeezed to four-fifths of what it asks for moves an edge four pixels for every five
+    /// the pointer does, and the edge stays under the pointer that way.
+    /// </remarks>
+    /// <returns>The fraction, or one while the table has not been laid out.</returns>
+    private double Squeeze()
+    {
+        var wanted = Wanted;
+
+        return _laid <= 0 || wanted <= _laid || wanted <= 0 ? 1 : _laid / wanted;
+    }
 
     /// <summary>
     /// How wide every column starts, in the order they are laid out, together with the column that takes what
@@ -2342,12 +2483,16 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         return ([.. widths], star, grabs);
     }
 
-    /// <summary>The columns of the table, as the widths stand.</summary>
+    /// <summary>The columns of the table, as wide as the table was worked out for.</summary>
+    /// <remarks>
+    /// Pixels, and the same pixels for every sheet of the table, so that a column stands where it is in the band of
+    /// headings and in every row alike — see <see cref="_shown"/>.
+    /// </remarks>
     private ColumnDefinitions Definitions()
     {
         var columns = new ColumnDefinitions();
 
-        foreach (var width in _widths)
+        foreach (var width in _shown)
         {
             columns.Add(new ColumnDefinition(width));
         }
@@ -2402,7 +2547,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         var band = new Border
         {
             Child = _header,
-            Padding = new Thickness(12, 7),
+            Padding = new Thickness(Inset, 7),
             MinHeight = 30,
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
@@ -2465,7 +2610,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         var row = new Border
         {
             Child = grid,
-            Padding = new Thickness(12, 0),
+            Padding = new Thickness(Inset, 0),
             BorderThickness = last ? new Thickness(0) : new Thickness(0, 0, 0, 1),
         };
         row[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
@@ -2628,7 +2773,10 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
             return;
         }
 
-        var change = Math.Clamp(e.GetPosition(this).X - grab.At, low, high);
+        // The move is one a reader makes on the edge they see, so it is taken in the widths the columns want: a
+        // table squeezed to a share of what it asks for moves an edge by the share of the move, which is what keeps
+        // the edge under the pointer. See `Squeeze`.
+        var change = Math.Clamp((e.GetPosition(this).X - grab.At) / Squeeze(), low, high);
 
         if (!left)
         {
@@ -2639,6 +2787,9 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         {
             _widths[grab.Right] = new GridLength(grab.RightWas - change);
         }
+
+        // What the columns want has changed and the table has not: the widths it is drawn at are worked out again.
+        _shown = Squeezed();
 
         Apply();
     }
@@ -2672,9 +2823,9 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
 
         void Into(Grid grid)
         {
-            for (var at = 0; at < _widths.Length; at++)
+            for (var at = 0; at < _shown.Length; at++)
             {
-                grid.ColumnDefinitions[at].Width = _widths[at];
+                grid.ColumnDefinitions[at].Width = _shown[at];
             }
         }
     }

@@ -32,7 +32,20 @@ ended for being slow is a window lost. A start that found the Desktop program al
 exit code 174 — is answered as a window, since the run that was already up was asked to come
 forward.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Fill the Overview's table to the dock rather than to its last row
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Squeeze the directory dock's columns instead of cutting them off
+
+The directory dock's table kept every column at the width it was given, so a dock narrowed
+below the table's own width put the right-hand columns past its edge — scrollable to, at best,
+and the list's horizontal scrollbar made sure the rows kept that width however narrow the dock
+was. The table is now drawn at the width it has: its columns keep the widths they are wanted at
+while there is room, and squeeze in proportion when there is not, so the whole table stays inside
+the dock. The widths are worked out once for the table and written into the band of headings and
+into every row alike, rather than each sheet working out a share of its own, so a column stands at
+one place all the way down the table and the band's headings sit over the cells they name. The
+horizontal scrollbar is taken off the list for the same reason: a list that can scroll sideways
+measures its rows at the width they ask for, which is the width the squeeze would never reach.
+
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Fill the Overview's table to the dock rather than to its last row
 
 The Overview's table stopped at its last row: the band and the rows were as tall as the rows came
 to, and the rest of the dock under them was empty ground. The table now takes the whole of the
@@ -41,7 +54,7 @@ scroll inside the table when there are more of them than there is room for, rath
 reading scrolling as one. What stands in the table's place when there is nothing to show is
 unchanged.
 
-### 4. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
+### 5. [`utils`] [`cli-theme`] [`rendering`] Draw a three-dash Markdown rule as a rule
 
 A message that marked a section break with `---` now draws a rule there, as Markdown says it should,
 instead of printing the three dashes as ordinary text. The test that recognized one required more
