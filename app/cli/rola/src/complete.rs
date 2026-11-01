@@ -287,18 +287,36 @@ pub fn layout_orphan_uuids(layout: &Layout) -> Vec<String> {
     ids
 }
 
-/// The words `rola retrack --change-upstream` may be given, as far as the run can know them.
+/// The words `rola retrack` may be given as the target, as far as the run can know them.
 ///
-/// What it names is another entry to record: a `Uuid` this Layout holds at no path, or a path or a
-/// `Uuid` of the fetched copy of the Vault's own Layout. Nothing is fetched here — a copy that is not
-/// here offers nothing — since a completion must not reach anywhere for what it offers.
+/// What a target names is what the path is to record: a version the index holds, or an entry of the
+/// fetched copy of the Vault's Layout, or one this Layout holds at no path. Nothing is fetched here —
+/// a copy that is not here offers nothing — since a completion must not reach anywhere for what it
+/// offers, and no step count or version number is offered, since nothing here says how far back a
+/// run means to go.
 #[must_use]
-pub fn change_upstream_words(workspace: &ResWorkspace) -> Vec<String> {
+pub fn target_words(
+    workspace: &ResWorkspace,
+    vault: &ResVault,
+    index: Option<&VCSIndex>,
+) -> Vec<String> {
+    let mut words = index_hashes(index, IndexObject::Version);
+    words.extend(entry_words(workspace, vault));
+
+    words.sort();
+    words.dedup();
+    words
+}
+
+/// The entries a target may name: the ones this Layout holds at no path, and the paths and entries
+/// of the fetched copy of the Vault's Layout it tracks.
+#[must_use]
+pub fn entry_words(workspace: &ResWorkspace, vault: &ResVault) -> Vec<String> {
     let Some(held) = workspace.as_ref() else {
         return Vec::new();
     };
 
-    let layout = held.layout_if_there().ok().flatten();
+    let layout = chosen_layout(workspace, vault, None);
     let mut words = layout.as_ref().map(layout_orphan_uuids).unwrap_or_default();
 
     if let Some(vault) = tracked_vault(held)

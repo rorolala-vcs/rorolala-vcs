@@ -13,7 +13,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class RetrackTests
 {
-    /// <summary>A retrack names the version, and says whether the work follows or the record jumps.</summary>
+    /// <summary>A retrack names the file and its target, and says whether the work follows or the record jumps.</summary>
     [Fact]
     public void ARetrackNamesTheVersionAndWhetherTheWorkFollows()
     {
@@ -27,8 +27,18 @@ public sealed class RetrackTests
 
         Assert.Contains("retrack", moved);
         Assert.Contains("/work/logo.psd", moved);
-        Assert.Contains("--until", moved);
         Assert.Contains("abc123", moved);
+
+        // The file and what the path is to record are the command's two words, in that order: the
+        // one it is about, then what it is to record.
+        var words = moved.ToList();
+        Assert.True(
+            words.IndexOf("/work/logo.psd") < words.IndexOf("abc123"),
+            "the file is not named before its target"
+        );
+
+        // The target is a word of the command, not a flag's value.
+        Assert.DoesNotContain("--until", moved);
         Assert.DoesNotContain("--only-index", moved);
         Assert.DoesNotContain("--allow-jump", moved);
         Assert.DoesNotContain("--force", moved);

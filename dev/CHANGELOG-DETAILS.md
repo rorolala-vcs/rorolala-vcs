@@ -59,34 +59,33 @@ refuses it, by the read-only name `truth@VAULT`. The Layout's own batch writes g
 need: an entry can be removed in the same batch that binds its path to another, which is one write
 and no moment where the path names nothing.
 
-### 4. [`app`] [`rola`] [`retrack`] Switch the Uuid a file records, or give it a new one
+### 4. **\[BREAKING!\]** [`app`] [`rola`] [`retrack`] Record a version, or another entry, for a file
 
-`rola retrack` no longer only moves a version pointer: `--change-upstream <REF>` records another
-entry's `Uuid` for the file, and `--fork` gives its entry a fresh `Uuid` holding what it records now.
-Both are a change of which entry the path is, so the entry the path named is dropped — anything the
-Vault records for it stays upstream — and the change is written as one batch, with no moment where
-the path names nothing.
+`rola retrack` now takes what the path is to record as its second word: `rola retrack <PATH> [TARGET]`.
+The `--until` flag is gone, and so is the `--change-upstream` flag a earlier draft of this version
+had: both are what `TARGET` says. One version back is what naming no target does.
 
-`REF` is a `Uuid` first, and a path of the Vault's own Layout after: a `Uuid` is looked for in the
-fetched copy of that Layout and then among the entries this Layout holds at no path, and a path is
-read from the fetched copy, which is fetched when it is not here and the run is online. A local path
-is not a way to name one, since the local path is what is being changed. The entry recorded must
-hold no path of its own, and it must record a version.
+A version target moves the entry's pointer as `--until` did: `~N` N versions back, `N` the version
+numbered N, or a version's hash, with `--allow-jump` for a hash off the way back and `--only-index`
+to leave the file alone. A step count is a word, so it is written `~N` rather than `-1`, which the
+command line reads as a flag; a run that writes one anyway is told the spelling that reads. A Vault's
+name is no longer a target: what a target names is a version, a `Uuid`, or a path of the Vault's own
+Layout.
 
-What happens to the file follows how the version the path records stands beside the version the
-entry records. The same version, or one the path's version is ahead of, is a change of identity
-only: the file is left as it is and unrecorded changes in it are kept. A version behind it is
-refused unless `--force` writes that version's content over the file or `--only-index` records the
-entry and leaves the file alone. Two chains are refused until `--allow-jump` says the jump is meant,
-and then the content is switched, or `--only-index` records the entry without touching the file. A
-file with unrecorded changes is refused before a content switch unless `--force`, and a merge
-waiting for the file is ended by `--force` as it is by a retrack of a version.
+An entry target - a `Uuid`, or a path of the Vault's own Layout - records that entry for the path in
+place of the one it recorded, dropping that entry. What it holds is read from the fetched copy of
+the Vault's Layout, or from this Layout when the `Uuid` is one it holds at no path; the entry must
+hold no path of its own and must record a version. What happens to the file follows how the two
+versions stand: the same version, or one the path's version is ahead of, is a change of identity
+only and keeps unrecorded changes; a version behind it is refused unless `--force` writes its
+content over the file or `--only-index` records the entry and leaves the file alone; two chains are
+refused until `--allow-jump` says the jump is meant. `--fork` still records a fresh `Uuid` with what
+the path records now, and cannot be given with a target.
 
-`--fork` needs none of that: it records a fresh `Uuid` with what the path records, and leaves the
-file, the index and the Vault alone. It is refused while a merge waits for the file unless `--force`
-ends that merge. Neither form adds an exit code; the codes the command already answers with carry
-every refusal. What the two write is the Workspace's own Layout, so a fetched copy of a Vault's
-Layout is refused as it is for every command that changes a Layout.
+What the command answers with is one shape whatever the target was: the path, the version it records,
+and whether what it records changed. A run that recorded an entry also answers with the two `Uuid`s
+and whether the entry was forked. The desktop's retrack passes the file and the target as its two
+words, and is otherwise unchanged.
 
 ## Refactor
 

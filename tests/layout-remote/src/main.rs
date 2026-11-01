@@ -1368,10 +1368,10 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    // `retrack` moves the entry's version pointer and writes the version's content back over the
-    // file with it, so the two agree again. `--only-index` moves the pointer and leaves the file
-    // alone, which is what a run that wants the work on disk untouched asks for. A level written
-    // `-1` begins with a dash, so it goes with the flag: `--until=-1`.
+    // `retrack` sets what the entry records: with no target it goes one version back and writes that
+    // version's content back over the file with it, so the two agree again. `--only-index` moves the
+    // record and leaves the file alone, which is what a run that wants the work on disk untouched
+    // asks for.
     //
     // The file is first put back to what the Layout was last known to agree with, so that what the
     // checks below see is the pointer moving and not the file: a file whose bytes never changed is
@@ -1398,7 +1398,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until=-1", "--only-index"],
+        &["retrack", "models/hero.psd", "--only-index"],
     ));
     checked.wants(
         "a retrack moves the pointer one version back",
@@ -1436,7 +1436,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until=-1"],
+        &["retrack", "models/hero.psd"],
     ));
     checked.wants(
         "a retrack of a file with unrecorded changes is refused, and both ways on are offered",
@@ -1446,12 +1446,11 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    // `--force` is the run that means to discard them. A level that begins with `-` is written with
-    // the value joined to the flag, `--until=-1`, since a word of its own would be read as an option.
+    // `--force` is the run that means to discard them.
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until=-1", "--force"],
+        &["retrack", "models/hero.psd", "--force"],
     ));
     checked.wants(
         "`--force` switches the content over the changes",
@@ -1471,7 +1470,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", "~5"],
+        &["retrack", "models/hero.psd", "~5"],
     ));
     checked.wants(
         "a step count past the first version is refused",
@@ -1482,7 +1481,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", "99"],
+        &["retrack", "models/hero.psd", "99"],
     ));
     checked.wants(
         "a version number past the newest is refused",
@@ -1496,7 +1495,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", &ahead_hex],
+        &["retrack", "models/hero.psd", &ahead_hex],
     ));
     checked.wants(
         "a hash off the way back is refused, and `--allow-jump` is offered",
@@ -1510,7 +1509,6 @@ async fn main() {
         &[
             "retrack",
             "models/hero.psd",
-            "--until",
             &ahead_hex,
             "--allow-jump",
         ],
@@ -1526,15 +1524,32 @@ async fn main() {
         ),
     );
 
-    // The Vault's own Layout is the upstream: naming it takes its version for the file without any
-    // check that the entry can walk there, and the copy fetched here is what answers.
+    // A Vault's name is no longer a target: what a target names is a version, a `Uuid`, or a path of
+    // the Vault's own Layout, and a word that is none of them is looked for as a path of that Layout.
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until", VAULT_NAME],
+        &["retrack", "models/hero.psd", VAULT_NAME],
     ));
     checked.wants(
-        "a Vault's name takes the version the Vault records, content and all",
+        "a Vault's name is not a target, and is read as a path of its Layout",
+        said.code == Some(251) && clean(&said.stderr).contains("names no path"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // The version the Vault's own Layout records for the file is a version target like any other:
+    // its hash, with `--allow-jump` because it is not on the way back from where the entry stands.
+    let second_hex: String = second_version
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["retrack", "models/hero.psd", &second_hex, "--allow-jump"],
+    ));
+    checked.wants(
+        "the version the Vault records is recorded by its hash, content and all",
         said.success()
             && local_version_of(&workspace, id) == second_version
             && fs::read(&model).unwrap() == b"second",
@@ -1623,13 +1638,9 @@ async fn main() {
     );
 
     // A variant waiting to be joined is a merge that was never recorded, and a retrack may not
-    // write over the file or move the pointer under it: what the two sides hold is the run's to
+    // write over the file or move the record under it: what the two sides hold is the run's to
     // join or to discard. The variant of the version after the one the entry is at is joined, so
     // its base is the version the entry names and the merge is one that could go on.
-    let second_hex: String = second_version
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
     let variants = clean(
         &run(&mut client(
             &workspace,
@@ -1665,7 +1676,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until=-1"],
+        &["retrack", "models/hero.psd"],
     ));
     checked.wants(
         "a retrack of a file a variant is waiting for is refused, and `--force` is offered",
@@ -1676,7 +1687,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until=-1", "--only-index"],
+        &["retrack", "models/hero.psd", "--only-index"],
     ));
     checked.wants(
         "`--only-index` cannot end a merge, and says as much",
@@ -1689,7 +1700,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", "--until=-1", "--force"],
+        &["retrack", "models/hero.psd", "--force"],
     ));
     checked.wants(
         "`--force` ends the merge, removes the variant file and switches the content",
@@ -1726,7 +1737,6 @@ async fn main() {
         &[
             "retrack",
             "models/hero.psd",
-            "--until",
             &second_hex,
             "--allow-jump",
         ],

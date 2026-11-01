@@ -1770,7 +1770,7 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.exits("the file is taken back one version", &ran, 0);
     let bottom = entry_field(rola, dir, "a.txt", "version").expect("the version it went back to");
 
-    let ran = rola.run(dir, &["retrack", "a.txt", "--until", &top, "--allow-jump"]);
+    let ran = rola.run(dir, &["retrack", "a.txt", &top, "--allow-jump"]);
     checked.exits("the file is put back at the version it was at", &ran, 0);
 
     // A fork records a fresh `Uuid` for what the path records now, and leaves the file alone.
@@ -1784,6 +1784,7 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
                 && value.get("version").and_then(JsonValue::as_str) == Some(top.as_str())
                 && value.get("forked") == Some(&JsonValue::Bool(true))
                 && value.get("switched") == Some(&JsonValue::Bool(false))
+                && value.get("changed") == Some(&JsonValue::Bool(true))
         }),
         &said(&ran),
     );
@@ -1837,6 +1838,14 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["layout", "path", "change-uuid", "a.txt", made]);
     checked.exits("a path already naming the entry is refused", &ran, 191);
 
+    let ran = rola.run(dir, &["retrack", "a.txt", made]);
+    checked.exits("recording the entry the path records already is refused", &ran, 251);
+    checked.stderr_has(
+        "the refusal says the entry is the one it records",
+        &ran,
+        "already records",
+    );
+
     let ran = rola.run(dir, &["layout", "path", "change-uuid", "a.txt", &b]);
     checked.exits("an entry another path names is refused", &ran, 10);
 
@@ -1849,8 +1858,9 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     );
     checked.exits("a fetched copy is not a Layout to change", &ran, 190);
 
-    // What `--change-upstream` refuses before anything is read.
-    let ran = rola.run(dir, &["retrack", "a.txt", "--change-upstream", &b]);
+    // What a target refuses before anything is read: an entry another path records, an entry nothing
+    // holds, and a fork given a target as well.
+    let ran = rola.run(dir, &["retrack", "a.txt", &b]);
     checked.exits("an entry another path records is refused", &ran, 251);
     checked.stderr_has(
         "the refusal names the path that records it",
@@ -1860,19 +1870,21 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     let ran = rola.run(
         dir,
-        &[
-            "retrack",
-            "a.txt",
-            "--change-upstream",
-            "00000000-0000-0000-0000-00000000dead",
-        ],
+        &["retrack", "a.txt", "00000000-0000-0000-0000-00000000dead"],
     );
     checked.exits("an entry nothing holds is refused", &ran, 251);
 
-    let ran = rola.run(dir, &["retrack", "a.txt", "--fork", "--until=-1"]);
-    checked.exits("a fork and a version level are refused together", &ran, 251);
+    let ran = rola.run(dir, &["retrack", "a.txt", "--fork", &top]);
+    checked.exits("a fork and a target are refused together", &ran, 251);
+    checked.stderr_has("the refusal names the fork", &ran, "--fork");
 
-    let ran = rola.run(dir, &["retrack", "a.txt", "--change-upstream", "art/none.psd"]);
+    // A step count is a word of the command line, and one written with a dash is read as a flag: the
+    // run that wrote it is told the spelling that reads.
+    let ran = rola.run(dir, &["retrack", "a.txt", "-1"]);
+    checked.exits("a step count written with a dash is refused", &ran, 251);
+    checked.stderr_has("the refusal names the spelling that reads", &ran, "~1");
+
+    let ran = rola.run(dir, &["retrack", "a.txt", "art/none.psd"]);
     checked.exits("a path of a Vault's Layout needs a Vault tracked", &ran, 251);
     checked.stderr_has("the refusal says no Vault is tracked", &ran, "tracks no Vault");
 
@@ -1885,11 +1897,21 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
         &dir.join(".rola/cache/readonly-layouts/vault/truth"),
     );
 
+    // A Vault's name is no longer a target: what names an entry is a `Uuid` or a path of the Vault's
+    // Layout, and a word that is neither is looked for as a path of that Layout.
+    let ran = rola.run(dir, &["retrack", "a.txt", "origin"]);
+    checked.exits("a Vault's name is not a target", &ran, 251);
+    checked.stderr_has(
+        "the refusal reads it as a path of the Vault's Layout",
+        &ran,
+        "names no path",
+    );
+
     // The Uuid the copy names is one this Layout holds at no path, and it records what the copy
     // records: the Uuid form is read from the copy without the Vault being reached for.
     let ran = rola.run(dir, &["retrack", "a.txt", "--fork"]);
     checked.exits("the path's entry is forked away from the copy's", &ran, 0);
-    let ran = rola.run(dir, &["retrack", "a.txt", "--change-upstream", made]);
+    let ran = rola.run(dir, &["retrack", "a.txt", made]);
     checked.exits("an entry the copy holds is recorded", &ran, 0);
     checked.wants(
         "the path records the copy's entry at the version the copy records",
@@ -1901,20 +1923,11 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // Another chain is a jump, which a run has to say it means before the content is switched.
     let ran = rola.run(dir, &["retrack", "b.txt", "--fork"]);
     checked.exits("the other file's entry is forked away from the copy's", &ran, 0);
-    let ran = rola.run(dir, &["retrack", "a.txt", "--change-upstream", "b.txt"]);
+    let ran = rola.run(dir, &["retrack", "a.txt", "b.txt"]);
     checked.exits("a version on another chain needs the jump allowed", &ran, 251);
     checked.stderr_has("the refusal names the way past it", &ran, "--allow-jump");
 
-    let ran = rola.run(
-        dir,
-        &[
-            "retrack",
-            "a.txt",
-            "--change-upstream",
-            "b.txt",
-            "--allow-jump",
-        ],
-    );
+    let ran = rola.run(dir, &["retrack", "a.txt", "b.txt", "--allow-jump"]);
     checked.exits("the jump is taken when it is allowed", &ran, 0);
     checked.wants(
         "the content is the version the copy records, and the file names its entry",
@@ -1926,17 +1939,12 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // A copy that is not here is not read, and a run that may not fetch is refused rather than
     // answered with an entry it never saw.
     fs::remove_dir_all(dir.join(".rola/cache")).expect("the copy taken away");
-    let ran = rola.run(
-        dir,
-        &[
-            "retrack",
-            "a.txt",
-            "--change-upstream",
-            "b.txt",
-            "--offline",
-        ],
+    let ran = rola.run(dir, &["retrack", "a.txt", "b.txt", "--offline"]);
+    checked.exits(
+        "a copy that is not here and may not be fetched is refused",
+        &ran,
+        252,
     );
-    checked.exits("a copy that is not here and may not be fetched is refused", &ran, 252);
 }
 
 /// Copies a directory and everything under it, which is the shape a fetched Layout is laid down in.
