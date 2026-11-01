@@ -11,6 +11,7 @@
 //! command itself.
 
 use librorolala::layout::Layout;
+use librorolala::status::tracked_vault;
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vcs::{VCSIndex, VCSIndexObject};
 use mingling::{
@@ -284,6 +285,45 @@ pub fn layout_orphan_uuids(layout: &Layout) -> Vec<String> {
 
     ids.sort();
     ids
+}
+
+/// The words `rola retrack --change-upstream` may be given, as far as the run can know them.
+///
+/// What it names is another entry to record: a `Uuid` this Layout holds at no path, or a path or a
+/// `Uuid` of the fetched copy of the Vault's own Layout. Nothing is fetched here — a copy that is not
+/// here offers nothing — since a completion must not reach anywhere for what it offers.
+#[must_use]
+pub fn change_upstream_words(workspace: &ResWorkspace) -> Vec<String> {
+    let Some(held) = workspace.as_ref() else {
+        return Vec::new();
+    };
+
+    let layout = held.layout_if_there().ok().flatten();
+    let mut words = layout.as_ref().map(layout_orphan_uuids).unwrap_or_default();
+
+    if let Some(vault) = tracked_vault(held)
+        && let Some(dir) = readonly_layout_copy(held, &vault, VAULT_LAYOUT_NAME)
+        && let Ok(copy) = Layout::open_existing(&dir)
+    {
+        words.extend(
+            copy.paths()
+                .into_iter()
+                .map(|(path, _)| path.as_str().to_owned()),
+        );
+
+        for (id, _) in copy.entries() {
+            if layout
+                .as_ref()
+                .is_none_or(|layout| layout.path_of(id).is_none())
+            {
+                words.push(id.to_string());
+            }
+        }
+    }
+
+    words.sort();
+    words.dedup();
+    words
 }
 
 /// Which of the index's objects a completion is after.

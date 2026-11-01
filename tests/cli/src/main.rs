@@ -43,10 +43,11 @@ fn main() {
     let claimed = sandbox.join("claimed");
     let cached = sandbox.join("cached");
     let ignoreme = sandbox.join("ignoreme");
+    let switching = sandbox.join("switching");
 
     for dir in [
         &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed, &cached,
-        &ignoreme,
+        &ignoreme, &switching,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -85,6 +86,7 @@ fn main() {
     held_by_another(&rola, &held, &mut checked);
     ownership(&rola, &claimed, &mut checked);
     empty_cache(&rola, &cached, &mut checked);
+    uuid_switch(&rola, &switching, &mut checked);
 
     checked.report();
 }
@@ -1698,6 +1700,243 @@ fn ownership(rola: &Rola, dir: &Path, checked: &mut Checked) {
         &ran,
         191,
     );
+}
+
+/// A field of the entry a Layout records at `path`, from `rola layout entries --json`.
+fn entry_field(rola: &Rola, dir: &Path, path: &str, field: &str) -> Option<String> {
+    let ran = rola.run(dir, &["layout", "entries", "--json"]);
+    let value = json(&ran)?;
+    let entries = value.get("entries")?.as_array()?;
+    let entry = entries
+        .iter()
+        .find(|entry| entry.get("path").and_then(JsonValue::as_str) == Some(path))?;
+
+    entry
+        .get(field)
+        .and_then(JsonValue::as_str)
+        .map(str::to_owned)
+}
+
+/// Whether an entry of the Layout is recorded under `uuid`, at any path.
+fn entry_named(rola: &Rola, dir: &Path, uuid: &str) -> bool {
+    let ran = rola.run(dir, &["layout", "entries", "--json"]);
+
+    json(&ran)
+        .and_then(|value| {
+            value
+                .get("entries")
+                .and_then(JsonValue::as_array)
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .any(|entry| entry.get("uuid").and_then(JsonValue::as_str) == Some(uuid))
+                })
+        })
+        .unwrap_or(false)
+}
+
+/// Changing the `Uuid` a path records, and giving it a new one.
+///
+/// The fixture is the shape these commands need: a Workspace with an account, a file recorded twice
+/// so its entry has a chain, another file on a chain of its own, and the copy of a Vault's Layout a
+/// fetch would leave — which is what a `--change-upstream` word naming an entry upstream is read
+/// from, without a Vault being served.
+fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to change Uuids in", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "bob"]);
+    checked.exits("the work acts as an account that is installed", &ran, 0);
+
+    fs::write(dir.join("a.txt"), "one").expect("a file to record");
+    let ran = rola.run(dir, &["track", "a.txt", "--message", "first", "--no-editor"]);
+    checked.exits("a file is recorded", &ran, 0);
+
+    fs::write(dir.join("a.txt"), "two").expect("the second reading of the file");
+    let ran = rola.run(dir, &["track", "a.txt", "--message", "second", "--no-editor"]);
+    checked.exits("the file is recorded again", &ran, 0);
+
+    fs::write(dir.join("b.txt"), "bee").expect("a file on a chain of its own");
+    let ran = rola.run(dir, &["track", "b.txt", "--message", "other", "--no-editor"]);
+    checked.exits("a second file is recorded", &ran, 0);
+
+    let a = entry_field(rola, dir, "a.txt", "uuid").expect("the entry the file records");
+    let top = entry_field(rola, dir, "a.txt", "version").expect("the version the entry records");
+    let b = entry_field(rola, dir, "b.txt", "uuid").expect("the entry the other file records");
+
+    // The version under the top one, which is what a first `retrack` reaches and what an entry made
+    // by hand is put at.
+    let ran = rola.run(dir, &["retrack", "a.txt"]);
+    checked.exits("the file is taken back one version", &ran, 0);
+    let bottom = entry_field(rola, dir, "a.txt", "version").expect("the version it went back to");
+
+    let ran = rola.run(dir, &["retrack", "a.txt", "--until", &top, "--allow-jump"]);
+    checked.exits("the file is put back at the version it was at", &ran, 0);
+
+    // A fork records a fresh `Uuid` for what the path records now, and leaves the file alone.
+    let ran = rola.run(dir, &["--json", "retrack", "a.txt", "--fork"]);
+    checked.exits("a file's entry is forked", &ran, 0);
+    checked.wants(
+        "a fork answers with the two Uuids and the version",
+        json(&ran).is_some_and(|value| {
+            value.get("from").and_then(JsonValue::as_str) == Some(a.as_str())
+                && value.get("to").and_then(JsonValue::as_str).is_some_and(|to| to != a)
+                && value.get("version").and_then(JsonValue::as_str) == Some(top.as_str())
+                && value.get("forked") == Some(&JsonValue::Bool(true))
+                && value.get("switched") == Some(&JsonValue::Bool(false))
+        }),
+        &said(&ran),
+    );
+    let forked = entry_field(rola, dir, "a.txt", "uuid").expect("the entry the fork records");
+    checked.wants(
+        "the path records the new Uuid at the version it was at",
+        forked != a
+            && entry_field(rola, dir, "a.txt", "version").as_deref() == Some(top.as_str()),
+        &said(&ran),
+    );
+    checked.wants(
+        "the file on disk is what it held",
+        fs::read_to_string(dir.join("a.txt")).is_ok_and(|it| it == "two"),
+        &said(&ran),
+    );
+    checked.wants(
+        "the Uuid that was recorded is gone from the Layout",
+        !entry_named(rola, dir, &a),
+        &said(&ran),
+    );
+
+    // What the command writes is the Layout and nothing else: the file still holds what it held.
+    let ran = rola.run(dir, &["layout", "path", "new-uuid", "a.txt"]);
+    checked.exits("a path's entry is given a new Uuid", &ran, 0);
+    let renewed = entry_field(rola, dir, "a.txt", "uuid").expect("the entry it records now");
+    checked.wants(
+        "the renewed Uuid is another one, at the version it recorded",
+        renewed != forked
+            && entry_field(rola, dir, "a.txt", "version").as_deref() == Some(top.as_str()),
+        &said(&ran),
+    );
+    checked.wants(
+        "the file was not touched",
+        fs::read_to_string(dir.join("a.txt")).is_ok_and(|it| it == "two"),
+        &said(&ran),
+    );
+
+    // A path is given to an entry that holds no path yet, and holds what that entry holds.
+    let made = "00000000-0000-0000-0000-0000000000c3";
+    let ran = rola.run(dir, &["layout", "entry", "create", made, &bottom]);
+    checked.exits("an entry is made by hand to give the path", &ran, 0);
+    let ran = rola.run(dir, &["layout", "path", "change-uuid", "a.txt", made]);
+    checked.exits("the path is made to name that entry", &ran, 0);
+    checked.wants(
+        "the path names the entry, at the version it holds",
+        entry_field(rola, dir, "a.txt", "uuid").as_deref() == Some(made)
+            && entry_field(rola, dir, "a.txt", "version").as_deref() == Some(bottom.as_str()),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["layout", "path", "change-uuid", "a.txt", made]);
+    checked.exits("a path already naming the entry is refused", &ran, 191);
+
+    let ran = rola.run(dir, &["layout", "path", "change-uuid", "a.txt", &b]);
+    checked.exits("an entry another path names is refused", &ran, 10);
+
+    let ran = rola.run(dir, &["layout", "path", "change-uuid", "none.txt", made]);
+    checked.exits("a path the Layout does not name is refused", &ran, 11);
+
+    let ran = rola.run(
+        dir,
+        &["layout", "path", "new-uuid", "a.txt", "--layout", "truth@origin"],
+    );
+    checked.exits("a fetched copy is not a Layout to change", &ran, 190);
+
+    // What `--change-upstream` refuses before anything is read.
+    let ran = rola.run(dir, &["retrack", "a.txt", "--change-upstream", &b]);
+    checked.exits("an entry another path records is refused", &ran, 251);
+    checked.stderr_has(
+        "the refusal names the path that records it",
+        &ran,
+        "b.txt",
+    );
+
+    let ran = rola.run(
+        dir,
+        &[
+            "retrack",
+            "a.txt",
+            "--change-upstream",
+            "00000000-0000-0000-0000-00000000dead",
+        ],
+    );
+    checked.exits("an entry nothing holds is refused", &ran, 251);
+
+    let ran = rola.run(dir, &["retrack", "a.txt", "--fork", "--until=-1"]);
+    checked.exits("a fork and a version level are refused together", &ran, 251);
+
+    let ran = rola.run(dir, &["retrack", "a.txt", "--change-upstream", "art/none.psd"]);
+    checked.exits("a path of a Vault's Layout needs a Vault tracked", &ran, 251);
+    checked.stderr_has("the refusal says no Vault is tracked", &ran, "tracks no Vault");
+
+    // The copy of a Vault's Layout a `layout fetch` leaves, written where a reader looks for it. The
+    // `TRACK` file is written directly rather than by `layout set-track`, since what is checked here
+    // is read from the copy alone and no Vault is served.
+    fs::write(dir.join(".rola/layout/TRACK"), "vault\n").expect("the tracked Vault");
+    copy_into(
+        &dir.join(".rola/layout"),
+        &dir.join(".rola/cache/readonly-layouts/vault/truth"),
+    );
+
+    // The Uuid the copy names is one this Layout holds at no path, and it records what the copy
+    // records: the Uuid form is read from the copy without the Vault being reached for.
+    let ran = rola.run(dir, &["retrack", "a.txt", "--fork"]);
+    checked.exits("the path's entry is forked away from the copy's", &ran, 0);
+    let ran = rola.run(dir, &["retrack", "a.txt", "--change-upstream", made]);
+    checked.exits("an entry the copy holds is recorded", &ran, 0);
+    checked.wants(
+        "the path records the copy's entry at the version the copy records",
+        entry_field(rola, dir, "a.txt", "uuid").as_deref() == Some(made)
+            && entry_field(rola, dir, "a.txt", "version").as_deref() == Some(bottom.as_str()),
+        &said(&ran),
+    );
+
+    // Another chain is a jump, which a run has to say it means before the content is switched.
+    let ran = rola.run(dir, &["retrack", "b.txt", "--fork"]);
+    checked.exits("the other file's entry is forked away from the copy's", &ran, 0);
+    let ran = rola.run(dir, &["retrack", "a.txt", "--change-upstream", "b.txt"]);
+    checked.exits("a version on another chain needs the jump allowed", &ran, 251);
+    checked.stderr_has("the refusal names the way past it", &ran, "--allow-jump");
+
+    let ran = rola.run(
+        dir,
+        &[
+            "retrack",
+            "a.txt",
+            "--change-upstream",
+            "b.txt",
+            "--allow-jump",
+        ],
+    );
+    checked.exits("the jump is taken when it is allowed", &ran, 0);
+    checked.wants(
+        "the content is the version the copy records, and the file names its entry",
+        fs::read_to_string(dir.join("a.txt")).is_ok_and(|it| it == "bee")
+            && entry_field(rola, dir, "a.txt", "uuid").as_deref() == Some(b.as_str()),
+        &said(&ran),
+    );
+
+    // A copy that is not here is not read, and a run that may not fetch is refused rather than
+    // answered with an entry it never saw.
+    fs::remove_dir_all(dir.join(".rola/cache")).expect("the copy taken away");
+    let ran = rola.run(
+        dir,
+        &[
+            "retrack",
+            "a.txt",
+            "--change-upstream",
+            "b.txt",
+            "--offline",
+        ],
+    );
+    checked.exits("a copy that is not here and may not be fetched is refused", &ran, 252);
 }
 
 /// Copies a directory and everything under it, which is the shape a fetched Layout is laid down in.

@@ -9,6 +9,7 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 1. **\[BREAKING!\]** [`app`] [`rola`] [`sync`] Submit a new file under the path the work tracks it at — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-sync-submit-a-new-file-under-the-path-the-work-tracks-it-at)
 2. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry — [See details](dev/CHANGELOG-DETAILS.md#2-breaking-modules-daemon-move-remote-path-move-a-path-in-a-vaults-layout-without-holding-the-entry)
 3. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names — [See details](dev/CHANGELOG-DETAILS.md#3-app-rola-layout-change-or-renew-the-uuid-a-layout-path-names)
+4. [`app`] [`rola`] [`retrack`] Switch the Uuid a file records, or give it a new one — [See details](dev/CHANGELOG-DETAILS.md#4-app-rola-retrack-switch-the-uuid-a-file-records-or-give-it-a-new-one)
 
 ## Refactor
 

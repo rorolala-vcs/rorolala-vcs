@@ -59,6 +59,35 @@ refuses it, by the read-only name `truth@VAULT`. The Layout's own batch writes g
 need: an entry can be removed in the same batch that binds its path to another, which is one write
 and no moment where the path names nothing.
 
+### 4. [`app`] [`rola`] [`retrack`] Switch the Uuid a file records, or give it a new one
+
+`rola retrack` no longer only moves a version pointer: `--change-upstream <REF>` records another
+entry's `Uuid` for the file, and `--fork` gives its entry a fresh `Uuid` holding what it records now.
+Both are a change of which entry the path is, so the entry the path named is dropped — anything the
+Vault records for it stays upstream — and the change is written as one batch, with no moment where
+the path names nothing.
+
+`REF` is a `Uuid` first, and a path of the Vault's own Layout after: a `Uuid` is looked for in the
+fetched copy of that Layout and then among the entries this Layout holds at no path, and a path is
+read from the fetched copy, which is fetched when it is not here and the run is online. A local path
+is not a way to name one, since the local path is what is being changed. The entry recorded must
+hold no path of its own, and it must record a version.
+
+What happens to the file follows how the version the path records stands beside the version the
+entry records. The same version, or one the path's version is ahead of, is a change of identity
+only: the file is left as it is and unrecorded changes in it are kept. A version behind it is
+refused unless `--force` writes that version's content over the file or `--only-index` records the
+entry and leaves the file alone. Two chains are refused until `--allow-jump` says the jump is meant,
+and then the content is switched, or `--only-index` records the entry without touching the file. A
+file with unrecorded changes is refused before a content switch unless `--force`, and a merge
+waiting for the file is ended by `--force` as it is by a retrack of a version.
+
+`--fork` needs none of that: it records a fresh `Uuid` with what the path records, and leaves the
+file, the index and the Vault alone. It is refused while a merge waits for the file unless `--force`
+ends that merge. Neither form adds an exit code; the codes the command already answers with carry
+every refusal. What the two write is the Workspace's own Layout, so a fetched copy of a Vault's
+Layout is refused as it is for every command that changes a Layout.
+
 ## Refactor
 
 ### 1. **\[BREAKING!\]** [`app`] [`rola`] [`layout`] Remove the `.rolayout` file format

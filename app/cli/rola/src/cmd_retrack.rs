@@ -32,7 +32,7 @@ use std::str::FromStr as _;
 use librorolala::auth::Account;
 use librorolala::daemon::{Chain, action_bring_remote_index_async, action_fetch_layout};
 use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{Layout, LayoutPath};
+use librorolala::layout::{Layout, LayoutPath, MutableData};
 use librorolala::status::{tracked_vault, variant_moves};
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
 use librorolala::tree_analyze::{Cache, cache_path, entry_of, tree_diff};
@@ -66,8 +66,8 @@ use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::checkout::remember;
 use crate::complete::{
-    IndexObject, filling_flag, index_hashes, index_keys, offer, positional, strip_written,
-    typing_flag, vault_names,
+    IndexObject, change_upstream_words, filling_flag, index_hashes, index_keys, offer, positional,
+    strip_written, typing_flag, vault_names,
 };
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_ERR_RETRACK_DIRTY, EC_HELP};
@@ -77,7 +77,7 @@ use crate::hash::{HashMiss, resolve as resolve_hash};
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutShouldInWorkspace, chosen, failed as layout_failed, readonly_layout_copy,
-    remote_spec,
+    remote_spec, switch_entry,
 };
 
 /// How alike two text files have to be to count as the same file moved.
@@ -93,6 +93,13 @@ const ARG_ONLY_INDEX: PickerArg<'static, Flag> = arg![only_index: Flag];
 
 /// Move the pointer to a version that is not on the way back to where it is now.
 const ARG_ALLOW_JUMP: PickerArg<'static, Flag> = arg![allow_jump: Flag];
+
+/// Record another `Uuid` for the file, named by a `Uuid` or a path of the Vault's own Layout.
+const ARG_CHANGE_UPSTREAM: PickerArg<'static, Option<String>> =
+    arg![change_upstream: Option<String>];
+
+/// Record a fresh `Uuid` for the file, with what it records now.
+const ARG_FORK: PickerArg<'static, Flag> = arg![fork: Flag];
 
 #[help(buffer)]
 pub fn help_retrack(_: EntryRetrack, ec: &mut ResExitCode) {
@@ -111,10 +118,13 @@ pub fn desc_retrack() -> Description {
 /// the pointer goes: a level, a version the index holds, or a Vault whose own Layout records one.
 /// A level such as `-1` begins with a dash, so it is written with the flag — `--until=-1` — rather
 /// than as a word of its own, which would be read as an option; what is offered here are the words
-/// that do stand on their own, the versions and the Vaults.
+/// that do stand on their own, the versions and the Vaults. `--change-upstream` names the entry to
+/// record instead: one this Layout holds at no path, or a path or entry of the fetched copy of the
+/// Vault's Layout it tracks.
 #[completion(EntryRetrack)]
 pub fn complete_retrack(
     ctx: ShellContext,
+    workspace: &mut LazyRes<ResWorkspace>,
     index: &mut LazyRes<ResVCSIndex>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
@@ -125,6 +135,10 @@ pub fn complete_retrack(
         return offer(&ctx, names);
     }
 
+    if filling_flag(&ctx, &ARG_CHANGE_UPSTREAM) {
+        return offer(&ctx, change_upstream_words(workspace.get_ref()));
+    }
+
     if typing_flag(&ctx) {
         return strip_written(
             &ctx,
@@ -132,6 +146,8 @@ pub fn complete_retrack(
                 ARG_UNTIL: t!("retrack.complete.until"),
                 ARG_ONLY_INDEX: t!("retrack.complete.only_index"),
                 ARG_ALLOW_JUMP: t!("retrack.complete.allow_jump"),
+                ARG_CHANGE_UPSTREAM: t!("retrack.complete.change_upstream"),
+                ARG_FORK: t!("retrack.complete.fork"),
             },
         );
     }
@@ -187,10 +203,13 @@ pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
         .pick(ARG_UNTIL)
         .pick(ARG_ONLY_INDEX)
         .pick(ARG_ALLOW_JUMP)
+        .pick(ARG_CHANGE_UPSTREAM)
+        .pick(ARG_FORK)
         .pick_or_route(arg![Vec<String>], || ErrorRetrackNoFile.to_chain())
         .pick(&UNMATCHED)
         .to_result();
-    let (until, only_index, allow_jump, mut files, unmatched) = match picked {
+    let (until, only_index, allow_jump, change_upstream, fork, mut files, unmatched) = match picked
+    {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -217,9 +236,22 @@ pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
         return ErrorRetrackFlags.into();
     }
 
+    // `--change-upstream` and `--fork` are two ways of changing the `Uuid` a path records, and a
+    // version level is a way of moving within one entry, so at most one of the three is a run.
+    let mode = match (change_upstream, matches!(fork, Flag::Active)) {
+        (Some(_), true) => return ErrorRetrackMode.into(),
+        (Some(reference), false) => Some(UuidMode::Change { reference }),
+        (None, true) => Some(UuidMode::Fork),
+        (None, false) => None,
+    };
+    if mode.is_some() && until.is_some() {
+        return ErrorRetrackMode.into();
+    }
+
     StateRetrack {
         file,
         until,
+        mode,
         only_index,
         allow_jump: matches!(allow_jump, Flag::Active),
         force: **force,
@@ -234,12 +266,25 @@ pub struct StateRetrack {
     file: String,
     /// Where the pointer goes, as it was written; one version back when it was not said.
     until: Option<String>,
+    /// Whether the run changes the `Uuid` the path records, and how; none when it moves a version.
+    mode: Option<UuidMode>,
     /// Whether the pointer moves and the file on disk is left alone.
     only_index: bool,
     /// Whether a version off the way back may be jumped to.
     allow_jump: bool,
     /// Whether changes that were never recorded, and a merge in progress, are gone past anyway.
     force: bool,
+}
+
+/// What a run that changes the `Uuid` a path records was asked for.
+enum UuidMode {
+    /// Record the entry `reference` names: a `Uuid`, or a path of the Vault's own Layout.
+    Change {
+        /// What was written after `--change-upstream`.
+        reference: String,
+    },
+    /// Record a fresh `Uuid`, holding what the path records now.
+    Fork,
 }
 
 #[chain(routeify)]
@@ -257,16 +302,21 @@ pub fn handle_retrack(
     let StateRetrack {
         file,
         until,
+        mode,
         only_index,
         allow_jump,
         force,
     } = state;
 
     // The level is read before anything is looked at, so a run that misspelled it is told that
-    // rather than a complaint about a file it would have refused for another reason.
-    let level = until_of(until.as_deref(), || {
-        index_keys(index.get_ref().as_ref(), IndexObject::Version)
-    })?;
+    // rather than a complaint about a file it would have refused for another reason. A run that
+    // changes the `Uuid` a path records has no level to read.
+    let level = match &mode {
+        None => Some(until_of(until.as_deref(), || {
+            index_keys(index.get_ref().as_ref(), IndexObject::Version)
+        })?),
+        Some(_) => None,
+    };
     let text = until.unwrap_or_else(|| "-1".to_owned());
 
     let layout = chosen(workspace.get_ref(), vault.get_ref(), None)?;
@@ -305,6 +355,33 @@ pub fn handle_retrack(
         Ok(runtime) => runtime,
         Err(error) => return failed(error.to_string()),
     };
+
+    // A run that changes the `Uuid` a path records takes the entry it is to record instead of a
+    // level, and is done before anything a level is read for.
+    if let Some(mode) = mode {
+        return switch_uuid(Switching {
+            mode: &mode,
+            layout: &layout,
+            path: &path,
+            old: id,
+            data: &data,
+            held,
+            root: &root,
+            vcs,
+            runtime: &runtime,
+            storage,
+            remote,
+            current,
+            offline: **offline,
+            concurrency: **concurrency,
+            only_index,
+            allow_jump,
+            force,
+        });
+    }
+
+    // UNWRAP: a run that names no `Uuid` mode is a run that names a level, and one was read above.
+    let level = level.expect("a version-mode run reads its level");
 
     let here = read_version(vcs, &runtime, data.version())?;
     let chain = ancestors(vcs, &runtime, &here)?;
@@ -454,16 +531,17 @@ pub fn handle_retrack(
         // Only a forced run reaches here with a merge waiting, and forcing it is what ends it: the
         // variant file is the content that was just replaced, so the record and the file go with it.
         if let Some(pending) = &pending {
-            end_merge(
-                &mut merging,
+            let disk = variant_disk(
+                &merging,
                 &layout,
                 &root,
                 vcs,
                 &runtime,
                 &diff.untagged,
-                id,
                 pending,
-            )?;
+            );
+
+            end_merge(&mut merging, &root, id, disk)?;
         }
 
         if let Some(sources) = &sources {
@@ -495,6 +573,603 @@ enum Action {
     Pointer,
     /// Write the version's content back over the file, the pointer moving with it.
     Content,
+}
+
+/// What a run that changes the `Uuid` a path records was asked for, and what it was asked about.
+// What the run is to do is a handful of independent answers it was given — leaving the file alone,
+// jumping between chains, going past unrecorded changes — and making each a two-variant enum would
+// say no more than the bool does while writing every use of it out twice.
+#[allow(clippy::struct_excessive_bools)]
+struct Switching<'a> {
+    /// The mode the run named.
+    mode: &'a UuidMode,
+    /// The Layout being worked in.
+    layout: &'a Layout,
+    /// Where the entry sits in the Layout.
+    path: &'a LayoutPath,
+    /// The `Uuid` the path names now.
+    old: Uuid,
+    /// What that entry holds now.
+    data: &'a MutableData,
+    /// The Workspace the run is in.
+    held: &'a Workspace,
+    /// The Workspace's root, where the working tree is.
+    root: &'a Path,
+    /// The version control index.
+    vcs: &'a VCSIndex,
+    /// The runtime the index is waited on.
+    runtime: &'a tokio::runtime::Runtime,
+    /// The store the content is taken from.
+    storage: &'a mut LazyRes<ResRorolalaStorage>,
+    /// The Vault the run reaches for.
+    remote: &'a mut LazyRes<ResCurrentRemoteVault>,
+    /// The account the run acts as.
+    current: &'a mut LazyRes<ResCurrentAccount>,
+    /// Whether the run may reach a Vault at all.
+    offline: bool,
+    /// How many units of content a transfer carries at a time.
+    concurrency: usize,
+    /// Whether the file on disk is to be left alone.
+    only_index: bool,
+    /// Whether a version off the way to the other one may be jumped to.
+    allow_jump: bool,
+    /// Whether unrecorded changes and a merge in progress are gone past anyway.
+    force: bool,
+}
+
+/// Records another `Uuid` for the path in `asked`, from `--change-upstream` or `--fork`.
+///
+/// What the path records is dropped and the entry it is to record takes its place, in one batch: an
+/// entry is its `Uuid`, so the two are one change and not a removal and a creation a reader could
+/// meet between. Nothing else is touched — the index, the stores and the working tree know nothing
+/// of a Layout's paths — except the file the run is told to write back or to leave alone.
+///
+/// What is read is read before anything is written, so a refused run leaves the Layout, the tree and
+/// the merge as they were.
+///
+/// # Errors
+///
+/// Renders [`ErrorRetrackReference`] when the entry to record is not one the run can name,
+/// [`ErrorRetrackSwitch`] when how the two versions stand refuses the change, [`ErrorRetrackModified`]
+/// when the file has changes the Layout does not name, [`ErrorRetrackMerging`] when a variant is
+/// waiting for the file, [`ErrorOffline`] when a version or a copy is not here and the run is
+/// offline, [`ErrorRetrackFailed`] when the store, the index or the Layout refuses, and
+/// [`ErrorRetrackLevel`] when a version the run needs cannot be brought.
+fn switch_uuid(asked: Switching<'_>) -> Next {
+    let Switching {
+        mode,
+        layout,
+        path,
+        old,
+        data,
+        held,
+        root,
+        vcs,
+        runtime,
+        storage,
+        remote,
+        current,
+        offline,
+        concurrency,
+        only_index,
+        allow_jump,
+        force,
+    } = asked;
+
+    let mut merging = Merging::read(root);
+    let pending = merging.at(old).cloned();
+
+    // A variant waiting for the file is a merge that was never recorded, and an entry recorded under
+    // another `Uuid` under it would leave the merge with a file it does not match. `--only-index`
+    // cannot end one, so only `--force` goes past this.
+    if let Some(pending) = &pending
+        && !force
+    {
+        return ErrorRetrackMerging {
+            path: path.as_str().to_owned(),
+            variant: hex(*pending.variant()),
+        }
+        .into();
+    }
+
+    // What the path is to record, and what that entry holds: a fresh `Uuid` with what the path
+    // records now, or the entry a `--change-upstream` word names.
+    let (target, source) = match mode {
+        UuidMode::Fork => (Uuid::new_v4(), data.clone()),
+        UuidMode::Change { reference } => {
+            match target_of(reference, layout, held, old, remote, current, offline) {
+                Ok(target) => (target.id, target.data),
+                Err(next) => return next,
+            }
+        }
+    };
+
+    // The file is left alone unless the versions say otherwise: an entry that records the same
+    // version, or one ahead of what the target records, keeps the work on disk as it is.
+    let action = match mode {
+        UuidMode::Fork => SwitchAction::Keep,
+        UuidMode::Change { .. } => {
+            match stand_of(data, &source, vcs, runtime, held, remote, current, offline) {
+                Ok(relation) => match switch_action(relation, only_index, allow_jump, force) {
+                    Ok(action) => action,
+                    Err(SwitchRefusal::Behind) => {
+                        return ErrorRetrackSwitch {
+                            path: path.as_str().to_owned(),
+                            kind: RetrackSwitchError::Behind,
+                        }
+                        .into();
+                    }
+                    Err(SwitchRefusal::NotOnChain) => {
+                        return ErrorRetrackSwitch {
+                            path: path.as_str().to_owned(),
+                            kind: RetrackSwitchError::NotOnChain,
+                        }
+                        .into();
+                    }
+                },
+                Err(next) => return next,
+            }
+        }
+    };
+
+    // What the new entry records: the version the path records now when that is what the file
+    // holds, and the version the entry to record holds when the content is switched.
+    let version = match action {
+        SwitchAction::Keep => data.version(),
+        SwitchAction::Pointer | SwitchAction::Content => source.version(),
+    };
+    let new_data = switched_data(&source, data, version);
+
+    // Whether the file is to be written, and where the variant a merge is waiting for lies, are
+    // both read from the tree as it stands before the Layout changes: a tree read after the change
+    // has no entry naming the variant's file, so a move of one is not found again.
+    let diff = if pending.is_some() || action == SwitchAction::Content {
+        match tree_diff(layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
+            Ok(diff) => Some(diff),
+            Err(error) => return failed(error.to_string()),
+        }
+    } else {
+        None
+    };
+    let pending_disk = match (&pending, &diff) {
+        (Some(pending), Some(diff)) => variant_disk(
+            &merging,
+            layout,
+            root,
+            vcs,
+            runtime,
+            &diff.untagged,
+            pending,
+        ),
+        _ => None,
+    };
+
+    // Changes the Layout does not name are the run's to discard or to leave alone: a content switch
+    // over them is what `--force` is for, and what a run without it is refused for.
+    if action == SwitchAction::Content
+        && !force
+        && diff
+            .as_ref()
+            .is_some_and(|diff| diff.modified.contains(path))
+    {
+        return ErrorRetrackModified {
+            path: path.as_str().to_owned(),
+        }
+        .into();
+    }
+
+    // The Layout is written before the content, so a run whose store is short of it leaves a record
+    // naming a version the file does not hold — which `rola status` reports as a change, and a
+    // second `rola retrack` puts right.
+    if let Err(error) = switch_entry(layout, path, target, new_data) {
+        return layout_failed(&error);
+    }
+
+    let switched = match action {
+        SwitchAction::Keep => false,
+        SwitchAction::Pointer => {
+            // What the file is to agree with now: the content the version it records holds, when
+            // that version can be read, and nothing at all when it cannot.
+            let agreed = read_version(vcs, runtime, version)
+                .ok()
+                .and_then(|version| stored_hash(vcs, runtime, &version).ok());
+
+            if let Err(next) = disagree(layout, root, path, agreed) {
+                return next;
+            }
+
+            false
+        }
+        SwitchAction::Content => {
+            let recorded = match content_of(vcs, runtime, version) {
+                Ok(recorded) => recorded,
+                Err(next) => return next,
+            };
+
+            // Content is read, and a Vault is bound to, only when the store here does not hold it.
+            let account = if holds(storage, runtime, recorded) {
+                None
+            } else {
+                let bound = match current.get_ref().must_bind() {
+                    Ok(bound) => bound,
+                    Err(next) => return next.into(),
+                };
+
+                match account_named(&bound, Some(held), None) {
+                    Ok(account) => Some(account),
+                    Err(next) => return next.into(),
+                }
+            };
+            let sources = match &account {
+                Some(account) => {
+                    let tracked = tracked_vault(held);
+                    let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
+                    let sources =
+                        match Sources::new(held, account, remote.get_ref(), primary, offline) {
+                            Ok(sources) => sources.with_concurrency(concurrency),
+                            Err(cause) => return failed(cause),
+                        };
+
+                    Some(sources)
+                }
+                None => None,
+            };
+
+            if let Err(next) = restore(
+                storage,
+                runtime,
+                layout,
+                root,
+                path,
+                recorded,
+                sources.as_ref(),
+            ) {
+                return next;
+            }
+
+            if let Some(sources) = &sources {
+                sources.report();
+            }
+
+            true
+        }
+    };
+
+    // Only a forced run reaches here with a merge waiting, and forcing it is what ends it: the merge
+    // was never recorded, so its record goes and the variant file it named goes with it.
+    if pending.is_some()
+        && let Err(next) = end_merge(&mut merging, root, old, pending_disk)
+    {
+        return next;
+    }
+
+    let number = read_version(vcs, runtime, version)
+        .ok()
+        .and_then(|version| runtime.block_on(vcs.version_num(&version)).ok());
+
+    ResultRetrackUuid {
+        path: path.as_str().to_owned(),
+        from: old.to_string(),
+        to: target.to_string(),
+        version: hex(version),
+        number,
+        forked: matches!(mode, UuidMode::Fork),
+        switched,
+    }
+    .into()
+}
+
+/// The `Uuid` a run that changes an entry's `Uuid` is to record, and what that entry holds.
+struct Target {
+    /// The `Uuid` the path is to record.
+    id: Uuid,
+    /// What it holds, from the copy of the Vault's Layout that has it or from this Layout.
+    data: MutableData,
+}
+
+/// Reads what the entry a `--change-upstream` word names is to be recorded as.
+///
+/// A word is a `Uuid` first, and a path of the Vault's own Layout after — a local path is not a way
+/// to name an entry here, since what is being changed is which entry the local path records. A
+/// `Uuid` needs no path and no fetch: one this Layout holds at no path is the entry to record, and
+/// the copy of the Vault's Layout is read only when it is here already. A path is read from that
+/// copy, fetched first when it is not here.
+fn target_of(
+    text: &str,
+    layout: &Layout,
+    held: &Workspace,
+    old: Uuid,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    offline: bool,
+) -> Result<Target, Next> {
+    let vault = tracked_vault(held);
+    let reference = reference_of(text).map_err(Into::<Next>::into)?;
+
+    let (id, source) = match reference {
+        Reference::Uuid(id) => {
+            // The copy is used when it is here, and never fetched for a `Uuid`: a `Uuid` gives no
+            // reason to reach anywhere, and the entry may be one this Layout holds at no path.
+            let copy = match &vault {
+                Some(name) => open_copy(held, name)?,
+                None => None,
+            };
+            let source = copy
+                .as_ref()
+                .and_then(|copy| copy.entry(id))
+                .or_else(|| layout.entry(id));
+
+            (id, source)
+        }
+        Reference::Path(path) => {
+            let Some(name) = vault else {
+                return Err(ErrorRetrackReference {
+                    reference: text.to_owned(),
+                    kind: RetrackReferenceError::NoVault,
+                }
+                .into());
+            };
+
+            let copy = if let Some(copy) = open_copy(held, &name)? {
+                copy
+            } else {
+                if offline {
+                    return Err(ErrorOffline.into());
+                }
+
+                fetch_copy(held, remote, current, &name)?;
+
+                match open_copy(held, &name)? {
+                    Some(copy) => copy,
+                    None => {
+                        return Err(failed(format!(
+                            "the copy of `{name}`'s Layout was fetched and is not here"
+                        )));
+                    }
+                }
+            };
+
+            let Some(id) = copy.id_of(&path) else {
+                return Err(ErrorRetrackReference {
+                    reference: text.to_owned(),
+                    kind: RetrackReferenceError::NotUpstream { vault: name },
+                }
+                .into());
+            };
+
+            let source = copy.entry(id);
+
+            (id, source)
+        }
+    };
+
+    // The entry the path records already is the one case every other check would be told apart
+    // from: it is named by a path — this one — so it is refused for being the entry it is.
+    if id == old {
+        return Err(ErrorRetrackReference {
+            reference: text.to_owned(),
+            kind: RetrackReferenceError::SameUuid {
+                uuid: id.to_string(),
+            },
+        }
+        .into());
+    }
+    if let Some(named) = layout.path_of(id) {
+        return Err(ErrorRetrackReference {
+            reference: text.to_owned(),
+            kind: RetrackReferenceError::Named {
+                uuid: id.to_string(),
+                path: named.as_str().to_owned(),
+            },
+        }
+        .into());
+    }
+
+    let Some(data) = source else {
+        return Err(ErrorRetrackReference {
+            reference: text.to_owned(),
+            kind: RetrackReferenceError::UnknownUuid {
+                uuid: id.to_string(),
+            },
+        }
+        .into());
+    };
+
+    // The root version is what an entry is at before anything was recorded for it, so an entry that
+    // records it records no version to switch to.
+    if data.version() == [0; 32] {
+        return Err(ErrorRetrackReference {
+            reference: text.to_owned(),
+            kind: RetrackReferenceError::NoVersion {
+                uuid: id.to_string(),
+            },
+        }
+        .into());
+    }
+
+    Ok(Target { id, data })
+}
+
+/// What a `--change-upstream` word was read as.
+enum Reference {
+    /// A `Uuid`, which needs no path to name an entry.
+    Uuid(Uuid),
+    /// A path of the Vault's own Layout.
+    Path(LayoutPath),
+}
+
+/// Reads a `--change-upstream` word as the one thing it names.
+///
+/// A `Uuid` is read first because it is the shape that names an entry without a path at all; every
+/// other word is a path of the Vault's own Layout, and one that is not a path either is refused
+/// rather than looked for.
+fn reference_of(text: &str) -> Result<Reference, ErrorRetrackReference> {
+    if let Ok(id) = Uuid::from_str(text) {
+        return Ok(Reference::Uuid(id));
+    }
+
+    LayoutPath::new(text)
+        .map(Reference::Path)
+        .map_err(|_| ErrorRetrackReference {
+            reference: text.to_owned(),
+            kind: RetrackReferenceError::NotAUuidOrPath,
+        })
+}
+
+/// Where the version a path records stands beside the version the entry it is to record is at.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Relation {
+    /// They are the same version.
+    Equal,
+    /// The version the path records is ahead: the other is behind it on its own chain.
+    Ahead,
+    /// The version the path records is behind: it is behind the other on the other's chain.
+    Behind,
+    /// They are on different chains.
+    Apart,
+}
+
+/// The relation `target` has to `cur`, from the chains each version is the top of.
+///
+/// Both chains are the hashes of what is under each version, the nearest first, as [`ancestors`]
+/// answers them, and each holds what is behind its own version rather than the version itself: what
+/// is asked is whether one version is on the way down from the other.
+fn relation(
+    cur: [u8; 32],
+    target: [u8; 32],
+    cur_chain: &[[u8; 32]],
+    target_chain: &[[u8; 32]],
+) -> Relation {
+    if cur == target {
+        return Relation::Equal;
+    }
+
+    // The target is behind `cur` on the way down, so what the path records is the newer one.
+    if cur_chain.contains(&target) {
+        return Relation::Ahead;
+    }
+    if target_chain.contains(&cur) {
+        return Relation::Behind;
+    }
+
+    Relation::Apart
+}
+
+/// How the version a path records stands beside the version the entry to record holds.
+///
+/// A version the index does not hold is brought from the Vault the Layout tracks, since a chain that
+/// cannot be read cannot be compared — which is the one step of this that may leave the machine.
+fn stand_of(
+    data: &MutableData,
+    target: &MutableData,
+    vcs: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    held: &Workspace,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    offline: bool,
+) -> Result<Relation, Next> {
+    let cur = data.version();
+    let target_version = target.version();
+    if cur == target_version {
+        return Ok(Relation::Equal);
+    }
+
+    let text = hex(target_version);
+    match presence(vcs, runtime, target_version) {
+        Presence::Version => {}
+        Presence::Elsewhere => {
+            return Err(failed(format!("the object {text} is not a version")));
+        }
+        Presence::Missing => {
+            // Nothing the run asked for is here, and an offline run may not go looking for it.
+            if offline {
+                return Err(ErrorOffline.into());
+            }
+
+            let bringer = Bringer {
+                workspace: held,
+                runtime,
+                end: vault_end(held, remote, current, None)?,
+                text: &text,
+            };
+
+            bringer.bring(target_version)?;
+        }
+    }
+
+    let here = read_version(vcs, runtime, cur)?;
+    let there = read_version(vcs, runtime, target_version)?;
+    let cur_chain = digests(&ancestors(vcs, runtime, &here)?);
+    let target_chain = digests(&ancestors(vcs, runtime, &there)?);
+
+    Ok(relation(cur, target_version, &cur_chain, &target_chain))
+}
+
+/// The hashes `chain` holds, in the order it holds them.
+fn digests(chain: &[Version]) -> Vec<[u8; 32]> {
+    chain
+        .iter()
+        .map(|version| *version.hash().digest())
+        .collect()
+}
+
+/// What changing the `Uuid` a path records does to the file on disk.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SwitchAction {
+    /// Leave the file alone: it still holds what the entry it records holds.
+    Keep,
+    /// Record the entry and leave the file alone, the reading told the two disagree.
+    Pointer,
+    /// Write the recorded version's content over the file.
+    Content,
+}
+
+/// The ways the two versions standing apart refuse a change of `Uuid`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SwitchRefusal {
+    /// The path records a version behind the one it would record.
+    Behind,
+    /// The two are on different chains, and jumping between chains was not allowed.
+    NotOnChain,
+}
+
+/// What changing the `Uuid` a path records does, for how the two versions stand.
+///
+/// The two versions being on one chain is what decides how little is done: the file already holds
+/// what the path records, so an entry that records the same version or a later one is a change of
+/// identity and nothing more, and one that records an earlier version is a change of what the file
+/// holds — refused unless the run says to switch the content or to leave the file behind. Different
+/// chains are not a step back at all, so they are refused until the run says it means to jump.
+fn switch_action(
+    relation: Relation,
+    only_index: bool,
+    allow_jump: bool,
+    force: bool,
+) -> Result<SwitchAction, SwitchRefusal> {
+    match relation {
+        Relation::Equal | Relation::Ahead => Ok(SwitchAction::Keep),
+        Relation::Behind if only_index => Ok(SwitchAction::Pointer),
+        Relation::Behind if force => Ok(SwitchAction::Content),
+        Relation::Behind => Err(SwitchRefusal::Behind),
+        Relation::Apart if !allow_jump => Err(SwitchRefusal::NotOnChain),
+        Relation::Apart if only_index => Ok(SwitchAction::Pointer),
+        Relation::Apart => Ok(SwitchAction::Content),
+    }
+}
+
+/// The data the entry a path comes to record is given.
+///
+/// Who holds it and what it says come from the entry being recorded, since that is the entry the
+/// path comes to be. The cut it prefers stays the one the path's own entry preferred: how content is
+/// written is about the file, not about the `Uuid` it is recorded under.
+fn switched_data(source: &MutableData, old: &MutableData, version: [u8; 32]) -> MutableData {
+    MutableData::new(
+        source.owner().map(str::to_owned),
+        version,
+        source.description().to_owned(),
+    )
+    .with_preference(old.preference().map(str::to_owned))
 }
 
 /// Whether the store here already holds the content `recorded`.
@@ -533,22 +1208,19 @@ fn content_of(
 /// file is a merge a reading reports as broken, while a variant file left by a write that failed is
 /// only a path the tree holds untagged — and the target's content is replaced by the caller.
 ///
+/// `disk` is where the variant file was found before the caller changed anything, read before the
+/// change because a change of `Uuid` takes away the entry the merge names its file by.
+///
 /// # Errors
 ///
 /// [`ErrorRetrackFailed`] when the merge in progress cannot be written back or the variant file
 /// cannot be removed.
 fn end_merge(
     merging: &mut Merging,
-    layout: &Layout,
     root: &Path,
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    untagged: &[LayoutPath],
     target: Uuid,
-    pending: &Pending,
+    disk: Option<PathBuf>,
 ) -> Result<(), Next> {
-    let disk = variant_disk(merging, layout, root, index, runtime, untagged, pending);
-
     merging.remove(target);
     if let Err(error) = merging.write(root) {
         return Err(failed(error.to_string()));
@@ -761,6 +1433,56 @@ fn upstream_version(
     }
 
     Ok(data.version())
+}
+
+/// The copy of `vault`'s own Layout the Workspace keeps, opened, or nothing when it was not fetched.
+///
+/// A copy that is not here is nothing rather than a failure: a run that has not fetched reads no
+/// copy here, and whether one is fetched is the caller's to say.
+///
+/// # Errors
+///
+/// [`ErrorRetrackFailed`] when a copy that is there cannot be read.
+fn open_copy(held: &Workspace, vault: &str) -> Result<Option<Layout>, Next> {
+    let Some(dir) = readonly_layout_copy(held, vault, VAULT_LAYOUT_NAME) else {
+        return Ok(None);
+    };
+
+    // A directory the Layout's own files are not in is not a copy, and reading it must not make one.
+    match Layout::open_existing(&dir) {
+        Ok(copy) => Ok(Some(copy)),
+        Err(error) if error.is_not_found() => Ok(None),
+        Err(error) => Err(failed(error.to_string())),
+    }
+}
+
+/// Fetches `vault`'s own Layout into the read-only copy the Workspace keeps.
+///
+/// # Errors
+///
+/// [`ErrorRetrackFailed`] when the Vault, its address or an account cannot be read, and whatever the
+/// fetch refuses with.
+fn fetch_copy(
+    held: &Workspace,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    vault: &str,
+) -> Result<(), Next> {
+    let name = remote
+        .get_ref()
+        .name_or_default(vault)
+        .map_err(mingling::Routable::to_chain)?;
+    let target = remote
+        .get_ref()
+        .vault_or_default(name.clone())
+        .map_err(mingling::Routable::to_chain)?;
+    let account_name = current.get_ref().must_bind().map_err(Into::<Next>::into)?;
+    let account = account_named(&account_name, Some(held), None).map_err(Into::<Next>::into)?;
+
+    action_fetch_layout(held, &account, target.to_string(), name)
+        .map_err(mingling::Routable::to_chain)?;
+
+    Ok(())
 }
 
 /// Whether this index holds the version under a hash, holds something else there, or holds nothing.
@@ -1236,6 +1958,241 @@ pub fn render_result_retrack(result: ResultRetrack) {
     r_println!("{}", said.trim());
 }
 
+/// Result: the `Uuid` a file's entry is recorded under was changed.
+#[derive(StructuralData, Serialize, Grouped)]
+pub struct ResultRetrackUuid {
+    /// Where the entry sits in the Layout.
+    path: String,
+    /// The `Uuid` it was recorded under.
+    from: String,
+    /// The `Uuid` it is recorded under now.
+    to: String,
+    /// The version it records now, as hex.
+    version: String,
+    /// That version's number in its chain, when it is known.
+    number: Option<u64>,
+    /// Whether the run gave it a fresh `Uuid` rather than recording another entry's.
+    forked: bool,
+    /// Whether the version's content was written back over the file.
+    switched: bool,
+}
+
+#[renderer(buffer)]
+pub fn render_result_retrack_uuid(result: ResultRetrackUuid) {
+    let version = named(&result.version, result.number);
+    let said = if result.forked {
+        t!(
+            "retrack.result_uuid_forked",
+            path = result.path,
+            to = result.to,
+            version = version
+        )
+    } else if result.switched {
+        t!(
+            "retrack.result_uuid_switched",
+            path = result.path,
+            from = result.from,
+            to = result.to,
+            version = version
+        )
+    } else {
+        t!(
+            "retrack.result_uuid_kept",
+            path = result.path,
+            from = result.from,
+            to = result.to,
+            version = version
+        )
+    };
+
+    r_println!("{}", said.trim());
+}
+
+/// Error: `--change-upstream` and `--fork` say different things, or one of them was given beside a
+/// version level.
+#[derive(Grouped)]
+pub struct ErrorRetrackMode;
+
+impl Failure for ErrorRetrackMode {
+    fn name(&self) -> &'static str {
+        "error_retrack_mode"
+    }
+
+    fn reason(&self) -> String {
+        t!("retrack.err_mode").trim().to_string()
+    }
+}
+
+failure!(ErrorRetrackMode);
+
+#[renderer(buffer)]
+pub fn render_error_retrack_mode(_: ErrorRetrackMode, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("retrack.err_mode").trim()));
+    r_eprintln!("{}", help_line!(t!("retrack.err_mode_help").trim()));
+    ec.exit_code = EC_ERR_RETRACK_ARGUMENT;
+}
+
+/// Error: a `--change-upstream` word names no entry the run can record.
+#[derive(Grouped)]
+pub struct ErrorRetrackReference {
+    /// What was written after `--change-upstream`.
+    reference: String,
+    /// What is wrong with it.
+    kind: RetrackReferenceError,
+}
+
+/// The ways a `--change-upstream` word names no entry to record.
+pub enum RetrackReferenceError {
+    /// It is neither a `Uuid` nor a path a Layout may hold.
+    NotAUuidOrPath,
+    /// It is a path, and the Layout being worked in tracks no Vault.
+    NoVault,
+    /// The Vault's Layout names no such path.
+    NotUpstream {
+        /// The Vault whose Layout names none.
+        vault: String,
+    },
+    /// Neither this Layout nor the copy of the Vault's Layout holds the `Uuid`.
+    UnknownUuid {
+        /// The `Uuid` nothing holds.
+        uuid: String,
+    },
+    /// The `Uuid` is the one the path records already.
+    SameUuid {
+        /// The `Uuid` the path records.
+        uuid: String,
+    },
+    /// The `Uuid` is recorded under another path.
+    Named {
+        /// The `Uuid` another path records.
+        uuid: String,
+        /// The path that records it.
+        path: String,
+    },
+    /// The entry records no version, so there is nothing to switch to.
+    NoVersion {
+        /// The `Uuid` whose entry records no version.
+        uuid: String,
+    },
+}
+
+impl Failure for ErrorRetrackReference {
+    fn name(&self) -> &'static str {
+        match self.kind {
+            RetrackReferenceError::NotAUuidOrPath => "error_retrack_reference_not_a_uuid_or_path",
+            RetrackReferenceError::NoVault => "error_retrack_reference_no_vault",
+            RetrackReferenceError::NotUpstream { .. } => "error_retrack_reference_not_upstream",
+            RetrackReferenceError::UnknownUuid { .. } => "error_retrack_reference_unknown_uuid",
+            RetrackReferenceError::SameUuid { .. } => "error_retrack_reference_same_uuid",
+            RetrackReferenceError::Named { .. } => "error_retrack_reference_named",
+            RetrackReferenceError::NoVersion { .. } => "error_retrack_reference_no_version",
+        }
+    }
+
+    fn reason(&self) -> String {
+        let said = match &self.kind {
+            RetrackReferenceError::NotAUuidOrPath => {
+                t!(
+                    "retrack.err_ref_not_a_uuid_or_path",
+                    reference = self.reference
+                )
+            }
+            RetrackReferenceError::NoVault => {
+                t!("retrack.err_ref_no_vault", reference = self.reference)
+            }
+            RetrackReferenceError::NotUpstream { vault } => t!(
+                "retrack.err_ref_not_upstream",
+                reference = self.reference,
+                vault = vault
+            ),
+            RetrackReferenceError::UnknownUuid { uuid } => {
+                t!("retrack.err_ref_unknown_uuid", uuid = uuid)
+            }
+            RetrackReferenceError::SameUuid { uuid } => {
+                t!("retrack.err_ref_same_uuid", uuid = uuid)
+            }
+            RetrackReferenceError::Named { uuid, path } => {
+                t!("retrack.err_ref_named", uuid = uuid, path = path)
+            }
+            RetrackReferenceError::NoVersion { uuid } => {
+                t!("retrack.err_ref_no_version", uuid = uuid)
+            }
+        };
+
+        said.trim().to_string()
+    }
+}
+
+failure!(ErrorRetrackReference);
+
+#[renderer(buffer)]
+pub fn render_error_retrack_reference(error: ErrorRetrackReference, ec: &mut ResExitCode) {
+    let help = match error.kind {
+        RetrackReferenceError::NotAUuidOrPath => t!("retrack.err_ref_not_a_uuid_or_path_help"),
+        RetrackReferenceError::NoVault => t!("retrack.err_ref_no_vault_help"),
+        RetrackReferenceError::NotUpstream { .. } => t!("retrack.err_ref_not_upstream_help"),
+        RetrackReferenceError::UnknownUuid { .. } => t!("retrack.err_ref_unknown_uuid_help"),
+        RetrackReferenceError::SameUuid { .. } => t!("retrack.err_ref_same_uuid_help"),
+        RetrackReferenceError::Named { .. } => t!("retrack.err_ref_named_help"),
+        RetrackReferenceError::NoVersion { .. } => t!("retrack.err_ref_no_version_help"),
+    };
+
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(help.trim()));
+    ec.exit_code = EC_ERR_RETRACK_ARGUMENT;
+}
+
+/// Error: the version a path records and the version its entry is to record refuse the change.
+#[derive(Grouped)]
+pub struct ErrorRetrackSwitch {
+    /// Where the entry sits in the Layout.
+    path: String,
+    /// Why the change is refused.
+    kind: RetrackSwitchError,
+}
+
+/// The ways two versions refuse a change of `Uuid`.
+pub enum RetrackSwitchError {
+    /// The version the path records is behind the one the entry records.
+    Behind,
+    /// The two versions are on different chains.
+    NotOnChain,
+}
+
+impl Failure for ErrorRetrackSwitch {
+    fn name(&self) -> &'static str {
+        match self.kind {
+            RetrackSwitchError::Behind => "error_retrack_switch_behind",
+            RetrackSwitchError::NotOnChain => "error_retrack_switch_not_on_chain",
+        }
+    }
+
+    fn reason(&self) -> String {
+        let said = match self.kind {
+            RetrackSwitchError::Behind => t!("retrack.err_switch_behind", path = self.path),
+            RetrackSwitchError::NotOnChain => {
+                t!("retrack.err_switch_not_on_chain", path = self.path)
+            }
+        };
+
+        said.trim().to_string()
+    }
+}
+
+failure!(ErrorRetrackSwitch);
+
+#[renderer(buffer)]
+pub fn render_error_retrack_switch(error: ErrorRetrackSwitch, ec: &mut ResExitCode) {
+    let help = match error.kind {
+        RetrackSwitchError::Behind => t!("retrack.err_switch_behind_help"),
+        RetrackSwitchError::NotOnChain => t!("retrack.err_switch_not_on_chain_help"),
+    };
+
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(help.trim()));
+    ec.exit_code = EC_ERR_RETRACK_ARGUMENT;
+}
+
 /// Error: no file was named.
 #[derive(Grouped)]
 pub struct ErrorRetrackNoFile;
@@ -1707,5 +2664,132 @@ mod tests {
         assert!(until_of(Some("-5"), Vec::new).is_err());
         assert!(until_of(Some("+1"), Vec::new).is_err());
         assert!(until_of(Some(""), Vec::new).is_err());
+    }
+
+    /// Where two versions stand is read from the chains each is the top of: the same version, one
+    /// behind the other on its own chain, or two chains that meet nowhere.
+    #[test]
+    fn the_relation_of_two_versions_is_read_from_their_chains() {
+        use super::{Relation, relation};
+
+        let old = [1; 32];
+        let cur = [3; 32];
+        let other = [9; 32];
+        let cur_chain = [[2; 32], old];
+        let target_chain = [[8; 32], old];
+
+        assert_eq!(relation(cur, cur, &[], &[]), Relation::Equal);
+        assert_eq!(
+            relation(cur, old, &cur_chain, &target_chain),
+            Relation::Ahead
+        );
+        assert_eq!(relation(old, cur, &[], &target_chain), Relation::Behind);
+        assert_eq!(
+            relation(cur, other, &cur_chain, &[[7; 32]]),
+            Relation::Apart
+        );
+    }
+
+    /// What a change of `Uuid` does to the file is decided by how the two versions stand and by the
+    /// flags the run gave: a version the same or a later one keeps the file, an earlier one needs
+    /// the run to say what happens, and another chain needs the jump allowed first.
+    #[test]
+    fn what_a_change_of_uuid_does_to_the_file_follows_the_versions_and_the_flags() {
+        use super::{Relation, SwitchAction, SwitchRefusal, switch_action};
+
+        assert_eq!(
+            switch_action(Relation::Equal, false, false, false),
+            Ok(SwitchAction::Keep)
+        );
+        assert_eq!(
+            switch_action(Relation::Equal, true, true, true),
+            Ok(SwitchAction::Keep)
+        );
+        assert_eq!(
+            switch_action(Relation::Ahead, false, false, false),
+            Ok(SwitchAction::Keep)
+        );
+        assert_eq!(
+            switch_action(Relation::Ahead, true, true, true),
+            Ok(SwitchAction::Keep)
+        );
+
+        assert_eq!(
+            switch_action(Relation::Behind, false, false, false),
+            Err(SwitchRefusal::Behind)
+        );
+        assert_eq!(
+            switch_action(Relation::Behind, true, false, false),
+            Ok(SwitchAction::Pointer)
+        );
+        assert_eq!(
+            switch_action(Relation::Behind, false, false, true),
+            Ok(SwitchAction::Content)
+        );
+
+        assert_eq!(
+            switch_action(Relation::Apart, false, false, false),
+            Err(SwitchRefusal::NotOnChain)
+        );
+        // A jump the run did not allow is refused however else it was asked to go.
+        assert_eq!(
+            switch_action(Relation::Apart, true, false, true),
+            Err(SwitchRefusal::NotOnChain)
+        );
+        assert_eq!(
+            switch_action(Relation::Apart, false, true, false),
+            Ok(SwitchAction::Content)
+        );
+        assert_eq!(
+            switch_action(Relation::Apart, false, true, true),
+            Ok(SwitchAction::Content)
+        );
+        assert_eq!(
+            switch_action(Relation::Apart, true, true, false),
+            Ok(SwitchAction::Pointer)
+        );
+    }
+
+    /// The entry a path comes to record holds what the entry it records holds, and is cut the way
+    /// the path's own entry asked for: what is written is about the file, not about its `Uuid`.
+    #[test]
+    fn the_entry_recorded_holds_what_it_held_and_the_preference_of_the_old_one() {
+        use super::switched_data;
+        use librorolala::layout::MutableData;
+
+        let source = MutableData::new(Some("bob".to_owned()), [2; 32], "upstream".to_owned())
+            .with_preference(Some("upstream-policy".to_owned()));
+        let old = MutableData::new(Some("alice".to_owned()), [1; 32], "mine".to_owned())
+            .with_preference(Some("maya-binary".to_owned()));
+
+        let data = switched_data(&source, &old, [5; 32]);
+
+        assert_eq!(data.owner(), Some("bob"));
+        assert_eq!(data.description(), "upstream");
+        assert_eq!(data.version(), [5; 32]);
+        assert_eq!(data.preference(), Some("maya-binary"));
+    }
+
+    /// A `--change-upstream` word is read as a `Uuid` before it is read as a path: a `Uuid` is also a
+    /// path a Layout may hold, so reading it as one would send the run looking in a Vault for an
+    /// entry it may hold here.
+    #[test]
+    fn a_change_upstream_word_is_a_uuid_before_it_is_a_path() {
+        use super::{Reference, RetrackReferenceError, reference_of};
+        use uuid::Uuid;
+
+        let id = Uuid::from_u128(7);
+
+        assert!(matches!(reference_of(&id.to_string()), Ok(Reference::Uuid(read)) if read == id));
+        assert!(
+            matches!(reference_of("art/hero.psd"), Ok(Reference::Path(path)) if path.as_str() == "art/hero.psd")
+        );
+        assert!(matches!(
+            reference_of(""),
+            Err(super::ErrorRetrackReference {
+                kind: RetrackReferenceError::NotAUuidOrPath,
+                ..
+            })
+        ));
     }
 }
