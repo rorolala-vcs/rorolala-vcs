@@ -1303,16 +1303,10 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_WORKSPACE_KEYS_DIR();
 
     /// <summary>
-    /// Path, inside the Workspace's data directory, where its Layouts are kept
+    /// Path, inside the Workspace's data directory, where its one Layout is kept
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint ROLA_WORKSPACE_LAYOUTS_DIR();
-
-    /// <summary>
-    /// Path to the file naming the Layout a Workspace has checked out
-    /// </summary>
-    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint ROLA_WORKSPACE_LAYOUT_PATH();
+    internal static extern nint ROLA_WORKSPACE_LAYOUT_DIR();
 
     /// <summary>
     /// Path to the file a run opens in an editor to write what it is recording
@@ -1357,7 +1351,7 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_VAULT_LAYOUT_DIR();
 
     /// <summary>
-    /// The name a Workspace's first Layout is commonly given
+    /// The name a Workspace's one Layout is known by when it has to be named
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_DEFAULT_LAYOUT_NAME();

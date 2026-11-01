@@ -65,7 +65,7 @@ use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_OWNERSHIP, EC_HELP};
 use crate::failure::failure;
 use crate::keys::account_named;
-use crate::layout::{ErrorLayoutFailed, ErrorLayoutMissing, cached_vault_copy, set_cached_owners};
+use crate::layout::{ErrorLayoutFailed, cached_vault_copy, set_cached_owners};
 use crate::progress::Reporting;
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
@@ -420,9 +420,8 @@ fn change(
     // not fail, so there is a Workspace here to hand on.
     let held = workspace.get_ref().as_ref().unwrap();
 
-    let layouts = held.layouts();
-    let name = match layouts.current() {
-        Ok(Some(name)) => name,
+    let layout = match held.layout_if_there() {
+        Ok(Some(layout)) => layout,
         Ok(None) => {
             return ErrorOwnershipArgument {
                 command: own_name(kind).to_owned(),
@@ -431,13 +430,8 @@ fn change(
         }
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     };
-    let layout = match layouts.get(&name) {
-        Ok(Some(layout)) => layout,
-        Ok(None) => return ErrorLayoutMissing.into(),
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
 
-    let Some(track) = (match layouts.track(&name) {
+    let Some(track) = (match held.layout_track() {
         Ok(track) => track,
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     }) else {

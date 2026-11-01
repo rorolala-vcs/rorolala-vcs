@@ -436,7 +436,7 @@ fn record(
     // records nothing — and a Vault that tracks nothing, a copy that is not there, and a file the
     // copy does not name are all answered with nothing to refuse.
     if !force {
-        let tracked = tracked_vault(held, &layout);
+        let tracked = tracked_vault(held);
         let unowned = match unowned(
             held,
             &layout,

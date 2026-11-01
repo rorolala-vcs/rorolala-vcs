@@ -1,7 +1,7 @@
-//! The bare `rola layout` command: what a run's Layouts are.
+//! The bare `rola layout` command: the Layout a run works in.
 //!
-//! Naming no subcommand asks the same thing as `rola layout ls`, so it is the same listing: what a
-//! run works in, whether that is a Workspace's many Layouts or a Vault's one.
+//! Naming no subcommand asks the same thing as `rola layout ls`, so it is the same listing: the one
+//! Layout a Workspace works in, or the one a Vault keeps.
 
 use mingling::{
     Suggest,
@@ -36,9 +36,9 @@ pub fn complete_layout() -> Suggest {
     suggest!()
 }
 
-/// Lists the Layouts a run works in
+/// Lists the Layout a run works in
 ///
-/// The same as `rola layout ls`: a Workspace's Layouts are listed, or a Vault's one.
+/// The same as `rola layout ls`: the one Layout a Workspace works in, or the one a Vault keeps.
 #[command(node = "layout")]
 pub fn layout(format: &mut ResFormat) -> StateLayoutLs {
     format.default_template(DEFAULT_FORMAT);

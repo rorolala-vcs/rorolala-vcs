@@ -49,6 +49,7 @@ use rorolala_cli_setups::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
+use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_location::normalize;
 use rust_i18n::t;
@@ -67,7 +68,7 @@ use crate::failure::failure;
 use crate::fetch::{self, Sources};
 use crate::hash::resolve as resolve_hash;
 use crate::keys::account_named;
-use crate::layout::{ErrorLayoutMissing, ErrorLayoutNoCurrent, cached_vault_copy, failed};
+use crate::layout::{ErrorLayoutNoCurrent, cached_vault_copy, failed};
 use crate::progress::Reporting;
 use crate::sync;
 use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
@@ -245,15 +246,9 @@ pub fn handle_checkin(
     // not fail, so there is a Workspace here to hand on.
     let held = workspace.get_ref().as_ref().unwrap();
 
-    let layouts = held.layouts();
-    let name = match layouts.current() {
-        Ok(Some(name)) => name,
-        Ok(None) => return ErrorLayoutNoCurrent.into(),
-        Err(error) => return failed(&error),
-    };
-    let layout = match layouts.get(&name) {
+    let layout = match held.layout_if_there() {
         Ok(Some(layout)) => layout,
-        Ok(None) => return ErrorLayoutMissing.into(),
+        Ok(None) => return ErrorLayoutNoCurrent.into(),
         Err(error) => return failed(&error),
     };
 
@@ -280,10 +275,11 @@ pub fn handle_checkin(
         );
     }
 
-    let Some(track) = (match layouts.track(&name) {
+    let track = match held.layout_track() {
         Ok(track) => track,
         Err(error) => return failed(&error),
-    }) else {
+    };
+    let Some(track) = track else {
         return ErrorCheckinNoTrack.into();
     };
 
@@ -370,7 +366,7 @@ pub fn handle_checkin(
     sources.report();
 
     ResultCheckedIn {
-        layout: name,
+        layout: DEFAULT_LAYOUT_NAME.to_owned(),
         vault: vault_name,
         entries,
         failed,
@@ -447,7 +443,7 @@ fn checkin_variant(
     // What is not here is asked of the Vault, unless the run was made offline: an offline run reads
     // what is here and says so where the read wants what is not.
     if found.is_none() && !**offline {
-        match index_from_vault(held, layout, remote, current, progress, &runtime, **offline) {
+        match index_from_vault(held, remote, current, progress, &runtime, **offline) {
             Ok(()) => found = read_variant(index, &runtime, &variant_key),
             Err(cause) => return join_failed(target, cause),
         }
@@ -486,7 +482,7 @@ fn checkin_variant(
         .ok()
         .and_then(|name| account_named(&name, Some(held), None).ok());
     if let Some(account) = &account {
-        let tracked = tracked_vault(held, layout);
+        let tracked = tracked_vault(held);
         let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
 
         if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline)
@@ -558,14 +554,13 @@ fn checkin_variant(
 /// is the one that reports it, and it is that run's name the reader needs beside it.
 fn index_from_vault(
     held: &librorolala::workspace::Workspace,
-    layout: &Layout,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     progress: &ResProgressSetting,
     runtime: &tokio::runtime::Runtime,
     offline: bool,
 ) -> Result<(), String> {
-    let Some(vault_name) = tracked_vault(held, layout) else {
+    let Some(vault_name) = tracked_vault(held) else {
         return Err(t!("checkin.err_join_no_track").trim().to_owned());
     };
     let Some(account_name) = current.get_ref().must_bind().ok() else {

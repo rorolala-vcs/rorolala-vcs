@@ -250,10 +250,7 @@ fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
 /// run on a Vault — or one whose paths are in no Workspace — has nothing here to keep in step and is
 /// left to the filesystem alone.
 pub fn working(held: &Workspace) -> Option<Layout> {
-    let layouts = held.layouts();
-    let name = layouts.current().ok().flatten()?;
-
-    layouts.get(&name).ok().flatten()
+    held.layout_if_there().ok().flatten()
 }
 
 /// The Workspace `disk` sits in, when it sits in one.

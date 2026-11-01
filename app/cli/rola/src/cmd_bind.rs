@@ -1,11 +1,11 @@
-//! The `rola bind` command: name a Vault address and start a Layout on it.
+//! The `rola bind` command: name a Vault address and point the Layout at it.
 //!
-//! Making a Workspace and putting it to work otherwise takes three commands — binding the
-//! address, choosing the Vault to reach for, and making a Layout that tracks it — and the three
-//! share one name. This is that one name said once: the Vault is bound under it, a Layout of the
-//! same name is made to track it, and the Workspace works in that Layout when it had none.
+//! Making a Workspace and putting it to work otherwise takes two commands — binding the address and
+//! choosing the Vault the Layout tracks — and the two share one name. This is that one name said
+//! once: the Vault is bound under it, and the Layout being worked in tracks it when the Layout
+//! tracks nothing yet.
 
-use librorolala::layout::normalize_name;
+use just_fmt::fmt_case_style::CaseFormatter;
 use librorolala::protocol::VaultAddress;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
@@ -30,10 +30,10 @@ use crate::complete::{offer, positional, strip_written, typing_flag};
 use crate::error::ErrorConfigUnreadable;
 use crate::exit_codes::{EC_ERR_LAYOUT, EC_HELP};
 use crate::failure::failure;
-use crate::layout::{ErrorLayoutExists, failed};
+use crate::layout::failed;
 use crate::vault::cmd_vault_bind::{ErrorVaultAddressInvalid, ErrorVaultAddressMissing};
 
-/// The name a Vault is bound under and a Layout is made with when none is given.
+/// The name a Vault is bound under when none is given.
 ///
 /// It is the name a Vault upstream is usually known by, so a run that has one Vault to share
 /// through does not have to name it.
@@ -41,9 +41,6 @@ const DEFAULT_NAME: &str = "origin";
 
 /// Leave the Vault being reached for where it is.
 const ARG_NO_SET_DEFAULT_VAULT: PickerArg<'static, Flag> = arg![no_set_default_vault: Flag];
-
-/// Leave the Layout being worked in where it is, even when the Workspace had none.
-const ARG_NO_SET_LAYOUT: PickerArg<'static, Flag> = arg![no_set_layout: Flag];
 
 #[help(buffer)]
 pub fn help_bind(_: EntryBind, ec: &mut ResExitCode) {
@@ -67,7 +64,6 @@ pub fn complete_bind(ctx: ShellContext, history: &mut LazyRes<ResAddressHistory>
             &ctx,
             suggest! {
                 ARG_NO_SET_DEFAULT_VAULT: t!("bind.complete.no_set_default_vault"),
-                ARG_NO_SET_LAYOUT: t!("bind.complete.no_set_layout"),
             },
         );
     }
@@ -79,37 +75,32 @@ pub fn complete_bind(ctx: ShellContext, history: &mut LazyRes<ResAddressHistory>
     offer(&ctx, history.get_ref().iter().map(str::to_string))
 }
 
-/// Binds a Vault address under a name and makes a Layout of that name
+/// Binds a Vault address under a name and points the Layout at it
 ///
 /// The name is the Workspace's own, so the same Vault may be `origin` here and something else
-/// elsewhere. It is normalised the way a Layout's name is — words of letters and digits joined by
-/// `-` — and the name `origin` is used when none is given.
-///
-/// The name is one thing said once: the Vault is bound under it, and a Layout by it is made to
-/// track that Vault. Binding a name the Workspace has already bound changes what it means, the way
-/// `rola vault bind` does; a name a Layout already holds is refused before anything is written,
-/// since a Layout keeps its own directory and nothing could be merged into it.
+/// elsewhere. It is normalised the way a name used as a directory key is — words of letters and
+/// digits joined by `-` — and the name `origin` is used when none is given.
 ///
 /// The Vault bound becomes the one the Workspace reaches for, unless `--no-set-default-vault`.
-/// Making the first Layout is also choosing what is worked in; `--no-set-layout` leaves the
-/// Workspace working in nothing.
+/// The Layout being worked in is made to track that Vault when it tracks nothing: a Layout that
+/// already tracks one is left tracking it, since which Vault the work goes to is not this command's
+/// to change out from under it.
 ///
 /// # Errors
 ///
 /// Renders [`ErrorWorkspaceNotExist`] when the run is not inside a Workspace,
 /// [`ErrorVaultAddressMissing`] when no address was given, [`ErrorVaultAddressInvalid`] when the
-/// address would not read as one, [`ErrorVaultNameInvalid`] when the name is not one a Layout may
-/// be given, [`ErrorLayoutExists`] when a Layout already holds the name, and the configuration-unreadable or Layout-not-worked failures otherwise.
+/// address would not read as one, [`ErrorVaultNameInvalid`] when the name is not one a binding may
+/// be given, and the configuration-unreadable or Layout-not-readable failures otherwise.
 #[command(node = "bind", entry = EntryBind)]
 pub fn bind(args: EntryBind) -> Next {
     let picked = args
         .pick(ARG_NO_SET_DEFAULT_VAULT)
-        .pick(ARG_NO_SET_LAYOUT)
         .pick_or_route(arg![String], || ErrorVaultAddressMissing.to_chain())
         .pick(arg![Option<String>])
         .pick(&UNMATCHED)
         .to_result();
-    let (no_set_default_vault, no_set_layout, address, name, unmatched) = match picked {
+    let (no_set_default_vault, address, name, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -122,7 +113,6 @@ pub fn bind(args: EntryBind) -> Next {
         address,
         name: name.unwrap_or_else(|| DEFAULT_NAME.to_owned()),
         set_default_vault: matches!(no_set_default_vault, Flag::Inactive),
-        set_layout: matches!(no_set_layout, Flag::Inactive),
     }
     .into()
 }
@@ -132,12 +122,10 @@ pub fn bind(args: EntryBind) -> Next {
 pub struct StateBind {
     /// The address, as it was written.
     address: String,
-    /// The name the address is bound under, and the Layout is made with.
+    /// The name the address is bound under.
     name: String,
     /// Whether the name is also made the one the Workspace reaches for.
     set_default_vault: bool,
-    /// Whether making the Layout may also choose it as the one worked in.
-    set_layout: bool,
 }
 
 #[chain]
@@ -151,7 +139,6 @@ pub fn handle_bind(
         address,
         name,
         set_default_vault,
-        set_layout,
     } = state;
 
     let Some(workspace) = workspace.get_ref().as_ref() else {
@@ -167,38 +154,14 @@ pub fn handle_bind(
     // reading one back later is reading the same thing either time.
     let address = address.to_string();
 
-    // What a Layout may be called is what the name has to be, since a Layout by it is made: the two
-    // are one name, so refusing the second half of the command is refusing the whole of it.
-    let Some(name) = normalize_name(&name) else {
+    // The name is a directory key for what is fetched from the Vault, so it is held to the shape a
+    // directory name has — the same shape a Layout's name was held to when a name was one.
+    let Some(name) = normalized_name(&name) else {
         return ErrorVaultNameInvalid { name }.into();
     };
 
-    let layouts = workspace.layouts();
-
-    // A Layout that tracks this very Vault is the one an earlier binding made under this name, and
-    // binding the name again is how its address is changed — the same as `rola vault bind`. Any
-    // other Layout holding the name is one this cannot make: a Layout keeps its own directory, and
-    // nothing could be merged into one that is already somebody's work.
-    //
-    // The check comes first and nothing is written before it, so a name this cannot make leaves the
-    // Workspace exactly as it was found rather than bound and then refused. Whether the Layout is
-    // there is the whole of what it decides: one that is not there is made below, and one that is
-    // there is left alone when it is this binding's own.
-    let held = layouts.contains(&name);
-    if held {
-        match layouts.track(&name) {
-            Ok(Some(track)) if track == name => {}
-            Ok(_) => return ErrorLayoutExists.into(),
-            Err(error) => return failed(&error),
-        }
-    }
-    let was_empty = match layouts.names() {
-        Ok(names) => names.is_empty(),
-        Err(error) => return failed(&error),
-    };
-
     // Report what cannot be read before anything is written: a binding that could not be saved has
-    // no business taking a name that a Layout is then made for.
+    // no business leaving a Layout pointed at a Vault the Workspace does not know.
     if let ResWorkspaceConfig::Unread { path, reason } = config.get_ref() {
         return ErrorConfigUnreadable::new(path.clone(), reason.clone()).into();
     }
@@ -217,37 +180,50 @@ pub fn handle_bind(
             .set_vault(name.clone());
     }
 
-    // A Layout that is already there is the one this binding made, and is left as it is: making it
-    // again would be refused by the Layout that is there, and its tracking is what it should be.
-    if !held {
-        if let Err(error) = layouts.create(&name) {
-            return failed(&error);
-        }
-        if let Err(error) = layouts.set_track(&name, &name) {
-            return failed(&error);
-        }
-    }
-    if was_empty
-        && set_layout
-        && let Err(error) = layouts.set_current(&name)
-    {
+    // The Layout is made where an older Workspace adopted none, so that binding a Vault is putting a
+    // Workspace to work rather than a link nothing records work against.
+    if let Err(error) = workspace.layout() {
         return failed(&error);
     }
 
-    // What the Layout being worked in is now, which is what a run wants to be told: a binding that
-    // made the first Layout is one there is now work in, and one into a Workspace already working
-    // somewhere else is not.
-    let working = matches!(layouts.current(), Ok(Some(current)) if current == name);
+    let tracks = matches!(workspace.layout_track(), Ok(Some(track)) if track == name);
+    if !tracks {
+        match workspace.layout_track() {
+            // A Layout that already tracks another Vault is left as it is: what the work goes to is
+            // not a binding's to change, and `rola layout set-track` is what changes it.
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                if let Err(error) = workspace.set_layout_track(&name) {
+                    return failed(&error);
+                }
+            }
+            Err(error) => return failed(&error),
+        }
+    }
+    let tracks = matches!(workspace.layout_track(), Ok(Some(track)) if track == name);
 
     ResultBound {
         name,
         address,
-        working,
+        tracking: tracks,
     }
     .into()
 }
 
-/// Error: the name a `rola bind` was given is not one a Layout may be given.
+/// The name a binding may be given, worked out from what a caller wrote.
+///
+/// A name is a directory name for what is fetched from the Vault, so it is the kebab-case form of
+/// what was written: one word of letters and digits with the words joined by `-`. `My Vault` and
+/// `my-vault` are the same name said two ways rather than two names, and nothing is answered when
+/// what was written holds no name at all.
+#[must_use]
+fn normalized_name(name: &str) -> Option<String> {
+    let normalized = CaseFormatter::from(name).to_kebab_case();
+
+    (!normalized.is_empty()).then_some(normalized)
+}
+
+/// Error: the name a `rola bind` was given is not one a binding may be given.
 #[derive(Grouped)]
 pub struct ErrorVaultNameInvalid {
     /// The name that would not do.
@@ -275,15 +251,15 @@ pub fn render_error_vault_name_invalid(error: ErrorVaultNameInvalid, ec: &mut Re
     ec.exit_code = EC_ERR_LAYOUT;
 }
 
-/// Result: a Vault address was bound under a name and a Layout was made.
+/// Result: a Vault address was bound under a name.
 #[derive(Grouped)]
 pub struct ResultBound {
-    /// The name that was bound, and the Layout that was made with it.
+    /// The name that was bound.
     name: String,
     /// The address it is bound to now.
     address: String,
-    /// Whether the Layout is the one now worked in.
-    working: bool,
+    /// Whether the Layout being worked in tracks it afterwards.
+    tracking: bool,
 }
 
 #[renderer(buffer)]
@@ -298,7 +274,7 @@ pub fn render_result_bound(result: ResultBound) {
         .trim()
     );
 
-    if result.working {
-        r_println!("{}", t!("bind.result_working", name = result.name).trim());
+    if result.tracking {
+        r_println!("{}", t!("bind.result_tracking", name = result.name).trim());
     }
 }

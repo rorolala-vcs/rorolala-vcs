@@ -25,19 +25,12 @@ pub const WORKSPACE_CONFIG_PATH: &str = "./.rola/workspace.toml";
 #[lazyffi(export = ROLA_WORKSPACE_KEYS_DIR)]
 pub const WORKSPACE_KEYS_DIR: &str = "./.rola/auth/";
 
-/// Path, inside the Workspace's data directory, where its Layouts are kept
+/// Path, inside the Workspace's data directory, where its one Layout is kept
 ///
-/// One directory per Layout, each named by the Layout's own name, so a Workspace holds as
-/// many as it has names for. A Vault keeps one instead, in a directory of its own.
-#[lazyffi(export = ROLA_WORKSPACE_LAYOUTS_DIR)]
-pub const WORKSPACE_LAYOUTS_DIR: &str = "./.rola/layouts/";
-
-/// Path to the file naming the Layout a Workspace has checked out
-///
-/// It holds the name of one of the Layouts under [`WORKSPACE_LAYOUTS_DIR`], which is the Layout
-/// the Workspace works in until another is chosen.
-#[lazyffi(export = ROLA_WORKSPACE_LAYOUT_PATH)]
-pub const WORKSPACE_LAYOUT_PATH: &str = "./.rola/LAYOUT";
+/// A Workspace works in one Layout and a Vault keeps one: what the work is made of is the Layout's to
+/// say, and a Workspace has no use for a name of its own on disk to say which of several it means.
+#[lazyffi(export = ROLA_WORKSPACE_LAYOUT_DIR)]
+pub const WORKSPACE_LAYOUT_DIR: &str = "./.rola/layout/";
 
 /// Path to the file a run opens in an editor to write what it is recording
 ///
@@ -52,7 +45,7 @@ pub const WORKSPACE_EDITING_PATH: &str = "./.rola/EDITING.md";
 ///
 /// The tree a Layout describes is read back against the files a Workspace holds, and what was
 /// found — each file's time, size and fingerprint — is kept here so the next reading can skip
-/// what has not changed. One directory per Layout; see [`LAYOUT_TRACK_FILE`] and its kin.
+/// what has not changed.
 #[lazyffi(export = ROLA_WORKSPACE_CACHE_DIR)]
 pub const WORKSPACE_CACHE_DIR: &str = "./.rola/cache/";
 
@@ -102,11 +95,10 @@ pub const LAYOUT_TRACK_FILE: &str = "TRACK";
 #[lazyffi(export = ROLA_VAULT_LAYOUT_DIR)]
 pub const VAULT_LAYOUT_DIR: &str = "./layout/";
 
-/// The name a Workspace's first Layout is commonly given
+/// The name a Workspace's one Layout is known by when it has to be named
 ///
-/// It is a name to offer rather than one that is imposed: a Workspace is made with no Layout at
-/// all, and the name of the first one is whoever adds it to choose. This is what that name is
-/// expected to be, for anything that has to suggest one.
+/// A Workspace's Layout is one and has no name of its own on disk; this is what it is called when
+/// it has to be named, as when it is listed or a command addresses it.
 #[lazyffi(export = ROLA_DEFAULT_LAYOUT_NAME)]
 pub const DEFAULT_LAYOUT_NAME: &str = "main";
 

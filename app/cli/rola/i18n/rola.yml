@@ -48,7 +48,7 @@ rola:
             storage                      Read and write the content a store holds
             vcs-index                    Read and write the version control index
             inv-idx                      Build and query the inverse index
-            layout                       Work with the Layouts a run keeps
+            layout                       Work with the Layout a run keeps
 
         **Other**
             vault                        Query and work with the Vaults this Workspace knows

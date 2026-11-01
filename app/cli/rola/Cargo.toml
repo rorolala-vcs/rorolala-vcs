@@ -16,6 +16,7 @@ annotate-snippets.workspace = true
 colored.workspace = true
 console.workspace = true
 globset.workspace = true
+just_fmt.workspace = true
 mingling.workspace = true
 minus.workspace = true
 rust-i18n.workspace = true

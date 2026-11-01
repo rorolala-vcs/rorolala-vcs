@@ -64,10 +64,7 @@ pub fn locate_status(directory: &Path) -> Option<Status> {
 
 /// The Layout a Workspace is working in, when it is working in one.
 fn working_layout(workspace: &Workspace) -> Option<Layout> {
-    let layouts = workspace.layouts();
-    let current = layouts.current().ok().flatten()?;
-
-    layouts.get(&current).ok().flatten()
+    workspace.layout_if_there().ok().flatten()
 }
 
 #[cfg(test)]
@@ -79,7 +76,6 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use rorolala_layout::LayoutPath;
-    use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
     use rorolala_utils_lazyffi::free_string;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
@@ -127,9 +123,7 @@ mod tests {
 
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
-        let layouts = workspace.layouts();
-        let layout = layouts.create(DEFAULT_LAYOUT_NAME).unwrap();
-        layouts.set_current(DEFAULT_LAYOUT_NAME).unwrap();
+        let layout = workspace.layout().unwrap();
 
         layout
             .create_path(&LayoutPath::new("gone.txt").unwrap(), Uuid::from_u128(1))
@@ -174,9 +168,13 @@ mod tests {
     }
 
     #[test]
-    fn a_workspace_working_in_no_layout_hands_back_null() {
+    fn a_workspace_holding_no_layout_hands_back_null() {
         let dir = scratch("no-layout");
         Workspace::create(&dir).unwrap();
+
+        // A Workspace has one Layout, and a reading has nothing to read when there is none: what is
+        // taken away here is what a Workspace with nothing to adopt from reads as.
+        fs::remove_dir_all(dir.join(".rola/layout")).unwrap();
 
         assert!(read(&dir).is_null(), "{dir:?}");
 

@@ -6,13 +6,13 @@
 //! nothing, which is what the run that wants to know before it is changed asks for.
 //!
 //! What goes up is the plan's creations and versions: a `Uuid` only this Layout holds is made an
-//! entry of the Vault's Layout under `@/new/`, and a version the Vault is behind on is set. What
-//! comes down is a version the Vault is ahead on: what it stored is written into the tree, and the
-//! version into the Layout. Content is moved around the Layout either way — the index and the
-//! store, unless `--no-index` or `--no-storage` says otherwise — and `--no-layout` leaves the
-//! Layout out of it entirely: no plan is made, the index is exchanged both ways, and the stored
-//! content is uploaded. A direction is a narrowing of the plan, so `--up-only` and `--down-only`
-//! are refused beside it.
+//! entry of the Vault's Layout at the path the work tracks it at, and a version the Vault is behind
+//! on is set. What comes down is a version the Vault is ahead on: what it stored is written into
+//! the tree, and the version into the Layout. Content is moved around the Layout either way — the
+//! index and the store, unless `--no-index` or `--no-storage` says otherwise — and `--no-layout`
+//! leaves the Layout out of it entirely: no plan is made, the index is exchanged both ways, and the
+//! stored content is uploaded. A direction is a narrowing of the plan, so `--up-only` and
+//! `--down-only` are refused beside it.
 //!
 //! A file changed here that the Vault is ahead on is refused before anything is written, so a pull
 //! never overwrites what the run does not know about; merging is not here yet.
@@ -48,7 +48,7 @@ use rorolala_cli_setups::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd, warn_line};
-use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, VAULT_LAYOUT_NAME};
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::{Direction as MoveDirection, Progress};
 use rust_i18n::t;
@@ -65,8 +65,8 @@ use crate::failure::failure;
 use crate::fetch;
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, ErrorLayoutNotCached,
-    add_cached_entry, cached_copy, failed, readonly_layout_copy, set_cached_version,
+    ErrorLayoutFailed, ErrorLayoutNoCurrent, ErrorLayoutNotCached, add_cached_entry, cached_copy,
+    failed, readonly_layout_copy, set_cached_version,
 };
 use crate::progress::Reporting;
 use crate::sync::{self, Direction, Entry, Kind};
@@ -132,10 +132,10 @@ pub fn complete_sync(ctx: ShellContext) -> Suggest {
 ///
 /// The Vault is the one the Layout's `TRACK` names, which the Workspace has
 /// [bound](crate::vault::cmd_vault_bind). What the Vault holds now is fetched first, and the plan
-/// says what is to move: a `Uuid` only this Layout holds goes up under the Vault's `@/new/`, a
-/// version the Vault is behind on goes up when this account holds it, one this Layout is behind on
-/// comes down, and a `Uuid` only the Vault holds is named rather than brought — `checkin` is what
-/// brings one.
+/// says what is to move: a `Uuid` only this Layout holds goes up at the path the work tracks it at,
+/// a version the Vault is behind on goes up when this account holds it, one this Layout is behind
+/// on comes down, and a `Uuid` only the Vault holds is named rather than brought — `checkin` is
+/// what brings one.
 ///
 /// `--up-only` and `--down-only` keep the plan to one direction; neither, or `--both`, is both.
 /// `--force` is what lets a version whose chain below the Vault's has moved apart go up anyway.
@@ -260,21 +260,15 @@ pub fn handle_sync(
     // not fail, so there is a Workspace here to hand on.
     let held = workspace.get_ref().as_ref().unwrap();
 
-    // The Layout being worked in is the one the plan is about; a Layout that is not checked out is
-    // not the one a run is working in.
-    let layouts = held.layouts();
-    let name = match layouts.current() {
-        Ok(Some(name)) => name,
+    // The Layout being worked in is the one the plan is about; there is one per Workspace, so it is
+    // the one a run is working in.
+    let layout = match held.layout_if_there() {
+        Ok(Some(layout)) => layout,
         Ok(None) => return ErrorLayoutNoCurrent.into(),
         Err(error) => return failed(&error),
     };
-    let layout = match layouts.get(&name) {
-        Ok(Some(layout)) => layout,
-        Ok(None) => return ErrorLayoutMissing.into(),
-        Err(error) => return failed(&error),
-    };
 
-    let Some(track) = (match layouts.track(&name) {
+    let Some(track) = (match held.layout_track() {
         Ok(track) => track,
         Err(error) => return failed(&error),
     }) else {
@@ -345,7 +339,12 @@ pub fn handle_sync(
 
     // What a run that wants to know before it is changed asks for: the plan, and nothing done.
     if state.dry_run {
-        let next = planned(plan.as_ref(), state, name, vault_name);
+        let next = planned(
+            plan.as_ref(),
+            state,
+            DEFAULT_LAYOUT_NAME.to_owned(),
+            vault_name,
+        );
 
         reporting.finish();
 
@@ -373,7 +372,12 @@ pub fn handle_sync(
     reporting.finish();
 
     match outcome {
-        Ok(carried) => done(plan.as_ref(), name, vault_name, carried),
+        Ok(carried) => done(
+            plan.as_ref(),
+            DEFAULT_LAYOUT_NAME.to_owned(),
+            vault_name,
+            carried,
+        ),
         Err(error) => error.into(),
     }
 }

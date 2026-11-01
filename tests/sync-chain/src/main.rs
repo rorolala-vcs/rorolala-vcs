@@ -40,10 +40,10 @@ const VAULT_NAME: &str = "origin";
 const STARTUP: Duration = Duration::from_secs(10);
 
 /// Where the file sits in a Layout: what a checkin names it by.
-const REMOTE_PATH: &str = "@/new/hero.psd";
+const REMOTE_PATH: &str = "hero.psd";
 
 /// Where a checkin puts it on disk, below the Workspace it is checked into.
-const LOCAL_PATH: &str = "new/hero.psd";
+const LOCAL_PATH: &str = "hero.psd";
 
 fn main() {
     let sandbox = Guard::new("sync-chain");
@@ -73,7 +73,11 @@ fn main() {
     let newer = psd(2);
 
     fs::write(&file, &older).expect("the first save");
-    let said = run(&mut client(&first, &data, &["track", ".", "--message", "1"]));
+    let said = run(&mut client(
+        &first,
+        &data,
+        &["track", ".", "--message", "1"],
+    ));
     checked.wants(
         "the first version is recorded",
         said.success(),
@@ -81,7 +85,11 @@ fn main() {
     );
 
     fs::write(&file, &newer).expect("the second save");
-    let said = run(&mut client(&first, &data, &["track", ".", "--message", "2"]));
+    let said = run(&mut client(
+        &first,
+        &data,
+        &["track", ".", "--message", "2"],
+    ));
     checked.wants(
         "the second version is recorded",
         said.success(),
@@ -104,7 +112,11 @@ fn main() {
         &data,
         &["storage", "ls-remote-manifests", VAULT_NAME],
     ));
-    let manifests = said.stdout.lines().filter(|line| !line.trim().is_empty()).count();
+    let manifests = said
+        .stdout
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count();
     checked.wants(
         "the Vault holds a manifest for every version of the chain",
         said.success() && manifests == 2,
@@ -120,7 +132,10 @@ fn main() {
     // one name, which the Vault is right to refuse.
     Workspace::create(&second)
         .unwrap_or_else(|error| panic!("making {}: {error:?}", second.display()));
-    copy_identity(&first.join(".rola").join("auth"), &second.join(".rola").join("auth"));
+    copy_identity(
+        &first.join(".rola").join("auth"),
+        &second.join(".rola").join("auth"),
+    );
 
     run(&mut client(&second, &data, &["account", NAME])).expect_success();
     run(&mut client(&second, &data, &["bind", &link()])).expect_success();
@@ -412,7 +427,10 @@ impl Checked {
         }
 
         if self.wrong.is_empty() {
-            println!("{} questions, every one answered as it should be", self.asked);
+            println!(
+                "{} questions, every one answered as it should be",
+                self.asked
+            );
 
             return;
         }

@@ -1,9 +1,9 @@
 //! `write-remote-entries`: writing many entries of the Vault's Layout in one exchange.
 //!
 //! A sync names every entry it is ahead on, and each would otherwise be its own exchange — a
-//! connection and a handshake per file. The writes are made here in one go: the entries to create
-//! under `@/new/`, and the versions to set, are carried across together and answered together, one
-//! outcome per write in the order they were asked for.
+//! connection and a handshake per file. The writes are made here in one go: the entries to create,
+//! and the versions to set, are carried across together and answered together, one outcome per
+//! write in the order they were asked for.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
 use serde::{Deserialize, Serialize};

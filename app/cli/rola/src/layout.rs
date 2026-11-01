@@ -1,27 +1,21 @@
-//! The `rola layout` namespace: the Layouts a Workspace works in and a Vault keeps.
+//! The `rola layout` namespace: the one Layout a Workspace works in and the one a Vault keeps.
 //!
-//! A Workspace holds many Layouts and works in one at a time; a Vault holds one. What is here is
-//! what the two have in common — where a run's Layouts are, and how a failure to work on them is
-//! said — beside the subcommands, each in a file of its own: listing them, and, under those, making,
-//! copying, tracking, exporting, importing and removing them.
+//! A Workspace works in one Layout and a Vault keeps one. What is here is what the two have in
+//! common — where a run's Layout is, and how a failure to work on it is said — beside the
+//! subcommands, each in a file of its own: listing it, tracking the Vault it goes to, fetching
+//! that Vault's own Layout, and reading and changing what a Layout names.
 
 pub mod cmd_layout;
-pub mod cmd_layout_cp;
 pub mod cmd_layout_entries;
 pub mod cmd_layout_entry;
 pub mod cmd_layout_fetch;
-pub mod cmd_layout_force_switch;
 pub mod cmd_layout_giveup_ownership;
-pub mod cmd_layout_import;
 pub mod cmd_layout_ls;
 pub mod cmd_layout_ls_ownership;
-pub mod cmd_layout_new;
 pub mod cmd_layout_path;
 pub mod cmd_layout_read_ownership;
 pub mod cmd_layout_req_ownership;
-pub mod cmd_layout_rm;
 pub mod cmd_layout_set_track;
-pub mod cmd_layout_shot;
 pub mod cmd_layout_tree_diff;
 pub mod cmd_layout_un_track;
 
@@ -34,12 +28,12 @@ use mingling::{
 use rorolala_cli_setups::{ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line};
-use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, VAULT_LAYOUT_NAME};
 use rorolala_workspace::Workspace;
 use rust_i18n::t;
 use uuid::Uuid;
 
-use librorolala::layout::{Batch, Layout, LayoutError, LayoutPath, Layouts, MutableData};
+use librorolala::layout::{Batch, Layout, LayoutError, LayoutPath, MutableData};
 use librorolala::storage::Key;
 
 use crate::Next;
@@ -49,41 +43,6 @@ use crate::exit_codes::{
 };
 use crate::failure::failure;
 use crate::hash::{HashMiss, resolve};
-
-/// What a run works its Layouts through.
-pub enum Place {
-    /// A Workspace, with its set of named Layouts.
-    Workspace(Layouts),
-
-    /// A Vault, with its one Layout.
-    Vault(Layout),
-}
-
-/// The place a run works its Layouts in, from what the run found.
-///
-/// A Workspace comes before a Vault: a run inside one works in its Layouts, whatever else the
-/// directories above it hold. A Vault keeps its one Layout directly, so it is opened here.
-///
-/// # Errors
-///
-/// Answers with [`ErrorNoLayouts`] when the run is in neither, and [`ErrorLayoutFailed`] when a
-/// Vault's Layout could not be opened.
-pub fn place(workspace: &ResWorkspace, vault: &ResVault) -> Result<Place, Next> {
-    if let Some(workspace) = workspace.as_ref() {
-        return Ok(Place::Workspace(workspace.layouts()));
-    }
-
-    let Some(vault) = vault.as_ref() else {
-        return Err(ErrorNoLayouts.into());
-    };
-
-    vault.layout().map(Place::Vault).map_err(|error| {
-        ErrorLayoutFailed {
-            cause: error.to_string(),
-        }
-        .into()
-    })
-}
 
 /// Error: this run is in neither a Workspace nor a Vault, so it has no Layouts to work on.
 #[derive(Grouped)]
@@ -157,19 +116,19 @@ pub fn render_error_layout_failed(error: ErrorLayoutFailed, ec: &mut ResExitCode
 
 /// The Layout a run works on: the one named, or the one being worked in.
 ///
-/// What is named is a Workspace's to choose; a Vault keeps one Layout and has nothing to name. A
-/// name written `NAME@VAULT` names a Vault's Layout rather than one of the Workspace's own: the
-/// copy a [`fetch`](crate::layout::cmd_layout_fetch) brought here is read, and a run that names one
-/// outside a Workspace — or one that was never fetched — is refused rather than answered from
-/// somewhere else.
+/// A Workspace works in one Layout and a Vault keeps one, so a name a run writes is only ever a
+/// fetched copy of a Vault's: `NAME@VAULT`. Naming the Workspace's own Layout by the label it is
+/// listed under is accepted so that a place can address it, and nothing else is a Layout a run can
+/// name — there is no second one to choose.
 ///
 /// # Errors
 ///
-/// Answers with the rendered failures of [`place`], with [`ErrorLayoutNoCurrent`] when nothing is
-/// named and the Workspace has no Layout being worked in, with [`ErrorLayoutArgument`] when a Vault
-/// run named one, with [`ErrorLayoutShouldInWorkspace`] when a Vault's Layout is named outside a
-/// Workspace, with [`ErrorLayoutNotCached`] when that Layout was never fetched, and with
-/// [`ErrorLayoutMissing`] when the one named is not there.
+/// Answers with [`ErrorNoLayouts`] when the run is in neither a Workspace nor a Vault, with
+/// [`ErrorLayoutNoCurrent`] when the Workspace holds no Layout, with [`ErrorLayoutArgument`] when a
+/// Vault run named one, with [`ErrorLayoutShouldInWorkspace`] when a Vault's Layout is named outside
+/// a Workspace, with [`ErrorLayoutNotCached`] when that Layout was never fetched, with
+/// [`ErrorLayoutMissing`] when the name is not the one the Workspace's Layout goes by, and with
+/// [`ErrorLayoutFailed`] when a Layout that is there cannot be read.
 pub fn chosen(
     workspace: &ResWorkspace,
     vault: &ResVault,
@@ -179,34 +138,36 @@ pub fn chosen(
         return cached_layout(workspace, layout, vault_name);
     }
 
-    match place(workspace, vault)? {
-        Place::Workspace(layouts) => {
-            let name = match named {
-                Some(name) => name.to_owned(),
-                None => match layouts.current() {
-                    Ok(Some(name)) => name,
-                    // A Workspace with no Layout being worked in has nowhere to work, which is a
-                    // different thing from a name that does not resolve: what is missing is the
-                    // Layout itself, and adding one is what makes the Workspace usable.
-                    Ok(None) => return Err(ErrorLayoutNoCurrent.into()),
-                    Err(error) => return Err(failed(&error)),
-                },
-            };
-
-            match layouts.get(&name) {
-                Ok(Some(layout)) => Ok(layout),
-                Ok(None) => Err(ErrorLayoutMissing.into()),
-                Err(error) => Err(failed(&error)),
-            }
+    if let Some(workspace) = workspace.as_ref() {
+        // UNWRAP: a name that is not a fetched copy is either the label the one Layout goes by or a
+        // name it cannot have; both are answered below without reading anything.
+        if named.is_some_and(|name| name != DEFAULT_LAYOUT_NAME) {
+            return Err(ErrorLayoutMissing.into());
         }
-        Place::Vault(layout) => {
-            if named.is_some() {
-                return Err(ErrorLayoutArgument.into());
-            }
 
-            Ok(layout)
-        }
+        return match workspace.layout_if_there() {
+            Ok(Some(layout)) => Ok(layout),
+            // A Workspace that holds no Layout is one whose work cannot be recorded, which is a
+            // different thing from a name that does not resolve: a Workspace made by a version that
+            // kept several adopts the one it worked in, and one with nothing to adopt has none.
+            Ok(None) => Err(ErrorLayoutNoCurrent.into()),
+            Err(error) => Err(failed(&error)),
+        };
     }
+
+    let Some(vault) = vault.as_ref() else {
+        return Err(ErrorNoLayouts.into());
+    };
+    if named.is_some() {
+        return Err(ErrorLayoutArgument.into());
+    }
+
+    vault.layout().map_err(|error| {
+        ErrorLayoutFailed {
+            cause: error.to_string(),
+        }
+        .into()
+    })
 }
 
 /// The Layout a run works on, when the run is to change it.
@@ -920,32 +881,6 @@ pub fn render_error_layout_path_taken(error: ErrorLayoutPathTaken, ec: &mut ResE
         help_line!(t!("cmd_layout.err_path_taken_help").trim())
     );
     ec.exit_code = EC_ALREADY_EXIST;
-}
-
-/// Error: the Vault's Layout holds the entry, but not for this account to move.
-#[derive(Grouped)]
-pub struct ErrorLayoutMoveRefused;
-
-impl Failure for ErrorLayoutMoveRefused {
-    fn name(&self) -> &'static str {
-        "error_layout_move_refused"
-    }
-
-    fn reason(&self) -> String {
-        t!("cmd_layout.err_move_refused").trim().to_string()
-    }
-}
-
-failure!(ErrorLayoutMoveRefused);
-
-#[renderer(buffer)]
-pub fn render_error_layout_move_refused(error: ErrorLayoutMoveRefused, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!(
-        "{}",
-        help_line!(t!("cmd_layout.err_move_refused_help").trim())
-    );
-    ec.exit_code = EC_ERR_LAYOUT_OWNERSHIP;
 }
 
 /// Error: the fetched copy names no entry by that `Uuid`.

@@ -76,10 +76,8 @@ impl Ownership {
     /// one of those — the Workspace still has answers, and they say that nothing is known yet.
     #[must_use]
     pub fn open(workspace: &Workspace, me: Option<String>) -> Option<Self> {
-        let layouts = workspace.layouts();
-        let current = layouts.current().ok().flatten()?;
-        let vault = layouts.track(&current).ok().flatten()?;
-        let local = layouts.get(&current).ok().flatten()?;
+        let local = workspace.layout_if_there().ok().flatten()?;
+        let vault = workspace.layout_track().ok().flatten()?;
 
         // Opening a copy makes one where none is there, so a copy that was never fetched is asked
         // about first: what was not fetched is not a copy with nothing in it.
@@ -221,10 +219,8 @@ mod tests {
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
 
-        let layouts = workspace.layouts();
-        let local = layouts.create("main").unwrap();
-        layouts.set_current("main").unwrap();
-        layouts.set_track("main", "vault").unwrap();
+        let local = workspace.layout().unwrap();
+        workspace.set_layout_track("vault").unwrap();
 
         let id = Uuid::from_u128(1);
         let path = LayoutPath::new("hero.psd").unwrap();
@@ -361,7 +357,7 @@ mod tests {
     #[test]
     fn a_workspace_that_tracks_no_vault_has_no_answers() {
         let (dir, workspace) = held("untracked", Some("alice"));
-        workspace.layouts().un_track("main").unwrap();
+        workspace.un_track_layout().unwrap();
 
         assert!(Ownership::open(&workspace, Some("alice".to_owned())).is_none());
 

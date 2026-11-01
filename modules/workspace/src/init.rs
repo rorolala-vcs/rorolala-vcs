@@ -1,12 +1,14 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use rorolala_layout::Layout;
 use rorolala_storage::RorolalaStorage;
 use rorolala_utils_configure::Config;
 use rorolala_utils_lazyffi::lazyffi;
 
 use crate::{
-    CONFIG_PATH, CreationError, DATA_DIR, IGNORE_RULES_DIR, INDEX_DIR, STORAGE_DIR, Workspace,
+    CONFIG_PATH, CreationError, DATA_DIR, IGNORE_RULES_DIR, INDEX_DIR, LAYOUT_DIR, STORAGE_DIR,
+    Workspace,
 };
 
 /// Marking the data directory hidden the way Windows says a directory is hidden.
@@ -74,8 +76,9 @@ impl Workspace {
     /// The store it keeps its objects in is made with it too, so that a Workspace that exists
     /// has somewhere to keep them; see [`Workspace::get_current_rola_storage`].
     ///
-    /// No Layout is made: a Workspace that has just been created has none, and one is added —
-    /// and becomes the one worked in — by whoever chooses its name.
+    /// The one Layout a Workspace works in is made with it too, so that a Workspace that exists has
+    /// somewhere for the work to be recorded; see [`LAYOUT_DIR`]. It is empty and tracks no Vault
+    /// until something is recorded or a Vault is bound.
     ///
     /// On Windows the data directory is marked hidden, which is how that platform says what the name
     /// beginning with a dot says everywhere else.
@@ -137,11 +140,11 @@ impl Workspace {
         let storage: PathBuf = dir.join(STORAGE_DIR).components().collect();
         let _ = RorolalaStorage::create(storage);
 
-        // No Layout is made here. A Layout is a named place to work, and what a Workspace starts
-        // with is the fact that it has none: the name of the first one is the caller's to choose,
-        // and whether it tracks a Vault is decided with it. A Workspace with no Layout is one
-        // that cannot work yet, which is said where a run asks for the Layout to work in rather
-        // than guessed at here.
+        // The Layout is made last, beside the store. A failure here is not one `create` has a name
+        // for, and what it leaves is a Workspace that reads as having no Layout, which is a state
+        // every command already answers for.
+        let layout: PathBuf = dir.join(LAYOUT_DIR).components().collect();
+        let _ = Layout::open(layout);
 
         Ok(())
     }
@@ -153,6 +156,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use rorolala_layout::{Layout, MutableData};
     use rorolala_storage::internals::Internals as _;
     use rorolala_utils_configure::Configure;
     use rorolala_utils_location::Locate;
@@ -283,16 +287,55 @@ mod tests {
     }
 
     #[test]
-    fn creating_a_workspace_leaves_it_with_no_layout_to_work_in() {
+    fn creating_a_workspace_makes_the_one_layout_it_works_in() {
         let dir = scratch("layout");
 
         Workspace::create(&dir).unwrap();
 
-        // A name is the caller's to choose, so a Workspace that has just been made has none: what
-        // makes one is adding a Layout, which is what also chooses the one being worked in.
-        let layouts = Workspace::locate(&dir).unwrap().layouts();
-        assert_eq!(layouts.names().unwrap(), Vec::<String>::new());
-        assert_eq!(layouts.current().unwrap(), None);
+        // A Workspace has one Layout and it is made with the Workspace, empty of entries and
+        // tracking no Vault.
+        let workspace = Workspace::locate(&dir).unwrap();
+        let layout = workspace
+            .layout_if_there()
+            .unwrap()
+            .expect("the one Layout is there");
+        assert_eq!(layout.entries(), Vec::new());
+        assert_eq!(workspace.layout_track().unwrap(), None);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A Workspace an older version made kept its Layouts under `.rola/layouts/` and named the one it
+    /// worked in in `.rola/LAYOUT`; the one it worked in is adopted, and the others are left alone.
+    #[test]
+    fn a_workspace_from_before_one_layout_adopts_the_layout_it_worked_in() {
+        let dir = scratch("legacy-layout");
+
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let working = dir.join(".rola/layouts/working");
+        let other = dir.join(".rola/layouts/other");
+        let held = Layout::open(&working).unwrap();
+        held.create_entry(
+            uuid::Uuid::from_u128(1),
+            MutableData::new(None, [1; 32], String::new()),
+        )
+        .unwrap();
+        drop(held);
+        let _ = Layout::open(&other);
+
+        // The Workspace made above already has a Layout, so what is there is taken away first: this
+        // is the shape an older version's Workspace is in.
+        fs::remove_dir_all(dir.join(crate::LAYOUT_DIR)).unwrap();
+        fs::write(dir.join(crate::LEGACY_LAYOUT_PATH), "working\n").unwrap();
+
+        let layout = workspace
+            .layout_if_there()
+            .unwrap()
+            .expect("the Layout it worked in is adopted");
+        assert!(layout.entry(uuid::Uuid::from_u128(1)).is_some());
+        assert!(!dir.join(crate::LAYOUT_DIR).join("other").exists());
+        assert_eq!(workspace.layout_track().unwrap(), None);
 
         let _ = fs::remove_dir_all(&dir);
     }

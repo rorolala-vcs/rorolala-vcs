@@ -8,8 +8,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// What may be renamed in the upstream place, and what a rename of it comes to.
 /// </summary>
 /// <remarks>
-/// A name of the work's own is the account's that holds it, so the two questions are one: who holds every entry at the path
-/// and under it, and what the paths become. Both are questions about the copy the place reads, answered without a run.
+/// A move is a change of where an entry is rather than of who holds it, so what may be renamed is every row of the copy the
+/// place reads, and what the paths become is answered without a run.
 /// </remarks>
 public sealed class UpstreamRenameTests
 {
@@ -25,7 +25,6 @@ public sealed class UpstreamRenameTests
         // first, so the folder of a folder is walked before the file beside it.
         Assert.Equal(["A", "A/sub/d.fbx", "A/c.psd"], moves.Select(move => move.From));
         Assert.Equal(["B", "B/sub/d.fbx", "B/c.psd"], moves.Select(move => move.To));
-        Assert.Equal(["me", "me", "me"], moves.Select(move => move.Holder));
     }
 
     /// <summary>A file renamed takes a name in its own folder, and nothing beside it moves.</summary>
@@ -76,27 +75,6 @@ public sealed class UpstreamRenameTests
         );
 
         Assert.Equal(names, place.DraftPaths.OrderBy(path => path, StringComparer.Ordinal));
-    }
-
-    /// <summary>Only what the account holds is its to name: the whole of it, and never what nobody holds.</summary>
-    [Fact]
-    public void OnlyWhatTheAccountHoldsIsItsToName()
-    {
-        var tree = Tree();
-
-        Assert.True(UpstreamPlace.Held(tree, new UpstreamCarry(Origin, "A"), "me"));
-        Assert.True(UpstreamPlace.Held(tree, new UpstreamCarry(Origin, "A/c.psd"), "me"));
-
-        // One entry of the folder is another's, and a folder is only what stands under it: the Vault would refuse the folder
-        // whole, so it is not offered.
-        Assert.False(UpstreamPlace.Held(tree, new UpstreamCarry(Origin, "B"), "me"));
-
-        // An entry nobody holds has no owner to match, and an account that is not known yet names nothing.
-        Assert.False(UpstreamPlace.Held(tree, new UpstreamCarry(Origin, "Loose.psd"), "me"));
-        Assert.False(UpstreamPlace.Held(tree, new UpstreamCarry(Origin, "A"), string.Empty));
-
-        // A path the copy does not name is not a row, and holds nothing.
-        Assert.False(UpstreamPlace.Held(tree, new UpstreamCarry(Origin, "gone.psd"), "me"));
     }
 
     /// <summary>The copy these checks rename in.</summary>

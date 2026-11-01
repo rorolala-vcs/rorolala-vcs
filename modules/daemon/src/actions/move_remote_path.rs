@@ -1,9 +1,10 @@
 //! `move-remote-path`: moving a path in the Vault's Layout.
 //!
-//! Locating a file and deprecating one are both a move of its path in the Vault's Layout: it is
-//! moved out of `@/new/` to where it belongs, or under `@/removed/` so it reads as deprecated.
-//! Either is the holder's to do, or an administrator's, and what the Vault answers says which of
-//! those happened — so the Workspace can change the copy it keeps to agree with it.
+//! Locating a file and deprecating one are both a move of its path in the Vault's Layout: an entry an
+//! older run submitted under `@/new/` is moved where it belongs, or an entry is moved under
+//! `@/removed/` so it reads as deprecated. A move changes where an entry is rather than who holds it,
+//! so any account the Vault lets write its Layout may make one; what the Vault answers says which
+//! outcome happened, so the Workspace can change the copy it keeps to agree with it.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 
@@ -21,9 +22,9 @@ use super::sync_storage::{Side, carry_blob};
 /// # Output
 ///
 /// What became of it, as JSON: the entry is now at the path it was moved to, nothing was at the
-/// path it came from, something is already at the path it was going to, the account may not move
-/// it, or a path is not one a remote Layout may name. It crosses as text for the reason an
-/// ownership outcome does — see `request-ownership`.
+/// path it came from, something is already at the path it was going to, or a path is not one a
+/// remote Layout may name. It crosses as text for the reason an ownership outcome does — see
+/// `request-ownership`.
 pub struct ActionMoveRemotePath;
 
 impl Action for ActionMoveRemotePath {
@@ -42,8 +43,8 @@ impl Action for ActionMoveRemotePath {
     /// # Errors
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
-    /// Vault, or the Vault holds no member to act as, [`ActionError::Codec`] if a path or an
-    /// outcome will not cross, [`ActionError::Store`] if the Vault's Layout could not be written,
+    /// Vault, [`ActionError::Codec`] if a path or an outcome will not cross,
+    /// [`ActionError::Store`] if the Vault's Layout could not be written,
     /// [`ActionError::Json`] if the outcome will not encode, and whatever the exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
@@ -60,21 +61,10 @@ impl Action for ActionMoveRemotePath {
         let bytes = arrived.or(to_vault).unwrap_or_default();
         let (from, to) = <(String, String)>::decode(bytes).map_err(codec_failed)?;
 
-        // Whether the account administrates the Vault is the Vault's own configuration's to say,
-        // and which account it is the session's to say: neither is taken from the caller.
+        // Who asked makes no difference to a move, so no member is read on either side.
         let outcome = if ctx.is_vault() {
-            let me = ctx
-                .get_member()
-                .into_inner()
-                .map(|member| member.name())
-                .ok_or(ActionError::MissingValue)?;
-            let admin = ctx
-                .current_vault_config()
-                .into_inner()
-                .is_some_and(|config| config.auth_config().is_admin(&me));
-
             Some(batched(&local_layout(&ctx)?, |batch| {
-                move_remote(batch, &from, &to, &me, admin)
+                move_remote(batch, &from, &to)
             })?)
         } else {
             None

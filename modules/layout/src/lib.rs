@@ -8,9 +8,7 @@
 mod bytes;
 mod data;
 mod error;
-mod file;
 mod layout;
-mod layouts;
 mod log;
 mod path;
 mod record;
@@ -19,7 +17,5 @@ mod snapshot;
 
 pub use data::*;
 pub use error::*;
-pub use file::*;
 pub use layout::*;
-pub use layouts::*;
 pub use path::*;

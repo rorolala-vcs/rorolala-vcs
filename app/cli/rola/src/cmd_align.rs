@@ -353,7 +353,7 @@ pub fn handle_align(
         .and_then(|name| account_named(&name, Some(held), None).ok());
     let sources = match &account {
         Some(account) => {
-            let tracked = tracked_vault(held, &layout);
+            let tracked = tracked_vault(held);
             let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
             let sources = match Sources::new(held, account, remote.get_ref(), primary, **offline) {
                 Ok(sources) => sources.with_concurrency(**concurrency),

@@ -351,7 +351,7 @@ pub fn handle_retrack(
                 let bringer = Bringer {
                     workspace: held,
                     runtime: &runtime,
-                    end: vault_end(held, &layout, remote, current, vault)?,
+                    end: vault_end(held, remote, current, vault)?,
                     text: &text,
                 };
 
@@ -429,7 +429,7 @@ pub fn handle_retrack(
     };
     let sources = match &account {
         Some(account) => {
-            let tracked = tracked_vault(held, &layout);
+            let tracked = tracked_vault(held);
             let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
             let sources = Sources::new(held, account, remote.get_ref(), primary, **offline)
                 .map_err(failed)?
@@ -858,14 +858,13 @@ fn presence(vcs: &VCSIndex, runtime: &tokio::runtime::Runtime, hash: Blake3Hash)
 /// [`ErrorRetrackFailed`] when the Layout tracks no Vault or the Vault or account cannot be read.
 fn vault_end(
     held: &Workspace,
-    layout: &Layout,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     vault: Option<&str>,
 ) -> Result<VaultEnd, Next> {
     let name = match vault {
         Some(name) => name.to_owned(),
-        None => tracked_vault(held, layout)
+        None => tracked_vault(held)
             .ok_or_else(|| failed(t!("retrack.err_no_vault").trim().to_owned()))?,
     };
     let name = remote

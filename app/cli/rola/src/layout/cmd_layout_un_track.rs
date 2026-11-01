@@ -1,14 +1,12 @@
-//! The `rola layout un-track` command: make a Layout track no Vault.
+//! The `rola layout un-track` command: make the Layout track no Vault.
 
 use mingling::{
-    Grouped, LazyRes, Routable, ShellContext, Suggest,
-    consts::UNMATCHED,
+    Grouped, LazyRes, Suggest,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
+        buffer, chain, command, completion, help, metadata, r_eprintln, r_println, renderer,
         suggest,
     },
     metadata::Description,
-    picker::EntryPicker,
     res::ResExitCode,
 };
 use rorolala_cli_setups::ResWorkspace;
@@ -16,10 +14,9 @@ use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
-use crate::complete::{offer, positional, typing_flag, workspace_layout_names};
 use crate::exit_codes::EC_HELP;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
-use crate::layout::{ErrorLayoutArgument, failed};
+use crate::layout::failed;
 
 #[help(buffer)]
 pub fn help_layout_un_track(_: EntryLayoutUnTrack, ec: &mut ResExitCode) {
@@ -34,81 +31,51 @@ pub fn desc_layout_un_track() -> Description {
 
 /// Completes what `rola layout un-track` can be given next.
 ///
-/// The one word names a Layout the Workspace holds, so those are what is offered.
+/// The command names nothing: it lets go of whatever the one Layout tracks, so there is nothing to
+/// offer.
 #[completion(EntryLayoutUnTrack)]
-pub fn complete_layout_un_track(
-    ctx: ShellContext,
-    workspace: &mut LazyRes<ResWorkspace>,
-) -> Suggest {
-    if typing_flag(&ctx) || positional(&ctx, "un-track") != 0 {
-        return suggest!();
-    }
-
-    offer(&ctx, workspace_layout_names(workspace.get_ref()))
+pub fn complete_layout_un_track() -> Suggest {
+    suggest!()
 }
 
-/// Makes a Layout track no Vault
+/// Makes the Layout track no Vault
 ///
 /// What it tracked is let go of; the Layout itself is left as it was.
 ///
 /// # Errors
 ///
-/// Renders [`ErrorShouldInWorkspace`] when the run is not inside a Workspace,
-/// [`ErrorLayoutArgument`] when no name was given, and the Layout-not-there failure otherwise.
+/// Renders [`ErrorShouldInWorkspace`] when the run is not inside a Workspace, and the
+/// Layout-not-readable failure otherwise.
 #[command(node = "layout.un-track", entry = EntryLayoutUnTrack)]
-pub fn layout_un_track(args: EntryLayoutUnTrack) -> Next {
-    let picked = args
-        .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
-        .pick(&UNMATCHED)
-        .to_result();
-    let (name, unmatched) = match picked {
-        Ok(name) => name,
-        Err(next) => return next,
-    };
-
-    if let Some(next) = crate::unmatched::refused(&unmatched, "layout un-track") {
-        return next;
-    }
-
-    StateLayoutUnTrack { name }.into()
+pub fn layout_un_track() -> StateLayoutUnTrack {
+    StateLayoutUnTrack
 }
 
-/// The state of letting go of what a Layout tracks.
-#[derive(Grouped)]
-pub struct StateLayoutUnTrack {
-    /// The Layout whose tracking is let go of.
-    name: String,
-}
+/// The state of letting go of what the Layout tracks.
+#[derive(Grouped, Clone, Copy)]
+pub struct StateLayoutUnTrack;
 
 #[chain]
 pub fn handle_layout_un_track(
-    state: StateLayoutUnTrack,
+    _state: StateLayoutUnTrack,
     workspace: &mut LazyRes<ResWorkspace>,
 ) -> Next {
-    let StateLayoutUnTrack { name } = state;
-
     let Some(workspace) = workspace.get_ref().as_ref() else {
         return ErrorShouldInWorkspace.into();
     };
 
-    if let Err(error) = workspace.layouts().un_track(&name) {
+    if let Err(error) = workspace.un_track_layout() {
         return failed(&error);
     }
 
-    ResultLayoutUnTrack { name }.into()
+    ResultLayoutUnTrack.into()
 }
 
-/// Result: a Layout was made to track no Vault.
+/// Result: the Layout was made to track no Vault.
 #[derive(Grouped)]
-pub struct ResultLayoutUnTrack {
-    /// The Layout whose tracking was let go of.
-    name: String,
-}
+pub struct ResultLayoutUnTrack;
 
 #[renderer(buffer)]
-pub fn render_result_layout_un_track(result: ResultLayoutUnTrack) {
-    r_println!(
-        "{}",
-        t!("cmd_layout_un_track.result_untracked", name = result.name).trim()
-    );
+pub fn render_result_layout_un_track(_: ResultLayoutUnTrack) {
+    r_println!("{}", t!("cmd_layout_un_track.result_untracked").trim());
 }

@@ -697,18 +697,14 @@ rorolala_vcs:
     no_program_why:
       en: "`rola` could not be run here, so the work was not touched"
       zh-CN: "`rola` 无法在此运行，因此没有改动工作"
-    # What a move that did not happen says: which entry, and — where the copy names one — who holds it, because an entry
-    # held by another account is the usual reason the Vault refuses one. The reason itself is the command's own words
-    # where it wrote any, and this one where it did not.
-    move_refused_held:
-      en: "`%{path}` could not be moved — %{holder} holds it"
-      zh-CN: "`%{path}` 无法移动——它由 %{holder} 持有"
+    # What a move that did not happen says: which entry. The reason itself is the command's own words where it wrote any,
+    # and this one where it did not.
     move_refused:
       en: "`%{path}` could not be moved"
       zh-CN: "`%{path}` 无法移动"
     move_refused_why:
-      en: "`%{to}` was not written: the Layout still names the entry where it was. An entry another account holds can be moved only by that account, or by an administrator of the Vault."
-      zh-CN: "没有写入 `%{to}`：布局仍把条目记在原处。由他人持有的条目，只有持有人或保险库管理员才能移动。"
+      en: "`%{to}` was not written: the Layout still names the entry where it was."
+      zh-CN: "没有写入 `%{to}`：布局仍把条目记在原处。"
 
     # What the root of the place opens at, and what it says when there is no Vault to open: the work's own upstream is
     # the Vault the Layout being worked in tracks, and the Workspace's default Vault where it tracks none.

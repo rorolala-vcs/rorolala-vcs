@@ -21,7 +21,9 @@ use mingling::{
     },
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResVault, ResWorkspace};
-use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_READONLY_LAYOUTS_DIR};
+use rorolala_utils_constants::{
+    DEFAULT_LAYOUT_NAME, VAULT_LAYOUT_NAME, WORKSPACE_READONLY_LAYOUTS_DIR,
+};
 use rorolala_utils_location::Locate as _;
 
 use crate::layout::{chosen, readonly_layout_copy};
@@ -187,24 +189,24 @@ pub fn vault_names(remote: &ResCurrentRemoteVault) -> Vec<String> {
     names
 }
 
-/// The Layouts the Workspace itself holds, in name order.
+/// The name the Workspace's one Layout is listed under, or nothing when the run is not in one.
 ///
-/// A fetched copy is not among them: it is read rather than worked in, so a command that changes a
-/// Layout names one of these.
+/// It is a label rather than a choice: a Workspace works in one Layout, and the label is what a
+/// place addresses it by. A fetched copy is not among them: it is read rather than worked in, so a
+/// command that changes a Layout names one of these.
 #[must_use]
 pub fn workspace_layout_names(workspace: &ResWorkspace) -> Vec<String> {
-    let Some(workspace) = workspace.as_ref() else {
-        return Vec::new();
-    };
-
-    workspace.layouts().names().unwrap_or_default()
+    workspace
+        .as_ref()
+        .map(|_| vec![DEFAULT_LAYOUT_NAME.to_owned()])
+        .unwrap_or_default()
 }
 
 /// The Layouts a run can name, in name order.
 ///
-/// A Workspace's own Layouts are named directly; a Vault's Layout, once fetched, is named
-/// `NAME@VAULT`, which is how a query reaches the read-only copy. A Vault's Layout is known by
-/// one name, so it is that one that stands before the `@`.
+/// The Workspace's own Layout is named by the label it is listed under; a Vault's Layout, once
+/// fetched, is named `NAME@VAULT`, which is how a query reaches the read-only copy. A Vault's
+/// Layout is known by one name, so it is that one that stands before the `@`.
 #[must_use]
 pub fn layout_names(workspace: &ResWorkspace) -> Vec<String> {
     let Some(held) = workspace.as_ref() else {

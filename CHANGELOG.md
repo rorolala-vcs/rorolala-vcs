@@ -2,6 +2,18 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.2.0 (Unreleased)
+
+## Feature
+
+1. **\[BREAKING!\]** [`app`] [`rola`] [`sync`] Submit a new file under the path the work tracks it at — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-sync-submit-a-new-file-under-the-path-the-work-tracks-it-at)
+2. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry — [See details](dev/CHANGELOG-DETAILS.md#2-breaking-modules-daemon-move-remote-path-move-a-path-in-a-vaults-layout-without-holding-the-entry)
+
+## Refactor
+
+1. **\[BREAKING!\]** [`app`] [`rola`] [`layout`] Remove the `.rolayout` file format — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-layout-remove-the-rolayout-file-format)
+2. **\[BREAKING!\]** [`modules`] [`workspace`] Keep one Layout per Workspace — [See details](dev/CHANGELOG-DETAILS.md#2-breaking-modules-workspace-keep-one-layout-per-workspace)
+
 # 0.1.3 (2026-11-01)
 
 ## Bugfix

@@ -39,7 +39,7 @@ pub use rorolala_ignore as ignore;
 /// The reverse dependency index over a version control index
 pub use rorolala_inverse_index as inverse_index;
 
-/// The Layouts a Workspace and a Vault share, and the file one is written down as
+/// The Layout a Workspace and a Vault keep: what each names, and what it holds
 pub use rorolala_layout as layout;
 
 /// Reading a Workspace's tree against the Layout it works from

@@ -289,7 +289,7 @@ impl Status {
         // What is not this account's to change is read before anything is said, and kept out of the
         // content changes: a reader that took them as its own work would be reading past the one
         // thing it is not to do.
-        let tracked = tracked_vault(workspace, layout);
+        let tracked = tracked_vault(workspace);
         let unowned = unowned(workspace, layout, tracked.as_deref(), me, &diff)?;
         let not_mine: BTreeSet<&str> = unowned.iter().map(String::as_str).collect();
 
@@ -323,7 +323,7 @@ impl Status {
         // A reading without the copy, the index or a runtime has none of them: how two versions stand is not
         // known without the chain, and a reading that guessed would be saying something it does not hold.
         let standing = match (index, runtime.as_ref()) {
-            (Some(index), Some(runtime)) => vault_copy(workspace, layout)
+            (Some(index), Some(runtime)) => vault_copy(workspace)
                 .map_or_else(Vec::new, |copy| base::every(layout, &copy, index, runtime)),
             _ => Vec::new(),
         };
@@ -493,8 +493,7 @@ fn wrong_base(
     runtime: Option<&tokio::runtime::Runtime>,
     modified: &[LayoutPath],
 ) -> Vec<String> {
-    let (Some(index), Some(runtime), Some(copy)) = (index, runtime, vault_copy(workspace, layout))
-    else {
+    let (Some(index), Some(runtime), Some(copy)) = (index, runtime, vault_copy(workspace)) else {
         return Vec::new();
     };
 
@@ -657,7 +656,7 @@ mod tests {
     use rorolala_ignore::IgnoreRuleSet;
     use rorolala_layout::{Layout, LayoutPath, MutableData};
     use rorolala_tree_analyze::remember_moved;
-    use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, VAULT_LAYOUT_NAME};
+    use rorolala_utils_constants::VAULT_LAYOUT_NAME;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
@@ -685,20 +684,13 @@ mod tests {
 
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
-        let layouts = workspace.layouts();
-        layouts.create(DEFAULT_LAYOUT_NAME).unwrap();
-        layouts.set_current(DEFAULT_LAYOUT_NAME).unwrap();
 
         (dir, workspace)
     }
 
     /// The Layout a Workspace works in.
     fn working(workspace: &Workspace) -> Layout {
-        workspace
-            .layouts()
-            .get(DEFAULT_LAYOUT_NAME)
-            .unwrap()
-            .unwrap()
+        workspace.layout().unwrap()
     }
 
     /// Makes the Layout name `text`, under an id of its own and with a version.
@@ -894,10 +886,7 @@ mod tests {
     fn a_path_another_account_holds_is_wrong_before_it_is_changed() {
         let (dir, workspace) = workspace("states-held");
         track(&workspace, 1, "hero.psd");
-        workspace
-            .layouts()
-            .set_track(DEFAULT_LAYOUT_NAME, "vault")
-            .unwrap();
+        workspace.set_layout_track("vault").unwrap();
 
         // The copy says somebody else holds the entry, which is what makes changing it wrong. It is kept the way a
         // fetch for a Workspace of this age keeps one, which a reader still reads.

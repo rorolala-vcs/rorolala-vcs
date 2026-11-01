@@ -609,9 +609,7 @@ fn apart(
 /// A target that names a path of the Vault's is read from it. A Layout that tracks no Vault, or one
 /// nobody has fetched, has no copy: what the run named is then read as something else, or refused.
 fn tracked_layout(held: &Workspace) -> Option<(String, Layout)> {
-    let layouts = held.layouts();
-    let name = layouts.current().ok().flatten()?;
-    let track = layouts.track(&name).ok().flatten()?;
+    let track = held.layout_track().ok().flatten()?;
     let dir = readonly_layout_copy(held, &track, VAULT_LAYOUT_NAME)?;
 
     // Opened as something that has to be there: a cache directory with none of the Layout in it — one a fetch was cut

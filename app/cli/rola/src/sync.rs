@@ -22,19 +22,17 @@ use serde::Serialize;
 /// How alike two text files have to be to count as the same file moved.
 const ALIKE: f32 = 0.6;
 
-/// The prefix a `Uuid` only this Layout holds is put under when it goes up.
-const NEW_PREFIX: &str = "@/new/";
-
 /// The marker a remote path carries when the Vault has deprecated the file.
 const REMOVED_PREFIX: &str = "@/removed/";
 
 /// The name the Vault's Layout is to give a `Uuid` only this Layout holds.
 ///
-/// The path it was tracked under when the Vault's Layout does not already name it, so what a reader
-/// sees first is where the file came from. When that name is taken, the parent, the stem, the
-/// `Uuid` in short form, and the extension: `art/hero.psd` becomes `art/hero@1a2b3c4.psd`. The short
-/// form grows a character at a time while even that name is taken, so two files submitted under one
-/// path stay two names — the whole `Uuid` last, which no `Uuid`-carrying name can share.
+/// It is the path the file is tracked under here, so the Vault's Layout names a first submission
+/// where the work holds it rather than in a staging area of the Vault's own. When that name is
+/// taken, the parent, the stem, the `Uuid` in short form, and the extension: `art/hero.psd` becomes
+/// `art/hero@1a2b3c4.psd`. The short form grows a character at a time while even that name is taken,
+/// so two files submitted under one path stay two names — the whole `Uuid` last, which no
+/// `Uuid`-carrying name can share.
 ///
 /// `None` when even the whole `Uuid` leaves the name taken, which cannot happen for a real one.
 fn create_remote_path(
@@ -42,7 +40,7 @@ fn create_remote_path(
     uuid: &str,
     taken: impl Fn(&LayoutPath) -> bool,
 ) -> Option<String> {
-    let clean = LayoutPath::new(&format!("{NEW_PREFIX}{}", local_path.as_str())).ok()?;
+    let clean = LayoutPath::new(local_path.as_str()).ok()?;
     if !taken(&clean) {
         return Some(clean.as_str().to_owned());
     }
@@ -54,9 +52,9 @@ fn create_remote_path(
     for length in plain.len().min(7)..=plain.len() {
         let short = &plain[..length];
         let candidate = if parent.is_empty() {
-            format!("{NEW_PREFIX}{stem}@{short}{extension}")
+            format!("{stem}@{short}{extension}")
         } else {
-            format!("{NEW_PREFIX}{parent}/{stem}@{short}{extension}")
+            format!("{parent}/{stem}@{short}{extension}")
         };
 
         let Ok(named) = LayoutPath::new(&candidate) else {
@@ -102,7 +100,7 @@ pub enum Direction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
-    /// Only this Layout names it, so it goes up to the Vault's `@/new/`.
+    /// Only this Layout names it, so it goes up as an entry of the Vault's Layout.
     Create,
     /// The Vault is behind and this account holds it, so the newer version goes up.
     Send,
@@ -698,46 +696,42 @@ mod tests {
     }
 
     #[test]
-    fn a_new_file_is_named_by_its_path() {
+    fn a_new_file_is_named_by_the_path_it_is_tracked_at() {
         let free = |_: &LayoutPath| false;
 
         assert_eq!(
             create_remote_path(&LayoutPath::new("art/hero.psd").unwrap(), UUID, free).as_deref(),
-            Some("@/new/art/hero.psd")
+            Some("art/hero.psd")
         );
     }
 
     #[test]
     fn a_taken_path_takes_the_short_uuid_before_the_extension() {
-        let taken = |candidate: &LayoutPath| candidate.as_str() == "@/new/art/hero.psd";
+        let taken = |candidate: &LayoutPath| candidate.as_str() == "art/hero.psd";
 
         assert_eq!(
             create_remote_path(&LayoutPath::new("art/hero.psd").unwrap(), UUID, taken).as_deref(),
-            Some("@/new/art/hero@1a2b3c4.psd")
+            Some("art/hero@1a2b3c4.psd")
         );
 
         // A dotted name keeps everything before the last dot as the stem: `a.pkg.tar.zst` is
         // `a.pkg.tar` and `.zst`.
-        let taken = |candidate: &LayoutPath| candidate.as_str() == "@/new/a.pkg.tar.zst";
+        let taken = |candidate: &LayoutPath| candidate.as_str() == "a.pkg.tar.zst";
 
         assert_eq!(
             create_remote_path(&LayoutPath::new("a.pkg.tar.zst").unwrap(), UUID, taken).as_deref(),
-            Some("@/new/a.pkg.tar@1a2b3c4.zst")
+            Some("a.pkg.tar@1a2b3c4.zst")
         );
     }
 
     #[test]
     fn a_taken_short_uuid_grows_a_character_at_a_time() {
-        let taken = |candidate: &LayoutPath| {
-            matches!(
-                candidate.as_str(),
-                "@/new/hero.psd" | "@/new/hero@1a2b3c4.psd"
-            )
-        };
+        let taken =
+            |candidate: &LayoutPath| matches!(candidate.as_str(), "hero.psd" | "hero@1a2b3c4.psd");
 
         assert_eq!(
             create_remote_path(&LayoutPath::new("hero.psd").unwrap(), UUID, taken).as_deref(),
-            Some("@/new/hero@1a2b3c4d.psd")
+            Some("hero@1a2b3c4d.psd")
         );
     }
 

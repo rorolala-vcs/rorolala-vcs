@@ -22,10 +22,11 @@ use super::sync_storage::{Side, carry_blob};
 
 /// The markers a remote path may sit under, at the top of the path.
 ///
-/// A file is not put where it belongs when it is first submitted: it lands under `new` until
-/// someone locates it, and moving it under `removed` is how it is deprecated. Both are states
-/// rather than places, so `@` is reserved for them and a located path does not start with one —
-/// and `@` rather than `#`, which a shell reads as the start of a comment.
+/// A path is normally where the file belongs. A marker path says what state the file is in instead:
+/// `new` is how an entry an older run submitted before it was placed reads, and moving a file under
+/// `removed` is how it is deprecated. Both are states rather than places, so `@` is reserved for
+/// them and a located path does not start with one — and `@` rather than `#`, which a shell reads as
+/// the start of a comment.
 const MARKERS: &[&str] = &["new", "removed"];
 
 /// The smallest log, in bytes, that is compacted for its own sake.
@@ -343,9 +344,8 @@ pub(crate) fn giveup(
 
 /// What became of a request to move a path in the Vault's Layout.
 ///
-/// A move is how a file is located and how it is deprecated, so it is the holder's or an
-/// administrator's to make: the Workspace reads which of the outcomes came back to know whether
-/// the Layout it keeps a copy of is to be changed with it.
+/// A move is how a file is located and how it is deprecated: the Workspace reads which of the outcomes
+/// came back to know whether the Layout it keeps a copy of is to be changed with it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PathMove {
     /// The entry is now at the path it was moved to.
@@ -354,17 +354,21 @@ pub enum PathMove {
     Missing,
     /// The path it was to move to already names something.
     Taken,
-    /// The account neither holds the entry nor administrates the Vault.
-    Refused,
     /// A path is not one a remote Layout may name.
     Malformed,
 }
 
-/// Moves whatever is at `from` to `to`, refusing what the account may not move.
+/// Moves whatever is at `from` to `to`.
 ///
-/// Which account this runs as is already known — the session says — and whether it administrates
-/// the Vault is read from the Vault's own configuration by the caller, so both come in as values
-/// and the decision here is only about the layout as `batch` leaves it.
+/// Who may move is the account's that can write the Vault's Layout at all: a move changes where an
+/// entry is, not who holds it, so requiring the holder made locating a file someone else's to do and
+/// made the answer depend on a reading that another writer could change between the read and the
+/// write. What is decided here is only about the Layout as `batch` leaves it.
+///
+/// Two moves racing are left as the Layout's log leaves them: whichever wrote last is the path the
+/// entry has, since a Layout holds no reservation for a path that is only going to be moved. A
+/// caller that reads a path and then moves it may find something else there, which is answered as
+/// [`PathMove::Taken`] rather than overwritten.
 ///
 /// # Errors
 ///
@@ -373,8 +377,6 @@ pub(crate) fn move_remote(
     batch: &mut Batch<'_>,
     from: &str,
     to: &str,
-    me: &str,
-    admin: bool,
 ) -> Result<PathMove, ActionError> {
     let (Ok(from), Ok(to)) = (LayoutPath::new(from), LayoutPath::new(to)) else {
         return Ok(PathMove::Malformed);
@@ -384,18 +386,11 @@ pub(crate) fn move_remote(
         return Ok(PathMove::Malformed);
     }
 
-    let Some(id) = batch.id_of(&from) else {
+    if batch.id_of(&from).is_none() {
         return Ok(PathMove::Missing);
-    };
+    }
     if batch.id_of(&to).is_some() {
         return Ok(PathMove::Taken);
-    }
-
-    let held = batch
-        .entry(id)
-        .and_then(|data| data.owner().map(str::to_owned));
-    if !admin && held.as_deref() != Some(me) {
-        return Ok(PathMove::Refused);
     }
 
     batch
@@ -427,9 +422,6 @@ fn is_remote_path(path: &LayoutPath) -> bool {
 pub(crate) fn codec_failed(error: impl std::fmt::Display) -> ActionError {
     ActionError::Codec(BincodeError::new(error.to_string()))
 }
-
-/// The prefix a `Uuid` only one side holds is put under when it goes up.
-const NEW_PREFIX: &str = "@/new/";
 
 /// What became of a request to write an entry of the Vault's Layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -533,11 +525,14 @@ where
     }
 }
 
-/// Creates an entry of the Vault's Layout under `@/new/`, held by the account that asks.
+/// Creates an entry of the Vault's Layout at the name the caller gives, held by the account that
+/// asks.
 ///
-/// The name is the caller's to choose and only has to be under `@/new/`: when the path the file was
-/// submitted under is free it is that path, and when it is taken the caller disambiguates it, so two
-/// files submitted under one name are still two paths.
+/// The name is the caller's to choose, and is the path the work tracks the file at: the Vault's
+/// Layout names a first submission where the work holds it. When that path is free it is that path,
+/// and when it is taken the caller disambiguates it, so two files submitted under one name are still
+/// two paths. A marker path is still a name an entry may be made under, since what an older run
+/// submitted under `@/new/` has to stay readable and movable.
 ///
 /// The entry and the path that names it are made as one change rather than two: a create that was
 /// cut in half would leave an entry no path names or a path naming no entry, and a layout holds
@@ -563,7 +558,7 @@ pub(crate) fn create_remote(
         return Ok(EntryWrite::Malformed);
     };
 
-    if !path.as_str().starts_with(NEW_PREFIX) {
+    if !is_remote_path(&path) {
         return Ok(EntryWrite::Malformed);
     }
     if batch.entry(id).is_some() {
@@ -756,38 +751,20 @@ mod tests {
     }
 
     #[test]
-    fn a_path_is_moved_by_its_holder_or_an_administrator() {
+    fn a_path_is_moved_by_any_account_that_may_write_the_layout() {
         let (layout, id) = at(
             "move-holder",
             "@/new/临时文件/模型.fbx@a1b2c3",
             Some("alice"),
         );
 
-        // A member who holds neither the entry nor the Vault may not move it.
+        // A move changes where an entry is, not who holds it: an account that holds neither the
+        // entry nor the Vault may make one.
         assert_eq!(
             batched(&layout, |batch| move_remote(
                 batch,
                 "@/new/临时文件/模型.fbx@a1b2c3",
                 "Models/model.fbx",
-                "bob",
-                false
-            ))
-            .unwrap(),
-            PathMove::Refused
-        );
-        assert_eq!(
-            layout.id_of(&LayoutPath::new("@/new/临时文件/模型.fbx@a1b2c3").unwrap()),
-            Some(id)
-        );
-
-        // Its holder may locate it, and the marker path stops naming it.
-        assert_eq!(
-            batched(&layout, |batch| move_remote(
-                batch,
-                "@/new/临时文件/模型.fbx@a1b2c3",
-                "Models/model.fbx",
-                "alice",
-                false
             ))
             .unwrap(),
             PathMove::Moved
@@ -801,16 +778,16 @@ mod tests {
                 .id_of(&LayoutPath::new("@/new/临时文件/模型.fbx@a1b2c3").unwrap())
                 .is_none()
         );
+        // The holder is not the move's to change.
+        assert_eq!(layout.entry(id).unwrap().owner(), Some("alice"));
 
-        // An administrator may move what it does not hold.
-        let (other, other_id) = at("move-admin", "@/new/a.psd@d4e5f6", Some("bob"));
+        // A path moved under the deprecated marker is a move like any other.
+        let (other, other_id) = at("move-deprecate", "@/new/a.psd@d4e5f6", Some("bob"));
         assert_eq!(
             batched(&other, |batch| move_remote(
                 batch,
                 "@/new/a.psd@d4e5f6",
                 "@/removed/a.psd",
-                "carol",
-                true
             ))
             .unwrap(),
             PathMove::Moved
@@ -831,8 +808,6 @@ mod tests {
                 batch,
                 "nowhere/a.psd",
                 "Models/a.psd",
-                "alice",
-                false
             ))
             .unwrap(),
             PathMove::Missing
@@ -844,8 +819,6 @@ mod tests {
                 batch,
                 "@/new/a.psd@d4e5f6",
                 "@/new/a.psd@d4e5f6",
-                "alice",
-                false
             ))
             .unwrap(),
             PathMove::Taken
@@ -859,8 +832,6 @@ mod tests {
                     batch,
                     "@/new/a.psd@d4e5f6",
                     refused,
-                    "alice",
-                    true
                 ))
                 .unwrap(),
                 PathMove::Malformed,
@@ -870,7 +841,7 @@ mod tests {
     }
 
     #[test]
-    fn a_new_entry_goes_under_new_and_is_held_by_its_creator() {
+    fn a_new_entry_is_made_at_the_name_it_is_given_and_is_held_by_its_creator() {
         let layout = Layout::open(scratch("create")).unwrap();
         let id = uuid::Uuid::from_u128(3);
         let version = "11".repeat(32);
@@ -878,7 +849,7 @@ mod tests {
         assert_eq!(
             batched(&layout, |batch| create_remote(
                 batch,
-                "@/new/art/hero.psd@abc1234",
+                "art/hero@abc1234.psd",
                 &id.to_string(),
                 &version,
                 "alice"
@@ -888,7 +859,7 @@ mod tests {
         );
         assert_eq!(layout.entry(id).unwrap().owner(), Some("alice"));
         assert_eq!(
-            layout.id_of(&LayoutPath::new("@/new/art/hero.psd@abc1234").unwrap()),
+            layout.id_of(&LayoutPath::new("art/hero@abc1234.psd").unwrap()),
             Some(id)
         );
 
@@ -896,7 +867,7 @@ mod tests {
         assert_eq!(
             batched(&layout, |batch| create_remote(
                 batch,
-                "@/new/other.psd@abc1234",
+                "art/other@abc1234.psd",
                 &id.to_string(),
                 &version,
                 "alice"
@@ -907,7 +878,7 @@ mod tests {
         assert_eq!(
             batched(&layout, |batch| create_remote(
                 batch,
-                "@/new/art/hero.psd@abc1234",
+                "art/hero@abc1234.psd",
                 &uuid::Uuid::from_u128(4).to_string(),
                 &version,
                 "alice"
@@ -916,18 +887,36 @@ mod tests {
             EntryWrite::Taken
         );
 
-        // A path outside `@/new/` is not a name a new entry is made under.
+        // A marker path is still a name an entry may be made under: what an older run submitted
+        // under `@/new/` has to stay readable.
         assert_eq!(
             batched(&layout, |batch| create_remote(
                 batch,
-                "art/hero.psd",
-                &uuid::Uuid::from_u128(4).to_string(),
+                "@/new/old.psd",
+                &uuid::Uuid::from_u128(5).to_string(),
                 &version,
                 "alice"
             ))
             .unwrap(),
-            EntryWrite::Malformed
+            EntryWrite::Written
         );
+
+        // A marker path this design does not name is not one, and neither is a marker with
+        // nothing under it.
+        for refused in ["@/archive/a.psd", "@/new", "@/removed"] {
+            assert_eq!(
+                batched(&layout, |batch| create_remote(
+                    batch,
+                    refused,
+                    &uuid::Uuid::from_u128(6).to_string(),
+                    &version,
+                    "alice"
+                ))
+                .unwrap(),
+                EntryWrite::Malformed,
+                "{refused}"
+            );
+        }
     }
 
     #[test]

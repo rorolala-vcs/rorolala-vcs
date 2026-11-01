@@ -3567,6 +3567,7 @@ dependencies = [
  "embed-resource",
  "globset",
  "indicatif",
+ "just_fmt 0.2.1",
  "just_template",
  "libc",
  "librorolala",
@@ -3850,7 +3851,6 @@ dependencies = [
 name = "rorolala-layout"
 version = "0.2.0"
 dependencies = [
- "just_fmt 0.2.1",
  "rorolala-errors",
  "rorolala-storage",
  "rorolala-utils-constants",

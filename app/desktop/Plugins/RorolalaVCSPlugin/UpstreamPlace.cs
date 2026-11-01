@@ -11,9 +11,9 @@ namespace RorolalaVCSPlugin;
 /// <summary>Which Layout a level of the place shows: the domain it is listed under, and its name.</summary>
 /// <remarks>
 /// The two domains are two ways of naming one thing: <c>vaults/origin</c> is the Layout the Vault <c>origin</c> keeps,
-/// and <c>layouts/work</c> is a Layout of the Workspace's own. What differs is what a run is told, since the command line
-/// writes a Vault's Layout as <c>truth@VAULT</c> and the Workspace's as its name alone, and whether an entry of it can be
-/// brought into the work, which is only ever from the Vault the work tracks.
+/// and <c>layouts/main</c> is the one Layout the Workspace works in. What differs is what a run is told, since the command
+/// line writes a Vault's Layout as <c>truth@VAULT</c> and the Workspace's as its label alone, and whether an entry of it can
+/// be brought into the work, which is only ever from the Vault the work tracks.
 /// </remarks>
 /// <param name="Domain">The domain it is listed under: <c>vaults</c> or <c>layouts</c>.</param>
 /// <param name="Name">The Vault's name, or the Layout's.</param>
@@ -537,9 +537,10 @@ internal sealed class UpstreamPlace
 
     /// <inheritdoc />
     /// <remarks>
-    /// A folder this side made is its own to name. A row of the work's own upstream is the account's that holds it — all of
-    /// it, since a folder is only what stands under it — and a Layout of the Workspace's own is not offered: what this names
-    /// is the Vault's upstream, and the paths of the work's own Layout are the work itself.
+    /// A folder this side made is its own to name. A row of the work's own upstream is the work's to move: a move is a
+    /// change of where an entry is rather than of who holds it, so no account's name has to stand over every entry at the
+    /// path. A Layout of the Workspace's own is not offered either: what this names is the Vault's upstream, and the paths
+    /// of the work's own Layout are the work itself.
     /// </remarks>
     public bool Renamable(object data)
     {
@@ -554,8 +555,7 @@ internal sealed class UpstreamPlace
         }
 
         return string.Equals(carry.Source.Domain, Vaults, StringComparison.Ordinal)
-            && Tree(carry.Source) is { } tree
-            && Held(tree, carry, Account());
+            && Tree(carry.Source) is not null;
     }
 
     /// <inheritdoc />
@@ -911,7 +911,7 @@ internal sealed class UpstreamPlace
     /// <param name="carrying">What the drag carried.</param>
     /// <param name="prefix">The prefix they are dropped on.</param>
     /// <returns>The moves, each entry once and in the order the carries were made.</returns>
-    internal static List<(string From, string To, string? Holder)> Moving(
+    internal static List<(string From, string To)> Moving(
         UpstreamEntriesTree tree,
         IReadOnlyList<UpstreamCarry> carrying,
         string prefix
@@ -920,7 +920,7 @@ internal sealed class UpstreamPlace
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(carrying);
 
-        List<(string From, string To, string? Holder)> moves = [];
+        List<(string From, string To)> moves = [];
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var carry in carrying)
@@ -943,7 +943,7 @@ internal sealed class UpstreamPlace
                     continue;
                 }
 
-                moves.Add((path, to, tree.Find(path)?.Entry?.Owner));
+                moves.Add((path, to));
             }
         }
 
@@ -970,35 +970,6 @@ internal sealed class UpstreamPlace
         }
     }
 
-    /// <summary>Whether every entry at a path and under it is held by one account, which is what makes it that account's.</summary>
-    /// <remarks>
-    /// A path is only the entries that stand at it and under it, so a folder is this side's exactly when all of them are: one
-    /// held by another account is a folder that account would have to move as well, and the Vault refuses the whole of it.
-    /// An entry nobody holds has no owner to match, and what nobody holds is not this side's to name.
-    /// </remarks>
-    /// <param name="tree">The copy.</param>
-    /// <param name="carry">The row being judged.</param>
-    /// <param name="account">The account the work acts as, empty when it is not known.</param>
-    /// <returns>Whether it is held by that account.</returns>
-    internal static bool Held(UpstreamEntriesTree tree, UpstreamCarry carry, string account)
-    {
-        ArgumentNullException.ThrowIfNull(tree);
-        ArgumentNullException.ThrowIfNull(carry);
-        ArgumentNullException.ThrowIfNull(account);
-
-        if (account.Length == 0)
-        {
-            return false;
-        }
-
-        var owners = Every(tree, carry.Path)
-            .Select(path => tree.Find(path)?.Entry?.Owner ?? string.Empty)
-            .ToList();
-
-        return owners.Count > 0
-            && owners.TrueForAll(owner => string.Equals(owner, account, StringComparison.Ordinal));
-    }
-
     /// <summary>What renaming a path comes to, one entry at a time.</summary>
     /// <remarks>
     /// A rename is a move within the path's own folder: the entries under a folder keep what they have below it, because an
@@ -1008,7 +979,7 @@ internal sealed class UpstreamPlace
     /// <param name="carry">What is being renamed.</param>
     /// <param name="to">The path it is to have.</param>
     /// <returns>The moves, each entry once, in the order a listing reads them.</returns>
-    internal static List<(string From, string To, string? Holder)> Renaming(
+    internal static List<(string From, string To)> Renaming(
         UpstreamEntriesTree tree,
         UpstreamCarry carry,
         string to
@@ -1018,7 +989,7 @@ internal sealed class UpstreamPlace
         ArgumentNullException.ThrowIfNull(carry);
 
         var root = carry.Path + "/";
-        List<(string From, string To, string? Holder)> moves = [];
+        List<(string From, string To)> moves = [];
 
         foreach (var path in Every(tree, carry.Path))
         {
@@ -1029,7 +1000,7 @@ internal sealed class UpstreamPlace
                 continue;
             }
 
-            moves.Add((path, landed, tree.Find(path)?.Entry?.Owner));
+            moves.Add((path, landed));
         }
 
         return moves;
@@ -2216,18 +2187,14 @@ internal sealed class UpstreamPlace
 
     /// <summary>Moves paths within one Layout, one run each.</summary>
     /// <remarks>
-    /// The words a refusal is shown with are the command's own, and the entry it is about is named beside them: what the
-    /// Vault refuses a move for is usually that the entry is held by another account, and a reader who is told only that
-    /// something failed has nothing to act on. What the command agreed to is written into the copy, so a move the copy
-    /// still names at its old path is read as a refusal whatever the run said about itself — a status of zero is not the
-    /// whole of the answer, and a drop that moved nothing cannot be left to say nothing.
+    /// The words a refusal is shown with are the command's own, and the entry it is about is named beside them: a reader who
+    /// is told only that something failed has nothing to act on. What the command agreed to is written into the copy, so a
+    /// move the copy still names at its old path is read as a refusal whatever the run said about itself — a status of zero
+    /// is not the whole of the answer, and a drop that moved nothing cannot be left to say nothing.
     /// </remarks>
     /// <param name="source">The Layout they are moved in.</param>
-    /// <param name="moves">Every move, in the order the drop made them, with the account holding the entry.</param>
-    private void Move(
-        UpstreamSource source,
-        IReadOnlyList<(string From, string To, string? Holder)> moves
-    )
+    /// <param name="moves">Every move, in the order the drop made them.</param>
+    private void Move(UpstreamSource source, IReadOnlyList<(string From, string To)> moves)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(moves);
@@ -2250,11 +2217,11 @@ internal sealed class UpstreamPlace
 
         _ = Task.Run(() =>
         {
-            List<(string From, string To, string? Holder, string Said, bool Done)> outcomes = [];
+            List<(string From, string To, string Said, bool Done)> outcomes = [];
 
             // One run each, and not one for the lot: the command moves one Layout path at a time, and an entry the Vault
             // refuses — a locked one, say — must not take the rest of the drop down with it.
-            foreach (var (from, to, holder) in moves)
+            foreach (var (from, to) in moves)
             {
                 var (done, said) = LayoutPathMoveCommand.Run(
                     program,
@@ -2266,7 +2233,7 @@ internal sealed class UpstreamPlace
                     _hub.Touch
                 );
 
-                outcomes.Add((from, to, holder, said, done));
+                outcomes.Add((from, to, said, done));
             }
 
             // What the command agreed to is written into the copy as well, so the copy is what says whether a move
@@ -2290,16 +2257,14 @@ internal sealed class UpstreamPlace
             {
                 _hub.End(run);
 
-                foreach (var (from, to, holder, said, _) in refused)
+                foreach (var (from, to, said, _) in refused)
                 {
                     var leaf = from[(from.LastIndexOf('/') + 1)..];
 
                     FailureNotice.Show(
                         _host.Dialogs,
                         _host.Icons,
-                        holder is { Length: > 0 }
-                            ? RolaI18N.Get("rorolala_vcs.place.move_refused_held", leaf, holder)
-                            : RolaI18N.Get("rorolala_vcs.place.move_refused", leaf),
+                        RolaI18N.Get("rorolala_vcs.place.move_refused", leaf),
                         said.Trim() is { Length: > 0 } words
                             ? words
                             : RolaI18N.Get("rorolala_vcs.place.move_refused_why", to)

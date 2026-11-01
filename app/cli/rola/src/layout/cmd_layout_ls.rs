@@ -1,8 +1,8 @@
-//! The `rola layout ls` command: the Layouts a run works in.
+//! The `rola layout ls` command: the Layout a run works in.
 //!
-//! A Workspace holds many, each with a name, and works in one of them at a time; a Vault holds one,
-//! which is `truth` because it has no name of its own to be read from disk. What is listed is each
-//! Layout by its name, whether it is the one checked out, and the Vault upstream it tracks.
+//! A Workspace has one Layout and a Vault keeps one, so the listing is one line: the label the
+//! Layout is listed under, that it is the one being worked in, and the Vault upstream it tracks.
+//! The label is what a place addresses the Layout by rather than a thing there is a second of.
 
 use mingling::{
     Grouped, LazyRes, StructuralData, Suggest,
@@ -15,21 +15,22 @@ use mingling::{
 };
 use rorolala_cli_setups::{ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::{err_line, trd};
-use rorolala_utils_constants::{LAYOUT_TRACK_FILE, VAULT_LAYOUT_NAME};
+use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, LAYOUT_TRACK_FILE, VAULT_LAYOUT_NAME};
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::EC_ERR_FORMAT;
 use crate::format::ResFormat;
-use crate::layout::{ErrorLayoutFailed, Place, place};
+use crate::layout::{ErrorLayoutFailed, ErrorLayoutNoCurrent, ErrorNoLayouts};
 
-/// How a listing of the Layouts is drawn when no template is named.
+/// How a listing of the Layout is drawn when no template is named.
 ///
-/// One Layout a line: its name, whether it is the one checked out, and the Vault it tracks when it
-/// tracks one. The three are the same names `--json` writes, so a template and a program read the
-/// same fields.
-pub const DEFAULT_FORMAT: &str = "{{ layouts.name }}{% if layouts.is_current %}  (checked out){% endif %}{% if layouts.tracking %}  -> {{ layouts.tracking }}{% endif %}";
+/// One Layout a line: the label it goes by, that it is the one being worked in, and the Vault it
+/// tracks when it tracks one. The three are the same names `--json` writes, so a template and a
+/// program read the same fields.
+pub const DEFAULT_FORMAT: &str =
+    "{{ layouts.name }}{% if layouts.tracking %}  -> {{ layouts.tracking }}{% endif %}";
 
 #[help(buffer)]
 pub fn help_layout_ls(_: EntryLayoutLs, ec: &mut ResExitCode) {
@@ -50,19 +51,20 @@ pub fn complete_layout_ls() -> Suggest {
     suggest!()
 }
 
-/// Lists the Layouts a run works in
+/// Lists the Layout a run works in
 ///
-/// A Workspace's Layouts are listed, or a Vault's one. Each carries its name, whether it is the one
-/// checked out (`is_current`), and the Vault upstream it tracks, which is empty when it tracks none.
+/// A Workspace's one Layout is listed, or a Vault's one. It carries the label it is listed under,
+/// that it is the one being worked in (`is_current`), and the Vault upstream it tracks, which is
+/// empty when it tracks none.
 #[command(node = "layout.ls")]
 pub fn layout_ls(format: &mut ResFormat) -> StateLayoutLs {
     format.default_template(DEFAULT_FORMAT);
     StateLayoutLs
 }
 
-/// The state a listing of the Layouts starts in.
+/// The state a listing of the Layout starts in.
 ///
-/// A listing names nothing: there is one set to read, and it is the run's own.
+/// A listing names nothing: there is one Layout to read, and it is the run's own.
 #[derive(Grouped, Clone, Copy)]
 pub struct StateLayoutLs;
 
@@ -73,39 +75,38 @@ pub fn handle_layout_ls(
     vault: &mut LazyRes<ResVault>,
     format: &mut ResFormat,
 ) -> Next {
-    let place = match place(workspace.get_ref(), vault.get_ref()) {
-        Ok(place) => place,
-        Err(next) => return next,
-    };
-
-    let layouts = match place {
-        Place::Workspace(set) => {
-            let current = match set.current() {
-                Ok(current) => current,
-                Err(error) => return failed(&error),
-            };
-            let names = match set.names() {
-                Ok(names) => names,
-                Err(error) => return failed(&error),
-            };
-
-            names
-                .into_iter()
-                .map(|name| {
-                    let tracking = set.track(&name).ok().flatten().unwrap_or_default();
-                    LayoutItem {
-                        is_current: current.as_deref() == Some(name.as_str()),
-                        tracking,
-                        name,
-                    }
-                })
-                .collect()
+    let layouts = if let Some(workspace) = workspace.get_ref().as_ref() {
+        // The Layout is read before what it tracks, so a Workspace made by an older version has the
+        // Layout it worked in adopted before the reading says anything about it.
+        match workspace.layout_if_there() {
+            Ok(Some(_)) => {}
+            Ok(None) => return ErrorLayoutNoCurrent.into(),
+            Err(error) => return failed(&error),
         }
-        Place::Vault(layout) => vec![LayoutItem {
+
+        let tracking = match workspace.layout_track() {
+            Ok(tracking) => tracking.unwrap_or_default(),
+            Err(error) => return failed(&error),
+        };
+
+        vec![LayoutItem {
+            name: DEFAULT_LAYOUT_NAME.to_owned(),
+            is_current: true,
+            tracking,
+        }]
+    } else if let Some(vault) = vault.get_ref().as_ref() {
+        let layout = match vault.layout() {
+            Ok(layout) => layout,
+            Err(error) => return failed(&error),
+        };
+
+        vec![LayoutItem {
             name: VAULT_LAYOUT_NAME.to_owned(),
             is_current: true,
             tracking: track_of(&layout),
-        }],
+        }]
+    } else {
+        return ErrorNoLayouts.into();
     };
 
     format.set(
@@ -137,18 +138,18 @@ fn failed(error: &librorolala::layout::LayoutError) -> Next {
 /// One Layout, as `layout ls` shows it.
 #[derive(Serialize)]
 pub struct LayoutItem {
-    /// The name it is known by.
+    /// The label it is listed under.
     name: String,
-    /// Whether it is the one the run has checked out.
+    /// Whether it is the one the run is working in.
     is_current: bool,
     /// The Vault upstream it tracks, empty when it tracks none.
     tracking: String,
 }
 
-/// Result: the run's Layouts were listed.
+/// Result: the run's Layout was listed.
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultLayouts {
-    /// Each Layout, in name order.
+    /// The one Layout.
     layouts: Vec<LayoutItem>,
 }
 
@@ -173,14 +174,7 @@ pub fn render_result_layouts(result: ResultLayouts, format: &ResFormat, ec: &mut
                 format!("{}  {}", layout.name, layout.tracking)
             };
 
-            if layout.is_current {
-                r_println!(
-                    "{}",
-                    t!("cmd_layout_ls.result_current", layout = shown).trim()
-                );
-            } else {
-                r_println!("{shown}");
-            }
+            r_println!("{shown}");
         }
     }
 }

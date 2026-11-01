@@ -14,6 +14,7 @@ use mingling::{
 };
 use rorolala_cli_setups::ResWorkspace;
 use rorolala_utils_cli_theme::{err_line, trd};
+use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
 use rust_i18n::t;
 use serde::Serialize;
 
@@ -150,7 +151,6 @@ pub fn handle_layout_tree_diff(
         .and_then(remote_spec)
         .map(|(layout, vault)| (layout.to_owned(), vault.to_owned()));
 
-    let layouts = held.layouts();
     // A Vault's Layout is read the same way whether it is being listed or read beside the tree, so
     // what `entries` answers for a name written `NAME@VAULT`, this answers for it too.
     let layout = if let Some((layout, vault)) = remote {
@@ -159,18 +159,18 @@ pub fn handle_layout_tree_diff(
             Err(next) => return next,
         }
     } else {
-        let name = match name {
-            Some(name) => name,
-            None => match layouts.current() {
-                Ok(Some(name)) => name,
-                Ok(None) => return ErrorLayoutNoCurrent.into(),
-                Err(error) => return failed(&error),
-            },
-        };
+        // The one Layout a Workspace has is the one this reads beside, so the only name that can
+        // resolve here is the label it is listed under.
+        if name
+            .as_deref()
+            .is_some_and(|name| name != DEFAULT_LAYOUT_NAME)
+        {
+            return ErrorLayoutMissing.into();
+        }
 
-        match layouts.get(&name) {
+        match held.layout_if_there() {
             Ok(Some(layout)) => layout,
-            Ok(None) => return ErrorLayoutMissing.into(),
+            Ok(None) => return ErrorLayoutNoCurrent.into(),
             Err(error) => return failed(&error),
         }
     };

@@ -540,10 +540,7 @@ impl VersionGraph {
 
 /// The Layout the Workspace is working in, when it is working in one.
 fn working_layout(workspace: &Workspace) -> Option<Layout> {
-    let layouts = workspace.layouts();
-    let current = layouts.current().ok().flatten()?;
-
-    layouts.get(&current).ok().flatten()
+    workspace.layout_if_there().ok().flatten()
 }
 
 /// The path `target` names in the Layout, read from the Workspace's root.
@@ -587,9 +584,7 @@ fn renamed(workspace: &Workspace, layout: &Layout, path: &LayoutPath) -> Option<
 
 /// The version the Vault the Layout tracks records for `id`, when its fetched copy is here.
 fn vault_origin(workspace: &Workspace, id: Uuid) -> Option<(String, [u8; 32])> {
-    let layouts = workspace.layouts();
-    let current = layouts.current().ok().flatten()?;
-    let track = layouts.track(&current).ok().flatten()?;
+    let track = workspace.layout_track().ok().flatten()?;
     let dir = workspace.readonly_layout_copy(&track, VAULT_LAYOUT_NAME)?;
     let layout = Layout::open(dir).ok()?;
     let version = layout.entry(id)?.version();
@@ -604,7 +599,6 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use rorolala_layout::{LayoutPath, MutableData};
-    use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
     use rorolala_utils_location::Locate as _;
     use rorolala_vcs::{ComputeBlake3, Creator, Message, VCSIndex, Version};
     use rorolala_workspace::Workspace;
@@ -631,9 +625,6 @@ mod tests {
         let dir = scratch(label);
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
-        let layouts = workspace.layouts();
-        layouts.create(DEFAULT_LAYOUT_NAME).unwrap();
-        layouts.set_current(DEFAULT_LAYOUT_NAME).unwrap();
 
         let index = VCSIndex::create(dir.join(".rola/index"));
         let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -644,11 +635,7 @@ mod tests {
 
     /// The Layout the Workspace works in.
     fn working(workspace: &Workspace) -> rorolala_layout::Layout {
-        workspace
-            .layouts()
-            .get(DEFAULT_LAYOUT_NAME)
-            .unwrap()
-            .unwrap()
+        workspace.layout().unwrap()
     }
 
     /// A version of `base`, made by `creator` and saying `message`.

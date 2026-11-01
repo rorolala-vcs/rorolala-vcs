@@ -135,13 +135,13 @@ pub fn handle_entries(
     // not fail, so there is a Workspace here to hand on.
     let held = workspace.get_ref().as_ref().unwrap();
 
-    let layouts = held.layouts();
-    let name = match layouts.current() {
-        Ok(Some(name)) => name,
+    match held.layout_if_there() {
+        Ok(Some(_)) => {}
         Ok(None) => return ErrorLayoutNoCurrent.into(),
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
-    let Some(track) = (match layouts.track(&name) {
+    }
+
+    let Some(track) = (match held.layout_track() {
         Ok(track) => track,
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     }) else {

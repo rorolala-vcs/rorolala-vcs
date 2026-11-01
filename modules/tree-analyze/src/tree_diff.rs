@@ -592,7 +592,7 @@ mod tests {
 
     use rorolala_ignore::IgnoreRuleSet;
     use rorolala_layout::{LayoutPath, MutableData};
-    use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, WORKSPACE_IGNORE_RULES_DIR};
+    use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
@@ -620,26 +620,18 @@ mod tests {
 
     /// A Workspace in a directory of its own, and the Layout it works in.
     ///
-    /// A Workspace is made with no Layout, since the name of the first one is the caller's to
-    /// choose; every test here works in one, so the fixture makes it and works in it.
+    /// Every Workspace has one Layout, which is made with it; every test here works in it.
     fn workspace(label: &str) -> (PathBuf, Workspace) {
         let dir = scratch(label);
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
-        let layouts = workspace.layouts();
-        layouts.create(DEFAULT_LAYOUT_NAME).unwrap();
-        layouts.set_current(DEFAULT_LAYOUT_NAME).unwrap();
 
         (dir, workspace)
     }
 
-    /// The Layout a Workspace works in, which the fixture has made and chosen.
+    /// The Layout a Workspace works in.
     fn working(workspace: &Workspace) -> rorolala_layout::Layout {
-        workspace
-            .layouts()
-            .get(DEFAULT_LAYOUT_NAME)
-            .unwrap()
-            .unwrap()
+        workspace.layout().unwrap()
     }
 
     /// Makes the Layout a Workspace works in name `text`, held by no account.

@@ -2,6 +2,81 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.2.0 (Unreleased)
+
+## Feature
+
+### 1. **\[BREAKING!\]** [`app`] [`rola`] [`sync`] Submit a new file under the path the work tracks it at
+
+A `Uuid` only the Workspace holds no longer reaches the Vault under `@/new/`: the Vault's
+Layout names it at the path the work tracks it at, so `art/hero.psd` is an entry of the Vault's
+Layout called `art/hero.psd` rather than `@/new/art/hero.psd`. A first submission reads where the
+work keeps the file instead of in a staging tree of the Vault's, and the two trees line up from the
+first sync.
+
+Because the name is now the work's own path, a path the Vault's Layout already names is told apart
+the way it was: the parent, the stem, the `Uuid` in short form and the extension,
+`art/hero@1a2b3c4.psd`, with the short form growing a character at a time and the whole `Uuid` last.
+The Vault side accepts any path a remote Layout may name, so no prefix is required of a creation.
+
+What an older version submitted under `@/new/` is unchanged: such an entry is still read, moved and
+deprecated as before, and a path under the marker is still a name a new entry may be made under.
+There is no migration — a layout that holds both spellings is what one built across the change
+looks like, and `layout path move` is what takes an old entry out of the marker.
+
+### 2. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry
+
+Moving a path in the Vault's Layout — locating an entry out of `@/new/`, deprecating one under
+`@/removed/`, renaming or regrouping one anywhere — no longer requires the account that asks to
+hold the entry, or to administer the Vault. A move changes where an entry is rather than who holds
+it, so any account the Vault lets write its Layout may make one. `rola layout path move` therefore
+no longer renders a refusal for an entry another account holds, and `rola req-ownership` /
+`giveup-ownership` are about content writes rather than about moves.
+
+The desktop's upstream view follows: every row of a fetched copy is renamable, and a folder is no
+longer offered only when all of its entries are the acting account's.
+
+`rola layout path move` still refuses a path that names nothing, a path that is already taken, and
+a path a remote Layout may not name. Two moves racing are answered by the Layout's log rather than
+by a holder check — the last write is the path the entry has — which is what a move always left
+behind; what a caller that read a path and then moves it finds taken is answered as taken rather
+than overwritten.
+
+## Refactor
+
+### 1. **\[BREAKING!\]** [`app`] [`rola`] [`layout`] Remove the `.rolayout` file format
+
+The `.rolayout` file is gone: `rola layout shot` no longer writes a Layout down as one, `rola
+layout import` no longer makes a Layout from one, and the library has no reader or writer for the
+format. A Layout is kept as the log it is and reached through the Layout itself, so a copy of one
+moment of it written to a file is a second thing to keep in step rather than a way to hand work
+over.
+
+A caller that wrote a `.rolayout` file to move work between machines has no command to replace it:
+the work travels as the Vault's own Layout, fetched from the Vault, and a Workspace made from
+nothing is bound to a Vault and checks the work in from it. A file already written is not read by
+this version and nothing converts it.
+
+### 2. **\[BREAKING!\]** [`modules`] [`workspace`] Keep one Layout per Workspace
+
+A Workspace works in one Layout. There is no set of named Layouts and no pointer naming the one
+checked out: the Layout is `./.rola/layout/`, made with the Workspace, and it is the only one a run
+can address. A Vault keeps its one Layout as before.
+
+The commands that managed the set are gone: `rola layout new`, `rola layout cp`, `rola layout rm`
+and `rola layout force-switch` are commands the program does not have. `rola bind` is what puts a
+fresh Workspace to work — it binds the Vault and points the Layout at it when the Layout tracks
+nothing — and `rola layout set-track <VAULT>` and `rola layout un-track` change what it tracks
+without taking a Layout's name. `rola layout ls` lists the one Layout under the label `main`, and
+`--layout` accepts `main` or a fetched Vault's `truth@VAULT`.
+
+A Workspace made by an older version keeps working: the next time it is opened, the Layout it
+worked in is adopted as its one Layout, and any other Layouts it held are left where they were and
+are no longer reachable. Emptying a Vault's Layout is no longer offered by a command.
+
+The desktop's upstream view is unchanged in what it lists and how it moves a path: its `layouts`
+domain now holds the one Layout, addressed as `rola@layouts/main`.
+
 # 0.1.3 (2026-11-01)
 
 ## Bugfix

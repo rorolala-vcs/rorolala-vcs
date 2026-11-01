@@ -18,10 +18,8 @@ use rorolala_workspace::Workspace;
 
 /// The Vault the Layout being worked in tracks, when it tracks one.
 #[must_use]
-pub fn tracked_vault(workspace: &Workspace, layout: &Layout) -> Option<String> {
-    let name = layout.dir().file_name()?.to_str()?;
-
-    workspace.layouts().track(name).ok().flatten()
+pub fn tracked_vault(workspace: &Workspace) -> Option<String> {
+    workspace.layout_track().ok().flatten()
 }
 
 /// The fetched copy of the Vault's own Layout, when one is here to read.
@@ -30,8 +28,8 @@ pub fn tracked_vault(workspace: &Workspace, layout: &Layout) -> Option<String> {
 /// tracks no Vault, and a copy that was never fetched, both answer nothing — opening a copy makes one
 /// where none is there, so what was not fetched is not a copy with nothing in it.
 #[must_use]
-pub fn vault_copy(workspace: &Workspace, layout: &Layout) -> Option<Layout> {
-    let vault = tracked_vault(workspace, layout)?;
+pub fn vault_copy(workspace: &Workspace) -> Option<Layout> {
+    let vault = tracked_vault(workspace)?;
     let dir = workspace.readonly_layout_copy(&vault, VAULT_LAYOUT_NAME)?;
 
     Layout::open(&dir).ok()

@@ -5,11 +5,13 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
 
+use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use rorolala_layout::Layouts;
+use rorolala_layout::{Layout, LayoutError};
 use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage};
-use rorolala_utils_constants::WORKSPACE_READONLY_LAYOUTS_DIR;
+use rorolala_utils_constants::{LAYOUT_TRACK_FILE, WORKSPACE_READONLY_LAYOUTS_DIR};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
 
@@ -35,9 +37,8 @@ pub use ownership::*;
 pub use rorolala_utils_constants::{
     WORKSPACE_CONFIG_PATH as CONFIG_PATH, WORKSPACE_DATA_DIR as DATA_DIR,
     WORKSPACE_IGNORE_RULES_DIR as IGNORE_RULES_DIR, WORKSPACE_INDEX_DIR as INDEX_DIR,
-    WORKSPACE_KEYS_DIR as KEYS_DIR, WORKSPACE_LAYOUT_PATH as LAYOUT_PATH,
-    WORKSPACE_LAYOUTS_DIR as LAYOUTS_DIR, WORKSPACE_LOCK_PATH as LOCK_PATH,
-    WORKSPACE_STORAGE_DIR as STORAGE_DIR,
+    WORKSPACE_KEYS_DIR as KEYS_DIR, WORKSPACE_LAYOUT_DIR as LAYOUT_DIR,
+    WORKSPACE_LOCK_PATH as LOCK_PATH, WORKSPACE_STORAGE_DIR as STORAGE_DIR,
 };
 
 /// Rorolala local workspace
@@ -118,25 +119,159 @@ impl Workspace {
             .unwrap_or_else(|| RorolalaStorage::create(self.storage_root()))
     }
 
-    /// The Layouts this Workspace holds, and the one it has checked out.
+    /// The Layout this Workspace works in, made where it is not there yet.
     ///
-    /// A Workspace keeps its Layouts under [`LAYOUTS_DIR`] inside its data directory, one
-    /// directory each, and the one it works in is named by [`LAYOUT_PATH`]. Nothing is made
-    /// here: a Workspace with no Layouts is one with nothing to list.
-    #[must_use]
-    pub fn layouts(&self) -> Layouts {
-        Layouts::open(
-            self.layouts_root(),
-            self.current_dir
-                .join(LAYOUT_PATH)
-                .components()
-                .collect::<PathBuf>(),
-        )
+    /// A Workspace has one Layout and it is kept under [`LAYOUT_DIR`]. Opening it makes it where it
+    /// is not there, which is what a command that changes the work wants: a Workspace that has just
+    /// been made already has one, and one made by an older version has the Layout it worked in
+    /// adopted here before anything is made.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError`] when the Layout cannot be made or read, or the one an older Workspace
+    /// worked in cannot be taken over.
+    pub fn layout(&self) -> Result<Layout, LayoutError> {
+        self.adopt_legacy_layout()?;
+
+        Layout::open(self.layout_dir())
     }
 
-    /// Where the Workspace's Layouts are rooted, with the layout's spelling walked back out of it.
-    fn layouts_root(&self) -> PathBuf {
-        self.current_dir.join(LAYOUTS_DIR).components().collect()
+    /// The Layout this Workspace works in, when there is one to read.
+    ///
+    /// It makes nothing: a Workspace that holds no Layout is a Workspace with no work recorded, and
+    /// a reader is told that rather than handed one that was made on the way. A Workspace made by a
+    /// version that kept several Layouts has the one it worked in adopted here, once.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError`] when a Layout that is there cannot be read, or the one an older
+    /// Workspace worked in cannot be taken over.
+    pub fn layout_if_there(&self) -> Result<Option<Layout>, LayoutError> {
+        match Layout::open_existing(self.layout_dir()) {
+            Ok(layout) => Ok(Some(layout)),
+            Err(error) if error.is_not_found() => {
+                self.adopt_legacy_layout()?;
+
+                match Layout::open_existing(self.layout_dir()) {
+                    Ok(layout) => Ok(Some(layout)),
+                    Err(error) if error.is_not_found() => Ok(None),
+                    Err(error) => Err(error),
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// The Vault the Layout being worked in tracks, when it tracks one.
+    ///
+    /// A Layout tracks nothing when the file naming its Vault is not there, and a Workspace with no
+    /// Layout tracks nothing either: a Layout is a place to work, and the Vault it tracks is where
+    /// the work goes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError`] when the file naming the Vault cannot be read.
+    pub fn layout_track(&self) -> Result<Option<String>, LayoutError> {
+        let dir = self.layout_dir();
+        if !dir.is_dir() {
+            return Ok(None);
+        }
+
+        match fs::read_to_string(dir.join(LAYOUT_TRACK_FILE)) {
+            Ok(text) => {
+                let track = text.trim();
+
+                Ok((!track.is_empty()).then(|| track.to_owned()))
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Makes the Layout being worked in track the Vault `track`, or track none when it is empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError`] when the file naming the Vault cannot be written, or the Layout an
+    /// older Workspace worked in cannot be taken over.
+    pub fn set_layout_track(&self, track: &str) -> Result<(), LayoutError> {
+        let track = track.trim();
+        if track.is_empty() {
+            return self.un_track_layout();
+        }
+
+        self.adopt_legacy_layout()?;
+
+        let dir = self.layout_dir();
+        fs::create_dir_all(&dir)?;
+        fs::write(dir.join(LAYOUT_TRACK_FILE), format!("{track}\n"))?;
+
+        Ok(())
+    }
+
+    /// Makes the Layout being worked in track no Vault.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError`] when what it names its Vault in cannot be taken away.
+    pub fn un_track_layout(&self) -> Result<(), LayoutError> {
+        match fs::remove_file(self.layout_dir().join(LAYOUT_TRACK_FILE)) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Where the Workspace's one Layout is kept, with the layout's spelling walked back out of it.
+    #[must_use]
+    pub fn layout_dir(&self) -> PathBuf {
+        self.current_dir.join(LAYOUT_DIR).components().collect()
+    }
+
+    /// Takes over the Layout a version before this one kept among several.
+    ///
+    /// A Workspace made before a Workspace had one Layout kept its Layouts under
+    /// [`LEGACY_LAYOUTS_DIR`], one directory each, and named the one it worked in in
+    /// [`LEGACY_LAYOUT_PATH`]. What it worked in is the one it goes on working in, so it is moved to
+    /// [`LAYOUT_DIR`] and the rest are left where they are: nothing is taken from a Workspace that
+    /// is not part of what it worked in, and a layout it did not work in is not one there is a
+    /// command to choose any more.
+    ///
+    /// The move is the reason this is not simply "the Layout is not there": a Workspace that has
+    /// none is one there is nothing to adopt from, and that is answered with "no Layout" as it was.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError`] when the Layout that was worked in is there but cannot be moved.
+    fn adopt_legacy_layout(&self) -> Result<(), LayoutError> {
+        let legacy = self.current_dir.join(LEGACY_LAYOUTS_DIR);
+        if !legacy.is_dir() {
+            return Ok(());
+        }
+
+        let name = match fs::read_to_string(self.current_dir.join(LEGACY_LAYOUT_PATH)) {
+            Ok(text) => text.trim().to_owned(),
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                // No name was written down: a Workspace with one Layout worked in the only one it
+                // had, and one with several and none named has nothing that says which it worked in.
+                let mut names = legacy_names(&legacy)?;
+                if names.len() == 1 {
+                    names.remove(0)
+                } else {
+                    return Ok(());
+                }
+            }
+            Err(error) => return Err(error.into()),
+        };
+
+        let from = legacy.join(&name);
+        if !from.is_dir() {
+            return Ok(());
+        }
+
+        fs::rename(&from, self.layout_dir())?;
+
+        Ok(())
     }
 
     /// Where a Vault's Layout copy is kept: the pointer, and a directory per generation.
@@ -169,6 +304,35 @@ impl Workspace {
     fn storage_root(&self) -> PathBuf {
         self.current_dir.join(STORAGE_DIR).components().collect()
     }
+}
+
+/// Where a version before this one kept the several Layouts a Workspace could work in.
+///
+/// It is read by [`Workspace::adopt_legacy_layout`] and written by nothing: the directory is what a
+/// Workspace made by an older version still has, and it goes away when every such Workspace has been
+/// opened once.
+const LEGACY_LAYOUTS_DIR: &str = "./.rola/layouts/";
+
+/// The file, inside the data directory, naming the Layout an older Workspace worked in.
+///
+/// It is read by [`Workspace::adopt_legacy_layout`] and written by nothing, for the reason
+/// [`LEGACY_LAYOUTS_DIR`] is.
+const LEGACY_LAYOUT_PATH: &str = "./.rola/LAYOUT";
+
+/// The names the Layouts an older Workspace kept are known by, in name order.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] when the directory cannot be read.
+fn legacy_names(legacy: &Path) -> Result<Vec<String>, LayoutError> {
+    let mut names: Vec<String> = fs::read_dir(legacy)?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .filter_map(|entry| entry.file_name().to_str().map(str::to_owned))
+        .collect();
+    names.sort_unstable();
+
+    Ok(names)
 }
 
 #[cfg(test)]

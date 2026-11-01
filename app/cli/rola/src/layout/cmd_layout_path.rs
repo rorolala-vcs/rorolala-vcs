@@ -35,9 +35,8 @@ use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutMoveRefused,
-    ErrorLayoutPathTaken, LayoutDid, ResultLayoutContent, chosen_writable, failed, remote_spec,
-    set_cached_path,
+    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutPathTaken, LayoutDid,
+    ResultLayoutContent, chosen_writable, failed, remote_spec, set_cached_path,
 };
 
 /// The `LayoutPath` `text` names, or the argument failure.
@@ -337,14 +336,14 @@ fn entry_layout(
 /// Moves the entry at one path to another
 ///
 /// `--layout truth@VAULT` moves the path in the Vault's own Layout rather than one of the
-/// Workspace's: locating a file is moving it out of `@/new/` to where it belongs, and deprecating
-/// one is moving it under `@/removed/`. Only the entry's holder, or an administrator of the Vault,
-/// may move it.
+/// Workspace's: an entry an older run submitted under `@/new/` is located by moving it where it
+/// belongs, and deprecating one is moving it under `@/removed/`. A move changes where an entry is
+/// rather than who holds it, so any account that may write the Vault's Layout may make one.
 ///
 /// # Errors
 ///
 /// Renders [`ErrorLayoutArgument`] when an argument is missing or does not read, and the
-/// path-not-there, path-not-allowed or path-already-taken failures otherwise.
+/// path-not-there or path-already-taken failures otherwise.
 #[command(node = "layout.path.move", entry = EntryLayoutPathMove)]
 pub fn layout_path_move(args: EntryLayoutPathMove) -> Next {
     let picked = args
@@ -451,7 +450,6 @@ pub fn handle_layout_path_move(
             }
             PathMove::Missing => ErrorLayoutMissing.into(),
             PathMove::Taken => ErrorLayoutPathTaken.into(),
-            PathMove::Refused => ErrorLayoutMoveRefused.into(),
             PathMove::Malformed => ErrorLayoutArgument.into(),
         };
     }

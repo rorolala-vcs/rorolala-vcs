@@ -51,11 +51,8 @@ async fn main() {
 
     Workspace::create(&workspace)
         .unwrap_or_else(|error| panic!("making {}: {error:?}", workspace.display()));
-    // A Workspace is made with no Layout, and what this works in is one of the Workspace's own: a
-    // Vault's Layout is the read-only copy a fetch brings here, not a place to work.
-    let layouts = locate_workspace(&workspace).unwrap().layouts();
-    layouts.create("main").expect("the Workspace's Layout");
-    layouts.set_current("main").expect("working in it");
+    // A Workspace is made with its one Layout, and what this works in is that one: a Vault's Layout
+    // is the read-only copy a fetch brings here, not a place to work.
     let auth = workspace.join(".rola").join("auth");
     for name in [ALICE, BOB] {
         pair(&auth, name);
@@ -385,8 +382,8 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    // Locating and deprecating are a move of the path in the Vault's Layout, and it is the
-    // holder's to make: take the entry again, then move it under the deprecated marker.
+    // Locating and deprecating are a move of the path in the Vault's Layout: take the entry again,
+    // then move it under the deprecated marker.
     run(&mut client(
         &workspace,
         &data,
@@ -449,7 +446,8 @@ async fn main() {
         ),
     );
 
-    // A member who neither holds the entry nor administrates the Vault may not move it.
+    // A move changes where an entry is rather than who holds it: an account that holds neither the
+    // entry nor the Vault may make one.
     run(&mut client(&workspace, &data, &["account", BOB])).expect_success();
     let said = run(&mut client(
         &workspace,
@@ -465,8 +463,29 @@ async fn main() {
         ],
     ));
     checked.wants(
-        "a member who does not hold the entry may not move it",
-        said.code == Some(193) && clean(&said.stderr).contains("Only the entry's holder"),
+        "a member who does not hold the entry may move it",
+        said.success() && vault_path(&root).as_deref() == Some("a.psd"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // Put it back under the marker, since what the checks after this one read is the deprecated
+    // entry they were written for; the account doing it still holds nothing.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "path",
+            "move",
+            "a.psd",
+            "@/removed/a.psd",
+            "--layout",
+            "truth@origin",
+        ],
+    ));
+    checked.wants(
+        "a move under the deprecated marker is a move like any other",
+        said.success() && vault_path(&root).as_deref() == Some("@/removed/a.psd"),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
@@ -575,7 +594,7 @@ async fn main() {
     run(&mut client(
         &workspace,
         &data,
-        &["layout", "set-track", "main", VAULT_NAME],
+        &["layout", "set-track", VAULT_NAME],
     ))
     .expect_success();
 
@@ -598,8 +617,7 @@ async fn main() {
         ),
     );
 
-    // A file tracked here and not in the Vault goes up under `@/new/`, named by the path it was
-    // tracked under.
+    // A file tracked here and not in the Vault goes up at the path it is tracked under.
     let fresh: Uuid = Uuid::from_u128(0xaa);
     let version = "33".repeat(32);
     run(&mut client(
@@ -631,8 +649,8 @@ async fn main() {
 
     let said = run(&mut client(&workspace, &data, &["sync", "--up-only"]));
     checked.wants(
-        "a file only this Layout holds goes up under @/new/",
-        said.success() && vault_path_of(&root, fresh) == Some("@/new/art/hero.psd".to_owned()),
+        "a file only this Layout holds goes up where the work tracks it",
+        said.success() && vault_path_of(&root, fresh) == Some("art/hero.psd".to_owned()),
         &format!(
             "it ended with {:?}, said {:?}, and the Vault names {:?}",
             said.code,
@@ -664,7 +682,7 @@ async fn main() {
     ));
     checked.wants(
         "the fetched copy follows what went up",
-        said.success() && said.stdout.contains("@/new/art/hero.psd"),
+        said.success() && said.stdout.contains("art/hero.psd"),
         &format!(
             "it ended with {:?} and said {:?}",
             said.code,
@@ -692,8 +710,7 @@ async fn main() {
     ))
     .expect_success();
 
-    let held =
-        Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
+    let held = Layout::open(workspace.join(".rola/layout")).expect("the Layout being worked in");
     let (id, first) = held
         .entries()
         .into_iter()
@@ -714,8 +731,7 @@ async fn main() {
     ))
     .expect_success();
 
-    let held =
-        Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
+    let held = Layout::open(workspace.join(".rola/layout")).expect("the Layout being worked in");
     let second = held.entry(id).expect("the entry").version();
 
     // The two versions the retrack checks below go back to. They are kept under names of their own
@@ -727,8 +743,7 @@ async fn main() {
 
     // Put this side back at the first version, with the tree matching it, so the Vault is ahead:
     // nothing here has been changed, and what the Vault holds is what a pull should bring.
-    let held =
-        Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
+    let held = Layout::open(workspace.join(".rola/layout")).expect("the Layout being worked in");
     held.update_entry(
         id,
         MutableData::new(Some(ALICE.to_owned()), first, String::new()),
@@ -764,7 +779,7 @@ async fn main() {
     );
     checked.wants(
         "the Layout follows the version that came down",
-        Layout::open(workspace.join(".rola/layouts/main"))
+        Layout::open(workspace.join(".rola/layout"))
             .expect("the Layout being worked in")
             .entry(id)
             .expect("the entry")
@@ -776,7 +791,7 @@ async fn main() {
     // A `Uuid` the Vault holds but this Layout does not is brought in by naming where it goes. In
     // the Layout that already holds it, that is refused; in a Workspace that never did, it is how
     // the file arrives at all — content and all.
-    let remote_path = "@/new/models/hero.psd";
+    let remote_path = "models/hero.psd";
 
     // The name a destination that is a directory takes the entry by: the leaf of the Vault's path.
     let leaf = "hero.psd";
@@ -801,9 +816,6 @@ async fn main() {
 
     let other = sandbox.join("ws2");
     Workspace::create(&other).expect("a second workspace");
-    let other_layouts = locate_workspace(&other).unwrap().layouts();
-    other_layouts.create("main").expect("the second Layout");
-    other_layouts.set_current("main").expect("working in it");
 
     // The same account, so the Vault admits the run: the keys belong to the Workspace, so they are
     // copied beside the new one rather than made again — a new pair would be a stranger.
@@ -827,7 +839,7 @@ async fn main() {
     run(&mut client(
         &other,
         &data,
-        &["layout", "set-track", "main", VAULT_NAME],
+        &["layout", "set-track", VAULT_NAME],
     ))
     .expect_success();
 
@@ -836,7 +848,7 @@ async fn main() {
     let said = run(&mut client(
         &other,
         &data,
-        &["checkin", "@/new/models/*", "./", "--json"],
+        &["checkin", "models/*", "./", "--json"],
     ));
     checked.wants(
         "a checkin brings what only the Vault holds into a fresh Workspace",
@@ -852,26 +864,16 @@ async fn main() {
     );
     checked.wants(
         "the Layout names what was checked in",
-        Layout::open(other.join(".rola/layouts/main"))
+        Layout::open(other.join(".rola/layout"))
             .expect("the second Layout")
             .id_of(&LayoutPath::new(leaf).unwrap())
             == Some(id),
         "the second Layout does not name what came in",
     );
 
-    // A Layout that tracks no Vault has nothing to sync with.
-    run(&mut client(
-        &workspace,
-        &data,
-        &["layout", "new", "untracked"],
-    ))
-    .expect_success();
-    run(&mut client(
-        &workspace,
-        &data,
-        &["layout", "force-switch", "untracked"],
-    ))
-    .expect_success();
+    // A Layout that tracks no Vault has nothing to sync with: the one Layout is the only one there
+    // is, so what it tracks is let go of and put back.
+    run(&mut client(&workspace, &data, &["layout", "un-track"])).expect_success();
 
     let said = run(&mut client(&workspace, &data, &["sync", "--dry-run"]));
     checked.wants(
@@ -890,7 +892,7 @@ async fn main() {
     run(&mut client(
         &workspace,
         &data,
-        &["layout", "force-switch", "main"],
+        &["layout", "set-track", VAULT_NAME],
     ))
     .expect_success();
 
@@ -1291,7 +1293,7 @@ async fn main() {
 
     // A lookback says what each version was — who made it and what it says, read from the variant
     // the version points at — and `rola status` draws the same for whatever it is given.
-    let version = Layout::open(workspace.join(".rola/layouts/main"))
+    let version = Layout::open(workspace.join(".rola/layout"))
         .expect("the Layout being worked in")
         .entry(id)
         .expect("the entry")
@@ -1396,12 +1398,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &[
-            "retrack",
-            "models/hero.psd",
-            "--until=-1",
-            "--only-index",
-        ],
+        &["retrack", "models/hero.psd", "--until=-1", "--only-index"],
     ));
     checked.wants(
         "a retrack moves the pointer one version back",
@@ -1679,12 +1676,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &[
-            "retrack",
-            "models/hero.psd",
-            "--until=-1",
-            "--only-index",
-        ],
+        &["retrack", "models/hero.psd", "--until=-1", "--only-index"],
     ));
     checked.wants(
         "`--only-index` cannot end a merge, and says as much",
@@ -1763,7 +1755,7 @@ async fn main() {
 
     let amended_id = {
         let held =
-            Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout being worked in");
+            Layout::open(workspace.join(".rola/layout")).expect("the Layout being worked in");
         held.entries()
             .into_iter()
             .find(|(id, _)| {
@@ -1888,7 +1880,7 @@ async fn main() {
     .expect_success();
 
     let gated_id = {
-        let held = Layout::open(workspace.join(".rola/layouts/main")).expect("the Layout");
+        let held = Layout::open(workspace.join(".rola/layout")).expect("the Layout");
         held.entries()
             .into_iter()
             .find(|(id, _)| {
@@ -2011,19 +2003,20 @@ async fn main() {
         &format!("before: {layout_before:?}, after: {layout_after:?}"),
     );
 
-    // A `Uuid` only this Layout holds is what a run that carries the Layout names under `@/new/`;
-    // one that read no Layout names nothing, so that path is where a write would show. What the
-    // checks before this one put there stays: the Vault holds the `@/new/` names they made, and
-    // what this run must not do is add one of its own.
+    // A `Uuid` only this Layout holds is what a run that carries the Layout makes an entry for; one
+    // that read no Layout names nothing, so that write would be the only thing that could add a
+    // name. What the checks before this one put there stays: what this run must not do is add one.
+    let named_before: Vec<Option<&str>> = layout_before
+        .0
+        .iter()
+        .map(|(_, _, path)| path.as_deref())
+        .collect();
     checked.wants(
-        "`--no-layout` adds no `@/new/` path to the Vault's Layout",
-        layout_after.0.iter().all(|entry| {
-            layout_before.0.contains(entry)
-                || entry
-                    .2
-                    .as_deref()
-                    .is_none_or(|path| !path.starts_with("@/new/"))
-        }),
+        "`--no-layout` adds no path to the Vault's Layout",
+        layout_after
+            .0
+            .iter()
+            .all(|(_, _, path)| named_before.contains(&path.as_deref())),
         &format!("it holds {:?}", layout_after.0),
     );
 
@@ -2149,7 +2142,8 @@ fn client(workspace: &Path, data: &Path, args: &[&str]) -> Command {
 
     command
         .current_dir(workspace)
-        .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data)
+        .env("XDG_DATA_HOME", data)
+        .env("ROLA_DATA_HOME", data)
         // What the run says is checked, so it is said in one language rather than whichever one
         // the machine happens to be set to.
         .env("ROLA_LANG", "en")
@@ -2239,7 +2233,7 @@ type LayoutState = (Vec<(Uuid, MutableData, Option<String>)>, Vec<(String, u64)>
 /// As for the Vault's Layout: a retrack writes the Layout, so what it did is read back rather than
 /// taken from what this process read before.
 fn local_version_of(workspace: &Path, id: Uuid) -> [u8; 32] {
-    Layout::open(workspace.join(".rola/layouts/main"))
+    Layout::open(workspace.join(".rola/layout"))
         .expect("the Layout being worked in")
         .entry(id)
         .expect("the entry")
@@ -2324,7 +2318,8 @@ fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
         command("rola-daemon")
             .arg("--port")
             .arg(port.to_string())
-            .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data),
+            .env("XDG_DATA_HOME", data)
+            .env("ROLA_DATA_HOME", data),
         ("127.0.0.1", port),
         STARTUP,
     )
