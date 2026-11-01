@@ -433,6 +433,90 @@ cmd_layout_path:
     en: Move the entry at one path to another
     zh-CN: 把条目从旧路径移到新路径
 
+  change_uuid_help:
+    en: |
+        Make a path name another entry
+
+        **Usage**: rola layout path change-uuid <PATH> <UUID>
+        **Flags**:
+            --vault, -v        Edit the Vault's Layout, rather than the Workspace's
+            --layout <NAME>    Change the path in that Layout, the Vault's own when written `truth@VAULT`
+
+        The entry the path named is dropped, and the entry given takes its place
+        `UUID` must be one the Layout holds at no path
+    zh-CN: |
+        让路径改指另一个条目
+
+        **用法**：rola layout path change-uuid <路径> <UUID>
+        **标识**：
+            --vault, -v          编辑保险库的布局，而非工作区的布局
+            --layout <布局名>    在该布局中修改路径，写成 `truth@保险库` 时修改保险库自身的布局
+
+        路径原本指向的条目会被删除，改由给出的条目占据该路径
+        `UUID` 须是布局持有、但没有任何路径指向的条目
+
+  change_uuid_description:
+    en: Make a path name another entry
+    zh-CN: 让路径改指另一个条目
+
+  new_uuid_help:
+    en: |
+        Give a path's entry a new Uuid
+
+        **Usage**: rola layout path new-uuid <PATH>
+        **Flags**:
+            --vault, -v        Edit the Vault's Layout, rather than the Workspace's
+            --layout <NAME>    Change the path in that Layout, the Vault's own when written `truth@VAULT`
+
+        The entry the path named is dropped and made again under a new Uuid, holding what it held
+    zh-CN: |
+        给路径上的条目换一个新的 Uuid
+
+        **用法**：rola layout path new-uuid <路径>
+        **标识**：
+            --vault, -v          编辑保险库的布局，而非工作区的布局
+            --layout <布局名>    在该布局中修改路径，写成 `truth@保险库` 时修改保险库自身的布局
+
+        路径原本指向的条目会被删除，并以新的 Uuid 重新创建，所持有的内容不变
+
+  new_uuid_description:
+    en: Give a path's entry a new Uuid
+    zh-CN: 给路径上的条目换一个新的 Uuid
+
+  err_same_uuid:
+    en: "The path already names the entry `%{uuid}`"
+    zh-CN: "该路径已经指向条目 `%{uuid}`"
+
+  err_same_uuid_help:
+    en: |
+        A change of Uuid is only a change when it is another Uuid
+        Please give the Uuid of an entry that has no path
+    zh-CN: |
+        只有换成另一个 Uuid 才算修改
+        请给出一个没有路径的条目的 Uuid
+
+  err_uuid_named:
+    en: "The entry `%{uuid}` is already named by `%{path}`"
+    zh-CN: "条目 `%{uuid}` 已由 `%{path}` 命名"
+
+  err_uuid_named_help:
+    en: |
+        An entry is at one path, so the path that names it has to let go first
+        Run `rola layout path remove` on that path, then try again
+    zh-CN: |
+        一个条目只位于一个路径，须先让指向它的路径放手
+        请先对该路径运行 `rola layout path remove`，然后重试
+
+  err_uuid_missing:
+    en: "The Layout holds no entry `%{uuid}`"
+    zh-CN: "布局中没有条目 `%{uuid}`"
+
+  err_uuid_missing_help:
+    en: |
+        Please check the Uuid, or make the entry first with `rola layout entry create`
+    zh-CN: |
+        请检查该 Uuid，或先用 `rola layout entry create` 创建该条目
+
   result_bound:
     en: "The path now names the entry: %{what}"
     zh-CN: "该路径现已指向条目：%{what}"
@@ -444,6 +528,14 @@ cmd_layout_path:
   result_moved:
     en: "The entry was moved: %{what}"
     zh-CN: "条目已移动：%{what}"
+
+  result_uuid_changed:
+    en: "The path now names another entry: %{what}"
+    zh-CN: "该路径现已指向另一个条目：%{what}"
+
+  result_uuid_new:
+    en: "The entry at the path was given a new Uuid: %{what}"
+    zh-CN: "该路径上的条目已换用新的 Uuid：%{what}"
 
 cmd_layout_entries:
   complete:

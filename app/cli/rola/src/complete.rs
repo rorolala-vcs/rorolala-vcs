@@ -268,6 +268,24 @@ pub fn layout_uuids(layout: &Layout) -> Vec<String> {
         .collect()
 }
 
+/// The `Uuid`s the Layout holds that no path names, in `Uuid` order.
+///
+/// An entry no path names is one waiting to be put somewhere — what a fetch of a Vault's Layout
+/// leaves, or what unbinding a path leaves — so it is the candidate a command that moves a path onto
+/// an entry offers.
+#[must_use]
+pub fn layout_orphan_uuids(layout: &Layout) -> Vec<String> {
+    let mut ids: Vec<String> = layout
+        .orphans()
+        .without_path
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
+
+    ids.sort();
+    ids
+}
+
 /// Which of the index's objects a completion is after.
 ///
 /// A hash names an object, and which object it is is what says whether a command can use it: a

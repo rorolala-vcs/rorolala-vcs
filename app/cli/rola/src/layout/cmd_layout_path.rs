@@ -6,7 +6,6 @@
 //! the layer for writing content by hand.
 
 use librorolala::daemon::{PathMove, action_move_remote_path};
-use librorolala::layout::LayoutPath;
 use librorolala::workspace::Merging;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
@@ -23,7 +22,6 @@ use rorolala_utils_cli_theme::trd;
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
-use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
@@ -36,20 +34,8 @@ use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutPathTaken, LayoutDid,
-    ResultLayoutContent, chosen_writable, failed, remote_spec, set_cached_path,
+    ResultLayoutContent, chosen_writable, failed, path_of, remote_spec, set_cached_path, uuid_of,
 };
-
-/// The `LayoutPath` `text` names, or the argument failure.
-fn path_of(text: &str) -> Result<LayoutPath, Next> {
-    LayoutPath::new(text).map_err(|error| failed(&error))
-}
-
-/// The `Uuid` `text` names, or the argument failure.
-fn uuid_of(text: &str) -> Result<Uuid, Next> {
-    use std::str::FromStr as _;
-
-    Uuid::from_str(text).map_err(|_| ErrorLayoutArgument.into())
-}
 
 #[help(buffer)]
 pub fn help_layout_path_create(_: EntryLayoutPathCreate, ec: &mut ResExitCode) {

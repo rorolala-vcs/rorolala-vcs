@@ -13,6 +13,8 @@ pub mod cmd_layout_giveup_ownership;
 pub mod cmd_layout_ls;
 pub mod cmd_layout_ls_ownership;
 pub mod cmd_layout_path;
+pub mod cmd_layout_path_change_uuid;
+pub mod cmd_layout_path_new_uuid;
 pub mod cmd_layout_read_ownership;
 pub mod cmd_layout_req_ownership;
 pub mod cmd_layout_set_track;
@@ -530,6 +532,69 @@ pub fn failed(error: &LayoutError) -> Next {
     }
 }
 
+/// The `LayoutPath` `text` names, or the argument failure.
+///
+/// # Errors
+///
+/// Returns [`ErrorLayoutArgument`] when `text` is not a path a Layout may hold.
+pub fn path_of(text: &str) -> Result<LayoutPath, Next> {
+    LayoutPath::new(text).map_err(|error| failed(&error))
+}
+
+/// The `Uuid` `text` names, or the argument failure.
+///
+/// # Errors
+///
+/// Returns [`ErrorLayoutArgument`] when `text` does not read as a `Uuid`.
+pub fn uuid_of(text: &str) -> Result<Uuid, Next> {
+    use std::str::FromStr as _;
+
+    Uuid::from_str(text).map_err(|_| ErrorLayoutArgument.into())
+}
+
+/// Makes `path` name `id`, holding `data`, in place of the entry it names.
+///
+/// A `Uuid` is at one path and a path names one `Uuid`, so changing what a path names is dropping
+/// the entry that was there and making another in its place. Both changes go in one batch: a path
+/// that names nothing, or a `Uuid` that no path names, is a state a Layout allows, but not one a
+/// reader should be shown while the change is being made.
+///
+/// The entry `id` is reused rather than made again when the Layout already holds it — an entry no
+/// path names yet — since what an entry is is a `Uuid` that holds data.
+///
+/// Switching a path to the entry it already names does nothing: a caller refuses it before it gets
+/// here, and writing it down would be a removal the batch makes again.
+///
+/// # Errors
+///
+/// Returns [`LayoutError::NotFound`] when `path` names no entry, and whatever making the changes
+/// fails with.
+pub fn switch_entry(
+    layout: &Layout,
+    path: &LayoutPath,
+    id: Uuid,
+    data: MutableData,
+) -> Result<(), LayoutError> {
+    let Some(old) = layout.id_of(path) else {
+        return Err(LayoutError::NotFound);
+    };
+    if old == id {
+        return Ok(());
+    }
+
+    let mut batch = layout.batch();
+    batch.remove_entry(old)?;
+
+    if batch.entry(id).is_some() {
+        batch.update_entry(id, data)?;
+        batch.create_path(path, id)?;
+    } else {
+        batch.create_file(id, data, path)?;
+    }
+
+    batch.commit()
+}
+
 /// The `--layout` of a command that works on one Layout.
 ///
 /// The name is written once, here: the parse reads it and every completion that answers for a
@@ -551,6 +616,10 @@ pub enum LayoutDid {
     Unbound,
     /// A path was moved.
     Moved,
+    /// The `Uuid` a path names was changed.
+    UuidChanged,
+    /// The `Uuid` a path names was renewed.
+    UuidNew,
 }
 
 /// Result: a Layout's content was changed.
@@ -571,6 +640,8 @@ pub fn render_result_layout_content(result: ResultLayoutContent) {
         LayoutDid::Bound => t!("cmd_layout_path.result_bound", what = result.what),
         LayoutDid::Unbound => t!("cmd_layout_path.result_unbound", what = result.what),
         LayoutDid::Moved => t!("cmd_layout_path.result_moved", what = result.what),
+        LayoutDid::UuidChanged => t!("cmd_layout_path.result_uuid_changed", what = result.what),
+        LayoutDid::UuidNew => t!("cmd_layout_path.result_uuid_new", what = result.what),
     };
 
     r_println!("{}", said.trim());
@@ -983,9 +1054,82 @@ pub fn render_error_ownership_held(error: ErrorOwnershipHeld, ec: &mut ResExitCo
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use uuid::Uuid;
 
-    use super::{remote_spec, vault_and_uuid};
+    use super::{remote_spec, switch_entry, vault_and_uuid};
+    use librorolala::layout::{Layout, LayoutError, LayoutPath, MutableData};
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-switch-entry-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    /// A path, from text a test can read.
+    fn path(text: &str) -> LayoutPath {
+        LayoutPath::new(text).unwrap()
+    }
+
+    /// Data an entry is made with.
+    fn data(seed: u8) -> MutableData {
+        MutableData::new(Some("alice".to_owned()), [seed; 32], "first".to_owned())
+    }
+
+    /// A path is made to name the entry that is already there, rather than another being made.
+    #[test]
+    fn switching_to_an_entry_with_no_path_reuses_it() {
+        let layout = Layout::open(scratch("reuse")).unwrap();
+        let old = Uuid::from_u128(1);
+        let kept = Uuid::from_u128(2);
+        layout.create_entry(old, data(1)).unwrap();
+        layout.create_path(&path("a.txt"), old).unwrap();
+        layout.create_entry(kept, data(2)).unwrap();
+
+        switch_entry(&layout, &path("a.txt"), kept, data(3)).unwrap();
+
+        assert_eq!(layout.id_of(&path("a.txt")), Some(kept));
+        assert_eq!(layout.entry(kept), Some(data(3)));
+        assert!(layout.entry(old).is_none());
+        assert_eq!(layout.orphans().without_path, Vec::<Uuid>::new());
+    }
+
+    /// A `Uuid` the Layout holds nothing for is made at the path it is to name.
+    #[test]
+    fn switching_to_an_unknown_uuid_makes_it() {
+        let layout = Layout::open(scratch("make")).unwrap();
+        let old = Uuid::from_u128(3);
+        let made = Uuid::from_u128(4);
+        layout.create_entry(old, data(3)).unwrap();
+        layout.create_path(&path("a.txt"), old).unwrap();
+
+        switch_entry(&layout, &path("a.txt"), made, data(4)).unwrap();
+
+        assert_eq!(layout.id_of(&path("a.txt")), Some(made));
+        assert_eq!(layout.entry(made), Some(data(4)));
+        assert!(layout.entry(old).is_none());
+    }
+
+    /// A path the Layout does not name is not a path that can be given another entry.
+    #[test]
+    fn switching_a_path_that_is_not_there_is_refused() {
+        let layout = Layout::open(scratch("missing")).unwrap();
+
+        assert!(matches!(
+            switch_entry(&layout, &path("none.txt"), Uuid::from_u128(5), data(5)),
+            Err(LayoutError::NotFound)
+        ));
+    }
 
     /// A name written `NAME@VAULT` names a Vault's Layout; one that is not written that way is a
     /// name of the Workspace's own, and `@` is what tells them apart.

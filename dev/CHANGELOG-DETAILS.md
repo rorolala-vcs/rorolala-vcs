@@ -42,6 +42,23 @@ by a holder check — the last write is the path the entry has — which is what
 behind; what a caller that read a path and then moves it finds taken is answered as taken rather
 than overwritten.
 
+### 3. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names
+
+`rola layout path change-uuid <PATH> <UUID>` makes a path name another entry: the entry the path named
+is dropped and the one given takes its place, holding the data the Layout already held for it. The
+`Uuid` has to be one the Layout holds at no path, since an entry is at one path — another path naming
+it is refused, and `rola layout path remove` is what lets it go first.
+
+`rola layout path new-uuid <PATH>` drops the entry the path names and makes it again under a new
+`Uuid`, holding what it held, so an entry can start over without the history it was recorded with
+being touched.
+
+Neither reaches beyond the Layout: the version index, the stores and the working tree know nothing of
+a Layout's paths. A fetched copy of a Vault's Layout is refused as every Layout-writing command
+refuses it, by the read-only name `truth@VAULT`. The Layout's own batch writes grow what the two
+need: an entry can be removed in the same batch that binds its path to another, which is one write
+and no moment where the path names nothing.
+
 ## Refactor
 
 ### 1. **\[BREAKING!\]** [`app`] [`rola`] [`layout`] Remove the `.rolayout` file format

@@ -616,9 +616,10 @@ pub struct Batch<'a> {
     /// The changes made so far, in the order they were made.
     records: Vec<Record>,
 
-    /// What each `Uuid` the batch has set holds, as the batch leaves it. A `Uuid` not here holds
-    /// what the layout holds.
-    data: HashMap<Uuid, MutableData>,
+    /// What each `Uuid` the batch has touched holds, as the batch leaves it. A `Uuid` not here holds
+    /// what the layout holds; one mapped to nothing is one the batch has removed, which is not the
+    /// same as one the layout never had.
+    data: HashMap<Uuid, Option<MutableData>>,
 
     /// Which path names which `Uuid` as the batch leaves it.
     index: Index,
@@ -690,6 +691,20 @@ impl Batch<'_> {
         self.push(Record::UpdateEntry { id, data })
     }
 
+    /// Removes `id`, and the path that names it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::NotFound`] if `id` holds nothing as the batch leaves it — which
+    /// includes one the batch has already removed.
+    pub fn remove_entry(&mut self, id: Uuid) -> Result<(), LayoutError> {
+        if !self.holds(id) {
+            return Err(LayoutError::NotFound);
+        }
+
+        self.push(Record::RemoveEntry { id })
+    }
+
     /// Moves the `Uuid` at `from` to `to`.
     ///
     /// # Errors
@@ -716,13 +731,14 @@ impl Batch<'_> {
     pub fn entry(&self, id: Uuid) -> Option<MutableData> {
         self.data
             .get(&id)
-            .cloned()
-            .or_else(|| self.layout.entry(id))
+            .map_or_else(|| self.layout.entry(id), Clone::clone)
     }
 
     /// Whether `id` holds data as the batch leaves it.
     fn holds(&self, id: Uuid) -> bool {
-        self.data.contains_key(&id) || self.layout.entry(id).is_some()
+        self.data
+            .get(&id)
+            .map_or_else(|| self.layout.entry(id).is_some(), Option::is_some)
     }
 
     /// Whether `path` names a `Uuid` as the batch leaves it.
@@ -787,17 +803,17 @@ impl Batch<'_> {
 }
 
 /// Makes what the batch has set true of `data`, which is what a change to an entry does.
-fn update_data(data: &mut HashMap<Uuid, MutableData>, record: &Record) {
+fn update_data(data: &mut HashMap<Uuid, Option<MutableData>>, record: &Record) {
     match record {
         Record::CreateEntry { id, data: held }
         | Record::UpdateEntry { id, data: held }
         | Record::Create { id, data: held, .. } => {
-            data.insert(*id, held.clone());
+            data.insert(*id, Some(held.clone()));
         }
-        Record::CreatePath { .. }
-        | Record::RemovePath { .. }
-        | Record::MovePath { .. }
-        | Record::RemoveEntry { .. } => {}
+        Record::RemoveEntry { id } => {
+            data.insert(*id, None);
+        }
+        Record::CreatePath { .. } | Record::RemovePath { .. } | Record::MovePath { .. } => {}
     }
 }
 
@@ -1335,5 +1351,79 @@ mod tests {
         assert_eq!(layout.as_files().unwrap(), files);
         layout.compact().unwrap();
         assert_eq!(layout.as_files().unwrap(), files);
+    }
+
+    #[test]
+    fn a_batch_removal_takes_the_path_that_named_it_with_it() {
+        let layout = Layout::open(scratch("batch-remove")).unwrap();
+        let id = Uuid::from_u128(51);
+        layout.create_entry(id, data(51)).unwrap();
+        layout.create_path(&path("a.txt"), id).unwrap();
+
+        let mut batch = layout.batch();
+        batch.remove_entry(id).unwrap();
+
+        // The batch says what it has left, not what the layout still holds: the removal is not
+        // written yet, and the layout behind it is unchanged.
+        assert!(batch.entry(id).is_none());
+        assert!(!batch.holds(id));
+        assert!(batch.id_of(&path("a.txt")).is_none());
+        assert_eq!(layout.entry(id), Some(data(51)));
+    }
+
+    #[test]
+    fn a_batch_takes_a_path_from_the_entry_it_names_and_gives_it_to_another() {
+        let layout = Layout::open(scratch("batch-swap")).unwrap();
+        let old = Uuid::from_u128(52);
+        let new = Uuid::from_u128(53);
+        layout.create_entry(old, data(52)).unwrap();
+        layout.create_path(&path("a.txt"), old).unwrap();
+
+        let mut batch = layout.batch();
+        batch.remove_entry(old).unwrap();
+        batch.create_file(new, data(53), &path("a.txt")).unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(layout.id_of(&path("a.txt")), Some(new));
+        assert!(layout.entry(old).is_none());
+        assert_eq!(layout.data_of(&path("a.txt")), Some(data(53)));
+    }
+
+    #[test]
+    fn a_batch_refuses_to_remove_what_it_has_already_removed() {
+        let layout = Layout::open(scratch("batch-twice")).unwrap();
+        let id = Uuid::from_u128(54);
+        layout.create_entry(id, data(54)).unwrap();
+
+        let mut batch = layout.batch();
+        batch.remove_entry(id).unwrap();
+
+        assert!(matches!(batch.remove_entry(id), Err(LayoutError::NotFound)));
+    }
+
+    #[test]
+    fn a_batch_removal_survives_being_read_back_by_another_open() {
+        let dir = scratch("batch-remove-reopen");
+        let id = Uuid::from_u128(55);
+
+        {
+            let layout = Layout::open(&dir).unwrap();
+            layout.create_entry(id, data(55)).unwrap();
+            layout.create_path(&path("a.txt"), id).unwrap();
+
+            let mut batch = layout.batch();
+            batch.remove_entry(id).unwrap();
+            batch.commit().unwrap();
+        }
+
+        let layout = Layout::open(&dir).unwrap();
+        assert!(layout.entry(id).is_none());
+        assert!(layout.id_of(&path("a.txt")).is_none());
+
+        // And the path is free to name something else again.
+        let other = Uuid::from_u128(56);
+        layout.create_entry(other, data(56)).unwrap();
+        layout.create_path(&path("a.txt"), other).unwrap();
+        assert_eq!(layout.id_of(&path("a.txt")), Some(other));
     }
 }
