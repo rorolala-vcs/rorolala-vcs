@@ -65,6 +65,41 @@ impl Table {
         &self.covered
     }
 
+    /// Names `covered` as the object keys these records describe.
+    ///
+    /// A rebuild that takes in objects keeps the records it already has and moves the covered keys
+    /// on to the index it read afterwards; the records of the keys it did not read are the same in
+    /// both, since an object is never rewritten under the same key.
+    pub fn set_covered(&mut self, covered: Vec<Hash>) {
+        self.covered = covered;
+    }
+
+    /// Every key a record is kept under, in key order.
+    ///
+    /// A key need not be an object the index holds: a variant names content, a version, a creator
+    /// and a message, and any of them may be absent while the variant is there. What is kept is the
+    /// edge, not the target's presence.
+    pub fn targets(&self) -> impl Iterator<Item = Hash> + '_ {
+        self.entries.keys().copied()
+    }
+
+    /// Every object pointing at `key`, with the role it points by, in role then key order.
+    pub fn dependents_all(&self, key: Hash) -> impl Iterator<Item = (Hash, Edge)> + '_ {
+        self.entries.get(&key).into_iter().flat_map(|entry| {
+            entry
+                .dependents
+                .iter()
+                .map(|(source, edge)| (*source, *edge))
+        })
+    }
+
+    /// The keys a number is recorded for, with it, in key order.
+    pub fn numbered(&self) -> impl Iterator<Item = (Hash, u64)> + '_ {
+        self.entries
+            .iter()
+            .filter_map(|(key, entry)| entry.number.map(|number| (*key, number)))
+    }
+
     /// Whether this describes exactly `current`: the same objects, no more and no fewer.
     ///
     /// The keys are in the order [`covered`](Self::covered) was written in, which is key order, and

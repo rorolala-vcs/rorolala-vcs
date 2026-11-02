@@ -205,6 +205,9 @@ pub const EC_ERR_INV_IDX_ARGUMENT: i32 = 132;
 /// `exit_codes.inv_idx_not_found`
 pub const EC_ERR_INV_IDX_NOT_FOUND: i32 = 133;
 
+/// `exit_codes.inv_idx_kind`
+pub const EC_ERR_INV_IDX_KIND: i32 = 134;
+
 // Actions — what the exchange between two ends fails with
 
 /// `exit_codes.action_no_channel`

@@ -9,7 +9,7 @@
 //!
 //! A program rather than a set of tests cargo runs, for the same reason the rest of them are.
 
-use librorolala::inverse_index::InverseIndex;
+use librorolala::inverse_index::{GraphEdgeKind, GraphRequest, InverseIndex, RebuildMode};
 use librorolala::storage::Key;
 use librorolala::vcs::{ROOT_VERSION, VCSIndex, VCSWrite as _, Variant, Version};
 use rorolala_utils_sandbox::{Guard, Sandbox};
@@ -22,6 +22,10 @@ async fn main() {
     a_rebuild_records_what_points_at_what(&sandbox, &mut checked).await;
     a_write_the_records_do_not_describe_falls_back(&sandbox, &mut checked).await;
     a_rebuild_takes_in_what_was_written_after(&sandbox, &mut checked).await;
+    a_number_fills_when_the_link_it_waited_for_arrives(&sandbox, &mut checked).await;
+    a_snapshot_says_what_the_records_say(&sandbox, &mut checked).await;
+    a_graph_window_walks_the_chain(&sandbox, &mut checked).await;
+    a_merge_is_answered_and_walked(&sandbox, &mut checked).await;
     a_pack_does_not_change_what_is_answered(&sandbox, &mut checked).await;
     nothing_is_answered_as_stored_when_nothing_is_there(&sandbox, &mut checked).await;
 
@@ -94,9 +98,19 @@ async fn a_rebuild_records_what_points_at_what(sandbox: &Sandbox, checked: &mut 
 
     let report = inverse.rebuild().await.expect("the inverse index is built");
     checked.wants(
-        "a rebuild reads every object the index holds",
-        report.objects == 3,
-        &format!("{} objects were read", report.objects),
+        "a first rebuild reads every object the index holds",
+        report.mode == RebuildMode::Full && report.objects_read == 3,
+        &format!(
+            "a {} rebuild read {} of {} objects",
+            report.mode.name(),
+            report.objects_read,
+            report.objects
+        ),
+    );
+    checked.wants(
+        "a first rebuild numbers the root and the version made of it",
+        report.versions_numbered == 2,
+        &format!("{} versions were numbered", report.versions_numbered),
     );
 
     checked.wants(
@@ -230,9 +244,19 @@ async fn a_rebuild_takes_in_what_was_written_after(sandbox: &Sandbox, checked: &
         .await
         .expect("the inverse index is built again");
     checked.wants(
-        "a rebuild takes in the objects written since the last one",
+        "a rebuild after a write is incremental",
+        report.mode == RebuildMode::Incremental,
+        &format!("a {} rebuild ran", report.mode.name()),
+    );
+    checked.wants(
+        "an incremental rebuild reads only what is new",
+        report.objects_read == 1,
+        &format!("{} objects were read", report.objects_read),
+    );
+    checked.wants(
+        "an incremental rebuild still describes every object",
         report.objects == 4,
-        &format!("{} objects were read", report.objects),
+        &format!("{} objects are held", report.objects),
     );
     checked.wants(
         "what was answered by falling back is answered by the records",
@@ -242,6 +266,308 @@ async fn a_rebuild_takes_in_what_was_written_after(sandbox: &Sandbox, checked: &
             .expect("the records answer")
             == vec![next.hash()],
         "the later variant was not found after the second rebuild",
+    );
+
+    // Nothing was written since: a rebuild has nothing to do and says so rather than reading again.
+    let report = inverse
+        .rebuild()
+        .await
+        .expect("the inverse index is built again");
+    checked.wants(
+        "a rebuild with nothing new is fresh",
+        report.mode == RebuildMode::Fresh,
+        &format!("a {} rebuild ran", report.mode.name()),
+    );
+    checked.wants(
+        "a fresh rebuild reads nothing",
+        report.objects_read == 0,
+        &format!("{} objects were read", report.objects_read),
+    );
+}
+
+/// A version whose base was not written yet is numbered by the rebuild that brings the base in.
+async fn a_number_fills_when_the_link_it_waited_for_arrives(
+    sandbox: &Sandbox,
+    checked: &mut Checked,
+) {
+    let index = index(sandbox, "numbering");
+    let inverse = inverse(&index);
+
+    // The root and the first variant are made but not written: the second version is based on the
+    // first, so what is written is a chain with its bottom end missing.
+    let root = Version::root();
+    let first_variant = root.new_variant([0x11; 32], [0xaa; 32], [0xbb; 32]);
+    let first = first_variant.new_version();
+    let second_variant = first.new_variant([0x22; 32], [0xaa; 32], [0xbb; 32]);
+    let second = second_variant.new_version();
+
+    index
+        .write(second_variant.clone())
+        .await
+        .expect("the variant is written");
+    index
+        .write(second.clone())
+        .await
+        .expect("the version is written");
+
+    let report = inverse.rebuild().await.expect("the inverse index is built");
+    checked.wants(
+        "a version cut off from the root is not numbered",
+        report.versions_numbered == 0,
+        &format!("{} versions were numbered", report.versions_numbered),
+    );
+
+    // The bottom of the chain arrives: the next rebuild numbers the versions from the root.
+    index
+        .write(root.clone())
+        .await
+        .expect("the root is written");
+    index
+        .write(first_variant.clone())
+        .await
+        .expect("the first variant is written");
+    index
+        .write(first.clone())
+        .await
+        .expect("the first version is written");
+
+    let report = inverse
+        .rebuild()
+        .await
+        .expect("the inverse index is built again");
+    checked.wants(
+        "the rebuild that fills the hole is incremental",
+        report.mode == RebuildMode::Incremental,
+        &format!("a {} rebuild ran", report.mode.name()),
+    );
+    checked.wants(
+        "a number waiting for its base is filled, the root's own included",
+        report.versions_numbered == 3,
+        &format!("{} versions were numbered", report.versions_numbered),
+    );
+    checked.wants(
+        "the versions are numbered from the root outwards",
+        inverse
+            .version_num(first.hash())
+            .await
+            .expect("the records answer")
+            == 0
+            && inverse
+                .version_num(second.hash())
+                .await
+                .expect("the records answer")
+                == 1,
+        "the versions were not numbered 0 and 1",
+    );
+}
+
+/// A snapshot is the records read the other way: what each variant is made of, and its number.
+async fn a_snapshot_says_what_the_records_say(sandbox: &Sandbox, checked: &mut Checked) {
+    let index = index(sandbox, "snapshot");
+    let chain = chain(&index).await;
+    let inverse = inverse(&index);
+
+    checked.wants(
+        "a snapshot is nothing while the records do not describe the index",
+        inverse
+            .snapshot()
+            .await
+            .expect("the records read")
+            .is_none(),
+        "the records that were never built answered for a snapshot",
+    );
+
+    inverse.rebuild().await.expect("the inverse index is built");
+
+    let snapshot = inverse
+        .snapshot()
+        .await
+        .expect("the records read")
+        .expect("the records describe the index");
+
+    checked.wants(
+        "a snapshot names the variant the records hold",
+        snapshot.variants().count() == 1 && snapshot.variant(chain.variant.hash()).is_some(),
+        &format!("{} variants were named", snapshot.variants().count()),
+    );
+    checked.wants(
+        "a snapshot names the versions the records hold",
+        snapshot.versions().count() == 2,
+        &format!("{} versions were named", snapshot.versions().count()),
+    );
+    checked.wants(
+        "a variant's base is the version it was made from",
+        snapshot
+            .variant(chain.variant.hash())
+            .is_some_and(|record| record.base_version == chain.root),
+        "the variant named another base",
+    );
+    checked.wants(
+        "the versions fixing a variant are found from it",
+        snapshot.versions_pinning(chain.variant.hash()) == vec![chain.version.hash()],
+        "the version was not found under its variant",
+    );
+    checked.wants(
+        "the first version is numbered from nothing",
+        snapshot
+            .version(chain.version.hash())
+            .is_some_and(|record| record.number == Some(0) && !record.is_root),
+        "the first version did not read as numbered 0",
+    );
+    checked.wants(
+        "the root is named as the root and not numbered",
+        snapshot
+            .version(chain.root)
+            .is_some_and(|record| record.is_root && record.number.is_none()),
+        "the root did not read as the root",
+    );
+
+    // A variant written since makes the records older than the index: they answer no snapshot, and
+    // what the index holds is read instead.
+    let later = chain
+        .version
+        .new_variant([0x22; 32], [0xaa; 32], [0xbb; 32]);
+    index
+        .write(later.clone())
+        .await
+        .expect("the variant is written");
+
+    checked.wants(
+        "a write the records do not describe leaves no snapshot",
+        inverse
+            .snapshot()
+            .await
+            .expect("the records read")
+            .is_none(),
+        "the stale records answered for a snapshot",
+    );
+
+    let scanned = inverse.scan().await.expect("the objects answer");
+    checked.wants(
+        "a scan answers with what the objects hold",
+        scanned.variants().count() == 2 && scanned.variant(later.hash()).is_some(),
+        &format!("{} variants were read", scanned.variants().count()),
+    );
+}
+
+/// A graph window is cut around a focus: the chain behind it, and where the view stops.
+async fn a_graph_window_walks_the_chain(sandbox: &Sandbox, checked: &mut Checked) {
+    let index = index(sandbox, "graph");
+    let chain = chain(&index).await;
+    let inverse = inverse(&index);
+    inverse.rebuild().await.expect("the inverse index is built");
+
+    let snapshot = inverse
+        .snapshot()
+        .await
+        .expect("the records read")
+        .expect("the records describe the index");
+    let view = snapshot.graph(&GraphRequest {
+        focus: vec![chain.version.hash()],
+        ..GraphRequest::default()
+    });
+
+    checked.wants(
+        "a window is anchored on the variant the focus fixes",
+        view.anchors.len() == 1
+            && view.anchors[0].version == chain.version.hash()
+            && view.anchors[0].variant == Some(chain.variant.hash()),
+        "the anchor did not resolve to the variant",
+    );
+
+    let node = view
+        .nodes
+        .iter()
+        .find(|node| node.hash == chain.variant.hash());
+    checked.wants(
+        "the chain stops at the root rather than at a variant",
+        node.is_some_and(|node| {
+            node.base_version == chain.root && node.base_variant.is_none() && node.frontier.parents
+        }),
+        "the variant's base did not read as the root",
+    );
+    checked.wants(
+        "the versions of the window carry their numbers",
+        view.versions
+            .iter()
+            .any(|version| version.hash == chain.version.hash() && version.number == Some(0))
+            && view.versions.iter().any(|version| {
+                version.hash == chain.root && version.is_root && version.number.is_none()
+            }),
+        "the numbers in the window were not the chain's",
+    );
+    checked.wants(
+        "a chain whose root is in the window names nothing missing",
+        view.missing.is_empty() && !view.truncated,
+        "the window named a missing key or was cut short",
+    );
+}
+
+/// A merge is found from the variant it merges in, and a window follows it.
+async fn a_merge_is_answered_and_walked(sandbox: &Sandbox, checked: &mut Checked) {
+    let index = index(sandbox, "merge");
+    let chain = chain(&index).await;
+    let inverse = inverse(&index);
+
+    let merge = Variant::new_bare_variant(
+        [0x33; 32],
+        *chain.version.hash().digest(),
+        Some(*chain.variant.hash().digest()),
+        [0xaa; 32],
+        [0xbb; 32],
+        0,
+    );
+    let merge_version = merge.new_version();
+
+    index
+        .write(merge.clone())
+        .await
+        .expect("the merge is written");
+    index
+        .write(merge_version.clone())
+        .await
+        .expect("the version is written");
+
+    inverse.rebuild().await.expect("the inverse index is built");
+
+    checked.wants(
+        "a merge is found from the variant it merges in",
+        inverse
+            .join_dependents(chain.variant.hash())
+            .await
+            .expect("the records answer")
+            == vec![merge.hash()],
+        "the merge was not found under the variant it joins",
+    );
+
+    let snapshot = inverse
+        .snapshot()
+        .await
+        .expect("the records read")
+        .expect("the records describe the index");
+    checked.wants(
+        "the records say which variants merge one in",
+        snapshot.variants_joining(chain.variant.hash()) == vec![merge.hash()],
+        "the merge was not named as joining",
+    );
+
+    let view = snapshot.graph(&GraphRequest {
+        focus: vec![merge_version.hash()],
+        ..GraphRequest::default()
+    });
+    checked.wants(
+        "a window follows a merge into the chain it merges",
+        view.nodes.iter().any(|node| node.hash == merge.hash())
+            && view
+                .nodes
+                .iter()
+                .any(|node| node.hash == chain.variant.hash())
+            && view.edges.iter().any(|edge| {
+                edge.from == merge.hash()
+                    && edge.to == chain.variant.hash()
+                    && edge.kind == GraphEdgeKind::Join
+            }),
+        "the merge's edge was not in the window",
     );
 }
 

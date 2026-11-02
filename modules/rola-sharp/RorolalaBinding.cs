@@ -2259,7 +2259,7 @@ internal static partial class RorolalaBinding
     internal static extern bool rola_ignore_rules_is_ignore(nint self, nint path, [MarshalAs(UnmanagedType.U1)] bool is_dir);
 
     /// <summary>
-    /// Builds the records afresh from every object the index holds, and writes them.
+    /// Brings the records up to date with the objects the index holds, reading only what is new.
     ///
     /// Blocks until the rebuild is done.
     ///
@@ -2269,6 +2269,18 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rebuild_rola_inverse_index(nint self);
+
+    /// <summary>
+    /// Builds the records afresh from every object the index holds, and writes them.
+    ///
+    /// Blocks until the rebuild is done.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaInverseIndexReport *`, owned; release it with `free_rola_inverse_index_report`
+    /// - `Err`: `RolaInverseIndexError *`, owned; release it with `free_rola_inverse_index_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rebuild_full_rola_inverse_index(nint self);
 
     /// <summary>
     /// The variants made from the content stored under `hash`.
@@ -2343,6 +2355,18 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult get_message_dependents(nint self, nint hash);
 
     /// <summary>
+    /// The variants that merge in the variant named `hash`.
+    ///
+    /// Blocks until the read is done. `hash` is the hex a key is written as.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaHashList *`, owned; release it with `free_rola_hash_list`
+    /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult get_join_dependents(nint self, nint hash);
+
+    /// <summary>
     /// The number of the version named `hash`.
     ///
     /// Blocks until the read is done. `hash` is the hex a key is written as.
@@ -2355,10 +2379,22 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult get_version_number(nint self, nint hash);
 
     /// <summary>
-    /// How many objects the index holds.
+    /// What the rebuild had to do: `fresh`, `incremental` or `full`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint inverse_index_report_mode(nint self);
+
+    /// <summary>
+    /// How many objects the index holds, as the build left it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern ulong inverse_index_report_objects(nint self);
+
+    /// <summary>
+    /// How many objects this rebuild read.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong inverse_index_report_objects_read(nint self);
 
     /// <summary>
     /// How many of them are variants.
@@ -2383,6 +2419,12 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern ulong inverse_index_report_messages(nint self);
+
+    /// <summary>
+    /// How many versions this rebuild numbered itself, the root's own number included.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong inverse_index_report_versions_numbered(nint self);
 
     /// <summary>
     /// How many records the inverse index has.

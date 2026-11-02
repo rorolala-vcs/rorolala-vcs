@@ -26,7 +26,7 @@ pub fn locate_inverse_index(dir: &Path) -> Option<InverseIndex> {
 
 #[lazyffi(export = rola_inverse_index_)]
 impl InverseIndex {
-    /// Builds the records afresh from every object the index holds, and writes them.
+    /// Brings the records up to date with the objects the index holds, reading only what is new.
     ///
     /// # Errors
     ///
@@ -37,6 +37,19 @@ impl InverseIndex {
     #[lazyffi(export = rebuild_rola_inverse_index)]
     pub fn rebuild_blocking(&self) -> Result<InverseIndexReport, InverseIndexError> {
         run(self.rebuild()).map_err(|error| InverseIndexError::Io(error.into()))?
+    }
+
+    /// Builds the records afresh from every object the index holds, and writes them.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InverseIndexError`] if the index cannot be read or the records cannot be written.
+    ///
+    /// # FFI
+    /// Blocks until the rebuild is done.
+    #[lazyffi(export = rebuild_full_rola_inverse_index)]
+    pub fn rebuild_full_blocking(&self) -> Result<InverseIndexReport, InverseIndexError> {
+        run(self.rebuild_full()).map_err(|error| InverseIndexError::Io(error.into()))?
     }
 
     /// The variants made from the content stored under `hash`.
@@ -160,6 +173,26 @@ impl InverseIndex {
             .into())
     }
 
+    /// The variants that merge in the variant named `hash`.
+    ///
+    /// # Errors
+    ///
+    /// As [`store_dependents_blocking`](Self::store_dependents_blocking).
+    ///
+    /// # FFI
+    /// Blocks until the read is done. `hash` is the hex a key is written as.
+    #[lazyffi(export = get_join_dependents)]
+    pub fn join_dependents_blocking(
+        &self,
+        hash: &str,
+    ) -> Result<HashList, InverseIndexReadingError> {
+        let key = key_of(hash)?;
+
+        Ok(run(self.join_dependents(key))
+            .map_err(|error| InverseIndexReadingError::Io(error.into()))??
+            .into())
+    }
+
     /// The number of the version named `hash`.
     ///
     /// # Errors
@@ -184,11 +217,25 @@ impl InverseIndex {
 
 #[lazyffi(export = rola_inverse_index_report_)]
 impl InverseIndexReport {
-    /// How many objects the index holds.
+    /// What the rebuild had to do: `fresh`, `incremental` or `full`.
+    #[must_use]
+    #[lazyffi(export = inverse_index_report_mode)]
+    pub fn mode(&self) -> String {
+        self.mode.name().to_owned()
+    }
+
+    /// How many objects the index holds, as the build left it.
     #[must_use]
     #[lazyffi(export = inverse_index_report_objects)]
     pub const fn objects(&self) -> u64 {
         self.objects
+    }
+
+    /// How many objects this rebuild read.
+    #[must_use]
+    #[lazyffi(export = inverse_index_report_objects_read)]
+    pub const fn objects_read(&self) -> u64 {
+        self.objects_read
     }
 
     /// How many of them are variants.
@@ -217,6 +264,13 @@ impl InverseIndexReport {
     #[lazyffi(export = inverse_index_report_messages)]
     pub const fn messages(&self) -> u64 {
         self.messages
+    }
+
+    /// How many versions this rebuild numbered itself, the root's own number included.
+    #[must_use]
+    #[lazyffi(export = inverse_index_report_versions_numbered)]
+    pub const fn versions_numbered(&self) -> u64 {
+        self.versions_numbered
     }
 
     /// How many records the inverse index has.

@@ -149,6 +149,10 @@ exit_codes:
     en: What the command looked for is not in the version control index
     zh-CN: 命令要查找的对象不在版本控制索引中
 
+  inv_idx_kind:
+    en: An option names no kind of object the inverse index holds
+    zh-CN: 选项没有给出反向索引所持有的对象种类
+
   storage_ls_storaged_no_storage:
     en: This run is nowhere a store is
     zh-CN: 本次运行不在任何仓库中

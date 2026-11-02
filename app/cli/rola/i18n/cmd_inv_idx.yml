@@ -8,6 +8,7 @@ inv_idx:
         **Usage**: rola inv-idx <COMMAND>
         **Commands**:
             rebuild               Build the inverse index from the index's objects
+            list                  List the variants and versions the records name
             store-dep <STORE>     List the variants made from a stored entry
             variant-dep <HASH>    List the versions that fix a variant
             version-dep <HASH>    List the variants based on a version
@@ -23,6 +24,7 @@ inv_idx:
         **用法**：rola inv-idx <子命令>
         **命令**：
             rebuild                 由索引中的对象建立反向索引
+            list                    列出记录中保存的变体与版本
             store-dep <存储条目>    列出基于某存储条目建立的变体
             variant-dep <哈希>      列出固定某变体的版本
             version-dep <哈希>      列出基于某版本的变体
@@ -87,28 +89,81 @@ inv_idx:
     zh-CN: |
         请先创建缺少的对象，然后重试
 
+  err_kind:
+    en: "`%{kind}` is not a kind of object the inverse index holds"
+    zh-CN: "`%{kind}` 不是反向索引持有的对象种类"
+
+  err_kind_help:
+    en: |
+        Please name one of `variant`, `version` or `all`
+    zh-CN: |
+        请给出 `variant`、`version` 或 `all` 之一
+
+inv_idx_list:
+  help:
+    en: |
+        List the variants and versions the inverse index holds
+
+        **Usage**: rola inv-idx list
+        **Flags**:
+            --kind <KIND>      List `variant`, `version` or `all`
+            --limit <ROWS>     Stop after this many rows
+            --json             Write as JSON
+
+        A variant is a row with its key and what it is made of; a version is a row with the variant it fixes and its number
+        The rows are the variants and then the versions, each in key order
+        The objects are read instead of the records when the records do not describe the index
+        `--format` draws each row through a template, with the fields `--json` writes under `objects`
+    zh-CN: |
+        列出反向索引持有的变体与版本
+
+        **用法**：rola inv-idx list
+        **标识**：
+            --kind <种类>      只列出 `variant`、`version` 或 `all`
+            --limit <行数>     最多列出这么多行
+            --json             以 JSON 输出
+
+        变体一行，含其哈希与构成它的各部分；版本一行，含它固定的变体与它的号
+        先列变体、再列版本，各自按哈希顺序
+        记录不再描述索引时，改为读取对象
+        `--format` 按模板绘制每一行，字段与 `--json` 的 `objects` 相同
+
+  description:
+    en: List the variants and versions the inverse index holds
+    zh-CN: 列出反向索引持有的变体与版本
+
+  complete:
+    kind:
+      en: List the variants, the versions, or both
+      zh-CN: 列出变体、版本或两者
+    limit:
+      en: Stop after this many rows
+      zh-CN: 最多列出多少行
+
 inv_idx_rebuild:
   help:
     en: |
-        Build the inverse index from the index's objects
+        Bring the inverse index up to date with the index's objects
 
         **Usage**: rola inv-idx rebuild
         **Flags**:
             --json    Write the report of this build as JSON
 
-        The product is a file, nothing is printed on stdout, and `--json` answers with the report
+        Only the objects written since the last build are read, and a build whose records already describe the index reads nothing
+        The product is a file, nothing is printed on stdout, and `--json` answers with the report: what it had to do, what it read, and what it numbered
     zh-CN: |
-        由索引中的对象建立反向索引
+        让反向索引跟上索引中的对象
 
         **用法**：rola inv-idx rebuild
         **标识**：
             --json    以 JSON 输出本次构建的报告
 
-        产物是一个文件，stdout 不打印任何内容，`--json` 则以报告作答
+        只读取上次构建之后写入的对象，记录已描述索引时什么都不读
+        产物是一个文件，stdout 不打印任何内容，`--json` 则以报告作答：做了什么、读了多少、编号了多少
 
   description:
-    en: Build the inverse index from the index's objects
-    zh-CN: 由索引中的对象建立反向索引
+    en: Bring the inverse index up to date with the index's objects
+    zh-CN: 让反向索引跟上索引中的对象
 
 inv_idx_store_dep:
   help:

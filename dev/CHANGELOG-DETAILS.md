@@ -100,7 +100,26 @@ by a holder check — the last write is the path the entry has — which is what
 behind; what a caller that read a path and then moves it finds taken is answered as taken rather
 than overwritten.
 
-### 5. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names
+### 5. [`app`] [`rola`] [`inv-idx`] List the variants and versions the inverse index holds
+
+`rola inv-idx list` lists what the records name: a variant is a row with its key, the version it is
+based on, the variant that version fixes, the variant it merges in, and the content, creator and
+message it names; a version is a row with its key, the variant it fixes, its number and whether it is
+the root. The rows are the variants and then the versions, each in key order. `--kind
+variant|version|all` keeps one kind, `--limit` stops the listing, and a kind this build does not know
+is refused with exit code 134. A root is drawn with `is_root` and no number, since it is numbered
+before the first.
+
+`--json` writes the rows under `objects` with the same field names, and `--format` draws each row
+through a template; the default is the kind and the key, a row a line. The listing is read-only: the
+records are used when they describe the index, and the objects are read instead when they do not, so
+a stale index is listed rather than rebuilt.
+
+`rola inv-idx rebuild` now reads only the objects written since the last build instead of every
+object, and its `--json` report says what it had to do: `mode` is `fresh`, `incremental` or `full`,
+with `objects_read` and `versions_numbered` beside the counts it already had.
+
+### 6. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names
 
 `rola layout path change-uuid <PATH> <UUID>` makes a path name another entry: the entry the path named
 is dropped and the one given takes its place, holding the data the Layout already held for it. The
@@ -116,6 +135,30 @@ a Layout's paths. A fetched copy of a Vault's Layout is refused as every Layout-
 refuses it, by the read-only name `truth@VAULT`. The Layout's own batch writes grow what the two
 need: an entry can be removed in the same batch that binds its path to another, which is one write
 and no moment where the path names nothing.
+
+### 7. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally
+
+The inverse index can now be read as a snapshot: every variant by its key with the version it is
+based on, the variant it merges in, and the content, creator and message it names; every version by
+its key with the variant it fixes and its number. What a walk asks of the records — which versions
+fix a variant, which variants are based on a version, which merge one in, which were made of one
+content — is answered from that inversion rather than by reading the records again per step.
+
+A snapshot also cuts a window of the variant graph: `Snapshot::graph` takes a focus, how far back
+towards the root and forward away from it to walk, whether to follow merges and one-hop branches, and
+a cap on nodes. What it answers with is the variants, the versions, the base and join edges, the keys
+the index does not hold, and a `frontier` on each node saying which way the window stopped short;
+`Snapshot::expand` walks one step further from a node. Nothing is read from the objects and nothing
+is fetched: a version or variant the index does not hold is named as missing.
+
+A rebuild is now incremental. The keys the records cover are compared with the keys the index lists,
+and only the difference is read; the file is built afresh only when it cannot be added to — it is
+absent, does not read, or covers an object the index no longer holds. Versions are numbered by
+filling outwards from the versions already numbered, so a version whose base was not written yet is
+numbered by a later rebuild when the link arrives. The report now says which of the three happened
+(`fresh`, `incremental`, `full`), how many objects were read, and how many versions were numbered.
+The file format is unchanged, so existing records stay valid and the first rebuild after this takes
+them in incrementally; `Edge::Join` gains the `join_dependents` question the other roles already had.
 
 ## Refactor
 

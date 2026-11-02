@@ -934,6 +934,59 @@ fn index(rola: &Rola, ws: &Path, checked: &mut Checked) {
         &ran,
         123,
     );
+
+    // The inverse index is derived data: building it reads the objects, and a second build has
+    // nothing left to read.
+    let ran = rola.run(ws, &["inv-idx", "rebuild", "--json"]);
+    checked.exits("the inverse index is built", &ran, 0);
+    checked.wants(
+        "a first build reads the objects",
+        json(&ran).is_some_and(|value| {
+            value.get("mode").and_then(JsonValue::as_str) == Some("full")
+                && value.get("objects_read").and_then(JsonValue::as_u64) > Some(0)
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["inv-idx", "rebuild", "--json"]);
+    checked.wants(
+        "a second build has nothing to read",
+        json(&ran).is_some_and(|value| {
+            value.get("mode").and_then(JsonValue::as_str) == Some("fresh")
+                && value.get("objects_read").and_then(JsonValue::as_u64) == Some(0)
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["inv-idx", "list", "--json"]);
+    checked.exits("the inverse index is listed", &ran, 0);
+    checked.wants(
+        "the root version is listed as the root, numbered before the first",
+        json(&ran).is_some_and(|value| {
+            value
+                .get("objects")
+                .and_then(JsonValue::as_array)
+                .is_some_and(|rows| {
+                    rows.iter().any(|row| {
+                        row.get("hash") == Some(&JsonValue::String(root.clone()))
+                            && row.get("is_root") == Some(&JsonValue::Bool(true))
+                            && row.get("number") == Some(&JsonValue::Null)
+                    })
+                })
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["inv-idx", "list", "--kind", "version"]);
+    checked.exits("one kind of row is listed", &ran, 0);
+    checked.wants(
+        "the listing draws a kind and a hash a line",
+        !ran.stdout.is_empty() && ran.stdout.lines().all(|line| line.starts_with("version ")),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["inv-idx", "list", "--kind", "nope"]);
+    checked.exits("a kind nothing is is refused", &ran, 134);
 }
 
 /// Moving, copying and removing a path by hand.

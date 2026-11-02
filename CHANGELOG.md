@@ -10,7 +10,9 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 2. **\[BREAKING!\]** [`app`] [`rola`] [`retrack`] Record a version, or another entry, for a file — [See details](dev/CHANGELOG-DETAILS.md#2-breaking-app-rola-retrack-record-a-version-or-another-entry-for-a-file)
 3. **\[BREAKING!\]** [`app`] [`rola`] [`sync`] Submit a new file under the path the work tracks it at — [See details](dev/CHANGELOG-DETAILS.md#3-breaking-app-rola-sync-submit-a-new-file-under-the-path-the-work-tracks-it-at)
 4. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry — [See details](dev/CHANGELOG-DETAILS.md#4-breaking-modules-daemon-move-remote-path-move-a-path-in-a-vaults-layout-without-holding-the-entry)
-5. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names — [See details](dev/CHANGELOG-DETAILS.md#5-app-rola-layout-change-or-renew-the-uuid-a-layout-path-names)
+5. [`app`] [`rola`] [`inv-idx`] List the variants and versions the inverse index holds — [See details](dev/CHANGELOG-DETAILS.md#5-app-rola-inv-idx-list-the-variants-and-versions-the-inverse-index-holds)
+6. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names — [See details](dev/CHANGELOG-DETAILS.md#6-app-rola-layout-change-or-renew-the-uuid-a-layout-path-names)
+7. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally — [See details](dev/CHANGELOG-DETAILS.md#7-modules-inverse-index-read-the-inverse-index-the-other-way-and-rebuild-it-incrementally)
 
 ## Refactor
 

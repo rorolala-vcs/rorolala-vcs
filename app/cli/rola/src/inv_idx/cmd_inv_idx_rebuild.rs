@@ -1,8 +1,10 @@
-//! The `rola inv-idx rebuild` command: build the inverse index from the objects.
+//! The `rola inv-idx rebuild` command: bring the inverse index up to date with the objects.
 //!
-//! A rebuild reads every object the index holds and writes what it found, so afterwards the records
-//! describe exactly the index they were built from. It prints nothing of its own: what it produced
-//! is a file, and what it is worth reading is the report a `--json` run is answered with.
+//! A rebuild reads the objects the records do not describe and writes what it found, so afterwards
+//! the records describe exactly the index they were built from; what it read is what the index had
+//! and the records did not, or every object when the records cannot be added to. It prints nothing
+//! of its own: what it produced is a file, and what it is worth reading is the report a `--json`
+//! run is answered with.
 
 use librorolala::inverse_index::InverseIndex;
 use mingling::{
@@ -34,11 +36,12 @@ pub fn desc_inv_idx_rebuild() -> Description {
     t!("inv_idx_rebuild.description").to_string().into()
 }
 
-/// Builds the inverse index from the objects the index holds
+/// Brings the inverse index up to date with the objects the index holds
 ///
-/// Every object is read once and what each points at is written down, so the records afterwards
-/// describe exactly the index they were built from — a reader that arrives after another object is
-/// written sees records that no longer describe it and falls back to the objects.
+/// The records are added to: only the objects written since the last build are read, and a run
+/// whose records already describe the index reads nothing. What cannot be added to — the file is
+/// not there, does not read, or describes objects the index no longer holds — is built afresh from
+/// every object.
 ///
 /// The run has to be somewhere an index can be found — inside a Vault or a Workspace.
 ///
@@ -71,9 +74,12 @@ pub fn handle_inv_idx_rebuild(
     let inverse = InverseIndex::at(index.clone());
     match runtime.block_on(inverse.rebuild()) {
         Ok(report) => ResultInvIdxRebuild {
+            mode: report.mode.name().to_owned(),
             objects: report.objects,
+            objects_read: report.objects_read,
             variants: report.variants,
             versions: report.versions,
+            versions_numbered: report.versions_numbered,
             creators: report.creators,
             messages: report.messages,
             entries: report.entries,
@@ -91,12 +97,18 @@ pub fn handle_inv_idx_rebuild(
 /// Result: what the rebuild found and wrote.
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultInvIdxRebuild {
-    /// How many objects the index holds.
+    /// What the rebuild had to do: `fresh`, `incremental` or `full`.
+    mode: String,
+    /// How many objects the index holds, as the build left it.
     objects: u64,
-    /// How many of them are variants.
+    /// How many objects this rebuild read.
+    objects_read: u64,
+    /// How many of the objects read are variants.
     variants: u64,
     /// How many are versions.
     versions: u64,
+    /// How many versions this rebuild numbered itself.
+    versions_numbered: u64,
     /// How many are creators.
     creators: u64,
     /// How many are messages.

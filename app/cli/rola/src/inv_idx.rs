@@ -9,6 +9,7 @@
 //! and the little that reading a hash and driving the index takes.
 
 pub mod cmd_inv_idx_creator_dep;
+pub mod cmd_inv_idx_list;
 pub mod cmd_inv_idx_msg_dep;
 pub mod cmd_inv_idx_rebuild;
 pub mod cmd_inv_idx_store_dep;
@@ -31,8 +32,8 @@ use serde::Serialize;
 
 use crate::Next;
 use crate::exit_codes::{
-    EC_ERR_FORMAT, EC_ERR_INV_IDX_ARGUMENT, EC_ERR_INV_IDX_NO_INDEX, EC_ERR_INV_IDX_NOT_FOUND,
-    EC_ERR_INV_IDX_READ, EC_HELP,
+    EC_ERR_FORMAT, EC_ERR_INV_IDX_ARGUMENT, EC_ERR_INV_IDX_KIND, EC_ERR_INV_IDX_NO_INDEX,
+    EC_ERR_INV_IDX_NOT_FOUND, EC_ERR_INV_IDX_READ, EC_HELP,
 };
 use crate::failure::failure;
 use crate::format::ResFormat;
@@ -216,6 +217,32 @@ pub fn render_error_inv_idx_argument(error: ErrorInvIdxArgument, ec: &mut ResExi
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("inv_idx.err_argument_help").trim()));
     ec.exit_code = EC_ERR_INV_IDX_ARGUMENT;
+}
+
+/// Error: an option names something the inverse index has no answer for.
+#[derive(Grouped)]
+pub struct ErrorInvIdxKind {
+    /// What was given, where a kind was wanted.
+    kind: String,
+}
+
+impl Failure for ErrorInvIdxKind {
+    fn name(&self) -> &'static str {
+        "error_inv_idx_kind"
+    }
+
+    fn reason(&self) -> String {
+        t!("inv_idx.err_kind", kind = self.kind).trim().to_string()
+    }
+}
+
+failure!(ErrorInvIdxKind);
+
+#[renderer(buffer)]
+pub fn render_error_inv_idx_kind(error: ErrorInvIdxKind, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("inv_idx.err_kind_help").trim()));
+    ec.exit_code = EC_ERR_INV_IDX_KIND;
 }
 
 /// Error: an argument does not read as a hash, or names no one object.
