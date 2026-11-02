@@ -5,9 +5,9 @@ retrack:
     only_index:
       en: Only move the record, leave the file on disk as it is
       zh-CN: 只移动记录，磁盘上的文件保持原样
-    allow_jump:
-      en: Allow recording a version or an entry that is not on the way to what the path records
-      zh-CN: 允许记录不在通往当前记录路径上的版本或条目
+    deny_jump:
+      en: Refuse a version or an entry that is not on the way to what the path records
+      zh-CN: 拒绝不在通往当前记录路径上的版本或条目
     fork:
       en: Give the file's entry a fresh Uuid, holding what it records now
       zh-CN: 给文件的条目换一个新的 Uuid，保持一致所记录的内容
@@ -18,7 +18,7 @@ retrack:
         **Usage**: rola retrack <PATH> [TARGET]
         **Flags**:
             --only-index         Move the record and leave the file on disk as it is
-            --allow-jump         Allow a version or an entry that is not on the way to what the path records
+            --deny-jump          Refuse a version or an entry that is not on the way to what the path records
             --fork               Give the file's entry a fresh Uuid, holding what it records now
             --force              Discard unrecorded changes or end a merge, and forcibly switch the content
             --offline            Do not reach for a Vault: use only what is already here
@@ -27,12 +27,12 @@ retrack:
         `PATH` must be a local path the Layout records, and `TARGET` names what it is to record, one version back by default
         A version target moves the entry's pointer: `~N` N versions back, `N` the version numbered N, or a version's hash
         The version's content is written back over the file with the pointer; `--only-index` moves the record and leaves the file alone
-        A hash off the way back is refused unless `--allow-jump` is given, and a step or a number past an end of the chain is always refused
+        A hash off the way back is a jump, which a run makes unless `--deny-jump` refuses it; a step or a number past an end of the chain is always refused
         A version this index does not hold is brought from the Vault the Layout tracks before the pointer moves; `--offline` refuses that
 
         An entry target — a `Uuid`, or a path of the Vault's own Layout — records that entry for the path instead, dropping the one it recorded
         The entry must hold no path of its own and must record a version; what it holds is read from the Vault's own Layout, or from this one
-        Whether the file changes follows how the two versions stand: the same or a later one keeps the file, an earlier one needs `--force` or `--only-index`, and another chain needs `--allow-jump`
+        Whether the file changes follows how the two versions stand: the same or a later one keeps the file, an earlier one needs `--force` or `--only-index`, and another chain is a jump `--deny-jump` refuses
         `--fork` records a fresh `Uuid` with what the path records now, and cannot be given with a target
 
         A step count written `-N` is read as a flag, so it is written `~N`
@@ -43,7 +43,7 @@ retrack:
         **用法**：rola retrack <路径> [目标]
         **标识**：
             --only-index         只移动记录，磁盘上的文件保持原样
-            --allow-jump         允许记录不在通往当前记录路径上的版本或条目
+            --deny-jump          拒绝不在通往当前记录路径上的版本或条目
             --fork               给文件的条目换一个新的 Uuid，保持一致所记录的内容
             --force              丢弃未记录的改动或结束合并，强制切换内容
             --offline            不连接保险库，只使用本地已有的内容与版本
@@ -52,12 +52,12 @@ retrack:
         `路径` 必须是布局记录过的本地路径，`目标` 指定它要记录什么，默认回退一个版本
         版本目标移动条目的指针：`~N` 回退 N 个版本、`N` 第 N 号版本，或某个版本的哈希
         该版本的内容会随指针写回文件；`--only-index` 只移动记录、不动磁盘上的文件
-        不在回退路径上的哈希需 `--allow-jump` 才接受，超出版本链两端的步数与编号一律拒绝
+        不在回退路径上的哈希属于跳转，默认接受，`--deny-jump` 时拒绝；超出版本链两端的步数与编号一律拒绝
         本地索引没有的版本会先从布局所跟踪的保险库取回，再移动指针；`--offline` 时拒绝这样做
 
         条目目标 —— 一个 `Uuid`，或保险库自身布局中的路径 —— 让该路径改而记录那个条目，并删除它原先记录的条目
         被记录的条目自身不能有路径，且必须记录过版本；其内容从保险库自身布局或本地布局中读取
-        是否改动文件由两个版本的关系决定：相同或本地领先则保留文件，本地落后需 `--force` 或 `--only-index`，不同链则需 `--allow-jump`
+        是否改动文件由两个版本的关系决定：相同或本地领先则保留文件，本地落后需 `--force` 或 `--only-index`，不同链属于跳转，由 `--deny-jump` 拒绝
         `--fork` 用该路径当前记录给条目换一个新的 `Uuid`，不能与目标同时给出
 
         以 `-` 开头写的步数会被当成标志，请写成 `~N`
@@ -248,14 +248,14 @@ retrack:
         `rola status <路径>` 会打印该文件经历过的版本
 
   err_not_ancestor:
-    en: "Going back from the version `%{path}` is now at cannot reach `%{target}`"
-    zh-CN: "从 `%{path}` 当前版本往回走不到 `%{target}`"
+    en: "`%{target}` is not on the way back from the version `%{path}` is at, and this run was asked not to jump"
+    zh-CN: "`%{target}` 不在 `%{path}` 当前版本的回退路径上，而本运行被要求不要跳转"
 
   err_not_ancestor_help:
     en: |
-        If the record really must be set to that version, add `--allow-jump`
+        Please remove `--deny-jump` if the record is to be set to that version
     zh-CN: |
-        确需把记录设为该版本，请加上 `--allow-jump`
+        若确需把记录设为该版本，请去掉 `--deny-jump`
 
   err_entry_no_vault:
     en: "`%{entry}` is a path, and the Layout tracks no Vault, so no Vault's Layout can be read for it"
@@ -338,16 +338,16 @@ retrack:
         或用 `--only-index` 记录该条目、同时保持文件原样
 
   err_switch_not_on_chain:
-    en: "The version `%{path}` records is not on the way to the one its new entry records"
-    zh-CN: "`%{path}` 记录的版本不在通往其新条目版本的路径上"
+    en: "The version `%{path}` records is not on the way to the one its new entry records, and this run was asked not to jump"
+    zh-CN: "`%{path}` 记录的版本不在通往其新条目版本的路径上，而本运行被要求不要跳转"
 
   err_switch_not_on_chain_help:
     en: |
         The two versions are on different chains, so the file holds work the new entry does not
-        Add `--allow-jump` to switch the content anyway, `--force` to discard unrecorded changes as well, or `--only-index` to record the entry and leave the file as it is
+        Remove `--deny-jump` to switch the content anyway, add `--force` to discard unrecorded changes as well, or use `--only-index` to record the entry and leave the file as it is
     zh-CN: |
         两个版本位于不同的链上，文件所持有的内容并不属于新条目
-        加 `--allow-jump` 仍然切换内容，再加 `--force` 一并丢弃未记录的改动，或用 `--only-index` 只记录条目、保持文件原样
+        去掉 `--deny-jump` 即可切换内容，再加 `--force` 一并丢弃未记录的改动，或用 `--only-index` 只记录条目、保持文件原样
 
   err_no_store:
     en: This run has no store to take the content from

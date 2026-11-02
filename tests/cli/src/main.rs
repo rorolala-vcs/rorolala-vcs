@@ -1770,7 +1770,7 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.exits("the file is taken back one version", &ran, 0);
     let bottom = entry_field(rola, dir, "a.txt", "version").expect("the version it went back to");
 
-    let ran = rola.run(dir, &["retrack", "a.txt", &top, "--allow-jump"]);
+    let ran = rola.run(dir, &["retrack", "a.txt", &top]);
     checked.exits("the file is put back at the version it was at", &ran, 0);
 
     // A fork records a fresh `Uuid` for what the path records now, and leaves the file alone.
@@ -1920,21 +1920,23 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
         &said(&ran),
     );
 
-    // Another chain is a jump, which a run has to say it means before the content is switched.
+    // Another chain is a jump, which a retrack makes by default: the content is switched and the
+    // path records the entry the target names.
     let ran = rola.run(dir, &["retrack", "b.txt", "--fork"]);
     checked.exits("the other file's entry is forked away from the copy's", &ran, 0);
     let ran = rola.run(dir, &["retrack", "a.txt", "b.txt"]);
-    checked.exits("a version on another chain needs the jump allowed", &ran, 251);
-    checked.stderr_has("the refusal names the way past it", &ran, "--allow-jump");
-
-    let ran = rola.run(dir, &["retrack", "a.txt", "b.txt", "--allow-jump"]);
-    checked.exits("the jump is taken when it is allowed", &ran, 0);
+    checked.exits("a version on another chain is jumped to by default", &ran, 0);
     checked.wants(
         "the content is the version the copy records, and the file names its entry",
         fs::read_to_string(dir.join("a.txt")).is_ok_and(|it| it == "bee")
             && entry_field(rola, dir, "a.txt", "uuid").as_deref() == Some(b.as_str()),
         &said(&ran),
     );
+
+    // A run that does not want the jump says so, and is told what refusing it came to.
+    let ran = rola.run(dir, &["retrack", "a.txt", made, "--deny-jump"]);
+    checked.exits("a version on another chain is refused when the jump is denied", &ran, 251);
+    checked.stderr_has("the refusal names the way past it", &ran, "--deny-jump");
 
     // A copy that is not here is not read, and a run that may not fetch is refused rather than
     // answered with an entry it never saw.

@@ -24,10 +24,6 @@ internal static class RetrackCommand
     /// Whether the record moves and the file on disk is left alone, which is
     /// <c>--only-index</c>.
     /// </param>
-    /// <param name="allowJump">
-    /// Whether a version that is not on the way back may be gone to, which is <c>--allow-jump</c>.
-    /// It is given for a Vault version the work's own chain does not hold.
-    /// </param>
     /// <param name="force">
     /// Whether changes that were never recorded are to be discarded, which is <c>--force</c>. It is
     /// given only where the reader has been asked and has agreed, since the content written back is
@@ -38,7 +34,6 @@ internal static class RetrackCommand
         string file,
         string target,
         bool onlyIndex,
-        bool allowJump,
         bool force
     )
     {
@@ -56,11 +51,6 @@ internal static class RetrackCommand
         if (onlyIndex)
         {
             arguments.Add("--only-index");
-        }
-
-        if (allowJump)
-        {
-            arguments.Add("--allow-jump");
         }
 
         // `--force` and `--only-index` say opposite things about the file on disk, so the two are
@@ -82,7 +72,6 @@ internal static class RetrackCommand
     /// <param name="file">The one file to set the record of.</param>
     /// <param name="target">What the path is to record, as the index names it.</param>
     /// <param name="onlyIndex">Whether the record moves and the file on disk is left alone.</param>
-    /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <param name="force">Whether unrecorded changes are to be discarded.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
     public static (bool Done, string Said) Run(
@@ -90,7 +79,6 @@ internal static class RetrackCommand
         string file,
         string target,
         bool onlyIndex,
-        bool allowJump,
         bool force
     )
     {
@@ -107,7 +95,7 @@ internal static class RetrackCommand
 
         var (done, said, _) = Sync.Asked(
             program,
-            Arguments(file, target, onlyIndex, allowJump, force),
+            Arguments(file, target, onlyIndex, force),
             directory
         );
 

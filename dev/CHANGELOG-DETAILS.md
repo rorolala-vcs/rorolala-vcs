@@ -66,11 +66,11 @@ The `--until` flag is gone, and so is the `--change-upstream` flag a earlier dra
 had: both are what `TARGET` says. One version back is what naming no target does.
 
 A version target moves the entry's pointer as `--until` did: `~N` N versions back, `N` the version
-numbered N, or a version's hash, with `--allow-jump` for a hash off the way back and `--only-index`
-to leave the file alone. A step count is a word, so it is written `~N` rather than `-1`, which the
-command line reads as a flag; a run that writes one anyway is told the spelling that reads. A Vault's
-name is no longer a target: what a target names is a version, a `Uuid`, or a path of the Vault's own
-Layout.
+numbered N, or a version's hash — a hash off the way back is a jump, and a jump is what a retrack
+makes unless it is asked not to. `--only-index` leaves the file alone. A step count is a word, so it
+is written `~N` rather than `-1`, which the command line reads as a flag; a run that writes one
+anyway is told the spelling that reads. A Vault's name is no longer a target: what a target names is
+a version, a `Uuid`, or a path of the Vault's own Layout.
 
 An entry target - a `Uuid`, or a path of the Vault's own Layout - records that entry for the path in
 place of the one it recorded, dropping that entry. What it holds is read from the fetched copy of
@@ -78,14 +78,16 @@ the Vault's Layout, or from this Layout when the `Uuid` is one it holds at no pa
 hold no path of its own and must record a version. What happens to the file follows how the two
 versions stand: the same version, or one the path's version is ahead of, is a change of identity
 only and keeps unrecorded changes; a version behind it is refused unless `--force` writes its
-content over the file or `--only-index` records the entry and leaves the file alone; two chains are
-refused until `--allow-jump` says the jump is meant. `--fork` still records a fresh `Uuid` with what
-the path records now, and cannot be given with a target.
+content over the file or `--only-index` records the entry and leaves the file alone. Two chains are
+a jump, which a run makes unless `--deny-jump` refuses it — the flag the version target's jump is
+refused with as well. `--fork` still records a fresh `Uuid` with what the path records now, and
+cannot be given with a target.
 
 What the command answers with is one shape whatever the target was: the path, the version it records,
 and whether what it records changed. A run that recorded an entry also answers with the two `Uuid`s
 and whether the entry was forked. The desktop's retrack passes the file and the target as its two
-words, and is otherwise unchanged.
+words and asks for no jump either way: a version the work's chain does not hold is a jump the command
+makes, so the plugin no longer tells it apart.
 
 ## Refactor
 

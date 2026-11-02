@@ -8,12 +8,13 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// The movement itself is the command line's and is not run here — it needs a Workspace and an index — so
 /// what is checked is what this plugin decides: which version the record is moved to, which file it is moved
-/// for, whether the work on disk follows it or the record is allowed to jump to it, and whether unrecorded
-/// changes are discarded.
+/// for, whether the work on disk follows it, and whether unrecorded changes are discarded. Whether the version
+/// is one the work's chain holds is the command line's to judge: a jump is what a retrack does by default, so
+/// the plugin asks for none and refuses none.
 /// </remarks>
 public sealed class RetrackTests
 {
-    /// <summary>A retrack names the file and its target, and says whether the work follows or the record jumps.</summary>
+    /// <summary>A retrack names the file and its target, and says whether the work follows it.</summary>
     [Fact]
     public void ARetrackNamesTheVersionAndWhetherTheWorkFollows()
     {
@@ -21,7 +22,6 @@ public sealed class RetrackTests
             "/work/logo.psd",
             "abc123",
             onlyIndex: false,
-            allowJump: false,
             force: false
         );
 
@@ -37,9 +37,11 @@ public sealed class RetrackTests
             "the file is not named before its target"
         );
 
-        // The target is a word of the command, not a flag's value.
+        // The target is a word of the command, not a flag's value, and how far it may be from the
+        // version the file records is the command line's own default.
         Assert.DoesNotContain("--until", moved);
         Assert.DoesNotContain("--only-index", moved);
+        Assert.DoesNotContain("--deny-jump", moved);
         Assert.DoesNotContain("--allow-jump", moved);
         Assert.DoesNotContain("--force", moved);
 
@@ -48,29 +50,16 @@ public sealed class RetrackTests
             "/work/logo.psd",
             "abc123",
             onlyIndex: true,
-            allowJump: false,
             force: false
         );
 
         Assert.Contains("--only-index", indexOnly);
-
-        // A Vault version the work's own chain does not hold is a jump, and says so.
-        var jump = RetrackCommand.Arguments(
-            "/work/logo.psd",
-            "abc123",
-            onlyIndex: false,
-            allowJump: true,
-            force: false
-        );
-
-        Assert.Contains("--allow-jump", jump);
 
         // Unrecorded changes are discarded only where the reader agreed to it.
         var forced = RetrackCommand.Arguments(
             "/work/logo.psd",
             "abc123",
             onlyIndex: false,
-            allowJump: false,
             force: true
         );
 
@@ -82,7 +71,6 @@ public sealed class RetrackTests
             "/work/logo.psd",
             "abc123",
             onlyIndex: true,
-            allowJump: false,
             force: true
         );
 

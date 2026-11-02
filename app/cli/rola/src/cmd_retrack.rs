@@ -88,8 +88,8 @@ const DEFAULT_ALIKE: f32 = 0.6;
 /// Leave the record where it is put and leave the file on disk alone.
 const ARG_ONLY_INDEX: PickerArg<'static, Flag> = arg![only_index: Flag];
 
-/// Record a version or an entry that is not on the way to what the path records now.
-const ARG_ALLOW_JUMP: PickerArg<'static, Flag> = arg![allow_jump: Flag];
+/// Refuse a version or an entry that is not on the way to what the path records now.
+const ARG_DENY_JUMP: PickerArg<'static, Flag> = arg![deny_jump: Flag];
 
 /// Record a fresh `Uuid` for the file, with what it records now.
 const ARG_FORK: PickerArg<'static, Flag> = arg![fork: Flag];
@@ -126,7 +126,7 @@ pub fn complete_retrack(
             &ctx,
             suggest! {
                 ARG_ONLY_INDEX: t!("retrack.complete.only_index"),
-                ARG_ALLOW_JUMP: t!("retrack.complete.allow_jump"),
+                ARG_DENY_JUMP: t!("retrack.complete.deny_jump"),
                 ARG_FORK: t!("retrack.complete.fork"),
             },
         );
@@ -153,10 +153,10 @@ pub fn complete_retrack(
 /// version back when it is not given.
 ///
 /// A version target moves the entry's pointer: `~N` N versions back, `N` the version numbered N, or
-/// a hash a version on the way back from where the entry is now, which is refused unless
-/// `--allow-jump` is given — `~N` and `N` past either end of the chain are always refused. The
-/// `Uuid`, the path and the description stay as they are, and nothing is removed from the index. A
-/// version this index does not hold is brought from the Vault the Layout tracks before the pointer
+/// a hash a version on the way back from where the entry is now — a hash off that way is a jump, and
+/// `--deny-jump` is what refuses one. `~N` and `N` past either end of the chain are always refused.
+/// The `Uuid`, the path and the description stay as they are, and nothing is removed from the index.
+/// A version this index does not hold is brought from the Vault the Layout tracks before the pointer
 /// moves, so a run may go to a version this side never fetched; `--offline` refuses that instead of
 /// reaching for it.
 ///
@@ -166,7 +166,7 @@ pub fn complete_retrack(
 /// from this Layout when the `Uuid` is one it holds at no path. Whether the file changes follows how
 /// the two versions stand: the same version or one the path's version is ahead of leaves the file as
 /// it is, a version behind it is refused unless `--force` or `--only-index` says what to do, and
-/// another chain needs `--allow-jump` first.
+/// another chain is a jump, which `--deny-jump` refuses.
 ///
 /// `--fork` records a fresh `Uuid` for what the path records now and leaves the file, the index and
 /// the Vault alone; it cannot be given with a target.
@@ -197,12 +197,12 @@ pub fn complete_retrack(
 pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
     let picked = args
         .pick(ARG_ONLY_INDEX)
-        .pick(ARG_ALLOW_JUMP)
+        .pick(ARG_DENY_JUMP)
         .pick(ARG_FORK)
         .pick_or_route(arg![Vec<String>], || ErrorRetrackNoFile.to_chain())
         .pick(&UNMATCHED)
         .to_result();
-    let (only_index, allow_jump, fork, words, unmatched) = match picked {
+    let (only_index, deny_jump, fork, words, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -254,7 +254,7 @@ pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
         target,
         fork,
         only_index,
-        allow_jump: matches!(allow_jump, Flag::Active),
+        deny_jump: matches!(deny_jump, Flag::Active),
         force: **force,
     }
     .into()
@@ -262,8 +262,8 @@ pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
 
 /// The state a retracking starts in.
 // What the run is to do is a handful of independent answers it was given — a fresh `Uuid`, leaving
-// the file alone, jumping between chains, going past unrecorded changes — and making each a
-// two-variant enum would say no more than the bool does while writing every use of it out twice.
+// the file alone, refusing jumps, going past unrecorded changes — and making each a two-variant
+// enum would say no more than the bool does while writing every use of it out twice.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Grouped)]
 pub struct StateRetrack {
@@ -275,8 +275,8 @@ pub struct StateRetrack {
     fork: bool,
     /// Whether the record moves and the file on disk is left alone.
     only_index: bool,
-    /// Whether a version or an entry off the way to what the path records may be gone to.
-    allow_jump: bool,
+    /// Whether a version or an entry off the way to what the path records is refused.
+    deny_jump: bool,
     /// Whether changes that were never recorded, and a merge in progress, are gone past anyway.
     force: bool,
 }
@@ -425,7 +425,7 @@ pub fn handle_retrack(
         target,
         fork,
         only_index,
-        allow_jump,
+        deny_jump,
         force,
     } = state;
 
@@ -498,7 +498,7 @@ pub fn handle_retrack(
             offline: **offline,
             concurrency: **concurrency,
             only_index,
-            allow_jump,
+            deny_jump,
             force,
         })?,
         Recording::Entry(entry) => switch_uuid(Switching {
@@ -518,7 +518,7 @@ pub fn handle_retrack(
             offline: **offline,
             concurrency: **concurrency,
             only_index,
-            allow_jump,
+            deny_jump,
             force,
         }),
         Recording::Fork => switch_uuid(Switching {
@@ -538,7 +538,7 @@ pub fn handle_retrack(
             offline: **offline,
             concurrency: **concurrency,
             only_index,
-            allow_jump,
+            deny_jump,
             force,
         }),
     }
@@ -581,8 +581,8 @@ struct RecordingVersion<'a> {
     concurrency: usize,
     /// Whether the file on disk is to be left alone.
     only_index: bool,
-    /// Whether a version off the way back may be jumped to.
-    allow_jump: bool,
+    /// Whether a version off the way back is refused.
+    deny_jump: bool,
     /// Whether unrecorded changes and a merge in progress are gone past anyway.
     force: bool,
 }
@@ -616,7 +616,7 @@ fn record_version(asked: RecordingVersion<'_>) -> Result<Next, Next> {
         offline,
         concurrency,
         only_index,
-        allow_jump,
+        deny_jump,
         force,
     } = asked;
     let here = read_version(vcs, runtime, data.version())?;
@@ -657,7 +657,7 @@ fn record_version(asked: RecordingVersion<'_>) -> Result<Next, Next> {
         text: written,
         level,
         path: path.as_str(),
-        allow_jump,
+        deny_jump,
     };
     let (target, number) = resolve_target(vcs, runtime, &chain, &asked)?;
 
@@ -833,8 +833,8 @@ struct Switching<'a> {
     concurrency: usize,
     /// Whether the file on disk is to be left alone.
     only_index: bool,
-    /// Whether a version off the way to the other one may be jumped to.
-    allow_jump: bool,
+    /// Whether a version off the way to the other one is refused.
+    deny_jump: bool,
     /// Whether unrecorded changes and a merge in progress are gone past anyway.
     force: bool,
 }
@@ -875,7 +875,7 @@ fn switch_uuid(asked: Switching<'_>) -> Next {
         offline,
         concurrency,
         only_index,
-        allow_jump,
+        deny_jump,
         force,
     } = asked;
 
@@ -912,7 +912,7 @@ fn switch_uuid(asked: Switching<'_>) -> Next {
     let action = match &entry {
         None => SwitchAction::Keep,
         Some(_) => match stand_of(data, &source, vcs, runtime, held, remote, current, offline) {
-            Ok(relation) => match switch_action(relation, only_index, allow_jump, force) {
+            Ok(relation) => match switch_action(relation, only_index, deny_jump, force) {
                 Ok(action) => action,
                 Err(SwitchRefusal::Behind) => {
                     return ErrorRetrackSwitch {
@@ -1324,7 +1324,7 @@ enum SwitchAction {
 enum SwitchRefusal {
     /// The path records a version behind the one it would record.
     Behind,
-    /// The two are on different chains, and jumping between chains was not allowed.
+    /// The two are on different chains, and the run asked to stay on the chain.
     NotOnChain,
 }
 
@@ -1334,11 +1334,12 @@ enum SwitchRefusal {
 /// what the path records, so an entry that records the same version or a later one is a change of
 /// identity and nothing more, and one that records an earlier version is a change of what the file
 /// holds — refused unless the run says to switch the content or to leave the file behind. Different
-/// chains are not a step back at all, so they are refused until the run says it means to jump.
+/// chains are not a step back at all, so they are what a run does unless it asked to stay on the
+/// chain with `--deny-jump`.
 fn switch_action(
     relation: Relation,
     only_index: bool,
-    allow_jump: bool,
+    deny_jump: bool,
     force: bool,
 ) -> Result<SwitchAction, SwitchRefusal> {
     match relation {
@@ -1346,7 +1347,7 @@ fn switch_action(
         Relation::Behind if only_index => Ok(SwitchAction::Pointer),
         Relation::Behind if force => Ok(SwitchAction::Content),
         Relation::Behind => Err(SwitchRefusal::Behind),
-        Relation::Apart if !allow_jump => Err(SwitchRefusal::NotOnChain),
+        Relation::Apart if deny_jump => Err(SwitchRefusal::NotOnChain),
         Relation::Apart if only_index => Ok(SwitchAction::Pointer),
         Relation::Apart => Ok(SwitchAction::Content),
     }
@@ -1466,15 +1467,15 @@ struct Asked<'a> {
     level: &'a VersionTarget,
     /// The path the entry is at, for the words a refusal uses.
     path: &'a str,
-    /// Whether a version off the way back may be jumped to.
-    allow_jump: bool,
+    /// Whether a version off the way back is refused.
+    deny_jump: bool,
 }
 
 /// The version the pointer is to be moved to, and its number when it is known.
 ///
 /// A step count and a number are worked out from the chain the entry is the top of; a hash is that
-/// chain when it names a version on it, and a version of the index otherwise, which only
-/// `--allow-jump` reaches.
+/// chain when it names a version on it, and a version of the index otherwise, which is a jump the
+/// run makes unless it asked to stay on the chain.
 fn resolve_target(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
@@ -1534,7 +1535,7 @@ fn resolve_target(
                 .into());
             };
 
-            if !asked.allow_jump {
+            if asked.deny_jump {
                 return Err(ErrorRetrackTarget {
                     target: asked.text.to_owned(),
                     kind: RetrackTargetError::NotAncestor {
@@ -2709,7 +2710,7 @@ mod tests {
 
     /// What a change of `Uuid` does to the file is decided by how the two versions stand and by the
     /// flags the run gave: a version the same or a later one keeps the file, an earlier one needs
-    /// the run to say what happens, and another chain needs the jump allowed first.
+    /// the run to say what happens, and another chain is a jump unless the run refused one.
     #[test]
     fn what_a_change_of_uuid_does_to_the_file_follows_the_versions_and_the_flags() {
         use super::{Relation, SwitchAction, SwitchRefusal, switch_action};
@@ -2744,26 +2745,27 @@ mod tests {
             Ok(SwitchAction::Content)
         );
 
+        // Another chain is a jump, and a jump is what a run makes unless it asked not to.
         assert_eq!(
             switch_action(Relation::Apart, false, false, false),
-            Err(SwitchRefusal::NotOnChain)
+            Ok(SwitchAction::Content)
         );
-        // A jump the run did not allow is refused however else it was asked to go.
         assert_eq!(
-            switch_action(Relation::Apart, true, false, true),
-            Err(SwitchRefusal::NotOnChain)
+            switch_action(Relation::Apart, false, false, true),
+            Ok(SwitchAction::Content)
         );
+        assert_eq!(
+            switch_action(Relation::Apart, true, false, false),
+            Ok(SwitchAction::Pointer)
+        );
+        // A run that refused the jump is refused however else it was asked to go.
         assert_eq!(
             switch_action(Relation::Apart, false, true, false),
-            Ok(SwitchAction::Content)
+            Err(SwitchRefusal::NotOnChain)
         );
         assert_eq!(
-            switch_action(Relation::Apart, false, true, true),
-            Ok(SwitchAction::Content)
-        );
-        assert_eq!(
-            switch_action(Relation::Apart, true, true, false),
-            Ok(SwitchAction::Pointer)
+            switch_action(Relation::Apart, true, true, true),
+            Err(SwitchRefusal::NotOnChain)
         );
     }
 

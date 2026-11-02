@@ -1489,32 +1489,27 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    // A hash the entry cannot walk back to is refused unless the run says it means to jump, and
-    // the refusal is where the way to jump is said.
+    // A hash the entry cannot walk back to is a jump: a retrack makes one by default, and
+    // `--deny-jump` is what refuses it.
     let ahead_hex: String = ahead.iter().map(|byte| format!("{byte:02x}")).collect();
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", &ahead_hex],
+        &["retrack", "models/hero.psd", &ahead_hex, "--deny-jump"],
     ));
     checked.wants(
-        "a hash off the way back is refused, and `--allow-jump` is offered",
-        said.code == Some(250) && clean(&said.stderr).contains("--allow-jump"),
+        "a hash off the way back is refused when the jump is denied, and the flag is named",
+        said.code == Some(250) && clean(&said.stderr).contains("--deny-jump"),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
     let said = run(&mut client(
         &workspace,
         &data,
-        &[
-            "retrack",
-            "models/hero.psd",
-            &ahead_hex,
-            "--allow-jump",
-        ],
+        &["retrack", "models/hero.psd", &ahead_hex],
     ));
     checked.wants(
-        "a run that means to jump moves the pointer to the version",
+        "a hash off the way back is jumped to by default",
         said.success() && local_version_of(&workspace, id) == ahead,
         &format!(
             "it ended with {:?}, said {:?}, and the Layout names {:?}",
@@ -1538,7 +1533,7 @@ async fn main() {
     );
 
     // The version the Vault's own Layout records for the file is a version target like any other:
-    // its hash, with `--allow-jump` because it is not on the way back from where the entry stands.
+    // its hash, which is a jump from where the entry stands and is made by default.
     let second_hex: String = second_version
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -1546,7 +1541,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["retrack", "models/hero.psd", &second_hex, "--allow-jump"],
+        &["retrack", "models/hero.psd", &second_hex],
     ));
     checked.wants(
         "the version the Vault records is recorded by its hash, content and all",
@@ -1734,12 +1729,7 @@ async fn main() {
     run(&mut client(
         &workspace,
         &data,
-        &[
-            "retrack",
-            "models/hero.psd",
-            &second_hex,
-            "--allow-jump",
-        ],
+        &["retrack", "models/hero.psd", &second_hex],
     ))
     .expect_success();
 

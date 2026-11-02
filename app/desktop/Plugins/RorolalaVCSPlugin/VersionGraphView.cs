@@ -1185,31 +1185,23 @@ internal sealed partial class VersionGraphView : Control
 
         // A retrack is about a version the track records, and the file the graph is of is where it is
         // written: a node the index has no hash for is a placeholder, and one with no file on screen
-        // has nothing to move. A version only the Vault has may be gone to as well: the command brings
-        // its chain here first, when it can, and then moves the record onto it.
+        // has nothing to move. A version only the Vault has may be gone to as well: moving onto it is
+        // a jump, which is what a retrack does unless it is asked not to.
         if (_target is not null)
         {
             if (node.Version is { Hash.Length: > 0 } version)
             {
                 menu.Items.Add(new Avalonia.Controls.Separator());
-                menu.Items.Add(
-                    RetrackItem(version.Hash, version.Label, allowJump: false, onlyIndex: false)
-                );
-                menu.Items.Add(
-                    RetrackItem(version.Hash, version.Label, allowJump: false, onlyIndex: true)
-                );
+                menu.Items.Add(RetrackItem(version.Hash, version.Label, onlyIndex: false));
+                menu.Items.Add(RetrackItem(version.Hash, version.Label, onlyIndex: true));
             }
             else if (node.Upstream is { Hash.Length: > 0 } upstream)
             {
                 var label = LabelOf(upstream);
 
                 menu.Items.Add(new Avalonia.Controls.Separator());
-                menu.Items.Add(
-                    RetrackItem(upstream.Hash, label, allowJump: true, onlyIndex: false)
-                );
-                menu.Items.Add(
-                    RetrackItem(upstream.Hash, label, allowJump: true, onlyIndex: true)
-                );
+                menu.Items.Add(RetrackItem(upstream.Hash, label, onlyIndex: false));
+                menu.Items.Add(RetrackItem(upstream.Hash, label, onlyIndex: true));
             }
         }
 
@@ -1227,13 +1219,11 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>One of the two retrack items, which differ in whether the file on disk follows the record.</summary>
     /// <param name="hash">The version the record is to be moved to.</param>
     /// <param name="label">What the version is called in the question.</param>
-    /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
     /// <returns>The item, ready to be added to a menu.</returns>
     private Avalonia.Controls.MenuItem RetrackItem(
         string hash,
         string label,
-        bool allowJump,
         bool onlyIndex
     )
     {
@@ -1251,7 +1241,7 @@ internal sealed partial class VersionGraphView : Control
             item.Icon = Icons.Inked(picture);
         }
 
-        item.Click += (_, _) => AskRetrack(hash, label, allowJump, onlyIndex);
+        item.Click += (_, _) => AskRetrack(hash, label, onlyIndex);
 
         return item;
     }
@@ -1362,9 +1352,8 @@ internal sealed partial class VersionGraphView : Control
     /// </remarks>
     /// <param name="hash">The version the record is to be moved to.</param>
     /// <param name="label">What the version is called in the question.</param>
-    /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
-    private void AskRetrack(string hash, string label, bool allowJump, bool onlyIndex)
+    private void AskRetrack(string hash, string label, bool onlyIndex)
     {
         if (
             _target is not { Length: > 0 } path
@@ -1376,7 +1365,7 @@ internal sealed partial class VersionGraphView : Control
 
         if (onlyIndex || !Changed(path))
         {
-            BeginRetrack(path, directory, hash, allowJump, onlyIndex, force: false);
+            BeginRetrack(path, directory, hash, onlyIndex, force: false);
 
             return;
         }
@@ -1389,7 +1378,7 @@ internal sealed partial class VersionGraphView : Control
                     Path.GetFileName(path),
                     label
                 ),
-                () => BeginRetrack(path, directory, hash, allowJump, onlyIndex: false, force: true)
+                () => BeginRetrack(path, directory, hash, onlyIndex: false, force: true)
             )
         );
     }
@@ -1577,7 +1566,6 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="path">The file the record is of.</param>
     /// <param name="directory">The directory the run is made in.</param>
     /// <param name="version">The version the record is to be moved to.</param>
-    /// <param name="allowJump">Whether a version off the way back may be gone to.</param>
     /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
     /// <param name="force">
     /// Whether unrecorded changes are to be discarded, which is what a reader agreed to in the question.
@@ -1586,7 +1574,6 @@ internal sealed partial class VersionGraphView : Control
         string path,
         string directory,
         string version,
-        bool allowJump,
         bool onlyIndex,
         bool force
     )
@@ -1600,7 +1587,6 @@ internal sealed partial class VersionGraphView : Control
                 path,
                 version,
                 onlyIndex,
-                allowJump,
                 force
             );
 
