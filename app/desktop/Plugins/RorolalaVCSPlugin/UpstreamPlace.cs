@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using FileSystemPlugin;
+using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using MenuItem = RorolalaDesktop.Contract.MenuItem;
@@ -636,36 +637,82 @@ internal sealed class UpstreamPlace
 
     /// <inheritdoc />
     /// <remarks>
-    /// Only a folder this side made is the place's to take away: what the work names is the Vault's, and a row of it is
-    /// removed by the command line, not by a suggestion about the work.
+    /// A folder this side made is the place's to take away, and so is an entry of a Vault's copy this account holds: an
+    /// entry is a file the Vault holds, and the account whose it is may let it go. What the work names in its own Layout
+    /// is not: that is the work itself, and a row of it is dealt with by the file places, not by a suggestion about the
+    /// upstream.
     /// </remarks>
-    public bool Removable(object data) => data is UpstreamCarry carry && Draft(carry);
+    public bool Removable(object data) => data is UpstreamCarry carry && (Draft(carry) || Deleting(carry));
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A folder this side made goes at once; an entry of the Vault's goes by asking the Vault to let it go, which is a
+    /// run of the command line rather than a change here. What the run agreed to is read back from the copy the run
+    /// wrote, since a status of zero is not the whole of the answer and a removal that did not happen must not be left
+    /// saying nothing.
+    /// </remarks>
     public bool Remove(LogicalAddress address, object data)
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        if (data is not UpstreamCarry carry || !Draft(carry))
+        if (data is not UpstreamCarry carry)
         {
             return false;
         }
 
-        // What is under it goes with it: a folder taken away with its children left standing would be children of
-        // nothing, and a listing of them would be a folder that is not there.
+        // What is under a folder this side made goes with it: a folder taken away with its children left standing would
+        // be children of nothing, and a listing of them would be a folder that is not there.
+        if (Draft(carry))
+        {
+            if (
+                _drafts.RemoveWhere(path =>
+                    string.Equals(path, carry.Path, StringComparison.Ordinal)
+                    || path.StartsWith(carry.Path + "/", StringComparison.Ordinal)
+                ) == 0
+            )
+            {
+                return false;
+            }
+
+            _host.Files.Redraw();
+
+            return true;
+        }
+
+        if (!Deleting(carry))
+        {
+            return false;
+        }
+
+        Take(carry);
+
+        return true;
+    }
+
+    /// <summary>Whether a row is an entry of a Vault's copy that this account may take away.</summary>
+    /// <remarks>
+    /// The account that holds it, or an administrator of the Vault, is what the command allows, and only the holder is
+    /// known here: what the readings say about an entry is who holds it, and whether the account administrates the Vault
+    /// is the Vault's own answer, which a run asks. So an administrator is offered nothing it is only an administrator
+    /// for, and the command line is where an administrator removes what it does not hold.
+    /// </remarks>
+    /// <param name="carry">The row.</param>
+    /// <returns>Whether it may be removed.</returns>
+    private static bool Deleting(UpstreamCarry carry)
+    {
+        ArgumentNullException.ThrowIfNull(carry);
+
         if (
-            _drafts.RemoveWhere(path =>
-                string.Equals(path, carry.Path, StringComparison.Ordinal)
-                || path.StartsWith(carry.Path + "/", StringComparison.Ordinal)
-            ) == 0
+            !string.Equals(carry.Source.Domain, Vaults, StringComparison.Ordinal)
+            || carry.Entry is not { } entry
         )
         {
             return false;
         }
 
-        _host.Files.Redraw();
+        var account = RolaUser.CurrentAccount();
 
-        return true;
+        return account.Length > 0 && string.Equals(entry.Owner, account, StringComparison.Ordinal);
     }
 
     /// <inheritdoc />
@@ -2273,6 +2320,84 @@ internal sealed class UpstreamPlace
 
                 // The command writes what the Vault agreed to into the copy as well, so the place is read again from what
                 // is here rather than from the Vault.
+                _host.Files.Touch();
+            });
+        });
+    }
+
+    /// <summary>Takes an entry of a Vault's copy away, by asking the Vault to let it go.</summary>
+    /// <remarks>
+    /// The place cannot write the Vault's Layout itself, so what it does is run the command that can, and then read the
+    /// copy the run wrote: the copy is what says whether the entry is gone, and a run that ended well without the copy
+    /// following it is a removal that did not happen. The rows are drawn again from the copy as the run left it, and what
+    /// was read of the ownership is forgotten, since the tree it was read from no longer holds what it did.
+    /// </remarks>
+    /// <param name="carry">The row, which names the Layout, the path, and the entry.</param>
+    private void Take(UpstreamCarry carry)
+    {
+        ArgumentNullException.ThrowIfNull(carry);
+
+        if (Program() is not { } program || BaseDirectory.Current is not { Length: > 0 } directory)
+        {
+            // Nothing was run, and a removal that did nothing and said nothing is the one thing a reader cannot tell
+            // from a removal that has not landed yet.
+            FailureNotice.Show(
+                _host.Dialogs,
+                _host.Icons,
+                RolaI18N.Get("rorolala_vcs.place.no_program"),
+                RolaI18N.Get("rorolala_vcs.place.no_program_why")
+            );
+
+            return;
+        }
+
+        var run = _hub.Begin("rorolala_vcs.progress.path_remove");
+        var source = carry.Source;
+        var path = carry.Path;
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = LayoutEntryRemoveCommand.Run(
+                program,
+                directory,
+                source.Layout,
+                path,
+                run.Records,
+                _hub.Touch
+            );
+
+            // What the command agreed to is written into the copy as well, so the copy is what says whether the entry
+            // is gone: asking it costs one run, and not asking it would leave a copy that still names the entry looking
+            // like a removal that happened.
+            var after = done ? Reads(source, directory) : null;
+            var refused =
+                !done
+                || !(
+                    after is { Done: true } copy
+                    && copy.Entries.All(entry =>
+                        !string.Equals(entry.Path, path, StringComparison.Ordinal)
+                    )
+                );
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hub.End(run);
+
+                if (refused)
+                {
+                    var leaf = path[(path.LastIndexOf('/') + 1)..];
+
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
+                        RolaI18N.Get("rorolala_vcs.place.remove_refused", leaf),
+                        said.Trim() is { Length: > 0 } words
+                            ? words
+                            : RolaI18N.Get("rorolala_vcs.place.remove_refused_why")
+                    );
+                }
+
+                Forget();
                 _host.Files.Touch();
             });
         });

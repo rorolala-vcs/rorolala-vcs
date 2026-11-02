@@ -200,12 +200,18 @@ pub fn integration_suites(workspace: &Workspace) -> Result<Vec<PathBuf>, Error> 
 /// They run one at a time so that a suite that fails is named rather than lost among the output of
 /// the others, and the ones after it still run, so one run reports every suite that failed.
 ///
+/// `bin_dir` is where the built programs are, and it crosses to every suite as `ROLA_BIN_DIR`: the
+/// plugins a suite drives reach the C ABI library, which no published program lays beside a test
+/// process, so the suites are told where to find it the way the cargo suites are told where the
+/// programs are.
+///
 /// # Errors
 ///
 /// Reports [`Error::Status`] naming the count when any suite failed.
-pub fn run_integration_suites(workspace: &Workspace) -> Result<(), Error> {
+pub fn run_integration_suites(workspace: &Workspace, bin_dir: &Path) -> Result<(), Error> {
     let suites = integration_suites(workspace)?;
     let mut failed = Vec::new();
+    let environment = [("ROLA_BIN_DIR", bin_dir.as_os_str())];
 
     for suite in &suites {
         println!("==> {}", suite.display());
@@ -213,7 +219,10 @@ pub fn run_integration_suites(workspace: &Workspace) -> Result<(), Error> {
 
         let restore = restore(workspace, &[&path]);
         let test = restore.and_then(|()| {
-            Tool::dotnet().run(["test", &path, "-c", CONFIGURATION, "--no-restore"])
+            Tool::dotnet().run_with_env(
+                &environment,
+                ["test", &path, "-c", CONFIGURATION, "--no-restore"],
+            )
         });
 
         if test.is_err() {

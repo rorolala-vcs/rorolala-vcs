@@ -440,6 +440,76 @@ pub enum EntryWrite {
     Malformed,
 }
 
+/// What became of a request to take an entry out of the Vault's Layout.
+///
+/// It is told apart from [`EntryWrite`] because what it answers is a loss rather than a write: an
+/// entry that was removed is one no path names any more, and a caller that reads it as a write would
+/// have nothing to say about what is gone.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EntryRemove {
+    /// The Vault's Layout no longer holds the entry, or names a path for it.
+    Removed,
+    /// The Vault's Layout names nothing at that path, or holds no entry by it.
+    Missing,
+    /// The account does not hold the entry and does not administrate the Vault.
+    Refused {
+        /// The account that holds it, when one does.
+        owner: Option<String>,
+    },
+    /// A path is not one a remote Layout may name.
+    Malformed,
+}
+
+/// Takes the entry the path names out of the Vault's Layout, path and all.
+///
+/// Removing is not a move: a move keeps what is at the path and changes where it is, while this is
+/// the entry going. The content the entry's version names stays in the store, and the version and
+/// the objects under it stay in the index — what is removed is the Vault's Layout naming it, which
+/// is what makes it a file of the Vault's at all.
+///
+/// Who may remove is the account that holds it, or one that administrates the Vault: an entry is a
+/// thing an account holds, and taking it away is a change of who holds what, the shape of change
+/// [`set_remote`] refuses across accounts already.
+///
+/// # Errors
+///
+/// Returns [`ActionError::Store`] if the change could not be made.
+pub(crate) fn remove_remote(
+    layout: &Layout,
+    path: &str,
+    me: &str,
+    admin: bool,
+) -> Result<EntryRemove, ActionError> {
+    let Ok(path) = LayoutPath::new(path) else {
+        return Ok(EntryRemove::Malformed);
+    };
+
+    if !is_remote_path(&path) {
+        return Ok(EntryRemove::Malformed);
+    }
+
+    let Some(id) = layout.id_of(&path) else {
+        return Ok(EntryRemove::Missing);
+    };
+    let Some(data) = layout.entry(id) else {
+        return Ok(EntryRemove::Missing);
+    };
+
+    if !admin && data.owner() != Some(me) {
+        return Ok(EntryRemove::Refused {
+            owner: data.owner().map(str::to_owned),
+        });
+    }
+
+    batched(layout, |batch| {
+        batch
+            .remove_entry(id)
+            .map_err(|error| ActionError::Store(error.to_string()))
+    })?;
+
+    Ok(EntryRemove::Removed)
+}
+
 /// Runs one write against the Vault, carrying the input there and the outcome back.
 ///
 /// Which write it is is `decide`'s to make: it is handed the Vault's Layout, what crossed, the
@@ -626,7 +696,8 @@ mod tests {
     use rorolala_storage::Key;
 
     use super::{
-        EntryWrite, Ownership, PathMove, create_remote, giveup, move_remote, set_remote, take,
+        EntryRemove, EntryWrite, Ownership, PathMove, create_remote, giveup, move_remote,
+        remove_remote, set_remote, take,
     };
 
     /// A directory of its own, emptied first so a rerun starts clean.
@@ -982,5 +1053,91 @@ mod tests {
             .unwrap(),
             EntryWrite::Missing
         );
+    }
+
+    /// The entry a path names is the holder's to take away, and with it the path.
+    #[test]
+    fn an_entry_is_removed_by_the_account_that_holds_it() {
+        let (layout, id) = at("remove-holder", "@/new/a.psd@d4e5f6", Some("alice"));
+
+        assert_eq!(
+            remove_remote(&layout, "@/new/a.psd@d4e5f6", "alice", false).unwrap(),
+            EntryRemove::Removed
+        );
+        assert!(layout.entry(id).is_none());
+        assert!(
+            layout
+                .id_of(&LayoutPath::new("@/new/a.psd@d4e5f6").unwrap())
+                .is_none()
+        );
+
+        // What was removed is gone from a reading of the Layout as well, which is what another open
+        // sees: the removal was written, not only held in the batch.
+        let again = Layout::open(layout.dir()).expect("the same Layout");
+        assert!(again.entry(id).is_none());
+    }
+
+    /// An entry another account holds is left alone, and one that is nobody's is not a holder's to
+    /// take away either.
+    #[test]
+    fn an_entry_another_account_holds_is_not_removed() {
+        let (layout, id) = at("remove-held", "@/new/a.psd@d4e5f6", Some("alice"));
+
+        assert_eq!(
+            remove_remote(&layout, "@/new/a.psd@d4e5f6", "bob", false).unwrap(),
+            EntryRemove::Refused {
+                owner: Some("alice".to_owned())
+            }
+        );
+        assert_eq!(layout.entry(id).unwrap().owner(), Some("alice"));
+
+        // An entry nobody holds is no account's to remove without administrating the Vault.
+        let (unnamed, unnamed_id) = at("remove-unheld", "b.psd", None);
+        assert_eq!(
+            remove_remote(&unnamed, "b.psd", "alice", false).unwrap(),
+            EntryRemove::Refused { owner: None }
+        );
+        assert!(unnamed.entry(unnamed_id).is_some());
+    }
+
+    /// An administrator may remove what another account holds, as it may set it.
+    #[test]
+    fn an_admin_removes_what_another_account_holds() {
+        let (layout, id) = at("remove-admin", "c.psd", Some("alice"));
+
+        assert_eq!(
+            remove_remote(&layout, "c.psd", "carol", true).unwrap(),
+            EntryRemove::Removed
+        );
+        assert!(layout.entry(id).is_none());
+
+        // The same is true of an entry nobody holds.
+        let (unnamed, unnamed_id) = at("remove-admin-unheld", "d.psd", None);
+        assert_eq!(
+            remove_remote(&unnamed, "d.psd", "carol", true).unwrap(),
+            EntryRemove::Removed
+        );
+        assert!(unnamed.entry(unnamed_id).is_none());
+    }
+
+    /// A path nothing is at is answered as missing rather than as a removal that happened.
+    #[test]
+    fn a_removal_that_cannot_be_made_says_which_way() {
+        let (layout, _) = at("remove-missing", "@/new/a.psd@d4e5f6", Some("alice"));
+
+        assert_eq!(
+            remove_remote(&layout, "nowhere/a.psd", "alice", false).unwrap(),
+            EntryRemove::Missing
+        );
+
+        // @ is reserved for the markers this design names, and a marker names a state rather
+        // than a place, so a path under none of them is not one a remote Layout may name.
+        for refused in ["@/archive/a.psd", "@/new", "@/removed"] {
+            assert_eq!(
+                remove_remote(&layout, refused, "alice", false).unwrap(),
+                EntryRemove::Malformed,
+                "{refused}"
+            );
+        }
     }
 }

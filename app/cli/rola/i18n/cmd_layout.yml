@@ -179,6 +179,30 @@ cmd_layout:
         需要持有者先放弃，才能取得它
         `rola layout read-ownership` 可以从取回的副本中读取持有者
 
+  err_layout_held:
+    en: "The entry `%{path}` is held by `%{owner}`, so this account may not remove it"
+    zh-CN: "`%{path}` 的条目由 `%{owner}` 持有，本账户不能删除它"
+
+  err_layout_held_help:
+    en: |
+        Only the account that holds an entry, or one that administrates the Vault, may remove it
+        Ask the holder to let go of it, or have an administrator of the Vault remove it
+    zh-CN: |
+        只有持有条目的账户、或保险库管理员才能删除它
+        请持有者先放弃，或由保险库管理员删除
+
+  err_layout_unheld:
+    en: "The entry `%{path}` is held by nobody, so only an administrator of the Vault may remove it"
+    zh-CN: "`%{path}` 的条目无人持有，只有保险库管理员才能删除它"
+
+  err_layout_unheld_help:
+    en: |
+        An entry nobody holds is still the Vault's, and an administrator is the one that acts for it
+        Have an administrator of the Vault remove it
+    zh-CN: |
+        无人持有的条目仍属于保险库，由管理员代表它行事
+        请保险库管理员删除它
+
 cmd_layout_ls:
   help:
     en: |
@@ -397,21 +421,32 @@ cmd_layout_path:
 
   remove_help:
     en: |
-        Make a path name nothing
+        Make a path name nothing, or take an entry out of the Vault's Layout
 
         **Usage**: rola layout path remove <PATH>
         **Flags**:
-            --vault, -v    Edit the Vault's Layout, rather than the Workspace's
+            --layout <NAME[@VAULT]>    Remove the path in that Layout, the Vault's own when written `truth@VAULT`
+            --vault, -v                Edit the Vault's Layout, rather than the Workspace's
+            --offline                  Do not reach the Vault when removing, using only what was fetched locally
+
+        Unbinding a path in a Layout here leaves the entry it named: the entry is still the work's,
+        at no path. Removing one from a Vault's own Layout is the entry going, path and all, so only
+        the account that holds it, or one that administrates the Vault, may do it.
     zh-CN: |
-        让路径不再指向任何条目
+        让路径不再指向任何条目，或从保险库的布局中删除条目
 
         **用法**：rola layout path remove <路径>
         **标识**：
-            --vault, -v    编辑保险库的布局，而非工作区的布局
+            --layout <名称[@保险库]>    在指定布局中删除路径，写成 `truth@VAULT` 时是保险库自己的布局
+            --vault, -v                 编辑保险库的布局，而非工作区的布局
+            --offline                   不访问保险库，仅使用本地已取回的内容
+
+        在此处解绑路径会留下它指向的条目：条目仍属于这份工作，只是没有路径。从保险库自己的布局
+        删除则条目本身一同消失，因此只有持有它的账户、或保险库管理员才能这样做。
 
   remove_description:
-    en: Make a path name nothing
-    zh-CN: 让路径不再指向任何条目
+    en: Make a path name nothing, or take an entry out of the Vault's Layout
+    zh-CN: 让路径不再指向任何条目，或从保险库的布局中删除条目
 
   move_help:
     en: |

@@ -34,6 +34,9 @@ pub use move_remote_path::*;
 mod read_remote_index;
 pub use read_remote_index::*;
 
+mod remove_remote_path;
+pub use remove_remote_path::*;
+
 mod request_ownership;
 pub use request_ownership::*;
 

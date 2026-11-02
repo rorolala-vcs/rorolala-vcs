@@ -791,6 +791,41 @@ pub fn set_cached_path(
     copy.move_path(from, to)
 }
 
+/// Takes the entry a path names out of the fetched copy, when the copy is there and names it.
+///
+/// It follows a removal the Vault accepted, so that a copy read afterwards says what the Vault says —
+/// the same reason [`set_cached_path`] follows a move. A copy that is not there, or one that does not
+/// name the path, is left as it is: the Vault is the truth, and the copy is brought up to date by
+/// `rola layout fetch`.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] if a copy that is there cannot be read back or written.
+pub fn set_cached_removed(
+    workspace: &Workspace,
+    vault: &str,
+    layout: &str,
+    path: &LayoutPath,
+) -> Result<(), LayoutError> {
+    let Some(dir) = readonly_layout_copy(workspace, vault, layout) else {
+        return Ok(());
+    };
+
+    let copy = match Layout::open_existing(&dir) {
+        Ok(copy) => copy,
+        // A directory without the Layout's own files is not a copy: nothing is followed into it,
+        // because the write that follows would make a copy out of an empty directory.
+        Err(error) if error.is_not_found() => return Ok(()),
+        Err(error) => return Err(error),
+    };
+
+    let Some(id) = copy.id_of(path) else {
+        return Ok(());
+    };
+
+    copy.remove_entry(id)
+}
+
 /// Opens the fetched copy of `vault`'s Layout, if there is one.
 ///
 /// A copy that is not there is nothing rather than a failure: the Vault is the truth, and a run that
@@ -1049,6 +1084,76 @@ pub fn render_error_ownership_held(error: ErrorOwnershipHeld, ec: &mut ResExitCo
         "{}",
         help_line!(t!("cmd_layout.err_ownership_held_help").trim())
     );
+    ec.exit_code = EC_ERR_LAYOUT_OWNERSHIP;
+}
+
+/// Error: the entry a path names is not this account's to delete.
+#[derive(Grouped)]
+pub struct ErrorLayoutHeld {
+    /// Where the entry sits in the Layout.
+    path: String,
+    /// The account that holds it, or nothing when nobody does.
+    owner: Option<String>,
+}
+
+impl ErrorLayoutHeld {
+    /// The refusal of a removal, asking whether anyone holds the entry.
+    ///
+    /// What an account that does not hold one is told is two things: whose it is it may ask, and
+    /// that an entry nobody holds is an administrator's to remove. Which of the two it is is the
+    /// whole of what the Vault's answer says about the account, so it is kept rather than flattened.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Where the entry sits in the Layout.
+    /// * `owner` - The account that holds it, when one does.
+    pub fn new(path: &str, owner: Option<String>) -> Self {
+        Self {
+            path: path.to_owned(),
+            owner,
+        }
+    }
+}
+
+impl Failure for ErrorLayoutHeld {
+    fn name(&self) -> &'static str {
+        if self.owner.is_some() {
+            "error_layout_held"
+        } else {
+            "error_layout_unheld"
+        }
+    }
+
+    fn reason(&self) -> String {
+        self.owner
+            .as_ref()
+            .map_or_else(
+                || t!("cmd_layout.err_layout_unheld", path = self.path),
+                |owner| {
+                    t!(
+                        "cmd_layout.err_layout_held",
+                        path = self.path,
+                        owner = owner
+                    )
+                },
+            )
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorLayoutHeld);
+
+#[renderer(buffer)]
+pub fn render_error_layout_held(error: ErrorLayoutHeld, ec: &mut ResExitCode) {
+    let help = if error.owner.is_some() {
+        t!("cmd_layout.err_layout_held_help")
+    } else {
+        t!("cmd_layout.err_layout_unheld_help")
+    };
+
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(help.trim()));
     ec.exit_code = EC_ERR_LAYOUT_OWNERSHIP;
 }
 

@@ -108,7 +108,7 @@ fn run_integration_test() -> Result<(), Error> {
 
     // The .NET suites are run after them, all together, for the same reason: one run reports every
     // suite that failed.
-    if let Err(error) = rola_build::dotnet::run_integration_suites(&workspace) {
+    if let Err(error) = rola_build::dotnet::run_integration_suites(&workspace, &bin_dir) {
         eprintln!("{error}");
         failed.push(".NET".to_owned());
     }

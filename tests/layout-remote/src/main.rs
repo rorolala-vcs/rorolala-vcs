@@ -220,21 +220,24 @@ async fn main() {
         ),
     );
 
-    // A copy is read, never worked in: a command that changes a Layout refuses one.
+    // A copy is read, never worked in: a command that changes a Layout here refuses one. What a Vault
+    // allows instead is a write it makes itself, which `layout path move` and `layout path remove`
+    // reach through the daemon and are checked for further down.
     let said = run(&mut client(
         &workspace,
         &data,
         &[
             "layout",
             "path",
-            "remove",
+            "create",
             "a.psd",
+            &gone,
             "--layout",
             "truth@origin",
         ],
     ));
     checked.wants(
-        "a fetched copy is refused by a command that writes",
+        "a fetched copy is refused by a command that writes here",
         said.code == Some(190) && clean(&said.stderr).contains("cannot be changed"),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
@@ -2095,6 +2098,154 @@ async fn main() {
             after.contains(&stored)
         ),
     );
+
+    // The entry of a Vault's Layout is the holder's to take away, and the run is a write on the Vault
+    // the way a move is: a fresh set of entries is put in the Vault's own Layout for it, one held by
+    // each account and one held by nobody, and the copy is brought up to date before the removals.
+    let mine: Uuid = Uuid::from_u128(0xde);
+    let theirs: Uuid = Uuid::from_u128(0xdf);
+    let unheld: Uuid = Uuid::from_u128(0xe0);
+
+    let vault_entries = Layout::open(root.join(LAYOUT_DIR)).expect("the Vault's Layout");
+    for (id, path, owner) in [
+        (mine, "delete/mine.psd", Some(ALICE.to_owned())),
+        (theirs, "delete/theirs.psd", Some(BOB.to_owned())),
+        (unheld, "delete/unheld.psd", None),
+    ] {
+        vault_entries
+            .create_entry(id, MutableData::new(owner, [8; 32], "a file".to_owned()))
+            .expect("an entry to remove");
+        vault_entries
+            .create_path(&LayoutPath::new(path).unwrap(), id)
+            .expect("a path to remove");
+    }
+
+    run(&mut client(&workspace, &data, &["account", ALICE])).expect_success();
+    run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "fetch", VAULT_NAME],
+    ))
+    .expect_success();
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "path", "remove", "delete/theirs.psd", "--layout", "truth@origin"],
+    ));
+    checked.wants(
+        "an entry another account holds is refused, naming the holder",
+        said.code == Some(193) && said.stderr.contains(BOB),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+    checked.wants(
+        "the refused removal left the Vault's entry where it was",
+        vault_path_of(&root, theirs).as_deref() == Some("delete/theirs.psd"),
+        &format!("the Vault names {:?}", vault_path_of(&root, theirs)),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "path", "remove", "delete/unheld.psd", "--layout", "truth@origin"],
+    ));
+    checked.wants(
+        "an entry nobody holds is refused without an administrator",
+        said.code == Some(193) && said.stderr.contains("nobody"),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "path",
+            "remove",
+            "delete/mine.psd",
+            "--layout",
+            "truth@origin",
+            "--offline",
+        ],
+    ));
+    checked.wants(
+        "a removal that may not reach the Vault is refused rather than made locally",
+        said.code == Some(252),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "path", "remove", "delete/mine.psd", "--layout", "truth@origin"],
+    ));
+    checked.wants(
+        "the holder removes the entry, path and all",
+        said.success()
+            && vault_path_of(&root, mine).is_none()
+            && vault_owner_of(&root, mine).is_none(),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault names {:?}",
+            said.code,
+            said.stdout.trim(),
+            vault_path_of(&root, mine)
+        ),
+    );
+
+    // What the Vault agreed to is written into the fetched copy as well, so a reading command sees
+    // the entry gone rather than the copy it was fetched with.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "entries", "--layout", "truth@origin", "--json"],
+    ));
+    checked.wants(
+        "the fetched copy follows the removal",
+        said.success() && !said.stdout.contains(&mine.to_string()),
+        &format!("it ended with {:?} and said {:?}", said.code, said.stdout.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "path", "remove", "delete/nothere.psd", "--layout", "truth@origin"],
+    ));
+    checked.wants(
+        "a path the Vault does not name is refused as missing",
+        said.code == Some(11),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "path", "remove", "@/archive/a.psd", "--layout", "truth@origin"],
+    ));
+    checked.wants(
+        "a path a remote Layout may not name is refused as an argument",
+        said.code == Some(191),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // The entry another account holds is that account's to remove: what the first run was refused
+    // for is what naming the holder makes possible.
+    run(&mut client(&workspace, &data, &["account", BOB])).expect_success();
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "path", "remove", "delete/theirs.psd", "--layout", "truth@origin"],
+    ));
+    checked.wants(
+        "the account that holds it removes it",
+        said.success() && vault_path_of(&root, theirs).is_none(),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault names {:?}",
+            said.code,
+            said.stdout.trim(),
+            vault_path_of(&root, theirs)
+        ),
+    );
+    run(&mut client(&workspace, &data, &["account", ALICE])).expect_success();
 
     serving.stop();
     checked.report();

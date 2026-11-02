@@ -10,7 +10,7 @@ use mingling::{
     macros::{chain, command, empty_result},
     res::ResExitCode,
 };
-use rola_build::{dotnet, paths::Workspace};
+use rola_build::{build_programs, dotnet, paths::Workspace};
 
 use super::run_check;
 use crate::Next;
@@ -26,6 +26,9 @@ pub fn dotnet_integration_test() -> StateDotnetIntegrationTest {
 pub struct StateDotnetIntegrationTest;
 
 /// Runs each suite on its own, restoring it first and running it with `--no-restore`.
+///
+/// The programs are built first, since a suite drives plugins that reach the C ABI library: what
+/// `ROLA_BIN_DIR` names is where the run finds both.
 #[chain]
 pub fn handle_dotnet_integration_test(
     _state: StateDotnetIntegrationTest,
@@ -35,7 +38,13 @@ pub fn handle_dotnet_integration_test(
         "dotnet-integration-test",
         "dotnet test tests/*/*.IntegrationTests.csproj -c Release --no-restore",
         ec,
-        || dotnet::run_integration_suites(&Workspace::discover()?),
+        || {
+            let workspace = Workspace::discover()?;
+            build_programs()?;
+            let bin_dir = workspace.release_dir()?;
+
+            dotnet::run_integration_suites(&workspace, &bin_dir)
+        },
     );
 
     empty_result!()

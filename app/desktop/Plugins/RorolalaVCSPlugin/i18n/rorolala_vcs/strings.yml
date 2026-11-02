@@ -706,6 +706,15 @@ rorolala_vcs:
       en: "`%{to}` was not written: the Layout still names the entry where it was."
       zh-CN: "没有写入 `%{to}`：布局仍把条目记在原处。"
 
+    # What a removal that did not happen says: which entry. The reason itself is the command's own words where it wrote
+    # any, and this one where it did not.
+    remove_refused:
+      en: "`%{path}` could not be removed"
+      zh-CN: "`%{path}` 无法删除"
+    remove_refused_why:
+      en: "The Vault still names the entry: only the account that holds it, or one that administrates the Vault, may remove it."
+      zh-CN: "保险库仍记录着该条目：只有持有它的账户、或保险库管理员才能删除它。"
+
     # What the root of the place opens at, and what it says when there is no Vault to open: the work's own upstream is
     # the Vault the Layout being worked in tracks, and the Workspace's default Vault where it tracks none.
     no_root_title:
@@ -764,6 +773,9 @@ rorolala_vcs:
     path_move:
       en: Moving the entry upstream
       zh-CN: 正在移动上游条目
+    path_remove:
+      en: Removing the entry upstream
+      zh-CN: 正在删除上游条目
     sync:
       en: Syncing
       zh-CN: 同步数据

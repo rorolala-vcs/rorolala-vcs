@@ -5,7 +5,9 @@
 //! Layout itself checks — binding a path to an entry that holds nothing is allowed — since this is
 //! the layer for writing content by hand.
 
-use librorolala::daemon::{PathMove, action_move_remote_path};
+use librorolala::daemon::{
+    EntryRemove, PathMove, action_move_remote_path, action_remove_remote_path,
+};
 use librorolala::workspace::Merging;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
@@ -33,8 +35,9 @@ use crate::error::ErrorOffline;
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
-    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutPathTaken, LayoutDid,
-    ResultLayoutContent, chosen_writable, failed, path_of, remote_spec, set_cached_path, uuid_of,
+    ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutHeld, ErrorLayoutMissing,
+    ErrorLayoutPathTaken, LayoutDid, ResultLayoutContent, chosen_writable, failed, path_of,
+    remote_spec, set_cached_path, set_cached_removed, uuid_of,
 };
 
 #[help(buffer)]
@@ -204,10 +207,19 @@ pub fn complete_layout_path_remove(
 /// What is left is the entry the path named, at no path: a half-made entry, which the Layout
 /// allows and `rola layout entries` reports.
 ///
+/// `--layout truth@VAULT` removes the entry the path names from the Vault's own Layout instead: a
+/// Vault's entry is a file the Vault holds, and letting one go is the entry going, path and all,
+/// rather than the path being unbound. Only the account that holds the entry, or one that
+/// administrates the Vault, may remove it. What the Vault agreed to is written into the copy kept
+/// here as well, so the places that read it see the file gone.
+///
 /// # Errors
 ///
-/// Renders [`ErrorLayoutArgument`] when an argument is missing or does not read, and the
-/// path-not-there or run-not-in-a-place failures otherwise.
+/// Renders [`ErrorLayoutArgument`] when an argument is missing or does not read,
+/// [`ErrorLayoutMissing`] when the path names nothing, [`ErrorLayoutHeld`] when another account
+/// holds the entry and this one does not administrate the Vault, [`ErrorOffline`] when the Vault's
+/// Layout is to be written and the run may not reach it, and the run-not-in-a-place or failed
+/// failures otherwise.
 #[command(node = "layout.path.remove", entry = EntryLayoutPathRemove)]
 pub fn layout_path_remove(args: EntryLayoutPathRemove) -> Next {
     let picked = args
@@ -236,11 +248,14 @@ pub struct StateLayoutPathRemove {
     layout: Option<String>,
 }
 
-#[chain]
+#[chain(routeify)]
 pub fn handle_layout_path_remove(
     state: StateLayoutPathRemove,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
+    remote: &mut LazyRes<ResCurrentRemoteVault>,
+    current: &mut LazyRes<ResCurrentAccount>,
+    offline: &ResOffline,
 ) -> Next {
     let StateLayoutPathRemove { path, layout } = state;
 
@@ -248,6 +263,65 @@ pub fn handle_layout_path_remove(
         Ok(path) => path,
         Err(next) => return next,
     };
+
+    // A Vault keeps one Layout, so a name written `NAME@VAULT` names that one only when `NAME` is
+    // the name it is known by; it is written by asking the Vault rather than by opening anything
+    // here, since the copy kept here is read and never the truth.
+    if let Some((named, vault_name)) = layout.as_deref().and_then(remote_spec) {
+        if named != VAULT_LAYOUT_NAME {
+            return ErrorLayoutArgument.into();
+        }
+
+        workspace.get_ref().check()?;
+
+        // UNWRAP: `check` above is exactly what a run without a Workspace fails with, and this run
+        // did not fail, so there is a Workspace here to hand on.
+        let held = workspace.get_ref().as_ref().unwrap();
+
+        let name = remote.get_ref().name_or_default(vault_name)?;
+        let target = remote.get_ref().vault_or_default(name.clone())?;
+
+        let account_name = current.get_ref().must_bind()?;
+        let account = account_named(&account_name, Some(held), None)?;
+
+        // Removing a path in the Vault's own Layout is the only part of this command that leaves
+        // the machine, and only a Layout named `NAME@VAULT` reaches it: an offline run may not make
+        // that removal, and the local unbindings are none of its business.
+        if **offline {
+            return ErrorOffline.into();
+        }
+
+        let answer = action_remove_remote_path(
+            held,
+            &account,
+            target.to_string(),
+            path.as_str().to_owned(),
+        )?;
+        let outcome: EntryRemove = match serde_json::from_str(&answer) {
+            Ok(outcome) => outcome,
+            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
+        };
+
+        return match outcome {
+            EntryRemove::Removed => {
+                // What the Vault agreed to is written into the copy as well, so reading it next
+                // does not show an entry the Vault no longer holds.
+                if let Err(error) = set_cached_removed(held, &name, named, &path) {
+                    return ErrorLayoutFailed::new(error.to_string()).into();
+                }
+
+                ResultLayoutContent {
+                    did: LayoutDid::Removed,
+                    what: path.as_str().to_owned(),
+                }
+                .into()
+            }
+            EntryRemove::Missing => ErrorLayoutMissing.into(),
+            EntryRemove::Refused { owner } => ErrorLayoutHeld::new(path.as_str(), owner).into(),
+            EntryRemove::Malformed => ErrorLayoutArgument.into(),
+        };
+    }
+
     let layout = match chosen_writable(workspace.get_ref(), vault.get_ref(), layout.as_deref()) {
         Ok(layout) => layout,
         Err(next) => return next,

@@ -708,3 +708,47 @@ pub fn action_fetch_ignore_rules(
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(action_fetch_ignore_rules_async(workspace, account, target, input, Progress::silent()))
 }
+
+/// Runs the [`ActionRemoveRemotePath`](crate::ActionRemoveRemotePath) action on the input it is handed, taken
+/// from `workspace`, as `account`, against the daemon at `target`.
+///
+/// `progress` is where the action says what it is doing while it does it; a run that is not
+/// being watched hands [`Progress::silent`], and the action runs the same way either way.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails.
+pub async fn action_remove_remote_path_async(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    input: String,
+    progress: Progress,
+) -> Result<String, ActionError> {
+    proc_action::<ActionRemoveRemotePath>(workspace, account, target, input, progress).await
+}
+
+/// Runs the [`ActionRemoveRemotePath`](crate::ActionRemoveRemotePath) action, blocking until it has.
+///
+/// This is the entry point the C ABI exports; the `async` one above is what a Rust
+/// caller should use instead. `workspace` is the copy the work is taken from, and the
+/// account is the one the caller names, so which identity an action runs as is theirs to
+/// say and not looked up behind their back, and the target is the daemon to reach, as a
+/// host and a port. Nothing is said of the action's progress here: a caller outside Rust
+/// has nowhere to read it, so the action is given no one to tell.
+///
+/// # Errors
+///
+/// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
+/// carried out but the exchange fails, or if the runtime cannot be built.
+#[rorolala_utils_lazyffi::lazyffi(export = do_action_remove_remote_path)]
+pub fn action_remove_remote_path(
+    workspace: &Workspace,
+    account: &Account,
+    target: String,
+    input: String,
+) -> Result<String, ActionError> {
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(action_remove_remote_path_async(workspace, account, target, input, Progress::silent()))
+}
