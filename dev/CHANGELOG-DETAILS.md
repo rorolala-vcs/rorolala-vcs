@@ -77,11 +77,12 @@ place of the one it recorded, dropping that entry. What it holds is read from th
 the Vault's Layout, or from this Layout when the `Uuid` is one it holds at no path; the entry must
 hold no path of its own and must record a version. What happens to the file follows how the two
 versions stand: the same version, or one the path's version is ahead of, is a change of identity
-only and keeps unrecorded changes; a version behind it is refused unless `--force` writes its
-content over the file or `--only-index` records the entry and leaves the file alone. Two chains are
-a jump, which a run makes unless `--deny-jump` refuses it — the flag the version target's jump is
-refused with as well. `--fork` still records a fresh `Uuid` with what the path records now, and
-cannot be given with a target.
+only and keeps the file as it is; a version behind it has that version's content written over the
+file, since what decides whether a file may be written is the file's own state and not the flag —
+changes that were never recorded are what `--force` discards, and `--only-index` records the entry
+and leaves the file alone. Two chains are a jump, which a run makes unless `--deny-jump` refuses it —
+the flag the version target's jump is refused with as well. `--fork` still records a fresh `Uuid`
+with what the path records now, and cannot be given with a target.
 
 What the command answers with is one shape whatever the target was: the path, the version it records,
 and whether what it records changed. A run that recorded an entry also answers with the two `Uuid`s

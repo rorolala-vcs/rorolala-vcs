@@ -165,15 +165,16 @@ pub fn complete_retrack(
 /// and must record a version; what it holds is read from the fetched copy of the Vault's Layout, or
 /// from this Layout when the `Uuid` is one it holds at no path. Whether the file changes follows how
 /// the two versions stand: the same version or one the path's version is ahead of leaves the file as
-/// it is, a version behind it is refused unless `--force` or `--only-index` says what to do, and
-/// another chain is a jump, which `--deny-jump` refuses.
+/// it is, a version behind it has that version's content written over the file, and another chain is
+/// a jump, which `--deny-jump` refuses.
 ///
 /// `--fork` records a fresh `Uuid` for what the path records now and leaves the file, the index and
 /// the Vault alone; it cannot be given with a target.
 ///
-/// The version's content is written back over the file with the record, so the two agree again.
-/// `--only-index` moves the record and leaves the file alone, which is what a run wants when the
-/// work on disk is not to be touched: `rola status` then reports the file as changed.
+/// The version's content is written back over the file with the record, so the two agree again —
+/// what a file standing as recorded is given without being asked, since the content it holds is the
+/// run's to replace. `--only-index` moves the record and leaves the file alone, which is what a run
+/// wants when the work on disk is not to be touched: `rola status` then reports the file as changed.
 ///
 /// A file with changes that were never recorded is refused where the content is to be switched, and
 /// so is one a variant is waiting to be joined into. `--force` goes ahead anyway: the changes are
@@ -187,7 +188,7 @@ pub fn complete_retrack(
 /// together, [`ErrorRetrackForkTarget`] when `--fork` and a target are, [`ErrorRetrackFile`] when
 /// what was named is not a local path the Layout records, [`ErrorRetrackTarget`] when `TARGET` names
 /// no version or entry it can read, [`ErrorRetrackEntry`] when the entry it names is not one it can
-/// record, [`ErrorRetrackSwitch`] when how the two versions stand refuses the change,
+/// record, [`ErrorRetrackSwitch`] when a crossed chain is what `--deny-jump` refuses,
 /// [`ErrorRetrackNothing`] when the entry was never recorded, [`ErrorRetrackModified`] when the file
 /// has changes the Layout does not name, [`ErrorRetrackMerging`] when a variant is waiting for the
 /// file, [`ErrorOffline`] when a version or a copy is not here and the run is offline,
@@ -852,11 +853,11 @@ struct Switching<'a> {
 /// # Errors
 ///
 /// Renders [`ErrorRetrackEntry`] when the entry to record is not one the run can record,
-/// [`ErrorRetrackSwitch`] when how the two versions stand refuses the change, [`ErrorRetrackModified`]
-/// when the file has changes the Layout does not name, [`ErrorRetrackMerging`] when a variant is
-/// waiting for the file, [`ErrorOffline`] when a version or a copy is not here and the run is
-/// offline, [`ErrorRetrackFailed`] when the store, the index or the Layout refuses, and
-/// [`ErrorRetrackTarget`] when a version the run needs cannot be brought.
+/// [`ErrorRetrackSwitch`] when a crossed chain is what `--deny-jump` refuses,
+/// [`ErrorRetrackModified`] when the file has changes the Layout does not name,
+/// [`ErrorRetrackMerging`] when a variant is waiting for the file, [`ErrorOffline`] when a version or
+/// a copy is not here and the run is offline, [`ErrorRetrackFailed`] when the store, the index or the
+/// Layout refuses, and [`ErrorRetrackTarget`] when a version the run needs cannot be brought.
 fn switch_uuid(asked: Switching<'_>) -> Next {
     let Switching {
         entry,
@@ -908,23 +909,17 @@ fn switch_uuid(asked: Switching<'_>) -> Next {
     };
 
     // The file is left alone unless the versions say otherwise: an entry that records the same
-    // version, or one ahead of what the target records, keeps the work on disk as it is.
+    // version, or one ahead of what the target records, keeps the work on disk as it is. Whether the
+    // file may be written at all is what the reading of it says below: standing as recorded, it is
+    // written; holding changes that were never recorded, it is what `--force` is for.
     let action = match &entry {
         None => SwitchAction::Keep,
         Some(_) => match stand_of(data, &source, vcs, runtime, held, remote, current, offline) {
-            Ok(relation) => match switch_action(relation, only_index, deny_jump, force) {
+            Ok(relation) => match switch_action(relation, only_index, deny_jump) {
                 Ok(action) => action,
-                Err(SwitchRefusal::Behind) => {
-                    return ErrorRetrackSwitch {
-                        path: path.as_str().to_owned(),
-                        kind: RetrackSwitchError::Behind,
-                    }
-                    .into();
-                }
                 Err(SwitchRefusal::NotOnChain) => {
                     return ErrorRetrackSwitch {
                         path: path.as_str().to_owned(),
-                        kind: RetrackSwitchError::NotOnChain,
                     }
                     .into();
                 }
@@ -1322,8 +1317,6 @@ enum SwitchAction {
 /// The ways the two versions standing apart refuse a change of `Uuid`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum SwitchRefusal {
-    /// The path records a version behind the one it would record.
-    Behind,
     /// The two are on different chains, and the run asked to stay on the chain.
     NotOnChain,
 }
@@ -1332,24 +1325,21 @@ enum SwitchRefusal {
 ///
 /// The two versions being on one chain is what decides how little is done: the file already holds
 /// what the path records, so an entry that records the same version or a later one is a change of
-/// identity and nothing more, and one that records an earlier version is a change of what the file
-/// holds — refused unless the run says to switch the content or to leave the file behind. Different
-/// chains are not a step back at all, so they are what a run does unless it asked to stay on the
-/// chain with `--deny-jump`.
+/// identity and nothing more, and one that records an earlier version has that version's content
+/// written over the file. Whether the file may be written is what the caller's reading of it decides
+/// — a file that stands as recorded is written without being asked, and one holding changes that were
+/// never recorded is what `--force` is for. Different chains are not a step back at all, so they are
+/// what a run does unless it asked to stay on the chain with `--deny-jump`.
 fn switch_action(
     relation: Relation,
     only_index: bool,
     deny_jump: bool,
-    force: bool,
 ) -> Result<SwitchAction, SwitchRefusal> {
     match relation {
         Relation::Equal | Relation::Ahead => Ok(SwitchAction::Keep),
-        Relation::Behind if only_index => Ok(SwitchAction::Pointer),
-        Relation::Behind if force => Ok(SwitchAction::Content),
-        Relation::Behind => Err(SwitchRefusal::Behind),
         Relation::Apart if deny_jump => Err(SwitchRefusal::NotOnChain),
-        Relation::Apart if only_index => Ok(SwitchAction::Pointer),
-        Relation::Apart => Ok(SwitchAction::Content),
+        Relation::Behind | Relation::Apart if only_index => Ok(SwitchAction::Pointer),
+        Relation::Behind | Relation::Apart => Ok(SwitchAction::Content),
     }
 }
 
@@ -2147,40 +2137,22 @@ pub fn render_error_retrack_entry(error: ErrorRetrackEntry, ec: &mut ResExitCode
     ec.exit_code = EC_ERR_RETRACK_ARGUMENT;
 }
 
-/// Error: the version a path records and the version its entry is to record refuse the change.
+/// Error: the two versions are on different chains, and the run asked to stay on the chain.
 #[derive(Grouped)]
 pub struct ErrorRetrackSwitch {
     /// Where the entry sits in the Layout.
     path: String,
-    /// Why the change is refused.
-    kind: RetrackSwitchError,
-}
-
-/// The ways two versions refuse a change of `Uuid`.
-pub enum RetrackSwitchError {
-    /// The version the path records is behind the one the entry records.
-    Behind,
-    /// The two versions are on different chains.
-    NotOnChain,
 }
 
 impl Failure for ErrorRetrackSwitch {
     fn name(&self) -> &'static str {
-        match self.kind {
-            RetrackSwitchError::Behind => "error_retrack_switch_behind",
-            RetrackSwitchError::NotOnChain => "error_retrack_switch_not_on_chain",
-        }
+        "error_retrack_switch_not_on_chain"
     }
 
     fn reason(&self) -> String {
-        let said = match self.kind {
-            RetrackSwitchError::Behind => t!("retrack.err_switch_behind", path = self.path),
-            RetrackSwitchError::NotOnChain => {
-                t!("retrack.err_switch_not_on_chain", path = self.path)
-            }
-        };
-
-        said.trim().to_string()
+        t!("retrack.err_switch_not_on_chain", path = self.path)
+            .trim()
+            .to_string()
     }
 }
 
@@ -2188,13 +2160,11 @@ failure!(ErrorRetrackSwitch);
 
 #[renderer(buffer)]
 pub fn render_error_retrack_switch(error: ErrorRetrackSwitch, ec: &mut ResExitCode) {
-    let help = match error.kind {
-        RetrackSwitchError::Behind => t!("retrack.err_switch_behind_help"),
-        RetrackSwitchError::NotOnChain => t!("retrack.err_switch_not_on_chain_help"),
-    };
-
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(help.trim()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("retrack.err_switch_not_on_chain_help").trim())
+    );
     ec.exit_code = EC_ERR_RETRACK_ARGUMENT;
 }
 
@@ -2709,62 +2679,61 @@ mod tests {
     }
 
     /// What a change of `Uuid` does to the file is decided by how the two versions stand and by the
-    /// flags the run gave: a version the same or a later one keeps the file, an earlier one needs
-    /// the run to say what happens, and another chain is a jump unless the run refused one.
+    /// flags the run gave: the same version or a later one keeps the file, an earlier one has its
+    /// content written over it unless the record alone is asked for, and another chain is a jump
+    /// unless the run refused one.
     #[test]
     fn what_a_change_of_uuid_does_to_the_file_follows_the_versions_and_the_flags() {
         use super::{Relation, SwitchAction, SwitchRefusal, switch_action};
 
         assert_eq!(
-            switch_action(Relation::Equal, false, false, false),
+            switch_action(Relation::Equal, false, false),
             Ok(SwitchAction::Keep)
         );
         assert_eq!(
-            switch_action(Relation::Equal, true, true, true),
+            switch_action(Relation::Equal, true, true),
             Ok(SwitchAction::Keep)
         );
         assert_eq!(
-            switch_action(Relation::Ahead, false, false, false),
+            switch_action(Relation::Ahead, false, false),
             Ok(SwitchAction::Keep)
         );
         assert_eq!(
-            switch_action(Relation::Ahead, true, true, true),
+            switch_action(Relation::Ahead, true, true),
             Ok(SwitchAction::Keep)
         );
 
+        // A version behind the one the entry records has its content written over the file: what
+        // decides whether the file may be written is whether it stands as recorded, not the flag.
         assert_eq!(
-            switch_action(Relation::Behind, false, false, false),
-            Err(SwitchRefusal::Behind)
+            switch_action(Relation::Behind, false, false),
+            Ok(SwitchAction::Content)
         );
         assert_eq!(
-            switch_action(Relation::Behind, true, false, false),
+            switch_action(Relation::Behind, true, false),
             Ok(SwitchAction::Pointer)
         );
         assert_eq!(
-            switch_action(Relation::Behind, false, false, true),
-            Ok(SwitchAction::Content)
+            switch_action(Relation::Behind, true, true),
+            Ok(SwitchAction::Pointer)
         );
 
         // Another chain is a jump, and a jump is what a run makes unless it asked not to.
         assert_eq!(
-            switch_action(Relation::Apart, false, false, false),
+            switch_action(Relation::Apart, false, false),
             Ok(SwitchAction::Content)
         );
         assert_eq!(
-            switch_action(Relation::Apart, false, false, true),
-            Ok(SwitchAction::Content)
-        );
-        assert_eq!(
-            switch_action(Relation::Apart, true, false, false),
+            switch_action(Relation::Apart, true, false),
             Ok(SwitchAction::Pointer)
         );
         // A run that refused the jump is refused however else it was asked to go.
         assert_eq!(
-            switch_action(Relation::Apart, false, true, false),
+            switch_action(Relation::Apart, false, true),
             Err(SwitchRefusal::NotOnChain)
         );
         assert_eq!(
-            switch_action(Relation::Apart, true, true, true),
+            switch_action(Relation::Apart, true, true),
             Err(SwitchRefusal::NotOnChain)
         );
     }

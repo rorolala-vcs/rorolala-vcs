@@ -1947,6 +1947,78 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
         &ran,
         252,
     );
+
+    // An entry whose version is ahead of the one a file records has that version's content written
+    // over the file without being forced: what decides whether the file may be written is the file's
+    // own state, not the flag. A file holding changes that were never recorded is still what
+    // `--force` is for, and `--only-index` still keeps the content where it is.
+    fs::write(dir.join("c.txt"), "c-one").expect("a file on a chain of its own");
+    let ran = rola.run(dir, &["track", "c.txt", "--message", "c first", "--no-editor"]);
+    checked.exits("a third file is recorded", &ran, 0);
+    let cv1 = entry_field(rola, dir, "c.txt", "version").expect("its first version");
+    fs::write(dir.join("c.txt"), "c-two").expect("its second reading");
+    let ran = rola.run(dir, &["track", "c.txt", "--message", "c second", "--no-editor"]);
+    checked.exits("the third file is recorded again", &ran, 0);
+    let cv2 = entry_field(rola, dir, "c.txt", "version").expect("its second version");
+
+    let ahead = "00000000-0000-0000-0000-0000000000c4";
+    let ran = rola.run(dir, &["layout", "entry", "create", ahead, &cv2]);
+    checked.exits("an entry at the newer version is made", &ran, 0);
+    let ran = rola.run(dir, &["retrack", "c.txt"]);
+    checked.exits("the third file is taken back one version", &ran, 0);
+    checked.wants(
+        "the third file records its first version again",
+        entry_field(rola, dir, "c.txt", "version").as_deref() == Some(cv1.as_str()),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["retrack", "c.txt", ahead]);
+    checked.exits(
+        "a version ahead of the file's record is written without --force",
+        &ran,
+        0,
+    );
+    checked.wants(
+        "the content of the version recorded is what the file holds",
+        fs::read_to_string(dir.join("c.txt")).is_ok_and(|it| it == "c-two")
+            && entry_field(rola, dir, "c.txt", "uuid").as_deref() == Some(ahead)
+            && entry_field(rola, dir, "c.txt", "version").as_deref() == Some(cv2.as_str()),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["retrack", "c.txt"]);
+    checked.exits("the third file is taken back again", &ran, 0);
+    fs::write(dir.join("c.txt"), "c-dirty").expect("a change nobody recorded");
+    let forced = "00000000-0000-0000-0000-0000000000c5";
+    let ran = rola.run(dir, &["layout", "entry", "create", forced, &cv2]);
+    checked.exits("another entry at the newer version is made", &ran, 0);
+    let ran = rola.run(dir, &["retrack", "c.txt", forced]);
+    checked.exits("a file with unrecorded changes still needs --force", &ran, 253);
+    checked.stderr_has("the refusal names the way past it", &ran, "--force");
+
+    let ran = rola.run(dir, &["retrack", "c.txt", forced, "--force"]);
+    checked.exits("--force writes over them", &ran, 0);
+    checked.wants(
+        "the content of the version recorded is what the file holds",
+        fs::read_to_string(dir.join("c.txt")).is_ok_and(|it| it == "c-two"),
+        &said(&ran),
+    );
+
+    // The record alone, with the file left where it is.
+    let ran = rola.run(dir, &["retrack", "c.txt"]);
+    checked.exits("the third file is taken back for the record-only switch", &ran, 0);
+    let held = "00000000-0000-0000-0000-0000000000c6";
+    let ran = rola.run(dir, &["layout", "entry", "create", held, &cv2]);
+    checked.exits("a third entry at the newer version is made", &ran, 0);
+    let before = fs::read_to_string(dir.join("c.txt")).unwrap_or_default();
+    let ran = rola.run(dir, &["retrack", "c.txt", held, "--only-index"]);
+    checked.exits("--only-index records the entry and leaves the file", &ran, 0);
+    checked.wants(
+        "the record names the entry and the file still holds what it held",
+        entry_field(rola, dir, "c.txt", "uuid").as_deref() == Some(held)
+            && fs::read_to_string(dir.join("c.txt")).is_ok_and(|it| it == before),
+        &said(&ran),
+    );
 }
 
 /// Copies a directory and everything under it, which is the shape a fetched Layout is laid down in.

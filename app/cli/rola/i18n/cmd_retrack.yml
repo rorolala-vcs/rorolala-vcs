@@ -32,7 +32,7 @@ retrack:
 
         An entry target — a `Uuid`, or a path of the Vault's own Layout — records that entry for the path instead, dropping the one it recorded
         The entry must hold no path of its own and must record a version; what it holds is read from the Vault's own Layout, or from this one
-        Whether the file changes follows how the two versions stand: the same or a later one keeps the file, an earlier one needs `--force` or `--only-index`, and another chain is a jump `--deny-jump` refuses
+        Whether the file changes follows how the two versions stand: the same or a later one keeps the file, an earlier one has its content written over the file when the file stands as recorded, and another chain is a jump `--deny-jump` refuses
         `--fork` records a fresh `Uuid` with what the path records now, and cannot be given with a target
 
         A step count written `-N` is read as a flag, so it is written `~N`
@@ -57,7 +57,7 @@ retrack:
 
         条目目标 —— 一个 `Uuid`，或保险库自身布局中的路径 —— 让该路径改而记录那个条目，并删除它原先记录的条目
         被记录的条目自身不能有路径，且必须记录过版本；其内容从保险库自身布局或本地布局中读取
-        是否改动文件由两个版本的关系决定：相同或本地领先则保留文件，本地落后需 `--force` 或 `--only-index`，不同链属于跳转，由 `--deny-jump` 拒绝
+        是否改动文件由两个版本的关系决定：相同或本地领先则保留文件，本地落后会在文件处于“已记录”状态时把内容写回，不同链属于跳转，由 `--deny-jump` 拒绝
         `--fork` 用该路径当前记录给条目换一个新的 `Uuid`，不能与目标同时给出
 
         以 `-` 开头写的步数会被当成标志，请写成 `~N`
@@ -324,18 +324,6 @@ retrack:
     zh-CN: |
         未记录版本的条目就是内容从未提交过的条目
         请用 `rola track` 记录该条目所属的文件，或用 `--fork` 给文件换一个新的 Uuid
-
-  err_switch_behind:
-    en: "The version `%{path}` records is behind the one its new entry records"
-    zh-CN: "`%{path}` 记录的版本落后于其新条目所记录的版本"
-
-  err_switch_behind_help:
-    en: |
-        Switch the content back to the entry's version with `--force`,
-        or record the entry and leave the file as it is with `--only-index`
-    zh-CN: |
-        用 `--force` 把内容切回该条目的版本，
-        或用 `--only-index` 记录该条目、同时保持文件原样
 
   err_switch_not_on_chain:
     en: "The version `%{path}` records is not on the way to the one its new entry records, and this run was asked not to jump"
