@@ -492,4 +492,30 @@ mod tests {
 
         let _ = fs::remove_dir_all(&root);
     }
+
+    #[test]
+    fn a_workspace_names_the_layout_copies_it_keeps() {
+        let (root, workspace) = scratch("named");
+        assert_eq!(workspace.readonly_layout_copies(), Vec::new());
+
+        let studio = super::LayoutCopy::of(&workspace, "studio", "truth");
+        let stage = staged(&studio, "log-0.wal");
+        studio.publish(&stage).unwrap();
+
+        let origin = super::LayoutCopy::of(&workspace, "origin", "truth");
+        let stage = staged(&origin, "log-0.wal");
+        origin.publish(&stage).unwrap();
+
+        // A directory under the cache is a copy whether or not a pointer names a generation: what is
+        // listed is what a reader can open, in name order.
+        assert_eq!(
+            workspace.readonly_layout_copies(),
+            vec![
+                ("origin".to_owned(), "truth".to_owned()),
+                ("studio".to_owned(), "truth".to_owned()),
+            ]
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
 }

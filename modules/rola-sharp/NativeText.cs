@@ -31,4 +31,14 @@ internal static class NativeText
             RorolalaBinding.free_string(text);
         }
     }
+
+    /// <summary>Reads a C string whose buffer is released by something else.</summary>
+    /// <remarks>
+    /// A string a failure carries is part of the failure: it goes when the failure is given back, and
+    /// releasing it here would be releasing it twice. It is copied out, and the owner releases it.
+    /// </remarks>
+    /// <param name="text">The buffer, or null when there is no string.</param>
+    /// <returns>What it said, or an empty string.</returns>
+    public static string Copied(nint text) =>
+        text == 0 ? string.Empty : Marshal.PtrToStringUTF8(text) ?? string.Empty;
 }

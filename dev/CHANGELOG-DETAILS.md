@@ -148,8 +148,10 @@ A snapshot also cuts a window of the variant graph: `Snapshot::graph` takes a fo
 towards the root and forward away from it to walk, whether to follow merges and one-hop branches, and
 a cap on nodes. What it answers with is the variants, the versions, the base and join edges, the keys
 the index does not hold, and a `frontier` on each node saying which way the window stopped short;
-`Snapshot::expand` walks one step further from a node. Nothing is read from the objects and nothing
-is fetched: a version or variant the index does not hold is named as missing.
+`Snapshot::expand` walks one step further from a node. A one-hop branch is not taken from the root:
+every file's first variant is based on it, so its dependents are the other chains rather than this
+one's history. Nothing is read from the objects and nothing is fetched: a version or variant the index
+does not hold is named as missing.
 
 A rebuild is now incremental. The keys the records cover are compared with the keys the index lists,
 and only the difference is read; the file is built afresh only when it cannot be added to — it is
@@ -159,6 +161,31 @@ numbered by a later rebuild when the link arrives. The report now says which of 
 (`fresh`, `incremental`, `full`), how many objects were read, and how many versions were numbered.
 The file format is unchanged, so existing records stay valid and the first rebuild after this takes
 them in incrementally; `Edge::Join` gains the `join_dependents` question the other roles already had.
+
+### 8. [`modules`] [`status`] [`variant-graph`] Read the variant graph of a workspace as one JSON document
+
+`rorolala-status` gains `locate_variant_graph_json`, which reads the variant graph around the entries
+a request names and answers with one JSON document: the graph, the entries that name it, the merges
+in progress and the texts. The window is the one the inverse index walks — a focus of entries, each a
+side and a path, how far back, forward and into merges to look, and a cap — and every node carries a
+`frontier` saying which way the window stopped short, so a drawing that reaches the edge asks again
+from the node it reached. A side is `local` for the Layout being worked in, or the name of a Vault
+whose copy was fetched. The records are rebuilt first when they do not describe the index, which is
+derived data and never the network; a key the index does not hold is named as missing rather than
+fetched.
+
+The words of each creator and message the window's variants name are read from the index once each
+and carried beside the graph, so a drawing does not ask for them node by node. Every entry whose
+version the window holds is named with the side it is on, the version it records, the account that
+holds it, and whether it was moved under the deprecated marker; a merge in progress names the variant
+waiting, the entry it joins into and where its variant file lies.
+
+The C ABI exposes the same reading as `locate_rola_variant_graph_json`, whose answer is an owned
+string and whose failures are a `RolaVariantGraphError` — nothing to draw, which is no Workspace, no
+Layout or no index, told apart from a request or an index that could not be read. `modules/rola-sharp`
+gains `RolaVariantGraph`, which asks for a window with a `VariantGraphRequest` and reads the answer
+into records, and `modules/workspace` gains `Workspace::readonly_layout_copies`, which names the
+Layout copies a Workspace keeps, by the Vault and the Layout each was fetched under.
 
 ## Refactor
 

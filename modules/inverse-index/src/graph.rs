@@ -34,6 +34,9 @@ pub struct GraphRequest {
     /// Whether to walk into what a variant merges in.
     pub joins: bool,
     /// Whether to take in a variant based on a version in the window, one hop.
+    ///
+    /// The root is not such a version: every file's first variant is based on it, so its dependents are
+    /// the other chains rather than branches of this one.
     pub branches: bool,
     /// How many variants the window holds at most.
     pub max_nodes: u32,
@@ -493,10 +496,22 @@ impl<'a> Walk<'a> {
     }
 
     /// Takes in one hop of the variants based on the versions already in the window.
+    ///
+    /// The root is left out: every file's first variant is based on it, so its dependents are the other
+    /// chains rather than branches of this one, and taking them in would draw a workspace's whole first
+    /// row around any window that reached the root.
     fn take_branches(&mut self) {
         let versions: Vec<Hash> = self.versions.iter().copied().collect();
 
         for version in versions {
+            if self
+                .snapshot
+                .version(version)
+                .is_some_and(|record| record.is_root)
+            {
+                continue;
+            }
+
             let branches = self.snapshot.variants_based_on(version).to_vec();
 
             for branch in branches {
@@ -772,6 +787,13 @@ mod tests {
             view.nodes
                 .iter()
                 .any(|node| node.hash == chain.third_variant)
+        );
+
+        // A variant of another chain is based on the root too, and is not a branch of this one: the
+        // root's dependents are every file's first variant, not this file's history.
+        assert!(
+            !view.nodes.iter().any(|node| node.hash == chain.foreign),
+            "another chain's first variant was taken in as a branch of this one",
         );
     }
 

@@ -3889,6 +3889,7 @@ name = "rorolala-status"
 version = "0.2.0"
 dependencies = [
  "rorolala-ignore",
+ "rorolala-inverse-index",
  "rorolala-layout",
  "rorolala-storage",
  "rorolala-tree-analyze",
@@ -3897,6 +3898,8 @@ dependencies = [
  "rorolala-utils-location",
  "rorolala-vcs",
  "rorolala-workspace",
+ "serde",
+ "serde_json",
  "tokio",
  "uuid",
 ]

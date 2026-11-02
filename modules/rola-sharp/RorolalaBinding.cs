@@ -812,6 +812,73 @@ internal enum RolaPathState : int
     RolaPathState_Merging = 7,
 }
 
+internal enum RolaVariantGraphErrorTag : int
+{
+    /// <summary>
+    /// No Workspace holds the directory the reading was asked of.
+    /// </summary>
+    RolaVariantGraphError_NoWorkspace = 0,
+    /// <summary>
+    /// The Workspace works in no Layout.
+    /// </summary>
+    RolaVariantGraphError_NoLayout = 1,
+    /// <summary>
+    /// The Workspace holds no version control index.
+    /// </summary>
+    RolaVariantGraphError_NoIndex = 2,
+    /// <summary>
+    /// The request does not read as one this build knows.
+    /// </summary>
+    RolaVariantGraphError_BadRequest = 3,
+    /// <summary>
+    /// The index, or the records beside it, could not be read.
+    /// </summary>
+    RolaVariantGraphError_Read = 4,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVariantGraphErrorBadRequest
+{
+    /// <summary>
+    /// Why it does not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVariantGraphErrorRead
+{
+    /// <summary>
+    /// Why it could not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaVariantGraphErrorPayload
+{
+    /// <summary>
+    /// The request does not read as one this build knows.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaVariantGraphErrorBadRequest BadRequest;
+    /// <summary>
+    /// The index, or the records beside it, could not be read.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaVariantGraphErrorRead Read;
+}
+
+/// <summary>
+/// What reading a variant graph failed with.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVariantGraphError
+{
+    public RolaVariantGraphErrorTag tag;
+    public RolaVariantGraphErrorPayload payload;
+}
+
 /// <summary>
 /// Represents an error that occurs during the creation of a Vault
 /// </summary>
@@ -1582,6 +1649,9 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_status(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_vault_config(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1940,6 +2010,20 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint locate_rola_version_graph(nint directory, nint target);
+
+    /// <summary>
+    /// The variant graph around the entries `request` names, as one JSON document.
+    ///
+    /// `directory` and `request` cross as UTF-8 strings. The answer is an owned JSON string the caller
+    /// releases with `free_string`; a failure is a `RolaVariantGraphError *` the caller releases with
+    /// `free_rola_variant_graph_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaVariantGraphError *`, owned; release it with `free_rola_variant_graph_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult locate_rola_variant_graph_json(nint directory, nint request);
 
     /// <summary>
     /// Locates a [`Vault`] by searching upwards from the given directory

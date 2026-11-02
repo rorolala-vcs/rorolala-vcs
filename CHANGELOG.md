@@ -13,6 +13,7 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 5. [`app`] [`rola`] [`inv-idx`] List the variants and versions the inverse index holds — [See details](dev/CHANGELOG-DETAILS.md#5-app-rola-inv-idx-list-the-variants-and-versions-the-inverse-index-holds)
 6. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names — [See details](dev/CHANGELOG-DETAILS.md#6-app-rola-layout-change-or-renew-the-uuid-a-layout-path-names)
 7. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally — [See details](dev/CHANGELOG-DETAILS.md#7-modules-inverse-index-read-the-inverse-index-the-other-way-and-rebuild-it-incrementally)
+8. [`modules`] [`status`] [`variant-graph`] Read the variant graph of a workspace as one JSON document — [See details](dev/CHANGELOG-DETAILS.md#8-modules-status-variant-graph-read-the-variant-graph-of-a-workspace-as-one-json-document)
 
 ## Refactor
 

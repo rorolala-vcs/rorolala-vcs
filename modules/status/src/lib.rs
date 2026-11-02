@@ -11,6 +11,7 @@ mod graph;
 mod merge;
 mod ownership;
 mod status;
+mod variant_graph;
 
 // The base of a version is read through the index, which is the FFI surface's own business alone; what
 // crosses is the standing itself, so the reader beside it is named here rather than re-exported.
@@ -20,3 +21,4 @@ pub use graph::*;
 pub use merge::*;
 pub use ownership::*;
 pub use status::*;
+pub use variant_graph::*;

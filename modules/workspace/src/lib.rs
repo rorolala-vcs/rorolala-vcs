@@ -296,6 +296,44 @@ impl Workspace {
         LayoutCopy::of(self, vault, layout).current()
     }
 
+    /// The Layout copies this Workspace keeps, each by the Vault and the Layout it was fetched under.
+    ///
+    /// A copy is here because a fetch brought it, so what is listed is what a reader can open now, in
+    /// name order: a Vault that was bound but never fetched has nothing to read here. The cache is
+    /// derived data, and a directory that cannot be read is answered as nothing rather than as a
+    /// failure — the same bargain [`readonly_layout_copy`](Self::readonly_layout_copy) makes for one
+    /// copy.
+    #[must_use]
+    pub fn readonly_layout_copies(&self) -> Vec<(String, String)> {
+        let root = self.current_dir.join(WORKSPACE_READONLY_LAYOUTS_DIR);
+        let Ok(vaults) = fs::read_dir(root) else {
+            return Vec::new();
+        };
+
+        let mut copies = Vec::new();
+        for vault in vaults.filter_map(Result::ok) {
+            let Ok(layouts) = fs::read_dir(vault.path()) else {
+                continue;
+            };
+            let vault = vault.file_name().to_string_lossy().into_owned();
+
+            for layout in layouts.filter_map(Result::ok) {
+                if !layout.path().is_dir() {
+                    continue;
+                }
+
+                copies.push((
+                    vault.clone(),
+                    layout.file_name().to_string_lossy().into_owned(),
+                ));
+            }
+        }
+
+        copies.sort();
+
+        copies
+    }
+
     /// Where the Workspace's store is rooted, with the layout's spelling walked back out of it.
     ///
     /// The directory is written `./.rola/storage/`, and joining that onto the Workspace's root
