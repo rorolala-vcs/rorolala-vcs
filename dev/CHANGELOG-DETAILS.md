@@ -6,60 +6,34 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Feature
 
-### 1. **\[BREAKING!\]** [`app`] [`rola`] [`sync`] Submit a new file under the path the work tracks it at
+### 1. **\[BREAKING!\]** [`app`] [`rola`] [`layout`] Remove an entry from a Vault's Layout, by the account that holds it
 
-A `Uuid` only the Workspace holds no longer reaches the Vault under `@/new/`: the Vault's
-Layout names it at the path the work tracks it at, so `art/hero.psd` is an entry of the Vault's
-Layout called `art/hero.psd` rather than `@/new/art/hero.psd`. A first submission reads where the
-work keeps the file instead of in a staging tree of the Vault's, and the two trees line up from the
-first sync.
+`rola layout path remove <PATH> --layout truth@VAULT` drops the entry the path names from the
+Vault's own Layout, and the path with it. Only the account that holds the entry, or one that
+administrates the Vault, may remove it: another account's refusal names the holder, and an entry
+nobody holds is an administrator's to remove. The local form is unchanged — `rola layout path
+remove <PATH>` still only unbinds the path, leaving the entry the work's.
 
-Because the name is now the work's own path, a path the Vault's Layout already names is told apart
-the way it was: the parent, the stem, the `Uuid` in short form and the extension,
-`art/hero@1a2b3c4.psd`, with the short form growing a character at a time and the whole `Uuid` last.
-The Vault side accepts any path a remote Layout may name, so no prefix is required of a creation.
+The write is the Vault's own: a new daemon action, `remove-remote-path` (id 19), carries the path
+and the Vault answers with what became of it, so an offline run is refused rather than answered
+locally, and what the Vault agreed to is written into the fetched copy as well — a reading command
+sees the entry gone without a fetch of its own. What the entry's version names stays in the store,
+and the version and the objects under it stay in the index: what is removed is the file as a thing
+the Vault holds.
 
-What an older version submitted under `@/new/` is unchanged: such an entry is still read, moved and
-deprecated as before, and a path under the marker is still a name a new entry may be made under.
-There is no migration — a layout that holds both spellings is what one built across the change
-looks like, and `layout path move` is what takes an old entry out of the marker.
+The desktop's upstream view follows: a row of a fetched copy the acting account holds is removable
+with the browser's own `Delete` gesture and its delete menu item, which ask before removing as
+every delete does. What the run came to is read back from the copy the run wrote rather than taken
+from its status, so a removal that did not happen says so. An entry another account holds is not
+offered there, since only its holder is known to the place: removing what an administrator does not
+hold is the command line's.
 
-### 2. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry
+Breaking: a Vault's Layout could not lose an entry before, and now can. An entry that is removed
+there is no longer named upstream, so the next `rola sync` reads the work's own record of it as a
+file the Vault does not hold and submits it again under the path the work tracks it at, unless the
+work lets go of it too.
 
-Moving a path in the Vault's Layout — locating an entry out of `@/new/`, deprecating one under
-`@/removed/`, renaming or regrouping one anywhere — no longer requires the account that asks to
-hold the entry, or to administer the Vault. A move changes where an entry is rather than who holds
-it, so any account the Vault lets write its Layout may make one. `rola layout path move` therefore
-no longer renders a refusal for an entry another account holds, and `rola req-ownership` /
-`giveup-ownership` are about content writes rather than about moves.
-
-The desktop's upstream view follows: every row of a fetched copy is renamable, and a folder is no
-longer offered only when all of its entries are the acting account's.
-
-`rola layout path move` still refuses a path that names nothing, a path that is already taken, and
-a path a remote Layout may not name. Two moves racing are answered by the Layout's log rather than
-by a holder check — the last write is the path the entry has — which is what a move always left
-behind; what a caller that read a path and then moves it finds taken is answered as taken rather
-than overwritten.
-
-### 3. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names
-
-`rola layout path change-uuid <PATH> <UUID>` makes a path name another entry: the entry the path named
-is dropped and the one given takes its place, holding the data the Layout already held for it. The
-`Uuid` has to be one the Layout holds at no path, since an entry is at one path — another path naming
-it is refused, and `rola layout path remove` is what lets it go first.
-
-`rola layout path new-uuid <PATH>` drops the entry the path names and makes it again under a new
-`Uuid`, holding what it held, so an entry can start over without the history it was recorded with
-being touched.
-
-Neither reaches beyond the Layout: the version index, the stores and the working tree know nothing of
-a Layout's paths. A fetched copy of a Vault's Layout is refused as every Layout-writing command
-refuses it, by the read-only name `truth@VAULT`. The Layout's own batch writes grow what the two
-need: an entry can be removed in the same batch that binds its path to another, which is one write
-and no moment where the path names nothing.
-
-### 4. **\[BREAKING!\]** [`app`] [`rola`] [`retrack`] Record a version, or another entry, for a file
+### 2. **\[BREAKING!\]** [`app`] [`rola`] [`retrack`] Record a version, or another entry, for a file
 
 `rola retrack` now takes what the path is to record as its second word: `rola retrack <PATH> [TARGET]`.
 The `--until` flag is gone, and so is the `--change-upstream` flag a earlier draft of this version
@@ -89,6 +63,59 @@ and whether what it records changed. A run that recorded an entry also answers w
 and whether the entry was forked. The desktop's retrack passes the file and the target as its two
 words and asks for no jump either way: a version the work's chain does not hold is a jump the command
 makes, so the plugin no longer tells it apart.
+
+### 3. **\[BREAKING!\]** [`app`] [`rola`] [`sync`] Submit a new file under the path the work tracks it at
+
+A `Uuid` only the Workspace holds no longer reaches the Vault under `@/new/`: the Vault's
+Layout names it at the path the work tracks it at, so `art/hero.psd` is an entry of the Vault's
+Layout called `art/hero.psd` rather than `@/new/art/hero.psd`. A first submission reads where the
+work keeps the file instead of in a staging tree of the Vault's, and the two trees line up from the
+first sync.
+
+Because the name is now the work's own path, a path the Vault's Layout already names is told apart
+the way it was: the parent, the stem, the `Uuid` in short form and the extension,
+`art/hero@1a2b3c4.psd`, with the short form growing a character at a time and the whole `Uuid` last.
+The Vault side accepts any path a remote Layout may name, so no prefix is required of a creation.
+
+What an older version submitted under `@/new/` is unchanged: such an entry is still read, moved and
+deprecated as before, and a path under the marker is still a name a new entry may be made under.
+There is no migration — a layout that holds both spellings is what one built across the change
+looks like, and `layout path move` is what takes an old entry out of the marker.
+
+### 4. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry
+
+Moving a path in the Vault's Layout — locating an entry out of `@/new/`, deprecating one under
+`@/removed/`, renaming or regrouping one anywhere — no longer requires the account that asks to
+hold the entry, or to administer the Vault. A move changes where an entry is rather than who holds
+it, so any account the Vault lets write its Layout may make one. `rola layout path move` therefore
+no longer renders a refusal for an entry another account holds, and `rola req-ownership` /
+`giveup-ownership` are about content writes rather than about moves.
+
+The desktop's upstream view follows: every row of a fetched copy is renamable, and a folder is no
+longer offered only when all of its entries are the acting account's.
+
+`rola layout path move` still refuses a path that names nothing, a path that is already taken, and
+a path a remote Layout may not name. Two moves racing are answered by the Layout's log rather than
+by a holder check — the last write is the path the entry has — which is what a move always left
+behind; what a caller that read a path and then moves it finds taken is answered as taken rather
+than overwritten.
+
+### 5. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names
+
+`rola layout path change-uuid <PATH> <UUID>` makes a path name another entry: the entry the path named
+is dropped and the one given takes its place, holding the data the Layout already held for it. The
+`Uuid` has to be one the Layout holds at no path, since an entry is at one path — another path naming
+it is refused, and `rola layout path remove` is what lets it go first.
+
+`rola layout path new-uuid <PATH>` drops the entry the path names and makes it again under a new
+`Uuid`, holding what it held, so an entry can start over without the history it was recorded with
+being touched.
+
+Neither reaches beyond the Layout: the version index, the stores and the working tree know nothing of
+a Layout's paths. A fetched copy of a Vault's Layout is refused as every Layout-writing command
+refuses it, by the read-only name `truth@VAULT`. The Layout's own batch writes grow what the two
+need: an entry can be removed in the same batch that binds its path to another, which is one write
+and no moment where the path names nothing.
 
 ## Refactor
 

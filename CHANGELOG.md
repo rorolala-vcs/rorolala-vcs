@@ -6,10 +6,11 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Feature
 
-1. **\[BREAKING!\]** [`app`] [`rola`] [`sync`] Submit a new file under the path the work tracks it at — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-sync-submit-a-new-file-under-the-path-the-work-tracks-it-at)
-2. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry — [See details](dev/CHANGELOG-DETAILS.md#2-breaking-modules-daemon-move-remote-path-move-a-path-in-a-vaults-layout-without-holding-the-entry)
-3. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names — [See details](dev/CHANGELOG-DETAILS.md#3-app-rola-layout-change-or-renew-the-uuid-a-layout-path-names)
-4. **\[BREAKING!\]** [`app`] [`rola`] [`retrack`] Record a version, or another entry, for a file — [See details](dev/CHANGELOG-DETAILS.md#4-breaking-app-rola-retrack-record-a-version-or-another-entry-for-a-file)
+1. **\[BREAKING!\]** [`app`] [`rola`] [`layout`] Remove an entry from a Vault's Layout, by the account that holds it — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-layout-remove-an-entry-from-a-vaults-layout-by-the-account-that-holds-it)
+2. **\[BREAKING!\]** [`app`] [`rola`] [`retrack`] Record a version, or another entry, for a file — [See details](dev/CHANGELOG-DETAILS.md#2-breaking-app-rola-retrack-record-a-version-or-another-entry-for-a-file)
+3. **\[BREAKING!\]** [`app`] [`rola`] [`sync`] Submit a new file under the path the work tracks it at — [See details](dev/CHANGELOG-DETAILS.md#3-breaking-app-rola-sync-submit-a-new-file-under-the-path-the-work-tracks-it-at)
+4. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry — [See details](dev/CHANGELOG-DETAILS.md#4-breaking-modules-daemon-move-remote-path-move-a-path-in-a-vaults-layout-without-holding-the-entry)
+5. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names — [See details](dev/CHANGELOG-DETAILS.md#5-app-rola-layout-change-or-renew-the-uuid-a-layout-path-names)
 
 ## Refactor
 
