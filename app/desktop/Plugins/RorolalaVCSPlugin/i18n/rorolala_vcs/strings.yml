@@ -297,6 +297,9 @@ rorolala_vcs:
     track_tip:
       en: Record the unrecorded change as a new version
       zh-CN: 将未记录的修改记录为新版本
+    track_directory_tip:
+      en: Record every unrecorded change under the chosen directory as new versions
+      zh-CN: 将所选目录下所有未记录的修改记录为新版本
     track_diverged:
       en: some chosen changes have parted from the Vault's chain and will be confirmed first
       zh-CN: 选中的部分修改已与保险库的链分叉，追踪前会再次确认

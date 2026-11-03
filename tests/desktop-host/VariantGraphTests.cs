@@ -18,6 +18,28 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class VariantGraphTests
 {
+    /// <summary>A place offers every changed or untracked file under it, as a chosen file would.</summary>
+    [Fact]
+    public void APlaceOffersTheChangedAndUntrackedFilesUnderIt()
+    {
+        var workspace = Recorded("place");
+
+        // The recording's own file is changed, and a directory beside it holds one file the Layout
+        // has never named.
+        File.WriteAllText(Path.Combine(workspace, "art.txt"), "changed\n");
+        Directory.CreateDirectory(Path.Combine(workspace, "art"));
+        File.WriteAllText(Path.Combine(workspace, "art", "one.txt"), "one\n");
+
+        using var status = RolaStatus.Locate(workspace);
+
+        Assert.NotNull(status);
+
+        var under = VersionGraphTrackBar.RecordableUnder(status, workspace);
+
+        Assert.Contains(Path.Combine(workspace, "art.txt"), under);
+        Assert.Contains(Path.Combine(workspace, "art", "one.txt"), under);
+    }
+
     /// <summary>A chain of two versions is drawn with its entries, its words and its versions.</summary>
     [Fact]
     public void AGraphOfTheWorkNamesItsChainAndItsEntries()

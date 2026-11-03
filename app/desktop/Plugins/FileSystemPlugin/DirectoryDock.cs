@@ -1015,7 +1015,11 @@ internal sealed class DirectoryControl : UserControl
     private void RepaintPlace() => _logical?.Repaint();
 
     /// <summary>Draws the listing with nothing chosen, which is what a view of the work taking the choice away means.</summary>
-    private void ClearedSelection() => _view?.Choose([]);
+    private void ClearedSelection()
+    {
+        ChosenDirectory.Clear();
+        _view?.Choose([]);
+    }
 
     /// <summary>
     /// Takes a turn of the wheel with control held as a step of zoom.

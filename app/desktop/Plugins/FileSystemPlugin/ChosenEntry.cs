@@ -57,6 +57,64 @@ public static class ChosenEntry
     /// </remarks>
     public static void Clear()
     {
+        ChosenDirectory.Clear();
+
+        if (Current is null)
+        {
+            return;
+        }
+
+        Current = null;
+        Changed?.Invoke();
+    }
+}
+
+/// <summary>
+/// The directory the user last clicked in a directory listing.
+/// </summary>
+/// <remarks>
+/// A click on a file says nothing here: what this is for is a choice of a place, which some actions —
+/// recording every untracked entry under it, say — act on as a whole. It is kept apart from
+/// <see cref="ChosenEntry"/> and <see cref="ChosenFiles"/> because neither of those can name a
+/// directory: a version chain hangs from a file, and a multi-file choice leaves places out.
+/// </remarks>
+public static class ChosenDirectory
+{
+    /// <summary>The directory clicked most recently, or nothing before any has been.</summary>
+    public static Entry? Current { get; private set; }
+
+    /// <summary>Raised when <see cref="Current"/> says something else.</summary>
+    public static event Action? Changed;
+
+    /// <summary>Says that a listing's entry was clicked, which is the place now being asked about.</summary>
+    /// <remarks>
+    /// A click on a file takes the place away: what the listing is working on is then the file, and a
+    /// directory chosen before it is no longer what the click was about.
+    /// </remarks>
+    /// <param name="entry">The entry the click landed on.</param>
+    public static void Publish(Entry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (entry.Kind != EntryKind.Directory)
+        {
+            Clear();
+
+            return;
+        }
+
+        if (Current is { } known && string.Equals(known.Path, entry.Path, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Current = entry;
+        Changed?.Invoke();
+    }
+
+    /// <summary>Says that no directory is the one last clicked, which is a choice taken away from elsewhere.</summary>
+    public static void Clear()
+    {
         if (Current is null)
         {
             return;
@@ -80,7 +138,7 @@ public static class ChosenEntry
 /// <para>
 /// Only files are published. A directory is not a version chain, and a step up is a place rather
 /// than work: a choice of either leaves the files of it out, which is what the callers that track or
-/// read a chain want anyway.
+/// read a chain want anyway. A place a click landed on is <see cref="ChosenDirectory"/>'s answer.
 /// </para>
 /// </remarks>
 public static class ChosenFiles
@@ -102,6 +160,8 @@ public static class ChosenFiles
     /// <summary>Says that the choice is nothing, which is a click away from every file.</summary>
     public static void Clear()
     {
+        ChosenDirectory.Clear();
+
         if (Current.Count > 0)
         {
             Current = [];
@@ -126,6 +186,19 @@ public static class ChosenFiles
         ArgumentNullException.ThrowIfNull(chosen);
 
         var files = chosen.Where(entry => entry.Kind == EntryKind.File).ToArray();
+        var place = chosen.FirstOrDefault(entry => entry.Kind == EntryKind.Directory);
+
+        // A directory chosen is what the click was about, and it is kept beside the file choice
+        // because it answers a different question — an action over a place rather than over one
+        // file. A choice of files takes the place's meaning away.
+        if (place is not null)
+        {
+            ChosenDirectory.Publish(place);
+        }
+        else if (files.Length > 0)
+        {
+            ChosenDirectory.Clear();
+        }
 
         if (Same(Current, files))
         {

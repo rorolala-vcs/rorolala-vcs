@@ -300,7 +300,11 @@ internal sealed class Files : Listing<Entry>
     public override void Chosen(IReadOnlyList<Entry> chosen) => ChosenFiles.Publish(chosen);
 
     /// <inheritdoc />
-    public override void Clicked(Entry item) => ChosenEntry.Publish(item);
+    public override void Clicked(Entry item)
+    {
+        ChosenEntry.Publish(item);
+        ChosenDirectory.Publish(item);
+    }
 
     /// <summary>
     /// Whether an entry may be picked up and dragged away.

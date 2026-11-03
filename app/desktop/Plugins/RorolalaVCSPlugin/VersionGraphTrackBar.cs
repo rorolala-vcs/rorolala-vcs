@@ -177,6 +177,8 @@ internal sealed class VersionGraphTrackBar : Border
     {
         ChosenFiles.Changed += Paint;
         ChosenEntry.Changed += Paint;
+        ChosenDirectory.Changed += Paint;
+        _files.Redrawn += Paint;
         Paint();
     }
 
@@ -185,6 +187,8 @@ internal sealed class VersionGraphTrackBar : Border
     {
         ChosenFiles.Changed -= Paint;
         ChosenEntry.Changed -= Paint;
+        ChosenDirectory.Changed -= Paint;
+        _files.Redrawn -= Paint;
     }
 
     /// <summary>Gives the template's border the nothing every state of the field is drawn as.</summary>
@@ -311,6 +315,14 @@ internal sealed class VersionGraphTrackBar : Border
     /// <returns>The files to record, in the order the listing shows them.</returns>
     private IReadOnlyList<Target> Targets()
     {
+        // A directory is a place, and what a track on it means is every untracked entry under it.
+        // That is asked before the file choice because the click that made the place was about the
+        // place: a listing's previous files are not what the reader is pointing at any more.
+        if (ChosenDirectory.Current is { } place)
+        {
+            return DirectoryTargets(place);
+        }
+
         var chosen = ChosenFiles.Current;
 
         IReadOnlyList<Entry> considered = chosen.Count > 0
@@ -376,6 +388,120 @@ internal sealed class VersionGraphTrackBar : Border
         return targets;
     }
 
+    /// <summary>The files a track on a directory would record: every recordable entry under it.</summary>
+    /// <remarks>
+    /// The reading is taken for the directory the place sits in rather than for the place itself:
+    /// the listing has already read the directory it shows, while a place that has just been clicked
+    /// has not been read and would answer nothing until a read made for it came back. What the
+    /// reading names is relative to the Workspace, so the place is made absolute here before the
+    /// entries are sifted by it.
+    /// <para>
+    /// What is considered is the reading's own lists — the untracked, the modified, the wrong-based,
+    /// and the files a merge is waiting for — rather than every file under the directory: a directory
+    /// of a thousand files with one edit is one track, and walking the tree to find the edit is work
+    /// the reading has already done. What each candidate then means is the same answer a listing's
+    /// row is acted on by, so a directory and a file choice cannot disagree about what may be recorded.
+    /// </para>
+    /// </remarks>
+    /// <param name="place">The directory clicked in a listing.</param>
+    /// <returns>The files under it a track would record.</returns>
+    private IReadOnlyList<Target> DirectoryTargets(Entry place)
+    {
+        var holder = Path.GetDirectoryName(place.Path) ?? place.Path;
+        var status = _statuses.Reading(holder) ?? _statuses.Reading(place.Path);
+
+        if (status is not { } read)
+        {
+            return [];
+        }
+
+        var directory = Path.GetFullPath(place.Path);
+        var targets = new List<Target>();
+
+        foreach (var file in RecordableUnder(read, directory))
+        {
+            targets.Add(new Target(directory, file, read.SyncOf(file) == SyncStanding.Diverged));
+        }
+
+        return targets;
+    }
+
+    /// <summary>The files under one directory a track would record.</summary>
+    /// <remarks>
+    /// The reading's own lists are what is sifted rather than the whole tree: a directory of a
+    /// thousand files with one edit is one track, and walking the tree to find the edit is work the
+    /// reading has already done. What each candidate then means is the same answer a listing's row
+    /// is acted on by, so a directory and a file choice cannot disagree about what may be recorded.
+    /// </remarks>
+    /// <param name="read">What the work says about itself.</param>
+    /// <param name="directory">The place whose entries are wanted.</param>
+    /// <returns>The full paths to record, in the order the reading names them.</returns>
+    internal static IReadOnlyList<string> RecordableUnder(RolaStatus read, string directory)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(directory);
+
+        var root = Path.GetFullPath(directory);
+        if (!root.EndsWith(Path.DirectorySeparatorChar))
+        {
+            root += Path.DirectorySeparatorChar;
+        }
+
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var considered = new HashSet<string>(
+            read.Untagged.Concat(read.Modified).Concat(read.WrongBase),
+            comparison == StringComparison.OrdinalIgnoreCase
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal
+        );
+
+        foreach (var merge in read.Merging)
+        {
+            if (merge.Target.Length > 0)
+            {
+                considered.Add(merge.Target);
+            }
+        }
+
+        var targets = new List<string>();
+
+        foreach (var named in considered)
+        {
+            var file = Path.GetFullPath(Path.Combine(read.Root, named));
+
+            if (!file.StartsWith(root, comparison))
+            {
+                continue;
+            }
+
+            var state = read.StateOf(file);
+
+            // The same states a chosen file is offered a track for. A wrong-based file another account
+            // holds is not this account's to record, and a merge is only a change where the file under
+            // it has changed.
+            var recordable = state switch
+            {
+                PathState.Modified or PathState.Untagged => true,
+                PathState.Merging => read.Modified.Any(named =>
+                    StatusReadings.Names(read.Root, named, file)
+                ),
+                PathState.Wrong => !read.Unowned.Any(named =>
+                    StatusReadings.Names(read.Root, named, file)
+                ),
+                _ => false,
+            };
+
+            if (recordable)
+            {
+                targets.Add(file);
+            }
+        }
+
+        return targets;
+    }
+
     /// <summary>Draws the button as the files chosen and what is written say it is.</summary>
     private void Paint()
     {
@@ -390,7 +516,11 @@ internal sealed class VersionGraphTrackBar : Border
             ready ? PaletteKeys.Front : PaletteKeys.Faint
         );
 
-        var tip = RolaI18N.Get("rorolala_vcs.version_graph.track_tip");
+        var tip = RolaI18N.Get(
+            ChosenDirectory.Current is null
+                ? "rorolala_vcs.version_graph.track_tip"
+                : "rorolala_vcs.version_graph.track_directory_tip"
+        );
 
         if (targets.Any(target => target.Diverged))
         {
